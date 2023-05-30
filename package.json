@@ -1,0 +1,26 @@
+{
+  "name": "@bipgopakap/effect-clue",
+  "version": "0.0.1",
+  "description": "A solver for the board game Clue",
+  "main": "index.js",
+  "scripts": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/bigpopakap/effect-clue.git"
+  },
+  "keywords": [
+    "Clue",
+    "effect",
+    "board",
+    "game",
+    "solver"
+  ],
+  "author": "bigpopakap",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/bigpopakap/effect-clue/issues"
+  },
+  "homepage": "https://github.com/bigpopakap/effect-clue#readme"
+}

@@ -1,0 +1,30 @@
+# Yarn
+# From https://stackoverflow.com/a/60184331
+/.pnp.*
+/.yarn/*
+/.yarn/install-state.gz
+!/.yarn/patches
+!/.yarn/plugins
+!/.yarn/releases
+!/.yarn/sdks
+!/.yarn/versions
+
+# Dependencies
+/node_modules/
+
+# Locally linked dependencies
+# See https://www.npmjs.com/package/link
+/link.config.json
+
+# Jest
+/coverage/
+
+# Build output
+dist/
+
+# Temp files
+/.tscache/
+/*.tmp.*
+/.eslintcache
+/*.log
+/*.tsbuildinfo
