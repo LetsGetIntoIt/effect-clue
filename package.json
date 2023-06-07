@@ -22,5 +22,8 @@
   "bugs": {
     "url": "https://github.com/bigpopakap/effect-clue/issues"
   },
-  "homepage": "https://github.com/bigpopakap/effect-clue#readme"
+  "homepage": "https://github.com/bigpopakap/effect-clue#readme",
+  "dependencies": {
+    "@effect/data": "0.12.5"
+  }
 }

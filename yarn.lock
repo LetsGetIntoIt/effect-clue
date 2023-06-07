@@ -3,9 +3,19 @@
 
 __metadata:
   version: 6
+  cacheKey: 8
 
 "@bipgopakap/effect-clue@workspace:.":
   version: 0.0.0-use.local
   resolution: "@bipgopakap/effect-clue@workspace:."
+  dependencies:
+    "@effect/data": 0.12.5
   languageName: unknown
   linkType: soft
+
+"@effect/data@npm:0.12.5":
+  version: 0.12.5
+  resolution: "@effect/data@npm:0.12.5"
+  checksum: dab16e6a4b998927f78dbfa2d8b2667883d77c7dad6d68d5e4e5c794eaf2d23cddc0c5c03f0f8c60a070967e523e787288a1982dbe06444a1e212fd3b048a7ea
+  languageName: node
+  linkType: hard
