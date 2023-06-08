@@ -3,10 +3,11 @@ import * as E from '@effect/data/Either';
 import * as ROA from '@effect/data/ReadonlyArray';
 import * as O from '@effect/data/Option';
 import * as Match from "@effect/match"
-import { identity, pipe, tupled } from '@effect/data/Function';
+import { flow, identity, pipe, tupled } from '@effect/data/Function';
 
 import * as Card from './clue/Card';
 import * as CardSetup from './clue/CardSetup';
+import { addAll, eitherApply } from './utils/ShouldBeBuiltin';
 
 const setupCards = ({
     useStandard,
@@ -31,7 +32,7 @@ const setupCards = ({
     ),
 
     // Add any extra user-defined cards
-    cardSetup => pipe(
+    eitherApply(pipe(
         // Default to no cards if the argument is not provided
         extraCards,
         O.fromNullable,
@@ -42,17 +43,12 @@ const setupCards = ({
         E.all,
 
         // Add all these cards to a setup
-        E.map(ROA.reduce(
-            // Start with an empty cardSetup
-            cardSetup,
-
-            // Add each card
-            (cardSetup, nextCard) => pipe(
-                cardSetup,
-                CardSetup.add(nextCard),
-            ),
+        E.map(flow(
+            // Add all these cards to a setup, and validate it
+            ROA.map(CardSetup.add),
+            addAll,
         )),
-    ),
+    )),
 
     // Validate the card setup
     E.flatMap(CardSetup.validate),

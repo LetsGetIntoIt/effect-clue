@@ -5,6 +5,7 @@ import * as ROA from '@effect/data/ReadonlyArray';
 import { pipe, flow } from '@effect/data/Function';
 
 import * as Card from './Card';
+import { addAll } from '../utils/ShouldBeBuiltin';
 
 export interface CardSetup {
     readonly cards: HS.HashSet<Card.Card>;
@@ -22,7 +23,7 @@ export const add = (newCard: Card.Card) =>
         cards: HS.add(newCard)
     });
 
-export const standardNorthAmericaCardSetup = (initialCardSetup: CardSetup): CardSetup =>
+export const standardNorthAmericaCardSetup: (initialCardSetup: CardSetup) => CardSetup =
     pipe(
         E.all([
             Card.create('person', 'scarlet'),
@@ -55,16 +56,8 @@ export const standardNorthAmericaCardSetup = (initialCardSetup: CardSetup): Card
         E.getOrThrow,
 
         // Add all these cards to a setup, and validate it
-        ROA.reduce(
-            // Start with an empty cardSetup
-            initialCardSetup,
-
-            // Add each card
-            (cardSetup, nextCard) => pipe(
-                cardSetup,
-                add(nextCard),
-            ),
-        ),
+        ROA.map(add),
+        addAll,
     );
 
 export interface ValidatedCardSetup extends CardSetup {
