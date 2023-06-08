@@ -32,7 +32,7 @@ const setupCards = ({
     ),
 
     // Add any extra user-defined cards
-    eitherApply(pipe(
+    pipe(
         // Default to no cards if the argument is not provided
         extraCards,
         O.fromNullable,
@@ -48,7 +48,9 @@ const setupCards = ({
             ROA.map(CardSetup.add),
             combineApply,
         )),
-    )),
+
+        eitherApply,
+    ),
 
     // Validate the card setup
     E.flatMap(CardSetup.validate),
