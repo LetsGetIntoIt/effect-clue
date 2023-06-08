@@ -5,29 +5,25 @@ import * as ST from "@effect/data/Struct";
 import * as S from '@effect/data/String';
 import * as EQV from '@effect/data/typeclass/Equivalence';
 
-export interface Card {
-    readonly cardType: string;
+export interface Player {
     readonly label: string;
 }
 
-export const Equivalence: EQV.Equivalence<Card> = ST.getEquivalence({
-    cardType: S.Equivalence,
+export const Equivalence: EQV.Equivalence<Player> = ST.getEquivalence({
     label: S.Equivalence,
 });
 
-class CardImpl implements Card, EQ.Equal {
-    public static readonly _tag: unique symbol = Symbol("Card");
+class PlayerImpl implements Player, EQ.Equal {
+    public static readonly _tag: unique symbol = Symbol("Player");
 
     constructor(
-        public readonly cardType: string,
-        public readonly label: string
+        public readonly label: string,
     ) {
-        this.cardType = cardType;
         this.label = label;
     }
 
     [EQ.symbol](that: EQ.Equal): boolean {
-        return (that instanceof CardImpl)  // TODO use a refinement based on the interface, not the class
+        return (that instanceof PlayerImpl) // TODO use a refinement based on the interface, not the class
             && Equivalence(this, that);
     }
 
@@ -39,11 +35,9 @@ class CardImpl implements Card, EQ.Equal {
 }
 
 export const create = (
-    cardType: string,
     label: string,
-): E.Either<string, Card> =>
-    // TODO maybe actually validate the cards?
-    E.right(new CardImpl(
-        cardType,
+): E.Either<string, Player> =>
+    // TODO maybe actually validate the player?
+    E.right(new PlayerImpl(
         label,
     ));

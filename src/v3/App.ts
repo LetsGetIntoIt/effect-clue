@@ -3,19 +3,26 @@ import * as E from '@effect/data/Either';
 import * as ROA from '@effect/data/ReadonlyArray';
 import * as O from '@effect/data/Option';
 import * as Match from "@effect/match"
+import * as HS from '@effect/data/HashSet';
 import { flow, identity, pipe, tupled } from '@effect/data/Function';
 
 import * as Card from './clue/Card';
 import * as CardSetup from './clue/CardSetup';
+import * as Player from './clue/Player';
+import * as PlayerSetup from './clue/PlayerSetup';
+import * as Guess from './clue/Guess';
+import * as GuessHistory from './clue/GuessHistory';
 import { combineApply, eitherApply } from './utils/ShouldBeBuiltin';
+
+type RawCard = [string, string];
 
 const setupCards = ({
     useStandard,
     extraCards,
 }: {
     useStandard?: 'North America';
-    extraCards?: [string, string][];
-}): T.Effect<never, string, CardSetup.ValidatedCardSetup> => pipe(
+    extraCards?: RawCard[];
+}): E.Either<string, CardSetup.ValidatedCardSetup> => pipe(
     CardSetup.empty,
 
     // Add whatever standard set was selected, if any
@@ -36,15 +43,14 @@ const setupCards = ({
         // Default to no cards if the argument is not provided
         extraCards,
         O.fromNullable,
-        O.getOrElse((): [string, string][] => []),
+        O.getOrElse((): RawCard[] => []),
 
         // Create the cards
         ROA.map(tupled(Card.create)),
         E.all,
 
-        // Add all these cards to a setup
+        // Add the cards
         E.map(flow(
-            // Add all these cards to a setup, and validate it
             ROA.map(CardSetup.add),
             combineApply,
         )),
@@ -52,38 +58,134 @@ const setupCards = ({
         eitherApply,
     ),
 
-    // Validate the card setup
+    // Validate the card set
     E.flatMap(CardSetup.validate),
 );
 
-const setupPlayers: T.Effect<PlayerSetup> = pipe(
-    PlayerSetup.empty(), // TODO maybe it requires one player, or having to build it later
-    T.flatMap(PlayerSetup.add(/* player info */)),
-    T.flatMap(PlayerSetup.add(/* player info */)),
-    T.flatMap(PlayerSetup.add(/* player info */)),
+type RawPlayer = [string];
+
+const setupPlayers = ({
+    names,
+}: {
+    names?: RawPlayer[];
+}): E.Either<string, PlayerSetup.ValidatedPlayerSetup> => pipe(
+    PlayerSetup.empty,
+    
+    pipe(
+        // Default to no cards if the argument is not provided
+        names,
+        O.fromNullable,
+        O.getOrElse((): RawPlayer[] => []),
+
+        // Create the players
+        ROA.map(tupled(Player.create)),
+        E.all,
+
+        // Add the players
+        E.map(flow(
+            ROA.map(PlayerSetup.add),
+            combineApply,
+        )),
+
+        eitherApply,
+    ),
+
+    // Validate the player set
+    E.flatMap(PlayerSetup.validate),
 );
 
-const game: T.Effect<Game> = pipe(
-    T.all({
-        cardSetup: setupCards({
-            useStandard: 'North America',
-        }),
+type RawGuess = {
+    cards: RawCard[],
+    guesser: RawPlayer,
+    nonRefuters: RawPlayer[],
+    refutation?: [
+        RawPlayer,
+        RawCard?
+    ],
+};
 
-        playerSetup: setupPlayers,
-    }),
+const parseGuess: (guess: RawGuess) => E.Either<string, {
+    cards: HS.HashSet<Card.Card>,
+    guesser: Player.Player,
+    nonRefuters: HS.HashSet<Player.Player>,
+    refutation: O.Option<{
+        refuter: Player.Player;
+        card: O.Option<Card.Card>;
+    }>,
+}> = ST.se;
 
-    T.flatMap(Game.create),
+const setupGuesses = ({
+    guesses,
+}: {
+    guesses?: RawGuess[];
+}): E.Either<string, GuessHistory.ValidatedGuessHistory> => pipe(
+    GuessHistory.empty,
+    
+    // Add the guesses
+    pipe(
+        // Default to no cards if the argument is not provided
+        guesses,
+        O.fromNullable,
+        O.getOrElse((): RawGuess[] => []),
 
-    // Add each guess
-    T.flatMap(pipe(
-        Guess.empty(),
-        T.flatMap(Guess.addGuesser(/* player info */)),
-        T.flatMap(Guess.build),
+        // Create the guesses
+        ROA.map(flow(
+            parseGuess,
+            E.flatMap(Guess.create),
+        )),
+        E.all,
 
-        T.flatMap(GamT.addGuess),
-    )),
+        // Add all these guesses to the history
+        E.map(flow(
+            ROA.map(GuessHistory.add),
+            combineApply,
+        )),
+
+        eitherApply,
+    ),
+
+    // Validate the guess history
+    E.flatMap(GuessHistory.validate),
 );
 
-const deductions: T.Effect<Deductions> = deduce(game);
+const ui: E.Either<string, UiOutput> = T.gen(function* ($) {
+    const cardSetup = yield* $(setupCards({
+        useStandard: 'North America',
 
-// Use Game and Deductions to render the UI
+        extraCards: [
+            ['room', 'doghouse'],
+        ],
+    }));
+
+    const playerSetup = yield* $(setupPlayers({
+        names: [
+            ['kapil'],
+            ['kate'],
+        ]
+    }));
+
+    // TODO add how many cards each player has
+
+    const guessHistory = yield* $(setupGuesses({
+        guesses: [
+
+        ],
+    }));
+
+    const deductions = yield* $(Deductions.deduce({
+        cardSetup,
+        playerSetup,
+        guesses,
+    }));
+
+    // Other features
+    // - Who I've shown what (and which card I should show to refute)
+    // - Best next guesses to make (not taking map into account)
+    // - Best next guesses to make, given you're in a particular room
+    // - Test hypotheses to find paradoxes
+    // - Percent likelihood
+    // - Take the map into account, update which is next best guess to make
+    // - Take the map into account, who should I pull away from their goal
+
+    // Return whatever is needed to render the UI
+});
