@@ -5,7 +5,7 @@ import * as ROA from '@effect/data/ReadonlyArray';
 import { pipe, flow } from '@effect/data/Function';
 
 import * as Card from './Card';
-import { combineApply } from '../utils/ShouldBeBuiltin';
+import { Endomorphism_getMonoid } from '../utils/ShouldBeBuiltin';
 
 export interface CardSetup {
     readonly cards: HS.HashSet<Card.Card>;
@@ -57,7 +57,7 @@ export const standardNorthAmericaCardSetup: (initialCardSetup: CardSetup) => Car
 
         // Add all these cards to a setup, and validate it
         ROA.map(add),
-        combineApply,
+        Endomorphism_getMonoid<CardSetup>().combineAll,
     );
 
 export interface ValidatedCardSetup extends CardSetup {

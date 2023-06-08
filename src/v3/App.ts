@@ -12,7 +12,7 @@ import * as Player from './clue/Player';
 import * as PlayerSetup from './clue/PlayerSetup';
 import * as Guess from './clue/Guess';
 import * as GuessHistory from './clue/GuessHistory';
-import { combineApply, eitherApply } from './utils/ShouldBeBuiltin';
+import { Endomorphism_getMonoid, eitherApply } from './utils/ShouldBeBuiltin';
 
 type RawCard = [string, string];
 
@@ -51,7 +51,7 @@ const setupCards = ({
         // Add the cards
         E.map(flow(
             ROA.map(CardSetup.add),
-            combineApply,
+            Endomorphism_getMonoid<CardSetup.CardSetup>().combineAll,
         )),
 
         eitherApply,
@@ -82,7 +82,7 @@ const setupPlayers = ({
         // Add the players
         E.map(flow(
             ROA.map(PlayerSetup.add),
-            combineApply,
+            Endomorphism_getMonoid<PlayerSetup.PlayerSetup>().combineAll,
         )),
 
         eitherApply,
@@ -134,7 +134,7 @@ const setupGuesses = ({
         // Add all these guesses to the history
         E.map(flow(
             ROA.map(GuessHistory.add),
-            combineApply,
+            Endomorphism_getMonoid<GuessHistory.GuessHistory>().combineAll,
         )),
 
         eitherApply,

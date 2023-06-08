@@ -1,16 +1,22 @@
 import * as E from '@effect/data/Either';
-import * as ROA from '@effect/data/ReadonlyArray';
-import * as EQV from '@effect/data/typeclass/Equivalence';
 import * as HS from '@effect/data/HashSet';
+import { identity, flow } from '@effect/data/Function'
+import * as SG from '@effect/data/typeclass/Semigroup'
+import * as MN from '@effect/data/typeclass/Monoid'
+import * as EQV from '@effect/data/typeclass/Equivalence';
 
-// TODO replace this with some in-built util that does the same thing
-export const combineApply = <I>(fns: readonly ((i: I) => I)[]) => (initial: I): I =>
-    ROA.reduce(fns, initial, (current, mapper) => mapper(current));
+export type Endomorphism<A> = (a: A) => A
+
+export const Endomorphism_getMonoid = <A>(): MN.Monoid<Endomorphism<A>> =>
+  MN.fromSemigroup(
+    SG.make((f, g) => flow(f, g)),
+    identity
+  );
 
 // TODO replace this with some in-built util that does the same thing
 export const eitherApply = <E, A>(maybeFn: E.Either<E, (a: A) => A>): ((a: A) => E.Either<E, A>) =>
     null;
 
 // TODO replace this with some in-built util that does the same thing
-export const getHashSetEquivalence = <A>(EQVA: EQV.Equivalence<A>): EQV.Equivalence<HS.HashSet<A>> =>
+export const HashSet_getEquivalence = <A>(EQVA: EQV.Equivalence<A>): EQV.Equivalence<HS.HashSet<A>> =>
     null;
