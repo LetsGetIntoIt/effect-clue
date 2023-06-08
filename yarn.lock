@@ -10,12 +10,69 @@ __metadata:
   resolution: "@bipgopakap/effect-clue@workspace:."
   dependencies:
     "@effect/data": 0.12.5
+    "@effect/io": 0.26.0
+    "@effect/match": 0.24.0
   languageName: unknown
   linkType: soft
 
-"@effect/data@npm:0.12.5":
+"@effect/data@npm:0.12.5, @effect/data@npm:^0.12.2, @effect/data@npm:~0.12.2":
   version: 0.12.5
   resolution: "@effect/data@npm:0.12.5"
   checksum: dab16e6a4b998927f78dbfa2d8b2667883d77c7dad6d68d5e4e5c794eaf2d23cddc0c5c03f0f8c60a070967e523e787288a1982dbe06444a1e212fd3b048a7ea
+  languageName: node
+  linkType: hard
+
+"@effect/io@npm:0.26.0":
+  version: 0.26.0
+  resolution: "@effect/io@npm:0.26.0"
+  dependencies:
+    "@effect/data": ~0.12.2
+  checksum: 5363d94d502dbf40eb726c253a6d66990079b832b2cd63e086cd00a8e8b4f5adfe13f953aa0ce6f838ce4626f4b1a7a69733d4a271e096100c94620502d22f8f
+  languageName: node
+  linkType: hard
+
+"@effect/io@npm:^0.25.2":
+  version: 0.25.13
+  resolution: "@effect/io@npm:0.25.13"
+  dependencies:
+    "@effect/data": ~0.12.2
+  checksum: a9f50245aa5585e0f621f3d6873e3758b14faf1d52ac04887d4fde6f0375df0e46caf239258f80f740bbeb594ebfd76547956d960273e2de8670ee98cda720ad
+  languageName: node
+  linkType: hard
+
+"@effect/match@npm:0.24.0":
+  version: 0.24.0
+  resolution: "@effect/match@npm:0.24.0"
+  dependencies:
+    "@effect/data": ^0.12.2
+    "@effect/schema": ^0.19.0
+  checksum: 8dd17b386206142c82988bc5a65a2233e5f30b97c3850b1d740bd9e980eb6152e326e897f44050735b96cd4e25772eed47ecd0efe8c694e78297b8856444b65c
+  languageName: node
+  linkType: hard
+
+"@effect/schema@npm:^0.19.0":
+  version: 0.19.3
+  resolution: "@effect/schema@npm:0.19.3"
+  dependencies:
+    "@effect/data": ^0.12.2
+    "@effect/io": ^0.25.2
+    fast-check: ^3.8.1
+  checksum: 26713a0f5297284bc290d692435e0dcc5a60ca820619133c9667ce439122f74df927ce6ecee0f2d1688e3641627a1a56ddb5b6598e556fbaf1d68220b23b4385
+  languageName: node
+  linkType: hard
+
+"fast-check@npm:^3.8.1":
+  version: 3.10.0
+  resolution: "fast-check@npm:3.10.0"
+  dependencies:
+    pure-rand: ^6.0.0
+  checksum: 8937e2dc8416e44bd23d6330fcb2c54a2c538944d40d53e6f379a01b79b1490cd8a4a81cd47ffa5aa8a7df71a0eccaae007371c639fd2dd43ae7507e9de8ec57
+  languageName: node
+  linkType: hard
+
+"pure-rand@npm:^6.0.0":
+  version: 6.0.2
+  resolution: "pure-rand@npm:6.0.2"
+  checksum: 79de33876a4f515d759c48e98d00756bbd916b4ea260cc572d7adfa4b62cace9952e89f0241d0410214554503d25061140fe325c66f845213d2b1728ba8d413e
   languageName: node
   linkType: hard

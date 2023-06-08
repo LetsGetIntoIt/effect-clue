@@ -1,3 +1,4 @@
+import * as T from '@effect/io/Effect';
 import * as E from '@effect/data/Either';
 import * as H from '@effect/data/Hash';
 import * as HS from "@effect/data/HashSet";
@@ -6,106 +7,6 @@ import * as ST from "@effect/data/Struct";
 import * as ROA from "@effect/data/ReadonlyArray";
 import * as S from '@effect/data/String';
 import * as O from '@effect/data/Option';
-import { pipe, flow } from '@effect/data/Function';
-
-/* CARD SETUP */
-
-class Card implements EQ.Equal {
-    public static readonly _tag: unique symbol = Symbol("Card");
-
-    constructor(
-        public readonly cardType: string,
-        public readonly label: string
-    ) {
-        this.cardType = cardType;
-        this.label = label;
-    }
-
-    [EQ.symbol](that: EQ.Equal): boolean {
-        return (that instanceof Card)
-            && ST.getEquivalence({
-                cardType: S.Equivalence,
-                label: S.Equivalence,
-            })(this, that);
-    }
-
-    [H.symbol](): number {
-        return H.structure({
-            ...this
-        });
-    }
-}
-
-interface CardSetup {
-    readonly cards: HS.HashSet<Card>;
-}
-
-const emptyCardSetup = (): CardSetup => Object.freeze({
-    cards: HS.empty(),
-});
-
-const addCard = (newCard: Card) =>
-                (initialSetup: CardSetup):
-                CardSetup =>
-    ST.evolve(initialSetup, {
-        cards: HS.add(newCard)
-    });
-
-interface ValidatedCardSetup extends CardSetup {
-    validated: true;
-    cardTypes: HS.HashSet<string>;
-}
-
-const validateCardSetup = (cardSetup: CardSetup): E.Either<string, ValidatedCardSetup> =>
-    E.right(
-        // TODO validate the card setup for real
-
-        Object.freeze({
-            ...cardSetup,
-            cardTypes: HS.map(cardSetup.cards, card => card.cardType),
-            validated: true,
-        })
-    );
-
-const standardNorthAmericaCardSetup = (): ValidatedCardSetup => pipe(
-    emptyCardSetup(),
-
-    flow(
-        addCard(new Card('person', 'scarlet')),
-        addCard(new Card('person', 'mustard')),
-        addCard(new Card('person', 'white')),
-        addCard(new Card('person', 'green')),
-        addCard(new Card('person', 'peacock')),
-        addCard(new Card('person', 'plum')),
-    ),
-
-    flow(
-        addCard(new Card('weapon', 'candlestick')),
-        addCard(new Card('weapon', 'knife')),
-        addCard(new Card('weapon', 'pipe')),
-        addCard(new Card('weapon', 'revolver')),
-        addCard(new Card('weapon', 'rope')),
-        addCard(new Card('weapon', 'wrench')),
-    ),
-
-    flow(
-        addCard(new Card('room', 'kitchen')),
-        addCard(new Card('room', 'ballroom')),
-        addCard(new Card('room', 'conservatory')),
-        addCard(new Card('room', 'dining room')),
-        addCard(new Card('room', 'billiard room')),
-        addCard(new Card('room', 'library')),
-        addCard(new Card('room', 'lounge')),
-        addCard(new Card('room', 'hall')),
-        addCard(new Card('room', 'study')),
-    ),
-
-    validateCardSetup,
-
-    E.getOrElse(reason => {
-        throw new Error(`Unexpected North America set is invalid: ${reason}`);
-    }),
-);
 
 /* PLAYER SETUP */
 
@@ -246,3 +147,14 @@ interface GameDeductions<CardType extends string, CardLabel extends string, Play
 // - Percent likelihood
 // - Take the map into account, update which is next best guess to make
 // - Take the map into account, who should I pull away from their goal
+
+export namespace CardSetup {
+    ValidatedCardSetup;
+}
+
+export const CardSetup = {
+    empty: emptyCardSetup,
+    standardNorthAmericaCardSetup,
+    add: addCard,
+    validate: validateCardSetup,
+};
