@@ -22,7 +22,7 @@ const setupCards = ({
 }: {
     useStandard?: 'North America';
     extraCards?: RawCard[];
-}): E.Either<string, CardSetup.ValidatedCardSetup> => pipe(
+}): E.Either<string[], CardSetup.ValidatedCardSetup> => pipe(
     CardSetup.empty,
 
     // Add whatever standard set was selected, if any
@@ -46,8 +46,7 @@ const setupCards = ({
         O.getOrElse((): RawCard[] => []),
 
         // Create the cards
-        ROA.map(tupled(Card.create)),
-        E.all,
+        E.validateAll(tupled(Card.create)),
 
         // Add the cards
         E.map(flow(
@@ -68,7 +67,7 @@ const setupPlayers = ({
     names,
 }: {
     names?: RawPlayer[];
-}): E.Either<string, PlayerSetup.ValidatedPlayerSetup> => pipe(
+}): E.Either<string[], PlayerSetup.ValidatedPlayerSetup> => pipe(
     PlayerSetup.empty,
     
     pipe(
@@ -78,8 +77,7 @@ const setupPlayers = ({
         O.getOrElse((): RawPlayer[] => []),
 
         // Create the players
-        ROA.map(tupled(Player.create)),
-        E.all,
+        E.validateAll(tupled(Player.create)),
 
         // Add the players
         E.map(flow(
@@ -112,15 +110,15 @@ const parseGuess: (guess: RawGuess) => E.Either<string, {
         refuter: Player.Player;
         card: O.Option<Card.Card>;
     }>,
-}> = ST.se;
+}> = null;
 
 const setupGuesses = ({
     guesses,
 }: {
     guesses?: RawGuess[];
-}): E.Either<string, GuessHistory.ValidatedGuessHistory> => pipe(
+}): E.Either<string[], GuessHistory.ValidatedGuessHistory> => pipe(
     GuessHistory.empty,
-    
+
     // Add the guesses
     pipe(
         // Default to no cards if the argument is not provided
@@ -128,12 +126,10 @@ const setupGuesses = ({
         O.fromNullable,
         O.getOrElse((): RawGuess[] => []),
 
-        // Create the guesses
-        ROA.map(flow(
+        E.validateAll(flow(
             parseGuess,
             E.flatMap(Guess.create),
         )),
-        E.all,
 
         // Add all these guesses to the history
         E.map(flow(
@@ -148,7 +144,7 @@ const setupGuesses = ({
     E.flatMap(GuessHistory.validate),
 );
 
-const ui: E.Either<string, UiOutput> = T.gen(function* ($) {
+const ui: E.Either<string[], UiOutput> = T.gen(function* ($) {
     const cardSetup = yield* $(setupCards({
         useStandard: 'North America',
 

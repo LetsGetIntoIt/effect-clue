@@ -24,7 +24,7 @@ export interface ValidatedPlayerSetup extends PlayerSetup {
     validated: true;
 }
 
-export const validate = (playerSetup: PlayerSetup): E.Either<string, ValidatedPlayerSetup> =>
+export const validate = (playerSetup: PlayerSetup): E.Either<string[], ValidatedPlayerSetup> =>
     E.right(
         // TODO validate the Player setup for real
 

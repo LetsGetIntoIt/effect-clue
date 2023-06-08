@@ -24,7 +24,7 @@ export interface ValidatedGuessHistory extends GuessHistory {
     validated: true;
 }
 
-export const validate = (guessHistory: GuessHistory): E.Either<string, ValidatedGuessHistory> =>
+export const validate = (guessHistory: GuessHistory): E.Either<string[], ValidatedGuessHistory> =>
     E.right(
         // TODO validate the Guess History for real
 

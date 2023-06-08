@@ -65,7 +65,7 @@ export interface ValidatedCardSetup extends CardSetup {
     cardTypes: HS.HashSet<string>;
 }
 
-export const validate = (cardSetup: CardSetup): E.Either<string, ValidatedCardSetup> =>
+export const validate = (cardSetup: CardSetup): E.Either<string[], ValidatedCardSetup> =>
     E.right(
         // TODO validate the card setup for real
 
