@@ -2,7 +2,7 @@ import * as E from '@effect/data/Either';
 import * as ROA from '@effect/data/ReadonlyArray';
 
 // TODO replace this with some in-built util that does the same thing
-export const addAll = <I>(fns: readonly ((i: I) => I)[]) => (initial: I): I =>
+export const combineApply = <I>(fns: readonly ((i: I) => I)[]) => (initial: I): I =>
     ROA.reduce(fns, initial, (current, mapper) => mapper(current));
 
 // TODO replace this with some in-built util that does the same thing

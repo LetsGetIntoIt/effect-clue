@@ -7,7 +7,7 @@ import { flow, identity, pipe, tupled } from '@effect/data/Function';
 
 import * as Card from './clue/Card';
 import * as CardSetup from './clue/CardSetup';
-import { addAll, eitherApply } from './utils/ShouldBeBuiltin';
+import { combineApply, eitherApply } from './utils/ShouldBeBuiltin';
 
 const setupCards = ({
     useStandard,
@@ -46,7 +46,7 @@ const setupCards = ({
         E.map(flow(
             // Add all these cards to a setup, and validate it
             ROA.map(CardSetup.add),
-            addAll,
+            combineApply,
         )),
     )),
 

@@ -5,7 +5,7 @@ import * as ROA from '@effect/data/ReadonlyArray';
 import { pipe, flow } from '@effect/data/Function';
 
 import * as Card from './Card';
-import { addAll } from '../utils/ShouldBeBuiltin';
+import { combineApply } from '../utils/ShouldBeBuiltin';
 
 export interface CardSetup {
     readonly cards: HS.HashSet<Card.Card>;
@@ -57,7 +57,7 @@ export const standardNorthAmericaCardSetup: (initialCardSetup: CardSetup) => Car
 
         // Add all these cards to a setup, and validate it
         ROA.map(add),
-        addAll,
+        combineApply,
     );
 
 export interface ValidatedCardSetup extends CardSetup {
