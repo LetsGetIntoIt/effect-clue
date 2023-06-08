@@ -145,6 +145,7 @@ const setupGuesses = ({
 );
 
 const ui: E.Either<string[], UiOutput> = T.gen(function* ($) {
+    // This will live in a component, returning the validated result or nothing
     const cardSetup = yield* $(setupCards({
         useStandard: 'North America',
 
@@ -153,6 +154,7 @@ const ui: E.Either<string[], UiOutput> = T.gen(function* ($) {
         ],
     }));
 
+    // This will live in a component, returning the validated result or nothing
     const playerSetup = yield* $(setupPlayers({
         names: [
             ['kapil'],
@@ -162,12 +164,14 @@ const ui: E.Either<string[], UiOutput> = T.gen(function* ($) {
 
     // TODO add how many cards each player has
 
+    // This will live in one component, returning the validated result or nothing
     const guessHistory = yield* $(setupGuesses({
         guesses: [
 
         ],
     }));
 
+    // This will live in the App, and be passed into each component to render extra stuff
     const deductions = yield* $(Deductions.deduce({
         cardSetup,
         playerSetup,
