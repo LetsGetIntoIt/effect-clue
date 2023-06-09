@@ -4,8 +4,9 @@ import * as EQ from "@effect/data/Equal";
 import * as ST from "@effect/data/Struct";
 import * as S from '@effect/data/String';
 import * as EQV from '@effect/data/typeclass/Equivalence';
+import { Show, Show_symbol } from '../utils/ShouldBeBuiltin';
 
-export interface Player {
+export interface Player extends EQ.Equal, Show {
     readonly label: string;
 }
 
@@ -13,13 +14,17 @@ export const Equivalence: EQV.Equivalence<Player> = ST.getEquivalence({
     label: S.Equivalence,
 });
 
-class PlayerImpl implements Player, EQ.Equal {
+class PlayerImpl implements Player {
     public static readonly _tag: unique symbol = Symbol("Player");
 
     constructor(
         public readonly label: string,
     ) {
         this.label = label;
+    }
+
+    [Show_symbol](): string {
+        return this.label;
     }
 
     [EQ.symbol](that: EQ.Equal): boolean {

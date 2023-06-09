@@ -4,8 +4,9 @@ import * as EQ from "@effect/data/Equal";
 import * as ST from "@effect/data/Struct";
 import * as S from '@effect/data/String';
 import * as EQV from '@effect/data/typeclass/Equivalence';
+import { Show, Show_symbol } from '../utils/ShouldBeBuiltin';
 
-export interface Card {
+export interface Card extends EQ.Equal, Show {
     readonly cardType: string;
     readonly label: string;
 }
@@ -15,7 +16,7 @@ export const Equivalence: EQV.Equivalence<Card> = ST.getEquivalence({
     label: S.Equivalence,
 });
 
-class CardImpl implements Card, EQ.Equal {
+class CardImpl implements Card {
     public static readonly _tag: unique symbol = Symbol("Card");
 
     constructor(
@@ -24,6 +25,10 @@ class CardImpl implements Card, EQ.Equal {
     ) {
         this.cardType = cardType;
         this.label = label;
+    }
+
+    [Show_symbol](): string {
+       return `Card '${this.label}' (${this.cardType})`
     }
 
     [EQ.symbol](that: EQ.Equal): boolean {

@@ -6,15 +6,15 @@ import * as ST from "@effect/data/Struct";
 import * as O from '@effect/data/Option';
 import * as EQV from '@effect/data/typeclass/Equivalence';
 
-import { HashSet_getEquivalence, Show, Show_show, Show_showHashSet, Show_showOption, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { HashSet_getEquivalence } from '../utils/ShouldBeBuiltin';
 
 import * as Player from './Player';
 import * as Card from './Card';
 
-export interface Guess extends EQ.Equal, Show {
+export interface NumCardsOwnedConclusion {
     readonly cards: HS.HashSet<Card.Card>;
 
-    readonly guesser: Player.Player;
+    readonly Conclusioner: Player.Player;
 
     readonly nonRefuters: HS.HashSet<Player.Player>;
 
@@ -24,9 +24,9 @@ export interface Guess extends EQ.Equal, Show {
     }>;
 }
 
-export const Equivalence: EQV.Equivalence<Guess> = ST.getEquivalence({
+export const Equivalence: EQV.Equivalence<Conclusion> = ST.getEquivalence({
     cards: HashSet_getEquivalence(Card.Equivalence),
-    guesser: Player.Equivalence,
+    Conclusioner: Player.Equivalence,
     nonRefuters: HashSet_getEquivalence(Player.Equivalence),
     refutation: O.getEquivalence(ST.getEquivalence({
         refuter: Player.Equivalence,
@@ -34,12 +34,12 @@ export const Equivalence: EQV.Equivalence<Guess> = ST.getEquivalence({
     })),
 });
 
-class GuessImpl implements Guess {
-    public static readonly _tag: unique symbol = Symbol("Guess");
+class ConclusionImpl implements Conclusion, EQ.Equal {
+    public static readonly _tag: unique symbol = Symbol("Conclusion");
 
     constructor(
         public readonly cards: HS.HashSet<Card.Card>,
-        public readonly guesser: Player.Player,
+        public readonly Conclusioner: Player.Player,
         public readonly nonRefuters: HS.HashSet<Player.Player>,
         public readonly refutation: O.Option<{
             refuter: Player.Player;
@@ -48,12 +48,8 @@ class GuessImpl implements Guess {
     ) {
     }
 
-    [Show_symbol](): string {
-        return `Guess by ${Show_show(this.guesser)} of ${Show_showHashSet(this.cards)} NOT refuted by ${Show_showHashSet(this.nonRefuters)} with refutation ${Show_showOption(this.refutation)}`
-    }
-
     [EQ.symbol](that: EQ.Equal): boolean {
-        return (that instanceof GuessImpl) // TODO use a refinement based on the interface, not the class
+        return (that instanceof ConclusionImpl) // TODO use a refinement based on the interface, not the class
                 && Equivalence(this, that);
     }
 
@@ -66,22 +62,22 @@ class GuessImpl implements Guess {
 
 export const create = ({
     cards,
-    guesser,
+    Conclusioner,
     nonRefuters,
     refutation,
 }: {
     readonly cards: HS.HashSet<Card.Card>;
-    readonly guesser: Player.Player;
+    readonly Conclusioner: Player.Player;
     readonly nonRefuters: HS.HashSet<Player.Player>;
     readonly refutation: O.Option<{
         refuter: Player.Player;
         card: O.Option<Card.Card>;
     }>;
-}): E.Either<string, Guess> =>
+}): E.Either<string, Conclusion> =>
     // TODO maybe actually validate the cards?
-    E.right(new GuessImpl(
+    E.right(new ConclusionImpl(
         cards,
-        guesser,
+        Conclusioner,
         nonRefuters,
         refutation,
     ));

@@ -1,35 +1,38 @@
 import * as E from '@effect/data/Either';
 import * as HS from "@effect/data/HashSet";
 import * as ST from "@effect/data/Struct";
+import * as CTX from '@effect/data/Context';
 
 import * as Guess from './Guess';
 
-export interface GuessHistory {
+export interface GuessSet {
     readonly guesses: HS.HashSet<Guess.Guess>;
 }
 
-export const empty: GuessHistory =
+export const Tag = CTX.Tag<GuessSet>();
+
+export const empty: GuessSet =
     Object.freeze({
         guesses: HS.empty(),
     });
 
 export const add = (newGuess: Guess.Guess) =>
-                (initialHistory: GuessHistory):
-                GuessHistory =>
-    ST.evolve(initialHistory, {
+                (initialSet: GuessSet):
+                GuessSet =>
+    ST.evolve(initialSet, {
         guesses: HS.add(newGuess)
     });
 
-export interface ValidatedGuessHistory extends GuessHistory {
+export interface ValidatedGuessSet extends GuessSet {
     validated: true;
 }
 
-export const validate = (guessHistory: GuessHistory): E.Either<string[], ValidatedGuessHistory> =>
+export const validate = (guessSet: GuessSet): E.Either<string[], ValidatedGuessSet> =>
     E.right(
-        // TODO validate the Guess History for real
+        // TODO validate the guesses for real
 
         Object.freeze({
-            ...guessHistory,
+            ...guessSet,
             validated: true,
         })
     );

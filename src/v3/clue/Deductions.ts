@@ -1,15 +1,21 @@
 import * as ROA from "@effect/data/ReadonlyArray";
 import * as O from '@effect/data/Option';
 import * as HM from "@effect/data/HashMap";
+import * as HS from '@effect/data/HashSet';
 import * as T from '@effect/io/Effect';
+import * as ST from "@effect/data/Struct";
+import * as E from '@effect/data/Either';
+import { flow, identity, pipe } from "@effect/data/Function";
 
-import * as Player from "./Player";
-import * as PlayerSetup from "./PlayerSetup";
+import { HashMap_setOrFail, Show_show } from "../utils/ShouldBeBuiltin";
+import {dedent} from "ts-dedent";
+
+import * as PlayerSet from "./PlayerSet";
 import * as Card from './Card';
-import * as CardSetup from './CardSetup';
+import * as CardSet from './CardSet';
 import * as CardHolder from './CardHolder';
 import * as Guess from './Guess';
-import * as GuessHistory from './GuessHistory';
+import * as GuessSet from './GuessSet';
 
 interface Reason {
     level: 'observed' | 'inferred' | 'suspected';
@@ -38,10 +44,73 @@ interface Conclusions {
     refutations: HM.HashMap<RefutationConclusionKey, [RefutationConclusionValue, Reason]>;
 }
 
-type Deduction = (conclusions: Conclusions) => T.Effect<CardSetup.CardSetup | PlayerSetup.PlayerSetup | GuessHistory.GuessHistory, never, Conclusions>;
+const setOwnership = (key: OwnershipConclusionKey, [value, reason]: [OnwershipConclusionValue, Reason]): ((conclusions: Conclusions) => E.Either<string, Conclusions>) =>
+    flow(
+        // Try to add the new ownership
+        ST.evolve({
+            ownership: HashMap_setOrFail(key, [value, reason]),
+            refutations: E.right<Conclusions['refutations']>,
+        }),
+        E.struct,
 
-const cardOwnedExactlyOnce: Deduction = (conclusions) => T.gen(function* ($) {
-    // - Each row must have exactly 1 "yes"
+        // Handle the case that ownership is already set
+        // TODO if they have the same value, should it append the reason?
+        E.mapLeft(([existingValue, existingReason]) => dedent`
+            Cannot update conclusion about ownership:
+                Holder = ${CardHolder.show(key.holder)}
+                Card = ${Show_show(key.card)}
+                Has = ${value.has}
+                Reason = ${Show_show(reason)}
+
+            Conflicting ownership conclusion already exists:
+                Has = ${existingValue.has}
+                Reason = ${Show_show(existingReason)}
+        `)
+    );
+
+const setRefutation = (key: RefutationConclusionKey, [value, reason]: [RefutationConclusionValue, Reason]): ((conclusions: Conclusions) => E.Either<string, Conclusions>) =>
+    flow(
+        // Try to add the new ownership
+        ST.evolve({
+            ownership: E.right<Conclusions['ownership']>,
+            refutations: HashMap_setOrFail(key, [value, reason]),
+        }),
+        E.struct,
+
+        // Handle the case that ownership is already set
+        // TODO if they have the same value, should it append the reason?
+        E.mapLeft(([existingValue, existingReason]) => dedent`
+            Cannot update conclusion about refutation card:
+                Guess = ${Show_show(key.guess)}
+                Card = ${Show_show(value.card)}
+                Reason = ${Show_show(reason)}
+
+            Conflicting ownership conclusion already exists:
+                Card = ${Show_show(existingValue.card)}
+                Reason = ${Show_show(existingReason)}
+        `)
+    );
+
+type Deduction = (conclusions: Conclusions) => T.Effect<CardSet.CardSet | PlayerSet.PlayerSet | GuessSet.GuessSet, never, Conclusions>;
+
+const cardOwnedExactlyOnce: Deduction = (initialConclusions) => T.gen(function* ($) {
+    const { cards } = yield* $(CardSet.Tag);
+    const { players } = yield* $(PlayerSet.Tag);
+
+    HS.forEach(cards, card => {
+        const [definiteHoldingPlayers, otherPlayers] = ROA.partition(
+            players,
+            player => true, // TODO figure this out
+        );
+
+        // If definiteHoldingPlayers < 1
+            // If otherPlayers === N-1, mark this person as having it
+            // else do nothing
+        // If definiteHoldingPlayers === 1, mark everyone else as not having it
+        // If definiteHoldingPlayers > 1, error out
+    });
+
+    // - Each card must have exactly 1 "yes"
     // -    "__ has the card, so nobody else can"
     // -    "Nobody else has the card, so ___ must have it"
 });
@@ -57,7 +126,6 @@ const eachPlayerOwnsExactly: Deduction = (conclusions) => T.gen(function* ($) {
     // -    "All of ___'s card are accounted for, so they cannot have this"
     // -    "All of ___'s cards have been rules out, so they must have this" 
 });
-
 
 const nonRefuterDoesNotOwn: Deduction = (conclusions) => T.gen(function* ($) {
     // - Any player that skips refutation does not have those cards

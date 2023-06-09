@@ -2,28 +2,33 @@ import * as E from '@effect/data/Either';
 import * as HS from "@effect/data/HashSet";
 import * as ST from "@effect/data/Struct";
 import * as ROA from '@effect/data/ReadonlyArray';
+import * as CTX from '@effect/data/Context';
 import { pipe, flow } from '@effect/data/Function';
 
 import * as Card from './Card';
 import { Endomorphism_getMonoid } from '../utils/ShouldBeBuiltin';
 
-export interface CardSetup {
+export interface CardSet {
     readonly cards: HS.HashSet<Card.Card>;
 }
 
-export const empty: CardSetup =
+export const Tag = CTX.Tag<CardSet>();
+
+export const empty: CardSet =
     Object.freeze({
         cards: HS.empty(),
     });
 
 export const add = (newCard: Card.Card) =>
-                (initialSetup: CardSetup):
-                CardSetup =>
-    ST.evolve(initialSetup, {
+                (initialSet: CardSet):
+                CardSet =>
+    ST.evolve(initialSet, {
         cards: HS.add(newCard)
     });
 
-export const standardNorthAmericaCardSetup: (initialCardSetup: CardSetup) => CardSetup =
+// TODO make this a direct CardSet (rather than a function to add all the standard cards)
+//      then add a function to combine two CardSets
+export const addStandardNorthAmericaCardSet: (initialCardSet: CardSet) => CardSet =
     pipe(
         E.all([
             Card.create('person', 'scarlet'),
@@ -55,23 +60,23 @@ export const standardNorthAmericaCardSetup: (initialCardSetup: CardSetup) => Car
         // not tagged errors that should be handled by the user
         E.getOrThrow,
 
-        // Add all these cards to a setup, and validate it
+        // Add all these cards to the set
         ROA.map(add),
-        Endomorphism_getMonoid<CardSetup>().combineAll,
+        Endomorphism_getMonoid<CardSet>().combineAll,
     );
 
-export interface ValidatedCardSetup extends CardSetup {
+export interface ValidatedCardSet extends CardSet {
     validated: true;
     cardTypes: HS.HashSet<string>;
 }
 
-export const validate = (cardSetup: CardSetup): E.Either<string[], ValidatedCardSetup> =>
+export const validate = (cardSet: CardSet): E.Either<string[], ValidatedCardSet> =>
     E.right(
-        // TODO validate the card setup for real
+        // TODO validate the card set for real
 
         Object.freeze({
-            ...cardSetup,
-            cardTypes: HS.map(cardSetup.cards, card => card.cardType),
+            ...cardSet,
+            cardTypes: HS.map(cardSet.cards, card => card.cardType),
             validated: true,
         })
     );
