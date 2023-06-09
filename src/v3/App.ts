@@ -5,6 +5,7 @@ import * as Clue from './clue';
 // TODO refactors
 // - use generator syntax wherever possible
 // - convert any logical validations into typings. Make bad states unrepresentable
+// - use @effect/schema to validate data into the Api
 
 // TODO more features
 // - Who I've shown what (and which card I should show to refute)
