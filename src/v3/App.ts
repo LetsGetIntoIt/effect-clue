@@ -174,7 +174,7 @@ const ui: E.Either<string[], UiOutput> = E.gen(function* ($) {
     const deductions = yield* $(Deductions.deduce({
         cardSetup,
         playerSetup,
-        guesses,
+        guessHistory,
     }));
 
     // Other features
