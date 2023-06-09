@@ -1,4 +1,3 @@
-import * as T from '@effect/io/Effect';
 import * as E from '@effect/data/Either';
 import * as ROA from '@effect/data/ReadonlyArray';
 import * as O from '@effect/data/Option';
@@ -144,7 +143,7 @@ const setupGuesses = ({
     E.flatMap(GuessHistory.validate),
 );
 
-const ui: E.Either<string[], UiOutput> = T.gen(function* ($) {
+const ui: E.Either<string[], UiOutput> = E.gen(function* ($) {
     // This will live in a component, returning the validated result or nothing
     const cardSetup = yield* $(setupCards({
         useStandard: 'North America',

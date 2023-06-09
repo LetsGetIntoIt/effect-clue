@@ -1,22 +1,36 @@
 import * as ROA from "@effect/data/ReadonlyArray";
+import * as HM from "@effect/data/HashMap";
+
+import * as CardHolder from './CardHolder';
+import * as Player from "./Player";
+import * as Card from './Card';
+import * as Guess from './Guess';
 
 interface Reason {
     level: 'observed' | 'inferred' | 'suspected';
     description: string;
 }
 
-interface Deduction<Conclusion> {
-    conclusion: Conclusion;
-    reasons: ROA.NonEmptyArray<Reason>;
+interface OwnershipDeductionKey {
+    holder: CardHolder.CardHolder;
+    card: Card.Card;
+}
+
+interface OnwershipDeductionValue {
+    has: boolean;
+}
+
+interface RefutationDeductionKey {
+    guess: Guess.Guess; // TODO replace with an ID?
+}
+
+interface RefutationDeductionValue {
+    card: Card.Card;
 }
 
 interface GameDeductions<CardType extends string, CardLabel extends string, PlayerLabel extends string> {
-    // Table of
-    // rows: cards of each type
-    // columns: case file and each player
-    // values: Deduction<'has', 'does not have'>
-
-    // Updates to the guess history, filling in refute cards
+    ownership: HM.HashMap<OwnershipDeductionKey, [OnwershipDeductionValue, Reason]>;
+    refutations: HM.HashMap<RefutationDeductionKey, [RefutationDeductionValue, Reason]>;
 }
 
 // Deduction rules
