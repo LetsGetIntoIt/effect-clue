@@ -1,8 +1,6 @@
 import * as E from '@effect/data/Either';
 import * as ROA from '@effect/data/ReadonlyArray';
-import * as O from '@effect/data/Option';
 import * as Match from "@effect/match"
-import * as HS from '@effect/data/HashSet';
 import { flow, identity, pipe, tupled } from '@effect/data/Function';
 
 import { Endomorphism_getMonoid, eitherApply } from '../utils/ShouldBeBuiltin';
