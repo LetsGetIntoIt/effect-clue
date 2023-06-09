@@ -8,6 +8,7 @@ import * as Clue from './clue';
 // - use @effect/schema to validate data into the Api
 
 // TODO more features
+// - Save and load games from localStorage
 // - Who I've shown what (and which card I should show to refute)
 // - Best next guesses to make (not taking map into account)
 // - Best next guesses to make, given you're in a particular room
