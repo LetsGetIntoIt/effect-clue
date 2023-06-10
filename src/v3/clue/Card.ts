@@ -4,7 +4,7 @@ import * as EQ from "@effect/data/Equal";
 import * as ST from "@effect/data/Struct";
 import * as S from '@effect/data/String';
 import * as EQV from '@effect/data/typeclass/Equivalence';
-import { Equal_isEqual, Predicate_Refinement_struct, Show, Show_isShow, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Predicate_Refinement_struct, Refinement_and, Show, Show_isShow, Show_symbol } from '../utils/ShouldBeBuiltin';
 import * as P from '@effect/data/Predicate';
 import { pipe } from '@effect/data/Function';
 
@@ -20,8 +20,8 @@ export const isCard: P.Refinement<unknown, Card> =
             label: P.isString,
         }),
 
-        P.compose(Equal_isEqual),
-        P.compose(Show_isShow),
+        Refinement_and(EQ.isEqual),
+        Refinement_and(Show_isShow),
     );
 
 export const Equivalence: EQV.Equivalence<Card> = ST.getEquivalence({

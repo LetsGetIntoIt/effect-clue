@@ -109,5 +109,9 @@ export const Predicate_Refinement_struct =
             }),
         );
 
-export const Equal_isEqual = <A>(a: A): a is A & EQ.Equal =>
-    EQ.isEqual(a);
+// Merged in this PR: https://github.com/Effect-TS/data/pull/361
+export const Refinement_and:
+        <A, C extends A>(that: P.Refinement<A, C>) =>
+        <B extends A>(self: P.Refinement<A, B>) =>
+        P.Refinement<A, B & C> =
+    P.and as any;
