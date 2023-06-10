@@ -5,6 +5,7 @@ import * as O from '@effect/data/Option';
 import * as ROA from '@effect/data/ReadonlyArray';
 import * as SG from '@effect/data/typeclass/Semigroup'
 import * as MN from '@effect/data/typeclass/Monoid'
+import * as EQ from '@effect/data/Equal';
 import * as EQV from '@effect/data/typeclass/Equivalence';
 import * as P from '@effect/data/Predicate';
 import { pipe, identity, flow, constant } from '@effect/data/Function'
@@ -24,10 +25,14 @@ export const Endomorphism_getMonoid = <A>(): MN.Monoid<Endomorphism<A>> =>
 export const eitherApply = <E, A>(maybeFn: E.Either<E, (a: A) => A>): ((a: A) => E.Either<E, A>) =>
     null;
 
+export const HashSet_every = <A, B extends A>(refineValue: P.Refinement<A, B>): P.Refinement<HS.HashSet<A>, HS.HashSet<B>> =>
+    (hashSet): hashSet is HS.HashSet<B> =>
+        HS.every(hashSet, refineValue);
+
 // TODO replace this with some in-built util that does the same thing
 export const HashSet_getEquivalence = <A>(EQVA: EQV.Equivalence<A>): EQV.Equivalence<HS.HashSet<A>> =>
     null;
-    
+
 export const HashMap_setOrFail = <K, V>(key: K, value: V) => (map: HM.HashMap<K, V>): E.Either<V, HM.HashMap<K, V>> =>
     pipe(
         // Try getting the existing value
@@ -47,6 +52,13 @@ export declare const Show_symbol: unique symbol;
 export interface Show {
     [Show_symbol](): string;
 }
+
+export const Show_isShow = <A>(thing: A): thing is A & Show =>
+    P.isNotNullable(thing) &&
+    P.isObject(thing) &&
+    Show_symbol in thing &&
+    P.isNotNullable(thing[Show_symbol]) &&
+    typeof thing[Show_symbol] === 'function';
 
 export const Show_show = (showable: Show): string =>
     showable[Show_symbol]();
@@ -85,3 +97,17 @@ export const HashMap_separateV = <V>(valuePredicate: P.Predicate<V>) => <K>(map:
             HM.filter(valuePredicate),
         ),
     ];
+
+export const Predicate_Refinement_struct =
+    <R extends Record<string | number | symbol, unknown>>(refinements: { [k in keyof R]: P.Refinement<unknown, R[k]>}):
+    P.Refinement<unknown, R> =>
+        pipe(
+            P.isRecord,
+
+            P.compose((obj): obj is R => {
+                // TODO
+            }),
+        );
+
+export const Equal_isEqual = <A>(a: A): a is A & EQ.Equal =>
+    EQ.isEqual(a);

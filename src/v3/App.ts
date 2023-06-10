@@ -6,6 +6,7 @@ import * as Clue from './clue';
 // - use generator syntax wherever possible
 // - convert any logical validations into typings. Make bad states unrepresentable
 // - use @effect/schema to validate data into the Api
+// - use TSPlus and see if a lot of interfaces/typeclasses/classes/constuctor code can be deduped
 
 // TODO more features
 // - Save and load games from localStorage

@@ -6,23 +6,29 @@ import * as ST from "@effect/data/Struct";
 import * as O from '@effect/data/Option';
 import * as EQV from '@effect/data/typeclass/Equivalence';
 
-import { HashSet_getEquivalence } from '../utils/ShouldBeBuiltin';
+import { HashSet_getEquivalence, Show } from '../utils/ShouldBeBuiltin';
 
 import * as Player from './Player';
 import * as Card from './Card';
+import * as CardHolder from './CardHolder';
 
-export interface NumCardsOwnedConclusion {
-    readonly cards: HS.HashSet<Card.Card>;
-
-    readonly Conclusioner: Player.Player;
-
-    readonly nonRefuters: HS.HashSet<Player.Player>;
-
-    readonly refutation: O.Option<{
-        refuter: Player.Player;
-        card: O.Option<Card.Card>;
-    }>;
+interface Reason extends EQ.Equal, Show {
+    level: 'observed' | 'inferred';
+    description: string;
 }
+
+type Conclusion = EQ.Equal & Show & (
+    | {
+        _conclusionTag: 'numOwned';
+        player: Player.Player;
+        numOwned: number;
+    }
+    | {
+        _conclusionTag: 'cardOwnedBy';
+        holder: CardHolder.CardHolder;
+        card: Card.Card;
+    }
+);
 
 export const Equivalence: EQV.Equivalence<Conclusion> = ST.getEquivalence({
     cards: HashSet_getEquivalence(Card.Equivalence),

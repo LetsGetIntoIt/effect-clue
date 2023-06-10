@@ -3,46 +3,47 @@ import * as H from '@effect/data/Hash';
 import * as EQ from "@effect/data/Equal";
 import * as ST from "@effect/data/Struct";
 import * as S from '@effect/data/String';
+import * as P from '@effect/data/Predicate';
 import * as EQV from '@effect/data/typeclass/Equivalence';
-import { Show, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Equal_isEqual, Predicate_Refinement_struct, Show, Show_isShow, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { pipe } from '@effect/data/Function';
 
 export interface Player extends EQ.Equal, Show {
     readonly label: string;
 }
 
+export const isPlayer: P.Refinement<unknown, Player> =
+    pipe(
+        Predicate_Refinement_struct({
+            label: P.isString,
+        }),
+
+        P.compose(Equal_isEqual),
+        P.compose(Show_isShow),
+    );
+
 export const Equivalence: EQV.Equivalence<Player> = ST.getEquivalence({
     label: S.Equivalence,
 });
-
-class PlayerImpl implements Player {
-    public static readonly _tag: unique symbol = Symbol("Player");
-
-    constructor(
-        public readonly label: string,
-    ) {
-        this.label = label;
-    }
-
-    [Show_symbol](): string {
-        return this.label;
-    }
-
-    [EQ.symbol](that: EQ.Equal): boolean {
-        return (that instanceof PlayerImpl) // TODO use a refinement based on the interface, not the class
-            && Equivalence(this, that);
-    }
-
-    [H.symbol](): number {
-        return H.structure({
-            ...this
-        });
-    }
-}
 
 export const create = (
     label: string,
 ): E.Either<string, Player> =>
     // TODO maybe actually validate the player?
-    E.right(new PlayerImpl(
+    E.right({
         label,
-    ));
+
+        [Show_symbol](): string {
+            return this.label;
+        },
+    
+        [EQ.symbol](that: EQ.Equal): boolean {
+            return isPlayer(that) && Equivalence(this, that);
+        },
+
+        [H.symbol](): number {
+            return H.structure({
+                ...this
+            });
+        },
+    });
