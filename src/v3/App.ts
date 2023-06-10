@@ -11,6 +11,7 @@ import * as Clue from './clue';
 // TODO more features
 // - Save and load games from localStorage
 // - Who I've shown what (and which card I should show to refute)
+// - See what other people should know (by direct observation and inference)
 // - Best next guesses to make (not taking map into account)
 // - Best next guesses to make, given you're in a particular room
 // - Test hypotheses to find paradoxes
