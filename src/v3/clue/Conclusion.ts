@@ -1,89 +1,142 @@
-import * as H from '@effect/data/Hash';
-import * as HS from "@effect/data/HashSet";
-import * as E from '@effect/data/Either';
-import * as EQ from "@effect/data/Equal";
-import * as ST from "@effect/data/Struct";
-import * as O from '@effect/data/Option';
+import * as EQ from '@effect/data/Equal';
+import * as ROA from '@effect/data/ReadonlyArray';
 import * as EQV from '@effect/data/typeclass/Equivalence';
+import * as ST from '@effect/data/Struct';
+import * as S from '@effect/data/String';
+import * as TU from '@effect/data/Tuple';
+import * as H from '@effect/data/Hash';
+import * as HS from '@effect/data/HashSet';
+import * as P from '@effect/data/Predicate';
+import * as E from '@effect/data/Either';
+import * as B from '@effect/data/Boolean';
+import { pipe } from '@effect/data/Function';
 
-import { HashSet_getEquivalence, Show } from '../utils/ShouldBeBuiltin';
+import { Equals_getRefinement2, Equivalence_constTrue, HashSet_every, HashSet_getEquivalence, Predicate_Refinement_struct, Refinement_and, Refinement_or, Show, Show_isShow, Show_symbol } from '../utils/ShouldBeBuiltin';
 
-import * as Player from './Player';
-import * as Card from './Card';
-import * as CardHolder from './CardHolder';
-
-interface Reason extends EQ.Equal, Show {
+/**
+ * Why do we know something?
+ * Did we directly observe it, or infer it?
+ * What specifically caused us to know this thing?
+ */
+export type Reason = EQ.Equal & Show & {
     level: 'observed' | 'inferred';
-    description: string;
+    explanation: string;
 }
 
-type Conclusion = EQ.Equal & Show & (
-    | {
-        _conclusionTag: 'numOwned';
-        player: Player.Player;
-        numOwned: number;
-    }
-    | {
-        _conclusionTag: 'cardOwnedBy';
-        holder: CardHolder.CardHolder;
-        card: Card.Card;
-    }
-);
-
-export const Equivalence: EQV.Equivalence<Conclusion> = ST.getEquivalence({
-    cards: HashSet_getEquivalence(Card.Equivalence),
-    Conclusioner: Player.Equivalence,
-    nonRefuters: HashSet_getEquivalence(Player.Equivalence),
-    refutation: O.getEquivalence(ST.getEquivalence({
-        refuter: Player.Equivalence,
-        card: O.getEquivalence(Card.Equivalence),
-    })),
+const ReasonEquivalence: EQV.Equivalence<Reason> = ST.getEquivalence({
+    level: S.Equivalence,
+    explanation: S.Equivalence,
 });
 
-class ConclusionImpl implements Conclusion, EQ.Equal {
-    public static readonly _tag: unique symbol = Symbol("Conclusion");
+const isReason: P.Refinement<unknown, Reason> =
+    pipe(
+        Predicate_Refinement_struct({
+            level: P.compose(P.isString, pipe(
+                Equals_getRefinement2('observed', S.Equivalence),
+                Refinement_or(Equals_getRefinement2('inferred', S.Equivalence)),
+            )),
 
-    constructor(
-        public readonly cards: HS.HashSet<Card.Card>,
-        public readonly Conclusioner: Player.Player,
-        public readonly nonRefuters: HS.HashSet<Player.Player>,
-        public readonly refutation: O.Option<{
-            refuter: Player.Player;
-            card: O.Option<Card.Card>;
-        }>,
-    ) {
-    }
+            explanation: P.isString,
+        }),
 
-    [EQ.symbol](that: EQ.Equal): boolean {
-        return (that instanceof ConclusionImpl) // TODO use a refinement based on the interface, not the class
-                && Equivalence(this, that);
-    }
+        Refinement_and(EQ.isEqual),
+        Refinement_and(Show_isShow),
+    );
 
-    [H.symbol](): number {
-        return H.structure({
-            ...this
-        });
-    }
+/**
+ * Something that we know
+ * A - the thing we know
+ * Reasons - the reasons we know this
+ */
+export type Conclusion<A> = {
+    answer: A,
+    reasons: HS.HashSet<Reason>;
 }
 
-export const create = ({
-    cards,
-    Conclusioner,
-    nonRefuters,
-    refutation,
-}: {
-    readonly cards: HS.HashSet<Card.Card>;
-    readonly Conclusioner: Player.Player;
-    readonly nonRefuters: HS.HashSet<Player.Player>;
-    readonly refutation: O.Option<{
-        refuter: Player.Player;
-        card: O.Option<Card.Card>;
-    }>;
-}): E.Either<string, Conclusion> =>
+export const getRefinement = <A>(refA: P.Refinement<unknown, A>): P.Refinement<unknown, Conclusion<A>> =>
+    pipe(
+        Predicate_Refinement_struct({
+            answer: refA,
+            reasons: pipe(
+                HS.isHashSet,
+                P.compose(HashSet_every(isReason)),
+            ),
+        }),
+
+        Refinement_and(EQ.isEqual),
+        Refinement_and(Show_isShow),
+    );
+
+export const isConclusion: P.Refinement<unknown, Conclusion<unknown>> =
+    getRefinement(P.isUnknown);
+
+export const getEquivalence = <A>(eqvA: EQV.Equivalence<A>): EQV.Equivalence<Conclusion<A>> =>
+    ST.getEquivalence({
+        answer: eqvA,
+        reasons: HashSet_getEquivalence(ReasonEquivalence),
+    });
+
+export const getEquivalenceIgnoreReasons = <A>(eqvA: EQV.Equivalence<A>): EQV.Equivalence<Conclusion<A>> =>
+    ST.getEquivalence({
+        answer: eqvA,
+
+        // Ignore whether the reasons are equivalent or not
+        reasons: Equivalence_constTrue,
+    });
+
+export const create = <A>(
+    refA: P.Refinement<unknown, A>,
+    eqvA: EQV.Equivalence<A>,
+) => (
+    answer: A,
+    reasons: HS.HashSet<Reason>,
+): E.Either<string, Conclusion<A>> =>
     // TODO maybe actually validate the cards?
-    E.right(new ConclusionImpl(
-        cards,
-        Conclusioner,
-        nonRefuters,
-        refutation,
-    ));
+    E.right({
+        answer,
+        reasons,
+
+        [Show_symbol](): string {
+           // TODO implement this
+           return `Some Conclusion`;
+        },
+    
+        [EQ.symbol](that: EQ.Equal): boolean {
+            return getRefinement(refA)(that)
+                && getEquivalence(eqvA)(this, that);
+        },
+
+        [H.symbol](): number {
+            return H.structure({
+                ...this
+            });
+        },
+    });
+
+export const combine = <A>(
+    refA: P.Refinement<unknown, A>,
+    eqvA: EQV.Equivalence<A>,
+) => (
+    that: Conclusion<A>
+) =>
+(self: Conclusion<A>):
+E.Either<string, Conclusion<A>> =>
+    pipe(
+        // Check if the two Conclusion values are equal
+        getEquivalenceIgnoreReasons(eqvA)(self, that),
+
+        B.match(
+            // They are unequal. Return an error
+            // TODO return a structured error
+            () => E.left('Conflicting Conclusion!'),
+
+            // They are equal. Merge the two Conclusions
+            () => create(refA, eqvA)(
+                // Use either Conclusion's value
+                self.answer,
+
+                // Merge their reasons
+                HS.union(self.reasons, that.reasons),
+            ),
+        ),
+    );

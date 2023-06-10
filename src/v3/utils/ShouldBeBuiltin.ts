@@ -8,7 +8,7 @@ import * as MN from '@effect/data/typeclass/Monoid'
 import * as EQ from '@effect/data/Equal';
 import * as EQV from '@effect/data/typeclass/Equivalence';
 import * as P from '@effect/data/Predicate';
-import { pipe, identity, flow, constant } from '@effect/data/Function'
+import { pipe, identity, flow, constant, constTrue } from '@effect/data/Function'
 
 export const String_surroundWith = (pre: string, post = pre) => (str: string): string =>
     `${pre}${str}${post}`;
@@ -115,3 +115,22 @@ export const Refinement_and:
         <B extends A>(self: P.Refinement<A, B>) =>
         P.Refinement<A, B & C> =
     P.and as any;
+
+export const Refinement_or:
+    <A, C extends A>(that: P.Refinement<A, C>) =>
+    <B extends A>(self: P.Refinement<A, B>) =>
+    P.Refinement<A, B | C> =
+        P.or as any;
+
+export const Equivalence_constTrue: EQV.Equivalence<unknown> =
+    EQV.make(constTrue);
+
+export const Equals_getRefinement1 = <A extends EQ.Equal, const M extends A>(model: M): P.Refinement<A, M> =>
+    (a): a is M =>
+        // TODO is there a function that avoids this manual EQ.symbol?
+        model[EQ.symbol](a);
+
+export const Equals_getRefinement2 = <A, const M extends A>(model: M, eqvA: EQV.Equivalence<A>): P.Refinement<A, M> =>
+    (a): a is M =>
+        // TODO is there a function that avoids this manual EQ.symbol?
+        eqvA(model, a);
