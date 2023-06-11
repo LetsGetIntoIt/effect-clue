@@ -138,7 +138,7 @@ export const Show_showOption: <A extends Show>(option: O.Option<A>) => string =
         flow(Show_show, String_surroundWith('Some(', ')')),
     );
 
-export const Show_showHashSet: <A extends Show>(hashSet: HS.HashSet<A>) => string =
+export const Show_showHashSet: (hashSet: HS.HashSet<unknown>) => string =
     flow(
         // Convert the values to an array
         HS.values,
@@ -152,7 +152,7 @@ export const Show_showHashSet: <A extends Show>(hashSet: HS.HashSet<A>) => strin
         String_surroundWith('{ ', ' }'),
     );
 
-export const Show_showHashMap: <K extends Show, V extends Show>(hashMap: HM.HashMap<K, V>) => string =
+export const Show_showHashMap: (hashMap: HM.HashMap<unknown, unknown>) => string =
     flow(
         // Convert the values to an array
         HashMap_entries,

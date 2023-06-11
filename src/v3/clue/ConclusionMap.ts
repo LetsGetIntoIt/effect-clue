@@ -23,20 +23,13 @@ import * as Conclusion from './Conclusion';
  */
 export type ConclusionMap<Q, A> =
     EQ.Equal & Show & {
-        eqvQ: EQV.Equivalence<Q>;
-        eqvA: EQV.Equivalence<A>;
         conclusions: HM.HashMap<Q, Conclusion.Conclusion<A>>;
     };
 
 const create = <Q, A>(
-    eqvQ: EQV.Equivalence<Q>,
-    eqvA: EQV.Equivalence<A>,
-) => (
     conclusions: HM.HashMap<Q, Conclusion.Conclusion<A>>
 ): ConclusionMap<Q, A> =>
     ({
-        eqvQ,
-        eqvA,
         conclusions,
 
         [Show_symbol](): string {
@@ -55,20 +48,12 @@ const create = <Q, A>(
         },
     });
 
-export const empty = <Q, A>(
-    eqvQ: EQV.Equivalence<Q>,
-    eqvA: EQV.Equivalence<A>,
-): ConclusionMap<Q, A> =>
-    pipe(
-        HM.empty(),
-        create(eqvQ, eqvA),
-    );
+export const empty = <Q, A>(): ConclusionMap<Q, A> =>
+    create(HM.empty());
 
 export const add = <Q, A>(
     question: Q,
     answer: A,
     reason: Conclusion.Reason,
-) => (
-    { conclusions }: ConclusionMap<Q, A>,
-): E.Either<string, ConclusionMap<Q, A>> =>
+): ((conclusions: ConclusionMap<Q, A>) => E.Either<string, ConclusionMap<Q, A>>) =>
     null;
