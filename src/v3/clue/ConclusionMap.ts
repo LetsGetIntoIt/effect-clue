@@ -12,7 +12,7 @@ import * as E from '@effect/data/Either';
 import * as B from '@effect/data/Boolean';
 import { flow, pipe } from '@effect/data/Function';
 
-import { Show } from '../utils/ShouldBeBuiltin';
+import { Show, Show_showHashMap, Show_symbol } from '../utils/ShouldBeBuiltin';
 
 import * as Conclusion from './Conclusion';
 
@@ -21,20 +21,50 @@ import * as Conclusion from './Conclusion';
  * Q - the topic that we know about
  * Conclusion - the conclusion we have about that topic
  */
-export type ConclusionMap<Q extends EQ.Equal, A extends EQ.Equal> =
+export type ConclusionMap<Q, A> =
     EQ.Equal & Show & {
+        eqvQ: EQV.Equivalence<Q>;
+        eqvA: EQV.Equivalence<A>;
         conclusions: HM.HashMap<Q, Conclusion.Conclusion<A>>;
     };
 
-const create = <Q extends EQ.Equal, A extends EQ.Equal>(conclusions: HM.HashMap<Q, A>): ConclusionMap<Q, A> =>
+const create = <Q, A>(
+    eqvQ: EQV.Equivalence<Q>,
+    eqvA: EQV.Equivalence<A>,
+) => (
+    conclusions: HM.HashMap<Q, Conclusion.Conclusion<A>>
+): ConclusionMap<Q, A> =>
     ({
+        eqvQ,
+        eqvA,
+        conclusions,
 
+        [Show_symbol](): string {
+           return Show_showHashMap(this.conclusions);
+        },
+
+        [EQ.symbol](that: EQ.Equal): boolean {
+            return isCard(that)
+                && Equivalence(this, that);
+        },
+
+        [H.symbol](): number {
+            return H.structure({
+                ...this
+            });
+        },
     });
 
-export const empty: <Q extends EQ.Equal, A extends EQ.Equal>() => ConclusionMap<Q, A> =
-    flow(HM.empty, create);
+export const empty = <Q, A>(
+    eqvQ: EQV.Equivalence<Q>,
+    eqvA: EQV.Equivalence<A>,
+): ConclusionMap<Q, A> =>
+    pipe(
+        HM.empty(),
+        create(eqvQ, eqvA),
+    );
 
-export const add = <Q extends EQ.Equal, A extends EQ.Equal>(
+export const add = <Q, A>(
     question: Q,
     answer: A,
     reason: Conclusion.Reason,

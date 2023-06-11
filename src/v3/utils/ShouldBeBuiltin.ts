@@ -8,7 +8,21 @@ import * as MN from '@effect/data/typeclass/Monoid'
 import * as EQ from '@effect/data/Equal';
 import * as EQV from '@effect/data/typeclass/Equivalence';
 import * as P from '@effect/data/Predicate';
+import * as TU from '@effect/data/Tuple';
+import * as B from '@effect/data/Boolean';
 import { pipe, identity, flow, constant, constTrue } from '@effect/data/Function'
+
+export const Either_fromRefinement = <A, B extends A>(refinement: P.Refinement<A, B>) => (a: A): E.Either<Exclude<A, B>, B> =>
+    pipe(
+        refinement(a),
+
+        B.match(
+            // The value doesn't pass the refinement
+            () => E.left(a as Exclude<A, B>),
+
+            () => E.right(a as B),
+        ),
+    );
 
 export const String_surroundWith = (pre: string, post = pre) => (str: string): string =>
     `${pre}${str}${post}`;
@@ -33,6 +47,12 @@ export const HashSet_every = <A, B extends A>(refineValue: P.Refinement<A, B>): 
 export const HashSet_getEquivalence = <A>(EQVA: EQV.Equivalence<A>): EQV.Equivalence<HS.HashSet<A>> =>
     null;
 
+export const HashMap_entries = <K, V>(hashMap: HM.HashMap<K, V>): IterableIterator<[K, V]> =>
+    pipe(
+        HM.mapWithIndex(hashMap, (v, k) => TU.tuple(k, v)),
+        HM.values,
+    );
+
 export const HashMap_setOrFail = <K, V>(key: K, value: V) => (map: HM.HashMap<K, V>): E.Either<V, HM.HashMap<K, V>> =>
     pipe(
         // Try getting the existing value
@@ -47,58 +67,20 @@ export const HashMap_setOrFail = <K, V>(key: K, value: V) => (map: HM.HashMap<K,
         ),
     );
 
-export declare const Show_symbol: unique symbol;
+export const Refinement_as = <B>(): P.Refinement<unknown, B> =>
+    (_): _ is B => true;
 
-export interface Show {
-    [Show_symbol](): string;
-}
+export const Refinement_has = <K extends string | number | symbol>(prop: K): P.Refinement<unknown, { [k in K]: unknown }> =>
+    pipe(
+        P.isObject,
 
-export const Show_isShow = <A>(thing: A): thing is A & Show =>
-    P.isNotNullable(thing) &&
-    P.isObject(thing) &&
-    Show_symbol in thing &&
-    P.isNotNullable(thing[Show_symbol]) &&
-    typeof thing[Show_symbol] === 'function';
-
-export const Show_show = (showable: Show): string =>
-    showable[Show_symbol]();
-
-export const Show_showOption: <A extends Show>(option: O.Option<A>) => string =
-    O.match(
-        constant('None'),
-        flow(Show_show, String_surroundWith('Some(', ')')),
+        P.compose(
+            (thing): thing is { [k in K]: unknown } =>
+                prop in thing,
+        ),
     );
 
-export const Show_showHashSet: <A extends Show>(hashSet: HS.HashSet<A>) => string =
-    flow(
-        // Convert the values to an array
-        HS.values,
-        ROA.fromIterable, // TODO ROA.map should be able to handle iterables
-
-        // Show each element
-        ROA.map(Show_show),
-
-        // Concatenate it all into one string
-        ROA.join(", "),
-        String_surroundWith('{ ', ' }'),
-    );
-
-export const HashMap_separateV = <V>(valuePredicate: P.Predicate<V>) => <K>(map: HM.HashMap<K, V>): [falseMap: HM.HashMap<K, V>, trueMap: HM.HashMap<K, V>] =>
-    [
-        // False map
-        pipe(
-            map,
-            HM.filter(P.not(valuePredicate)),
-        ),
-
-        // True map
-        pipe(
-            map,
-            HM.filter(valuePredicate),
-        ),
-    ];
-
-export const Predicate_Refinement_struct =
+export const Refinement_struct =
     <R extends Record<string | number | symbol, unknown>>(refinements: { [k in keyof R]: P.Refinement<unknown, R[k]>}):
     P.Refinement<unknown, R> =>
         pipe(
@@ -121,6 +103,86 @@ export const Refinement_or:
     <B extends A>(self: P.Refinement<A, B>) =>
     P.Refinement<A, B | C> =
         P.or as any;
+
+export declare const Show_symbol: unique symbol;
+
+export interface Show {
+    [Show_symbol](): string;
+}
+
+export const Show_isShow: P.Refinement<unknown, Show> =
+    Refinement_struct({
+        [Show_symbol]: pipe(
+            P.isNotNullable,
+            Refinement_and(P.isFunction),
+
+            // We can't verify the function arguments and return type,
+            // so just cast it
+            Refinement_and(Refinement_as<Show[typeof Show_symbol]>()),
+        ),
+    });
+
+export const Show_show: (thing: unknown) => string =
+    flow(
+        Either_fromRefinement(Show_isShow),
+
+        E.match(
+            JSON.stringify,
+            showable => showable[Show_symbol](),
+        ),
+    );
+
+export const Show_showOption: <A extends Show>(option: O.Option<A>) => string =
+    O.match(
+        constant('None'),
+        flow(Show_show, String_surroundWith('Some(', ')')),
+    );
+
+export const Show_showHashSet: <A extends Show>(hashSet: HS.HashSet<A>) => string =
+    flow(
+        // Convert the values to an array
+        HS.values,
+        ROA.fromIterable, // TODO ROA.map should be able to handle iterables
+
+        // Show each element
+        ROA.map(Show_show),
+
+        // Concatenate it all into one string
+        ROA.join(", "),
+        String_surroundWith('{ ', ' }'),
+    );
+
+export const Show_showHashMap: <K extends Show, V extends Show>(hashMap: HM.HashMap<K, V>) => string =
+    flow(
+        // Convert the values to an array
+        HashMap_entries,
+        ROA.fromIterable, // TODO ROA.map should be able to handle iterables
+
+        // Show each key -> value mapping
+        ROA.map(flow(
+            TU.bimap(Show_show, Show_show),
+            ROA.join(' -> '),
+        )),
+
+        // Concatenate it all into one string
+        ROA.join(", "),
+        String_surroundWith('{ ', ' }'),
+    );
+
+export const HashMap_separateV = <V>(valuePredicate: P.Predicate<V>) => <K>(map: HM.HashMap<K, V>): [falseMap: HM.HashMap<K, V>, trueMap: HM.HashMap<K, V>] =>
+    [
+        // False map
+        pipe(
+            map,
+            HM.filter(P.not(valuePredicate)),
+        ),
+
+        // True map
+        pipe(
+            map,
+            HM.filter(valuePredicate),
+        ),
+    ];
 
 export const Equivalence_constTrue: EQV.Equivalence<unknown> =
     EQV.make(constTrue);

@@ -8,7 +8,7 @@ import * as P from '@effect/data/Predicate';
 import * as EQV from '@effect/data/typeclass/Equivalence';
 import { pipe } from '@effect/data/Function';
 
-import { Equal_isEqual, HashSet_every, HashSet_getEquivalence, Predicate_Refinement_struct, Show, Show_isShow, Show_show, Show_showHashSet, Show_showOption, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Equal_isEqual, HashSet_every, HashSet_getEquivalence, Refinement_struct, Show, Show_isShow, Show_show, Show_showHashSet, Show_showOption, Show_symbol } from '../utils/ShouldBeBuiltin';
 
 import * as Player from './Player';
 import * as Card from './Card';
@@ -28,7 +28,7 @@ export interface Guess extends EQ.Equal, Show {
 
 export const isGuess: P.Refinement<unknown, Guess> =
     pipe(
-        Predicate_Refinement_struct({
+        Refinement_struct({
             cards: pipe(
                 HS.isHashSet,
                 P.compose(HashSet_every(Card.isCard)),

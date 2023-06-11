@@ -5,7 +5,7 @@ import * as ST from "@effect/data/Struct";
 import * as S from '@effect/data/String';
 import * as P from '@effect/data/Predicate';
 import * as EQV from '@effect/data/typeclass/Equivalence';
-import { Equal_isEqual, Predicate_Refinement_struct, Show, Show_isShow, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Equal_isEqual, Refinement_struct, Show, Show_isShow, Show_symbol } from '../utils/ShouldBeBuiltin';
 import { pipe } from '@effect/data/Function';
 
 export interface Player extends EQ.Equal, Show {
@@ -14,7 +14,7 @@ export interface Player extends EQ.Equal, Show {
 
 export const isPlayer: P.Refinement<unknown, Player> =
     pipe(
-        Predicate_Refinement_struct({
+        Refinement_struct({
             label: P.isString,
         }),
 

@@ -4,7 +4,7 @@ import * as EQ from "@effect/data/Equal";
 import * as ST from "@effect/data/Struct";
 import * as S from '@effect/data/String';
 import * as EQV from '@effect/data/typeclass/Equivalence';
-import { Predicate_Refinement_struct, Refinement_and, Show, Show_isShow, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_symbol } from '../utils/ShouldBeBuiltin';
 import * as P from '@effect/data/Predicate';
 import { pipe } from '@effect/data/Function';
 
@@ -15,7 +15,7 @@ export interface Card extends EQ.Equal, Show {
 
 export const isCard: P.Refinement<unknown, Card> =
     pipe(
-        Predicate_Refinement_struct({
+        Refinement_struct({
             cardType: P.isString,
             label: P.isString,
         }),

@@ -8,7 +8,7 @@ import * as EQV from '@effect/data/typeclass/Equivalence';
 import * as O from '@effect/data/Option';
 import { constant, pipe } from '@effect/data/Function';
 
-import { Predicate_Refinement_struct, Refinement_and, Show, Show_isShow, Show_show, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_show, Show_symbol } from '../utils/ShouldBeBuiltin';
 
 import * as Player from "./Player";
 
@@ -26,7 +26,7 @@ export type CardHolder = EQ.Equal & Show & RawCardHolder;
 export const isCardHolder: P.Refinement<unknown, CardHolder> =
     pipe(
         // TODO fix this
-        Predicate_Refinement_struct({
+        Refinement_struct({
             _cardHolderTag: P.isString,
             player: Player.isPlayer,
         }),

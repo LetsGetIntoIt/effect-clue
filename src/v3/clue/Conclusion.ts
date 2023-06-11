@@ -11,7 +11,7 @@ import * as E from '@effect/data/Either';
 import * as B from '@effect/data/Boolean';
 import { pipe } from '@effect/data/Function';
 
-import { Equals_getRefinement2, Equivalence_constTrue, HashSet_every, HashSet_getEquivalence, Predicate_Refinement_struct, Refinement_and, Refinement_or, Show, Show_isShow, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Equals_getRefinement2, Equivalence_constTrue, HashSet_every, HashSet_getEquivalence, Refinement_struct, Refinement_and, Refinement_or, Show, Show_isShow, Show_symbol, Show_show, Show_showHashSet } from '../utils/ShouldBeBuiltin';
 
 /**
  * Why do we know something?
@@ -30,7 +30,7 @@ const ReasonEquivalence: EQV.Equivalence<Reason> = ST.getEquivalence({
 
 const isReason: P.Refinement<unknown, Reason> =
     pipe(
-        Predicate_Refinement_struct({
+        Refinement_struct({
             level: P.compose(P.isString, pipe(
                 Equals_getRefinement2('observed', S.Equivalence),
                 Refinement_or(Equals_getRefinement2('inferred', S.Equivalence)),
@@ -55,7 +55,7 @@ export type Conclusion<A> = {
 
 export const getRefinement = <A>(refA: P.Refinement<unknown, A>): P.Refinement<unknown, Conclusion<A>> =>
     pipe(
-        Predicate_Refinement_struct({
+        Refinement_struct({
             answer: refA,
             reasons: pipe(
                 HS.isHashSet,
@@ -97,10 +97,9 @@ export const create = <A>(
         reasons,
 
         [Show_symbol](): string {
-           // TODO implement this
-           return `Some Conclusion`;
+           return `${Show_show(answer)} because ${Show_showHashSet(reasons)}`;
         },
-    
+
         [EQ.symbol](that: EQ.Equal): boolean {
             return getRefinement(refA)(that)
                 && getEquivalence(eqvA)(this, that);

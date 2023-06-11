@@ -3,6 +3,7 @@ import * as E from '@effect/data/Either';
 import * as Clue from './clue';
 
 // TODO refactors
+// - Typeclass usage: stop passing around Equivalence, Refinement and Show instances everywhere
 // - use generator syntax wherever possible
 // - convert any logical validations into typings. Make bad states unrepresentable
 // - use @effect/schema to validate data into the Api
