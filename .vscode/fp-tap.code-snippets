@@ -1,0 +1,28 @@
+{
+	"Inspect Pipe": {
+		"scope": "javascript,typescript",
+		"prefix": "tapa",
+		"body": [
+			"(a) => { $0; return a; },"
+		],
+		"description": "Inspect the value in a pipe() or flow()"
+	},
+
+	"Debug Pipe": {
+		"scope": "javascript,typescript",
+		"prefix": "tapd",
+		"body": [
+			"(a) => { $0; debugger; return a; },$1"
+		],
+		"description": "Debug the value in a pipe() or flow()"
+	},
+
+	"Log Pipe": {
+		"scope": "javascript,typescript",
+		"prefix": "tapl",
+		"body": [
+			"(a) => { console.log(a); $0; return a; },$1"
+		],
+		"description": "Log the value in a pipe() or flow()"
+	}
+}

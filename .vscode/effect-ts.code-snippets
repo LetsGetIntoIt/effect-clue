@@ -1,0 +1,19 @@
+{
+    "Effect-TS Effect.gen()": {
+        "prefix": "tgen",
+        "body": ["T.gen(function* ($) {\n\t$0\n})"],
+        "description": "Effect-TS with generator function"
+    },
+
+    "Effect-TS Either.gen()": {
+        "prefix": "tgen",
+        "body": ["E.gen(function* ($) {\n\t$0\n})"],
+        "description": "Effect-TS with generator function"
+    },
+
+    "Effect-TS yield": {
+        "prefix": "yld",
+        "body": ["yield* $($0);"],
+        "description": "Effect-TS yield within generator function"
+    },
+}
