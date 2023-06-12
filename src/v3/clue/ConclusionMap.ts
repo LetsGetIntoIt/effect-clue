@@ -1,16 +1,11 @@
 import * as EQ from '@effect/data/Equal';
-import * as ROA from '@effect/data/ReadonlyArray';
 import * as EQV from '@effect/data/typeclass/Equivalence';
 import * as ST from '@effect/data/Struct';
-import * as S from '@effect/data/String';
-import * as TU from '@effect/data/Tuple';
 import * as H from '@effect/data/Hash';
-import * as HS from '@effect/data/HashSet';
 import * as HM from '@effect/data/HashMap';
 import * as P from '@effect/data/Predicate';
 import * as E from '@effect/data/Either';
-import * as B from '@effect/data/Boolean';
-import { flow, pipe } from '@effect/data/Function';
+import { pipe } from '@effect/data/Function';
 
 import { HashMap_every, HashMap_getEquivalence, Refinement_and, Refinement_struct, Show, Show_isShow, Show_showHashMap, Show_symbol } from '../utils/ShouldBeBuiltin';
 

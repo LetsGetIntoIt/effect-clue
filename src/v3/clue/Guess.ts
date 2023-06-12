@@ -8,7 +8,7 @@ import * as P from '@effect/data/Predicate';
 import * as EQV from '@effect/data/typeclass/Equivalence';
 import { pipe } from '@effect/data/Function';
 
-import { Equal_isEqual, HashSet_every, HashSet_getEquivalence, Refinement_struct, Show, Show_isShow, Show_show, Show_showHashSet, Show_showOption, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { HashSet_every, HashSet_getEquivalence, Option_getRefinement, Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_showHashSet, Show_showOption, Show_symbol } from '../utils/ShouldBeBuiltin';
 
 import * as Player from './Player';
 import * as Card from './Card';
@@ -20,6 +20,8 @@ export interface Guess extends EQ.Equal, Show {
 
     readonly nonRefuters: HS.HashSet<Player.Player>;
 
+    // TODO convert this whole object to a tagged class for the 3 different possible cases
+    //      Unrefuted, RefutedUnknown, RefutedKnown
     readonly refutation: O.Option<{
         refuter: Player.Player;
         card: O.Option<Card.Card>;
@@ -43,13 +45,18 @@ export const isGuess: P.Refinement<unknown, Guess> =
 
             refutation: pipe(
                 O.isOption,
-                
-                // TODO
+                P.compose(Option_getRefinement(Refinement_struct({
+                    refuter: Player.isPlayer,
+                    card: pipe(
+                        O.isOption,
+                        P.compose(Option_getRefinement(Card.isCard)),
+                    ),
+                }))),
             ),
         }),
 
-        P.compose(Equal_isEqual),
-        P.compose(Show_isShow),
+        Refinement_and(EQ.isEqual),
+        Refinement_and(Show_isShow),
     );
 
 export const Equivalence: EQV.Equivalence<Guess> = ST.getEquivalence({

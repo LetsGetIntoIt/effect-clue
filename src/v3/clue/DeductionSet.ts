@@ -12,10 +12,11 @@ import * as E from '@effect/data/Either';
 import * as B from '@effect/data/Boolean';
 import { flow, pipe } from '@effect/data/Function';
 
-import { Show } from '../utils/ShouldBeBuiltin';
+import { Show, Show_show, Show_symbol } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';
 import * as Player from './Player';
+import * as Guess from './Guess';
 import * as CardHolder from './CardHolder';
 import * as Conclusion from './Conclusion';
 import * as ConclusionMap from './ConclusionMap';
@@ -29,22 +30,48 @@ export type DeductionSet =
     EQ.Equal & Show & {
         numCards: ConclusionMap.ConclusionMap<Player.Player, number>;
         holdings: ConclusionMap.ConclusionMap<[CardHolder.CardHolder, Card.Card], boolean>;
-        refuteCards: ConclusionMap.ConclusionMap<Guess.RefutedUnknownGuess, OrHashSet<Card>>;
+        refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, OrHashSet<Card.Card>>;
     };
 
 const create = (deductions : {
     numCards: ConclusionMap.ConclusionMap<Player.Player, number>,
     holdings: ConclusionMap.ConclusionMap<[CardHolder.CardHolder, Card.Card], boolean>,
-    refuteCards: ConclusionMap.ConclusionMap<Guess.RefutedUnknownGuess, OrHashSet<Card>>,
-}): DeductionSet => ({
-    ...deductions,
-});
+    refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, OrHashSet<Card.Card>>,
+}): E.Either<string, DeductionSet> => pipe(
+    // TODO actually validate the deductions
 
-export const empty: DeductionSet = create({
-    numCards: ConclusionMap.empty(),
-    holdings: ConclusionMap.empty(),
-    refuteCards: ConclusionMap.empty(),
-});
+    E.right({
+        ...deductions,
+
+        [Show_symbol](): string {
+           return `We have deduced numCards ${Show_show(this.numCards)} and holdings ${Show_show(this.holdings)} and refutations: ${Show_show(this.refuteCards)}`;
+        },
+
+        [EQ.symbol](that: EQ.Equal): boolean {
+            return isCard(that)
+                && Equivalence(this, that);
+        },
+
+        [H.symbol](): number {
+            return H.structure({
+                ...this
+            });
+        },
+    }),
+);
+
+export const empty: DeductionSet =
+    pipe(
+        create({
+            numCards: ConclusionMap.empty(),
+            holdings: ConclusionMap.empty(),
+            refuteCards: ConclusionMap.empty(),
+        }),
+
+        // If creating an empty deduction set errors, it is a defects in the underlying code,
+        // not tagged errors that should be handled by the user
+        E.getOrThrow,
+    );
 
 export const setNumCards =
         (player: Player.Player, numCards: number, reason: Conclusion.Reason) =>

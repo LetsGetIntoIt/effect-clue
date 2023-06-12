@@ -203,3 +203,15 @@ export const Equals_getRefinement2 = <A, const M extends A>(model: M, eqvA: EQV.
     (a): a is M =>
         // TODO is there a function that avoids this manual EQ.symbol?
         eqvA(model, a);
+
+export const Option_getRefinement = <A, B extends A>(refinement: P.Refinement<A, B>): P.Refinement<O.Option<A>, O.Option<B>> =>
+    (opt): opt is O.Option<B> =>
+        O.match(
+            opt,
+
+            // If it's a none, we're done!
+            constTrue,
+
+            // If it's a some, refine the value
+            refinement,
+        );
