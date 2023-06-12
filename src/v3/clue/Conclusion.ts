@@ -1,9 +1,7 @@
 import * as EQ from '@effect/data/Equal';
-import * as ROA from '@effect/data/ReadonlyArray';
 import * as EQV from '@effect/data/typeclass/Equivalence';
 import * as ST from '@effect/data/Struct';
 import * as S from '@effect/data/String';
-import * as TU from '@effect/data/Tuple';
 import * as H from '@effect/data/Hash';
 import * as HS from '@effect/data/HashSet';
 import * as P from '@effect/data/Predicate';
@@ -70,24 +68,21 @@ export const getRefinement = <A>(refA: P.Refinement<unknown, A>): P.Refinement<u
 export const isConclusion: P.Refinement<unknown, Conclusion<unknown>> =
     getRefinement(P.isUnknown);
 
-export const getEquivalence = <A>(eqvA: EQV.Equivalence<A>): EQV.Equivalence<Conclusion<A>> =>
+export const Equivalence: EQV.Equivalence<Conclusion<unknown>> =
     ST.getEquivalence({
-        answer: eqvA,
+        answer: EQ.equivalence(),
         reasons: HashSet_getEquivalence(ReasonEquivalence),
     });
 
-export const getEquivalenceIgnoreReasons = <A>(eqvA: EQV.Equivalence<A>): EQV.Equivalence<Conclusion<A>> =>
+export const EquivalenceIgnoreReasons: EQV.Equivalence<Conclusion<unknown>> =
     ST.getEquivalence({
-        answer: eqvA,
+        answer: EQ.equivalence(),
 
         // Ignore whether the reasons are equivalent or not
         reasons: Equivalence_constTrue,
     });
 
 export const create = <A>(
-    refA: P.Refinement<unknown, A>,
-    eqvA: EQV.Equivalence<A>,
-) => (
     answer: A,
     reasons: HS.HashSet<Reason>,
 ): E.Either<string, Conclusion<A>> =>
@@ -101,8 +96,8 @@ export const create = <A>(
         },
 
         [EQ.symbol](that: EQ.Equal): boolean {
-            return getRefinement(refA)(that)
-                && getEquivalence(eqvA)(this, that);
+            return isConclusion(that)
+                && Equivalence(this, that);
         },
 
         [H.symbol](): number {
@@ -113,16 +108,13 @@ export const create = <A>(
     });
 
 export const combine = <A>(
-    refA: P.Refinement<unknown, A>,
-    eqvA: EQV.Equivalence<A>,
-) => (
     that: Conclusion<A>
 ) =>
 (self: Conclusion<A>):
 E.Either<string, Conclusion<A>> =>
     pipe(
         // Check if the two Conclusion values are equal
-        getEquivalenceIgnoreReasons(eqvA)(self, that),
+        EquivalenceIgnoreReasons(self, that),
 
         B.match(
             // They are unequal. Return an error
@@ -130,7 +122,7 @@ E.Either<string, Conclusion<A>> =>
             () => E.left('Conflicting Conclusion!'),
 
             // They are equal. Merge the two Conclusions
-            () => create(refA, eqvA)(
+            () => create(
                 // Use either Conclusion's value
                 self.answer,
 

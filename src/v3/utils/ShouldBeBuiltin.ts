@@ -43,8 +43,15 @@ export const HashSet_every = <A, B extends A>(refineValue: P.Refinement<A, B>): 
     (hashSet): hashSet is HS.HashSet<B> =>
         HS.every(hashSet, refineValue);
 
-// TODO replace this with some in-built util that does the same thing
+export const HashMap_every = <AIn, BIn, AOut extends AIn, BOut extends BIn>(refineKey: P.Refinement<AIn, AOut>, refineValue: P.Refinement<BIn, BOut>): P.Refinement<HM.HashMap<AIn, BIn>, HM.HashMap<AOut, BOut>> =>
+    (hashMap): hashMap is HM.HashMap<AOut, BOut> =>
+        HS.every(HM.keySet(hashMap), refineKey)
+        && pipe(HM.values(hashMap), ROA.fromIterable, ROA.every(refineValue));
+
 export const HashSet_getEquivalence = <A>(EQVA: EQV.Equivalence<A>): EQV.Equivalence<HS.HashSet<A>> =>
+    null;
+
+export const HashMap_getEquivalence = <A, B>(EQVA: EQV.Equivalence<A>, EQVB: EQV.Equivalence<B>): EQV.Equivalence<HM.HashMap<A, B>> =>
     null;
 
 export const HashMap_entries = <K, V>(hashMap: HM.HashMap<K, V>): IterableIterator<[K, V]> =>

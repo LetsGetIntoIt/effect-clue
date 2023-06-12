@@ -12,7 +12,7 @@ import * as E from '@effect/data/Either';
 import * as B from '@effect/data/Boolean';
 import { flow, pipe } from '@effect/data/Function';
 
-import { Show, Show_showHashMap, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { HashMap_every, HashMap_getEquivalence, Refinement_and, Refinement_struct, Show, Show_isShow, Show_showHashMap, Show_symbol } from '../utils/ShouldBeBuiltin';
 
 import * as Conclusion from './Conclusion';
 
@@ -26,6 +26,29 @@ export type ConclusionMap<Q, A> =
         conclusions: HM.HashMap<Q, Conclusion.Conclusion<A>>;
     };
 
+export const getRefinement = <Q, A>(refQ: P.Refinement<unknown, Q>, refA: P.Refinement<unknown, A>): P.Refinement<unknown, ConclusionMap<Q, A>> =>
+    pipe(
+        Refinement_struct({
+            conclusions: pipe(
+                HM.isHashMap,
+                P.compose(
+                    HashMap_every(refQ, Conclusion.getRefinement(refA)),
+                ),
+            ),
+        }),
+
+        Refinement_and(EQ.isEqual),
+        Refinement_and(Show_isShow),
+    );
+
+export const isConclusionMap: P.Refinement<unknown, ConclusionMap<unknown, unknown>> =
+    getRefinement(P.isUnknown, P.isUnknown);
+
+export const Equivalence: EQV.Equivalence<ConclusionMap<unknown, unknown>> =
+    ST.getEquivalence({
+        conclusions: HashMap_getEquivalence(EQ.equivalence(), EQ.equivalence()),
+    });
+
 const create = <Q, A>(
     conclusions: HM.HashMap<Q, Conclusion.Conclusion<A>>
 ): ConclusionMap<Q, A> =>
@@ -37,8 +60,7 @@ const create = <Q, A>(
         },
 
         [EQ.symbol](that: EQ.Equal): boolean {
-            return isCard(that)
-                && Equivalence(this, that);
+            return isConclusionMap(that) && Equivalence(this, that);
         },
 
         [H.symbol](): number {
