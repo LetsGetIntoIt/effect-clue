@@ -49,7 +49,7 @@ const app: E.Either<string[], AppState> = E.gen(function* ($) {
             [['kate'], 10],
         ],
 
-        knownCardHolders: [
+        knownCardOwners: [
             [['kapil'], ['room', 'doghouse']],
         ],
     }));

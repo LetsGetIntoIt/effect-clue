@@ -12,22 +12,22 @@ import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_show, Show_s
 
 import * as Player from "./Player";
 
-type RawCardHolder =
+type RawCardOwner =
     | {
-        _cardHolderTag: 'player',
+        _cardOwnerTag: 'player',
         player: Player.Player;
     }
     | {
-        _cardHolderTag: 'caseFile',
+        _cardOwnerTag: 'caseFile',
     };
 
-export type CardHolder = EQ.Equal & Show & RawCardHolder;
+export type CardOwner = EQ.Equal & Show & RawCardOwner;
 
-export const isCardHolder: P.Refinement<unknown, CardHolder> =
+export const isCardOwner: P.Refinement<unknown, CardOwner> =
     pipe(
         // TODO fix this
         Refinement_struct({
-            _cardHolderTag: P.isString,
+            _cardOwnerTag: P.isString,
             player: Player.isPlayer,
         }),
 
@@ -36,27 +36,27 @@ export const isCardHolder: P.Refinement<unknown, CardHolder> =
     );
 
 // TODO fix this
-export const Equivalence: EQV.Equivalence<CardHolder> = ST.getEquivalence({
-    _cardHolderTag: S.Equivalence,
+export const Equivalence: EQV.Equivalence<CardOwner> = ST.getEquivalence({
+    _cardOwnerTag: S.Equivalence,
     player: EQV.contramap(
         O.getEquivalence(Player.Equivalence),
         O.fromNullable<Player.Player | undefined>,
     ),
 });
 
-const create = (cardHolder: RawCardHolder): CardHolder =>
+const create = (cardOwner: RawCardOwner): CardOwner =>
     ({
-        ...cardHolder,
+        ...cardOwner,
 
         [Show_symbol]: constant(pipe(
-            M.value(cardHolder),
-            M.when({ _cardHolderTag: 'player' }, ({ player }) => Show_show(player)),
-            M.when({ _cardHolderTag: 'caseFile' }, () => `CaseFile`),
+            M.value(cardOwner),
+            M.when({ _cardOwnerTag: 'player' }, ({ player }) => Show_show(player)),
+            M.when({ _cardOwnerTag: 'caseFile' }, () => `CaseFile`),
             M.exhaustive,
         )),
 
         [EQ.symbol](that: EQ.Equal): boolean {
-            return isCardHolder(that) && Equivalence(this, that);
+            return isCardOwner(that) && Equivalence(this, that);
         },
 
         [H.symbol](): number {
@@ -66,13 +66,13 @@ const create = (cardHolder: RawCardHolder): CardHolder =>
         },
     });
 
-export const createPlayer = (player: Player.Player): CardHolder =>
+export const createPlayer = (player: Player.Player): CardOwner =>
     create({
-        _cardHolderTag: 'player',
+        _cardOwnerTag: 'player',
         player,
     });
 
-export const caseFile: CardHolder =
+export const caseFile: CardOwner =
     create({
-        _cardHolderTag: 'caseFile',
+        _cardOwnerTag: 'caseFile',
     });

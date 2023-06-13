@@ -17,7 +17,7 @@ import { Show, Show_show, Show_symbol } from '../utils/ShouldBeBuiltin';
 import * as Card from './Card';
 import * as Player from './Player';
 import * as Guess from './Guess';
-import * as CardHolder from './CardHolder';
+import * as CardOwner from './CardOwner';
 import * as Conclusion from './Conclusion';
 import * as ConclusionMap from './ConclusionMap';
 
@@ -29,13 +29,13 @@ import * as ConclusionMap from './ConclusionMap';
 export type ConclusionMapSet =
     EQ.Equal & Show & {
         numCards: ConclusionMap.ConclusionMap<Player.Player, number>;
-        holdings: ConclusionMap.ConclusionMap<[CardHolder.CardHolder, Card.Card], boolean>;
+        ownership: ConclusionMap.ConclusionMap<[CardOwner.CardOwner, Card.Card], boolean>;
         refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>;
     };
 
 const create = (conclusions : {
     numCards: ConclusionMap.ConclusionMap<Player.Player, number>,
-    holdings: ConclusionMap.ConclusionMap<[CardHolder.CardHolder, Card.Card], boolean>,
+    ownership: ConclusionMap.ConclusionMap<[CardOwner.CardOwner, Card.Card], boolean>,
     refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>,
 }): E.Either<string, ConclusionMapSet> => pipe(
     // TODO actually validate the conclusions
@@ -44,7 +44,7 @@ const create = (conclusions : {
         ...conclusions,
 
         [Show_symbol](): string {
-           return `We have deduced numCards ${Show_show(this.numCards)} and holdings ${Show_show(this.holdings)} and refutations: ${Show_show(this.refuteCards)}`;
+           return `We have deduced numCards ${Show_show(this.numCards)} and ownership ${Show_show(this.ownership)} and refutations: ${Show_show(this.refuteCards)}`;
         },
 
         [EQ.symbol](that: EQ.Equal): boolean {
@@ -64,7 +64,7 @@ export const empty: ConclusionMapSet =
     pipe(
         create({
             numCards: ConclusionMap.empty(),
-            holdings: ConclusionMap.empty(),
+            ownership: ConclusionMap.empty(),
             refuteCards: ConclusionMap.empty(),
         }),
 
@@ -77,7 +77,7 @@ export const combine = (that: ConclusionMapSet) => (self: ConclusionMapSet): E.E
     // TODO validate that there are no conflicting conclusions
     null;
 
-export const setNumCards =
+export const addNumCards =
         (player: Player.Player, numCards: number, reason: Conclusion.Reason) =>
         (conclusions: ConclusionMapSet):
         E.Either<string, ConclusionMapSet> =>
@@ -85,8 +85,8 @@ export const setNumCards =
     //      where should the CardSet data be accessed from?
     null;
 
-export const setHolding =
-        (holder: CardHolder.CardHolder, card: Card.Card, isHolding: boolean, reason: Conclusion.Reason) =>
+export const addOwnership =
+        (owner: CardOwner.CardOwner, card: Card.Card, isOwned: boolean, reason: Conclusion.Reason) =>
         (conclusions: ConclusionMapSet):
         E.Either<string, ConclusionMapSet> =>
     null;

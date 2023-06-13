@@ -85,17 +85,17 @@ type RawKnownNumCards = [RawPlayer, number];
 // TODO use @effect/schema
 const parseKnownNumCards: (knownNumCards: RawKnownNumCards) => E.Either<string, [Player.Player, number]> = null;
 
-type RawKnownCardHolder = [RawPlayer, RawCard];
+type RawKnownCardOwner = [RawPlayer, RawCard];
 
 // TODO use @effect/schema
-const parseKnownCardHolder: (knownCardHolder: RawKnownCardHolder) => E.Either<string, [Player.Player, Card.Card]> = null;
+const parseKnownCardOwner: (knownCardOwner: RawKnownCardOwner) => E.Either<string, [Player.Player, Card.Card]> = null;
 
 export const setupKnownConclusions = ({
     knownNumCards = [],
-    knownCardHolders = [],
+    knownCardOwners = [],
 }: {
     knownNumCards?: readonly RawKnownNumCards[];
-    knownCardHolders?: RawKnownCardHolder[];
+    knownCardOwners?: RawKnownCardOwner[];
 }): E.Either<string[], ConclusionSet.ValidatedConclusionSet> => pipe(
     ConclusionSet.empty,
 
@@ -112,13 +112,13 @@ export const setupKnownConclusions = ({
         eitherApply,
     ),
 
-    // Add the known card holders
+    // Add the known card owners
     pipe(
-        E.validateAll(knownCardHolders, parseKnownCardHolder),
+        E.validateAll(knownCardOwners, parseKnownCardOwner),
 
         // Add all these guesses to the set
         E.map(flow(
-            ROA.map(ConclusionSet.addKnownCardHolder),
+            ROA.map(ConclusionSet.addOwnership),
             Endomorphism_getMonoid<ConclusionSet.ConclusionSet>().combineAll,
         )),
 
