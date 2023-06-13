@@ -75,7 +75,7 @@ const app: E.Either<string[], AppState> = E.gen(function* ($) {
         ],
     }));
 
-    const deductions = yield* $(Clue.setupDeductions());
+    const deductionRules = yield* $(Clue.setupDeductionRules());
 
     // This will live in the App, and be passed into each component to render extra stuff
     const deducedConclusions = yield* $(Clue.setupDeducedConclusions());

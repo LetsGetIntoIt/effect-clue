@@ -170,5 +170,8 @@ export const setupGuesses = ({
     E.flatMap(GuessSet.validate),
 );
 
-export const setupDeductions = null;
+// TODO choose which deduction rules we are going to use
+export const setupDeductionRules = null;
+
+// TODO run all deduction rules until we don't come to any new conclusions
 export const setupDeducedConclusions = null;

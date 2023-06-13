@@ -26,22 +26,22 @@ import * as ConclusionMap from './ConclusionMap';
  * Q - the topic that we know about
  * Conclusion - the conclusion we have about that topic
  */
-export type DeductionSet =
+export type ConclusionMapSet =
     EQ.Equal & Show & {
         numCards: ConclusionMap.ConclusionMap<Player.Player, number>;
         holdings: ConclusionMap.ConclusionMap<[CardHolder.CardHolder, Card.Card], boolean>;
         refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, OrHashSet<Card.Card>>;
     };
 
-const create = (deductions : {
+const create = (conclusions : {
     numCards: ConclusionMap.ConclusionMap<Player.Player, number>,
     holdings: ConclusionMap.ConclusionMap<[CardHolder.CardHolder, Card.Card], boolean>,
     refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, OrHashSet<Card.Card>>,
-}): E.Either<string, DeductionSet> => pipe(
-    // TODO actually validate the deductions
+}): E.Either<string, ConclusionMapSet> => pipe(
+    // TODO actually validate the conclusions
 
     E.right({
-        ...deductions,
+        ...conclusions,
 
         [Show_symbol](): string {
            return `We have deduced numCards ${Show_show(this.numCards)} and holdings ${Show_show(this.holdings)} and refutations: ${Show_show(this.refuteCards)}`;
@@ -60,7 +60,7 @@ const create = (deductions : {
     }),
 );
 
-export const empty: DeductionSet =
+export const empty: ConclusionMapSet =
     pipe(
         create({
             numCards: ConclusionMap.empty(),
@@ -73,24 +73,28 @@ export const empty: DeductionSet =
         E.getOrThrow,
     );
 
+export const combine = (that: ConclusionMapSet) => (self: ConclusionMapSet): E.Either<string, ConclusionMapSet> =>
+    // TODO validate that there are no conflicting conclusions
+    null;
+
 export const setNumCards =
         (player: Player.Player, numCards: number, reason: Conclusion.Reason) =>
-        (deductions: DeductionSet):
-        E.Either<string, DeductionSet> =>
+        (conclusions: ConclusionMapSet):
+        E.Either<string, ConclusionMapSet> =>
     // TODO how do we validate that we haven't exceeded the total number of cards of each type?
     //      where should the CardSet data be accessed from?
     null;
 
 export const setHolding =
         (holder: CardHolder.CardHolder, card: Card.Card, isHolding: boolean, reason: Conclusion.Reason) =>
-        (deductions: DeductionSet):
-        E.Either<string, DeductionSet> =>
+        (conclusions: ConclusionMapSet):
+        E.Either<string, ConclusionMapSet> =>
     null;
 
 export const setRefuteCards =
         (guess: Guess.Guess, possibleCards: OrHashSet<Card.Card>) =>
-        (deductions: DeductionSet):
-        E.Either<string, DeductionSet> =>
+        (conclusions: ConclusionMapSet):
+        E.Either<string, ConclusionMapSet> =>
     // TODO use typings to ensure that we are only modifying refuted guesses
     // TODO validate that this is a subset of "Player's known held cards" - "Guessed cards"
     null;
