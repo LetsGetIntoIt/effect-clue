@@ -14,6 +14,7 @@ import * as Clue from './clue';
 // - convert any logical validations into typings. Make bad states unrepresentable
 // - use @effect/schema to validate data into the Api
 // - use TSPlus and see if a lot of interfaces/typeclasses/classes/constuctor code can be deduped
+// - Implement CardSet.MonoidUnion, and make StandardNorthAmericaCardSet a regular CardSet, rather than a function to add all the standard cards
 
 // TODO more features
 // - Save and load games from localStorage

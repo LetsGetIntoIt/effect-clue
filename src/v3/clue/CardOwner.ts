@@ -25,7 +25,6 @@ export type CardOwner = EQ.Equal & Show & RawCardOwner;
 
 export const isCardOwner: P.Refinement<unknown, CardOwner> =
     pipe(
-        // TODO fix this
         Refinement_struct({
             _cardOwnerTag: P.isString,
             player: Player.isPlayer,
@@ -35,7 +34,6 @@ export const isCardOwner: P.Refinement<unknown, CardOwner> =
         Refinement_and(Show_isShow),
     );
 
-// TODO fix this
 export const Equivalence: EQV.Equivalence<CardOwner> = ST.getEquivalence({
     _cardOwnerTag: S.Equivalence,
     player: EQV.contramap(

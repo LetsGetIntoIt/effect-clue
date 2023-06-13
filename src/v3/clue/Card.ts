@@ -33,7 +33,6 @@ export const create = (
     cardType: string,
     label: string,
 ): E.Either<string, Card> =>
-    // TODO maybe actually validate the cards?
     E.right({
         cardType,
         label,

@@ -82,12 +82,10 @@ export const setupPlayers = ({
 
 type RawKnownNumCards = [RawPlayer, number];
 
-// TODO use @effect/schema
 const parseKnownNumCards: (knownNumCards: RawKnownNumCards) => E.Either<string, [Player.Player, number]> = null;
 
 type RawKnownCardOwner = [RawPlayer, RawCard];
 
-// TODO use @effect/schema
 const parseKnownCardOwner: (knownCardOwner: RawKnownCardOwner) => E.Either<string, [Player.Player, Card.Card]> = null;
 
 export const setupKnownConclusions = ({
@@ -139,7 +137,6 @@ type RawGuess = {
     ],
 };
 
-// TODO use @effect/schema
 const parseGuess: (guess: RawGuess) => E.Either<string, Guess.Guess> = null;
 
 export const setupGuesses = ({

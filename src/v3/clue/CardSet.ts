@@ -26,8 +26,6 @@ export const add = (newCard: Card.Card) =>
         cards: HS.add(newCard)
     });
 
-// TODO make this a direct CardSet (rather than a function to add all the standard cards)
-//      then add a function to combine two CardSets
 export const addStandardNorthAmericaCardSet: (initialCardSet: CardSet) => CardSet =
     pipe(
         E.all([
