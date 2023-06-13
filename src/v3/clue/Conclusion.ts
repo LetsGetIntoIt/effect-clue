@@ -7,7 +7,8 @@ import * as HS from '@effect/data/HashSet';
 import * as P from '@effect/data/Predicate';
 import * as E from '@effect/data/Either';
 import * as B from '@effect/data/Boolean';
-import { pipe } from '@effect/data/Function';
+import * as M from '@effect/match';
+import { constant, pipe } from '@effect/data/Function';
 
 import { Equals_getRefinement, Equivalence_constTrue, HashSet_every, HashSet_getEquivalence, Refinement_struct, Refinement_and, Refinement_or, Show, Show_isShow, Show_symbol, Show_show, Show_showHashSet } from '../utils/ShouldBeBuiltin';
 
@@ -107,24 +108,33 @@ export const create = <A>(
     });
 
 export const combine = <A>(
-    that: Conclusion<A>
-) =>
-(self: Conclusion<A>):
-E.Either<string, Conclusion<A>> =>
+    collisionStrategy: 'overwrite' | 'fail',
+) => (
+    newConclusion: Conclusion<A>,
+) => (
+    oldConclusion: Conclusion<A>,
+): E.Either<string, Conclusion<A>> =>
     pipe(
-        // Check if the two Conclusion values are equal
-        EquivalenceIgnoreReasons(self, that),
+        EquivalenceIgnoreReasons(newConclusion, oldConclusion),
 
         B.match(
-            () => E.left('Conflicting Conclusion!'),
+            // The values are not equal
+            constant(pipe(
+                M.value(collisionStrategy),
 
-            // They are equal. Merge the two Conclusions
+                // If the strategy is to overwrite, just use the new conclusion
+                M.when('overwrite',  () => E.right(newConclusion)),
+
+                // If the strategy is to fail, do so
+                M.when('fail', () => E.left(`New conclusion ${Show_show(newConclusion)} conflicts with existing conclusion ${Show_show(oldConclusion)}`)),
+
+                M.exhaustive,
+            )),
+
+            // The values are equal, so just merge the reasons
             () => create(
-                // Use either Conclusion's value
-                self.answer,
-
-                // Merge their reasons
-                HS.union(self.reasons, that.reasons),
+                newConclusion.answer,
+                HS.union(newConclusion.reasons, oldConclusion.reasons),
             ),
         ),
     );

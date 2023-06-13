@@ -215,3 +215,18 @@ export const Function_getSemigroup =
     SG.make(
         (f, g) => (a) => SGB.combine(f(a), g(a))
     );
+
+export const Tuple_isLength = <T extends readonly unknown[]>(length: T["length"]): P.Refinement<readonly unknown[], T> =>
+    (arr): arr is T => arr.length === length;
+
+export const Tuple_getRefinement = <A extends readonly unknown[], B extends A>(
+    refinements: {
+        [K in keyof A]: P.Refinement<A[K], B[K]>
+    }
+): P.Refinement<A, B> =>
+    (value: A): value is B =>
+        value.every((value, index) =>
+            refinements?.[index]?.(value as A[number])) as boolean;
+
+export const ReadonlyArray_isArray: P.Refinement<unknown, unknown[]> =
+    Array.isArray;

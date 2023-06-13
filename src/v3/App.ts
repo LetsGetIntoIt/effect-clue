@@ -3,6 +3,7 @@ import * as E from '@effect/data/Either';
 import * as Clue from './clue';
 
 // TODO refactors
+// - Add logging, services and spans
 // - Guess.create() should validate that all the cards, nonRefuters, refuteCards, etc. make sense
 // - All Error strings from the API should be tagged/structured, instead of "string"
 // - Accumulate errors from the API where applicable (instead of failing at the first one)
