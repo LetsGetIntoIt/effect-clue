@@ -77,6 +77,8 @@ export const setNumCards =
         (player: Player.Player, numCards: number, reason: Conclusion.Reason) =>
         (deductions: DeductionSet):
         E.Either<string, DeductionSet> =>
+    // TODO how do we validate that we haven't exceeded the total number of cards of each type?
+    //      where should the CardSet data be accessed from?
     null;
 
 export const setHolding =
@@ -86,7 +88,9 @@ export const setHolding =
     null;
 
 export const setRefuteCards =
-        (guess: Guess.RefutedUnknownGuess, possibleCards: OrHashSet<Card.Card>) =>
+        (guess: Guess.Guess, possibleCards: OrHashSet<Card.Card>) =>
         (deductions: DeductionSet):
         E.Either<string, DeductionSet> =>
+    // TODO use typings to ensure that we are only modifying refuted guesses
+    // TODO validate that this is a subset of "Player's known held cards" - "Guessed cards"
     null;
