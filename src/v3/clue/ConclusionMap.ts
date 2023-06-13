@@ -5,7 +5,7 @@ import * as H from '@effect/data/Hash';
 import * as HM from '@effect/data/HashMap';
 import * as P from '@effect/data/Predicate';
 import * as E from '@effect/data/Either';
-import { pipe } from '@effect/data/Function';
+import { constant, pipe } from '@effect/data/Function';
 
 import { HashMap_every, HashMap_getEquivalence, Refinement_and, Refinement_struct, Show, Show_isShow, Show_showHashMap, Show_symbol } from '../utils/ShouldBeBuiltin';
 
@@ -68,9 +68,29 @@ const create = <Q, A>(
 export const empty = <Q, A>(): ConclusionMap<Q, A> =>
     create(HM.empty());
 
-export const add = <Q, A>(
+export const setAddOrFail = <A>(
+    addOrFail: (answer: A, prevAnswer: A) => E.Either<string, A>,
+) => <Q>(
     question: Q,
+) => (
     answer: A,
     reason: Conclusion.Reason,
 ): ((conclusions: ConclusionMap<Q, A>) => E.Either<string, ConclusionMap<Q, A>>) =>
     null;
+
+export const add = <Q>(
+    question: Q
+): (
+    <A>(answer: A, reason: Conclusion.Reason) =>
+    ((conclusions: ConclusionMap<Q, A>) =>
+    E.Either<string, ConclusionMap<Q, A>>)
+) =>
+    setAddOrFail(constant(E.left('conflicting answers')));
+
+export const set = <Q>(
+    question: Q
+): (
+    <A>(answer: A, reason: Conclusion.Reason) =>
+    ((conclusions: ConclusionMap<Q, A>) => E.Either<string, ConclusionMap<Q, A>>)
+) =>
+    setAddOrFail(E.right);

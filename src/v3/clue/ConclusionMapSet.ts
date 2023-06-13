@@ -30,13 +30,13 @@ export type ConclusionMapSet =
     EQ.Equal & Show & {
         numCards: ConclusionMap.ConclusionMap<Player.Player, number>;
         holdings: ConclusionMap.ConclusionMap<[CardHolder.CardHolder, Card.Card], boolean>;
-        refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, OrHashSet<Card.Card>>;
+        refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, HS.HashSet<[Card.Card, 'owned' | 'maybe']>>;
     };
 
 const create = (conclusions : {
     numCards: ConclusionMap.ConclusionMap<Player.Player, number>,
     holdings: ConclusionMap.ConclusionMap<[CardHolder.CardHolder, Card.Card], boolean>,
-    refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, OrHashSet<Card.Card>>,
+    refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, HS.HashSet<[Card.Card, 'owned' | 'maybe']>>,
 }): E.Either<string, ConclusionMapSet> => pipe(
     // TODO actually validate the conclusions
 
@@ -96,5 +96,8 @@ export const setRefuteCards =
         (conclusions: ConclusionMapSet):
         E.Either<string, ConclusionMapSet> =>
     // TODO use typings to ensure that we are only modifying refuted guesses
-    // TODO validate that this is a subset of "Player's known held cards" - "Guessed cards"
+
+    // TODO validate that this is the only possible thing
+    // - {player's known owned cards} & {guessed cards} ==> "(owned)"
+    // - {player's unknown ownerships} & {guess cards} ==> "(maybe)"
     null;

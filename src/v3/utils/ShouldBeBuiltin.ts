@@ -215,3 +215,10 @@ export const Option_getRefinement = <A, B extends A>(refinement: P.Refinement<A,
             // If it's a some, refine the value
             refinement,
         );
+
+export const Function_getSemigroup =
+    <B>(SGB: SG.Semigroup<B>) =>
+    <A = never>(): SG.Semigroup<(a: A) => B> =>
+    SG.make(
+        (f, g) => (a) => SGB.combine(f(a), g(a))
+    );
