@@ -6,7 +6,7 @@
     },
 
     "Effect-TS Either.gen()": {
-        "prefix": "tgen",
+        "prefix": "egen",
         "body": ["E.gen(function* ($) {\n\t$0\n})"],
         "description": "Effect-TS with generator function"
     },
