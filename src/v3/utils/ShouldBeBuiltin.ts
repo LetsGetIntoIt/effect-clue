@@ -35,7 +35,6 @@ export const Endomorphism_getMonoid = <A>(): MN.Monoid<Endomorphism<A>> =>
     identity
   );
 
-// TODO replace this with some in-built util that does the same thing
 export const eitherApply = <E, A>(maybeFn: E.Either<E, (a: A) => A>): ((a: A) => E.Either<E, A>) =>
     null;
 
@@ -94,7 +93,7 @@ export const Refinement_struct =
             P.isRecord,
 
             P.compose((obj): obj is R => {
-                // TODO
+                
             }),
         );
 
@@ -149,7 +148,7 @@ export const Show_showHashSet: (hashSet: HS.HashSet<unknown>) => string =
     flow(
         // Convert the values to an array
         HS.values,
-        ROA.fromIterable, // TODO ROA.map should be able to handle iterables
+        ROA.fromIterable,
 
         // Show each element
         ROA.map(Show_show),
@@ -163,7 +162,7 @@ export const Show_showHashMap: (hashMap: HM.HashMap<unknown, unknown>) => string
     flow(
         // Convert the values to an array
         HashMap_entries,
-        ROA.fromIterable, // TODO ROA.map should be able to handle iterables
+        ROA.fromIterable,
 
         // Show each key -> value mapping
         ROA.map(flow(
@@ -194,15 +193,9 @@ export const HashMap_separateV = <V>(valuePredicate: P.Predicate<V>) => <K>(map:
 export const Equivalence_constTrue: EQV.Equivalence<unknown> =
     EQV.make(constTrue);
 
-export const Equals_getRefinement1 = <A extends EQ.Equal, const M extends A>(model: M): P.Refinement<A, M> =>
+export const Equals_getRefinement = <const A, const M extends A>(model: M): P.Refinement<A, M> =>
     (a): a is M =>
-        // TODO is there a function that avoids this manual EQ.symbol?
-        model[EQ.symbol](a);
-
-export const Equals_getRefinement2 = <A, const M extends A>(model: M, eqvA: EQV.Equivalence<A>): P.Refinement<A, M> =>
-    (a): a is M =>
-        // TODO is there a function that avoids this manual EQ.symbol?
-        eqvA(model, a);
+        EQ.equals(model)(a);
 
 export const Option_getRefinement = <A, B extends A>(refinement: P.Refinement<A, B>): P.Refinement<O.Option<A>, O.Option<B>> =>
     (opt): opt is O.Option<B> =>

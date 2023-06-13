@@ -29,7 +29,6 @@ export const Equivalence: EQV.Equivalence<Player> = ST.getEquivalence({
 export const create = (
     label: string,
 ): E.Either<string, Player> =>
-    // TODO maybe actually validate the player?
     E.right({
         label,
 

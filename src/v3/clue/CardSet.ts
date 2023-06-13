@@ -70,8 +70,6 @@ export interface ValidatedCardSet extends CardSet {
 
 export const validate = (cardSet: CardSet): E.Either<string[], ValidatedCardSet> =>
     E.right(
-        // TODO validate the card set for real
-
         Object.freeze({
             ...cardSet,
             cardTypes: HS.map(cardSet.cards, card => card.cardType),

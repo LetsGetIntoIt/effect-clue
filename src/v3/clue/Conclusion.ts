@@ -9,7 +9,7 @@ import * as E from '@effect/data/Either';
 import * as B from '@effect/data/Boolean';
 import { pipe } from '@effect/data/Function';
 
-import { Equals_getRefinement2, Equivalence_constTrue, HashSet_every, HashSet_getEquivalence, Refinement_struct, Refinement_and, Refinement_or, Show, Show_isShow, Show_symbol, Show_show, Show_showHashSet } from '../utils/ShouldBeBuiltin';
+import { Equals_getRefinement, Equivalence_constTrue, HashSet_every, HashSet_getEquivalence, Refinement_struct, Refinement_and, Refinement_or, Show, Show_isShow, Show_symbol, Show_show, Show_showHashSet } from '../utils/ShouldBeBuiltin';
 
 /**
  * Why do we know something?
@@ -30,8 +30,8 @@ const isReason: P.Refinement<unknown, Reason> =
     pipe(
         Refinement_struct({
             level: P.compose(P.isString, pipe(
-                Equals_getRefinement2('observed', S.Equivalence),
-                Refinement_or(Equals_getRefinement2('inferred', S.Equivalence)),
+                Equals_getRefinement('observed'),
+                Refinement_or(Equals_getRefinement('inferred')),
             )),
 
             explanation: P.isString,
@@ -86,7 +86,6 @@ export const create = <A>(
     answer: A,
     reasons: HS.HashSet<Reason>,
 ): E.Either<string, Conclusion<A>> =>
-    // TODO maybe actually validate the cards?
     E.right({
         answer,
         reasons,
@@ -117,8 +116,6 @@ E.Either<string, Conclusion<A>> =>
         EquivalenceIgnoreReasons(self, that),
 
         B.match(
-            // They are unequal. Return an error
-            // TODO return a structured error
             () => E.left('Conflicting Conclusion!'),
 
             // They are equal. Merge the two Conclusions

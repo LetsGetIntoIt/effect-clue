@@ -20,8 +20,6 @@ export interface Guess extends EQ.Equal, Show {
 
     readonly nonRefuters: HS.HashSet<Player.Player>;
 
-    // TODO convert this whole object to a tagged class for the 3 different possible cases
-    //      Unrefuted, RefutedUnknown, RefutedKnown
     readonly refutation: O.Option<{
         refuter: Player.Player;
         card: O.Option<Card.Card>;
@@ -83,7 +81,6 @@ export const create = ({
         card: O.Option<Card.Card>;
     }>;
 }): E.Either<string, Guess> =>
-    // TODO maybe actually validate the cards?
     E.right({
         cards,
         guesser,

@@ -3,6 +3,7 @@ import * as E from '@effect/data/Either';
 import * as Clue from './clue';
 
 // TODO refactors
+// - Guess.create() should validate that all the cards, nonRefuters, refuteCards, etc. make sense
 // - All Error strings from the API should be tagged/structured, instead of "string"
 // - Accumulate errors from the API where applicable (instead of failing at the first one)
 // - All Conclusion.Reasons should be tagged/structured, instead of string
@@ -14,6 +15,8 @@ import * as Clue from './clue';
 // - convert any logical validations into typings. Make bad states unrepresentable
 // - use @effect/schema to validate data into the Api
 // - use TSPlus and see if a lot of interfaces/typeclasses/classes/constuctor code can be deduped
+// - Simplify Guess by converting to a tagged class for the 3 different possible cases: Unrefuted, RefutedUnknown, RefutedKnown
+// - ^ Update DeductionRule to only add refuted cards for RefutedUnknown guesses
 // - Implement CardSet.MonoidUnion, and make StandardNorthAmericaCardSet a regular CardSet, rather than a function to add all the standard cards
 
 // TODO more features

@@ -29,8 +29,6 @@ export interface ValidatedGuessSet extends GuessSet {
 
 export const validate = (guessSet: GuessSet): E.Either<string[], ValidatedGuessSet> =>
     E.right(
-        // TODO validate the guesses for real
-
         Object.freeze({
             ...guessSet,
             validated: true,

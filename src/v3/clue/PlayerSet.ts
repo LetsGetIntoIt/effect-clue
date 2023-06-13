@@ -29,8 +29,6 @@ export interface ValidatedPlayerSet extends PlayerSet {
 
 export const validate = (playerSet: PlayerSet): E.Either<string[], ValidatedPlayerSet> =>
     E.right(
-        // TODO validate the Player set for real
-
         Object.freeze({
             ...playerSet,
             validated: true,
