@@ -1,12 +1,13 @@
 import * as E from '@effect/data/Either';
 import * as SG from '@effect/data/typeclass/Semigroup';
 import * as MON from '@effect/data/typeclass/Monoid';
-
-import * as ConclusionMapSet from "./ConclusionMapSet";
-import { Either_getSemigroupCombine, Function_getSemigroup } from '../utils/ShouldBeBuiltin';
 import { constant, pipe } from '@effect/data/Function';
 
-type DeductionRule = (
+import { Either_getSemigroupCombine, Function_getSemigroup } from '../utils/ShouldBeBuiltin';
+
+import * as ConclusionMapSet from "./ConclusionMapSet";
+
+export type DeductionRule = (
     // Accepts a current set of deductions
     conclusions: ConclusionMapSet.ConclusionMapSet
 ) =>

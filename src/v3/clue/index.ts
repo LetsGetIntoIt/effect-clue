@@ -3,6 +3,6 @@ export {
     setupPlayers,
     setupKnownConclusions,
     setupGuesses,
-    setupDeductions,
-    setupDeducedConclusions,
+    setupDeductionRules,
+    deduceConclusions,
 } from './Api';

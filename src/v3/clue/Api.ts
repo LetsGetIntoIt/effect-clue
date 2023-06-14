@@ -3,7 +3,7 @@ import * as ROA from '@effect/data/ReadonlyArray';
 import * as Match from "@effect/match"
 import { flow, identity, pipe, tupled } from '@effect/data/Function';
 
-import { Endomorphism_getMonoid, eitherApply } from '../utils/ShouldBeBuiltin';
+import { Either_fromRefinement, Endomorphism_getMonoid, ReadonlyArray_isArray, eitherApply } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';
 import * as CardSet from './CardSet';
@@ -11,6 +11,8 @@ import * as Player from './Player';
 import * as PlayerSet from './PlayerSet';
 import * as Guess from './Guess';
 import * as GuessSet from './GuessSet';
+import * as DeductionRule from './DeductionRule';
+import * as ConclusionMapSet from './ConclusionMapSet';
 
 type RawCard = [string, string];
 
@@ -167,6 +169,57 @@ export const setupGuesses = ({
     E.flatMap(GuessSet.validate),
 );
 
-export const setupDeductionRules;
+const ALL_DEDUCTION_RULES = [
+    'cardIsHeldAtMostOnce',
+    'cardIsHeldAtLeastOnce',
+    'cardIsHeldExactlyOnce',
+    'playerHasAtMostNumCards',
+    'playerHasAtLeastNumCards',
+    'playerHasExactlyNumCards',
+    'caseFileHasAtMostOnePerCardType',
+    'caseFileHasAtLeastOnePerCardType',
+    'caseFileHasExactlyOnePerCardType',
+    'guessIsRefutedByHeldCard',
+] as const;
 
-export const setupDeducedConclusions;
+type RawDeductionRule = typeof ALL_DEDUCTION_RULES[number];
+
+export const setupDeductionRules = (
+    rules: 'all' | readonly RawDeductionRule[] = 'all',
+): E.Either<string[], DeductionRule.DeductionRule> =>
+    pipe(
+        // Convert the default list of "all"
+        rules,
+        rules => typeof rules === 'string'
+            ? ALL_DEDUCTION_RULES
+            : rules,
+
+        // Convert the selected deduction rule IDs to actual functions
+        ROA.map(pipe(
+            Match.type<RawDeductionRule>(),
+
+            Match.when('cardIsHeldAtMostOnce', () => DeductionRule.cardIsHeldAtMostOnce),
+            Match.when('cardIsHeldAtLeastOnce', () => DeductionRule.cardIsHeldAtLeastOnce),
+            Match.when('cardIsHeldExactlyOnce', () => DeductionRule.cardIsHeldExactlyOnce),
+            Match.when('playerHasAtMostNumCards', () => DeductionRule.playerHasAtMostNumCards),
+            Match.when('playerHasAtLeastNumCards', () => DeductionRule.playerHasAtLeastNumCards),
+            Match.when('playerHasExactlyNumCards', () => DeductionRule.playerHasExactlyNumCards),
+            Match.when('caseFileHasAtMostOnePerCardType', () => DeductionRule.caseFileHasAtMostOnePerCardType),
+            Match.when('caseFileHasAtLeastOnePerCardType', () => DeductionRule.caseFileHasAtLeastOnePerCardType),
+            Match.when('caseFileHasExactlyOnePerCardType', () => DeductionRule.caseFileHasExactlyOnePerCardType),
+            Match.when('guessIsRefutedByHeldCard', () => DeductionRule.guessIsRefutedByHeldCard),
+
+            Match.exhaustive,
+        )),
+
+        // Combine them all into a single deduction rule
+        DeductionRule.MonoidUnion.combineAll,
+
+        // This operation is always successful
+        E.right,
+    );
+
+export const deduceConclusions = (
+    conclusions: ConclusionMapSet.ConclusionMapSet
+): E.Either<string[], ConclusionMapSet.ConclusionMapSet> =>
+    null;
