@@ -2,21 +2,55 @@ import * as E from '@effect/data/Either';
 import * as HS from "@effect/data/HashSet";
 import * as ST from "@effect/data/Struct";
 import * as ROA from '@effect/data/ReadonlyArray';
-import * as CTX from '@effect/data/Context';
-import { pipe, flow } from '@effect/data/Function';
+import * as EQ from '@effect/data/Equal';
+import * as EQV from '@effect/data/typeclass/Equivalence';
+import * as P from '@effect/data/Predicate';
+import * as H from '@effect/data/Hash';
+import { pipe } from '@effect/data/Function';
 
 import * as Card from './Card';
-import { Endomorphism_getMonoid } from '../utils/ShouldBeBuiltin';
+import { Endomorphism_getMonoid, HashSet_every, HashSet_getEquivalence, Refinement_and, Refinement_struct, Show, Show_isShow, Show_showHashSet, Show_symbol } from '../utils/ShouldBeBuiltin';
 
-export interface CardSet {
+type RawCardSet = {
     readonly cards: HS.HashSet<Card.Card>;
 }
 
-export const Tag = CTX.Tag<CardSet>();
+export type CardSet = EQ.Equal & Show & RawCardSet;
+
+export const isCardSet: P.Refinement<unknown, CardSet> =
+    pipe(
+        Refinement_struct({
+            cards: pipe(
+                HS.isHashSet,
+                P.compose(HashSet_every(Card.isCard)),
+            ),
+        }),
+
+        Refinement_and(EQ.isEqual),
+        Refinement_and(Show_isShow),
+    );
+
+export const Equivalence: EQV.Equivalence<CardSet> = ST.getEquivalence({
+    cards: HashSet_getEquivalence(Card.Equivalence),
+});
 
 export const empty: CardSet =
     Object.freeze({
         cards: HS.empty(),
+
+        [Show_symbol](): string {
+            return Show_showHashSet(this.cards);
+        },
+
+        [EQ.symbol](that: EQ.Equal): boolean {
+            return isCardSet(that) && Equivalence(this, that);
+        },
+
+        [H.symbol](): number {
+            return H.structure({
+                ...this
+            });
+        },
     });
 
 export const add = (newCard: Card.Card) =>

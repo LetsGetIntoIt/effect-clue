@@ -3,7 +3,8 @@ import * as SG from '@effect/data/typeclass/Semigroup';
 import * as MON from '@effect/data/typeclass/Monoid';
 
 import * as ConclusionMapSet from "./ConclusionMapSet";
-import { Function_getSemigroup } from '../utils/ShouldBeBuiltin';
+import { Either_getSemigroupCombine, Function_getSemigroup } from '../utils/ShouldBeBuiltin';
+import { constant, pipe } from '@effect/data/Function';
 
 type DeductionRule = (
     // Accepts a current set of deductions
@@ -12,14 +13,18 @@ type DeductionRule = (
     // Returns either an logical error, or a new set of deductions (newly-deduced only)
     E.Either<string, ConclusionMapSet.ConclusionMapSet>;
 
-export const constEmpty: DeductionRule = null;
+export const constEmpty: DeductionRule =
+    constant(E.right(ConclusionMapSet.empty));
 
 export const SemigroupUnion: SG.Semigroup<DeductionRule> = 
     Function_getSemigroup(
-        E.getFirstLeftSemigroup(
-            ConclusionMapSet.SemigroupUnion,
-        ),
-    );
+        Either_getSemigroupCombine(
+            (first: ConclusionMapSet.ConclusionMapSet, second) => pipe(
+                first,
+                ConclusionMapSet.combine(second),
+            ),
+        )
+    )();
 
 export const MonoidUnion: MON.Monoid<DeductionRule> = MON.fromSemigroup(
     SemigroupUnion,

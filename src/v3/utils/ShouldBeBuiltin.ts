@@ -230,3 +230,11 @@ export const Tuple_getRefinement = <A extends readonly unknown[], B extends A>(
 
 export const ReadonlyArray_isArray: P.Refinement<unknown, unknown[]> =
     Array.isArray;
+
+export const Either_getSemigroupCombine = <A, E>(combine: (a: A, b: A) => E.Either<E, A>): SG.Semigroup<E.Either<E, A>> =>
+    SG.make((first, second) => E.gen(function* ($) {
+        const firstValue = yield* $(first);
+        const secondValue = yield* $(second);
+
+        return yield* $(combine(firstValue, secondValue));
+    }));
