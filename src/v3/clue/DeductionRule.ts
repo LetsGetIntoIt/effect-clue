@@ -10,8 +10,9 @@ import * as P from '@effect/data/Predicate';
 import * as ROA from '@effect/data/ReadonlyArray';
 import * as O from '@effect/data/Option';
 
-import { Effect_getSemigroupCombine, HashMap_someWithIndex } from '../utils/ShouldBeBuiltin';
+import { Effect_getSemigroupCombine, Equals_getRefinement, HashMap_someWithIndex } from '../utils/ShouldBeBuiltin';
 
+import * as Card from './Card';
 import * as Game from "./Game";
 import * as ConclusionMapSet from "./ConclusionMapSet";
 import * as CardOwner from './CardOwner';
@@ -70,11 +71,60 @@ export const cardIsHeldAtMostOnce: DeductionRule = T.gen(function* ($) {
 
         // Subtract the full list of cardowners
         // TODO need to be able to get all the card owners in a game
+
+        return nonOwners;
     });
+
+    // For all these owners with unknown ownership over owned cards, mark them as definitely not owned
+    return yield* $(HM.reduceWithIndex<
+        T.Effect<Game.Game, string, ConclusionMapSet.ConclusionMapSet>,
+        HS.HashSet<CardOwner.CardOwner>,
+        Card.Card
+    >(
+        unknownOwnersOfOwnedCards,
+        
+        // Start with an empty set of conclusions
+        T.succeed(ConclusionMapSet.empty),
+
+        (conclusions, unknownOwners, card) =>
+            pipe(
+                conclusions,
+
+                // TODO actually add each owner
+                T.flatMap(ConclusionMapSet.addOwnership(null as any, null as any, null as any)),
+            ),
+    ));
 });
 
 // If a card is held by everyone except one, then it's held by that one
-export const cardIsHeldAtLeastOnce: DeductionRule = null;
+export const cardIsHeldAtLeastOnce: DeductionRule = T.gen(function* ($) {
+    const game = yield* $(Game.Tag);
+    const cardOwners = Game.getCardOwners(game);
+
+    const knownConclusions = yield* $(ConclusionMapSet.Tag);
+
+    // Get a map of known owned cards
+    const ownedCards = ConclusionMapSet.getOwnedCards(knownConclusions);
+
+    // Get the cards that have exactly 1 unknown owner, and N-1 known NON-owners
+    // track that single owner that is unknown
+    const singleUnknownOwnerCards = pipe(
+        // Start with all the unowned cards
+        ConclusionMapSet.getUnownedCards(knownConclusions),
+
+        // Keep only unowned cards where we do NOT know the owner
+        HM.filterWithIndex((_, card) => !HM.has(ownedCards, card)),
+
+        // Keep only cards where there is exactly 1 unknown owner
+        // This owner owns the card, because nobody else does
+        HM.filter(flow(HS.size, Equals_getRefinement(HS.size(cardOwners)))),
+
+        // Figure out the remaining unknown ownership holder
+        HM.map(nonOwners => HS.difference(cardOwners, nonOwners)),
+    );
+
+    // TODO
+});
 
 export const cardIsHeldExactlyOnce: DeductionRule =
     SemigroupUnion.combine(cardIsHeldAtMostOnce, cardIsHeldAtLeastOnce);
