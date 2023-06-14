@@ -2,9 +2,11 @@ import * as E from '@effect/data/Either';
 import * as SG from '@effect/data/typeclass/Semigroup';
 import * as MON from '@effect/data/typeclass/Monoid';
 import { constant, pipe } from '@effect/data/Function';
+import * as T from '@effect/io/Effect';
 
-import { Either_getSemigroupCombine, Function_getSemigroup } from '../utils/ShouldBeBuiltin';
+import { Effect_getSemigroupCombine, Either_getSemigroupCombine, Function_getSemigroup } from '../utils/ShouldBeBuiltin';
 
+import * as Game from "./Game";
 import * as ConclusionMapSet from "./ConclusionMapSet";
 
 export type DeductionRule = (
@@ -12,14 +14,14 @@ export type DeductionRule = (
     conclusions: ConclusionMapSet.ConclusionMapSet
 ) =>
     // Returns either an logical error, or a new set of deductions (newly-deduced only)
-    E.Either<string, ConclusionMapSet.ConclusionMapSet>;
+    T.Effect<Game.Game, string, ConclusionMapSet.ConclusionMapSet>;
 
 export const constEmpty: DeductionRule =
-    constant(E.right(ConclusionMapSet.empty));
+    constant(T.succeed(ConclusionMapSet.empty));
 
 export const SemigroupUnion: SG.Semigroup<DeductionRule> = 
     Function_getSemigroup(
-        Either_getSemigroupCombine(
+        Effect_getSemigroupCombine(
             (first: ConclusionMapSet.ConclusionMapSet, second) => pipe(
                 first,
                 ConclusionMapSet.combine(second),

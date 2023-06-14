@@ -16,21 +16,14 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@effect/data@npm:0.12.6, @effect/data@npm:^0.12.6":
+"@effect/data@npm:0.12.6":
   version: 0.12.6
   resolution: "@effect/data@npm:0.12.6"
   checksum: 7ff0298e1d2748610e4fee0597a45973f815f82968e26b38b7638b58ddeb99de9a15e1d4e0bd5abdd7c74c3f69c9309155cd6eeec3aa61d817509fd6517ee511
   languageName: node
   linkType: hard
 
-"@effect/data@npm:^0.12.2, @effect/data@npm:~0.12.2":
-  version: 0.12.5
-  resolution: "@effect/data@npm:0.12.5"
-  checksum: dab16e6a4b998927f78dbfa2d8b2667883d77c7dad6d68d5e4e5c794eaf2d23cddc0c5c03f0f8c60a070967e523e787288a1982dbe06444a1e212fd3b048a7ea
-  languageName: node
-  linkType: hard
-
-"@effect/io@npm:0.26.0, @effect/io@npm:^0.26.0":
+"@effect/io@npm:0.26.0":
   version: 0.26.0
   resolution: "@effect/io@npm:0.26.0"
   dependencies:

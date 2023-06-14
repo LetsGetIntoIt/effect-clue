@@ -33,7 +33,7 @@ export const Equivalence: EQV.Equivalence<GameSetup> = ST.getEquivalence({
     playerSet: PlayerSet.Equivalence,
 });
 
-const create = (gameSetup: RawGameSetup): GameSetup =>
+export const create = (gameSetup: RawGameSetup): GameSetup =>
     ({
         ...gameSetup,
 
@@ -50,4 +50,10 @@ const create = (gameSetup: RawGameSetup): GameSetup =>
                 ...this
             });
         },
+    });
+
+export const empty: GameSetup =
+    create({
+        cardSet: CardSet.empty,
+        playerSet: PlayerSet.empty,
     });

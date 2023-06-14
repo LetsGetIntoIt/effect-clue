@@ -3,6 +3,7 @@ import * as P from '@effect/data/Predicate';
 import * as EQV from '@effect/data/typeclass/Equivalence';
 import * as ST from '@effect/data/Struct';
 import * as H from '@effect/data/Hash';
+import * as CTX from '@effect/data/Context';
 import { pipe } from '@effect/data/Function';
 
 import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol } from '../utils/ShouldBeBuiltin';
@@ -16,6 +17,8 @@ type RawGame = {
 };
 
 export type Game = EQ.Equal & Show & RawGame;
+
+export const Tag = CTX.Tag<Game>();
 
 export const isGame: P.Refinement<unknown, Game> =
     pipe(
@@ -33,7 +36,7 @@ export const Equivalence: EQV.Equivalence<Game> = ST.getEquivalence({
     guessSet: GuessSet.Equivalence,
 });
 
-const create = (game: RawGame): Game =>
+export const create = (game: RawGame): Game =>
     ({
         ...game,
 
@@ -50,4 +53,10 @@ const create = (game: RawGame): Game =>
                 ...this
             });
         },
+    });
+
+export const empty: Game =
+    create({
+        gameSetup: GameSetup.empty,
+        guessSet: GuessSet.empty,
     });

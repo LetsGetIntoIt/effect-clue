@@ -10,6 +10,7 @@ import * as EQV from '@effect/data/typeclass/Equivalence';
 import * as P from '@effect/data/Predicate';
 import * as TU from '@effect/data/Tuple';
 import * as B from '@effect/data/Boolean';
+import * as T from '@effect/io/Effect';
 import { pipe, identity, flow, constant, constTrue } from '@effect/data/Function'
 
 export const Either_fromRefinement = <A, B extends A>(refinement: P.Refinement<A, B>) => (a: A): E.Either<Exclude<A, B>, B> =>
@@ -233,6 +234,14 @@ export const ReadonlyArray_isArray: P.Refinement<unknown, unknown[]> =
 
 export const Either_getSemigroupCombine = <A, E>(combine: (a: A, b: A) => E.Either<E, A>): SG.Semigroup<E.Either<E, A>> =>
     SG.make((first, second) => E.gen(function* ($) {
+        const firstValue = yield* $(first);
+        const secondValue = yield* $(second);
+
+        return yield* $(combine(firstValue, secondValue));
+    }));
+
+export const Effect_getSemigroupCombine = <A, E, R>(combine: (a: A, b: A) => T.Effect<R, E, A>): SG.Semigroup<T.Effect<R, E, A>> =>
+    SG.make((first, second) => T.gen(function* ($) {
         const firstValue = yield* $(first);
         const secondValue = yield* $(second);
 

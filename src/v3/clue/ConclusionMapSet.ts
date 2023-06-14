@@ -1,25 +1,22 @@
 import * as EQ from '@effect/data/Equal';
 import * as EQV from '@effect/data/typeclass/Equivalence';
 import * as ST from '@effect/data/Struct';
-import * as TU from '@effect/data/Tuple';
 import * as H from '@effect/data/Hash';
 import * as HM from '@effect/data/HashMap';
 import * as P from '@effect/data/Predicate';
 import * as E from '@effect/data/Either';
+import * as T from '@effect/io/Effect';
 import { flow, pipe } from '@effect/data/Function';
 
-import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol, HashMap_every, Equals_getRefinement, Refinement_or } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';
 import * as Player from './Player';
 import * as Guess from './Guess';
-import * as CardOwner from './CardOwner';
+import * as Game from './Game';
 import * as CardOwnership from './CardOwnership';
 import * as Conclusion from './Conclusion';
 import * as ConclusionMap from './ConclusionMap';
-import { HashMap_every } from '../utils/ShouldBeBuiltin';
-import { Equals_getRefinement } from '../utils/ShouldBeBuiltin';
-import { Refinement_or } from '../utils/ShouldBeBuiltin';
 
 /**
  * Something that we know about a specific topic
@@ -67,7 +64,7 @@ const create = (conclusions : {
     numCards: ConclusionMap.ConclusionMap<Player.Player, number>,
     ownership: ConclusionMap.ConclusionMap<CardOwnership.CardOwnership, boolean>,
     refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>,
-}): E.Either<string, ConclusionMapSet> => pipe(
+}): T.Effect<Game.Game, string, ConclusionMapSet> => pipe(
     // TODO actually validate the conclusions
     // - all Cards and Players actually exist in the GameSetup
     // - all Guesses actaully exist in the Game
@@ -105,9 +102,12 @@ export const empty: ConclusionMapSet =
             refuteCards: ConclusionMap.empty(),
         }),
 
+        // We just need an empty game
+        T.provideService(Game.Tag, Game.empty),
+
         // If creating an empty deduction set errors, it is a defects in the underlying code,
         // not tagged errors that should be handled by the user
-        E.getOrThrow,
+        T.runSync,
     );
 
 export const combine = (
@@ -122,7 +122,7 @@ export const combine = (
         ownership: selfOwnership,
         refuteCards: selfRefuteCards,
     }: ConclusionMapSet,
-): E.Either<string, ConclusionMapSet> =>
+): T.Effect<Game.Game, string, ConclusionMapSet> =>
     create({
         numCards: ConclusionMap.union(selfNumCards, thatNumCards),
         ownership: ConclusionMap.union(selfOwnership, thatOwnership),
@@ -131,7 +131,7 @@ export const combine = (
 
 export const addNumCards =
         (player: Player.Player, numCards: number, reason: Conclusion.Reason):
-        ((conclusions: ConclusionMapSet) => E.Either<string, ConclusionMapSet>) =>
+        ((conclusions: ConclusionMapSet) => T.Effect<Game.Game, string, ConclusionMapSet>) =>
     flow(
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
@@ -142,12 +142,12 @@ export const addNumCards =
         }),
         E.struct,
 
-        E.flatMap(create),
+        T.flatMap(create),
     );
 
 export const addOwnership =
         (ownership: CardOwnership.CardOwnership, isOwned: boolean, reason: Conclusion.Reason):
-        ((conclusions: ConclusionMapSet) => E.Either<string, ConclusionMapSet>) =>
+        ((conclusions: ConclusionMapSet) => T.Effect<Game.Game, string, ConclusionMapSet>) =>
     flow(
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
@@ -158,12 +158,12 @@ export const addOwnership =
         }),
         E.struct,
 
-        E.flatMap(create),
+        T.flatMap(create),
     );
 
 export const setRefuteCards =
         (guess: Guess.Guess, possibleCards: HM.HashMap<Card.Card, 'owned' | 'maybe'>, reason: Conclusion.Reason):
-        ((conclusions: ConclusionMapSet) => E.Either<string, ConclusionMapSet>) =>
+        ((conclusions: ConclusionMapSet) => T.Effect<Game.Game, string, ConclusionMapSet>) =>
     flow(
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
@@ -174,5 +174,5 @@ export const setRefuteCards =
         }),
         E.struct,
 
-        E.flatMap(create),
+        T.flatMap(create),
     );
