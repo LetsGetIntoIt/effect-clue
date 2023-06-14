@@ -54,3 +54,9 @@ export const create = (
             });
         },
     });
+
+export const getOwner = (cardOwnership: CardOwnership): CardOwner.CardOwner =>
+    cardOwnership.owner;
+
+export const getCard = (cardOwnership: CardOwnership): Card.Card =>
+    cardOwnership.card;

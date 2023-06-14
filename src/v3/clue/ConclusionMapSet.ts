@@ -3,17 +3,22 @@ import * as EQV from '@effect/data/typeclass/Equivalence';
 import * as ST from '@effect/data/Struct';
 import * as H from '@effect/data/Hash';
 import * as HM from '@effect/data/HashMap';
+import * as HS from '@effect/data/HashSet';
 import * as P from '@effect/data/Predicate';
 import * as E from '@effect/data/Either';
 import * as T from '@effect/io/Effect';
+import * as CTX from "@effect/data/Context";
+import * as O from '@effect/data/Option';
+import * as TU from '@effect/data/Tuple';
 import { flow, pipe } from '@effect/data/Function';
 
-import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol, HashMap_every, Equals_getRefinement, Refinement_or } from '../utils/ShouldBeBuiltin';
+import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol, HashMap_every, Equals_getRefinement, Refinement_or, Refinement_isTrue, HashMap_fromHashSet, Refinement_isFalse, HashMap_fromHashSetMulti } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';
 import * as Player from './Player';
 import * as Guess from './Guess';
 import * as Game from './Game';
+import * as CardOwner from './CardOwner';
 import * as CardOwnership from './CardOwnership';
 import * as Conclusion from './Conclusion';
 import * as ConclusionMap from './ConclusionMap';
@@ -29,6 +34,8 @@ export type ConclusionMapSet =
         ownership: ConclusionMap.ConclusionMap<CardOwnership.CardOwnership, boolean>;
         refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>;
     };
+
+export const Tag = CTX.Tag<ConclusionMapSet>();
 
 export const isConclusionMapSet: P.Refinement<unknown, ConclusionMapSet> =
     pipe(
@@ -110,24 +117,41 @@ export const empty: ConclusionMapSet =
         T.runSync,
     );
 
-export const combine = (
-    {
-        numCards: thatNumCards,
-        ownership: thatOwnership,
-        refuteCards: thatRefuteCards,
-    }: ConclusionMapSet,
-) => (
-    {
-        numCards: selfNumCards,
-        ownership: selfOwnership,
-        refuteCards: selfRefuteCards,
-    }: ConclusionMapSet,
-): T.Effect<Game.Game, string, ConclusionMapSet> =>
-    create({
-        numCards: ConclusionMap.union(selfNumCards, thatNumCards),
-        ownership: ConclusionMap.union(selfOwnership, thatOwnership),
-        refuteCards: ConclusionMap.union(selfRefuteCards, thatRefuteCards),
-    });
+export const getOwnedCards = (conclusions: ConclusionMapSet): HM.HashMap<Card.Card, CardOwner.CardOwner> =>
+    pipe(
+        // Get the hashmap of ownership
+        // TODO does this short-hand make sense? Can we reduce the number of properties in each object instead?
+        conclusions.ownership.conclusions,
+
+        // Get only cards that are owned
+        HM.filter(Conclusion.getRefinement(Refinement_isTrue)),
+
+        // Convert the keys into a map
+        HM.keySet,
+        HS.map(ownership => TU.tuple(
+            CardOwnership.getCard(ownership),
+            CardOwnership.getOwner(ownership),
+        )),
+        HashMap_fromHashSet,
+    );
+
+export const getUnownedCards = (conclusions: ConclusionMapSet): HM.HashMap<Card.Card, HS.HashSet<CardOwner.CardOwner>> =>
+    pipe(
+        // Get the hashmap of ownership
+        // TODO does this short-hand make sense? Can we reduce the number of properties in each object instead?
+        conclusions.ownership.conclusions,
+
+        // Get only cards that are owned
+        HM.filter(Conclusion.getRefinement(Refinement_isFalse)),
+
+        // Convert the keys into a map
+        HM.keySet,
+        HS.map(ownership => TU.tuple(
+            CardOwnership.getCard(ownership),
+            CardOwnership.getOwner(ownership), // This is the non-owner
+        )),
+        HashMap_fromHashSetMulti,
+    );
 
 export const addNumCards =
         (player: Player.Player, numCards: number, reason: Conclusion.Reason):
@@ -176,3 +200,22 @@ export const setRefuteCards =
 
         T.flatMap(create),
     );
+
+export const combine = (
+    {
+        numCards: thatNumCards,
+        ownership: thatOwnership,
+        refuteCards: thatRefuteCards,
+    }: ConclusionMapSet,
+) => (
+    {
+        numCards: selfNumCards,
+        ownership: selfOwnership,
+        refuteCards: selfRefuteCards,
+    }: ConclusionMapSet,
+): T.Effect<Game.Game, string, ConclusionMapSet> =>
+    create({
+        numCards: ConclusionMap.union(selfNumCards, thatNumCards),
+        ownership: ConclusionMap.union(selfOwnership, thatOwnership),
+        refuteCards: ConclusionMap.union(selfRefuteCards, thatRefuteCards),
+    });

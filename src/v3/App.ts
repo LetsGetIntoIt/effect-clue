@@ -30,6 +30,8 @@ import * as Clue from './clue';
 // - Percent likelihood
 // - Take the map into account, update which is next best guess to make
 // - Take the map into account, who should I pull away from their goal
+// - Allow for multiple case files
+// - Allow each casefile to have a KNOWN 0-many of a card type (ex. a killer and victim, two weapons, no weapons, etc.)
 
 interface AppState {
 

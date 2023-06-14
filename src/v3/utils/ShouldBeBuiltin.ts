@@ -176,6 +176,21 @@ export const Show_showHashMap: (hashMap: HM.HashMap<unknown, unknown>) => string
         String_surroundWith('{ ', ' }'),
     );
 
+export const HashMap_fromHashSet: <K, V>(hashSet: HS.HashSet<[K, V]>) => HM.HashMap<K, V> =
+    flow(
+        HS.values,
+        HM.fromIterable,
+    );
+
+export const HashMap_fromHashSetSelf: <A>(hashSet: HS.HashSet<A>) => HM.HashMap<A, A> =
+    flow(
+        HS.map(a => TU.tuple(a, a)),
+        HashMap_fromHashSet,
+    );
+
+export const HashMap_fromHashSetMulti: <K, V>(hashSet: HS.HashSet<[K, V]>) => HM.HashMap<K, HS.HashSet<V>> =
+    null;
+
 export const HashMap_separateV = <V>(valuePredicate: P.Predicate<V>) => <K>(map: HM.HashMap<K, V>): [falseMap: HM.HashMap<K, V>, trueMap: HM.HashMap<K, V>] =>
     [
         // False map
@@ -190,6 +205,14 @@ export const HashMap_separateV = <V>(valuePredicate: P.Predicate<V>) => <K>(map:
             HM.filter(valuePredicate),
         ),
     ];
+
+export const HashMap_someWithIndex = <K, V>(
+    predicate: (value: V, key: K) => boolean,
+): ((hashMap: HM.HashMap<K, V>) => boolean) =>
+    flow(
+        HM.filterWithIndex(predicate),
+        P.not(HM.isEmpty),
+    );
 
 export const Equivalence_constTrue: EQV.Equivalence<unknown> =
     EQV.make(constTrue);
@@ -247,3 +270,11 @@ export const Effect_getSemigroupCombine = <A, E, R>(combine: (a: A, b: A) => T.E
 
         return yield* $(combine(firstValue, secondValue));
     }));
+
+export const Refinement_isTrue: P.Refinement<unknown, true> =
+    (u): u is true =>
+        u === true;
+
+export const Refinement_isFalse: P.Refinement<unknown, false> =
+    (u): u is false =>
+        u === false;

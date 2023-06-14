@@ -5,9 +5,11 @@ import * as ST from '@effect/data/Struct';
 import * as H from '@effect/data/Hash';
 import * as CTX from '@effect/data/Context';
 import { pipe } from '@effect/data/Function';
+import * as HS from '@effect/data/HashSet';
 
 import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol } from '../utils/ShouldBeBuiltin';
 
+import * as Card from './Card';
 import * as GameSetup from "./GameSetup";
 import * as GuessSet from "./GuessSet";
 
@@ -60,3 +62,7 @@ export const empty: Game =
         gameSetup: GameSetup.empty,
         guessSet: GuessSet.empty,
     });
+
+// TODO does this short-hand make sense? Can we reduce the number of properties in each object instead?
+export const getCards = (game: Game): HS.HashSet<Card.Card> =>
+    game.gameSetup.cardSet.cards;

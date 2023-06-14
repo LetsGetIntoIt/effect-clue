@@ -1,33 +1,49 @@
 import * as E from '@effect/data/Either';
 import * as SG from '@effect/data/typeclass/Semigroup';
 import * as MON from '@effect/data/typeclass/Monoid';
-import { constant, pipe } from '@effect/data/Function';
+import { constUndefined, constant, flow, pipe } from '@effect/data/Function';
+import * as HS from '@effect/data/HashSet';
+import * as HM from '@effect/data/HashMap';
 import * as T from '@effect/io/Effect';
+import * as EQ from '@effect/data/Equal';
+import * as P from '@effect/data/Predicate';
+import * as ROA from '@effect/data/ReadonlyArray';
+import * as O from '@effect/data/Option';
 
-import { Effect_getSemigroupCombine, Either_getSemigroupCombine, Function_getSemigroup } from '../utils/ShouldBeBuiltin';
+import { Effect_getSemigroupCombine, HashMap_someWithIndex } from '../utils/ShouldBeBuiltin';
 
 import * as Game from "./Game";
 import * as ConclusionMapSet from "./ConclusionMapSet";
+import * as CardOwner from './CardOwner';
 
-export type DeductionRule = (
-    // Accepts a current set of deductions
-    conclusions: ConclusionMapSet.ConclusionMapSet
-) =>
-    // Returns either an logical error, or a new set of deductions (newly-deduced only)
-    T.Effect<Game.Game, string, ConclusionMapSet.ConclusionMapSet>;
+export type DeductionRule = T.Effect<
+    // Accepts the objects in the game
+    | Game.Game
+
+    // Accepts a set of "known" conclusions
+    | ConclusionMapSet.ConclusionMapSet
+,
+    // Returns an error if we encounter a logical contradiction
+    string
+,
+    // Returns the newly-deduced conclusion (not included the already known ones)
+    ConclusionMapSet.ConclusionMapSet
+>;
 
 export const constEmpty: DeductionRule =
-    constant(T.succeed(ConclusionMapSet.empty));
+    T.succeed(ConclusionMapSet.empty);
 
 export const SemigroupUnion: SG.Semigroup<DeductionRule> = 
-    Function_getSemigroup(
-        Effect_getSemigroupCombine(
-            (first: ConclusionMapSet.ConclusionMapSet, second) => pipe(
-                first,
-                ConclusionMapSet.combine(second),
-            ),
-        )
-    )();
+    Effect_getSemigroupCombine<
+        ConclusionMapSet.ConclusionMapSet,
+        string,
+        Game.Game | ConclusionMapSet.ConclusionMapSet
+    >(
+        (first: ConclusionMapSet.ConclusionMapSet, second) => pipe(
+            first,
+            ConclusionMapSet.combine(second),
+        ),
+    );
 
 export const MonoidUnion: MON.Monoid<DeductionRule> = MON.fromSemigroup(
     SemigroupUnion,
@@ -35,7 +51,27 @@ export const MonoidUnion: MON.Monoid<DeductionRule> = MON.fromSemigroup(
 );
 
 // If a card is held by an owner, it cannot be held by anyone else
-export const cardIsHeldAtMostOnce: DeductionRule = null;
+export const cardIsHeldAtMostOnce: DeductionRule = T.gen(function* ($) {
+    const game = yield* $(Game.Tag);
+
+    const knownConclusions = yield* $(ConclusionMapSet.Tag);
+
+    // Get a map of known owned and unowned cards
+    const ownedCards = ConclusionMapSet.getOwnedCards(knownConclusions);
+    const unownedCards = ConclusionMapSet.getUnownedCards(knownConclusions);
+
+    // For each owned card, find those whose ownership is unknown
+    const unknownOwnersOfOwnedCards = HM.mapWithIndex(ownedCards, (owner, card) => {
+        // Figure out who definitely does not own this card
+        const nonOwners = pipe(
+            HM.get(unownedCards, card),
+            O.getOrElse(HS.empty<CardOwner.CardOwner>),
+        );
+
+        // Subtract the full list of cardowners
+        // TODO need to be able to get all the card owners in a game
+    });
+});
 
 // If a card is held by everyone except one, then it's held by that one
 export const cardIsHeldAtLeastOnce: DeductionRule = null;
