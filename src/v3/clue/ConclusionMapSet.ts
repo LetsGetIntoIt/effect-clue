@@ -8,12 +8,13 @@ import * as P from '@effect/data/Predicate';
 import * as E from '@effect/data/Either';
 import { flow, pipe } from '@effect/data/Function';
 
-import { ReadonlyArray_isArray, Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol, Tuple_getRefinement, Tuple_isLength } from '../utils/ShouldBeBuiltin';
+import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';
 import * as Player from './Player';
 import * as Guess from './Guess';
 import * as CardOwner from './CardOwner';
+import * as CardOwnership from './CardOwnership';
 import * as Conclusion from './Conclusion';
 import * as ConclusionMap from './ConclusionMap';
 import { HashMap_every } from '../utils/ShouldBeBuiltin';
@@ -28,7 +29,7 @@ import { Refinement_or } from '../utils/ShouldBeBuiltin';
 export type ConclusionMapSet =
     EQ.Equal & Show & {
         numCards: ConclusionMap.ConclusionMap<Player.Player, number>;
-        ownership: ConclusionMap.ConclusionMap<[CardOwner.CardOwner, Card.Card], boolean>;
+        ownership: ConclusionMap.ConclusionMap<CardOwnership.CardOwnership, boolean>;
         refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>;
     };
 
@@ -37,17 +38,7 @@ export const isConclusionMapSet: P.Refinement<unknown, ConclusionMapSet> =
         Refinement_struct({
             numCards: ConclusionMap.getRefinement(Player.isPlayer, P.isNumber),
 
-            ownership: ConclusionMap.getRefinement(
-                pipe(
-                    ReadonlyArray_isArray,
-                    P.compose(Tuple_isLength<[unknown, unknown]>(2)),
-
-                    P.compose(
-                        Tuple_getRefinement<[unknown, unknown], [CardOwner.CardOwner, Card.Card]>([CardOwner.isCardOwner, Card.isCard]),
-                    ),
-                ),
-                P.isBoolean,
-            ),
+            ownership: ConclusionMap.getRefinement(CardOwnership.isCardOwnership, P.isBoolean),
 
             refuteCards: ConclusionMap.getRefinement(
                 Guess.isGuess,
@@ -74,10 +65,12 @@ export const Equivalence: EQV.Equivalence<ConclusionMapSet> =
 
 const create = (conclusions : {
     numCards: ConclusionMap.ConclusionMap<Player.Player, number>,
-    ownership: ConclusionMap.ConclusionMap<[CardOwner.CardOwner, Card.Card], boolean>,
+    ownership: ConclusionMap.ConclusionMap<CardOwnership.CardOwnership, boolean>,
     refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>,
 }): E.Either<string, ConclusionMapSet> => pipe(
     // TODO actually validate the conclusions
+    // - all Cards and Players actually exist in the GameSetup
+    // - all Guesses actaully exist in the Game
     // - numCards cannot exceed total number of cards - where do we read that info from?
     // - card can be owned by at most 1 owner
     // - casefile can own at most 1 of each card type
@@ -153,14 +146,14 @@ export const addNumCards =
     );
 
 export const addOwnership =
-        (owner: CardOwner.CardOwner, card: Card.Card, isOwned: boolean, reason: Conclusion.Reason):
+        (ownership: CardOwnership.CardOwnership, isOwned: boolean, reason: Conclusion.Reason):
         ((conclusions: ConclusionMapSet) => E.Either<string, ConclusionMapSet>) =>
     flow(
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
         ST.evolve({
             numCards: (_) => E.right(_),
-            ownership: ConclusionMap.add(TU.tuple(owner, card), isOwned, reason),
+            ownership: ConclusionMap.add(ownership, isOwned, reason),
             refuteCards: (_) => E.right(_),
         }),
         E.struct,

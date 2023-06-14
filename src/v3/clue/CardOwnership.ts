@@ -8,42 +8,44 @@ import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_symbol, Show
 import * as P from '@effect/data/Predicate';
 import { pipe } from '@effect/data/Function';
 
-type RawCard = {
-    readonly cardType: string;
-    readonly label: string;
+import * as Card from "./Card";
+import * as CardOwner from "./CardOwner";
+
+type RawCardOnwership = {
+    readonly owner: CardOwner.CardOwner;
+    readonly card: Card.Card;
 };
 
-export type Card = EQ.Equal & Show & RawCard;
+export type CardOwnership = EQ.Equal & Show & RawCardOnwership;
 
-export const isCard: P.Refinement<unknown, Card> =
+export const isCardOwnership: P.Refinement<unknown, CardOwnership> =
     pipe(
         Refinement_struct({
-            cardType: P.isString,
-            label: P.isString,
+            owner: CardOwner.isCardOwner,
+            card: Card.isCard,
         }),
 
         Refinement_and(EQ.isEqual),
         Refinement_and(Show_isShow),
     );
 
-export const Equivalence: EQV.Equivalence<Card> = ST.getEquivalence({
-    cardType: S.Equivalence,
-    label: S.Equivalence,
+export const Equivalence: EQV.Equivalence<CardOwnership> = ST.getEquivalence({
+    owner: CardOwner.Equivalence,
+    card: Card.Equivalence,
 });
 
 export const create = (
-    card: RawCard,
-): E.Either<string, Card> =>
+    cardOwnership: RawCardOnwership,
+): E.Either<string, CardOwnership> =>
     E.right({
-        ...card,
+        ...cardOwnership,
 
         [Show_symbol](): string {
-           return `Card '${Show_show(this.label)}' (${Show_show(this.cardType)})`
+           return `('${Show_show(this.owner)}', ${Show_show(this.card)})`
         },
-
+    
         [EQ.symbol](that: EQ.Equal): boolean {
-            return isCard(that)
-                && Equivalence(this, that);
+            return isCardOwnership(that) && Equivalence(this, that);
         },
 
         [H.symbol](): number {

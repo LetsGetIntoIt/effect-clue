@@ -5,12 +5,14 @@ import * as ST from "@effect/data/Struct";
 import * as S from '@effect/data/String';
 import * as P from '@effect/data/Predicate';
 import * as EQV from '@effect/data/typeclass/Equivalence';
-import { Equal_isEqual, Refinement_struct, Show, Show_isShow, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol } from '../utils/ShouldBeBuiltin';
 import { pipe } from '@effect/data/Function';
 
-export interface Player extends EQ.Equal, Show {
+type RawPlayer = {
     readonly label: string;
 }
+
+export type Player = EQ.Equal & Show & RawPlayer;
 
 export const isPlayer: P.Refinement<unknown, Player> =
     pipe(
@@ -18,8 +20,8 @@ export const isPlayer: P.Refinement<unknown, Player> =
             label: P.isString,
         }),
 
-        P.compose(Equal_isEqual),
-        P.compose(Show_isShow),
+        Refinement_and(EQ.isEqual),
+        Refinement_and(Show_isShow),
     );
 
 export const Equivalence: EQV.Equivalence<Player> = ST.getEquivalence({
@@ -27,15 +29,15 @@ export const Equivalence: EQV.Equivalence<Player> = ST.getEquivalence({
 });
 
 export const create = (
-    label: string,
+    player: RawPlayer,
 ): E.Either<string, Player> =>
     E.right({
-        label,
+        ...player,
 
         [Show_symbol](): string {
-            return this.label;
+            return `${Show_show(this.label)}`;
         },
-    
+
         [EQ.symbol](that: EQ.Equal): boolean {
             return isPlayer(that) && Equivalence(this, that);
         },
