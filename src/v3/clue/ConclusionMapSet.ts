@@ -192,6 +192,7 @@ export const modifySetRefuteCards =
         T.flatMap(create),
     );
 
+// TODO don't just union thes. This overwrites old values. Instead, actually apply each modification
 export const modifyCombine = (
     {
         numCards: thatNumCards,
@@ -206,7 +207,7 @@ export const modifyCombine = (
     }
 ) =>
     create({
-        numCards: ConclusionMap.union(selfNumCards, thatNumCards),
-        ownership: ConclusionMap.union(selfOwnership, thatOwnership),
-        refuteCards: ConclusionMap.union(selfRefuteCards, thatRefuteCards),
+        numCards: ConclusionMap.combine(selfNumCards, thatNumCards),
+        ownership: ConclusionMap.combine(selfOwnership, thatOwnership),
+        refuteCards: ConclusionMap.combine(selfRefuteCards, thatRefuteCards),
     });

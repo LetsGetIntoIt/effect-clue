@@ -70,8 +70,8 @@ const create = <Q, A>(
 export const empty = <Q, A>(): ConclusionMap<Q, A> =>
     create(HM.empty());
 
-// TODO should this go one-by-one and merge them together?
-export const union = <Q, A>(first: ConclusionMap<Q, A>, second: ConclusionMap<Q, A>): ConclusionMap<Q, A> =>
+// TODO don't just union thes. This overwrites old values. Instead, actually merge the conclusions and error on conflicts
+export const combine = <Q, A>(first: ConclusionMap<Q, A>, second: ConclusionMap<Q, A>): ConclusionMap<Q, A> =>
     create(HM.union(first.conclusions, second.conclusions));
 
 export const addOrSet = (
