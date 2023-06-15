@@ -13,6 +13,18 @@ import * as B from '@effect/data/Boolean';
 import * as T from '@effect/io/Effect';
 import { pipe, identity, flow, constant, constTrue } from '@effect/data/Function'
 
+export const Equivalence_contramap = <A, B>(
+    contramap: (b: B) => A,
+) => (
+    EQA: EQV.Equivalence<A>,
+): EQV.Equivalence<B> =>
+    EQV.make(
+        (self, that) => EQA(
+            contramap(self),
+            contramap(that),
+        ),
+    );
+
 export const Either_fromRefinement = <A, B extends A>(refinement: P.Refinement<A, B>) => (a: A): E.Either<Exclude<A, B>, B> =>
     pipe(
         refinement(a),
@@ -51,12 +63,6 @@ export const HashMap_every = <AIn, BIn, AOut extends AIn, BOut extends BIn>(refi
     (hashMap): hashMap is HM.HashMap<AOut, BOut> =>
         pipe(hashMap, HM.keySet, HS.every(refineKey))
         && pipe(hashMap, HM.values, ROA.fromIterable, ROA.every(refineValue));
-
-export const HashSet_getEquivalence = <A>(EQVA: EQV.Equivalence<A>): EQV.Equivalence<HS.HashSet<A>> =>
-    null;
-
-export const HashMap_getEquivalence = <A, B>(EQVA: EQV.Equivalence<A>, EQVB: EQV.Equivalence<B>): EQV.Equivalence<HM.HashMap<A, B>> =>
-    null;
 
 export const HashMap_entries = <K, V>(hashMap: HM.HashMap<K, V>): IterableIterator<[K, V]> =>
     pipe(

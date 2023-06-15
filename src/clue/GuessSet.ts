@@ -7,7 +7,7 @@ import * as P from '@effect/data/Predicate';
 import * as H from '@effect/data/Hash';
 import { pipe } from '@effect/data/Function';
 
-import { HashSet_every, HashSet_getEquivalence, Refinement_and, Refinement_struct, Show, Show_isShow, Show_showHashSet, Show_symbol } from "../utils/ShouldBeBuiltin";
+import { HashSet_every, Refinement_and, Refinement_struct, Show, Show_isShow, Show_showHashSet, Show_symbol } from "../utils/ShouldBeBuiltin";
 
 import * as Guess from './Guess';
 
@@ -31,7 +31,7 @@ export const isGuessSet: P.Refinement<unknown, GuessSet> =
     );
 
 export const Equivalence: EQV.Equivalence<GuessSet> = ST.getEquivalence({
-    guesses: HashSet_getEquivalence(Guess.Equivalence),
+    guesses: EQ.equivalence(),
 });
 
 export const empty: GuessSet =

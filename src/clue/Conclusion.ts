@@ -10,7 +10,7 @@ import * as B from '@effect/data/Boolean';
 import * as M from '@effect/match';
 import { constant, pipe } from '@effect/data/Function';
 
-import { Equals_getRefinement, Equivalence_constTrue, HashSet_every, HashSet_getEquivalence, Refinement_struct, Refinement_and, Refinement_or, Show, Show_isShow, Show_symbol, Show_show, Show_showHashSet } from '../utils/ShouldBeBuiltin';
+import { Equals_getRefinement, Equivalence_constTrue, HashSet_every, Refinement_struct, Refinement_and, Refinement_or, Show, Show_isShow, Show_symbol, Show_show, Show_showHashSet } from '../utils/ShouldBeBuiltin';
 
 type RawReason = {
     level: 'observed' | 'inferred';
@@ -89,7 +89,7 @@ export const isConclusion: P.Refinement<unknown, Conclusion<unknown>> =
 export const Equivalence: EQV.Equivalence<Conclusion<unknown>> =
     ST.getEquivalence({
         answer: EQ.equivalence(),
-        reasons: HashSet_getEquivalence(ReasonEquivalence),
+        reasons: EQ.equivalence(),
     });
 
 export const EquivalenceIgnoreReasons: EQV.Equivalence<Conclusion<unknown>> =

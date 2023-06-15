@@ -9,7 +9,7 @@ import * as H from '@effect/data/Hash';
 import { pipe } from '@effect/data/Function';
 
 import * as Card from './Card';
-import { Endomorphism_getMonoid, HashSet_every, HashSet_getEquivalence, Refinement_and, Refinement_struct, Show, Show_isShow, Show_showHashSet, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Endomorphism_getMonoid, HashSet_every, Refinement_and, Refinement_struct, Show, Show_isShow, Show_showHashSet, Show_symbol } from '../utils/ShouldBeBuiltin';
 
 type RawCardSet = {
     readonly cards: HS.HashSet<Card.Card>;
@@ -31,7 +31,7 @@ export const isCardSet: P.Refinement<unknown, CardSet> =
     );
 
 export const Equivalence: EQV.Equivalence<CardSet> = ST.getEquivalence({
-    cards: HashSet_getEquivalence(Card.Equivalence),
+    cards: EQ.equivalence(),
 });
 
 export const empty: CardSet =

@@ -10,7 +10,7 @@ import * as S from '@effect/data/String';
 import * as M from "@effect/match";
 import { pipe } from '@effect/data/Function';
 
-import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_symbol, Show_show, HashSet_every, HashSet_getEquivalence, Refinement_or, Equals_getRefinement } from '../utils/ShouldBeBuiltin';
+import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_symbol, Show_show, HashSet_every, Refinement_or, Equals_getRefinement } from '../utils/ShouldBeBuiltin';
 
 import * as CardOwner from "./CardOwner";
 
@@ -62,7 +62,7 @@ export const isCardOwnership: P.Refinement<unknown, CardOwnership> =
 export const Equivalence: EQV.Equivalence<CardOwnership> = ST.getEquivalence({
     _cardOwnershipType: S.Equivalence,
     owner: O.getEquivalence(CardOwner.Equivalence),
-    nonOwners: HashSet_getEquivalence(CardOwner.Equivalence),
+    nonOwners: EQ.equivalence(),
 });
 
 export const create = (

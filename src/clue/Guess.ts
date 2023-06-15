@@ -8,7 +8,7 @@ import * as P from '@effect/data/Predicate';
 import * as EQV from '@effect/data/typeclass/Equivalence';
 import { pipe } from '@effect/data/Function';
 
-import { HashSet_every, HashSet_getEquivalence, Option_getRefinement, Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_showHashSet, Show_showOption, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { HashSet_every, Option_getRefinement, Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_showHashSet, Show_showOption, Show_symbol } from '../utils/ShouldBeBuiltin';
 
 import * as Player from './Player';
 import * as Card from './Card';
@@ -60,9 +60,9 @@ export const isGuess: P.Refinement<unknown, Guess> =
     );
 
 export const Equivalence: EQV.Equivalence<Guess> = ST.getEquivalence({
-    cards: HashSet_getEquivalence(Card.Equivalence),
+    cards: EQ.equivalence(),
     guesser: Player.Equivalence,
-    nonRefuters: HashSet_getEquivalence(Player.Equivalence),
+    nonRefuters: EQ.equivalence(),
     refutation: O.getEquivalence(ST.getEquivalence({
         refuter: Player.Equivalence,
         card: O.getEquivalence(Card.Equivalence),

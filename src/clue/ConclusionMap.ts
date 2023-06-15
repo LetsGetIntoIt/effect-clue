@@ -9,7 +9,7 @@ import * as E from '@effect/data/Either';
 import * as O from '@effect/data/Option';
 import { pipe } from '@effect/data/Function';
 
-import { HashMap_every, HashMap_getEquivalence, Refinement_and, Refinement_struct, Show, Show_isShow, Show_showHashMap, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { HashMap_every, Refinement_and, Refinement_struct, Show, Show_isShow, Show_showHashMap, Show_symbol } from '../utils/ShouldBeBuiltin';
 
 import * as Conclusion from './Conclusion';
 
@@ -43,7 +43,7 @@ export const isConclusionMap: P.Refinement<unknown, ConclusionMap<unknown, unkno
 
 export const Equivalence: EQV.Equivalence<ConclusionMap<unknown, unknown>> =
     ST.getEquivalence({
-        conclusions: HashMap_getEquivalence(EQ.equivalence(), EQ.equivalence()),
+        conclusions: EQ.equivalence(),
     });
 
 const create = <Q, A>(
