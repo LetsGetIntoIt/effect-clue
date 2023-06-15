@@ -14,7 +14,7 @@ import * as Game from "./Game";
 import * as ConclusionMapSet from "./ConclusionMapSet";
 import * as CardOwner from './CardOwner';
 import * as CardOwnership from './CardOwnership';
-import * as CardOwnerCardPair from './Pair';
+import * as Pair from './Pair';
 import * as Conclusion from './Conclusion';
 
 export type DeductionRule = T.Effect<
@@ -86,9 +86,9 @@ export const cardIsHeldAtMostOnce: DeductionRule = T.gen(function* ($) {
         // Now put together all the modifications we need to apply
         HS.map(([card, owner]) =>
             E.gen(function* ($) {
-                const cardOwnerCardPair = yield* $(CardOwnerCardPair.create({
-                    owner,
-                    card,
+                const question = yield* $(Pair.create({
+                    first: owner,
+                    second: card,
                 }));
 
                 // TODO make reasons structured/an enum
@@ -97,7 +97,7 @@ export const cardIsHeldAtMostOnce: DeductionRule = T.gen(function* ($) {
                     explanation: `Card is already owned by someone else`
                 });
 
-                return ConclusionMapSet.modifyAddOwnership(cardOwnerCardPair, false, reason);
+                return ConclusionMapSet.modifyAddOwnership(question, false, reason);
             })
         ),
 
@@ -144,9 +144,9 @@ export const cardIsHeldAtLeastOnce: DeductionRule = T.gen(function* ($) {
         // Now put together all the modifications we need to apply
         HS.map(([card, owner]) =>
             E.gen(function* ($) {
-                const cardOwnerCardPair = yield* $(CardOwnerCardPair.create({
-                    owner,
-                    card,
+                const question = yield* $(Pair.create({
+                    first: owner,
+                    second: card,
                 }));
 
                 // TODO make reasons structured/an enum
@@ -155,7 +155,7 @@ export const cardIsHeldAtLeastOnce: DeductionRule = T.gen(function* ($) {
                     explanation: `Card not owned anywhere else`,
                 });
 
-                return ConclusionMapSet.modifyAddOwnership(cardOwnerCardPair, true, reason);
+                return ConclusionMapSet.modifyAddOwnership(question, true, reason);
             })
         ),
 

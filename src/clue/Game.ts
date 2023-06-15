@@ -70,4 +70,4 @@ export const getCards = (game: Game): HS.HashSet<Card.Card> =>
 
 // TODO does this short-hand make sense? Can we reduce the number of properties in each object instead?
 export const getCardOwners = (game: Game): HS.HashSet<CardOwner.CardOwner> =>
-    null;
+    game.gameSetup.owners.owners;

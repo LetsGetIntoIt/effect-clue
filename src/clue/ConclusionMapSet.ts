@@ -20,8 +20,8 @@ import * as Card from './Card';
 import * as Player from './Player';
 import * as Guess from './Guess';
 import * as Game from './Game';
+import * as Pair from './Pair';
 import * as CardOwner from './CardOwner';
-import * as CardOwnerCardPair from './Pair';
 import * as CardOwnership from './CardOwnership';
 import * as Conclusion from './Conclusion';
 import * as ConclusionMap from './ConclusionMap';
@@ -34,7 +34,7 @@ import * as ConclusionMap from './ConclusionMap';
 export type ConclusionMapSet =
     EQ.Equal & Show & {
         numCards: ConclusionMap.ConclusionMap<Player.Player, number>;
-        ownership: ConclusionMap.ConclusionMap<CardOwnerCardPair.Pair, boolean>;
+        ownership: ConclusionMap.ConclusionMap<Pair.Pair<CardOwner.CardOwner, Card.Card>, boolean>;
         refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>;
     };
 
@@ -45,7 +45,10 @@ export const isConclusionMapSet: P.Refinement<unknown, ConclusionMapSet> =
         Refinement_struct({
             numCards: ConclusionMap.getRefinement(Player.isPlayer, P.isNumber),
 
-            ownership: ConclusionMap.getRefinement(CardOwnerCardPair.isPair, P.isBoolean),
+            ownership: ConclusionMap.getRefinement(
+                Pair.getRefinement(CardOwner.isCardOwner, Card.isCard),
+                P.isBoolean,
+            ),
 
             refuteCards: ConclusionMap.getRefinement(
                 Guess.isGuess,
@@ -72,7 +75,7 @@ export const Equivalence: EQV.Equivalence<ConclusionMapSet> =
 
 const create = (conclusions : {
     numCards: ConclusionMap.ConclusionMap<Player.Player, number>,
-    ownership: ConclusionMap.ConclusionMap<CardOwnerCardPair.Pair, boolean>,
+    ownership: ConclusionMap.ConclusionMap<Pair.Pair<CardOwner.CardOwner, Card.Card>, boolean>,
     refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>,
 }): T.Effect<Game.Game, string, ConclusionMapSet> => pipe(
     // TODO actually validate the conclusions
@@ -161,7 +164,7 @@ export const modifyAddNumCards =
     );
 
 export const modifyAddOwnership =
-        (ownership: CardOwnerCardPair.Pair, isOwned: boolean, reason: Conclusion.Reason):
+        (ownership: Pair.Pair<CardOwner.CardOwner, Card.Card>, isOwned: boolean, reason: Conclusion.Reason):
         Modification =>
     flow(
         ST.pick('numCards', 'ownership', 'refuteCards'),

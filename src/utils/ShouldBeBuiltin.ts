@@ -36,9 +36,6 @@ export const Endomorphism_getMonoid = <A>(): MN.Monoid<Endomorphism<A>> =>
     identity
   );
 
-export const eitherApply = <E, A>(maybeFn: E.Either<E, (a: A) => A>): ((a: A) => E.Either<E, A>) =>
-    null;
-
 export const HashSet_fromOption = <A>(val: O.Option<A>): HS.HashSet<A> =>
     O.match(
         val,
@@ -94,16 +91,17 @@ export const Refinement_has = <K extends string | number | symbol>(prop: K): P.R
         ),
     );
 
-export const Refinement_struct =
-    <R extends Record<string | number | symbol, unknown>>(refinements: { [k in keyof R]: P.Refinement<unknown, R[k]>}):
-    P.Refinement<unknown, R> =>
-        pipe(
-            P.isRecord,
-
-            P.compose((obj): obj is R => {
-                
-            }),
-        );
+export const Refinement_struct = <R extends Record<string, P.Refinement<unknown, unknown>>>(
+    refinements: R,
+): P.Refinement<
+    unknown,
+    {
+        readonly [K in keyof R]: [R[K]] extends [P.Refinement<any, infer B>] ? B : never;
+    }
+> => pipe(
+    P.isRecord,
+    P.compose(P.struct(refinements) as any),
+);
 
 // Merged in this PR: https://github.com/Effect-TS/data/pull/361
 export const Refinement_and:
@@ -146,7 +144,7 @@ export const Show_show: (thing: unknown) => string =
         ),
     );
 
-export const Show_showOption: <A extends Show>(option: O.Option<A>) => string =
+export const Show_showOption: (option: O.Option<unknown>) => string =
     O.match(
         constant('None'),
         flow(Show_show, String_surroundWith('Some(', ')')),
@@ -189,9 +187,6 @@ export const HashMap_fromHashSetTuple: <K, V>(hashSet: HS.HashSet<[K, V]>) => HM
         HM.fromIterable,
     );
 
-export const HashSet_fromHashMap: <K, V>(hashMap: HM.HashMap<K, V>) => HS.HashSet<[K, V]> =
-    null;
-
 export const HashMap_fromHashSetMap = <K, V>(f: (k: K) => V): ((hashSet: HS.HashSet<K>) => HM.HashMap<K, V>) =>
     flow(
         HS.map(k => TU.tuple(k, f(k))),
@@ -201,11 +196,23 @@ export const HashMap_fromHashSetMap = <K, V>(f: (k: K) => V): ((hashSet: HS.Hash
 export const HashMap_fromHashSetIdentity: <A>(hashSet: HS.HashSet<A>) => HM.HashMap<A, A> =
     HashMap_fromHashSetMap(identity);
 
-export const HashMap_fromHashSetMulti: <K, V>(hashSet: HS.HashSet<[K, V]>) => HM.HashMap<K, HS.HashSet<V>> =
-    null;
+export const HashSet_fromHashMapMulti = <K, V>(hashMap: HM.HashMap<K, HS.HashSet<V>>): HS.HashSet<[K, V]> =>
+    pipe(
+        hashMap,
 
-export const HashSet_fromHashMapMulti: <K, V>(hashMap: HM.HashMap<K, HS.HashSet<V>>) => HS.HashSet<[K, V]> =
-    null;
+        HM.mapWithIndex((hashSet, key) =>
+            HS.map(hashSet, (value) =>
+                TU.tuple(key, value),
+            ),
+        ),
+
+        HM.values,
+
+        ROA.reduce(
+            HS.empty<[K, V]>(),
+            (unionSet, nextSet) => HS.union(unionSet, nextSet),
+        ),
+    );
 
 export const HashMap_separateV = <V>(valuePredicate: P.Predicate<V>) => <K>(map: HM.HashMap<K, V>): [falseMap: HM.HashMap<K, V>, trueMap: HM.HashMap<K, V>] =>
     [
@@ -304,9 +311,3 @@ export const HashSet_isSize = <A>(size: number): P.Predicate<HS.HashSet<A>> =>
 
 export const HashSet_isEmpty = <A>(): P.Predicate<HS.HashSet<A>> =>
     HashSet_isSize(0);
-
-export const HashMap_flip = <K, V>(hashMap: HM.HashMap<K, V>): HM.HashMap<V, HS.HashSet<K>> =>
-    null;
-
-export const HashMap_flipMulti = <K, V>(hashMap: HM.HashMap<K, HS.HashSet<V>>): HM.HashMap<V, HS.HashSet<K>> =>
-    null;

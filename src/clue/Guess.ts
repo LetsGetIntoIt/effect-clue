@@ -76,7 +76,7 @@ export const create = (guess: RawGuess): E.Either<string, Guess> =>
         [Show_symbol](): string {
             return `Guess by ${Show_show(this.guesser)} of ${Show_showHashSet(this.cards)} NOT refuted by ${Show_showHashSet(this.nonRefuters)} with refutation ${Show_showOption(this.refutation)}`
         },
-    
+
         [EQ.symbol](that: EQ.Equal): boolean {
             return isGuess(that) && Equivalence(this, that);
         },
