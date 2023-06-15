@@ -13,7 +13,7 @@ import { HashSet_every, HashSet_getEquivalence, Option_getRefinement, Refinement
 import * as Player from './Player';
 import * as Card from './Card';
 
-export interface Guess extends EQ.Equal, Show {
+type RawGuess = {
     readonly cards: HS.HashSet<Card.Card>;
 
     readonly guesser: Player.Player;
@@ -25,6 +25,8 @@ export interface Guess extends EQ.Equal, Show {
         card: O.Option<Card.Card>;
     }>;
 }
+
+export type Guess = EQ.Equal & Show & RawGuess;
 
 export const isGuess: P.Refinement<unknown, Guess> =
     pipe(
@@ -67,25 +69,9 @@ export const Equivalence: EQV.Equivalence<Guess> = ST.getEquivalence({
     })),
 });
 
-export const create = ({
-    cards,
-    guesser,
-    nonRefuters,
-    refutation,
-}: {
-    readonly cards: HS.HashSet<Card.Card>;
-    readonly guesser: Player.Player;
-    readonly nonRefuters: HS.HashSet<Player.Player>;
-    readonly refutation: O.Option<{
-        refuter: Player.Player;
-        card: O.Option<Card.Card>;
-    }>;
-}): E.Either<string, Guess> =>
+export const create = (guess: RawGuess): E.Either<string, Guess> =>
     E.right({
-        cards,
-        guesser,
-        nonRefuters,
-        refutation,
+        ...guess,
 
         [Show_symbol](): string {
             return `Guess by ${Show_show(this.guesser)} of ${Show_showHashSet(this.cards)} NOT refuted by ${Show_showHashSet(this.nonRefuters)} with refutation ${Show_showOption(this.refutation)}`

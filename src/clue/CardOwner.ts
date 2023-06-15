@@ -11,6 +11,7 @@ import { constant, pipe } from '@effect/data/Function';
 import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_show, Show_symbol } from '../utils/ShouldBeBuiltin';
 
 import * as Player from "./Player";
+import * as CaseFile from './CaseFile';
 
 type RawCardOwner =
     | {
@@ -19,6 +20,7 @@ type RawCardOwner =
     }
     | {
         _cardOwnerTag: 'caseFile',
+        caseFile: CaseFile.CaseFile,
     };
 
 export type CardOwner = EQ.Equal & Show & RawCardOwner;
@@ -28,6 +30,7 @@ export const isCardOwner: P.Refinement<unknown, CardOwner> =
         Refinement_struct({
             _cardOwnerTag: P.isString,
             player: Player.isPlayer,
+            caseFile: CaseFile.isCaseFile,
         }),
 
         Refinement_and(EQ.isEqual),
@@ -39,6 +42,10 @@ export const Equivalence: EQV.Equivalence<CardOwner> = ST.getEquivalence({
     player: EQV.contramap(
         O.getEquivalence(Player.Equivalence),
         O.fromNullable<Player.Player | undefined>,
+    ),
+    caseFile: EQV.contramap(
+        O.getEquivalence(CaseFile.Equivalence),
+        O.fromNullable<CaseFile.CaseFile | undefined>,
     ),
 });
 
@@ -70,7 +77,8 @@ export const createPlayer = (player: Player.Player): CardOwner =>
         player,
     });
 
-export const caseFile: CardOwner =
+export const createCaseFile = (caseFile: CaseFile.CaseFile): CardOwner =>
     create({
         _cardOwnerTag: 'caseFile',
+        caseFile,
     });

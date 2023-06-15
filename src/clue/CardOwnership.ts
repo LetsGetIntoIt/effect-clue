@@ -8,9 +8,9 @@ import * as HS from "@effect/data/HashSet";
 import * as P from '@effect/data/Predicate';
 import * as S from '@effect/data/String';
 import * as M from "@effect/match";
-import { constant, pipe } from '@effect/data/Function';
+import { pipe } from '@effect/data/Function';
 
-import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_symbol, Show_show, Option_getRefinement, HashSet_every, HashSet_getEquivalence, Refinement_or, Equals_getRefinement } from '../utils/ShouldBeBuiltin';
+import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_symbol, Show_show, HashSet_every, HashSet_getEquivalence, Refinement_or, Equals_getRefinement } from '../utils/ShouldBeBuiltin';
 
 import * as CardOwner from "./CardOwner";
 

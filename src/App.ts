@@ -1,6 +1,7 @@
 import * as E from '@effect/data/Either';
 
 import * as Clue from './clue';
+import * as ConclusionMapSet from './clue/ConclusionMapSet';
 
 // TODO refactors
 // - Add logging, services and spans
@@ -49,7 +50,7 @@ export const app: E.Either<string[], AppState> = E.gen(function* ($) {
 
     // This will live in a component, returning the validated result or nothing
     const players = yield* $(Clue.setupPlayers({
-        names: [
+        players: [
             ['kapil'],
             ['kate'],
         ]
@@ -91,6 +92,6 @@ export const app: E.Either<string[], AppState> = E.gen(function* ($) {
     const deductionRules = yield* $(Clue.setupDeductionRules());
 
     // This will live in the App, and be passed into each component to render extra stuff
-    const deducedConclusions = yield* $(Clue.deduceConclusions(knownConclusions));
+    const deducedConclusions = yield* $(Clue.deduceConclusions(ConclusionMapSet.empty));
 
 });

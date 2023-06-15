@@ -9,20 +9,20 @@ import { pipe } from '@effect/data/Function';
 
 import { HashSet_every, HashSet_getEquivalence, Refinement_and, Refinement_struct, Show, Show_isShow, Show_showHashSet, Show_symbol } from '../utils/ShouldBeBuiltin';
 
-import * as Player from './Player';
+import * as CardOwner from './CardOwner';
 
-type RawPlayerSet = {
-    readonly players: HS.HashSet<Player.Player>;
+type RawCardOwnerSet = {
+    readonly owners: HS.HashSet<CardOwner.CardOwner>;
 }
 
-export type PlayerSet = EQ.Equal & Show & RawPlayerSet;
+export type CardOwnerSet = EQ.Equal & Show & RawCardOwnerSet;
 
-export const isPlayerSet: P.Refinement<unknown, PlayerSet> =
+export const isCardOwnerSet: P.Refinement<unknown, CardOwnerSet> =
     pipe(
         Refinement_struct({
-            players: pipe(
+            owners: pipe(
                 HS.isHashSet,
-                P.compose(HashSet_every(Player.isPlayer)),
+                P.compose(HashSet_every(CardOwner.isCardOwner)),
             ),
         }),
 
@@ -30,20 +30,20 @@ export const isPlayerSet: P.Refinement<unknown, PlayerSet> =
         Refinement_and(Show_isShow),
     );
 
-export const Equivalence: EQV.Equivalence<PlayerSet> = ST.getEquivalence({
-    players: HashSet_getEquivalence(Player.Equivalence),
+export const Equivalence: EQV.Equivalence<CardOwnerSet> = ST.getEquivalence({
+    owners: HashSet_getEquivalence(CardOwner.Equivalence),
 });
 
-export const empty: PlayerSet =
+export const empty: CardOwnerSet =
     Object.freeze({
-        players: HS.empty(),
+        owners: HS.empty(),
 
         [Show_symbol](): string {
-            return Show_showHashSet(this.players);
+            return Show_showHashSet(this.owners);
         },
 
         [EQ.symbol](that: EQ.Equal): boolean {
-            return isPlayerSet(that) && Equivalence(this, that);
+            return isCardOwnerSet(that) && Equivalence(this, that);
         },
 
         [H.symbol](): number {
@@ -53,21 +53,21 @@ export const empty: PlayerSet =
         },
     });
 
-export const add = (newPlayer: Player.Player) =>
-                (initialSet: PlayerSet):
-                PlayerSet =>
+export const add = (newOwner: CardOwner.CardOwner) =>
+                (initialSet: CardOwnerSet):
+                CardOwnerSet =>
     ST.evolve(initialSet, {
-        players: HS.add(newPlayer)
+        owners: HS.add(newOwner),
     });
 
-export interface ValidatedPlayerSet extends PlayerSet {
+export interface ValidatedCardOwnerSet extends CardOwnerSet {
     validated: true;
 }
 
-export const validate = (playerSet: PlayerSet): E.Either<string[], ValidatedPlayerSet> =>
+export const validate = (cardOwnerSet: CardOwnerSet): E.Either<string[], ValidatedCardOwnerSet> =>
     E.right(
         Object.freeze({
-            ...playerSet,
+            ...cardOwnerSet,
             validated: true,
         })
     );

@@ -14,7 +14,7 @@ import * as Game from "./Game";
 import * as ConclusionMapSet from "./ConclusionMapSet";
 import * as CardOwner from './CardOwner';
 import * as CardOwnership from './CardOwnership';
-import * as CardOwnerCardPair from './CardOwnerCardPair';
+import * as CardOwnerCardPair from './Pair';
 import * as Conclusion from './Conclusion';
 
 export type DeductionRule = T.Effect<

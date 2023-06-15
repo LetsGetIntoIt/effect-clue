@@ -3,12 +3,14 @@ import * as ROA from '@effect/data/ReadonlyArray';
 import * as Match from "@effect/match"
 import { flow, identity, pipe, tupled } from '@effect/data/Function';
 
-import { Either_fromRefinement, Endomorphism_getMonoid, ReadonlyArray_isArray, eitherApply } from '../utils/ShouldBeBuiltin';
+import { Endomorphism_getMonoid } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';
 import * as CardSet from './CardSet';
 import * as Player from './Player';
-import * as PlayerSet from './PlayerSet';
+import * as CaseFile from './CaseFile';
+import * as CardOwnerSet from './CardOwnerSet';
+import * as CardOwner from './CardOwner';
 import * as Guess from './Guess';
 import * as GuessSet from './GuessSet';
 import * as DeductionRule from './DeductionRule';
@@ -18,116 +20,97 @@ type RawCard = [string, string];
 
 export const setupCards = ({
     useStandard,
-    extraCards = [],
+    extraCards: rawExtraCards = [],
 }: {
     useStandard?: 'North America';
     extraCards?: RawCard[];
-}): E.Either<string[], CardSet.ValidatedCardSet> => pipe(
-    CardSet.empty,
+}): E.Either<string[], CardSet.ValidatedCardSet> =>
+    E.gen(function* ($) {
+        // Add whatever standard set was selected, if any
+        const addStandardSet = pipe(
+            Match.value(useStandard),
 
-    // Add whatever standard set was selected, if any
-    pipe(
-        Match.value(useStandard),
+            // If no standard set is selected, leave the set untouched
+            Match.when(undefined, () => identity<CardSet.CardSet>),
+            
+            // Otherwise, add the selected standard set
+            Match.when('North America', () => CardSet.addStandardNorthAmericaCardSet),
 
-        // If no standard set is selected, leave the set untouched
-        Match.when(undefined, () => identity<CardSet.CardSet>),
-        
-        // Otherwise, add the selected standard set
-        Match.when('North America', () => CardSet.addStandardNorthAmericaCardSet),
+            Match.exhaustive,
+        );
 
-        Match.exhaustive,
-    ),
+        // Create the extra manual cards
+        const extraCards = yield* $(E.validateAll(
+            rawExtraCards,
+            ([cardType, label]) => Card.create({
+                cardType,
+                label,
+            }),
+        ));
 
-    // Add any extra user-defined cards
-    pipe(
-        // Create the cards
-        E.validateAll(extraCards, tupled(Card.create)),
-
-        // Add the cards
-        E.map(flow(
+        // Create our functiont to add all these manual cards
+        const addExtraCards = pipe(
+            extraCards,
             ROA.map(CardSet.add),
             Endomorphism_getMonoid<CardSet.CardSet>().combineAll,
-        )),
+        );
 
-        eitherApply,
-    ),
-
-    // Validate the card set
-    E.flatMap(CardSet.validate),
-);
+        return yield* $(
+            CardSet.empty,
+            addStandardSet,
+            addExtraCards,
+            CardSet.validate,
+        );
+    });
 
 type RawPlayer = [string];
+type RawCaseFile = [string];
 
-export const setupPlayers = ({
-    names = [],
+export const setupCardOwners = ({
+    players = [],
+    caseFiles = [],
 }: {
-    names?: RawPlayer[];
-}): E.Either<string[], PlayerSet.ValidatedPlayerSet> => pipe(
-    PlayerSet.empty,
-    
-    pipe(
+    players?: RawPlayer[];
+    caseFiles?: RawCaseFile[];
+}): E.Either<string[], CardOwnerSet.ValidatedCardOwnerSet> =>
+    E.gen(function* ($) {
         // Create the players
-        E.validateAll(names, tupled(Player.create)),
+        const playerOwners = yield* $(E.validateAll(
+            players,
 
-        // Add the players
-        E.map(flow(
-            ROA.map(PlayerSet.add),
-            Endomorphism_getMonoid<PlayerSet.PlayerSet>().combineAll,
-        )),
+            flow(
+                ([label]) => ({ label }),
+                Player.create,
+                E.map(CardOwner.createPlayer),
+            ),
+        ));
 
-        eitherApply,
-    ),
+        // Create the case files
+        const caseFileOwners = yield* $(E.validateAll(
+            caseFiles,
 
-    // Validate the player set
-    E.flatMap(PlayerSet.validate),
-);
+            flow(
+                ([label]) => ({ label }),
+                CaseFile.create,
+                E.map(CardOwner.createCaseFile),
+            ),
+        ));
 
-type RawKnownNumCards = [RawPlayer, number];
+        // Create our functiont to add all these owners
+        const addAllOwners = pipe(
+            playerOwners,
+            ROA.appendAll(caseFileOwners),
 
-const parseKnownNumCards: (knownNumCards: RawKnownNumCards) => E.Either<string, [Player.Player, number]> = null;
+            ROA.map(CardOwnerSet.add),
+            Endomorphism_getMonoid<CardOwnerSet.CardOwnerSet>().combineAll,
+        );
 
-type RawKnownCardOwner = [RawPlayer, RawCard];
-
-const parseKnownCardOwner: (knownCardOwner: RawKnownCardOwner) => E.Either<string, [Player.Player, Card.Card]> = null;
-
-export const setupKnownConclusions = ({
-    knownNumCards = [],
-    knownCardOwners = [],
-}: {
-    knownNumCards?: readonly RawKnownNumCards[];
-    knownCardOwners?: RawKnownCardOwner[];
-}): E.Either<string[], ConclusionSet.ValidatedConclusionSet> => pipe(
-    ConclusionSet.empty,
-
-    // Add the known number of cards
-    pipe(
-        E.validateAll(knownNumCards, parseKnownNumCards),
-
-        // Add all these guesses to the set
-        E.map(flow(
-            ROA.map(ConclusionSet.addKnownNumCards),
-            Endomorphism_getMonoid<ConclusionSet.ConclusionSet>().combineAll,
-        )),
-
-        eitherApply,
-    ),
-
-    // Add the known card owners
-    pipe(
-        E.validateAll(knownCardOwners, parseKnownCardOwner),
-
-        // Add all these guesses to the set
-        E.map(flow(
-            ROA.map(ConclusionSet.addOwnership),
-            Endomorphism_getMonoid<ConclusionSet.ConclusionSet>().combineAll,
-        )),
-
-        eitherApply,
-    ),
-
-    // Validate the conclusion set
-    E.flatMap(ConclusionSet.validate),
-);
+        return yield* $(
+            CardOwnerSet.empty,
+            addAllOwners,
+            CardOwnerSet.validate,
+        );
+    });
 
 type RawGuess = {
     cards: RawCard[],
@@ -139,35 +122,39 @@ type RawGuess = {
     ],
 };
 
-const parseGuess: (guess: RawGuess) => E.Either<string, Guess.Guess> = null;
+// TODO actually parse this!
+const parseGuess = (guess: RawGuess): E.Either<string, any> =>
+    E.left('Not implemented yet');
 
 export const setupGuesses = ({
-    guesses = [],
+    guesses: rawGuesses = [],
 }: {
     guesses?: RawGuess[];
-}): E.Either<string[], GuessSet.ValidatedGuessSet> => pipe(
-    GuessSet.empty,
-
-    // Add the guesses
-    pipe(
+}): E.Either<string[], GuessSet.ValidatedGuessSet> =>
+    E.gen(function* ($) {
         // Create the guesses
-        E.validateAll(guesses, flow(
-            parseGuess,
-            E.flatMap(Guess.create),
-        )),
+        const guesses = yield* $(E.validateAll(
+            rawGuesses,
 
-        // Add all these guesses to the set
-        E.map(flow(
+            flow(
+                parseGuess,
+                E.flatMap(Guess.create),
+            )),
+        );
+
+        // Create our function to add all the guesses
+        const addGuesses = pipe(
+            guesses,
             ROA.map(GuessSet.add),
             Endomorphism_getMonoid<GuessSet.GuessSet>().combineAll,
-        )),
+        );
 
-        eitherApply,
-    ),
-
-    // Validate the guess set
-    E.flatMap(GuessSet.validate),
-);
+        return yield* $(
+            GuessSet.empty,
+            addGuesses,
+            GuessSet.validate,
+        );
+    });
 
 const ALL_DEDUCTION_RULES = [
     'cardIsHeldAtMostOnce',
@@ -225,4 +212,4 @@ export const deduceConclusions = (
     // TODO run the deduction rule, and merge its findings
     //      keep re-running the deduction rule until it finds nothing new
     //      or exceeds some retry limit, at which point throw an Defect
-    null;
+    E.left(['Not implemented yet']);

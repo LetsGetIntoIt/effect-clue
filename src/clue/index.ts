@@ -1,6 +1,6 @@
 export {
     setupCards,
-    setupPlayers,
+    setupCardOwners as setupPlayers,
     setupKnownConclusions,
     setupGuesses,
     setupDeductionRules,
