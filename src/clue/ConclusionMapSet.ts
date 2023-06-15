@@ -11,10 +11,11 @@ import * as CTX from "@effect/data/Context";
 import * as O from '@effect/data/Option';
 import * as TU from '@effect/data/Tuple';
 import * as SG from '@effect/data/typeclass/Semigroup';
+import * as B from '@effect/data/Boolean';
 import * as MON from '@effect/data/typeclass/Monoid';
-import { flow, pipe } from '@effect/data/Function';
+import { constant, flow, pipe } from '@effect/data/Function';
 
-import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol, HashMap_every, Equals_getRefinement, Refinement_or } from '../utils/ShouldBeBuiltin';
+import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol, HashMap_every, Equals_getRefinement, Refinement_or, Struct_get, HashSet_of } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';
 import * as Player from './Player';
@@ -73,6 +74,23 @@ export const Equivalence: EQV.Equivalence<ConclusionMapSet> =
         refuteCards: ConclusionMap.Equivalence,
     });
 
+const HashMap_setOrUpdate = <K, V>(
+    key: K,
+    set: () => V,
+    update: (existing: V) => V,
+) => (
+    hashMap: HM.HashMap<K, V>
+): HM.HashMap<K, V> =>
+    pipe(
+        // See if there's a value
+        HM.get(hashMap, key),
+
+        // Decide the updated value to set
+        O.match(set, update),
+
+        updatedValue => HM.set(hashMap, key, updatedValue),
+    );
+
 const create = (conclusions : {
     numCards: ConclusionMap.ConclusionMap<Player.Player, number>,
     ownership: ConclusionMap.ConclusionMap<Pair.Pair<CardOwner.CardOwner, Card.Card>, boolean>,
@@ -124,12 +142,54 @@ export const empty: ConclusionMapSet =
     );
 
 // TODO store this insead as a HashMap<Card.Card, ...> on the object itself, rather than recomputing it each time
-export const getOwnershipOf = (
+export const getOwnershipByCard: (
     conclusions: ConclusionMapSet,
-) => (
-    card: Card.Card,
-): CardOwnership.CardOwnership =>
-    null;
+) => HM.HashMap<Card.Card, CardOwnership.CardOwnership> =
+    flow(
+        // Pluck out the actual HashMap we care about
+        Struct_get('ownership'),
+        Struct_get('conclusions'),
+
+        // We don't care about the conclusions and reasons, just whether its owned or not
+        HM.map(Conclusion.getAnswer),
+
+        HM.reduceWithIndex(
+            HM.empty(),
+
+            (ownershipByCard, isOwned, nextOwnerCardPair) => {
+                const owner = Pair.getFirst(nextOwnerCardPair);
+                const card = Pair.getSecond(nextOwnerCardPair);
+
+                const newOwnership = pipe(
+                    isOwned,
+
+                    // TODO make better constructors for these
+                    B.match(
+                        constant(CardOwnership.createOwned({
+                            owner,
+                            nonOwners: HS.empty(),
+                        })),
+
+                        constant(CardOwnership.createUnowned({
+                            nonOwners: HashSet_of(owner),
+                        })),
+                    ),
+                );
+
+                return HashMap_setOrUpdate(
+                    card,
+
+                    // If this card doesn't exist in the map yet
+                    constant(newOwnership),
+
+                    // If we already have ownership information for the card
+                    flow(CardOwnership.combine(newOwnership), E.getOrThrow),
+                )(
+                    ownershipByCard,
+                )
+            },
+        )
+    );
 
 export type Modification = ((conclusions: ConclusionMapSet) => T.Effect<Game.Game, string, ConclusionMapSet>);
 

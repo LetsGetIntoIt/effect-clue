@@ -8,7 +8,7 @@ import * as HS from "@effect/data/HashSet";
 import * as P from '@effect/data/Predicate';
 import * as S from '@effect/data/String';
 import * as M from "@effect/match";
-import { pipe } from '@effect/data/Function';
+import { flow, pipe } from '@effect/data/Function';
 
 import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_symbol, Show_show, HashSet_every, Refinement_or, Equals_getRefinement } from '../utils/ShouldBeBuiltin';
 
@@ -65,10 +65,10 @@ export const Equivalence: EQV.Equivalence<CardOwnership> = ST.getEquivalence({
     nonOwners: EQ.equivalence(),
 });
 
-export const create = (
+const createInternal = (
     cardOwnership: RawCardOnwershipOwned | RawCardOnwershipUnowned,
-): E.Either<string, CardOwnership> =>
-    E.right({
+): CardOwnership =>
+    Object.freeze({
         ...cardOwnership,
 
         [Show_symbol](): string {
@@ -97,6 +97,37 @@ export const create = (
             });
         },
     });
+
+export const createOwned = (cardOwnership: Omit<RawCardOnwershipOwned, '_cardOwnershipType'>): CardOwnership =>
+    pipe(
+        cardOwnership,
+
+        ownership => ({
+            _cardOwnershipType: 'owned' as const,
+            ...cardOwnership,
+        }),
+
+        createInternal,
+    );
+
+export const createUnowned = (cardOwnership: Omit<RawCardOnwershipUnowned, '_cardOwnershipType'>): CardOwnership =>
+    pipe(
+        cardOwnership,
+
+        ownership => ({
+            _cardOwnershipType: 'unowned' as const,
+            ...cardOwnership,
+        }),
+
+        createInternal,
+    );
+
+export const combine = (
+    second: CardOwnership,
+) => (
+    first: CardOwnership,
+): E.Either<string, CardOwnership> =>
+    null;
 
 // TODO does this short-hand make sense? Can we reduce the number of properties in each object instead?
 export const getOwner: (ownership: CardOwnership) => O.Option<CardOwner.CardOwner> =

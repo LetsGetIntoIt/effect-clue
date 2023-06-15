@@ -155,3 +155,7 @@ export const combine = <A>(
             ),
         ),
     );
+
+// TODO does this short-hand make sense? Can we reduce the number of properties in each object instead?
+export const getAnswer = <A>(conclusion: Conclusion<A>): A =>
+    conclusion.answer;

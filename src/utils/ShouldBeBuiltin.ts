@@ -11,6 +11,7 @@ import * as P from '@effect/data/Predicate';
 import * as TU from '@effect/data/Tuple';
 import * as B from '@effect/data/Boolean';
 import * as T from '@effect/io/Effect';
+import * as ST from '@effect/data/Struct';
 import { pipe, identity, flow, constant, constTrue } from '@effect/data/Function'
 
 export const Equivalence_contramap = <A, B>(
@@ -326,3 +327,10 @@ export const HashSet_isSize = <A>(size: number): P.Predicate<HS.HashSet<A>> =>
 
 export const HashSet_isEmpty = <A>(): P.Predicate<HS.HashSet<A>> =>
     HashSet_isSize(0);
+
+export const Struct_get = <S, Key extends keyof S>(
+    key: Key,
+) => (
+    s: S,
+): S[Key] =>
+    s[key];
