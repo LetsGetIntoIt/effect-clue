@@ -196,6 +196,9 @@ export const HashMap_fromHashSetMap = <K, V>(f: (k: K) => V): ((hashSet: HS.Hash
 export const HashMap_fromHashSetIdentity: <A>(hashSet: HS.HashSet<A>) => HM.HashMap<A, A> =
     HashMap_fromHashSetMap(identity);
 
+export const HashSet_of = <A>(value: A): HS.HashSet<A> =>
+    HS.fromIterable([value]);
+
 export const HashSet_fromHashMapMulti = <K, V>(hashMap: HM.HashMap<K, HS.HashSet<V>>): HS.HashSet<[K, V]> =>
     pipe(
         hashMap,
@@ -212,6 +215,12 @@ export const HashSet_fromHashMapMulti = <K, V>(hashMap: HM.HashMap<K, HS.HashSet
             HS.empty<[K, V]>(),
             (unionSet, nextSet) => HS.union(unionSet, nextSet),
         ),
+    );
+
+export const HashSet_fromHashMap: <K, V>(hashMap: HM.HashMap<K, V>) => HS.HashSet<[K, V]> =
+    flow(
+        HM.map(HashSet_of),
+        HashSet_fromHashMapMulti,
     );
 
 export const HashMap_separateV = <V>(valuePredicate: P.Predicate<V>) => <K>(map: HM.HashMap<K, V>): [falseMap: HM.HashMap<K, V>, trueMap: HM.HashMap<K, V>] =>
