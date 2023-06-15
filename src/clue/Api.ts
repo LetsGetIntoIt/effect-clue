@@ -222,4 +222,7 @@ export const setupDeductionRules = (
 export const deduceConclusions = (
     conclusions: ConclusionMapSet.ConclusionMapSet
 ): E.Either<string[], ConclusionMapSet.ConclusionMapSet> =>
+    // TODO run the deduction rule, and merge its findings
+    //      keep re-running the deduction rule until it finds nothing new
+    //      or exceeds some retry limit, at which point throw an Defect
     null;
