@@ -39,6 +39,13 @@ export const Endomorphism_getMonoid = <A>(): MN.Monoid<Endomorphism<A>> =>
 export const eitherApply = <E, A>(maybeFn: E.Either<E, (a: A) => A>): ((a: A) => E.Either<E, A>) =>
     null;
 
+export const HashSet_fromOption = <A>(val: O.Option<A>): HS.HashSet<A> =>
+    O.match(
+        val,
+        HS.empty<A>,
+        flow(ROA.of, HS.fromIterable),
+    );
+
 export const HashSet_every = <A, B extends A>(refineValue: P.Refinement<A, B>): P.Refinement<HS.HashSet<A>, HS.HashSet<B>> =>
     (hashSet): hashSet is HS.HashSet<B> =>
         HS.every(hashSet, refineValue);
@@ -176,19 +183,28 @@ export const Show_showHashMap: (hashMap: HM.HashMap<unknown, unknown>) => string
         String_surroundWith('{ ', ' }'),
     );
 
-export const HashMap_fromHashSet: <K, V>(hashSet: HS.HashSet<[K, V]>) => HM.HashMap<K, V> =
+export const HashMap_fromHashSetTuple: <K, V>(hashSet: HS.HashSet<[K, V]>) => HM.HashMap<K, V> =
     flow(
         HS.values,
         HM.fromIterable,
     );
 
-export const HashMap_fromHashSetSelf: <A>(hashSet: HS.HashSet<A>) => HM.HashMap<A, A> =
+export const HashSet_fromHashMap: <K, V>(hashMap: HM.HashMap<K, V>) => HS.HashSet<[K, V]> =
+    null;
+
+export const HashMap_fromHashSetMap = <K, V>(f: (k: K) => V): ((hashSet: HS.HashSet<K>) => HM.HashMap<K, V>) =>
     flow(
-        HS.map(a => TU.tuple(a, a)),
-        HashMap_fromHashSet,
+        HS.map(k => TU.tuple(k, f(k))),
+        HashMap_fromHashSetTuple,
     );
 
+export const HashMap_fromHashSetIdentity: <A>(hashSet: HS.HashSet<A>) => HM.HashMap<A, A> =
+    HashMap_fromHashSetMap(identity);
+
 export const HashMap_fromHashSetMulti: <K, V>(hashSet: HS.HashSet<[K, V]>) => HM.HashMap<K, HS.HashSet<V>> =
+    null;
+
+export const HashSet_fromHashMapMulti: <K, V>(hashMap: HM.HashMap<K, HS.HashSet<V>>) => HS.HashSet<[K, V]> =
     null;
 
 export const HashMap_separateV = <V>(valuePredicate: P.Predicate<V>) => <K>(map: HM.HashMap<K, V>): [falseMap: HM.HashMap<K, V>, trueMap: HM.HashMap<K, V>] =>
@@ -278,3 +294,19 @@ export const Refinement_isTrue: P.Refinement<unknown, true> =
 export const Refinement_isFalse: P.Refinement<unknown, false> =
     (u): u is false =>
         u === false;
+
+export const Refinement_constTrue = <A>(): P.Refinement<A, A> =>
+    constTrue as any;
+
+export const HashSet_isSize = <A>(size: number): P.Predicate<HS.HashSet<A>> =>
+    (hashSet) =>
+        HS.size(hashSet) === size;
+
+export const HashSet_isEmpty = <A>(): P.Predicate<HS.HashSet<A>> =>
+    HashSet_isSize(0);
+
+export const HashMap_flip = <K, V>(hashMap: HM.HashMap<K, V>): HM.HashMap<V, HS.HashSet<K>> =>
+    null;
+
+export const HashMap_flipMulti = <K, V>(hashMap: HM.HashMap<K, HS.HashSet<V>>): HM.HashMap<V, HS.HashSet<K>> =>
+    null;

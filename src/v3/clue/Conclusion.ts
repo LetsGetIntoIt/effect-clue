@@ -12,15 +12,12 @@ import { constant, pipe } from '@effect/data/Function';
 
 import { Equals_getRefinement, Equivalence_constTrue, HashSet_every, HashSet_getEquivalence, Refinement_struct, Refinement_and, Refinement_or, Show, Show_isShow, Show_symbol, Show_show, Show_showHashSet } from '../utils/ShouldBeBuiltin';
 
-/**
- * Why do we know something?
- * Did we directly observe it, or infer it?
- * What specifically caused us to know this thing?
- */
-export type Reason = EQ.Equal & Show & {
+type RawReason = {
     level: 'observed' | 'inferred';
     explanation: string;
 }
+
+export type Reason = EQ.Equal & Show & RawReason;
 
 const ReasonEquivalence: EQV.Equivalence<Reason> = ST.getEquivalence({
     level: S.Equivalence,
@@ -41,6 +38,26 @@ const isReason: P.Refinement<unknown, Reason> =
         Refinement_and(EQ.isEqual),
         Refinement_and(Show_isShow),
     );
+
+export const createReason = (reason: RawReason): Reason =>
+        Object.freeze({
+            ...reason,
+
+            
+            [Show_symbol](): string {
+                return `${Show_show(this.level)}: ${Show_show(this.explanation)}`;
+            },
+    
+            [EQ.symbol](that: EQ.Equal): boolean {
+                return isReason(that) && ReasonEquivalence(this, that);
+            },
+    
+            [H.symbol](): number {
+                return H.structure({
+                    ...this
+                });
+            },
+        });
 
 /**
  * Something that we know

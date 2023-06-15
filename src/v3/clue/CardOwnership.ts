@@ -2,48 +2,91 @@ import * as E from '@effect/data/Either';
 import * as H from '@effect/data/Hash';
 import * as EQ from "@effect/data/Equal";
 import * as ST from "@effect/data/Struct";
-import * as S from '@effect/data/String';
 import * as EQV from '@effect/data/typeclass/Equivalence';
-import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_symbol, Show_show } from '../utils/ShouldBeBuiltin';
+import * as O from '@effect/data/Option';
+import * as HS from "@effect/data/HashSet";
 import * as P from '@effect/data/Predicate';
-import { pipe } from '@effect/data/Function';
+import * as S from '@effect/data/String';
+import * as M from "@effect/match";
+import { constant, pipe } from '@effect/data/Function';
 
-import * as Card from "./Card";
+import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_symbol, Show_show, Option_getRefinement, HashSet_every, HashSet_getEquivalence, Refinement_or, Equals_getRefinement } from '../utils/ShouldBeBuiltin';
+
 import * as CardOwner from "./CardOwner";
 
-type RawCardOnwership = {
-    readonly owner: CardOwner.CardOwner;
-    readonly card: Card.Card;
+type RawCardOnwershipOwned = {
+    _cardOwnershipType: 'owned';
+    owner: CardOwner.CardOwner;
+    nonOwners: HS.HashSet<CardOwner.CardOwner>;
 };
 
-export type CardOwnership = EQ.Equal & Show & RawCardOnwership;
+type RawCardOnwershipUnowned = {
+    _cardOwnershipType: 'unowned';
+    nonOwners: HS.HashSet<CardOwner.CardOwner>;
+};
 
-export const isCardOwnership: P.Refinement<unknown, CardOwnership> =
+export type CardOwnershipOwned = EQ.Equal & Show & RawCardOnwershipOwned;
+export type CardOwnershipUnowned = EQ.Equal & Show & RawCardOnwershipUnowned;
+export type CardOwnership = CardOwnershipOwned | CardOwnershipUnowned;
+
+export const isCardOwnershipOwned: P.Refinement<unknown, CardOwnershipOwned> =
     pipe(
         Refinement_struct({
+            _cardOwnershipType: Equals_getRefinement('owned'),
             owner: CardOwner.isCardOwner,
-            card: Card.isCard,
+            nonOwners: pipe(HS.isHashSet, P.compose(HashSet_every(CardOwner.isCardOwner)))
         }),
 
         Refinement_and(EQ.isEqual),
         Refinement_and(Show_isShow),
     );
 
+export const isCardOwnershipUnowned: P.Refinement<unknown, CardOwnership> =
+    pipe(
+        Refinement_struct({
+            _cardOwnershipType: Equals_getRefinement('unowned'),
+            owner: P.isUndefined,
+            nonOwners: pipe(HS.isHashSet, P.compose(HashSet_every(CardOwner.isCardOwner)))
+        }),
+
+        Refinement_and(EQ.isEqual),
+        Refinement_and(Show_isShow),
+    );
+
+export const isCardOwnership: P.Refinement<unknown, CardOwnership> =
+    pipe(
+        isCardOwnershipOwned,
+        Refinement_or(isCardOwnershipUnowned),
+    );
+
 export const Equivalence: EQV.Equivalence<CardOwnership> = ST.getEquivalence({
-    owner: CardOwner.Equivalence,
-    card: Card.Equivalence,
+    _cardOwnershipType: S.Equivalence,
+    owner: O.getEquivalence(CardOwner.Equivalence),
+    nonOwners: HashSet_getEquivalence(CardOwner.Equivalence),
 });
 
 export const create = (
-    cardOwnership: RawCardOnwership,
+    cardOwnership: RawCardOnwershipOwned | RawCardOnwershipUnowned,
 ): E.Either<string, CardOwnership> =>
     E.right({
         ...cardOwnership,
 
         [Show_symbol](): string {
-           return `('${Show_show(this.owner)}', ${Show_show(this.card)})`
+            return pipe(
+                M.value(this),
+
+                M.when({  _cardOwnershipType: 'owned' }, (self) =>
+                    `Owned by '${Show_show(self.owner)}' and not by ${Show_show(this.nonOwners)})`
+                ),
+
+                M.when({  _cardOwnershipType: 'unowned' }, (self) =>
+                    `Not owned by ${Show_show(self.nonOwners)})`
+                ),
+
+                M.exhaustive,
+            );
         },
-    
+
         [EQ.symbol](that: EQ.Equal): boolean {
             return isCardOwnership(that) && Equivalence(this, that);
         },
@@ -55,8 +98,15 @@ export const create = (
         },
     });
 
-export const getOwner = (cardOwnership: CardOwnership): CardOwner.CardOwner =>
-    cardOwnership.owner;
+// TODO does this short-hand make sense? Can we reduce the number of properties in each object instead?
+export const getOwner: (ownership: CardOwnership) => O.Option<CardOwner.CardOwner> =
+    pipe(
+        M.type<CardOwnership>(),
+        M.when({  _cardOwnershipType: 'owned' }, ({ owner }) => O.some(owner)),
+        M.when({  _cardOwnershipType: 'unowned' }, O.none),
+        M.exhaustive,
+    );
 
-export const getCard = (cardOwnership: CardOwnership): Card.Card =>
-    cardOwnership.card;
+// TODO does this short-hand make sense? Can we reduce the number of properties in each object instead?
+export const getNonOwners = (ownership: CardOwnership): HS.HashSet<CardOwner.CardOwner> =>
+    ownership.nonOwners;

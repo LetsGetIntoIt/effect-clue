@@ -10,15 +10,18 @@ import * as T from '@effect/io/Effect';
 import * as CTX from "@effect/data/Context";
 import * as O from '@effect/data/Option';
 import * as TU from '@effect/data/Tuple';
+import * as SG from '@effect/data/typeclass/Semigroup';
+import * as MON from '@effect/data/typeclass/Monoid';
 import { flow, pipe } from '@effect/data/Function';
 
-import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol, HashMap_every, Equals_getRefinement, Refinement_or, Refinement_isTrue, HashMap_fromHashSet, Refinement_isFalse, HashMap_fromHashSetMulti } from '../utils/ShouldBeBuiltin';
+import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol, HashMap_every, Equals_getRefinement, Refinement_or } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';
 import * as Player from './Player';
 import * as Guess from './Guess';
 import * as Game from './Game';
 import * as CardOwner from './CardOwner';
+import * as CardOwnerCardPair from './CardOwnerCardPair';
 import * as CardOwnership from './CardOwnership';
 import * as Conclusion from './Conclusion';
 import * as ConclusionMap from './ConclusionMap';
@@ -31,7 +34,7 @@ import * as ConclusionMap from './ConclusionMap';
 export type ConclusionMapSet =
     EQ.Equal & Show & {
         numCards: ConclusionMap.ConclusionMap<Player.Player, number>;
-        ownership: ConclusionMap.ConclusionMap<CardOwnership.CardOwnership, boolean>;
+        ownership: ConclusionMap.ConclusionMap<CardOwnerCardPair.CardOwnerCardPair, boolean>;
         refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>;
     };
 
@@ -42,7 +45,7 @@ export const isConclusionMapSet: P.Refinement<unknown, ConclusionMapSet> =
         Refinement_struct({
             numCards: ConclusionMap.getRefinement(Player.isPlayer, P.isNumber),
 
-            ownership: ConclusionMap.getRefinement(CardOwnership.isCardOwnership, P.isBoolean),
+            ownership: ConclusionMap.getRefinement(CardOwnerCardPair.isCardOwnerCardPair, P.isBoolean),
 
             refuteCards: ConclusionMap.getRefinement(
                 Guess.isGuess,
@@ -69,7 +72,7 @@ export const Equivalence: EQV.Equivalence<ConclusionMapSet> =
 
 const create = (conclusions : {
     numCards: ConclusionMap.ConclusionMap<Player.Player, number>,
-    ownership: ConclusionMap.ConclusionMap<CardOwnership.CardOwnership, boolean>,
+    ownership: ConclusionMap.ConclusionMap<CardOwnerCardPair.CardOwnerCardPair, boolean>,
     refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>,
 }): T.Effect<Game.Game, string, ConclusionMapSet> => pipe(
     // TODO actually validate the conclusions
@@ -117,45 +120,33 @@ export const empty: ConclusionMapSet =
         T.runSync,
     );
 
-export const getOwnedCards = (conclusions: ConclusionMapSet): HM.HashMap<Card.Card, CardOwner.CardOwner> =>
-    pipe(
-        // Get the hashmap of ownership
-        // TODO does this short-hand make sense? Can we reduce the number of properties in each object instead?
-        conclusions.ownership.conclusions,
+// TODO store this insead as a HashMap<Card.Card, ...> on the object itself, rather than recomputing it each time
+export const getOwnershipOf = (
+    conclusions: ConclusionMapSet,
+) => (
+    card: Card.Card,
+): CardOwnership.CardOwnership =>
+    null;
 
-        // Get only cards that are owned
-        HM.filter(Conclusion.getRefinement(Refinement_isTrue)),
+export type Modification = ((conclusions: ConclusionMapSet) => T.Effect<Game.Game, string, ConclusionMapSet>);
 
-        // Convert the keys into a map
-        HM.keySet,
-        HS.map(ownership => TU.tuple(
-            CardOwnership.getCard(ownership),
-            CardOwnership.getOwner(ownership),
-        )),
-        HashMap_fromHashSet,
-    );
+export const modifyIdentity: Modification =
+    T.succeed;
 
-export const getUnownedCards = (conclusions: ConclusionMapSet): HM.HashMap<Card.Card, HS.HashSet<CardOwner.CardOwner>> =>
-    pipe(
-        // Get the hashmap of ownership
-        // TODO does this short-hand make sense? Can we reduce the number of properties in each object instead?
-        conclusions.ownership.conclusions,
+export const ModificationSemigroup: SG.Semigroup<Modification> =
+    SG.make((modifyFirst, modifySecond) => (first) => T.gen(function* ($) {
+        const second = yield* $(modifyFirst(first));
+        return yield* $(modifySecond(second));
+    }));
 
-        // Get only cards that are owned
-        HM.filter(Conclusion.getRefinement(Refinement_isFalse)),
+export const ModificationMonoid: MON.Monoid<Modification> = MON.fromSemigroup(
+    ModificationSemigroup,
+    modifyIdentity,
+);
 
-        // Convert the keys into a map
-        HM.keySet,
-        HS.map(ownership => TU.tuple(
-            CardOwnership.getCard(ownership),
-            CardOwnership.getOwner(ownership), // This is the non-owner
-        )),
-        HashMap_fromHashSetMulti,
-    );
-
-export const addNumCards =
+export const modifyAddNumCards =
         (player: Player.Player, numCards: number, reason: Conclusion.Reason):
-        ((conclusions: ConclusionMapSet) => T.Effect<Game.Game, string, ConclusionMapSet>) =>
+        Modification =>
     flow(
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
@@ -169,9 +160,9 @@ export const addNumCards =
         T.flatMap(create),
     );
 
-export const addOwnership =
-        (ownership: CardOwnership.CardOwnership, isOwned: boolean, reason: Conclusion.Reason):
-        ((conclusions: ConclusionMapSet) => T.Effect<Game.Game, string, ConclusionMapSet>) =>
+export const modifyAddOwnership =
+        (ownership: CardOwnerCardPair.CardOwnerCardPair, isOwned: boolean, reason: Conclusion.Reason):
+        Modification =>
     flow(
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
@@ -185,9 +176,9 @@ export const addOwnership =
         T.flatMap(create),
     );
 
-export const setRefuteCards =
+export const modifySetRefuteCards =
         (guess: Guess.Guess, possibleCards: HM.HashMap<Card.Card, 'owned' | 'maybe'>, reason: Conclusion.Reason):
-        ((conclusions: ConclusionMapSet) => T.Effect<Game.Game, string, ConclusionMapSet>) =>
+        Modification =>
     flow(
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
@@ -201,19 +192,19 @@ export const setRefuteCards =
         T.flatMap(create),
     );
 
-export const combine = (
+export const modifyCombine = (
     {
         numCards: thatNumCards,
         ownership: thatOwnership,
         refuteCards: thatRefuteCards,
     }: ConclusionMapSet,
-) => (
+): Modification => (
     {
         numCards: selfNumCards,
         ownership: selfOwnership,
         refuteCards: selfRefuteCards,
-    }: ConclusionMapSet,
-): T.Effect<Game.Game, string, ConclusionMapSet> =>
+    }
+) =>
     create({
         numCards: ConclusionMap.union(selfNumCards, thatNumCards),
         ownership: ConclusionMap.union(selfOwnership, thatOwnership),
