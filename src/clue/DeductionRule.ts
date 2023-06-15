@@ -4,11 +4,7 @@ import * as MON from '@effect/data/typeclass/Monoid';
 import * as HS from '@effect/data/HashSet';
 import * as HM from '@effect/data/HashMap';
 import * as T from '@effect/io/Effect';
-import * as EQ from '@effect/data/Equal';
-import * as P from '@effect/data/Predicate';
 import * as ROA from '@effect/data/ReadonlyArray';
-import * as O from '@effect/data/Option';
-import * as ST from '@effect/data/Struct';
 import { flow, pipe } from '@effect/data/Function';
 
 import { Effect_getSemigroupCombine, HashMap_fromHashSetMap, HashSet_fromHashMapMulti, HashSet_fromOption, HashSet_isSize } from '../utils/ShouldBeBuiltin';
@@ -178,19 +174,23 @@ export const cardIsHeldExactlyOnce: DeductionRule =
     SemigroupUnion.combine(cardIsHeldAtMostOnce, cardIsHeldAtLeastOnce);
 
 // If all of a player's cards are accounted for, they don't have any others
-export const playerHasAtMostNumCards: DeductionRule = null;
+export const playerHasAtMostNumCards: DeductionRule =
+    T.fail(`DeductionRule playerHasAtMostNumCards not implemented yet`);
 
 // If all of a player's missing cards are accounted for (the number that will be missing), they have all the others
-export const playerHasAtLeastNumCards: DeductionRule = null;
+export const playerHasAtLeastNumCards: DeductionRule =
+    T.fail(`DeductionRule playerHasAtLeastNumCards not implemented yet`);
 
 export const playerHasExactlyNumCards: DeductionRule =
     SemigroupUnion.combine(playerHasAtMostNumCards, playerHasAtLeastNumCards);
 
 // If indentify a card in the case file, it's none of the other ones of that type
-export const caseFileHasAtMostOnePerCardType: DeductionRule = null;
+export const caseFileHasAtMostOnePerCardType: DeductionRule =
+    T.fail(`DeductionRule caseFileHasAtMostOnePerCardType not implemented yet`);
 
 // If we eliminate all but 1 of a card of a type, then it's the remaining one
-export const caseFileHasAtLeastOnePerCardType: DeductionRule = null;
+export const caseFileHasAtLeastOnePerCardType: DeductionRule =
+    T.fail(`DeductionRule caseFileHasAtLeastOnePerCardType not implemented yet`);
 
 export const caseFileHasExactlyOnePerCardType: DeductionRule =
     SemigroupUnion.combine(caseFileHasAtMostOnePerCardType, caseFileHasAtLeastOnePerCardType);
@@ -198,4 +198,5 @@ export const caseFileHasExactlyOnePerCardType: DeductionRule =
 // If someone has refuted a guess, then list the following assumed refute cards:
 // - {player's known owned cards} & {guessed cards} ==> "(owned)"
 // - {player's unknown ownerships} & {guess cards} ==> "(maybe)"
-export const guessIsRefutedByHeldCard: DeductionRule = null;
+export const guessIsRefutedByHeldCard: DeductionRule =
+    T.fail(`DeductionRule guessIsRefutedByHeldCard not implemented yet`);
