@@ -1,4 +1,3 @@
-import * as E from '@effect/data/Either';
 import * as H from '@effect/data/Hash';
 import * as EQ from "@effect/data/Equal";
 import * as ST from "@effect/data/Struct";
@@ -38,8 +37,8 @@ export const Equivalence: EQV.Equivalence<Pair<unknown, unknown>> = ST.getEquiva
 
 export const create = <A, B>(
     pair: RawPair<A, B>,
-): E.Either<string, Pair<A, B>> =>
-    E.right({
+): Pair<A, B> =>
+    Object.freeze({
         ...pair,
 
         [Show_symbol](): string {

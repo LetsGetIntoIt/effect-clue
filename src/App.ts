@@ -49,7 +49,7 @@ export const app: E.Either<string[], AppState> = E.gen(function* ($) {
     }));
 
     // This will live in a component, returning the validated result or nothing
-    const players = yield* $(Clue.setupPlayers({
+    const players = yield* $(Clue.setupCardOwners({
         players: [
             ['kapil'],
             ['kate'],

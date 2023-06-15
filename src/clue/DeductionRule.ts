@@ -58,14 +58,11 @@ export const cardIsHeldAtMostOnce: DeductionRule = T.gen(function* ($) {
     const allCardOwners = Game.getCardOwners(game);
 
     const knownConclusions = yield* $(ConclusionMapSet.Tag);
-    const getOwnershipOf = ConclusionMapSet.getOwnershipOf(knownConclusions);
+    const ownershipByCard = ConclusionMapSet.getOwnershipByCard(knownConclusions);
 
     // For each card that is owned, mark it as NOT owned by any owner left blank
-    const modifyConclusions = yield* $(
-        allCards,
-
-        // Get ownership info of every card in the game
-        HashMap_fromHashSetMap(getOwnershipOf),
+    const modifyConclusions = pipe(
+        ownershipByCard,
 
         // Keep only the cards with a known owner
         HM.filter(CardOwnership.isCardOwnershipOwned),
@@ -85,28 +82,26 @@ export const cardIsHeldAtMostOnce: DeductionRule = T.gen(function* ($) {
 
         // Now put together all the modifications we need to apply
         HS.map(([card, owner]) =>
-            E.gen(function* ($) {
-                const question = yield* $(Pair.create({
+            ConclusionMapSet.modifyAddOwnership(
+                Pair.create({
                     first: owner,
                     second: card,
-                }));
+                }),
 
-                // TODO make reasons structured/an enum
-                const reason = Conclusion.createReason({
+                false,
+
+                Conclusion.createReason({
                     level: 'inferred',
                     explanation: `Card is already owned by someone else`
-                });
-
-                return ConclusionMapSet.modifyAddOwnership(question, false, reason);
-            })
+                }),
+            ),
         ),
 
         HS.values,
         ROA.fromIterable,
-        ROA.sequence(E.Applicative),
 
         // Convert them into a single modification
-        E.map(ConclusionMapSet.ModificationMonoid.combineAll),
+        ConclusionMapSet.ModificationMonoid.combineAll,
     );
 
     return yield* $(modifyConclusions(knownConclusions));
@@ -120,14 +115,11 @@ export const cardIsHeldAtLeastOnce: DeductionRule = T.gen(function* ($) {
     const allCardOwners = Game.getCardOwners(game);
 
     const knownConclusions = yield* $(ConclusionMapSet.Tag);
-    const getOwnershipOf = ConclusionMapSet.getOwnershipOf(knownConclusions);
+    const ownershipByCard = ConclusionMapSet.getOwnershipByCard(knownConclusions);
 
     // For each card that is not owned, if there is a single unknown, mark it as OWNED
-    const modifyConclusions = yield* $(
-        allCards,
-
-        // Get ownership info of every card in the game
-        HashMap_fromHashSetMap(getOwnershipOf),
+    const modifyConclusions = pipe(
+        ownershipByCard,
 
         // Keep only the cards with a known owner
         HM.filter(CardOwnership.isCardOwnershipUnowned),
@@ -143,28 +135,27 @@ export const cardIsHeldAtLeastOnce: DeductionRule = T.gen(function* ($) {
 
         // Now put together all the modifications we need to apply
         HS.map(([card, owner]) =>
-            E.gen(function* ($) {
-                const question = yield* $(Pair.create({
+            ConclusionMapSet.modifyAddOwnership(
+                Pair.create({
                     first: owner,
                     second: card,
-                }));
-
-                // TODO make reasons structured/an enum
-                const reason = Conclusion.createReason({
+                }),
+                
+                true,
+                
+                Conclusion.createReason({
                     level: 'inferred',
                     explanation: `Card not owned anywhere else`,
-                });
-
-                return ConclusionMapSet.modifyAddOwnership(question, true, reason);
-            })
+                }),
+                
+            ),
         ),
 
         HS.values,
         ROA.fromIterable,
-        ROA.sequence(E.Applicative),
 
         // Convert them into a single modification
-        E.map(ConclusionMapSet.ModificationMonoid.combineAll),
+        ConclusionMapSet.ModificationMonoid.combineAll,
     );
 
     return yield* $(modifyConclusions(knownConclusions));

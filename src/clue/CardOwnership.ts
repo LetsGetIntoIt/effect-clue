@@ -8,11 +8,13 @@ import * as HS from "@effect/data/HashSet";
 import * as P from '@effect/data/Predicate';
 import * as S from '@effect/data/String';
 import * as M from "@effect/match";
+import * as B from '@effect/data/Boolean';
 import { flow, pipe } from '@effect/data/Function';
 
 import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_symbol, Show_show, HashSet_every, Refinement_or, Equals_getRefinement } from '../utils/ShouldBeBuiltin';
 
 import * as CardOwner from "./CardOwner";
+import * as Pair from './Pair';
 
 type RawCardOnwershipOwned = {
     _cardOwnershipType: 'owned';
@@ -122,12 +124,67 @@ export const createUnowned = (cardOwnership: Omit<RawCardOnwershipUnowned, '_car
         createInternal,
     );
 
-export const combine = (
+export const combine: (
     second: CardOwnership,
 ) => (
     first: CardOwnership,
-): E.Either<string, CardOwnership> =>
-    null;
+) => E.Either<string, CardOwnership> =
+    pipe(
+        M.type<CardOwnership>(),
+
+        M.when({ _cardOwnershipType: 'owned' }, (second) => pipe(
+            M.type<CardOwnership>(),
+
+            M.when({ _cardOwnershipType: 'owned' }, (first) => pipe(
+                // Both are owned
+                // They can only be combined if their owners are the same
+                EQ.equals(first.owner)(second.owner),
+
+                B.match(
+                    // They do not match
+                    () => E.left('Conflicting ownership'),
+
+                    () => E.right(createOwned({
+                        owner: first.owner,
+                        nonOwners: HS.union(first.nonOwners, second.nonOwners),
+                    })),
+                ),
+            )),
+    
+            M.when(({ _cardOwnershipType: 'unowned' }), (first) => pipe(
+                // Second is owned, first is unowned
+                E.right(createOwned({
+                    owner: second.owner,
+                    nonOwners: HS.union(first.nonOwners, second.nonOwners),
+                })),
+            )),
+            
+            M.exhaustive,
+        )),
+
+        M.when(({ _cardOwnershipType: 'unowned' }), (second) => pipe(
+            M.type<CardOwnership>(),
+
+            M.when({ _cardOwnershipType: 'owned' }, (first) => pipe(
+                // Second is unowned, first is owned
+                E.right(createOwned({
+                    owner: first.owner,
+                    nonOwners: HS.union(first.nonOwners, second.nonOwners),
+                })),
+            )),
+
+            M.when(({ _cardOwnershipType: 'unowned' }), (first) => pipe(
+                // Both are unowned
+                E.right(createUnowned({
+                    nonOwners: HS.union(first.nonOwners, second.nonOwners),
+                })),
+            )),
+
+            M.exhaustive,
+        )),
+        
+        M.exhaustive,
+    );
 
 // TODO does this short-hand make sense? Can we reduce the number of properties in each object instead?
 export const getOwner: (ownership: CardOwnership) => O.Option<CardOwner.CardOwner> =
