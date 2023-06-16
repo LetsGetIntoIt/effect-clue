@@ -20,7 +20,7 @@ import * as Conclusion from './Conclusion';
  */
 export type ConclusionMap<Q, A> =
     EQ.Equal & {
-        conclusions: HM.HashMap<Q, Conclusion.Conclusion<A>>;
+        readonly conclusions: HM.HashMap<Q, Conclusion.Conclusion<A>>;
     };
 
 export const getRefinement = <Q, A>(refQ: P.Refinement<unknown, Q>, refA: P.Refinement<unknown, A>): P.Refinement<unknown, ConclusionMap<Q, A>> =>

@@ -9,7 +9,7 @@ import * as P from '@effect/data/Predicate';
 import * as S from '@effect/data/String';
 import * as M from "@effect/match";
 import * as B from '@effect/data/Boolean';
-import { flow, pipe } from '@effect/data/Function';
+import { constant, flow, pipe } from '@effect/data/Function';
 
 import { Refinement_struct, Refinement_and, HashSet_every, Refinement_or, Equals_getRefinement } from '../utils/ShouldBeBuiltin';
 
@@ -17,14 +17,14 @@ import * as CardOwner from "./CardOwner";
 import * as Pair from './Pair';
 
 type RawCardOnwershipOwned = {
-    _cardOwnershipType: 'owned';
-    owner: CardOwner.CardOwner;
-    nonOwners: HS.HashSet<CardOwner.CardOwner>;
+    readonly _cardOwnershipType: 'owned';
+    readonly owner: CardOwner.CardOwner;
+    readonly nonOwners: HS.HashSet<CardOwner.CardOwner>;
 };
 
 type RawCardOnwershipUnowned = {
-    _cardOwnershipType: 'unowned';
-    nonOwners: HS.HashSet<CardOwner.CardOwner>;
+    readonly _cardOwnershipType: 'unowned';
+    readonly nonOwners: HS.HashSet<CardOwner.CardOwner>;
 };
 
 export type CardOwnershipOwned = EQ.Equal & RawCardOnwershipOwned;
@@ -71,8 +71,8 @@ const createInternal = (
     Object.freeze({
         ...cardOwnership,
 
-        toString: pipe(
-            M.type<CardOwnership>(),
+        toString: constant(pipe(
+            M.value(cardOwnership),
 
             M.when({  _cardOwnershipType: 'owned' }, (self) =>
                 `Owned by '${self.owner}' and not by ${self.nonOwners})`
@@ -83,7 +83,7 @@ const createInternal = (
             ),
 
             M.exhaustive,
-        ),
+        )),
 
         [EQ.symbol](that: EQ.Equal): boolean {
             return isCardOwnership(that) && Equivalence(this, that);

@@ -15,12 +15,12 @@ import * as CaseFile from './CaseFile';
 
 type RawCardOwner =
     | {
-        _cardOwnerTag: 'player',
-        player: Player.Player;
+        readonly _cardOwnerTag: 'player',
+        readonly player: Player.Player;
     }
     | {
-        _cardOwnerTag: 'caseFile',
-        caseFile: CaseFile.CaseFile,
+        readonly _cardOwnerTag: 'caseFile',
+        readonly caseFile: CaseFile.CaseFile,
     };
 
 export type CardOwner = EQ.Equal & RawCardOwner;
@@ -52,14 +52,12 @@ const create = (cardOwner: RawCardOwner): CardOwner =>
     ({
         ...cardOwner,
 
-        toString: pipe(
-            M.type<RawCardOwner>(),
+        toString: constant(pipe(
+            M.value(cardOwner),
             M.when({ _cardOwnerTag: 'player' }, ({ player }) => `${player}`),
             M.when({ _cardOwnerTag: 'caseFile' }, () => `CaseFile`),
             M.exhaustive,
-
-            apply(cardOwner),
-        ),
+        )),
 
         [EQ.symbol](that: EQ.Equal): boolean {
             return isCardOwner(that) && Equivalence(this, that);

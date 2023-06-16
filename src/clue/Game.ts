@@ -15,8 +15,8 @@ import * as GuessSet from "./GuessSet";
 import * as CardOwner from './CardOwner';
 
 type RawGame = {
-    gameSetup: GameSetup.GameSetup;
-    guessSet: GuessSet.GuessSet;
+    readonly gameSetup: GameSetup.GameSetup;
+    readonly guessSet: GuessSet.GuessSet;
 };
 
 export type Game = EQ.Equal & RawGame;

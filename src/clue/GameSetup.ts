@@ -11,8 +11,8 @@ import * as CardSet from "./CardSet";
 import * as CardOwnerSet from "./CardOwnerSet";
 
 type RawGameSetup = {
-    cards: CardSet.CardSet;
-    owners: CardOwnerSet.CardOwnerSet;
+    readonly cards: CardSet.CardSet;
+    readonly owners: CardOwnerSet.CardOwnerSet;
 };
 
 export type GameSetup = EQ.Equal & RawGameSetup;
