@@ -1,175 +1,100 @@
-import * as EQ from '@effect/data/Equal';
-import * as EQV from '@effect/data/typeclass/Equivalence';
+import * as D from '@effect/data/Data';
+import * as B from '@effect/data/Brand';
 import * as ST from '@effect/data/Struct';
-import * as H from '@effect/data/Hash';
 import * as HM from '@effect/data/HashMap';
 import * as HS from '@effect/data/HashSet';
-import * as P from '@effect/data/Predicate';
 import * as E from '@effect/data/Either';
 import * as T from '@effect/io/Effect';
 import * as CTX from "@effect/data/Context";
-import * as O from '@effect/data/Option';
-import * as TU from '@effect/data/Tuple';
 import * as SG from '@effect/data/typeclass/Semigroup';
-import * as B from '@effect/data/Boolean';
+import * as BOOL from '@effect/data/Boolean';
 import * as MON from '@effect/data/typeclass/Monoid';
 import { constant, flow, pipe } from '@effect/data/Function';
 
-import { Refinement_and, Refinement_struct, HashMap_every, Equals_getRefinement, Refinement_or, Struct_get, HashSet_of } from '../utils/ShouldBeBuiltin';
+import { Struct_get, HashSet_of, Brand_refinedEffect, HashMap_setOrUpdate } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';
 import * as Player from './Player';
 import * as Guess from './Guess';
-import * as Game from './Game';
-import * as Pair from './Pair';
+import * as GameSetup from './GameSetup';
 import * as CardOwner from './CardOwner';
 import * as CardOwnership from './CardOwnership';
 import * as Conclusion from './Conclusion';
 import * as ConclusionMap from './ConclusionMap';
 
-/**
- * Something that we know about a specific topic
- * Q - the topic that we know about
- * Conclusion - the conclusion we have about that topic
- */
-export type ConclusionMapSet =
-    EQ.Equal & {
-        numCards: ConclusionMap.ConclusionMap<Player.Player, number>;
-        ownership: ConclusionMap.ConclusionMap<Pair.Pair<CardOwner.CardOwner, Card.Card>, boolean>;
-        refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>;
-    };
+export interface ConclusionMapSet extends D.Case {
+    _tag: "ConclusionMapSet";
+    numCards: ConclusionMap.ValidatedConclusionMap<Player.Player, number>;
+    ownership: ConclusionMap.ValidatedConclusionMap<D.Data<[CardOwner.CardOwner, Card.Card]>, boolean>;
+    refuteCards: ConclusionMap.ValidatedConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>;
+};
 
-export const Tag = CTX.Tag<ConclusionMapSet>();
+export const ConclusionMapSet = D.tagged<ConclusionMapSet>("ConclusionMapSet");
 
-export const isConclusionMapSet: P.Refinement<unknown, ConclusionMapSet> =
-    pipe(
-        Refinement_struct({
-            numCards: ConclusionMap.getRefinement(Player.isPlayer, P.isNumber),
+export type ValidatedConclusionMapSet = ConclusionMapSet & B.Brand<'ValidatedConclusionMapSet'>;
 
-            ownership: ConclusionMap.getRefinement(
-                Pair.getRefinement(CardOwner.isCardOwner, Card.isCard),
-                P.isBoolean,
-            ),
-
-            refuteCards: ConclusionMap.getRefinement(
-                Guess.isGuess,
-                pipe(
-                    HM.isHashMap,
-                    P.compose(HashMap_every(
-                        Card.isCard,
-                        pipe(Equals_getRefinement('owned'), Refinement_or(Equals_getRefinement('maybe'))),
-                    )),
-                ),
-            ),
-        }),
-
-        Refinement_and(EQ.isEqual),
-    );
-
-export const Equivalence: EQV.Equivalence<ConclusionMapSet> =
-    ST.getEquivalence({
-        numCards: ConclusionMap.Equivalence,
-        ownership: ConclusionMap.Equivalence,
-        refuteCards: ConclusionMap.Equivalence,
-    });
-
-const HashMap_setOrUpdate = <K, V>(
-    key: K,
-    set: () => V,
-    update: (existing: V) => V,
-) => (
-    hashMap: HM.HashMap<K, V>
-): HM.HashMap<K, V> =>
-    pipe(
-        // See if there's a value
-        HM.get(hashMap, key),
-
-        // Decide the updated value to set
-        O.match(set, update),
-
-        updatedValue => HM.set(hashMap, key, updatedValue),
-    );
-
-const create = (conclusions : {
-    numCards: ConclusionMap.ConclusionMap<Player.Player, number>,
-    ownership: ConclusionMap.ConclusionMap<Pair.Pair<CardOwner.CardOwner, Card.Card>, boolean>,
-    refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>,
-}): T.Effect<Game.Game, string, ConclusionMapSet> => pipe(
-    // TODO actually validate the conclusions
-    // - all Cards and Players actually exist in the GameSetup
-    // - all Guesses actaully exist in the Game
-    // - numCards cannot exceed total number of cards - where do we read that info from?
-    // - card can be owned by at most 1 owner
-    // - casefile can own at most 1 of each card type
-    // - refuteCards must satisfy this requirement
-    //   - {player's known owned cards} & {guessed cards} ==> "(owned)"
-    //   - {player's unknown ownerships} & {guess cards} ==> "(maybe)"
-
-    E.right({
-        ...conclusions,
-
-        toString() {
-           return `We have deduced numCards ${this.numCards} and ownership ${this.ownership} and refutations: ${this.refuteCards}`;
-        },
-
-        [EQ.symbol](that: EQ.Equal): boolean {
-            return isConclusionMapSet(that) && Equivalence(this, that);
-        },
-
-        [H.symbol](): number {
-            return H.structure({
-                ...this
-            });
-        },
+export const ValidatedConclusionMapSet = Brand_refinedEffect<ValidatedConclusionMapSet, GameSetup.GameSetup>(
+    T.gen(function* ($) {
+        return [
+            // TODO actually validate the conclusions
+            // - all Cards and Players actually exist in the GameSetup
+            // - all Guesses actaully exist in the Game
+            // - numCards cannot exceed total number of cards - where do we read that info from?
+            // - card can be owned by at most 1 owner
+            // - casefile can own at most 1 of each card type
+            // - refuteCards must satisfy this requirement
+            //   - {player's known owned cards} & {guessed cards} ==> "(owned)"
+            //   - {player's unknown ownerships} & {guess cards} ==> "(maybe)"
+        ];
     }),
 );
 
-export const empty: ConclusionMapSet =
+export const Tag = CTX.Tag<ValidatedConclusionMapSet>();
+
+export const empty: ValidatedConclusionMapSet =
     pipe(
-        create({
+        ConclusionMapSet({
             numCards: ConclusionMap.empty(),
             ownership: ConclusionMap.empty(),
             refuteCards: ConclusionMap.empty(),
         }),
 
+        ValidatedConclusionMapSet,
+
         // We just need an empty game
-        T.provideService(Game.Tag, Game.empty),
+        T.provideService(GameSetup.Tag, GameSetup.empty),
 
         // If creating an empty deduction set errors, it is a defects in the underlying code,
         // not tagged errors that should be handled by the user
         T.runSync,
     );
 
-// TODO store this insead as a HashMap<Card.Card, ...> on the object itself, rather than recomputing it each time
+// TODO store this on the ValidatedConclusionMapSet itself, rather than recomputing it each time
 export const getOwnershipByCard: (
-    conclusions: ConclusionMapSet,
+    conclusions: ValidatedConclusionMapSet,
 ) => HM.HashMap<Card.Card, CardOwnership.CardOwnership> =
     flow(
         // Pluck out the actual HashMap we care about
         Struct_get('ownership'),
-        Struct_get('conclusions'),
 
         // We don't care about the conclusions and reasons, just whether its owned or not
-        HM.map(Conclusion.getAnswer),
+        HM.map(({ answer }) => answer),
 
         HM.reduceWithIndex(
             HM.empty(),
 
-            (ownershipByCard, isOwned, nextOwnerCardPair) => {
-                const owner = Pair.getFirst(nextOwnerCardPair);
-                const card = Pair.getSecond(nextOwnerCardPair);
-
+            (ownershipByCard, isOwned, [owner, card]) => {
                 const newOwnership = pipe(
                     isOwned,
 
                     // TODO make better constructors for these
-                    B.match(
-                        constant(CardOwnership.createOwned({
+                    BOOL.match(
+                        constant(CardOwnership.CardOwnershipOwned({
                             owner,
                             nonOwners: HS.empty(),
                         })),
 
-                        constant(CardOwnership.createUnowned({
+                        constant(CardOwnership.CardOwnershipUnowned({
                             nonOwners: HashSet_of(owner),
                         })),
                     ),
@@ -190,9 +115,9 @@ export const getOwnershipByCard: (
         )
     );
 
-export type Modification = ((conclusions: ConclusionMapSet) => T.Effect<Game.Game, string, ConclusionMapSet>);
+export type Modification = ((conclusions: ConclusionMapSet) => T.Effect<GameSetup.GameSetup, B.Brand.BrandErrors, ConclusionMapSet>);
 
-export const modifyIdentity: Modification =
+export const identity: Modification =
     T.succeed;
 
 export const ModificationSemigroup: SG.Semigroup<Modification> =
@@ -203,7 +128,7 @@ export const ModificationSemigroup: SG.Semigroup<Modification> =
 
 export const ModificationMonoid: MON.Monoid<Modification> = MON.fromSemigroup(
     ModificationSemigroup,
-    modifyIdentity,
+    identity,
 );
 
 export const modifyAddNumCards =
@@ -213,29 +138,31 @@ export const modifyAddNumCards =
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
         ST.evolve({
-            numCards: ConclusionMap.add(player, numCards, reason),
+            numCards: ConclusionMap.setMergeOrFail(player, numCards, HashSet_of(reason)),
             ownership: (_) => E.right(_),
             refuteCards: (_) => E.right(_),
         }),
         E.struct,
 
-        T.flatMap(create),
+        T.map(ConclusionMapSet),
+        T.flatMap(ValidatedConclusionMapSet),
     );
 
 export const modifyAddOwnership =
-        (ownership: Pair.Pair<CardOwner.CardOwner, Card.Card>, isOwned: boolean, reason: Conclusion.Reason):
+        (ownership: D.Data<[CardOwner.CardOwner, Card.Card]>, isOwned: boolean, reason: Conclusion.Reason):
         Modification =>
     flow(
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
         ST.evolve({
             numCards: (_) => E.right(_),
-            ownership: ConclusionMap.add(ownership, isOwned, reason),
+            ownership: ConclusionMap.setMergeOrFail(ownership, isOwned, HashSet_of(reason)),
             refuteCards: (_) => E.right(_),
         }),
         E.struct,
 
-        T.flatMap(create),
+        T.map(ConclusionMapSet),
+        T.flatMap(ValidatedConclusionMapSet),
     );
 
 export const modifySetRefuteCards =
@@ -247,29 +174,29 @@ export const modifySetRefuteCards =
         ST.evolve({
             numCards: (_) => E.right(_),
             ownership: (_) => E.right(_),
-            refuteCards: ConclusionMap.set(guess, possibleCards, reason),
+            refuteCards: ConclusionMap.setMergeOrOverwrite(guess, possibleCards, HashSet_of(reason)),
         }),
         E.struct,
 
-        T.flatMap(create),
+        T.map(ConclusionMapSet),
+        T.flatMap(ValidatedConclusionMapSet),
     );
 
-// TODO don't just union thes. This overwrites old values. Instead, actually apply each modification
 export const modifyCombine = (
-    {
-        numCards: thatNumCards,
-        ownership: thatOwnership,
-        refuteCards: thatRefuteCards,
-    }: ConclusionMapSet,
-): Modification => (
-    {
-        numCards: selfNumCards,
-        ownership: selfOwnership,
-        refuteCards: selfRefuteCards,
-    }
-) =>
-    create({
-        numCards: ConclusionMap.combine(selfNumCards, thatNumCards),
-        ownership: ConclusionMap.combine(selfOwnership, thatOwnership),
-        refuteCards: ConclusionMap.combine(selfRefuteCards, thatRefuteCards),
-    });
+    second: ConclusionMapSet,
+): Modification => (first) =>
+    pipe(
+        first,
+
+        ST.pick('numCards', 'ownership', 'refuteCards'),
+
+        ST.evolve({
+            numCards: ConclusionMap.combineMergeOrFail(second.numCards),
+            ownership: ConclusionMap.combineMergeOrFail(second.ownership),
+            refuteCards: ConclusionMap.combineMergeOrFail(second.refuteCards),
+        }),
+        E.struct,
+
+        T.map(ConclusionMapSet),
+        T.flatMap(ValidatedConclusionMapSet),
+    );

@@ -1,54 +1,23 @@
-import * as E from '@effect/data/Either';
-import * as H from '@effect/data/Hash';
-import * as EQ from "@effect/data/Equal";
-import * as ST from "@effect/data/Struct";
+import * as D from '@effect/data/Data';
+import * as B from '@effect/data/Brand';
+import * as O from '@effect/data/Option';
 import * as S from '@effect/data/String';
-import * as P from '@effect/data/Predicate';
-import * as EQV from '@effect/data/typeclass/Equivalence';
-import { Equals_getRefinement, Refinement_and, Refinement_struct } from '../utils/ShouldBeBuiltin';
-import { pipe } from '@effect/data/Function';
+import { constant, flow } from '@effect/data/Function';
+import { Brand_refined, Option_fromRefinement, Struct_get } from '../utils/ShouldBeBuiltin';
 
-type RawCaseFile = {
+export interface CaseFile extends D.Case {
+    _tag: "CaseFile";
     readonly label: string;
-}
-
-export type CaseFile = EQ.Equal & RawCaseFile & {
-    readonly _clueTag: 'CaseFile';
 };
 
-export const isCaseFile: P.Refinement<unknown, CaseFile> =
-    pipe(
-        Refinement_struct({
-            _clueTag: Equals_getRefinement('CaseFile'),
-            label: P.isString,
-        }),
+export const CaseFile = D.tagged<CaseFile>("CaseFile");
 
-        Refinement_and(EQ.isEqual),
-    );
+export type ValidatedCaseFile = CaseFile & B.Brand<'ValidatedCaseFile'>;
 
-export const Equivalence: EQV.Equivalence<CaseFile> = ST.getEquivalence({
-    _clueTag: S.Equivalence,
-    label: S.Equivalence,
-});
-
-export const create = (
-    casefile: RawCaseFile,
-): E.Either<string, CaseFile> =>
-    E.right({
-        _clueTag: 'CaseFile',
-        ...casefile,
-
-        toString() {
-            return `${this.label}`;
-        },
-
-        [EQ.symbol](that: EQ.Equal): boolean {
-            return isCaseFile(that) && Equivalence(this, that);
-        },
-
-        [H.symbol](): number {
-            return H.structure({
-                ...this
-            });
-        },
-    });
+export const ValidatedCaseFile = Brand_refined<ValidatedCaseFile>([
+    flow(
+        Struct_get('label'),
+        Option_fromRefinement(S.isEmpty),
+        O.map(constant(B.error(`label should be a non-empty string`))),
+    ),
+]);

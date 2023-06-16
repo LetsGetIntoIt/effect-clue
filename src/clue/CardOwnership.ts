@@ -1,123 +1,60 @@
-import * as E from '@effect/data/Either';
-import * as H from '@effect/data/Hash';
-import * as EQ from "@effect/data/Equal";
-import * as ST from "@effect/data/Struct";
-import * as EQV from '@effect/data/typeclass/Equivalence';
+import * as D from '@effect/data/Data';
+import * as HS from '@effect/data/HashSet';
 import * as O from '@effect/data/Option';
-import * as HS from "@effect/data/HashSet";
-import * as P from '@effect/data/Predicate';
-import * as S from '@effect/data/String';
-import * as M from "@effect/match";
+import * as E from '@effect/data/Either';
+import * as EQ from '@effect/data/Equal';
 import * as B from '@effect/data/Boolean';
-import { constant, flow, pipe } from '@effect/data/Function';
+import * as P from '@effect/data/Predicate';
+import * as M from '@effect/match';
+import { constFalse, constTrue, pipe } from '@effect/data/Function';
 
-import { Refinement_struct, Refinement_and, HashSet_every, Refinement_or, Equals_getRefinement } from '../utils/ShouldBeBuiltin';
+import * as CardOwner from './CardOwner';
 
-import * as CardOwner from "./CardOwner";
-import * as Pair from './Pair';
-
-type RawCardOnwershipOwned = {
-    readonly _cardOwnershipType: 'owned';
+export interface CardOwnershipOwned extends D.Case {
+    _tag: "CardOwnershipOwned";
     readonly owner: CardOwner.CardOwner;
     readonly nonOwners: HS.HashSet<CardOwner.CardOwner>;
 };
 
-type RawCardOnwershipUnowned = {
-    readonly _cardOwnershipType: 'unowned';
+// TODO validate that the owner doesn't show up as a non-owner
+export const CardOwnershipOwned = D.tagged<CardOwnershipOwned>("CardOwnershipOwned");
+
+export interface CardOwnershipUnowned extends D.Case {
+    _tag: "CardOwnershipUnowned";
     readonly nonOwners: HS.HashSet<CardOwner.CardOwner>;
 };
 
-export type CardOwnershipOwned = EQ.Equal & RawCardOnwershipOwned;
-export type CardOwnershipUnowned = EQ.Equal & RawCardOnwershipUnowned;
+export const CardOwnershipUnowned = D.tagged<CardOwnershipUnowned>("CardOwnershipUnowned");
+
 export type CardOwnership = CardOwnershipOwned | CardOwnershipUnowned;
 
-export const isCardOwnershipOwned: P.Refinement<unknown, CardOwnershipOwned> =
-    pipe(
-        Refinement_struct({
-            _cardOwnershipType: Equals_getRefinement('owned'),
-            owner: CardOwner.isCardOwner,
-            nonOwners: pipe(HS.isHashSet, P.compose(HashSet_every(CardOwner.isCardOwner)))
-        }),
-
-        Refinement_and(EQ.isEqual),
-    );
-
-export const isCardOwnershipUnowned: P.Refinement<unknown, CardOwnership> =
-    pipe(
-        Refinement_struct({
-            _cardOwnershipType: Equals_getRefinement('unowned'),
-            owner: P.isUndefined,
-            nonOwners: pipe(HS.isHashSet, P.compose(HashSet_every(CardOwner.isCardOwner)))
-        }),
-
-        Refinement_and(EQ.isEqual),
-    );
-
-export const isCardOwnership: P.Refinement<unknown, CardOwnership> =
-    pipe(
-        isCardOwnershipOwned,
-        Refinement_or(isCardOwnershipUnowned),
-    );
-
-export const Equivalence: EQV.Equivalence<CardOwnership> = ST.getEquivalence({
-    _cardOwnershipType: S.Equivalence,
-    owner: O.getEquivalence(CardOwner.Equivalence),
-    nonOwners: EQ.equivalence(),
-});
-
-const createInternal = (
-    cardOwnership: RawCardOnwershipOwned | RawCardOnwershipUnowned,
-): CardOwnership =>
-    Object.freeze({
-        ...cardOwnership,
-
-        toString: constant(pipe(
-            M.value(cardOwnership),
-
-            M.when({  _cardOwnershipType: 'owned' }, (self) =>
-                `Owned by '${self.owner}' and not by ${self.nonOwners})`
-            ),
-
-            M.when({  _cardOwnershipType: 'unowned' }, (self) =>
-                `Not owned by ${self.nonOwners})`
-            ),
-
+// TODO can Data.Case give this for free?
+export const isOwned: P.Refinement<CardOwnership, CardOwnershipOwned> =
+    (ownership): ownership is CardOwnershipOwned =>
+        pipe(
+            M.value(ownership),
+            M.when({ _tag: 'CardOwnershipOwned' }, constTrue),
+            M.when({ _tag: 'CardOwnershipUnowned' }, constFalse),
             M.exhaustive,
-        )),
+        );
 
-        [EQ.symbol](that: EQ.Equal): boolean {
-            return isCardOwnership(that) && Equivalence(this, that);
-        },
+// TODO can Data.Case give this for free?
+export const isUnowned: P.Refinement<CardOwnership, CardOwnershipUnowned> =
+    (ownership): ownership is CardOwnershipUnowned =>
+        pipe(
+            M.value(ownership),
+            M.when({ _tag: 'CardOwnershipOwned' }, constFalse),
+            M.when({ _tag: 'CardOwnershipUnowned' }, constTrue),
+            M.exhaustive,
+        );
 
-        [H.symbol](): number {
-            return H.structure({
-                ...this
-            });
-        },
-    });
-
-export const createOwned = (cardOwnership: Omit<RawCardOnwershipOwned, '_cardOwnershipType'>): CardOwnership =>
+// TODO can this be baked in as a property of the objects themselves, so that its just directly available?
+export const getOwner: (ownership: CardOwnership) => O.Option<CardOwner.CardOwner> =
     pipe(
-        cardOwnership,
-
-        ownership => ({
-            _cardOwnershipType: 'owned' as const,
-            ...cardOwnership,
-        }),
-
-        createInternal,
-    );
-
-export const createUnowned = (cardOwnership: Omit<RawCardOnwershipUnowned, '_cardOwnershipType'>): CardOwnership =>
-    pipe(
-        cardOwnership,
-
-        ownership => ({
-            _cardOwnershipType: 'unowned' as const,
-            ...cardOwnership,
-        }),
-
-        createInternal,
+        M.type<CardOwnership>(),
+        M.when({ _tag: 'CardOwnershipOwned' }, ({ owner }) => O.some(owner)),
+        M.when({ _tag: 'CardOwnershipUnowned' }, O.none),
+        M.exhaustive,
     );
 
 export const combine: (
@@ -128,28 +65,28 @@ export const combine: (
     pipe(
         M.type<CardOwnership>(),
 
-        M.when({ _cardOwnershipType: 'owned' }, (second) => pipe(
+        M.when({ _tag: 'CardOwnershipOwned' }, (second) => pipe(
             M.type<CardOwnership>(),
 
-            M.when({ _cardOwnershipType: 'owned' }, (first) => pipe(
+            M.when({ _tag: 'CardOwnershipOwned' }, (first) => pipe(
                 // Both are owned
                 // They can only be combined if their owners are the same
-                EQ.equals(first.owner)(second.owner),
+                EQ.equals(first.owner, second.owner),
 
                 B.match(
                     // They do not match
                     () => E.left('Conflicting ownership'),
 
-                    () => E.right(createOwned({
+                    () => E.right(CardOwnershipOwned({
                         owner: first.owner,
                         nonOwners: HS.union(first.nonOwners, second.nonOwners),
                     })),
                 ),
             )),
-    
-            M.when(({ _cardOwnershipType: 'unowned' }), (first) => pipe(
+
+            M.when(({ _tag: 'CardOwnershipUnowned' }), (first) => pipe(
                 // Second is owned, first is unowned
-                E.right(createOwned({
+                E.right(CardOwnershipOwned({
                     owner: second.owner,
                     nonOwners: HS.union(first.nonOwners, second.nonOwners),
                 })),
@@ -158,20 +95,20 @@ export const combine: (
             M.exhaustive,
         )),
 
-        M.when(({ _cardOwnershipType: 'unowned' }), (second) => pipe(
+        M.when(({ _tag: 'CardOwnershipUnowned' }), (second) => pipe(
             M.type<CardOwnership>(),
 
-            M.when({ _cardOwnershipType: 'owned' }, (first) => pipe(
+            M.when({ _tag: 'CardOwnershipOwned' }, (first) => pipe(
                 // Second is unowned, first is owned
-                E.right(createOwned({
+                E.right(CardOwnershipOwned({
                     owner: first.owner,
                     nonOwners: HS.union(first.nonOwners, second.nonOwners),
                 })),
             )),
 
-            M.when(({ _cardOwnershipType: 'unowned' }), (first) => pipe(
+            M.when(({ _tag: 'CardOwnershipUnowned' }), (first) => pipe(
                 // Both are unowned
-                E.right(createUnowned({
+                E.right(CardOwnershipUnowned({
                     nonOwners: HS.union(first.nonOwners, second.nonOwners),
                 })),
             )),
@@ -181,16 +118,3 @@ export const combine: (
         
         M.exhaustive,
     );
-
-// TODO does this short-hand make sense? Can we reduce the number of properties in each object instead?
-export const getOwner: (ownership: CardOwnership) => O.Option<CardOwner.CardOwner> =
-    pipe(
-        M.type<CardOwnership>(),
-        M.when({  _cardOwnershipType: 'owned' }, ({ owner }) => O.some(owner)),
-        M.when({  _cardOwnershipType: 'unowned' }, O.none),
-        M.exhaustive,
-    );
-
-// TODO does this short-hand make sense? Can we reduce the number of properties in each object instead?
-export const getNonOwners = (ownership: CardOwnership): HS.HashSet<CardOwner.CardOwner> =>
-    ownership.nonOwners;

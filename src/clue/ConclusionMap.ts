@@ -1,93 +1,50 @@
-import * as EQ from '@effect/data/Equal';
-import * as EQV from '@effect/data/typeclass/Equivalence';
-import * as ST from '@effect/data/Struct';
-import * as H from '@effect/data/Hash';
+import * as B from '@effect/data/Brand';
+import * as O from '@effect/data/Option';
+import * as E from '@effect/data/Either';
 import * as HS from '@effect/data/HashSet';
 import * as HM from '@effect/data/HashMap';
-import * as P from '@effect/data/Predicate';
-import * as E from '@effect/data/Either';
-import * as O from '@effect/data/Option';
 import { pipe } from '@effect/data/Function';
-
-import { HashMap_every, Refinement_and, Refinement_struct } from '../utils/ShouldBeBuiltin';
+import { Brand_refined } from '../utils/ShouldBeBuiltin';
 
 import * as Conclusion from './Conclusion';
 
-/**
- * Something that we know about a specific topic
- * Q - the topic that we know about
- * Conclusion - the conclusion we have about that topic
- */
-export type ConclusionMap<Q, A> =
-    EQ.Equal & {
-        readonly conclusions: HM.HashMap<Q, Conclusion.Conclusion<A>>;
-    };
+export type ConclusionMap<Q, A> = B.Branded<HM.HashMap<Q, Conclusion.ValidatedConclusion<A>>, 'ConclusionMap'>;
 
-export const getRefinement = <Q, A>(refQ: P.Refinement<unknown, Q>, refA: P.Refinement<unknown, A>): P.Refinement<unknown, ConclusionMap<Q, A>> =>
+export const ConclusionMapOf = <Q, A>() => B.nominal<ConclusionMap<Q, A>>();
+
+export type ValidatedConclusionMap<Q, A> = ConclusionMap<Q, A> & B.Brand<'ValidatedConclusionMap'>;
+
+export const ValidatedConclusionMapOf = <Q, A>() => Brand_refined<ValidatedConclusionMap<Q, A>>([
+    // TODO validate this in any way?
+]);
+
+export const empty = <Q, A>(): ValidatedConclusionMap<Q, A> =>
     pipe(
-        Refinement_struct({
-            conclusions: pipe(
-                HM.isHashMap,
-                P.compose(
-                    HashMap_every(refQ, Conclusion.getRefinement(refA)),
-                ),
-            ),
-        }),
-
-        Refinement_and(EQ.isEqual),
+        HM.empty<Q, Conclusion.ValidatedConclusion<A>>(),
+        ConclusionMapOf(),
+        ValidatedConclusionMapOf(),
+        E.getOrThrow,
     );
 
-export const isConclusionMap: P.Refinement<unknown, ConclusionMap<unknown, unknown>> =
-    getRefinement(P.isUnknown, P.isUnknown);
-
-export const Equivalence: EQV.Equivalence<ConclusionMap<unknown, unknown>> =
-    ST.getEquivalence({
-        conclusions: EQ.equivalence(),
-    });
-
-const create = <Q, A>(
-    conclusions: HM.HashMap<Q, Conclusion.Conclusion<A>>
-): ConclusionMap<Q, A> =>
-    ({
-        conclusions,
-
-        toString() {
-           return `${String(this.conclusions)}`;
-        },
-
-        [EQ.symbol](that: EQ.Equal): boolean {
-            return isConclusionMap(that) && Equivalence(this, that);
-        },
-
-        [H.symbol](): number {
-            return H.structure({
-                ...this
-            });
-        },
-    });
-
-export const empty = <Q, A>(): ConclusionMap<Q, A> =>
-    create(HM.empty());
-
-// TODO don't just union thes. This overwrites old values. Instead, actually merge the conclusions and error on conflicts
-export const combine = <Q, A>(first: ConclusionMap<Q, A>, second: ConclusionMap<Q, A>): ConclusionMap<Q, A> =>
-    create(HM.union(first.conclusions, second.conclusions));
-
-export const addOrSet = (
+export const setMergeOrOverwriteOrFail = (
     collisionStrategy: 'overwrite' | 'fail',
 ) => <Q, A>(
     question: Q,
     answer: A,
-    reason: Conclusion.Reason,
+    reasons: HS.HashSet<Conclusion.Reason>,
 ) => (
-    { conclusions }: ConclusionMap<Q, A>,
-): E.Either<string, ConclusionMap<Q, A>> =>
+    conclusions: ValidatedConclusionMap<Q, A>,
+) : E.Either<B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =>
     E.gen(function* ($) {
         // Prepare our function to combine conclusions
         const combine = Conclusion.combine<A>(collisionStrategy);
 
         // Create the new conclusion
-        const newConclusion = yield* $(Conclusion.create(answer, HS.fromIterable([reason])));
+        const newConclusion = yield* $(
+            { answer, reasons, },
+            Conclusion.ConclusionOf(),
+            Conclusion.ValidatedConclusionOf(),
+        );
 
         // Create the conclusion to add
         const combinedConclusion = yield* $(
@@ -104,27 +61,66 @@ export const addOrSet = (
         );
 
         // Insert the new conclusion
-        return yield* $(E.right(
-            create(
-                HM.set(conclusions, question, combinedConclusion),
-            ),
-        ));
+        return yield* $(
+            HM.set(conclusions, question, combinedConclusion),
+            ConclusionMapOf(),
+            ValidatedConclusionMapOf(),
+        );
     });
 
-export const add: <Q, A>(
+export const setMergeOrFail: <Q, A>(
     question: Q,
     answer: A,
-    reason: Conclusion.Reason,
+    reasons: HS.HashSet<Conclusion.Reason>,
 ) => (
-    { conclusions }: ConclusionMap<Q, A>,
-) => E.Either<string, ConclusionMap<Q, A>> =
-    addOrSet('fail');
+    conclusions: ValidatedConclusionMap<Q, A>,
+) => E.Either<B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =
+    setMergeOrOverwriteOrFail('fail');
 
-export const set: <Q, A>(
+export const setMergeOrOverwrite: <Q, A>(
     question: Q,
     answer: A,
-    reason: Conclusion.Reason,
+    reasons: HS.HashSet<Conclusion.Reason>,
 ) => (
-    { conclusions }: ConclusionMap<Q, A>,
-) => E.Either<string, ConclusionMap<Q, A>> =
-    addOrSet('overwrite');
+    conclusions: ValidatedConclusionMap<Q, A>,
+) => E.Either<B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =
+    setMergeOrOverwriteOrFail('overwrite');
+
+export const combineMergeOrOverwriteOrFail = (
+    collisionStrategy: 'overwrite' | 'fail',
+) => <Q, A>(
+    second: ValidatedConclusionMap<Q, A>,
+) => (
+    first: ValidatedConclusionMap<Q, A>,
+): E.Either<B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =>
+        HM.reduceWithIndex<
+            E.Either<B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>>,
+            Conclusion.Conclusion<A>,
+            Q
+        >(
+            second,
+
+            E.right(first),
+
+            (combinedEither, { answer, reasons }, question) => pipe(
+                combinedEither,
+
+                E.flatMap(
+                    setMergeOrOverwriteOrFail(collisionStrategy)(question, answer, reasons),
+                ),
+            ),
+        );
+
+export const combineMergeOrFail: <Q, A>(
+    second: ValidatedConclusionMap<Q, A>,
+) => (
+    conclusions: ValidatedConclusionMap<Q, A>,
+) => E.Either<B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =
+    combineMergeOrOverwriteOrFail('fail');
+
+export const combineMergeOrOverwrite: <Q, A>(
+    second: ValidatedConclusionMap<Q, A>,
+) => (
+    conclusions: ValidatedConclusionMap<Q, A>,
+) => E.Either<B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =
+    combineMergeOrOverwriteOrFail('overwrite');

@@ -1,49 +1,23 @@
-import * as E from '@effect/data/Either';
-import * as H from '@effect/data/Hash';
-import * as EQ from "@effect/data/Equal";
-import * as ST from "@effect/data/Struct";
+import * as D from '@effect/data/Data';
+import * as B from '@effect/data/Brand';
+import * as O from '@effect/data/Option';
 import * as S from '@effect/data/String';
-import * as P from '@effect/data/Predicate';
-import * as EQV from '@effect/data/typeclass/Equivalence';
-import { Refinement_and, Refinement_struct } from '../utils/ShouldBeBuiltin';
-import { pipe } from '@effect/data/Function';
+import { constant, flow } from '@effect/data/Function';
+import { Brand_refined, Option_fromRefinement, Struct_get } from '../utils/ShouldBeBuiltin';
 
-type RawPlayer = {
-    readonly label: string;
-}
+export interface Player extends D.Case {
+    _tag: "Player";
+    readonly name: string;
+};
 
-export type Player = EQ.Equal & RawPlayer;
+export const Player = D.tagged<Player>("Player");
 
-export const isPlayer: P.Refinement<unknown, Player> =
-    pipe(
-        Refinement_struct({
-            label: P.isString,
-        }),
+export type ValidatedPlayer = Player & B.Brand<'ValidatedPlayer'>;
 
-        Refinement_and(EQ.isEqual),
-    );
-
-export const Equivalence: EQV.Equivalence<Player> = ST.getEquivalence({
-    label: S.Equivalence,
-});
-
-export const create = (
-    player: RawPlayer,
-): E.Either<string, Player> =>
-    E.right({
-        ...player,
-
-        toString() {
-            return `${this.label}`;
-        },
-
-        [EQ.symbol](that: EQ.Equal): boolean {
-            return isPlayer(that) && Equivalence(this, that);
-        },
-
-        [H.symbol](): number {
-            return H.structure({
-                ...this
-            });
-        },
-    });
+export const ValidatedPlayer = Brand_refined<ValidatedPlayer>([
+    flow(
+        Struct_get('name'),
+        Option_fromRefinement(S.isEmpty),
+        O.map(constant(B.error(`name should be a non-empty string`))),
+    ),
+]);

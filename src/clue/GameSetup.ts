@@ -1,58 +1,20 @@
-import * as EQ from '@effect/data/Equal';
-import * as P from '@effect/data/Predicate';
-import * as EQV from '@effect/data/typeclass/Equivalence';
-import * as ST from '@effect/data/Struct';
-import * as H from '@effect/data/Hash';
-import { pipe } from '@effect/data/Function';
-
-import { Refinement_and, Refinement_struct } from '../utils/ShouldBeBuiltin';
+import * as D from '@effect/data/Data';
+import * as CTX from '@effect/data/Context';
 
 import * as CardSet from "./CardSet";
 import * as CardOwnerSet from "./CardOwnerSet";
 
-type RawGameSetup = {
-    readonly cards: CardSet.CardSet;
-    readonly owners: CardOwnerSet.CardOwnerSet;
+export interface GameSetup extends D.Case {
+    _tag: 'GameSetup';
+    readonly cards: CardSet.ValidatedCardSet;
+    readonly owners: CardOwnerSet.ValidatedCardOwnerSet;
 };
 
-export type GameSetup = EQ.Equal & RawGameSetup;
+export const GameSetup = D.tagged<GameSetup>("GameSetup");
 
-export const isGameSetup: P.Refinement<unknown, GameSetup> =
-    pipe(
-        Refinement_struct({
-            cards: CardSet.isCardSet,
-            owners: CardOwnerSet.isCardOwnerSet,
-        }),
+export const Tag = CTX.Tag<GameSetup>();
 
-        Refinement_and(EQ.isEqual),
-    );
-
-export const Equivalence: EQV.Equivalence<GameSetup> = ST.getEquivalence({
-    cards: CardSet.Equivalence,
-    owners: CardOwnerSet.Equivalence,
+export const empty: GameSetup = GameSetup({
+    cards: CardSet.empty,
+    owners: CardOwnerSet.empty,
 });
-
-export const create = (gameSetup: RawGameSetup): GameSetup =>
-    ({
-        ...gameSetup,
-
-        toString() {
-            return `Game setup with cards ${this.cards} and players ${this.owners}`;
-        },
-
-        [EQ.symbol](that: EQ.Equal): boolean {
-            return isGameSetup(that) && Equivalence(this, that);
-        },
-
-        [H.symbol](): number {
-            return H.structure({
-                ...this
-            });
-        },
-    });
-
-export const empty: GameSetup =
-    create({
-        cards: CardSet.empty,
-        owners: CardOwnerSet.empty,
-    });

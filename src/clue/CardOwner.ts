@@ -1,83 +1,20 @@
-import * as M from '@effect/match';
-import * as EQ from '@effect/data/Equal';
-import * as P from '@effect/data/Predicate';
-import * as S from '@effect/data/String';
-import * as H from '@effect/data/Hash';
-import * as ST from '@effect/data/Struct';
-import * as EQV from '@effect/data/typeclass/Equivalence';
-import * as O from '@effect/data/Option';
-import { apply, constant, pipe } from '@effect/data/Function';
+import * as D from '@effect/data/Data';
 
-import { Refinement_struct, Refinement_and } from '../utils/ShouldBeBuiltin';
-
-import * as Player from "./Player";
+import * as Player from './Player';
 import * as CaseFile from './CaseFile';
 
-type RawCardOwner =
-    | {
-        readonly _cardOwnerTag: 'player',
-        readonly player: Player.Player;
-    }
-    | {
-        readonly _cardOwnerTag: 'caseFile',
-        readonly caseFile: CaseFile.CaseFile,
-    };
+export interface CardOwnerPlayer extends D.Case {
+    _tag: "CardOwnerPlayer";
+    readonly player: Player.Player;
+};
 
-export type CardOwner = EQ.Equal & RawCardOwner;
+export const CardOwnerPlayer = D.tagged<CardOwnerPlayer>("CardOwnerPlayer");
 
-export const isCardOwner: P.Refinement<unknown, CardOwner> =
-    pipe(
-        Refinement_struct({
-            _cardOwnerTag: P.isString,
-            player: Player.isPlayer,
-            caseFile: CaseFile.isCaseFile,
-        }),
+export interface CardOwnerCaseFile extends D.Case {
+    _tag: "CardOwnerCaseFile";
+    readonly caseFile: CaseFile.CaseFile;
+};
 
-        Refinement_and(EQ.isEqual),
-    );
+export const CardOwnerCaseFile = D.tagged<CardOwnerCaseFile>("CardOwnerCaseFile");
 
-export const Equivalence: EQV.Equivalence<CardOwner> = ST.getEquivalence({
-    _cardOwnerTag: S.Equivalence,
-    player: EQV.contramap(
-        O.getEquivalence(Player.Equivalence),
-        O.fromNullable<Player.Player | undefined>,
-    ),
-    caseFile: EQV.contramap(
-        O.getEquivalence(CaseFile.Equivalence),
-        O.fromNullable<CaseFile.CaseFile | undefined>,
-    ),
-});
-
-const create = (cardOwner: RawCardOwner): CardOwner =>
-    ({
-        ...cardOwner,
-
-        toString: constant(pipe(
-            M.value(cardOwner),
-            M.when({ _cardOwnerTag: 'player' }, ({ player }) => `${player}`),
-            M.when({ _cardOwnerTag: 'caseFile' }, () => `CaseFile`),
-            M.exhaustive,
-        )),
-
-        [EQ.symbol](that: EQ.Equal): boolean {
-            return isCardOwner(that) && Equivalence(this, that);
-        },
-
-        [H.symbol](): number {
-            return H.structure({
-                ...this
-            });
-        },
-    });
-
-export const createPlayer = (player: Player.Player): CardOwner =>
-    create({
-        _cardOwnerTag: 'player',
-        player,
-    });
-
-export const createCaseFile = (caseFile: CaseFile.CaseFile): CardOwner =>
-    create({
-        _cardOwnerTag: 'caseFile',
-        caseFile,
-    });
+export type CardOwner = CardOwnerPlayer | CardOwnerCaseFile;

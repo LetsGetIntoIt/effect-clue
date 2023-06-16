@@ -1,4 +1,5 @@
-import * as E from '@effect/data/Either';
+import * as B from '@effect/data/Brand';
+import * as D from '@effect/data/Data';
 import * as SG from '@effect/data/typeclass/Semigroup';
 import * as MON from '@effect/data/typeclass/Monoid';
 import * as HS from '@effect/data/HashSet';
@@ -7,25 +8,26 @@ import * as T from '@effect/io/Effect';
 import * as ROA from '@effect/data/ReadonlyArray';
 import { flow, pipe } from '@effect/data/Function';
 
-import { Effect_getSemigroupCombine, HashMap_fromHashSetMap, HashSet_fromHashMapMulti, HashSet_fromOption, HashSet_isSize } from '../utils/ShouldBeBuiltin';
+import { Effect_getSemigroupCombine, HashSet_fromHashMapMulti, HashSet_isSize } from '../utils/ShouldBeBuiltin';
 
-import * as Card from './Card';
-import * as Game from "./Game";
+import * as GameSetup from "./GameSetup";
 import * as ConclusionMapSet from "./ConclusionMapSet";
-import * as CardOwner from './CardOwner';
 import * as CardOwnership from './CardOwnership';
-import * as Pair from './Pair';
 import * as Conclusion from './Conclusion';
+import * as GuessSet from './GuessSet';
 
 export type DeductionRule = T.Effect<
     // Accepts the objects in the game
-    | Game.Game
+    | GameSetup.GameSetup
+
+    // Accepts the set of gueses that have been made
+    | GuessSet.GuessSet
 
     // Accepts a set of "known" conclusions
     | ConclusionMapSet.ConclusionMapSet
 ,
     // Returns an error if we encounter a logical contradiction
-    string
+    B.Brand.BrandErrors
 ,
     // Returns the newly-deduced conclusion (not included the already known ones)
     ConclusionMapSet.ConclusionMapSet
@@ -37,8 +39,8 @@ export const constEmpty: DeductionRule =
 export const SemigroupUnion: SG.Semigroup<DeductionRule> = 
     Effect_getSemigroupCombine<
         ConclusionMapSet.ConclusionMapSet,
-        string,
-        Game.Game | ConclusionMapSet.ConclusionMapSet
+        B.Brand.BrandErrors,
+        GameSetup.GameSetup | GuessSet.GuessSet | ConclusionMapSet.ConclusionMapSet
     >(
         (first: ConclusionMapSet.ConclusionMapSet, second) => pipe(
             first,
@@ -53,9 +55,10 @@ export const MonoidUnion: MON.Monoid<DeductionRule> = MON.fromSemigroup(
 
 // If a card is held by an owner, it cannot be held by anyone else
 export const cardIsHeldAtMostOnce: DeductionRule = T.gen(function* ($) {
-    const game = yield* $(Game.Tag);
-    const allCards = Game.getCards(game);
-    const allCardOwners = Game.getCardOwners(game);
+    const {
+        cards: allCards,
+        owners: allCardOwners,
+    } = yield* $(GameSetup.Tag);
 
     const knownConclusions = yield* $(ConclusionMapSet.Tag);
     const ownershipByCard = ConclusionMapSet.getOwnershipByCard(knownConclusions);
@@ -65,7 +68,7 @@ export const cardIsHeldAtMostOnce: DeductionRule = T.gen(function* ($) {
         ownershipByCard,
 
         // Keep only the cards with a known owner
-        HM.filter(CardOwnership.isCardOwnershipOwned),
+        HM.filter(CardOwnership.isOwned),
 
         // Figure out the owners we DON'T know about
         HM.map(flow(
@@ -83,14 +86,11 @@ export const cardIsHeldAtMostOnce: DeductionRule = T.gen(function* ($) {
         // Now put together all the modifications we need to apply
         HS.map(([card, owner]) =>
             ConclusionMapSet.modifyAddOwnership(
-                Pair.create({
-                    first: owner,
-                    second: card,
-                }),
+                D.array([owner, card]),
 
                 false,
 
-                Conclusion.createReason({
+                Conclusion.Reason({
                     level: 'inferred',
                     explanation: `Card is already owned by someone else`
                 }),
@@ -110,9 +110,10 @@ export const cardIsHeldAtMostOnce: DeductionRule = T.gen(function* ($) {
 // TODO reduce duplication with the other card holding rule
 // If a card is held by everyone except one, then it's held by that one
 export const cardIsHeldAtLeastOnce: DeductionRule = T.gen(function* ($) {
-    const game = yield* $(Game.Tag);
-    const allCards = Game.getCards(game);
-    const allCardOwners = Game.getCardOwners(game);
+    const {
+        cards: allCards,
+        owners: allCardOwners,
+    } = yield* $(GameSetup.Tag);
 
     const knownConclusions = yield* $(ConclusionMapSet.Tag);
     const ownershipByCard = ConclusionMapSet.getOwnershipByCard(knownConclusions);
@@ -122,7 +123,7 @@ export const cardIsHeldAtLeastOnce: DeductionRule = T.gen(function* ($) {
         ownershipByCard,
 
         // Keep only the cards with a known owner
-        HM.filter(CardOwnership.isCardOwnershipUnowned),
+        HM.filter(CardOwnership.isUnowned),
 
         // Figure out the owners we DON'T know about
         HM.map(({ nonOwners }) => HS.difference(allCardOwners, nonOwners)),
@@ -136,18 +137,14 @@ export const cardIsHeldAtLeastOnce: DeductionRule = T.gen(function* ($) {
         // Now put together all the modifications we need to apply
         HS.map(([card, owner]) =>
             ConclusionMapSet.modifyAddOwnership(
-                Pair.create({
-                    first: owner,
-                    second: card,
-                }),
-                
+                D.array([owner, card]),
+
                 true,
                 
-                Conclusion.createReason({
+                Conclusion.Reason({
                     level: 'inferred',
                     explanation: `Card not owned anywhere else`,
                 }),
-                
             ),
         ),
 
@@ -166,22 +163,22 @@ export const cardIsHeldExactlyOnce: DeductionRule =
 
 // If all of a player's cards are accounted for, they don't have any others
 export const playerHasAtMostNumCards: DeductionRule =
-    T.fail(`DeductionRule playerHasAtMostNumCards not implemented yet`);
+    T.fail(B.error(`DeductionRule playerHasAtMostNumCards not implemented yet`));
 
 // If all of a player's missing cards are accounted for (the number that will be missing), they have all the others
 export const playerHasAtLeastNumCards: DeductionRule =
-    T.fail(`DeductionRule playerHasAtLeastNumCards not implemented yet`);
+    T.fail(B.error(`DeductionRule playerHasAtLeastNumCards not implemented yet`));
 
 export const playerHasExactlyNumCards: DeductionRule =
     SemigroupUnion.combine(playerHasAtMostNumCards, playerHasAtLeastNumCards);
 
 // If indentify a card in the case file, it's none of the other ones of that type
 export const caseFileHasAtMostOnePerCardType: DeductionRule =
-    T.fail(`DeductionRule caseFileHasAtMostOnePerCardType not implemented yet`);
+    T.fail(B.error(`DeductionRule caseFileHasAtMostOnePerCardType not implemented yet`));
 
 // If we eliminate all but 1 of a card of a type, then it's the remaining one
 export const caseFileHasAtLeastOnePerCardType: DeductionRule =
-    T.fail(`DeductionRule caseFileHasAtLeastOnePerCardType not implemented yet`);
+    T.fail(B.error(`DeductionRule caseFileHasAtLeastOnePerCardType not implemented yet`));
 
 export const caseFileHasExactlyOnePerCardType: DeductionRule =
     SemigroupUnion.combine(caseFileHasAtMostOnePerCardType, caseFileHasAtLeastOnePerCardType);
@@ -190,4 +187,4 @@ export const caseFileHasExactlyOnePerCardType: DeductionRule =
 // - {player's known owned cards} & {guessed cards} ==> "(owned)"
 // - {player's unknown ownerships} & {guess cards} ==> "(maybe)"
 export const guessIsRefutedByHeldCard: DeductionRule =
-    T.fail(`DeductionRule guessIsRefutedByHeldCard not implemented yet`);
+    T.fail(B.error(`DeductionRule guessIsRefutedByHeldCard not implemented yet`));

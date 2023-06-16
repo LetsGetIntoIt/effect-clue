@@ -1,72 +1,24 @@
-import * as E from '@effect/data/Either';
-import * as HS from "@effect/data/HashSet";
-import * as ST from "@effect/data/Struct";
-import * as EQ from '@effect/data/Equal';
-import * as EQV from '@effect/data/typeclass/Equivalence';
-import * as P from '@effect/data/Predicate';
-import * as H from '@effect/data/Hash';
-import { pipe } from '@effect/data/Function';
-
-import { HashSet_every, Refinement_and, Refinement_struct } from "../utils/ShouldBeBuiltin";
+import * as B from '@effect/data/Brand';
+import * as HS from '@effect/data/HashSet';
+import * as CTX from '@effect/data/Context';
+import { flow } from '@effect/data/Function';
+import { Brand_refined } from '../utils/ShouldBeBuiltin';
 
 import * as Guess from './Guess';
 
-type RawGuessSet = {
-    readonly guesses: HS.HashSet<Guess.Guess>;
-}
+export type GuessSet = B.Branded<HS.HashSet<Guess.ValidatedGuess>, 'GuessSet'>;
 
-export type GuessSet = EQ.Equal & RawGuessSet;
+export const GuessSet = B.nominal<GuessSet>();
 
-export const isGuessSet: P.Refinement<unknown, GuessSet> =
-    pipe(
-        Refinement_struct({
-            guesses: pipe(
-                HS.isHashSet,
-                P.compose(HashSet_every(Guess.isGuess)),
-            ),
-        }),
+export const empty: GuessSet = GuessSet(HS.empty());
 
-        Refinement_and(EQ.isEqual),
-    );
+export const add = (owner: Guess.ValidatedGuess): ((owners: GuessSet) => GuessSet) =>
+    flow(HS.add(owner), GuessSet);
 
-export const Equivalence: EQV.Equivalence<GuessSet> = ST.getEquivalence({
-    guesses: EQ.equivalence(),
-});
+export type ValidatedGuessSet = GuessSet & B.Brand<'ValidatedGuessSet'>;
 
-export const empty: GuessSet =
-    Object.freeze({
-        guesses: HS.empty(),
+export const ValidatedGuessSet = Brand_refined<ValidatedGuessSet>([
+    // TODO is there any validation to do on a collection of gueseses that can't be done individually?
+]);
 
-        toString() {
-            return `${String(this.guesses)}`;
-        },
-
-        [EQ.symbol](that: EQ.Equal): boolean {
-            return isGuessSet(that) && Equivalence(this, that);
-        },
-
-        [H.symbol](): number {
-            return H.structure({
-                ...this
-            });
-        },
-    });
-
-export const add = (newGuess: Guess.Guess) =>
-                (initialSet: GuessSet):
-                GuessSet =>
-    ST.evolve(initialSet, {
-        guesses: HS.add(newGuess)
-    });
-
-export interface ValidatedGuessSet extends GuessSet {
-    validated: true;
-}
-
-export const validate = (guessSet: GuessSet): E.Either<string[], ValidatedGuessSet> =>
-    E.right(
-        Object.freeze({
-            ...guessSet,
-            validated: true,
-        })
-    );
+export const Tag = CTX.Tag<ValidatedGuessSet>();

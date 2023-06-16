@@ -1,88 +1,56 @@
-import * as H from '@effect/data/Hash';
-import * as HS from "@effect/data/HashSet";
-import * as E from '@effect/data/Either';
-import * as EQ from "@effect/data/Equal";
-import * as ST from "@effect/data/Struct";
+import * as D from '@effect/data/Data';
+import * as B from '@effect/data/Brand';
 import * as O from '@effect/data/Option';
+import * as HS from '@effect/data/HashSet';
 import * as P from '@effect/data/Predicate';
-import * as EQV from '@effect/data/typeclass/Equivalence';
-import { pipe } from '@effect/data/Function';
+import * as T from '@effect/io/Effect';
+import { Brand_refinedEffect, Option_fromPredicate, Struct_get } from '../utils/ShouldBeBuiltin';
 
-import { HashSet_every, Option_getRefinement, Refinement_and, Refinement_struct } from '../utils/ShouldBeBuiltin';
-
-import * as Player from './Player';
 import * as Card from './Card';
+import * as Player from './Player';
+import * as GameSetup from './GameSetup';
+import { constant, flow } from '@effect/data/Function';
 
-type RawGuess = {
-    readonly cards: HS.HashSet<Card.Card>;
+export interface Guess extends D.Case {
+    _tag: "Guess";
 
-    readonly guesser: Player.Player;
-
-    readonly nonRefuters: HS.HashSet<Player.Player>;
-
+    readonly cards: HS.HashSet<Card.ValidatedCard>;
+    readonly guesser: Player.ValidatedPlayer;
+    readonly nonRefuters: HS.HashSet<Player.ValidatedPlayer>;
     readonly refutation: O.Option<{
-        refuter: Player.Player;
-        card: O.Option<Card.Card>;
+        refuter: Player.ValidatedPlayer;
+        card: O.Option<Card.ValidatedCard>;
     }>;
-}
+};
 
-export type Guess = EQ.Equal & RawGuess;
+export const Guess = D.tagged<Guess>("Guess");
 
-export const isGuess: P.Refinement<unknown, Guess> =
-    pipe(
-        Refinement_struct({
-            cards: pipe(
-                HS.isHashSet,
-                P.compose(HashSet_every(Card.isCard)),
+export type ValidatedGuess = Guess & B.Brand<'ValidatedGuess'>;
+
+export const ValidatedGuess = Brand_refinedEffect<ValidatedGuess, GameSetup.GameSetup>(
+    T.gen(function* ($) {
+        const gameSetup = yield* $(GameSetup.Tag);
+
+        return [
+            flow(
+                Struct_get('cards'),
+
+                Option_fromPredicate(
+                    // Check if the guessed cards are NOT a subset of all the cards in the game
+                    P.not(HS.isSubset(gameSetup.cards)),
+                ),
+
+                O.map(constant(B.error(`All guessed cards should be part of the game`))),
             ),
-            
-            guesser: Player.isPlayer,
-            
-            nonRefuters: pipe(
-                HS.isHashSet,
-                P.compose(HashSet_every(Player.isPlayer)),
-            ),
 
-            refutation: pipe(
-                O.isOption,
-                P.compose(Option_getRefinement(Refinement_struct({
-                    refuter: Player.isPlayer,
-                    card: pipe(
-                        O.isOption,
-                        P.compose(Option_getRefinement(Card.isCard)),
-                    ),
-                }))),
-            ),
-        }),
-
-        Refinement_and(EQ.isEqual),
-    );
-
-export const Equivalence: EQV.Equivalence<Guess> = ST.getEquivalence({
-    cards: EQ.equivalence(),
-    guesser: Player.Equivalence,
-    nonRefuters: EQ.equivalence(),
-    refutation: O.getEquivalence(ST.getEquivalence({
-        refuter: Player.Equivalence,
-        card: O.getEquivalence(Card.Equivalence),
-    })),
-});
-
-export const create = (guess: RawGuess): E.Either<string, Guess> =>
-    E.right({
-        ...guess,
-
-        toString() {
-            return `Guess by ${this.guesser} of ${this.cards} NOT refuted by ${this.nonRefuters} with refutation ${this.refutation}`;
-        },
-
-        [EQ.symbol](that: EQ.Equal): boolean {
-            return isGuess(that) && Equivalence(this, that);
-        },
-
-        [H.symbol](): number {
-            return H.structure({
-                ...this
-            });
-        }
-    });
+            // TODO validate that the guesser is in the player set
+            // TODO validate that the nonRefuters are a subset of the player set
+            // TODO validate that the refuter is in the player set
+            // TODo validate that the refuteCard is in the full card set
+            // TODO validate that the refuteCard is in the guessed set
+            // TODO validate that the guesser is not in the nonRefuter set
+            // TODO validate that the guesser is not the refuter
+            // TODO validate that the refuter is not in the nonRefuter set
+        ];
+    }),
+);
