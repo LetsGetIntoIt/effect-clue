@@ -2,7 +2,7 @@ import * as H from '@effect/data/Hash';
 import * as EQ from "@effect/data/Equal";
 import * as ST from "@effect/data/Struct";
 import * as EQV from '@effect/data/typeclass/Equivalence';
-import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_symbol, Show_show } from '../utils/ShouldBeBuiltin';
+import { Refinement_struct, Refinement_and } from '../utils/ShouldBeBuiltin';
 import * as P from '@effect/data/Predicate';
 import { pipe } from '@effect/data/Function';
 
@@ -11,7 +11,7 @@ type RawPair<A, B> = {
     readonly second: B;
 };
 
-export type Pair<A, B> = EQ.Equal & Show & RawPair<A, B>;
+export type Pair<A, B> = EQ.Equal & RawPair<A, B>;
 
 export const getRefinement = <A, B>(
     refFirst: P.Refinement<unknown, A>,
@@ -24,7 +24,6 @@ export const getRefinement = <A, B>(
         }),
 
         Refinement_and(EQ.isEqual),
-        Refinement_and(Show_isShow),
     );
 
 export const isPair: P.Refinement<unknown, Pair<unknown, unknown>> =
@@ -41,8 +40,8 @@ export const create = <A, B>(
     Object.freeze({
         ...pair,
 
-        [Show_symbol](): string {
-           return `('${Show_show(this.first)}', ${Show_show(this.second)})`
+        toString() {
+           return `('${this.first}', ${this.second})`;
         },
 
         [EQ.symbol](that: EQ.Equal): boolean {

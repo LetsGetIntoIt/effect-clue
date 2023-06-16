@@ -15,7 +15,7 @@ import * as B from '@effect/data/Boolean';
 import * as MON from '@effect/data/typeclass/Monoid';
 import { constant, flow, pipe } from '@effect/data/Function';
 
-import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol, HashMap_every, Equals_getRefinement, Refinement_or, Struct_get, HashSet_of } from '../utils/ShouldBeBuiltin';
+import { Refinement_and, Refinement_struct, HashMap_every, Equals_getRefinement, Refinement_or, Struct_get, HashSet_of } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';
 import * as Player from './Player';
@@ -33,7 +33,7 @@ import * as ConclusionMap from './ConclusionMap';
  * Conclusion - the conclusion we have about that topic
  */
 export type ConclusionMapSet =
-    EQ.Equal & Show & {
+    EQ.Equal & {
         numCards: ConclusionMap.ConclusionMap<Player.Player, number>;
         ownership: ConclusionMap.ConclusionMap<Pair.Pair<CardOwner.CardOwner, Card.Card>, boolean>;
         refuteCards: ConclusionMap.ConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>;
@@ -64,7 +64,6 @@ export const isConclusionMapSet: P.Refinement<unknown, ConclusionMapSet> =
         }),
 
         Refinement_and(EQ.isEqual),
-        Refinement_and(Show_isShow),
     );
 
 export const Equivalence: EQV.Equivalence<ConclusionMapSet> =
@@ -109,8 +108,8 @@ const create = (conclusions : {
     E.right({
         ...conclusions,
 
-        [Show_symbol](): string {
-           return `We have deduced numCards ${Show_show(this.numCards)} and ownership ${Show_show(this.ownership)} and refutations: ${Show_show(this.refuteCards)}`;
+        toString() {
+           return `We have deduced numCards ${this.numCards} and ownership ${this.ownership} and refutations: ${this.refuteCards}`;
         },
 
         [EQ.symbol](that: EQ.Equal): boolean {

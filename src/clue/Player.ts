@@ -5,14 +5,14 @@ import * as ST from "@effect/data/Struct";
 import * as S from '@effect/data/String';
 import * as P from '@effect/data/Predicate';
 import * as EQV from '@effect/data/typeclass/Equivalence';
-import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Refinement_and, Refinement_struct } from '../utils/ShouldBeBuiltin';
 import { pipe } from '@effect/data/Function';
 
 type RawPlayer = {
     readonly label: string;
 }
 
-export type Player = EQ.Equal & Show & RawPlayer;
+export type Player = EQ.Equal & RawPlayer;
 
 export const isPlayer: P.Refinement<unknown, Player> =
     pipe(
@@ -21,7 +21,6 @@ export const isPlayer: P.Refinement<unknown, Player> =
         }),
 
         Refinement_and(EQ.isEqual),
-        Refinement_and(Show_isShow),
     );
 
 export const Equivalence: EQV.Equivalence<Player> = ST.getEquivalence({
@@ -34,8 +33,8 @@ export const create = (
     E.right({
         ...player,
 
-        [Show_symbol](): string {
-            return `${Show_show(this.label)}`;
+        toString() {
+            return `${this.label}`;
         },
 
         [EQ.symbol](that: EQ.Equal): boolean {

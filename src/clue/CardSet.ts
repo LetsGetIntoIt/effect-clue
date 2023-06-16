@@ -9,13 +9,13 @@ import * as H from '@effect/data/Hash';
 import { pipe } from '@effect/data/Function';
 
 import * as Card from './Card';
-import { Endomorphism_getMonoid, HashSet_every, Refinement_and, Refinement_struct, Show, Show_isShow, Show_showHashSet, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Endomorphism_getMonoid, HashSet_every, Refinement_and, Refinement_struct } from '../utils/ShouldBeBuiltin';
 
 type RawCardSet = {
     readonly cards: HS.HashSet<Card.Card>;
 }
 
-export type CardSet = EQ.Equal & Show & RawCardSet;
+export type CardSet = EQ.Equal & RawCardSet;
 
 export const isCardSet: P.Refinement<unknown, CardSet> =
     pipe(
@@ -27,7 +27,6 @@ export const isCardSet: P.Refinement<unknown, CardSet> =
         }),
 
         Refinement_and(EQ.isEqual),
-        Refinement_and(Show_isShow),
     );
 
 export const Equivalence: EQV.Equivalence<CardSet> = ST.getEquivalence({
@@ -38,8 +37,8 @@ export const empty: CardSet =
     Object.freeze({
         cards: HS.empty(),
 
-        [Show_symbol](): string {
-            return Show_showHashSet(this.cards);
+        toString() {
+            return `${String(this.cards)}`;
         },
 
         [EQ.symbol](that: EQ.Equal): boolean {

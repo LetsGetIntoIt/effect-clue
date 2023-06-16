@@ -9,7 +9,7 @@ import * as E from '@effect/data/Either';
 import * as O from '@effect/data/Option';
 import { pipe } from '@effect/data/Function';
 
-import { HashMap_every, Refinement_and, Refinement_struct, Show, Show_isShow, Show_showHashMap, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { HashMap_every, Refinement_and, Refinement_struct } from '../utils/ShouldBeBuiltin';
 
 import * as Conclusion from './Conclusion';
 
@@ -19,7 +19,7 @@ import * as Conclusion from './Conclusion';
  * Conclusion - the conclusion we have about that topic
  */
 export type ConclusionMap<Q, A> =
-    EQ.Equal & Show & {
+    EQ.Equal & {
         conclusions: HM.HashMap<Q, Conclusion.Conclusion<A>>;
     };
 
@@ -35,7 +35,6 @@ export const getRefinement = <Q, A>(refQ: P.Refinement<unknown, Q>, refA: P.Refi
         }),
 
         Refinement_and(EQ.isEqual),
-        Refinement_and(Show_isShow),
     );
 
 export const isConclusionMap: P.Refinement<unknown, ConclusionMap<unknown, unknown>> =
@@ -52,8 +51,8 @@ const create = <Q, A>(
     ({
         conclusions,
 
-        [Show_symbol](): string {
-           return Show_showHashMap(this.conclusions);
+        toString() {
+           return `${String(this.conclusions)}`;
         },
 
         [EQ.symbol](that: EQ.Equal): boolean {

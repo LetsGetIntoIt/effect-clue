@@ -5,7 +5,7 @@ import * as ST from '@effect/data/Struct';
 import * as H from '@effect/data/Hash';
 import { pipe } from '@effect/data/Function';
 
-import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Refinement_and, Refinement_struct } from '../utils/ShouldBeBuiltin';
 
 import * as CardSet from "./CardSet";
 import * as CardOwnerSet from "./CardOwnerSet";
@@ -15,7 +15,7 @@ type RawGameSetup = {
     owners: CardOwnerSet.CardOwnerSet;
 };
 
-export type GameSetup = EQ.Equal & Show & RawGameSetup;
+export type GameSetup = EQ.Equal & RawGameSetup;
 
 export const isGameSetup: P.Refinement<unknown, GameSetup> =
     pipe(
@@ -25,7 +25,6 @@ export const isGameSetup: P.Refinement<unknown, GameSetup> =
         }),
 
         Refinement_and(EQ.isEqual),
-        Refinement_and(Show_isShow),
     );
 
 export const Equivalence: EQV.Equivalence<GameSetup> = ST.getEquivalence({
@@ -37,8 +36,8 @@ export const create = (gameSetup: RawGameSetup): GameSetup =>
     ({
         ...gameSetup,
 
-        [Show_symbol](): string {
-            return `Game setup with cards ${Show_show(this.cards)} and players ${Show_show(this.owners)}`;
+        toString() {
+            return `Game setup with cards ${this.cards} and players ${this.owners}`;
         },
 
         [EQ.symbol](that: EQ.Equal): boolean {

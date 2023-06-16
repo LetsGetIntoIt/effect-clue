@@ -7,7 +7,7 @@ import * as CTX from '@effect/data/Context';
 import { pipe } from '@effect/data/Function';
 import * as HS from '@effect/data/HashSet';
 
-import { Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Refinement_and, Refinement_struct } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';
 import * as GameSetup from "./GameSetup";
@@ -19,7 +19,7 @@ type RawGame = {
     guessSet: GuessSet.GuessSet;
 };
 
-export type Game = EQ.Equal & Show & RawGame;
+export type Game = EQ.Equal & RawGame;
 
 export const Tag = CTX.Tag<Game>();
 
@@ -31,7 +31,6 @@ export const isGame: P.Refinement<unknown, Game> =
         }),
 
         Refinement_and(EQ.isEqual),
-        Refinement_and(Show_isShow),
     );
 
 export const Equivalence: EQV.Equivalence<Game> = ST.getEquivalence({
@@ -43,8 +42,8 @@ export const create = (game: RawGame): Game =>
     ({
         ...game,
 
-        [Show_symbol](): string {
-            return `Game with setup ${Show_show(this.gameSetup)} and guesses ${Show_show(this.guessSet)}`;
+        toString() {
+            return `Game with setup ${this.gameSetup} and guesses ${this.guessSet}`;
         },
 
         [EQ.symbol](that: EQ.Equal): boolean {

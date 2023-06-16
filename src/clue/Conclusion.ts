@@ -10,14 +10,14 @@ import * as B from '@effect/data/Boolean';
 import * as M from '@effect/match';
 import { constant, pipe } from '@effect/data/Function';
 
-import { Equals_getRefinement, Equivalence_constTrue, HashSet_every, Refinement_struct, Refinement_and, Refinement_or, Show, Show_isShow, Show_symbol, Show_show, Show_showHashSet } from '../utils/ShouldBeBuiltin';
+import { Equals_getRefinement, Equivalence_constTrue, HashSet_every, Refinement_struct, Refinement_and, Refinement_or } from '../utils/ShouldBeBuiltin';
 
 type RawReason = {
     level: 'observed' | 'inferred';
     explanation: string;
 }
 
-export type Reason = EQ.Equal & Show & RawReason;
+export type Reason = EQ.Equal & RawReason;
 
 const ReasonEquivalence: EQV.Equivalence<Reason> = ST.getEquivalence({
     level: S.Equivalence,
@@ -36,7 +36,6 @@ const isReason: P.Refinement<unknown, Reason> =
         }),
 
         Refinement_and(EQ.isEqual),
-        Refinement_and(Show_isShow),
     );
 
 export const createReason = (reason: RawReason): Reason =>
@@ -44,10 +43,10 @@ export const createReason = (reason: RawReason): Reason =>
             ...reason,
 
             
-            [Show_symbol](): string {
-                return `${Show_show(this.level)}: ${Show_show(this.explanation)}`;
+            toString() {
+                return `${String(this.level)}: ${String(this.explanation)}`;
             },
-    
+
             [EQ.symbol](that: EQ.Equal): boolean {
                 return isReason(that) && ReasonEquivalence(this, that);
             },
@@ -80,7 +79,6 @@ export const getRefinement = <A>(refA: P.Refinement<unknown, A>): P.Refinement<u
         }),
 
         Refinement_and(EQ.isEqual),
-        Refinement_and(Show_isShow),
     );
 
 export const isConclusion: P.Refinement<unknown, Conclusion<unknown>> =
@@ -108,8 +106,8 @@ export const create = <A>(
         answer,
         reasons,
 
-        [Show_symbol](): string {
-           return `${Show_show(answer)} because ${Show_showHashSet(reasons)}`;
+        toString() {
+           return `${this.answer} because ${this.reasons}`;
         },
 
         [EQ.symbol](that: EQ.Equal): boolean {
@@ -143,7 +141,7 @@ export const combine = <A>(
                 M.when('overwrite',  () => E.right(newConclusion)),
 
                 // If the strategy is to fail, do so
-                M.when('fail', () => E.left(`New conclusion ${Show_show(newConclusion)} conflicts with existing conclusion ${Show_show(oldConclusion)}`)),
+                M.when('fail', () => E.left(`New conclusion ${newConclusion} conflicts with existing conclusion ${oldConclusion}`)),
 
                 M.exhaustive,
             )),

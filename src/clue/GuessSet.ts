@@ -7,7 +7,7 @@ import * as P from '@effect/data/Predicate';
 import * as H from '@effect/data/Hash';
 import { pipe } from '@effect/data/Function';
 
-import { HashSet_every, Refinement_and, Refinement_struct, Show, Show_isShow, Show_showHashSet, Show_symbol } from "../utils/ShouldBeBuiltin";
+import { HashSet_every, Refinement_and, Refinement_struct } from "../utils/ShouldBeBuiltin";
 
 import * as Guess from './Guess';
 
@@ -15,7 +15,7 @@ type RawGuessSet = {
     readonly guesses: HS.HashSet<Guess.Guess>;
 }
 
-export type GuessSet = EQ.Equal & Show & RawGuessSet;
+export type GuessSet = EQ.Equal & RawGuessSet;
 
 export const isGuessSet: P.Refinement<unknown, GuessSet> =
     pipe(
@@ -27,7 +27,6 @@ export const isGuessSet: P.Refinement<unknown, GuessSet> =
         }),
 
         Refinement_and(EQ.isEqual),
-        Refinement_and(Show_isShow),
     );
 
 export const Equivalence: EQV.Equivalence<GuessSet> = ST.getEquivalence({
@@ -38,8 +37,8 @@ export const empty: GuessSet =
     Object.freeze({
         guesses: HS.empty(),
 
-        [Show_symbol](): string {
-            return Show_showHashSet(this.guesses);
+        toString() {
+            return `${String(this.guesses)}`;
         },
 
         [EQ.symbol](that: EQ.Equal): boolean {

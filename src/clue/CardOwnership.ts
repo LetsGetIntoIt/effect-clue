@@ -11,7 +11,7 @@ import * as M from "@effect/match";
 import * as B from '@effect/data/Boolean';
 import { flow, pipe } from '@effect/data/Function';
 
-import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_symbol, Show_show, HashSet_every, Refinement_or, Equals_getRefinement } from '../utils/ShouldBeBuiltin';
+import { Refinement_struct, Refinement_and, HashSet_every, Refinement_or, Equals_getRefinement } from '../utils/ShouldBeBuiltin';
 
 import * as CardOwner from "./CardOwner";
 import * as Pair from './Pair';
@@ -27,8 +27,8 @@ type RawCardOnwershipUnowned = {
     nonOwners: HS.HashSet<CardOwner.CardOwner>;
 };
 
-export type CardOwnershipOwned = EQ.Equal & Show & RawCardOnwershipOwned;
-export type CardOwnershipUnowned = EQ.Equal & Show & RawCardOnwershipUnowned;
+export type CardOwnershipOwned = EQ.Equal & RawCardOnwershipOwned;
+export type CardOwnershipUnowned = EQ.Equal & RawCardOnwershipUnowned;
 export type CardOwnership = CardOwnershipOwned | CardOwnershipUnowned;
 
 export const isCardOwnershipOwned: P.Refinement<unknown, CardOwnershipOwned> =
@@ -40,7 +40,6 @@ export const isCardOwnershipOwned: P.Refinement<unknown, CardOwnershipOwned> =
         }),
 
         Refinement_and(EQ.isEqual),
-        Refinement_and(Show_isShow),
     );
 
 export const isCardOwnershipUnowned: P.Refinement<unknown, CardOwnership> =
@@ -52,7 +51,6 @@ export const isCardOwnershipUnowned: P.Refinement<unknown, CardOwnership> =
         }),
 
         Refinement_and(EQ.isEqual),
-        Refinement_and(Show_isShow),
     );
 
 export const isCardOwnership: P.Refinement<unknown, CardOwnership> =
@@ -73,21 +71,19 @@ const createInternal = (
     Object.freeze({
         ...cardOwnership,
 
-        [Show_symbol](): string {
-            return pipe(
-                M.value(this),
+        toString: pipe(
+            M.type<CardOwnership>(),
 
-                M.when({  _cardOwnershipType: 'owned' }, (self) =>
-                    `Owned by '${Show_show(self.owner)}' and not by ${Show_show(this.nonOwners)})`
-                ),
+            M.when({  _cardOwnershipType: 'owned' }, (self) =>
+                `Owned by '${self.owner}' and not by ${self.nonOwners})`
+            ),
 
-                M.when({  _cardOwnershipType: 'unowned' }, (self) =>
-                    `Not owned by ${Show_show(self.nonOwners)})`
-                ),
+            M.when({  _cardOwnershipType: 'unowned' }, (self) =>
+                `Not owned by ${self.nonOwners})`
+            ),
 
-                M.exhaustive,
-            );
-        },
+            M.exhaustive,
+        ),
 
         [EQ.symbol](that: EQ.Equal): boolean {
             return isCardOwnership(that) && Equivalence(this, that);

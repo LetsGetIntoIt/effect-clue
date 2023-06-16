@@ -12,7 +12,6 @@ import * as ConclusionMapSet from './clue/ConclusionMapSet';
 // - Conclusion.Reasons should be ordered from simplest to most complex
 // - DeductionRules should be ordered from simplest to most complex
 // - CardType should become its own object with a display label (maybe eventually, users can set the card types in a separate step)
-// - Typeclass usage: stop passing around Equivalence, Refinement and Show instances everywhere
 // - use generator syntax wherever possible
 // - convert any logical validations into typings. Make bad states unrepresentable
 // - use @effect/schema to validate data into the Api

@@ -5,14 +5,14 @@ import * as ST from "@effect/data/Struct";
 import * as S from '@effect/data/String';
 import * as P from '@effect/data/Predicate';
 import * as EQV from '@effect/data/typeclass/Equivalence';
-import { Equals_getRefinement, Refinement_and, Refinement_struct, Show, Show_isShow, Show_show, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Equals_getRefinement, Refinement_and, Refinement_struct } from '../utils/ShouldBeBuiltin';
 import { pipe } from '@effect/data/Function';
 
 type RawCaseFile = {
     readonly label: string;
 }
 
-export type CaseFile = EQ.Equal & Show & RawCaseFile & {
+export type CaseFile = EQ.Equal & RawCaseFile & {
     readonly _clueTag: 'CaseFile';
 };
 
@@ -24,7 +24,6 @@ export const isCaseFile: P.Refinement<unknown, CaseFile> =
         }),
 
         Refinement_and(EQ.isEqual),
-        Refinement_and(Show_isShow),
     );
 
 export const Equivalence: EQV.Equivalence<CaseFile> = ST.getEquivalence({
@@ -39,8 +38,8 @@ export const create = (
         _clueTag: 'CaseFile',
         ...casefile,
 
-        [Show_symbol](): string {
-            return `${Show_show(this.label)}`;
+        toString() {
+            return `${this.label}`;
         },
 
         [EQ.symbol](that: EQ.Equal): boolean {

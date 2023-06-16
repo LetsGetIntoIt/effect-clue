@@ -6,9 +6,9 @@ import * as H from '@effect/data/Hash';
 import * as ST from '@effect/data/Struct';
 import * as EQV from '@effect/data/typeclass/Equivalence';
 import * as O from '@effect/data/Option';
-import { constant, pipe } from '@effect/data/Function';
+import { apply, constant, pipe } from '@effect/data/Function';
 
-import { Refinement_struct, Refinement_and, Show, Show_isShow, Show_show, Show_symbol } from '../utils/ShouldBeBuiltin';
+import { Refinement_struct, Refinement_and } from '../utils/ShouldBeBuiltin';
 
 import * as Player from "./Player";
 import * as CaseFile from './CaseFile';
@@ -23,7 +23,7 @@ type RawCardOwner =
         caseFile: CaseFile.CaseFile,
     };
 
-export type CardOwner = EQ.Equal & Show & RawCardOwner;
+export type CardOwner = EQ.Equal & RawCardOwner;
 
 export const isCardOwner: P.Refinement<unknown, CardOwner> =
     pipe(
@@ -34,7 +34,6 @@ export const isCardOwner: P.Refinement<unknown, CardOwner> =
         }),
 
         Refinement_and(EQ.isEqual),
-        Refinement_and(Show_isShow),
     );
 
 export const Equivalence: EQV.Equivalence<CardOwner> = ST.getEquivalence({
@@ -53,12 +52,14 @@ const create = (cardOwner: RawCardOwner): CardOwner =>
     ({
         ...cardOwner,
 
-        [Show_symbol]: constant(pipe(
-            M.value(cardOwner),
-            M.when({ _cardOwnerTag: 'player' }, ({ player }) => Show_show(player)),
+        toString: pipe(
+            M.type<RawCardOwner>(),
+            M.when({ _cardOwnerTag: 'player' }, ({ player }) => `${player}`),
             M.when({ _cardOwnerTag: 'caseFile' }, () => `CaseFile`),
             M.exhaustive,
-        )),
+
+            apply(cardOwner),
+        ),
 
         [EQ.symbol](that: EQ.Equal): boolean {
             return isCardOwner(that) && Equivalence(this, that);
