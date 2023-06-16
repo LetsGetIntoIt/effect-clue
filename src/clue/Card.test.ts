@@ -1,37 +1,58 @@
-import * as T from '@effect/io/Effect';
+import * as E from '@effect/data/Either';
 
 import * as Card from "./Card";
-import { Effect_expectSucceed, Effect_test } from '../utils/EffectTest';
+import { pipe } from '@effect/data/Function';
 
 describe('Card', () => {
-    describe('#create', () => {
-        it('succeeds and returns the right thing', () => {
-            Effect_test(T.gen(function* ($) {
-                const card = yield* $(Effect_expectSucceed(
-                    Card.create({
-                        cardType: 'type',
-                        label: 'label',
-                    }),
-                ));
-
-                expect(card).toEqual({
-                    cardType: 'type',
-                    label: 'label',
-                });
-            }));
+    describe('#Equal', () => {
+        test('unvalidated cards are equal', () => {
+            expect(
+                Card.Card({
+                    cardType: 'room',
+                    label: 'dining room',
+                }),
+            ).toEqual(
+                Card.Card({
+                    cardType: 'room',
+                    label: 'dining room',
+                }),
+            );
         });
     });
 
-    test('#toString', () => {
-        Effect_test(T.gen(function* ($) {
-            const card = yield* $(Effect_expectSucceed(
-                Card.create({
-                    cardType: 'type',
-                    label: 'label',
-                }),
-            ));
+    describe('ValidCard', () => {
+        describe('#constructor', () => {
+            test('on a valid card', () => {
+                expect(pipe(
+                    Card.Card({
+                        cardType: 'room',
+                        label: 'dining room',
+                    }),
+    
+                    Card.ValidatedCard,
+                )).toEqual(
+                    E.right(Card.Card({
+                        cardType: 'room',
+                        label: 'dining room',
+                    })),
+                );
+            });
 
-            expect(`${card}`).toEqual('');
-        }));
+            test('on a completely invalid card', () => {
+                expect(pipe(
+                    Card.Card({
+                        cardType: '',
+                        label: '',
+                    }),
+    
+                    Card.ValidatedCard,
+                )).toEqual(
+                    E.left([
+                        { message: 'cardType should be a non-empty string', },
+                        { message: 'label should be a non-empty string', },
+                    ]),
+                );
+            });
+        });
     });
 });

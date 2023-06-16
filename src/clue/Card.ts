@@ -1,52 +1,30 @@
-import * as E from '@effect/data/Either';
-import * as H from '@effect/data/Hash';
-import * as EQ from "@effect/data/Equal";
-import * as ST from "@effect/data/Struct";
+import * as D from '@effect/data/Data';
+import * as B from '@effect/data/Brand';
+import * as O from '@effect/data/Option';
 import * as S from '@effect/data/String';
-import * as EQV from '@effect/data/typeclass/Equivalence';
-import { Refinement_struct, Refinement_and } from '../utils/ShouldBeBuiltin';
-import * as P from '@effect/data/Predicate';
-import { pipe } from '@effect/data/Function';
+import { constant, flow } from '@effect/data/Function';
+import { Brand_refined, Option_fromRefinement, Struct_get } from '../utils/ShouldBeBuiltin';
 
-type RawCard = {
+export interface Card extends D.Case {
+    _tag: "Card";
     readonly cardType: string;
     readonly label: string;
 };
 
-export type Card = EQ.Equal & RawCard;
+export const Card = D.tagged<Card>("Card");
 
-export const isCard: P.Refinement<unknown, Card> =
-    pipe(
-        Refinement_struct({
-            cardType: P.isString,
-            label: P.isString,
-        }),
+export type ValidatedCard = Card & B.Brand<'ValidatedCard'>;
 
-        Refinement_and(EQ.isEqual),    );
+export const ValidatedCard = Brand_refined<ValidatedCard>([
+    flow(
+        Struct_get('cardType'),
+        Option_fromRefinement(S.isEmpty),
+        O.map(constant(B.error(`cardType should be a non-empty string`))),
+    ),
 
-export const Equivalence: EQV.Equivalence<Card> = ST.getEquivalence({
-    cardType: S.Equivalence,
-    label: S.Equivalence,
-});
-
-export const create = (
-    card: RawCard,
-): E.Either<string, Card> =>
-    E.right({
-        ...card,
-
-        toString() {
-            return `Card '${this.label}' (${this.cardType})`
-        },
-
-        [EQ.symbol](that: EQ.Equal): boolean {
-            return isCard(that)
-                && Equivalence(this, that);
-        },
-
-        [H.symbol](): number {
-            return H.structure({
-                ...this
-            });
-        },
-    });
+    flow(
+        Struct_get('label'),
+        Option_fromRefinement(S.isEmpty),
+        O.map(constant(B.error(`label should be a non-empty string`))),
+    ),
+]);

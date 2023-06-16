@@ -11,8 +11,8 @@ import * as P from '@effect/data/Predicate';
 import * as TU from '@effect/data/Tuple';
 import * as B from '@effect/data/Boolean';
 import * as T from '@effect/io/Effect';
-import * as ST from '@effect/data/Struct';
-import { pipe, identity, flow, constant, constTrue } from '@effect/data/Function'
+import * as BR from '@effect/data/Brand';
+import { pipe, identity, flow, constant, constTrue, apply } from '@effect/data/Function'
 
 export const Equivalence_contramap = <A, B>(
     contramap: (b: B) => A,
@@ -37,6 +37,24 @@ export const Either_fromRefinement = <A, B extends A>(refinement: P.Refinement<A
             () => E.right(a as B),
         ),
     );
+
+export const Either_fromPredicate: <A>(predicate: P.Predicate<A>) => (a: A) => E.Either<A, A> =
+    Either_fromRefinement as any;
+
+export const Option_fromRefinement = <A, B extends A>(refinement: P.Refinement<A, B>) => (a: A): O.Option<B> =>
+    pipe(
+        refinement(a),
+
+        B.match(
+            // The value doesn't pass the refinement
+            () => O.none(),
+
+            () => O.some(a as B),
+        ),
+    );
+
+export const Option_fromPredicate: <A>(predicate: P.Predicate<A>) => (a: A) => O.Option<A> =
+    Option_fromRefinement as any;
 
 export const String_surroundWith = (pre: string, post = pre) => (str: string): string =>
     `${pre}${str}${post}`;
@@ -269,3 +287,24 @@ export const Struct_get = <S, Key extends keyof S>(
     s: S,
 ): S[Key] =>
     s[key];
+
+export const Either_swap: <E, A>(either: E.Either<E, A>) => E.Either<A, E> =
+    E.match(E.right, E.left);
+
+export const Brand_refined = <Branded extends BR.Brand<string | symbol>>(
+    refinements: readonly ((unbranded: BR.Brand.Unbranded<Branded>) => O.Option<BR.Brand.BrandErrors>)[],
+) => (
+    unbranded: BR.Brand.Unbranded<Branded>
+): E.Either<BR.Brand.BrandErrors, Branded> =>
+    pipe(
+        refinements,
+        ROA.map(apply(unbranded)),
+
+        ROA.sequence(O.Applicative),
+
+        O.map(errors => BR.errors(...errors)),
+
+        E.fromOption(() => unbranded),
+        Either_swap,
+        E.map(BR.nominal<Branded>()),
+    );
