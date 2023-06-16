@@ -123,7 +123,7 @@ export const Refinement_or:
     P.Refinement<A, B | C> =
         P.or as any;
 
-export declare const Show_symbol: unique symbol;
+export const Show_symbol: unique symbol = Symbol.for('Show');
 
 export interface Show {
     [Show_symbol](): string;

@@ -13,7 +13,7 @@ type RawCard = {
     readonly label: string;
 };
 
-export type Card = EQ.Equal & Show & RawCard;
+export type Card = EQ.Equal & RawCard;
 
 export const isCard: P.Refinement<unknown, Card> =
     pipe(
@@ -37,8 +37,8 @@ export const create = (
     E.right({
         ...card,
 
-        [Show_symbol](): string {
-           return `Card '${Show_show(this.label)}' (${Show_show(this.cardType)})`
+        toString() {
+            return `Card '${Show_show(this.label)}' (${Show_show(this.cardType)})`
         },
 
         [EQ.symbol](that: EQ.Equal): boolean {
