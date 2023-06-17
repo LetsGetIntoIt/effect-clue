@@ -15,7 +15,7 @@ describe('App', () => {
                             ['room', 'doghouse'],
                         ],
                     }],
-        
+
                     ownersSetup: [{
                         players: [
                             ['kapil'],

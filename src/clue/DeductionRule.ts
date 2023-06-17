@@ -21,16 +21,16 @@ export type DeductionRule = T.Effect<
     | GameSetup.GameSetup
 
     // Accepts the set of gueses that have been made
-    | GuessSet.GuessSet
+    | GuessSet.ValidatedGuessSet
 
     // Accepts a set of "known" conclusions
-    | ConclusionMapSet.ConclusionMapSet
+    | ConclusionMapSet.ValidatedConclusionMapSet
 ,
     // Returns an error if we encounter a logical contradiction
     B.Brand.BrandErrors
 ,
     // Returns the newly-deduced conclusion (not included the already known ones)
-    ConclusionMapSet.ConclusionMapSet
+    ConclusionMapSet.ValidatedConclusionMapSet
 >;
 
 export const constEmpty: DeductionRule =
@@ -38,11 +38,11 @@ export const constEmpty: DeductionRule =
 
 export const SemigroupUnion: SG.Semigroup<DeductionRule> = 
     Effect_getSemigroupCombine<
-        ConclusionMapSet.ConclusionMapSet,
+        ConclusionMapSet.ValidatedConclusionMapSet,
         B.Brand.BrandErrors,
-        GameSetup.GameSetup | GuessSet.GuessSet | ConclusionMapSet.ConclusionMapSet
+        GameSetup.GameSetup | GuessSet.ValidatedGuessSet | ConclusionMapSet.ValidatedConclusionMapSet
     >(
-        (first: ConclusionMapSet.ConclusionMapSet, second) => pipe(
+        (first, second) => pipe(
             first,
             ConclusionMapSet.modifyCombine(second),
         ),
@@ -86,7 +86,8 @@ export const cardIsHeldAtMostOnce: DeductionRule = T.gen(function* ($) {
         // Now put together all the modifications we need to apply
         HS.map(([card, owner]) =>
             ConclusionMapSet.modifyAddOwnership(
-                D.array([owner, card]),
+                owner,
+                card,
 
                 false,
 
@@ -137,7 +138,8 @@ export const cardIsHeldAtLeastOnce: DeductionRule = T.gen(function* ($) {
         // Now put together all the modifications we need to apply
         HS.map(([card, owner]) =>
             ConclusionMapSet.modifyAddOwnership(
-                D.array([owner, card]),
+                owner,
+                card,
 
                 true,
                 

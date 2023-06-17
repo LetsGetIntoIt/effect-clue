@@ -3,16 +3,18 @@ import * as HS from '@effect/data/HashSet';
 import * as HM from '@effect/data/HashMap';
 import * as O from '@effect/data/Option';
 import * as ROA from '@effect/data/ReadonlyArray';
-import * as SG from '@effect/data/typeclass/Semigroup'
-import * as MN from '@effect/data/typeclass/Monoid'
-import * as EQ from '@effect/data/Equal';
+import * as SG from '@effect/data/typeclass/Semigroup';
+import * as MN from '@effect/data/typeclass/Monoid';
 import * as EQV from '@effect/data/typeclass/Equivalence';
 import * as P from '@effect/data/Predicate';
 import * as TU from '@effect/data/Tuple';
 import * as BOOL from '@effect/data/Boolean';
 import * as T from '@effect/io/Effect';
 import * as B from '@effect/data/Brand';
-import { pipe, identity, flow, constTrue, apply } from '@effect/data/Function'
+import { pipe, identity, flow, constTrue, apply } from '@effect/data/Function';
+
+export const Equivalence_constTrue: EQV.Equivalence<unknown> =
+    constTrue;
 
 export const Option_fromRefinement = <A, B extends A>(refinement: P.Refinement<A, B>) => (a: A): O.Option<B> =>
     pipe(
@@ -91,6 +93,7 @@ export const Brand_refined = <Branded extends B.Brand<string | symbol>>(
 
         ROA.sequence(O.Applicative),
 
+        O.filter(ROA.isNonEmptyArray),
         O.map(errors => B.errors(...errors)),
 
         E.fromOption(() => unbranded),
