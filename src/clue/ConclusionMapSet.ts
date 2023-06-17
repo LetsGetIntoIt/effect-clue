@@ -149,14 +149,14 @@ export const modifyAddNumCards =
     );
 
 export const modifyAddOwnership =
-        (ownership: D.Data<[CardOwner.CardOwner, Card.Card]>, isOwned: boolean, reason: Conclusion.Reason):
+        (owner: CardOwner.CardOwner, card: Card.Card, isOwned: boolean, reason: Conclusion.Reason):
         Modification =>
     flow(
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
         ST.evolve({
             numCards: (_) => E.right(_),
-            ownership: ConclusionMap.setMergeOrFail(ownership, isOwned, HashSet_of(reason)),
+            ownership: ConclusionMap.setMergeOrFail(D.array([owner, card] as const), isOwned, HashSet_of(reason)),
             refuteCards: (_) => E.right(_),
         }),
         E.struct,

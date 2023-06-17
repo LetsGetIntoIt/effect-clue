@@ -39,75 +39,49 @@ import * as Clue from './clue';
 // - Allow for multiple case files
 // - Allow each casefile to have a KNOWN 0-many of a card type (ex. a killer and victim, two weapons, no weapons, etc.)
 
-interface AppState {
-
+interface AppInput {
+    cardSetup: Parameters<typeof Clue.setupCards>;
+    ownersSetup: Parameters<typeof Clue.setupCardOwners>;
+    knownConclusionsSetup: Parameters<typeof Clue.setupKnownConclusions>;
+    guessesSetup: Parameters<typeof Clue.setupGuesses>;
+    deductionRulesSetup: Parameters<typeof Clue.setupDeductionRules>;
 }
 
-export const app: T.Effect<never, B.Brand.BrandErrors, AppState> = T.gen(function* ($) {
-    const cards = yield* $(Clue.setupCards({
-        useStandard: 'North America',
+interface AppOutput {
+    
+}
 
-        extraCards: [
-            ['room', 'doghouse'],
-        ],
-    }));
+export const run = ({
+    cardSetup: cardSetupArgs,
+    ownersSetup: ownersSetupArgs,
+    knownConclusionsSetup: knownConclusionsSetupArgs,
+    guessesSetup: guessesSetupArgs,
+    deductionRulesSetup: deductionRulesSetupArgs,
+}: AppInput): T.Effect<never, B.Brand.BrandErrors, AppOutput> => T.gen(function* ($) {
+    const cards = yield* $(Clue.setupCards(...cardSetupArgs));
+    const owners = yield* $(Clue.setupCardOwners(...ownersSetupArgs));
 
-    const owners = yield* $(Clue.setupCardOwners({
-        players: [
-            ['kapil'],
-            ['kate'],
-        ],
+    const game = yield* $(Clue.setupGame({ cards, owners }));
 
-        caseFiles: [
-            ['murder'],
-        ],
-    }));
-
-    const game = yield* $(Clue.setupGame({
-        cards,
-        owners,
-    }));
-
-    // This will live in a component, returning the validated result or nothing
     const knownConclusions = yield* $(
-        Clue.setupKnownConclusions({
-            knownNumCards: [
-                [['kapil'], 5],
-                [['kate'], 10],
-            ],
-
-            knownCardOwners: [
-                [['kapil'], ['room', 'doghouse']],
-            ],
-        }),
-
+        Clue.setupKnownConclusions(...knownConclusionsSetupArgs),
         Clue.provideGame(game),
     );
 
-    // This will live in one component, returning the validated result or nothing
-    const guesses = yield* $(Clue.setupGuesses({
-        guesses: [
-            {
-                cards: [
-                    ['person', 'mustard'],
-                    ['weapon', 'knife'],
-                    ['room', 'doghouse'],
-                ],
-                guesser: ['kapil'],
-                nonRefuters: [
-                    // None
-                ],
-                refutation: [
-                    ['kate'],
-                    ['weapon', 'knife'],
-                ],
-            },
-        ],
-    }));
+    const guesses = yield* $(
+        Clue.setupGuesses(...guessesSetupArgs),
+        Clue.provideGame(game),
+    );
 
-    const deductionRule = yield* $(Clue.setupDeductionRules('all'));
+    const deductionRule = yield* $(Clue.setupDeductionRules(...deductionRulesSetupArgs));
 
-    const deducedConclusions = yield* $(Clue.deduceConclusions(knownConclusions));
+    const deducedConclusions = yield* $(
+        knownConclusions,
+        Clue.deduceConclusions(deductionRule),
 
-    console.log(deducedConclusions);
+        Clue.provideGame(game),
+        Clue.provideGuesses(guesses),
+    );
+
+    return {};
 });

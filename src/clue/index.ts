@@ -5,6 +5,7 @@ export {
     provideGame,
     setupKnownConclusions,
     setupGuesses,
+    provideGuesses,
     setupDeductionRules,
     deduceConclusions,
 } from './Api';

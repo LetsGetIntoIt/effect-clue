@@ -2,8 +2,8 @@ import * as B from '@effect/data/Brand';
 import * as E from '@effect/data/Either';
 import * as ROA from '@effect/data/ReadonlyArray';
 import * as T from '@effect/io/Effect';
-import * as Match from "@effect/match"
-import { flow, identity, pipe, tupled } from '@effect/data/Function';
+import * as Match from "@effect/match";
+import { flow, pipe } from '@effect/data/Function';
 
 import { Endomorphism_getMonoid } from '../utils/ShouldBeBuiltin';
 
@@ -212,8 +212,9 @@ export const setupKnownConclusions = ({
 
             ROA.appendAll(ROA.map(knownCardOwners, ([player, card]) =>
                 ConclusionMapSet.modifyAddOwnership(
-                    CardOwner.CardOwnerPlayer(player),
+                    CardOwner.CardOwnerPlayer({ player }),
                     card,
+                    true,
                     Conclusion.Reason({
                         level: 'observed',
                         explanation: 'Manually entered',
@@ -270,6 +271,9 @@ export const setupGuesses = ({
         );
     });
 
+export const provideGuesses = (guesses: GuessSet.ValidatedGuessSet) =>
+    T.provideService(GuessSet.Tag, guesses);
+
 const ALL_DEDUCTION_RULES = [
     'cardIsHeldAtMostOnce',
     'cardIsHeldAtLeastOnce',
@@ -323,9 +327,15 @@ export const setupDeductionRules = (
     );
 
 export const deduceConclusions = (
-    conclusions: ConclusionMapSet.ConclusionMapSet
-): E.Either<string[], ConclusionMapSet.ConclusionMapSet> =>
+    deductionRule: DeductionRule.DeductionRule,
+) => (
+    conclusions: ConclusionMapSet.ValidatedConclusionMapSet,
+): T.Effect<
+    GameSetup.GameSetup | GuessSet.ValidatedGuessSet,
+    B.Brand.BrandErrors,
+    ConclusionMapSet.ValidatedConclusionMapSet
+> =>
     // TODO run the deduction rule, and merge its findings
     //      keep re-running the deduction rule until it finds nothing new
     //      or exceeds some retry limit, at which point throw an Defect
-    E.left(['Not implemented yet']);
+    T.fail(B.error('Not implemented yet'));
