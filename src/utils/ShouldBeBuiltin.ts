@@ -13,6 +13,13 @@ import * as T from '@effect/io/Effect';
 import * as B from '@effect/data/Brand';
 import { pipe, identity, flow, constTrue, apply } from '@effect/data/Function';
 
+export const Function_getSemigroup =
+    <B>(SGB: SG.Semigroup<B>) =>
+    <A = never>(): SG.Semigroup<(a: A) => B> =>
+    SG.make(
+        (f, g) => (a) => SGB.combine(f(a), g(a))
+    );
+
 export const Equivalence_constTrue: EQV.Equivalence<unknown> =
     constTrue;
 

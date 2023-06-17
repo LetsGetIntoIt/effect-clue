@@ -10,55 +10,58 @@ describe('App', () => {
                 App.run({
                     cardSetup: [{
                         useStandard: 'North America',
-                    
+
                         extraCards: [
-                            ['room', 'doghouse'],
+                            ['Room', 'Dog house'],
                         ],
                     }],
 
                     ownersSetup: [{
                         players: [
-                            ['kapil'],
-                            ['kate'],
+                            ['Kapil'],
+                            ['Kate'],
+                            ['Karthik'],
                         ],
                     
                         caseFiles: [
-                            ['murder'],
+                            ['Murder'],
                         ],
                     }],
-        
+
                     knownConclusionsSetup: [{
                         knownNumCards: [
-                            [['kapil'], 5],
-                            [['kate'], 10],
+                            [['Kapil'], 5],
+                            [['Kate'], 10],
                         ],
-            
+
                         knownCardOwners: [
-                            [['kapil'], ['room', 'doghouse']],
+                            [['Kapil'], ['Room', 'Dog house']],
                         ],
                     }],
-        
+
                     guessesSetup: [{
                         guesses: [
                             {
                                 cards: [
-                                    ['person', 'mustard'],
-                                    ['weapon', 'knife'],
-                                    ['room', 'doghouse'],
+                                    ['Suspect', 'Col. Mustard'],
+                                    ['Weapon', 'Knife'],
+                                    ['Room', 'Dog house'],
                                 ],
-                                guesser: ['kapil'],
+                                guesser: ['Kapil'],
                                 nonRefuters: [
                                     // None
                                 ],
                                 refutation: [
-                                    ['kate'],
-                                    ['weapon', 'knife'],
+                                    ['Kate'],
+                                    ['Weapon', 'Knife'],
                                 ],
                             },
                         ],
                     }],
-        
-                    deductionRulesSetup: ['all'],
+
+                    deductionRulesSetup: [[
+                        'cardIsHeldExactlyOnce',
+                    ]],
                 }),
             ));
 

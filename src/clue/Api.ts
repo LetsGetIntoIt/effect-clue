@@ -1,7 +1,10 @@
 import * as B from '@effect/data/Brand';
+import * as O from '@effect/data/Option';
 import * as E from '@effect/data/Either';
 import * as ROA from '@effect/data/ReadonlyArray';
 import * as T from '@effect/io/Effect';
+import * as HS from '@effect/data/HashSet';
+import * as ST from "@effect/data/Struct";
 import * as Match from "@effect/match";
 import { flow, pipe } from '@effect/data/Function';
 
@@ -242,8 +245,63 @@ type RawGuess = {
 };
 
 // TODO actually parse this!
-const parseGuess = (guess: RawGuess): E.Either<B.Brand.BrandErrors, Guess.ValidatedGuess> =>
-    E.left(B.error('Not implemented yet'));
+const parseGuess = ({
+    cards: rawCards,
+    guesser: rawGuesser,
+    nonRefuters: rawNonRefuters,
+    refutation: rawRefutation,
+}: RawGuess): T.Effect<GameSetup.GameSetup, B.Brand.BrandErrors, Guess.ValidatedGuess> =>
+    T.gen(function* ($) {
+        const cards = yield* $(
+            E.validateAll(rawCards, parseCard),
+            E.mapLeft(errors => B.errors(...errors)),
+            E.map(HS.fromIterable),
+        );
+
+        const guesser = yield* $(parsePlayer(rawGuesser));
+
+        const nonRefuters = yield* $(
+            E.validateAll(rawNonRefuters, parsePlayer),
+            E.mapLeft(errors => B.errors(...errors)),
+            E.map(HS.fromIterable),
+        );
+
+        const refutation = yield* $(
+            O.fromNullable(rawRefutation),
+
+            O.map(flow(
+                ([rawPlayer, rawCard]) => ({
+                    refuter: rawPlayer,
+                    card: rawCard,
+                }),
+
+                ST.evolve({
+                    refuter: parsePlayer,
+                    
+                    card: flow(
+                        O.fromNullable,
+                        O.map(parseCard),
+                        O.sequence(E.Applicative),
+                    ),
+                }),
+
+                E.struct,
+            )),
+
+            O.sequence(E.Applicative),
+        );
+
+        return yield* $(
+            Guess.Guess({
+                cards,
+                guesser,
+                nonRefuters,
+                refutation,
+            }),
+
+            Guess.ValidatedGuess,
+        );
+    });
 
 export const setupGuesses = ({
     guesses: rawGuesses = [],
@@ -335,7 +393,6 @@ export const deduceConclusions = (
     B.Brand.BrandErrors,
     ConclusionMapSet.ValidatedConclusionMapSet
 > =>
-    // TODO run the deduction rule, and merge its findings
-    //      keep re-running the deduction rule until it finds nothing new
-    //      or exceeds some retry limit, at which point throw an Defect
-    T.fail(B.error('Not implemented yet'));
+    T.gen(function* ($) {
+        return yield* $(deductionRule(conclusions));
+    });
