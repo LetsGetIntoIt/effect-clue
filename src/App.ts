@@ -21,6 +21,12 @@ import * as Clue from './clue';
 // - Implement CardSet.MonoidUnion, and make StandardNorthAmericaCardSet a regular CardSet, rather than a function to add all the standard cards
 
 // TODO more features
+// - Update player number of cards to be a range
+// - - New RageExact / RangeBounded object. getMin() getMax(). clampMax() and clampMin() functions
+// - - Update "player has at most/least" deductiont to use the getMin() getMax() of their cards
+// - - New deductions: if a player has refuted something, they have at least that many cards
+// - - New deductions: each player has a maximum of TOTAL CARDS - SUM(min cards) of every other player
+// - Deduction: if a player has refuted {A, B, C} and {C, D, E} and they have only 1 card unaccounted, then they have C
 // - Save and load games from localStorage
 // - Who I've shown what (and which card I should show to refute)
 // - See what other people should know (by direct observation and inference)
