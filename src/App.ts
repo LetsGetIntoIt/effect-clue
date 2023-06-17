@@ -1,7 +1,7 @@
-import * as E from '@effect/data/Either';
+import * as B from '@effect/data/Brand';
+import * as T from '@effect/io/Effect';
 
 import * as Clue from './clue';
-import * as ConclusionMapSet from './clue/ConclusionMapSet';
 
 // TODO refactors
 // - Add logging, services and spans
@@ -37,8 +37,7 @@ interface AppState {
 
 }
 
-export const app: E.Either<string[], AppState> = E.gen(function* ($) {
-    // This will live in a component, returning the validated result or nothing
+export const app: T.Effect<never, B.Brand.BrandErrors, AppState> = T.gen(function* ($) {
     const cards = yield* $(Clue.setupCards({
         useStandard: 'North America',
 
@@ -47,26 +46,38 @@ export const app: E.Either<string[], AppState> = E.gen(function* ($) {
         ],
     }));
 
-    // This will live in a component, returning the validated result or nothing
-    const players = yield* $(Clue.setupCardOwners({
+    const owners = yield* $(Clue.setupCardOwners({
         players: [
             ['kapil'],
             ['kate'],
-        ]
+        ],
+
+        caseFiles: [
+            ['murder'],
+        ],
+    }));
+
+    const game = yield* $(Clue.setupGame({
+        cards,
+        owners,
     }));
 
     // This will live in a component, returning the validated result or nothing
-    const knownConclusions = yield* $(Clue.setupKnownConclusions({
-        knownNumCards: [
-            [['kapil'], 5],
-            [['kate'], 10],
-        ],
+    const knownConclusions = yield* $(
+        Clue.setupKnownConclusions({
+            knownNumCards: [
+                [['kapil'], 5],
+                [['kate'], 10],
+            ],
 
-        knownCardOwners: [
-            [['kapil'], ['room', 'doghouse']],
-        ],
-    }));
- 
+            knownCardOwners: [
+                [['kapil'], ['room', 'doghouse']],
+            ],
+        }),
+
+        Clue.provideGame(game),
+    );
+
     // This will live in one component, returning the validated result or nothing
     const guesses = yield* $(Clue.setupGuesses({
         guesses: [
@@ -88,9 +99,9 @@ export const app: E.Either<string[], AppState> = E.gen(function* ($) {
         ],
     }));
 
-    const deductionRules = yield* $(Clue.setupDeductionRules());
+    const deductionRule = yield* $(Clue.setupDeductionRules('all'));
 
-    // This will live in the App, and be passed into each component to render extra stuff
-    const deducedConclusions = yield* $(Clue.deduceConclusions(ConclusionMapSet.empty));
+    const deducedConclusions = yield* $(Clue.deduceConclusions(knownConclusions));
 
+    console.log(deducedConclusions);
 });

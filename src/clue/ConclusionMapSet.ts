@@ -115,7 +115,7 @@ export const getOwnershipByCard: (
         )
     );
 
-export type Modification = ((conclusions: ConclusionMapSet) => T.Effect<GameSetup.GameSetup, B.Brand.BrandErrors, ConclusionMapSet>);
+export type Modification = ((conclusions: ValidatedConclusionMapSet) => T.Effect<GameSetup.GameSetup, B.Brand.BrandErrors, ValidatedConclusionMapSet>);
 
 export const identity: Modification =
     T.succeed;

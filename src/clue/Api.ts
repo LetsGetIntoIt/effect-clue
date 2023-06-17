@@ -1,5 +1,7 @@
+import * as B from '@effect/data/Brand';
 import * as E from '@effect/data/Either';
 import * as ROA from '@effect/data/ReadonlyArray';
+import * as T from '@effect/io/Effect';
 import * as Match from "@effect/match"
 import { flow, identity, pipe, tupled } from '@effect/data/Function';
 
@@ -11,12 +13,24 @@ import * as Player from './Player';
 import * as CaseFile from './CaseFile';
 import * as CardOwnerSet from './CardOwnerSet';
 import * as CardOwner from './CardOwner';
+import * as GameSetup from './GameSetup';
 import * as Guess from './Guess';
 import * as GuessSet from './GuessSet';
 import * as DeductionRule from './DeductionRule';
+import * as Conclusion from './Conclusion';
 import * as ConclusionMapSet from './ConclusionMapSet';
 
 type RawCard = [string, string];
+
+const parseCard: (card: RawCard) => E.Either<B.Brand.BrandErrors, Card.ValidatedCard> =
+    flow(
+        ([cardType, label]) => Card.Card({
+            cardType,
+            label,
+        }),
+
+        Card.ValidatedCard,
+    );
 
 export const setupCards = ({
     useStandard,
@@ -24,31 +38,28 @@ export const setupCards = ({
 }: {
     useStandard?: 'North America';
     extraCards?: RawCard[];
-}): E.Either<string[], CardSet.ValidatedCardSet> =>
+}): E.Either<B.Brand.BrandErrors, CardSet.ValidatedCardSet> =>
     E.gen(function* ($) {
-        // Add whatever standard set was selected, if any
-        const addStandardSet = pipe(
+        // Start with whatever standard set was selected
+        const startingSet = pipe(
             Match.value(useStandard),
 
             // If no standard set is selected, leave the set untouched
-            Match.when(undefined, () => identity<CardSet.CardSet>),
+            Match.when(undefined, () => CardSet.empty),
             
             // Otherwise, add the selected standard set
-            Match.when('North America', () => CardSet.addStandardNorthAmericaCardSet),
+            Match.when('North America', () => CardSet.northAmerica),
 
             Match.exhaustive,
         );
 
         // Create the extra manual cards
-        const extraCards = yield* $(E.validateAll(
-            rawExtraCards,
-            ([cardType, label]) => Card.create({
-                cardType,
-                label,
-            }),
-        ));
+        const extraCards = yield* $(
+            E.validateAll(rawExtraCards, parseCard), 
+            E.mapLeft(errors => B.errors(...errors)),
+        );
 
-        // Create our functiont to add all these manual cards
+        // Create our function to add all these extra cards
         const addExtraCards = pipe(
             extraCards,
             ROA.map(CardSet.add),
@@ -56,15 +67,26 @@ export const setupCards = ({
         );
 
         return yield* $(
-            CardSet.empty,
-            addStandardSet,
+            startingSet,
             addExtraCards,
-            CardSet.validate,
+            CardSet.ValidatedCardSet,
         );
     });
 
 type RawPlayer = [string];
 type RawCaseFile = [string];
+
+const parsePlayer: (player: RawPlayer) => E.Either<B.Brand.BrandErrors, Player.ValidatedPlayer> =
+    flow(
+        ([name]) => Player.Player({ name }),
+        Player.ValidatedPlayer,
+    );
+
+const parseCaseFile: (caseFile: RawCaseFile) => E.Either<B.Brand.BrandErrors, CaseFile.ValidatedCaseFile> =
+    flow(
+        ([label]) => CaseFile.CaseFile({ label }),
+        CaseFile.ValidatedCaseFile,
+    );
 
 export const setupCardOwners = ({
     players = [],
@@ -72,29 +94,41 @@ export const setupCardOwners = ({
 }: {
     players?: RawPlayer[];
     caseFiles?: RawCaseFile[];
-}): E.Either<string[], CardOwnerSet.ValidatedCardOwnerSet> =>
+}): E.Either<B.Brand.BrandErrors, CardOwnerSet.ValidatedCardOwnerSet> =>
     E.gen(function* ($) {
         // Create the players
-        const playerOwners = yield* $(E.validateAll(
-            players,
+        const playerOwners = yield* $(
+            E.validateAll(
+                players,
 
-            flow(
-                ([label]) => ({ label }),
-                Player.create,
-                E.map(CardOwner.createPlayer),
+                flow(
+                    parsePlayer,
+                    E.map(player => CardOwner.CardOwnerPlayer({
+                        player,
+                    })),
+                ),
             ),
-        ));
+
+            // Concat all the errors
+            E.mapLeft(errors => B.errors(...errors)),
+        );
 
         // Create the case files
-        const caseFileOwners = yield* $(E.validateAll(
-            caseFiles,
+        const caseFileOwners = yield* $(
+            E.validateAll(
+                caseFiles,
 
-            flow(
-                ([label]) => ({ label }),
-                CaseFile.create,
-                E.map(CardOwner.createCaseFile),
+                flow(
+                    parseCaseFile,
+                    E.map(caseFile => CardOwner.CardOwnerCaseFile({
+                        caseFile,
+                    })),
+                ),
             ),
-        ));
+
+            // Concat all the errors
+            E.mapLeft(errors => B.errors(...errors)),
+        );
 
         // Create our functiont to add all these owners
         const addAllOwners = pipe(
@@ -108,7 +142,91 @@ export const setupCardOwners = ({
         return yield* $(
             CardOwnerSet.empty,
             addAllOwners,
-            CardOwnerSet.validate,
+            CardOwnerSet.ValidatedCardOwnerSet,
+        );
+    });
+
+export const setupGame = ({
+    cards = CardSet.empty,
+    owners = CardOwnerSet.empty,
+}: {
+    cards?: CardSet.ValidatedCardSet;
+    owners?: CardOwnerSet.ValidatedCardOwnerSet;
+}): E.Either<B.Brand.BrandErrors, GameSetup.GameSetup> =>
+    E.right(GameSetup.GameSetup({
+        cards,
+        owners,
+    }));
+
+export const provideGame = (game: GameSetup.GameSetup) =>
+    T.provideService(GameSetup.Tag, game);
+
+export const setupKnownConclusions = ({
+    knownNumCards: rawKnownNumCards = [],
+    knownCardOwners: rawKnownCardOwners = [],
+}: {
+    knownNumCards?: readonly [RawPlayer, number][];
+    knownCardOwners?: readonly [RawPlayer, RawCard][];
+}): T.Effect<GameSetup.GameSetup, B.Brand.BrandErrors, ConclusionMapSet.ValidatedConclusionMapSet> =>
+    T.gen(function* ($) {
+        const knownNumCards = yield* $(
+            E.validateAll(
+                rawKnownNumCards,
+
+                ([player, numCards]) => E.tuple(
+                    parsePlayer(player),
+                    E.right(numCards),
+                ),
+            ),
+
+            // Concat all the errors
+            E.mapLeft(errors => B.errors(...errors)),
+        );
+
+        const knownCardOwners = yield* $(
+            E.validateAll(
+                rawKnownCardOwners,
+
+                ([player, card]) => E.tuple(
+                    parsePlayer(player),
+                    parseCard(card),
+                ),
+            ),
+
+            // Concat all the errors
+            E.mapLeft(errors => B.errors(...errors)),
+        );
+
+        // Create the function to add all these conclusions
+        const addConclusions = pipe(
+            ROA.map(knownNumCards, ([player, numCards]) =>
+                ConclusionMapSet.modifyAddNumCards(
+                    player,
+                    numCards,
+                    Conclusion.Reason({
+                        level: 'observed',
+                        explanation: 'Manually entered',
+                    })
+                ),
+            ),
+
+            ROA.appendAll(ROA.map(knownCardOwners, ([player, card]) =>
+                ConclusionMapSet.modifyAddOwnership(
+                    CardOwner.CardOwnerPlayer(player),
+                    card,
+                    Conclusion.Reason({
+                        level: 'observed',
+                        explanation: 'Manually entered',
+                    })
+                ),
+            )),
+
+            ConclusionMapSet.ModificationMonoid.combineAll,
+        );
+
+        return yield* $(
+            ConclusionMapSet.empty,
+            addConclusions,
         );
     });
 
@@ -123,23 +241,19 @@ type RawGuess = {
 };
 
 // TODO actually parse this!
-const parseGuess = (guess: RawGuess): E.Either<string, any> =>
-    E.left('Not implemented yet');
+const parseGuess = (guess: RawGuess): E.Either<B.Brand.BrandErrors, Guess.ValidatedGuess> =>
+    E.left(B.error('Not implemented yet'));
 
 export const setupGuesses = ({
     guesses: rawGuesses = [],
 }: {
     guesses?: RawGuess[];
-}): E.Either<string[], GuessSet.ValidatedGuessSet> =>
-    E.gen(function* ($) {
+}): T.Effect<GameSetup.GameSetup, B.Brand.BrandErrors, GuessSet.ValidatedGuessSet> =>
+    T.gen(function* ($) {
         // Create the guesses
-        const guesses = yield* $(E.validateAll(
-            rawGuesses,
-
-            flow(
-                parseGuess,
-                E.flatMap(Guess.create),
-            )),
+        const guesses = yield* $(
+            T.validateAll(rawGuesses, parseGuess),
+            T.mapError(errors => B.errors(...errors)),
         );
 
         // Create our function to add all the guesses
@@ -152,7 +266,7 @@ export const setupGuesses = ({
         return yield* $(
             GuessSet.empty,
             addGuesses,
-            GuessSet.validate,
+            GuessSet.ValidatedGuessSet,
         );
     });
 
@@ -173,13 +287,15 @@ type RawDeductionRule = typeof ALL_DEDUCTION_RULES[number];
 
 export const setupDeductionRules = (
     rules: 'all' | readonly RawDeductionRule[] = 'all',
-): E.Either<string[], DeductionRule.DeductionRule> =>
+): E.Either<B.Brand.BrandErrors, DeductionRule.DeductionRule> =>
     pipe(
         // Convert the default list of "all"
         rules,
         rules => typeof rules === 'string'
             ? ALL_DEDUCTION_RULES
             : rules,
+
+        // TODO validate that the strings are actually valid
 
         // Convert the selected deduction rule IDs to actual functions
         ROA.map(pipe(
