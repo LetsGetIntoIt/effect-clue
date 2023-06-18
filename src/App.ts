@@ -2,6 +2,7 @@ import * as B from '@effect/data/Brand';
 import * as T from '@effect/io/Effect';
 
 import * as Clue from './clue';
+import * as ConclusionMapSet from './clue/ConclusionMapSet';
 
 // TODO refactors
 // - Add logging, services and spans
@@ -48,7 +49,8 @@ interface AppInput {
 }
 
 interface AppOutput {
-    
+    // TODO don't leak out this internal type. Convert it to some raw output
+    conclusions: ConclusionMapSet.ValidatedConclusionMapSet;
 }
 
 export const run = ({
@@ -83,5 +85,7 @@ export const run = ({
         Clue.provideGuesses(guesses),
     );
 
-    return {};
+    return {
+        conclusions: deducedConclusions,
+    };
 });

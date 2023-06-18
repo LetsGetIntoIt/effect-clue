@@ -395,4 +395,5 @@ export const deduceConclusions = (
 > =>
     T.gen(function* ($) {
         return yield* $(deductionRule(conclusions));
+        // TODO keep running deductions until we haven't found anything new
     });

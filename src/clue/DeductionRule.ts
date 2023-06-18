@@ -29,7 +29,7 @@ export type DeductionRule = (
     // Returns an error if we encounter a logical contradiction
     B.Brand.BrandErrors
 ,
-    // Returns the newly-deduced conclusion (not included the already known ones)
+    // Returns the set of conclusions, augmented with new findings
     ConclusionMapSet.ValidatedConclusionMapSet
 >;
 

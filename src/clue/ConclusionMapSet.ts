@@ -89,13 +89,13 @@ export const getOwnershipByCard: (
 
                     // TODO make better constructors for these
                     BOOL.match(
+                        constant(CardOwnership.CardOwnershipUnowned({
+                            nonOwners: HashSet_of(owner),
+                        })),
+
                         constant(CardOwnership.CardOwnershipOwned({
                             owner,
                             nonOwners: HS.empty(),
-                        })),
-
-                        constant(CardOwnership.CardOwnershipUnowned({
-                            nonOwners: HashSet_of(owner),
                         })),
                     ),
                 );
