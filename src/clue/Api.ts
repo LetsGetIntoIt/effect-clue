@@ -7,6 +7,7 @@ import * as HS from '@effect/data/HashSet';
 import * as ST from "@effect/data/Struct";
 import * as EQ from '@effect/data/Equal';
 import * as Match from "@effect/match";
+import * as P from '@effect/data/Predicate';
 import { flow, pipe } from '@effect/data/Function';
 
 import { Endomorphism_getMonoid } from '../utils/ShouldBeBuiltin';
@@ -387,28 +388,40 @@ export const setupDeductionRules = (
 
 export const deduceConclusions = (
     deductionRule: DeductionRule.DeductionRule,
+    {
+        maxIterations,
+    }: {
+        maxIterations?: number,
+    } = {
+        // Default to no options
+    }
 ) => (
-    conclusions: ConclusionMapSet.ValidatedConclusionMapSet,
+    initialConclusions: ConclusionMapSet.ValidatedConclusionMapSet,
 ): T.Effect<
     GameSetup.GameSetup | GuessSet.ValidatedGuessSet,
     B.Brand.BrandErrors,
     ConclusionMapSet.ValidatedConclusionMapSet
 > =>
     T.gen(function* ($) {
-        // Start with the old conclusions
-        let newConclusions = conclusions;
-        let numRounds = 0;
+        // Start with the initial conclusions
+        let previousConclusions = initialConclusions;
+        let newConclusions = initialConclusions;
+        let iterationNum = 0;
 
         do {
-            numRounds++;
-            console.log(`Running conclusions round ${numRounds}`);
+            iterationNum++;
+            console.log(`Running conclusions iteration ${iterationNum}`);
 
-            // Add more conclusions recursively
+            // Add more conclusions recursively, tracking the results of the previous iteration
+            previousConclusions = newConclusions;
             newConclusions = yield* $(deductionRule(newConclusions));
         } while (
-            // Stop when we haven't updated anything
-            // TODO why isn't Equality working here?
-            !EQ.equals(conclusions, newConclusions)
+            // Continue as long as the iteration gave us new results
+            !EQ.equals(previousConclusions, newConclusions)
+
+            // Continue forever if no max iterations is provided,
+            // or continue as long as we haven't hit that maximum
+            && (P.isNullable(maxIterations) || iterationNum < maxIterations)
         );
 
         return newConclusions;
