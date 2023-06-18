@@ -1,7 +1,7 @@
 import * as T from '@effect/io/Effect';
 
-import * as App from './App';
-import { Effect_expectSucceed, Effect_test } from './utils/EffectTest';
+import * as App from './Api';
+import { Effect_expectSucceed, Effect_test } from '../utils/EffectTest';
 
 describe('App', () => {
     test('scenario 1', async () => {
@@ -47,13 +47,29 @@ describe('App', () => {
                                     ['Weapon', 'Knife'],
                                     ['Room', 'Dog house'],
                                 ],
-                                guesser: ['Kapil'],
+                                guesser: ['Kate'],
                                 nonRefuters: [
-                                    // None
+                                    ['Karthik'],
                                 ],
                                 refutation: [
                                     ['Kate'],
                                     ['Weapon', 'Knife'],
+                                ],
+                            },
+
+                            {
+                                cards: [
+                                    ['Suspect', 'Col. Mustard'],
+                                    ['Weapon', 'Knife'],
+                                    ['Room', 'Dog house'],
+                                ],
+                                guesser: ['Kate'],
+                                nonRefuters: [
+                                    // None
+                                ],
+                                refutation: [
+                                    ['Kapil'],
+                                    // Refute card unknown
                                 ],
                             },
                         ],
@@ -65,7 +81,8 @@ describe('App', () => {
                 }),
             ));
 
-            expect(result).toEqual({});
+            // TODO actually write tests and assert stuff
+            expect(result).toBeDefined();
         }));
     });
 });

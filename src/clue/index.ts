@@ -1,11 +1,3 @@
 export {
-    setupCards,
-    setupCardOwners,
-    setupGame,
-    provideGame,
-    setupKnownConclusions,
-    setupGuesses,
-    provideGuesses,
-    setupDeductionRules,
-    deduceConclusions,
+    run,
 } from './Api';
