@@ -8,7 +8,7 @@ import { Brand_refinedEffect, Option_fromPredicate, Struct_get } from '../utils/
 
 import * as Card from './Card';
 import * as Player from './Player';
-import * as GameSetup from './GameSetup';
+import * as Game from './Game';
 import { constant, flow } from '@effect/data/Function';
 
 export interface Guess extends D.Case {
@@ -27,9 +27,9 @@ export const Guess = D.tagged<Guess>("Guess");
 
 export type ValidatedGuess = Guess & B.Brand<'ValidatedGuess'>;
 
-export const ValidatedGuess = Brand_refinedEffect<ValidatedGuess, GameSetup.GameSetup>(
+export const ValidatedGuess = Brand_refinedEffect<ValidatedGuess, Game.Game>(
     T.gen(function* ($) {
-        const gameSetup = yield* $(GameSetup.Tag);
+        const game = yield* $(Game.Tag);
 
         return [
             flow(
@@ -37,7 +37,7 @@ export const ValidatedGuess = Brand_refinedEffect<ValidatedGuess, GameSetup.Game
 
                 Option_fromPredicate(
                     // Check if the guessed cards are NOT a subset of all the cards in the game
-                    P.not(HS.isSubset(gameSetup.cards)),
+                    P.not(HS.isSubset(game.cards)),
                 ),
 
                 O.map(constant(B.error(`All guessed cards should be part of the game`))),

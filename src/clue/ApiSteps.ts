@@ -18,7 +18,7 @@ import * as Player from './Player';
 import * as CaseFile from './CaseFile';
 import * as CardOwnerSet from './CardOwnerSet';
 import * as CardOwner from './CardOwner';
-import * as GameSetup from './GameSetup';
+import * as Game from './Game';
 import * as Guess from './Guess';
 import * as GuessSet from './GuessSet';
 import * as DeductionRule from './DeductionRule';
@@ -157,14 +157,14 @@ export const setupGame = ({
 }: {
     cards?: CardSet.ValidatedCardSet;
     owners?: CardOwnerSet.ValidatedCardOwnerSet;
-}): E.Either<B.Brand.BrandErrors, GameSetup.GameSetup> =>
-    E.right(GameSetup.GameSetup({
+}): E.Either<B.Brand.BrandErrors, Game.Game> =>
+    E.right(Game.Game({
         cards,
         owners,
     }));
 
-export const provideGame = (game: GameSetup.GameSetup) =>
-    T.provideService(GameSetup.Tag, game);
+export const provideGame = (game: Game.Game) =>
+    T.provideService(Game.Tag, game);
 
 export const setupKnownConclusions = ({
     knownNumCards: rawKnownNumCards = [],
@@ -172,7 +172,7 @@ export const setupKnownConclusions = ({
 }: {
     knownNumCards?: readonly [RawPlayer, number][];
     knownCardOwners?: readonly [RawPlayer, RawCard][];
-}): T.Effect<GameSetup.GameSetup, B.Brand.BrandErrors, ConclusionMapSet.ValidatedConclusionMapSet> =>
+}): T.Effect<Game.Game, B.Brand.BrandErrors, ConclusionMapSet.ValidatedConclusionMapSet> =>
     T.gen(function* ($) {
         const knownNumCards = yield* $(
             E.validateAll(
@@ -252,7 +252,7 @@ const parseGuess = ({
     guesser: rawGuesser,
     nonRefuters: rawNonRefuters,
     refutation: rawRefutation,
-}: RawGuess): T.Effect<GameSetup.GameSetup, B.Brand.BrandErrors, Guess.ValidatedGuess> =>
+}: RawGuess): T.Effect<Game.Game, B.Brand.BrandErrors, Guess.ValidatedGuess> =>
     T.gen(function* ($) {
         const cards = yield* $(
             E.validateAll(rawCards, parseCard),
@@ -309,7 +309,7 @@ export const setupGuesses = ({
     guesses: rawGuesses = [],
 }: {
     guesses?: RawGuess[];
-}): T.Effect<GameSetup.GameSetup, B.Brand.BrandErrors, GuessSet.ValidatedGuessSet> =>
+}): T.Effect<Game.Game, B.Brand.BrandErrors, GuessSet.ValidatedGuessSet> =>
     T.gen(function* ($) {
         // Create the guesses
         const guesses = yield* $(
@@ -398,7 +398,7 @@ export const deduceConclusions = (
 ) => (
     initialConclusions: ConclusionMapSet.ValidatedConclusionMapSet,
 ): T.Effect<
-    GameSetup.GameSetup | GuessSet.ValidatedGuessSet,
+    Game.Game | GuessSet.ValidatedGuessSet,
     B.Brand.BrandErrors,
     ConclusionMapSet.ValidatedConclusionMapSet
 > =>

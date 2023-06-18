@@ -10,7 +10,7 @@ import { constant, flow, pipe } from '@effect/data/Function';
 
 import { Effect_getSemigroupCombine, Function_getSemigroup, HashSet_fromHashMapMulti, HashSet_isSize } from '../utils/ShouldBeBuiltin';
 
-import * as GameSetup from "./GameSetup";
+import * as Game from "./Game";
 import * as ConclusionMapSet from "./ConclusionMapSet";
 import * as CardOwnership from './CardOwnership';
 import * as Conclusion from './Conclusion';
@@ -21,7 +21,7 @@ export type DeductionRule = (
     knownConclusions: ConclusionMapSet.ValidatedConclusionMapSet
 ) => T.Effect<
     // Accepts the objects in the game
-    | GameSetup.GameSetup
+    | Game.Game
 
     // Accepts the set of gueses that have been made
     | GuessSet.ValidatedGuessSet
@@ -41,7 +41,7 @@ export const SemigroupUnion: SG.Semigroup<DeductionRule> =
         Effect_getSemigroupCombine<
             ConclusionMapSet.ValidatedConclusionMapSet,
             B.Brand.BrandErrors,
-            GameSetup.GameSetup | GuessSet.ValidatedGuessSet
+            Game.Game | GuessSet.ValidatedGuessSet
         >(
             (first, second) => pipe(
                 first,
@@ -62,7 +62,7 @@ export const cardIsHeldAtMostOnce: DeductionRule = (
     const {
         cards: allCards,
         owners: allCardOwners,
-    } = yield* $(GameSetup.Tag);
+    } = yield* $(Game.Tag);
 
     const ownershipByCard = ConclusionMapSet.getOwnershipByCard(knownConclusions);
 
@@ -119,7 +119,7 @@ export const cardIsHeldAtLeastOnce: DeductionRule = (
     const {
         cards: allCards,
         owners: allCardOwners,
-    } = yield* $(GameSetup.Tag);
+    } = yield* $(Game.Tag);
 
     const ownershipByCard = ConclusionMapSet.getOwnershipByCard(knownConclusions);
 

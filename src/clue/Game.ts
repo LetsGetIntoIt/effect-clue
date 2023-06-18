@@ -4,17 +4,17 @@ import * as CTX from '@effect/data/Context';
 import * as CardSet from "./CardSet";
 import * as CardOwnerSet from "./CardOwnerSet";
 
-export interface GameSetup extends D.Case {
-    _tag: 'GameSetup';
+export interface Game extends D.Case {
+    _tag: 'Game';
     readonly cards: CardSet.ValidatedCardSet;
     readonly owners: CardOwnerSet.ValidatedCardOwnerSet;
 };
 
-export const GameSetup = D.tagged<GameSetup>("GameSetup");
+export const Game = D.tagged<Game>("Game");
 
-export const Tag = CTX.Tag<GameSetup>();
+export const Tag = CTX.Tag<Game>();
 
-export const empty: GameSetup = GameSetup({
+export const empty: Game = Game({
     cards: CardSet.empty,
     owners: CardOwnerSet.empty,
 });

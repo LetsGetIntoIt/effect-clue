@@ -16,7 +16,7 @@ import { Struct_get, HashSet_of, Brand_refinedEffect, HashMap_setOrUpdate } from
 import * as Card from './Card';
 import * as Player from './Player';
 import * as Guess from './Guess';
-import * as GameSetup from './GameSetup';
+import * as Game from './Game';
 import * as CardOwner from './CardOwner';
 import * as CardOwnership from './CardOwnership';
 import * as Conclusion from './Conclusion';
@@ -33,11 +33,11 @@ export const ConclusionMapSet = D.tagged<ConclusionMapSet>("ConclusionMapSet");
 
 export type ValidatedConclusionMapSet = ConclusionMapSet & B.Brand<'ValidatedConclusionMapSet'>;
 
-export const ValidatedConclusionMapSet = Brand_refinedEffect<ValidatedConclusionMapSet, GameSetup.GameSetup>(
+export const ValidatedConclusionMapSet = Brand_refinedEffect<ValidatedConclusionMapSet, Game.Game>(
     T.gen(function* ($) {
         return [
             // TODO actually validate the conclusions
-            // - all Cards and Players actually exist in the GameSetup
+            // - all Cards and Players actually exist in the game
             // - all Guesses actaully exist in the Game
             // - numCards cannot exceed total number of cards - where do we read that info from?
             // - card can be owned by at most 1 owner
@@ -62,7 +62,7 @@ export const empty: ValidatedConclusionMapSet =
         ValidatedConclusionMapSet,
 
         // We just need an empty game
-        T.provideService(GameSetup.Tag, GameSetup.empty),
+        T.provideService(Game.Tag, Game.empty),
 
         // If creating an empty deduction set errors, it is a defects in the underlying code,
         // not tagged errors that should be handled by the user
@@ -115,7 +115,7 @@ export const getOwnershipByCard: (
         )
     );
 
-export type Modification = ((conclusions: ValidatedConclusionMapSet) => T.Effect<GameSetup.GameSetup, B.Brand.BrandErrors, ValidatedConclusionMapSet>);
+export type Modification = ((conclusions: ValidatedConclusionMapSet) => T.Effect<Game.Game, B.Brand.BrandErrors, ValidatedConclusionMapSet>);
 
 export const identity: Modification =
     T.succeed;
