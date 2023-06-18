@@ -5,6 +5,7 @@ import * as ROA from '@effect/data/ReadonlyArray';
 import * as T from '@effect/io/Effect';
 import * as HS from '@effect/data/HashSet';
 import * as ST from "@effect/data/Struct";
+import * as EQ from '@effect/data/Equal';
 import * as Match from "@effect/match";
 import { flow, pipe } from '@effect/data/Function';
 
@@ -394,6 +395,21 @@ export const deduceConclusions = (
     ConclusionMapSet.ValidatedConclusionMapSet
 > =>
     T.gen(function* ($) {
-        return yield* $(deductionRule(conclusions));
-        // TODO keep running deductions until we haven't found anything new
+        // Start with the old conclusions
+        let newConclusions = conclusions;
+        let numRounds = 0;
+
+        do {
+            numRounds++;
+            console.log(`Running conclusions round ${numRounds}`);
+
+            // Add more conclusions recursively
+            newConclusions = yield* $(deductionRule(newConclusions));
+        } while (
+            // Stop when we haven't updated anything
+            // TODO why isn't Equality working here?
+            !EQ.equals(conclusions, newConclusions)
+        );
+
+        return newConclusions;
     });
