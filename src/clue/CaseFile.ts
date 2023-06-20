@@ -1,6 +1,6 @@
-import { D, B, S, O, E } from '../utils/EffectImports';
+import { D, B, S, O, E, P } from '../utils/EffectImports';
 import { flow, constant, pipe } from '@effect/data/Function';
-import { Brand_refined, Option_fromRefinement, Struct_get } from '../utils/ShouldBeBuiltin';
+import { Brand_refined, Either_fromPredicate, Option_fromRefinement, Struct_get } from '../utils/ShouldBeBuiltin';
 
 export interface CaseFile extends D.Case {
     _tag: "CaseFile";
@@ -12,10 +12,9 @@ export const CaseFile = D.tagged<CaseFile>("CaseFile");
 export type ValidatedCaseFile = CaseFile & B.Brand<'ValidatedCaseFile'>;
 
 export const ValidatedCaseFile = Brand_refined<ValidatedCaseFile>([
-    flow(
-        Struct_get('label'),
-        Option_fromRefinement(S.isEmpty),
-        O.map(constant(B.error(`label should be a non-empty string`))),
+    Either_fromPredicate(
+        P.contramap(S.isNonEmpty, Struct_get('label')),
+        constant(B.error(`label should be a non-empty string`)),
     ),
 ]);
 

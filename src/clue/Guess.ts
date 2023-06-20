@@ -1,6 +1,6 @@
 import { D, HS, O, B, T, P } from '../utils/EffectImports';
 import { flow, constant } from '@effect/data/Function';
-import { Brand_refinedEffect, Option_fromPredicate, Struct_get } from '../utils/ShouldBeBuiltin';
+import { Brand_refinedEffect, Either_fromPredicate, Option_fromPredicate, Struct_get } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';
 import * as Player from './Player';
@@ -27,15 +27,10 @@ export const ValidatedGuess = Brand_refinedEffect<ValidatedGuess, Game.Game>(
         const game = yield* $(Game.Tag);
 
         return [
-            flow(
-                Struct_get('cards'),
-
-                Option_fromPredicate(
-                    // Check if the guessed cards are NOT a subset of all the cards in the game
-                    P.not(HS.isSubset(game.cards)),
-                ),
-
-                O.map(constant(B.error(`All guessed cards should be part of the game`))),
+            Either_fromPredicate(
+                // Ensure that the guessed cards are a subset of all cards in the game
+                P.contramap(HS.isSubset(game.cards), Struct_get('cards')),
+                constant(B.error(`All guessed cards should be part of the game`)),
             ),
 
             // TODO validate that the guesser is in the player set

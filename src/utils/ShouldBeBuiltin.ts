@@ -1,4 +1,4 @@
-import { SG, EQV, P, O, BOOL, MON, HS, HM, TU, ROA, T, E, B } from "./EffectImports";
+import { SG, EQV, P, O, BOOL, MON, HS, HM, TU, ROA, T, E, B, AP } from "./EffectImports";
 import { constTrue, pipe, flow, identity, apply } from "@effect/data/Function";
 
 export const Function_getSemigroup =
@@ -25,6 +25,21 @@ export const Option_fromRefinement = <A, B extends A>(refinement: P.Refinement<A
 
 export const Option_fromPredicate: <A>(predicate: P.Predicate<A>) => (a: A) => O.Option<A> =
     Option_fromRefinement as any;
+
+export const Either_fromRefinement = <A, B extends A, E>(refinement: P.Refinement<A, B>, onFalse: (value: Exclude<A, B>) => E) => (a: A): E.Either<E, B> =>
+    pipe(
+        refinement(a),
+
+        BOOL.match(
+            // The value doesn't pass the refinement
+            () => E.left(onFalse(a as Exclude<A, B>)),
+
+            () => E.right(a as B),
+        ),
+    );
+
+export const Either_fromPredicate: <A, E>(refinement: P.Predicate<A>, onFalse: (value: A) => E) => (a: A) => E.Either<E, A> =
+    Either_fromRefinement as any;
 
 export type Endomorphism<A> = (a: A) => A
 
@@ -74,30 +89,63 @@ export const Struct_get = <S, Key extends keyof S>(
 ): S[Key] =>
     s[key];
 
-export const Either_swap: <E, A>(either: E.Either<E, A>) => E.Either<A, E> =
-    E.match(E.right, E.left);
+export const Either_validate = <A, E, B>(validations: readonly ((input: A) => E.Either<E, B>)[]) => (input: A): E.Either<E[], B[]> =>
+    pipe(
+        ROA.map(validations, apply(input)),
+
+        ROA.reduce<E.Either<E[], B[]>, E.Either<E, B>>(
+            E.right([]),
+
+            (overallResult, nextValidationResult) => pipe(
+                overallResult,
+
+                E.match(
+                    // We already have an error
+                    (errors) => pipe(
+                        nextValidationResult,
+
+                        E.match(
+                            // Append the new error
+                            (nextError) => E.left([...errors, nextError]),
+
+                            // It doesn't matter if we have a success, because we're already in failures
+                            () => E.left(errors),
+                        ),
+                    ),
+
+                    // We have success
+                    (values) => pipe(
+                        nextValidationResult,
+
+                        E.match(
+                            // Switch us into the error channel with this first error
+                            (nextError) => E.left([nextError]),
+
+                            // Append the new value
+                            (nextValue) => E.right([...values, nextValue]),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    );
 
 export const Brand_refined = <Branded extends B.Brand<string | symbol>>(
-    refinements: readonly ((unbranded: B.Brand.Unbranded<Branded>) => O.Option<B.Brand.BrandErrors>)[],
+    refinements: readonly ((unbranded: B.Brand.Unbranded<Branded>) => E.Either<B.Brand.BrandErrors, unknown>)[],
 ) => (
-    unbranded: B.Brand.Unbranded<Branded>
+    unbranded: B.Brand.Unbranded<Branded>,
 ): E.Either<B.Brand.BrandErrors, Branded> =>
     pipe(
-        refinements,
-        ROA.map(apply(unbranded)),
-
-        ROA.sequence(O.Applicative),
-
-        O.filter(ROA.isNonEmptyArray),
-        O.map(errors => B.errors(...errors)),
-
-        E.fromOption(() => unbranded),
-        Either_swap,
-        E.map(B.nominal<Branded>()),
+        unbranded,
+        Either_validate(refinements),
+        E.bimap(
+            errors => B.errors(...errors),
+            () => B.nominal<Branded>()(unbranded),
+        ),
     );
 
 export const Brand_refinedEffect = <Branded extends B.Brand<string | symbol>, R>(
-    refinements: T.Effect<R, never, readonly ((unbranded: B.Brand.Unbranded<Branded>) => O.Option<B.Brand.BrandErrors>)[]>,
+    refinements: T.Effect<R, never, readonly ((unbranded: B.Brand.Unbranded<Branded>) => E.Either<B.Brand.BrandErrors, unknown>)[]>,
 ) => (
     unbranded: B.Brand.Unbranded<Branded>
 ): T.Effect<R, B.Brand.BrandErrors, Branded> =>

@@ -1,6 +1,6 @@
-import { D, B, S, O } from '../utils/EffectImports';
-import { flow, constant } from '@effect/data/Function';
-import { Brand_refined, Option_fromRefinement, Struct_get } from '../utils/ShouldBeBuiltin';
+import { D, B, S, P } from '../utils/EffectImports';
+import { constant } from '@effect/data/Function';
+import { Brand_refined, Either_fromPredicate, Struct_get } from '../utils/ShouldBeBuiltin';
 
 export interface Card extends D.Case {
     _tag: "Card";
@@ -13,15 +13,13 @@ export const Card = D.tagged<Card>("Card");
 export type ValidatedCard = Card & B.Brand<'ValidatedCard'>;
 
 export const ValidatedCard = Brand_refined<ValidatedCard>([
-    flow(
-        Struct_get('cardType'),
-        Option_fromRefinement(S.isEmpty),
-        O.map(constant(B.error(`cardType should be a non-empty string`))),
+    Either_fromPredicate(
+        P.contramap(S.isNonEmpty, Struct_get('cardType')),
+        constant(B.error(`cardType should be a non-empty string`)),
     ),
 
-    flow(
-        Struct_get('label'),
-        Option_fromRefinement(S.isEmpty),
-        O.map(constant(B.error(`label should be a non-empty string`))),
+    Either_fromPredicate(
+        P.contramap(S.isNonEmpty, Struct_get('label')),
+        constant(B.error(`label should be a non-empty string`)),
     ),
 ]);
