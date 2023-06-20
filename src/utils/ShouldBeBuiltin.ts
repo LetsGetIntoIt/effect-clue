@@ -1,17 +1,5 @@
-import * as E from '@effect/data/Either';
-import * as HS from '@effect/data/HashSet';
-import * as HM from '@effect/data/HashMap';
-import * as O from '@effect/data/Option';
-import * as ROA from '@effect/data/ReadonlyArray';
-import * as SG from '@effect/data/typeclass/Semigroup';
-import * as MN from '@effect/data/typeclass/Monoid';
-import * as EQV from '@effect/data/typeclass/Equivalence';
-import * as P from '@effect/data/Predicate';
-import * as TU from '@effect/data/Tuple';
-import * as BOOL from '@effect/data/Boolean';
-import * as T from '@effect/io/Effect';
-import * as B from '@effect/data/Brand';
-import { pipe, identity, flow, constTrue, apply } from '@effect/data/Function';
+import { SG, EQV, P, O, BOOL, MON, HS, HM, TU, ROA, T, E, B } from "./EffectImports";
+import { constTrue, pipe, flow, identity, apply } from "@effect/data/Function";
 
 export const Function_getSemigroup =
     <B>(SGB: SG.Semigroup<B>) =>
@@ -40,8 +28,8 @@ export const Option_fromPredicate: <A>(predicate: P.Predicate<A>) => (a: A) => O
 
 export type Endomorphism<A> = (a: A) => A
 
-export const Endomorphism_getMonoid = <A>(): MN.Monoid<Endomorphism<A>> =>
-  MN.fromSemigroup(
+export const Endomorphism_getMonoid = <A>(): MON.Monoid<Endomorphism<A>> =>
+  MON.fromSemigroup(
     SG.make((f, g) => flow(f, g)),
     identity
   );

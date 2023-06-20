@@ -1,13 +1,6 @@
-import * as D from '@effect/data/Data';
-import * as HS from '@effect/data/HashSet';
-import * as O from '@effect/data/Option';
-import * as E from '@effect/data/Either';
-import * as EQ from '@effect/data/Equal';
-import * as B from '@effect/data/Boolean';
-import * as P from '@effect/data/Predicate';
-import * as M from '@effect/match';
-import { constFalse, constTrue, pipe } from '@effect/data/Function';
 
+import { D, HS, P, M, O, E, EQ, B, BOOL } from '../utils/EffectImports';
+import { pipe, constTrue, constFalse } from '@effect/data/Function';
 import * as CardOwner from './CardOwner';
 
 export interface CardOwnershipOwned extends D.Case {
@@ -73,7 +66,7 @@ export const combine: (
                 // They can only be combined if their owners are the same
                 EQ.equals(first.owner, second.owner),
 
-                B.match(
+                BOOL.match(
                     // They do not match
                     () => E.left('Conflicting ownership'),
 

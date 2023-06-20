@@ -1,13 +1,5 @@
-import * as D from '@effect/data/Data';
-import * as BOOL from '@effect/data/Boolean';
-import * as B from '@effect/data/Brand';
-import * as HS from '@effect/data/HashSet';
-import * as ST from '@effect/data/Struct';
-import * as E from '@effect/data/Either';
-import * as EQ from '@effect/data/Equal';
-import * as EQV from '@effect/data/typeclass/Equivalence';
-import * as M from '@effect/match';
-import { constant, pipe } from '@effect/data/Function';
+import { D, HS, B, EQV, ST, EQ, E, BOOL, M } from '../utils/EffectImports';
+import { pipe, constant } from '@effect/data/Function';
 import { Brand_refined, Equivalence_constTrue } from '../utils/ShouldBeBuiltin';
 
 export interface Reason extends D.Case {

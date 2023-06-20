@@ -1,15 +1,6 @@
-import * as B from '@effect/data/Brand';
-import * as O from '@effect/data/Option';
-import * as E from '@effect/data/Either';
-import * as ROA from '@effect/data/ReadonlyArray';
-import * as T from '@effect/io/Effect';
-import * as HS from '@effect/data/HashSet';
-import * as ST from "@effect/data/Struct";
-import * as EQ from '@effect/data/Equal';
-import * as Match from "@effect/match";
-import * as P from '@effect/data/Predicate';
-import { flow, pipe } from '@effect/data/Function';
 
+import { E, B, ROA, T, HS, O, ST, EQ, P, M } from '../utils/EffectImports';
+import { flow, pipe } from '@effect/data/Function';
 import { Endomorphism_getMonoid } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';
@@ -24,6 +15,7 @@ import * as GuessSet from './GuessSet';
 import * as DeductionRule from './DeductionRule';
 import * as Conclusion from './Conclusion';
 import * as ConclusionMapSet from './ConclusionMapSet';
+
 
 type RawCard = [string, string];
 
@@ -47,15 +39,15 @@ export const setupCards = ({
     E.gen(function* ($) {
         // Start with whatever standard set was selected
         const startingSet = pipe(
-            Match.value(useStandard),
+            M.value(useStandard),
 
             // If no standard set is selected, leave the set untouched
-            Match.when(undefined, () => CardSet.empty),
+            M.when(undefined, () => CardSet.empty),
             
             // Otherwise, add the selected standard set
-            Match.when('North America', () => CardSet.northAmerica),
+            M.when('North America', () => CardSet.northAmerica),
 
-            Match.exhaustive,
+            M.exhaustive,
         );
 
         // Create the extra manual cards
@@ -342,20 +334,20 @@ export const setupDeductionRules = (
 
         // Convert the selected deduction rule IDs to actual functions
         ROA.map(pipe(
-            Match.type<RawDeductionRule>(),
+            M.type<RawDeductionRule>(),
 
-            Match.when('cardIsHeldAtMostOnce', () => DeductionRule.cardIsHeldAtMostOnce),
-            Match.when('cardIsHeldAtLeastOnce', () => DeductionRule.cardIsHeldAtLeastOnce),
-            Match.when('cardIsHeldExactlyOnce', () => DeductionRule.cardIsHeldExactlyOnce),
-            Match.when('playerHasAtMostNumCards', () => DeductionRule.playerHasAtMostNumCards),
-            Match.when('playerHasAtLeastNumCards', () => DeductionRule.playerHasAtLeastNumCards),
-            Match.when('playerHasExactlyNumCards', () => DeductionRule.playerHasExactlyNumCards),
-            Match.when('caseFileHasAtMostOnePerCardType', () => DeductionRule.caseFileHasAtMostOnePerCardType),
-            Match.when('caseFileHasAtLeastOnePerCardType', () => DeductionRule.caseFileHasAtLeastOnePerCardType),
-            Match.when('caseFileHasExactlyOnePerCardType', () => DeductionRule.caseFileHasExactlyOnePerCardType),
-            Match.when('guessIsRefutedByHeldCard', () => DeductionRule.guessIsRefutedByHeldCard),
+            M.when('cardIsHeldAtMostOnce', () => DeductionRule.cardIsHeldAtMostOnce),
+            M.when('cardIsHeldAtLeastOnce', () => DeductionRule.cardIsHeldAtLeastOnce),
+            M.when('cardIsHeldExactlyOnce', () => DeductionRule.cardIsHeldExactlyOnce),
+            M.when('playerHasAtMostNumCards', () => DeductionRule.playerHasAtMostNumCards),
+            M.when('playerHasAtLeastNumCards', () => DeductionRule.playerHasAtLeastNumCards),
+            M.when('playerHasExactlyNumCards', () => DeductionRule.playerHasExactlyNumCards),
+            M.when('caseFileHasAtMostOnePerCardType', () => DeductionRule.caseFileHasAtMostOnePerCardType),
+            M.when('caseFileHasAtLeastOnePerCardType', () => DeductionRule.caseFileHasAtLeastOnePerCardType),
+            M.when('caseFileHasExactlyOnePerCardType', () => DeductionRule.caseFileHasExactlyOnePerCardType),
+            M.when('guessIsRefutedByHeldCard', () => DeductionRule.guessIsRefutedByHeldCard),
 
-            Match.exhaustive,
+            M.exhaustive,
         )),
 
         // Combine them all into a single deduction rule

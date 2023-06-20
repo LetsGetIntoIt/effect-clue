@@ -1,16 +1,6 @@
-import * as D from '@effect/data/Data';
-import * as B from '@effect/data/Brand';
-import * as ST from '@effect/data/Struct';
-import * as HM from '@effect/data/HashMap';
-import * as HS from '@effect/data/HashSet';
-import * as E from '@effect/data/Either';
-import * as T from '@effect/io/Effect';
-import * as CTX from "@effect/data/Context";
-import * as SG from '@effect/data/typeclass/Semigroup';
-import * as BOOL from '@effect/data/Boolean';
-import * as MON from '@effect/data/typeclass/Monoid';
-import { constant, flow, pipe } from '@effect/data/Function';
 
+import { D, HM, B, T, CTX, BOOL, HS, E, SG, MON, ST } from '../utils/EffectImports';
+import { pipe, flow, constant } from '@effect/data/Function';
 import { Struct_get, HashSet_of, Brand_refinedEffect, HashMap_setOrUpdate } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';

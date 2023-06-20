@@ -1,8 +1,5 @@
-import * as B from '@effect/data/Brand';
-import * as HS from '@effect/data/HashSet';
-import * as E from '@effect/data/Either';
-import * as ROA from '@effect/data/ReadonlyArray';
-import { apply, flow, pipe } from '@effect/data/Function';
+import { B, HS, E, ROA } from '../utils/EffectImports';
+import { flow, pipe, apply } from '@effect/data/Function';
 import { Brand_refined, Endomorphism_getMonoid } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';

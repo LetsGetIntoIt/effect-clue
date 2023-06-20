@@ -1,4 +1,4 @@
-import * as D from '@effect/data/Data';
+import { D } from '../utils/EffectImports';
 
 import * as Player from './Player';
 import * as CaseFile from './CaseFile';

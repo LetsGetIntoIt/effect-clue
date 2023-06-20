@@ -1,6 +1,4 @@
-import * as D from '@effect/data/Data';
-import * as HS from '@effect/data/HashSet';
-import * as CTX from '@effect/data/Context';
+import { D, CTX, HS } from "../utils/EffectImports";
 
 import * as CardSet from "./CardSet";
 import * as PlayerSet from "./PlayerSet";

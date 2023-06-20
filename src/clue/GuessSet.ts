@@ -1,6 +1,4 @@
-import * as B from '@effect/data/Brand';
-import * as HS from '@effect/data/HashSet';
-import * as CTX from '@effect/data/Context';
+import { B, HS, CTX } from '../utils/EffectImports';
 import { flow } from '@effect/data/Function';
 import { Brand_refined } from '../utils/ShouldBeBuiltin';
 

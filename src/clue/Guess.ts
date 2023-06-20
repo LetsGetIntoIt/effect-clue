@@ -1,15 +1,10 @@
-import * as D from '@effect/data/Data';
-import * as B from '@effect/data/Brand';
-import * as O from '@effect/data/Option';
-import * as HS from '@effect/data/HashSet';
-import * as P from '@effect/data/Predicate';
-import * as T from '@effect/io/Effect';
+import { D, HS, O, B, T, P } from '../utils/EffectImports';
+import { flow, constant } from '@effect/data/Function';
 import { Brand_refinedEffect, Option_fromPredicate, Struct_get } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';
 import * as Player from './Player';
 import * as Game from './Game';
-import { constant, flow } from '@effect/data/Function';
 
 export interface Guess extends D.Case {
     _tag: "Guess";

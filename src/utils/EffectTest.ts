@@ -1,4 +1,4 @@
-import * as T from '@effect/io/Effect';
+import { T } from "./EffectImports";
 
 export const Effect_test: (effect: T.Effect<never, never, void>) => Promise<void> =
     T.runPromise;

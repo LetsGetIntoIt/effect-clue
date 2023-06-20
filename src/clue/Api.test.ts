@@ -1,7 +1,8 @@
-import * as T from '@effect/io/Effect';
+
+import { T } from '../utils/EffectImports';
+import { Effect_expectSucceed, Effect_test } from '../utils/EffectTest';
 
 import * as App from './Api';
-import { Effect_expectSucceed, Effect_test } from '../utils/EffectTest';
 
 describe('App', () => {
     test('scenario 1', async () => {

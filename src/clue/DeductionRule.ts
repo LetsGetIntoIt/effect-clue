@@ -1,18 +1,9 @@
-import * as B from '@effect/data/Brand';
-import * as D from '@effect/data/Data';
-import * as SG from '@effect/data/typeclass/Semigroup';
-import * as MON from '@effect/data/typeclass/Monoid';
-import * as HS from '@effect/data/HashSet';
-import * as HM from '@effect/data/HashMap';
-import * as T from '@effect/io/Effect';
-import * as ROA from '@effect/data/ReadonlyArray';
-import { constant, flow, pipe } from '@effect/data/Function';
-
+import { T, B, SG, MON, HM, HS, ROA } from '../utils/EffectImports';
+import { constant, pipe, flow } from '@effect/data/Function';
 import { Effect_getSemigroupCombine, Function_getSemigroup, HashSet_fromHashMapMulti, HashSet_isSize } from '../utils/ShouldBeBuiltin';
 
 import * as Game from "./Game";
 import * as ConclusionMapSet from "./ConclusionMapSet";
-import * as CardOwner from './CardOwner';
 import * as CardOwnership from './CardOwnership';
 import * as Conclusion from './Conclusion';
 import * as GuessSet from './GuessSet';

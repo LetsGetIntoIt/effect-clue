@@ -1,9 +1,5 @@
-import * as D from '@effect/data/Data';
-import * as E from "@effect/data/Either";
-import * as B from '@effect/data/Brand';
-import * as O from '@effect/data/Option';
-import * as S from '@effect/data/String';
-import { constant, flow, pipe } from '@effect/data/Function';
+import { D, B, S, O, E } from '../utils/EffectImports';
+import { flow, constant, pipe } from '@effect/data/Function';
 import { Brand_refined, Option_fromRefinement, Struct_get } from '../utils/ShouldBeBuiltin';
 
 export interface CaseFile extends D.Case {

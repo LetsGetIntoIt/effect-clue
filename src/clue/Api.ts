@@ -1,5 +1,5 @@
-import * as B from '@effect/data/Brand';
-import * as T from '@effect/io/Effect';
+
+import { T, B } from '../utils/EffectImports';
 
 import * as ApiSteps from './ApiSteps';
 import * as ConclusionMapSet from './ConclusionMapSet';

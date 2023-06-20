@@ -1,6 +1,4 @@
-import * as B from '@effect/data/Brand';
-import * as HS from '@effect/data/HashSet';
-import * as E from '@effect/data/Either';
+import { B, HS, E } from '../utils/EffectImports';
 import { flow, pipe } from '@effect/data/Function';
 import { Brand_refined } from '../utils/ShouldBeBuiltin';
 

@@ -1,8 +1,5 @@
-import * as D from '@effect/data/Data';
-import * as B from '@effect/data/Brand';
-import * as O from '@effect/data/Option';
-import * as S from '@effect/data/String';
-import { constant, flow } from '@effect/data/Function';
+import { B, D, O, S } from '../utils/EffectImports';
+import { flow, constant } from '@effect/data/Function';
 import { Brand_refined, Option_fromRefinement, Struct_get } from '../utils/ShouldBeBuiltin';
 
 export interface Player extends D.Case {

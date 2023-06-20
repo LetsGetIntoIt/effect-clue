@@ -1,7 +1,7 @@
-import * as E from '@effect/data/Either';
+import { E } from "../utils/EffectImports";
+import { pipe } from "@effect/data/Function";
 
 import * as Card from "./Card";
-import { pipe } from '@effect/data/Function';
 
 describe('Card', () => {
     describe('#Equal', () => {
