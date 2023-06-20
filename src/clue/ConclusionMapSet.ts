@@ -8,7 +8,8 @@ import * as Player from './Player';
 import * as Guess from './Guess';
 import * as Game from './Game';
 import * as CardOwner from './CardOwner';
-import * as CardOwnership from './CardOwnership';
+import * as OwnershipOfCard from './OwnershipOfCard';
+import * as OwnershipOfOwner from './OwnershipOfOwner';
 import * as Conclusion from './Conclusion';
 import * as ConclusionMap from './ConclusionMap';
 import * as Range from './Range';
@@ -61,9 +62,9 @@ export const empty: ValidatedConclusionMapSet =
     );
 
 // TODO store this on the ValidatedConclusionMapSet itself, rather than recomputing it each time
-export const getOwnershipByCard: (
+export const getOwnershipOfCards: (
     conclusions: ValidatedConclusionMapSet,
-) => HM.HashMap<Card.Card, CardOwnership.CardOwnership> =
+) => HM.HashMap<Card.Card, OwnershipOfCard.OwnershipOfCard> =
     flow(
         // Pluck out the actual HashMap we care about
         Struct_get('ownership'),
@@ -80,11 +81,11 @@ export const getOwnershipByCard: (
 
                     // TODO make better constructors for these
                     BOOL.match(
-                        constant(CardOwnership.CardOwnershipUnowned({
+                        constant(OwnershipOfCard.OwnershipOfUnownedCard({
                             nonOwners: HashSet_of(owner),
                         })),
 
-                        constant(CardOwnership.CardOwnershipOwned({
+                        constant(OwnershipOfCard.OwnershipOfOwnedCard({
                             owner,
                             nonOwners: HS.empty(),
                         })),
@@ -98,13 +99,19 @@ export const getOwnershipByCard: (
                     constant(newOwnership),
 
                     // If we already have ownership information for the card
-                    flow(CardOwnership.combine(newOwnership), E.getOrThrow),
+                    flow(OwnershipOfCard.combine(newOwnership), E.getOrThrow),
                 )(
                     ownershipByCard,
                 )
             },
         )
     );
+
+// TODO store this on the ValidatedConclusionMapSet itself, rather than recomputing it each time
+export const getOwnershipOfOwner: (
+    conclusions: ValidatedConclusionMapSet,
+) => HM.HashMap<CardOwner.CardOwner, OwnershipOfOwner.OwnershipOfOwner> =
+    null;
 
 export type Modification = ((conclusions: ValidatedConclusionMapSet) => T.Effect<Game.Game, B.Brand.BrandErrors, ValidatedConclusionMapSet>);
 

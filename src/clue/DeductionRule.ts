@@ -4,10 +4,11 @@ import { Effect_getSemigroupCombine, Function_getSemigroup, HashSet_fromHashMapM
 
 import * as Game from "./Game";
 import * as ConclusionMapSet from "./ConclusionMapSet";
-import * as CardOwnership from './CardOwnership';
+import * as OwnershipOfCard from './OwnershipOfCard';
 import * as Conclusion from './Conclusion';
 import * as GuessSet from './GuessSet';
 import * as Range from './Range';
+import * as CardOwner from './CardOwner';
 
 export type DeductionRule = (
     // Accepts a set of "known" conclusions
@@ -82,7 +83,7 @@ export const playerHasMaxNumCardsRemaining: DeductionRule = (
 
     // TODO update our knowledge about each player's number of cards
     return yield* $(T.fail(
-        B.error(`DeductionRule playerHasAtMostNumCards not implemented yet`),
+        B.error(`DeductionRule playerHasNoMoreThanMaxNumCards not implemented yet`),
     ));
 });
 
@@ -111,14 +112,14 @@ export const cardIsHeldAtMostOnce: DeductionRule = (
     const game = yield* $(Game.Tag);
     const gameOwners = Game.owners(game);
 
-    const ownershipByCard = ConclusionMapSet.getOwnershipByCard(knownConclusions);
+    const ownershipByCard = ConclusionMapSet.getOwnershipOfCards(knownConclusions);
 
     // For each card that is owned, mark it as NOT owned by any owner left blank
     const modifyConclusions = pipe(
         ownershipByCard,
 
         // Keep only the cards with a known owner
-        HM.filter(CardOwnership.isOwned),
+        HM.filter(OwnershipOfCard.isOwned),
 
         // Figure out the owners we DON'T know about
         HM.map(flow(
@@ -166,14 +167,14 @@ export const cardIsHeldAtLeastOnce: DeductionRule = (
     const game = yield* $(Game.Tag);
     const gameOwners = Game.owners(game);
 
-    const ownershipByCard = ConclusionMapSet.getOwnershipByCard(knownConclusions);
+    const ownershipByCard = ConclusionMapSet.getOwnershipOfCards(knownConclusions);
 
     // For each card that is not owned, if there is a single unknown, mark it as OWNED
     const modifyConclusions = pipe(
         ownershipByCard,
 
         // Keep only the cards with a known owner
-        HM.filter(CardOwnership.isUnowned),
+        HM.filter(OwnershipOfCard.isUnowned),
 
         // Figure out the owners we DON'T know about
         HM.map(({ nonOwners }) => HS.difference(gameOwners, nonOwners)),
@@ -213,23 +214,37 @@ export const cardIsHeldExactlyOnce: DeductionRule =
     SemigroupUnion.combine(cardIsHeldAtMostOnce, cardIsHeldAtLeastOnce);
 
 // If all of a player's cards are accounted for, they don't have any others
-export const playerHasAtMostNumCards: DeductionRule =
-    constant(
-        T.fail(
-            B.error(`DeductionRule playerHasAtMostNumCards not implemented yet`),
-        ),
+export const playerHasNoMoreThanMaxNumCards: DeductionRule = (
+    knownConclusions,
+) => T.gen(function* ($) {
+    const game = yield* $(Game.Tag);
+
+    const ownersipByPlayer = pipe(
+        ConclusionMapSet.getOwnershipOfOwner(knownConclusions),
+
+        // TODO we only care about players. Filter out the case file
+        // TODO we only care about players where we know their maxNum cards. Filter out the rest
+
+        // For these players, figure out which cards we DON'T know their ownership of
+
+        // Mark all these cards as UNOWNED by this player
     );
+
+    return yield* $(T.fail(
+        B.error(`DeductionRule playerHasNoMoreThanMaxNumCards not implemented yet`),
+    ));
+})
 
 // If all of a player's missing cards are accounted for (the number that will be missing), they have all the others
-export const playerHasAtLeastNumCards: DeductionRule =
+export const playerHasNoLessThanMinNumCards: DeductionRule =
     constant(
         T.fail(
-            B.error(`DeductionRule playerHasAtLeastNumCards not implemented yet`),
+            B.error(`DeductionRule playerHasNoLessThanMinNumCards not implemented yet`),
         ),
     );
 
-export const playerHasExactlyNumCards: DeductionRule =
-    SemigroupUnion.combine(playerHasAtMostNumCards, playerHasAtLeastNumCards);
+export const playerHasNoCardsOutsideNumCardsRage: DeductionRule =
+    SemigroupUnion.combine(playerHasNoMoreThanMaxNumCards, playerHasNoLessThanMinNumCards);
 
 // If indentify a card in the case file, it's none of the other ones of that type
 export const caseFileHasAtMostOnePerCardType: DeductionRule =
