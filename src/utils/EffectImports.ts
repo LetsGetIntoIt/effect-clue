@@ -1,5 +1,6 @@
 export * as BOOL from '@effect/data/Boolean';
 export * as S from '@effect/data/String';
+export * as N from '@effect/data/Number';
 export * as D from '@effect/data/Data';
 export * as TU from '@effect/data/Tuple';
 export * as ROA from '@effect/data/ReadonlyArray';

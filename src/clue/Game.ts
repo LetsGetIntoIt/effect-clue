@@ -4,6 +4,7 @@ import * as CardSet from "./CardSet";
 import * as PlayerSet from "./PlayerSet";
 import * as CaseFile from './CaseFile';
 import * as CardOwner from './CardOwner';
+import { Struct_get } from "../utils/ShouldBeBuiltin";
 
 export interface Game extends D.Case {
     _tag: 'Game';
@@ -34,3 +35,7 @@ export const owners = (game: Game): HS.HashSet<CardOwner.CardOwner> => {
 
     return HS.add<CardOwner.CardOwner>(playerOwners, caseFileOwner);
 }
+
+// TODO how to make this a cached and calculated prop on the object itself?
+export const cardTypes = (game: Game): HS.HashSet<string> =>
+    HS.map(game.cards, Struct_get('cardType'));

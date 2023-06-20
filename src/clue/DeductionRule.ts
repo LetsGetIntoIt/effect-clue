@@ -1,12 +1,13 @@
-import { T, B, SG, MON, HM, HS, ROA } from '../utils/EffectImports';
+import { T, B, SG, MON, HM, HS, ROA, N } from '../utils/EffectImports';
 import { constant, pipe, flow } from '@effect/data/Function';
-import { Effect_getSemigroupCombine, Function_getSemigroup, HashSet_fromHashMapMulti, HashSet_isSize } from '../utils/ShouldBeBuiltin';
+import { Effect_getSemigroupCombine, Function_getSemigroup, HashSet_fromHashMapMulti, HashSet_isSize, Struct_get } from '../utils/ShouldBeBuiltin';
 
 import * as Game from "./Game";
 import * as ConclusionMapSet from "./ConclusionMapSet";
 import * as CardOwnership from './CardOwnership';
 import * as Conclusion from './Conclusion';
 import * as GuessSet from './GuessSet';
+import * as Range from './Range';
 
 export type DeductionRule = (
     // Accepts a set of "known" conclusions
@@ -47,9 +48,63 @@ export const MonoidUnion: MON.Monoid<DeductionRule> = MON.fromSemigroup(
     constEmpty,
 );
 
+// Every player has at least 0 cards, of course!
+export const playerHasAtLeastZeroCards: DeductionRule =
+    constant(
+        T.fail(
+            B.error(`DeductionRule playerHasAtLeastZeroCards not implemented yet`),
+        ),
+    );
+
+// A player can have at most TOTAL_NUM_CARDS - SUM(OTHER_PLAYER.MIN_NUM_CARDS)
+export const playerHasMaxNumCardsRemaining: DeductionRule = (
+    knownConclusions,
+) => T.gen(function* ($) {
+    const game = yield* $(Game.Tag);
+
+    // Get the total number of cards in the game
+    const totalNumCards = HS.size(game.cards);
+
+    // How many are in the case file?
+    // TODO this logic will need to update if case files can have more of any type of card
+    const caseFileNumCards = HS.size(Game.cardTypes(game));
+
+    // How many cards do all players have at a minimum?
+    const minPlayerNumCards = pipe(
+        knownConclusions.numCards,
+        HM.map(flow(Struct_get('answer'), Range.min)),
+        HM.values,
+        N.MonoidSum.combineAll,
+    );
+
+    // What is the maximum number of cards any player has?
+    const maxNumCards = totalNumCards - caseFileNumCards - minPlayerNumCards;
+
+    // TODO update our knowledge about each player's number of cards
+    return yield* $(T.fail(
+        B.error(`DeductionRule playerHasAtMostNumCards not implemented yet`),
+    ));
+});
+
+// A player must have at least as many cards as required to make all their refutations
+export const playerHasMinNumCardsRefuted: DeductionRule =
+    // Filter down to all the guesses they have refuted, where we DON'T know which card they refuted with
+    // Initialize MIN_NUM_CARDS=0 OR_CARDS={}
+    // For each guess:
+    //      If this has any overlap with existing OR_CARDS, ignore it and move on
+    //      Else
+    //          MIN_NUM_CARDS++
+    //          OR_CARDS union= guessed cards
+    // If the new minimum exceeds the max, is that a problem?
+    constant(
+        T.fail(
+            B.error(`DeductionRule playerHasMinNumCardsRefuted not implemented yet`),
+        ),
+    );
+
 // If a card is held by an owner, it cannot be held by anyone else
 export const cardIsHeldAtMostOnce: DeductionRule = (
-    knownConclusions: ConclusionMapSet.ValidatedConclusionMapSet,
+    knownConclusions,
 ) => T.gen(function* ($) {
     const game = yield* $(Game.Tag);
     const gameOwners = Game.owners(game);
@@ -104,7 +159,7 @@ export const cardIsHeldAtMostOnce: DeductionRule = (
 // TODO reduce duplication with the other card holding rule
 // If a card is held by everyone except one, then it's held by that one
 export const cardIsHeldAtLeastOnce: DeductionRule = (
-    knownConclusions: ConclusionMapSet.ValidatedConclusionMapSet,
+    knownConclusions,
 ) => T.gen(function* ($) {
     const game = yield* $(Game.Tag);
     const gameOwners = Game.owners(game);

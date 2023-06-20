@@ -306,6 +306,9 @@ export const provideGuesses = (guesses: GuessSet.ValidatedGuessSet) =>
     T.provideService(GuessSet.Tag, guesses);
 
 const ALL_DEDUCTION_RULES = [
+    'playerHasAtLeastZeroCards',
+    'playerHasMaxNumCardsRemaining',
+    'playerHasMinNumCardsRefuted',
     'cardIsHeldAtMostOnce',
     'cardIsHeldAtLeastOnce',
     'cardIsHeldExactlyOnce',
@@ -336,6 +339,9 @@ export const setupDeductionRules = (
         ROA.map(pipe(
             M.type<RawDeductionRule>(),
 
+            M.when('playerHasAtLeastZeroCards', () => DeductionRule.playerHasAtLeastZeroCards),
+            M.when('playerHasMaxNumCardsRemaining', () => DeductionRule.playerHasMaxNumCardsRemaining),
+            M.when('playerHasMinNumCardsRefuted', () => DeductionRule.playerHasMinNumCardsRefuted),
             M.when('cardIsHeldAtMostOnce', () => DeductionRule.cardIsHeldAtMostOnce),
             M.when('cardIsHeldAtLeastOnce', () => DeductionRule.cardIsHeldAtLeastOnce),
             M.when('cardIsHeldExactlyOnce', () => DeductionRule.cardIsHeldExactlyOnce),
