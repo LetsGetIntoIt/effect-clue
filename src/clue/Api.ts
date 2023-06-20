@@ -6,28 +6,23 @@ import * as ConclusionMapSet from './ConclusionMapSet';
 
 // TODO refactors
 // - Add logging, services and spans
-// - Guess.create() should validate that all the cards, nonRefuters, refuteCards, etc. make sense
+// - Add diagnotics to the result of the deduceConclusions() step (number of iterations, was it exhaustive, etc.)
 // - All Error strings from the API should be tagged/structured, instead of "string"
 // - Accumulate errors from the API where applicable (instead of failing at the first one)
 // - All Conclusion.Reasons should be tagged/structured, instead of string
 // - Conclusion.Reasons should be ordered from simplest to most complex
 // - DeductionRules should be ordered from simplest to most complex
-// - CardType should become its own object with a display label (maybe eventually, users can set the card types in a separate step)
-// - use generator syntax wherever possible
-// - convert any logical validations into typings. Make bad states unrepresentable
 // - use @effect/schema to validate data into the Api
 // - use TSPlus and see if a lot of interfaces/typeclasses/classes/constuctor code can be deduped
 // - Simplify Guess by converting to a tagged class for the 3 different possible cases: Unrefuted, RefutedUnknown, RefutedKnown
 // - ^ Update DeductionRule to only add refuted cards for RefutedUnknown guesses
-// - Implement CardSet.MonoidUnion, and make StandardNorthAmericaCardSet a regular CardSet, rather than a function to add all the standard cards
 
 // TODO more features
-// - Update player number of cards to be a range
-// - - New RageExact / RangeBounded object. getMin() getMax(). clampMax() and clampMin() functions
-// - - Update "player has at most/least" deductiont to use the getMin() getMax() of their cards
-// - - New deductions: if a player has refuted something, they have at least that many cards
-// - - New deductions: each player has a maximum of TOTAL CARDS - SUM(min cards) of every other player
+// - New deduction rule: if a player has refuted something, they have at least that many cards
+// - New deduction rule: each player has a maximum of TOTAL CARDS - SUM(min cards) of every other player
 // - Deduction: if a player has refuted {A, B, C} and {C, D, E} and they have only 1 card unaccounted, then they have C
+// - New deduction rule: simulated dealing. Branch through the possible ways the cards could have been dealt, and eliminate any paradoxical ones
+// - Add probabilities using simulated dealing. How many hands of the possible arrangements have (owner, card)=true?
 // - Save and load games from localStorage
 // - Who I've shown what (and which card I should show to refute)
 // - See what other people should know (by direct observation and inference)
