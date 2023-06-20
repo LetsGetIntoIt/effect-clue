@@ -11,10 +11,11 @@ import * as CardOwner from './CardOwner';
 import * as CardOwnership from './CardOwnership';
 import * as Conclusion from './Conclusion';
 import * as ConclusionMap from './ConclusionMap';
+import * as Range from './Range';
 
 export interface ConclusionMapSet extends D.Case {
     _tag: "ConclusionMapSet";
-    numCards: ConclusionMap.ValidatedConclusionMap<Player.Player, number>;
+    numCards: ConclusionMap.ValidatedConclusionMap<Player.Player, Range.Range>;
     ownership: ConclusionMap.ValidatedConclusionMap<D.Data<[CardOwner.CardOwner, Card.Card]>, boolean>;
     refuteCards: ConclusionMap.ValidatedConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>;
 };
@@ -128,7 +129,7 @@ export const modifyAddNumCards =
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
         ST.evolve({
-            numCards: ConclusionMap.setMergeOrFail(player, numCards, HashSet_of(reason)),
+            numCards: ConclusionMap.setMergeOrFail(player, Range.RangeExact({ value: numCards }) as Range.Range, HashSet_of(reason)),
             ownership: (_) => E.right(_),
             refuteCards: (_) => E.right(_),
         }),
