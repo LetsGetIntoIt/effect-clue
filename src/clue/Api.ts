@@ -18,7 +18,6 @@ import * as ConclusionMapSet from './ConclusionMapSet';
 // - ^ Update DeductionRule to only add refuted cards for RefutedUnknown guesses
 
 // TODO more features
-// - Deduction: if a player has refuted {A, B, C} and {C, D, E} and they have only 1 card unaccounted, then they have C
 // - New deduction rule: simulated dealing. Branch through the possible ways the cards could have been dealt, and eliminate any paradoxical ones
 // - Add probabilities using simulated dealing. How many hands of the possible arrangements have (owner, card)=true?
 // - Save and load games from localStorage

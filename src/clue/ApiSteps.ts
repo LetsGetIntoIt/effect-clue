@@ -319,6 +319,7 @@ const ALL_DEDUCTION_RULES = [
     'caseFileHasAtLeastOnePerCardType',
     'caseFileHasExactlyOnePerCardType',
     'guessIsRefutedByHeldCard',
+    'playerWith1CardRefutesWithIntersection',
 ] as const;
 
 type RawDeductionRule = typeof ALL_DEDUCTION_RULES[number];
@@ -352,6 +353,7 @@ export const setupDeductionRules = (
             M.when('caseFileHasAtLeastOnePerCardType', () => DeductionRule.caseFileHasAtLeastOnePerCardType),
             M.when('caseFileHasExactlyOnePerCardType', () => DeductionRule.caseFileHasExactlyOnePerCardType),
             M.when('guessIsRefutedByHeldCard', () => DeductionRule.guessIsRefutedByHeldCard),
+            M.when('playerWith1CardRefutesWithIntersection', () => DeductionRule.playerWith1CardRefutesWithIntersection),
 
             M.exhaustive,
         )),

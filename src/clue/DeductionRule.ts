@@ -257,3 +257,11 @@ export const guessIsRefutedByHeldCard: DeductionRule =
             B.error(`DeductionRule guessIsRefutedByHeldCard not implemented yet`),
         ),
     );
+
+// If a player has only 1 card left, that card is the intersection of any unknown refutes they've made
+export const playerWith1CardRefutesWithIntersection: DeductionRule =
+    constant(
+        T.fail(
+            B.error(`DeductionRule playerWith1CardRefutesWithIntersection not implemented yet`),
+        ),
+    );
