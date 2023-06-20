@@ -129,7 +129,7 @@ export const modifyAddNumCards =
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
         ST.evolve({
-            numCards: ConclusionMap.setMergeOrFail(player, Range.RangeExact({ value: numCards }) as Range.Range, HashSet_of(reason)),
+            numCards: ConclusionMap.setMergeOrFail(player, Range.Range(numCards), HashSet_of(reason)),
             ownership: (_) => E.right(_),
             refuteCards: (_) => E.right(_),
         }),

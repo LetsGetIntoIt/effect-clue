@@ -1,12 +1,12 @@
 import { pipe } from '@effect/data/Function';
-import { D, M } from '../utils/EffectImports';
+import { D, M, P } from '../utils/EffectImports';
 
 export interface RangeExact extends D.Case {
     _tag: "RangeExact";
     readonly value: number;
 };
 
-export const RangeExact = D.tagged<RangeExact>("RangeExact");
+const RangeExact = D.tagged<RangeExact>("RangeExact");
 
 export interface RangeBounded extends D.Case {
     _tag: "RangeBounded";
@@ -14,9 +14,16 @@ export interface RangeBounded extends D.Case {
     readonly max: number;
 };
 
-export const RangeBounded = D.tagged<RangeBounded>("RangeBounded");
+const RangeBounded = D.tagged<RangeBounded>("RangeBounded");
 
 export type Range = RangeExact | RangeBounded;
+
+export const Range = (min: number, max?: number): Range =>
+    P.isNotNullable(max)
+        ? min === max
+            ? RangeExact({ value: min })
+            : RangeBounded({ min, max })
+        : RangeExact({ value: min });
 
 // TODO can this be baked in as a property of the objects themselves, so that its just directly available?
 export const min: (range: Range) => number =
