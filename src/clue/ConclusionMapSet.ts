@@ -122,7 +122,7 @@ export const ModificationMonoid: MON.Monoid<Modification> = MON.fromSemigroup(
     identity,
 );
 
-export const modifyAddNumCards =
+export const modifyAddNumCardsExact =
         (player: Player.Player, numCards: number, reason: Conclusion.Reason):
         Modification =>
     flow(
