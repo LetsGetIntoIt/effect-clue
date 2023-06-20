@@ -87,20 +87,22 @@ export const playerHasMaxNumCardsRemaining: DeductionRule = (
 });
 
 // A player must have at least as many cards as required to make all their refutations
-export const playerHasMinNumCardsRefuted: DeductionRule =
-    // Filter down to all the guesses they have refuted, where we DON'T know which card they refuted with
-    // Initialize MIN_NUM_CARDS=0 OR_CARDS={}
-    // For each guess:
-    //      If this has any overlap with existing OR_CARDS, ignore it and move on
-    //      Else
-    //          MIN_NUM_CARDS++
-    //          OR_CARDS union= guessed cards
-    // If the new minimum exceeds the max, is that a problem?
-    constant(
-        T.fail(
+export const playerHasMinNumCardsRefuted: DeductionRule = (
+    knownConclusions,
+) => T.gen(function* ($) {
+        // Filter down to all the guesses they have refuted, where we DON'T know which card they refuted with
+        // Initialize MIN_NUM_CARDS=0 OR_CARDS={}
+        // For each guess:
+        //      If this has any overlap with existing OR_CARDS, ignore it and move on
+        //      Else
+        //          MIN_NUM_CARDS++
+        //          OR_CARDS union= guessed cards
+        // If the new minimum exceeds the max, is that a problem?
+
+        return yield* $(T.fail(
             B.error(`DeductionRule playerHasMinNumCardsRefuted not implemented yet`),
-        ),
-    );
+        ));
+    });
 
 // If a card is held by an owner, it cannot be held by anyone else
 export const cardIsHeldAtMostOnce: DeductionRule = (
