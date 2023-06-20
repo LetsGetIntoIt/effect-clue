@@ -375,7 +375,7 @@ export const deduceConclusions = (
 > =>
     T.gen(function* ($) {
         // Start with the initial conclusions
-        let previousConclusions = initialConclusions;
+        let previousConclusions;
         let newConclusions = initialConclusions;
         let iterationNum = 0;
 
