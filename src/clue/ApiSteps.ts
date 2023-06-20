@@ -16,7 +16,7 @@ import * as Card from './Card';
 import * as CardSet from './CardSet';
 import * as Player from './Player';
 import * as CaseFile from './CaseFile';
-import * as CardOwnerSet from './CardOwnerSet';
+import * as PlayerSet from './PlayerSet';
 import * as CardOwner from './CardOwner';
 import * as Game from './Game';
 import * as Guess from './Guess';
@@ -93,74 +93,53 @@ const parseCaseFile: (caseFile: RawCaseFile) => E.Either<B.Brand.BrandErrors, Ca
         CaseFile.ValidatedCaseFile,
     );
 
-export const setupCardOwners = ({
-    players = [],
-    caseFiles = [],
+export const setupPlayers = ({
+    players: rawPlayers = [],
 }: {
     players?: RawPlayer[];
-    caseFiles?: RawCaseFile[];
-}): E.Either<B.Brand.BrandErrors, CardOwnerSet.ValidatedCardOwnerSet> =>
+}): E.Either<B.Brand.BrandErrors, PlayerSet.ValidatedPlayerSet> =>
     E.gen(function* ($) {
-        // Create the players
-        const playerOwners = yield* $(
-            E.validateAll(
-                players,
-
-                flow(
-                    parsePlayer,
-                    E.map(player => CardOwner.CardOwnerPlayer({
-                        player,
-                    })),
-                ),
-            ),
-
-            // Concat all the errors
-            E.mapLeft(errors => B.errors(...errors)),
-        );
-
-        // Create the case files
-        const caseFileOwners = yield* $(
-            E.validateAll(
-                caseFiles,
-
-                flow(
-                    parseCaseFile,
-                    E.map(caseFile => CardOwner.CardOwnerCaseFile({
-                        caseFile,
-                    })),
-                ),
-            ),
-
-            // Concat all the errors
+        const players = yield* $(
+            E.validateAll(rawPlayers, parsePlayer),
             E.mapLeft(errors => B.errors(...errors)),
         );
 
         // Create our functiont to add all these owners
         const addAllOwners = pipe(
-            playerOwners,
-            ROA.appendAll(caseFileOwners),
-
-            ROA.map(CardOwnerSet.add),
-            Endomorphism_getMonoid<CardOwnerSet.CardOwnerSet>().combineAll,
+            players,
+            ROA.map(PlayerSet.add),
+            Endomorphism_getMonoid<PlayerSet.PlayerSet>().combineAll,
         );
 
         return yield* $(
-            CardOwnerSet.empty,
+            PlayerSet.empty,
             addAllOwners,
-            CardOwnerSet.ValidatedCardOwnerSet,
+            PlayerSet.ValidatedPlayerSet,
         );
+    });
+
+export const setupCaseFile = ({
+    caseFile: rawCaseFile = ['Murder'],
+}: {
+    caseFile?: RawCaseFile;
+}): E.Either<B.Brand.BrandErrors, CaseFile.ValidatedCaseFile> =>
+    E.gen(function* ($) {
+        return yield* $(parseCaseFile(rawCaseFile));
     });
 
 export const setupGame = ({
     cards = CardSet.empty,
-    owners = CardOwnerSet.empty,
+    players = PlayerSet.empty,
+    caseFile = CaseFile.standard,
 }: {
     cards?: CardSet.ValidatedCardSet;
-    owners?: CardOwnerSet.ValidatedCardOwnerSet;
+    players?: PlayerSet.ValidatedPlayerSet;
+    caseFile?: CaseFile.ValidatedCaseFile;
 }): E.Either<B.Brand.BrandErrors, Game.Game> =>
     E.right(Game.Game({
         cards,
-        owners,
+        players,
+        caseFile,
     }));
 
 export const provideGame = (game: Game.Game) =>

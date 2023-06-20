@@ -42,7 +42,8 @@ import * as ConclusionMapSet from './ConclusionMapSet';
 
 interface ApiInput {
     cardSetup: Parameters<typeof ApiSteps.setupCards>;
-    ownersSetup: Parameters<typeof ApiSteps.setupCardOwners>;
+    playersSetup: Parameters<typeof ApiSteps.setupPlayers>;
+    caseFileSetup: Parameters<typeof ApiSteps.setupCaseFile>;
     knownConclusionsSetup: Parameters<typeof ApiSteps.setupKnownConclusions>;
     guessesSetup: Parameters<typeof ApiSteps.setupGuesses>;
     deductionRulesSetup: Parameters<typeof ApiSteps.setupDeductionRules>;
@@ -55,15 +56,17 @@ interface ApiOutput {
 
 export const run = ({
     cardSetup: cardSetupArgs,
-    ownersSetup: ownersSetupArgs,
+    playersSetup: playersSetupArgs,
+    caseFileSetup: caseFileSetupArgs,
     knownConclusionsSetup: knownConclusionsSetupArgs,
     guessesSetup: guessesSetupArgs,
     deductionRulesSetup: deductionRulesSetupArgs,
 }: ApiInput): T.Effect<never, B.Brand.BrandErrors, ApiOutput> => T.gen(function* ($) {
     const cards = yield* $(ApiSteps.setupCards(...cardSetupArgs));
-    const owners = yield* $(ApiSteps.setupCardOwners(...ownersSetupArgs));
+    const players = yield* $(ApiSteps.setupPlayers(...playersSetupArgs));
+    const caseFile = yield* $(ApiSteps.setupCaseFile(...caseFileSetupArgs));
 
-    const game = yield* $(ApiSteps.setupGame({ cards, owners }));
+    const game = yield* $(ApiSteps.setupGame({ cards, players, caseFile }));
 
     const knownConclusions = yield* $(
         ApiSteps.setupKnownConclusions(...knownConclusionsSetupArgs),

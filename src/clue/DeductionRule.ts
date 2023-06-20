@@ -12,6 +12,7 @@ import { Effect_getSemigroupCombine, Function_getSemigroup, HashSet_fromHashMapM
 
 import * as Game from "./Game";
 import * as ConclusionMapSet from "./ConclusionMapSet";
+import * as CardOwner from './CardOwner';
 import * as CardOwnership from './CardOwnership';
 import * as Conclusion from './Conclusion';
 import * as GuessSet from './GuessSet';
@@ -59,10 +60,8 @@ export const MonoidUnion: MON.Monoid<DeductionRule> = MON.fromSemigroup(
 export const cardIsHeldAtMostOnce: DeductionRule = (
     knownConclusions: ConclusionMapSet.ValidatedConclusionMapSet,
 ) => T.gen(function* ($) {
-    const {
-        cards: allCards,
-        owners: allCardOwners,
-    } = yield* $(Game.Tag);
+    const game = yield* $(Game.Tag);
+    const gameOwners = Game.owners(game);
 
     const ownershipByCard = ConclusionMapSet.getOwnershipByCard(knownConclusions);
 
@@ -80,7 +79,7 @@ export const cardIsHeldAtMostOnce: DeductionRule = (
 
             // Find the difference from all owners in the game
             // This is the owners that are blank for this card
-            known => HS.difference(allCardOwners, known),
+            known => HS.difference(gameOwners, known),
         )),
 
         // Convert to a nice set of pairs
@@ -116,10 +115,8 @@ export const cardIsHeldAtMostOnce: DeductionRule = (
 export const cardIsHeldAtLeastOnce: DeductionRule = (
     knownConclusions: ConclusionMapSet.ValidatedConclusionMapSet,
 ) => T.gen(function* ($) {
-    const {
-        cards: allCards,
-        owners: allCardOwners,
-    } = yield* $(Game.Tag);
+    const game = yield* $(Game.Tag);
+    const gameOwners = Game.owners(game);
 
     const ownershipByCard = ConclusionMapSet.getOwnershipByCard(knownConclusions);
 
@@ -131,7 +128,7 @@ export const cardIsHeldAtLeastOnce: DeductionRule = (
         HM.filter(CardOwnership.isUnowned),
 
         // Figure out the owners we DON'T know about
-        HM.map(({ nonOwners }) => HS.difference(allCardOwners, nonOwners)),
+        HM.map(({ nonOwners }) => HS.difference(gameOwners, nonOwners)),
 
         // Keep only the cards that have exactly 1 unknown owner
         HM.filter(HashSet_isSize(1)),

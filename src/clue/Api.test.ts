@@ -16,16 +16,16 @@ describe('App', () => {
                         ],
                     }],
 
-                    ownersSetup: [{
+                    playersSetup: [{
                         players: [
                             ['Kapil'],
                             ['Kate'],
                             ['Karthik'],
                         ],
-                    
-                        caseFiles: [
-                            ['Murder'],
-                        ],
+                    }],
+
+                    caseFileSetup: [{
+                        caseFile: ['Murder'],
                     }],
 
                     knownConclusionsSetup: [{

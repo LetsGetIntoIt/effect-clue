@@ -62,7 +62,7 @@ export const empty: ValidatedConclusionMapSet =
         ValidatedConclusionMapSet,
 
         // We just need an empty game
-        T.provideService(Game.Tag, Game.empty),
+        T.provideService(Game.Tag, Game.emptyStandard),
 
         // If creating an empty deduction set errors, it is a defects in the underlying code,
         // not tagged errors that should be handled by the user
