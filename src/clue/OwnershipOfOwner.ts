@@ -1,12 +1,31 @@
 
-import { D, HS } from '../utils/EffectImports';
+import { flow, pipe } from '@effect/data/Function';
+import { B, E, HM } from '../utils/EffectImports';
+import { Brand_refined } from '../utils/ShouldBeBuiltin';
 
 import * as Card from './Card';
 
-export interface OwnershipOfOwner  extends D.Case {
-    _tag: "OwnershipOfOwner";
-    readonly owned: HS.HashSet<Card.Card>;
-    readonly unowned: HS.HashSet<Card.Card>;
-};
+export type OwnershipOfOwner = B.Branded<HM.HashMap<Card.ValidatedCard, boolean>, 'OwnershipOfOwner'>;
 
-export const OwnershipOfOwner = D.tagged<OwnershipOfOwner>("OwnershipOfOwner");
+export const OwnershipOfOwner = B.nominal<OwnershipOfOwner>();
+
+export type ValidatedOwnershipOfOwner = OwnershipOfOwner & B.Brand<'OwnershipOfOwner'>;
+
+export const ValidatedOwnershipOfOwner = Brand_refined<ValidatedOwnershipOfOwner>([
+    // TODO validate that the owned and unowned 
+]);
+
+export const empty: ValidatedOwnershipOfOwner =
+    pipe(
+        HM.empty(),
+        OwnershipOfOwner,
+        ValidatedOwnershipOfOwner,
+        E.getOrThrow,
+    );
+
+export const set = (card: Card.ValidatedCard, isOwned: boolean): ((ownership: ValidatedOwnershipOfOwner) => E.Either<B.Brand.BrandErrors, ValidatedOwnershipOfOwner>) =>
+    flow(
+        HM.set(card, isOwned),
+        OwnershipOfOwner,
+        ValidatedOwnershipOfOwner,
+    );

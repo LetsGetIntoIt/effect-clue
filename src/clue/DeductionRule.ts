@@ -1,6 +1,6 @@
-import { T, B, SG, MON, HM, HS, ROA, N } from '../utils/EffectImports';
-import { constant, pipe, flow } from '@effect/data/Function';
-import { Effect_getSemigroupCombine, Function_getSemigroup, HashSet_fromHashMapMulti, HashSet_isSize, Struct_get } from '../utils/ShouldBeBuiltin';
+import { T, B, SG, MON, HM, HS, ROA, N, P, EQ, O, BOOL } from '../utils/EffectImports';
+import { constant, pipe, flow, identity, constFalse } from '@effect/data/Function';
+import { Effect_getSemigroupCombine, Function_getSemigroup, HashMap_filterWithIndexKV, HashSet_fromHashMapMulti, HashSet_isEmpty as HashSet_isEmpty, HashSet_isSize, Option_fromPredicate, Refinement_identity, Struct_get } from '../utils/ShouldBeBuiltin';
 
 import * as Game from "./Game";
 import * as ConclusionMapSet from "./ConclusionMapSet";
@@ -49,13 +49,18 @@ export const MonoidUnion: MON.Monoid<DeductionRule> = MON.fromSemigroup(
     constEmpty,
 );
 
-// Every player has at least 0 cards, of course!
-export const playerHasAtLeastZeroCards: DeductionRule =
-    constant(
-        T.fail(
-            B.error(`DeductionRule playerHasAtLeastZeroCards not implemented yet`),
-        ),
-    );
+// Every player has >=0 cards, and <= ALL_CARDS.size(), of course!
+export const playerHasZeroToNumAllCards: DeductionRule = (
+    knownConclusions
+) => T.gen(function* ($) {
+    const game = yield* $(Game.Tag);
+    const numCards = HS.size(game.cards);
+
+    // TODO update our knowledge about each player's number of cards. Camp to [0, numCards]
+    return yield* $(T.fail(
+        B.error(`DeductionRule playerHasNoMoreThanMaxNumCards not implemented yet`),
+    ));
+});
 
 // A player can have at most TOTAL_NUM_CARDS - SUM(OTHER_PLAYER.MIN_NUM_CARDS)
 export const playerHasMaxNumCardsRemaining: DeductionRule = (
@@ -71,7 +76,7 @@ export const playerHasMaxNumCardsRemaining: DeductionRule = (
     const caseFileNumCards = HS.size(Game.cardTypes(game));
 
     // How many cards do all players have at a minimum?
-    const minPlayerNumCards = pipe(
+    const totalMinPlayerNumCards = pipe(
         knownConclusions.numCards,
         HM.map(flow(Struct_get('answer'), Range.min)),
         HM.values,
@@ -79,7 +84,7 @@ export const playerHasMaxNumCardsRemaining: DeductionRule = (
     );
 
     // What is the maximum number of cards any player has?
-    const maxNumCards = totalNumCards - caseFileNumCards - minPlayerNumCards;
+    const maxNumCards = totalNumCards - caseFileNumCards - totalMinPlayerNumCards;
 
     // TODO update our knowledge about each player's number of cards
     return yield* $(T.fail(
@@ -112,7 +117,7 @@ export const cardIsHeldAtMostOnce: DeductionRule = (
     const game = yield* $(Game.Tag);
     const gameOwners = Game.owners(game);
 
-    const ownershipByCard = ConclusionMapSet.getOwnershipOfCards(knownConclusions);
+    const ownershipByCard = ConclusionMapSet.getOwnershipByCard(knownConclusions);
 
     // For each card that is owned, mark it as NOT owned by any owner left blank
     const modifyConclusions = pipe(
@@ -167,7 +172,7 @@ export const cardIsHeldAtLeastOnce: DeductionRule = (
     const game = yield* $(Game.Tag);
     const gameOwners = Game.owners(game);
 
-    const ownershipByCard = ConclusionMapSet.getOwnershipOfCards(knownConclusions);
+    const ownershipByCard = ConclusionMapSet.getOwnershipByCard(knownConclusions);
 
     // For each card that is not owned, if there is a single unknown, mark it as OWNED
     const modifyConclusions = pipe(
@@ -182,10 +187,8 @@ export const cardIsHeldAtLeastOnce: DeductionRule = (
         // Keep only the cards that have exactly 1 unknown owner
         HM.filter(HashSet_isSize(1)),
 
-        // Convert to a nice set of pairs
-        HashSet_fromHashMapMulti,
-
         // Now put together all the modifications we need to apply
+        HashSet_fromHashMapMulti,
         HS.map(([card, owner]) =>
             ConclusionMapSet.modifyAddOwnership(
                 owner,
@@ -219,29 +222,153 @@ export const playerHasNoMoreThanMaxNumCards: DeductionRule = (
 ) => T.gen(function* ($) {
     const game = yield* $(Game.Tag);
 
-    const ownersipByPlayer = pipe(
-        ConclusionMapSet.getOwnershipOfOwner(knownConclusions),
+    const modifyConclusions = pipe(
+        ConclusionMapSet.getOwnershipByOwner(knownConclusions),
 
-        // TODO we only care about players. Filter out the case file
-        // TODO we only care about players where we know their maxNum cards. Filter out the rest
+        // We only care about players
+        HashMap_filterWithIndexKV(
+            CardOwner.isPlayer,
+            Refinement_identity(),
+        ),
+
+        // We only care about players where we know their maxNum cards
+        HM.filterWithIndex((ownership, owner) => {
+            const numOwnedCards = pipe(
+                ownership,
+                HM.filter(identity),
+                HM.size,
+            );
+
+            const maxNumCards = pipe(
+                knownConclusions.numCards,
+                HM.get(owner),
+                O.map(flow(
+                    Struct_get('answer'),
+                    Range.max,
+                )),
+            );
+
+            return O.match(
+                maxNumCards,
+                
+                // We don't know their max number of cards
+                constFalse,
+
+                // We do know their max num cards, and we know what all those cards are
+                EQ.equals(numOwnedCards),
+            );
+        }),
 
         // For these players, figure out which cards we DON'T know their ownership of
+        // and only proceed if there are any cards with unknown ownership
+        HM.filterMap(flow(
+            HM.keySet,
+            HS.difference(game.cards),
+            Option_fromPredicate(P.not(HashSet_isEmpty()))
+        )),
 
         // Mark all these cards as UNOWNED by this player
-    );
+        HashSet_fromHashMapMulti,
+        HS.map(([owner, card]) =>
+            ConclusionMapSet.modifyAddOwnership(
+                owner,
+                card,
 
-    return yield* $(T.fail(
-        B.error(`DeductionRule playerHasNoMoreThanMaxNumCards not implemented yet`),
-    ));
-})
+                false,
 
-// If all of a player's missing cards are accounted for (the number that will be missing), they have all the others
-export const playerHasNoLessThanMinNumCards: DeductionRule =
-    constant(
-        T.fail(
-            B.error(`DeductionRule playerHasNoLessThanMinNumCards not implemented yet`),
+                Conclusion.Reason({
+                    level: 'inferred',
+                    explanation: `All of this player's cards have been accounted for already, so they cannot own this one`,
+                }),
+            ),
         ),
+
+        HS.values,
+        ROA.fromIterable,
+
+        // Convert them into a single modification
+        ConclusionMapSet.ModificationMonoid.combineAll,
     );
+
+    return yield* $(modifyConclusions(knownConclusions));
+});
+
+// For each player, if all cards are accounted for except their min number, then they own the rest
+export const playerHasNoLessThanMinNumCards: DeductionRule = (
+    knownConclusions,
+) => T.gen(function* ($) {
+    const game = yield* $(Game.Tag);
+
+    const modifyConclusions = pipe(
+        ConclusionMapSet.getOwnershipByOwner(knownConclusions),
+
+        // We only care about players
+        HashMap_filterWithIndexKV(
+            CardOwner.isPlayer,
+            Refinement_identity(),
+        ),
+
+        // We only care about players where we know all cards except their min number of cards
+        HM.filterWithIndex((ownership, owner) => {
+            const numUnownedCards = pipe(
+                ownership,
+                HM.filter(BOOL.not),
+                HM.size,
+            );
+
+            const minNumCards = pipe(
+                knownConclusions.numCards,
+                HM.get(owner),
+                O.map(flow(
+                    Struct_get('answer'),
+                    Range.min,
+                )),
+            );
+
+            return O.match(
+                minNumCards,
+
+                // We don't know their min number of cards
+                constFalse,
+
+                // We do know their min num cards, and we know what all those cards are
+                EQ.equals(numUnownedCards),
+            );
+        }),
+
+        // For these players, figure out which cards we DON'T know their ownership of
+        // and only proceed if there are any cards with unknown ownership
+        HM.filterMap(flow(
+            HM.keySet,
+            HS.difference(game.cards),
+            Option_fromPredicate(P.not(HashSet_isEmpty()))
+        )),
+
+        // Mark all these cards as UNOWNED by this player
+        HashSet_fromHashMapMulti,
+        HS.map(([owner, card]) =>
+            ConclusionMapSet.modifyAddOwnership(
+                owner,
+                card,
+
+                true,
+
+                Conclusion.Reason({
+                    level: 'inferred',
+                    explanation: `All except this player's min number of cards have been accounted for, so they definitely own the rest`,
+                }),
+            ),
+        ),
+
+        HS.values,
+        ROA.fromIterable,
+
+        // Convert them into a single modification
+        ConclusionMapSet.ModificationMonoid.combineAll,
+    );
+
+    return yield* $(modifyConclusions(knownConclusions));
+});
 
 export const playerHasNoCardsOutsideNumCardsRage: DeductionRule =
     SemigroupUnion.combine(playerHasNoMoreThanMaxNumCards, playerHasNoLessThanMinNumCards);

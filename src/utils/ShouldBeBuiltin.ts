@@ -1,4 +1,4 @@
-import { SG, EQV, P, O, BOOL, MON, HS, HM, TU, ROA, T, E, B, AP } from "./EffectImports";
+import { SG, EQV, P, O, BOOL, MON, HS, HM, TU, ROA, T, E, B, EQ } from "./EffectImports";
 import { constTrue, pipe, flow, identity, apply } from "@effect/data/Function";
 
 export const Function_getSemigroup =
@@ -7,6 +7,9 @@ export const Function_getSemigroup =
     SG.make(
         (f, g) => (a) => SGB.combine(f(a), g(a))
     );
+
+export const Refinement_identity = <A>(): P.Refinement<A, A> =>
+    constTrue as any;
 
 export const Equivalence_constTrue: EQV.Equivalence<unknown> =
     constTrue;
@@ -70,6 +73,14 @@ export const HashSet_fromHashMapMulti = <K, V>(hashMap: HM.HashMap<K, HS.HashSet
         ),
     );
 
+export const HashMap_filterWithIndexKV = <KIn, VIn, KOut extends KIn, VOut extends VIn>(
+    refineK: P.Refinement<KIn, KOut>,
+    refineV: P.Refinement<VIn, VOut>,
+): ((hashMapIn: HM.HashMap<KIn, VIn>) => HM.HashMap<KOut, VOut>) =>
+    HM.filterWithIndex<KIn, VIn, VOut>((value, key): value is VOut /* And key is KOut */ =>
+        refineK(key) && refineV(value),
+    ) as any;
+
 export const Effect_getSemigroupCombine = <A, E, R>(combine: (a: A, b: A) => T.Effect<R, E, A>): SG.Semigroup<T.Effect<R, E, A>> =>
     SG.make((first, second) => T.gen(function* ($) {
         const firstValue = yield* $(first);
@@ -79,8 +90,13 @@ export const Effect_getSemigroupCombine = <A, E, R>(combine: (a: A, b: A) => T.E
     }));
 
 export const HashSet_isSize = <A>(size: number): P.Predicate<HS.HashSet<A>> =>
-    (hashSet) =>
-        HS.size(hashSet) === size;
+    pipe(
+        EQ.equals(size),
+        P.contramap(HS.size),
+    );
+
+export const HashSet_isEmpty = <A>(): P.Predicate<HS.HashSet<A>> =>
+    HashSet_isSize(0);
 
 export const Struct_get = <S, Key extends keyof S>(
     key: Key,
@@ -129,6 +145,9 @@ export const Either_validate = <A, E, B>(validations: readonly ((input: A) => E.
             ),
         ),
     );
+
+export const Either_validateNonEmpty: <A, E, B>(validations: ROA.NonEmptyArray<((input: A) => E.Either<E, B>)>) => (input: A) => E.Either<E[], ROA.NonEmptyArray<B>> =
+    Either_validate as any;
 
 export const Brand_refined = <Branded extends B.Brand<string | symbol>>(
     refinements: readonly ((unbranded: B.Brand.Unbranded<Branded>) => E.Either<B.Brand.BrandErrors, unknown>)[],

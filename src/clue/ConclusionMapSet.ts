@@ -17,8 +17,8 @@ import * as Range from './Range';
 export interface ConclusionMapSet extends D.Case {
     _tag: "ConclusionMapSet";
     numCards: ConclusionMap.ValidatedConclusionMap<Player.Player, Range.Range>;
-    ownership: ConclusionMap.ValidatedConclusionMap<D.Data<[CardOwner.CardOwner, Card.Card]>, boolean>;
-    refuteCards: ConclusionMap.ValidatedConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>;
+    ownership: ConclusionMap.ValidatedConclusionMap<D.Data<[CardOwner.CardOwner, Card.ValidatedCard]>, boolean>;
+    refuteCards: ConclusionMap.ValidatedConclusionMap<Guess.Guess, HM.HashMap<Card.ValidatedCard, 'owned' | 'maybe'>>;
 };
 
 export const ConclusionMapSet = D.tagged<ConclusionMapSet>("ConclusionMapSet");
@@ -62,9 +62,9 @@ export const empty: ValidatedConclusionMapSet =
     );
 
 // TODO store this on the ValidatedConclusionMapSet itself, rather than recomputing it each time
-export const getOwnershipOfCards: (
+export const getOwnershipByCard: (
     conclusions: ValidatedConclusionMapSet,
-) => HM.HashMap<Card.Card, OwnershipOfCard.OwnershipOfCard> =
+) => HM.HashMap<Card.ValidatedCard, OwnershipOfCard.OwnershipOfCard> =
     flow(
         // Pluck out the actual HashMap we care about
         Struct_get('ownership'),
@@ -108,10 +108,37 @@ export const getOwnershipOfCards: (
     );
 
 // TODO store this on the ValidatedConclusionMapSet itself, rather than recomputing it each time
-export const getOwnershipOfOwner: (
+export const getOwnershipByOwner: (
     conclusions: ValidatedConclusionMapSet,
-) => HM.HashMap<CardOwner.CardOwner, OwnershipOfOwner.OwnershipOfOwner> =
-    null;
+) => HM.HashMap<CardOwner.CardOwner, OwnershipOfOwner.ValidatedOwnershipOfOwner> =
+    flow(
+        // Pluck out the actual HashMap we care about
+        Struct_get('ownership'),
+
+        // We don't care about the conclusions and reasons, just whether its owned or not
+        HM.map(({ answer }) => answer),
+
+        HM.reduceWithIndex(
+            HM.empty(),
+
+            (ownershipByOwner, isOwned, [owner, card]) =>
+                HashMap_setOrUpdate(
+                    owner,
+
+                    // If this card doesn't exist in the map yet
+                    constant(pipe(
+                        OwnershipOfOwner.empty,
+                        OwnershipOfOwner.set(card, isOwned),
+                        E.getOrThrow
+                    )),
+
+                    // If we already have ownership information for the card
+                    flow(OwnershipOfOwner.set(card, isOwned), E.getOrThrow)
+                )(
+                    ownershipByOwner
+                ),
+        )
+    );
 
 export type Modification = ((conclusions: ValidatedConclusionMapSet) => T.Effect<Game.Game, B.Brand.BrandErrors, ValidatedConclusionMapSet>);
 
@@ -136,7 +163,11 @@ export const modifyAddNumCardsExact =
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
         ST.evolve({
-            numCards: ConclusionMap.setMergeOrFail(player, Range.Range(numCards), HashSet_of(reason)),
+            numCards: (numCardsMap) => E.gen(function* ($) {
+                const newRange = yield* $(Range.Range(numCards));
+                const updateNumCards = ConclusionMap.setMergeOrFail(player, newRange, HashSet_of(reason));
+                return yield* $(updateNumCards(numCardsMap));
+            }),
             ownership: (_) => E.right(_),
             refuteCards: (_) => E.right(_),
         }),
@@ -147,7 +178,7 @@ export const modifyAddNumCardsExact =
     );
 
 export const modifyAddOwnership =
-        (owner: CardOwner.CardOwner, card: Card.Card, isOwned: boolean, reason: Conclusion.Reason):
+        (owner: CardOwner.CardOwner, card: Card.ValidatedCard, isOwned: boolean, reason: Conclusion.Reason):
         Modification =>
     flow(
         ST.pick('numCards', 'ownership', 'refuteCards'),
@@ -164,7 +195,7 @@ export const modifyAddOwnership =
     );
 
 export const modifySetRefuteCards =
-        (guess: Guess.Guess, possibleCards: HM.HashMap<Card.Card, 'owned' | 'maybe'>, reason: Conclusion.Reason):
+        (guess: Guess.Guess, possibleCards: HM.HashMap<Card.ValidatedCard, 'owned' | 'maybe'>, reason: Conclusion.Reason):
         Modification =>
     flow(
         ST.pick('numCards', 'ownership', 'refuteCards'),
