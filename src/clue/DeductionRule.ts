@@ -1,5 +1,5 @@
 import { T, B, SG, MON, HM, HS, ROA, N, P, EQ, O, BOOL } from '../utils/EffectImports';
-import { constant, pipe, flow, identity, constFalse } from '@effect/data/Function';
+import { constant, pipe, flow, identity as F_identity, constFalse } from '@effect/data/Function';
 import { Effect_getSemigroupCombine, Function_getSemigroup, HashMap_filterWithIndexKV, HashSet_fromHashMapMulti, HashSet_isEmpty as HashSet_isEmpty, HashSet_isSize, Option_fromPredicate, Refinement_identity, Struct_get } from '../utils/ShouldBeBuiltin';
 
 import * as Game from "./Game";
@@ -27,8 +27,8 @@ export type DeductionRule = (
     ConclusionMapSet.ValidatedConclusionMapSet
 >;
 
-export const constEmpty: DeductionRule =
-    constant(T.succeed(ConclusionMapSet.empty));
+export const identity: DeductionRule =
+    T.succeed;
 
 export const SemigroupUnion: SG.Semigroup<DeductionRule> = 
     Function_getSemigroup(
@@ -46,7 +46,7 @@ export const SemigroupUnion: SG.Semigroup<DeductionRule> =
 
 export const MonoidUnion: MON.Monoid<DeductionRule> = MON.fromSemigroup(
     SemigroupUnion,
-    constEmpty,
+    identity,
 );
 
 // Every player has >=0 cards, and <= ALL_CARDS.size(), of course!
@@ -235,7 +235,7 @@ export const playerHasNoMoreThanMaxNumCards: DeductionRule = (
         HM.filterWithIndex((ownership, owner) => {
             const numOwnedCards = pipe(
                 ownership,
-                HM.filter(identity),
+                HM.filter(F_identity),
                 HM.size,
             );
 
