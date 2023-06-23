@@ -1,6 +1,6 @@
 import { D, HS, B, EQV, ST, EQ, E, BOOL, M } from '../utils/EffectImports';
 import { pipe, constant } from '@effect/data/Function';
-import { Brand_refined, Equivalence_constTrue } from '../utils/ShouldBeBuiltin';
+import { Brand_refined, Equivalence_constTrue } from '../utils/Effect';
 
 export interface Reason extends D.Case {
     _tag: "Reason";

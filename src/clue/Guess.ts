@@ -1,6 +1,6 @@
 import { D, HS, O, B, T, P } from '../utils/EffectImports';
 import { flow, constant } from '@effect/data/Function';
-import { Brand_refinedEffect, Either_fromPredicate, Option_fromPredicate, Struct_get } from '../utils/ShouldBeBuiltin';
+import { Brand_refinedEffect, Either_fromPredicate, Option_fromPredicate, Struct_get } from '../utils/Effect';
 
 import * as Card from './Card';
 import * as Player from './Player';

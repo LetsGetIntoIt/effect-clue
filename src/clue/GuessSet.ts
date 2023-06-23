@@ -1,6 +1,6 @@
 import { B, HS, CTX } from '../utils/EffectImports';
 import { flow } from '@effect/data/Function';
-import { Brand_refined } from '../utils/ShouldBeBuiltin';
+import { Brand_refined } from '../utils/Effect';
 
 import * as Guess from './Guess';
 

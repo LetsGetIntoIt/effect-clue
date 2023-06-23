@@ -1,6 +1,6 @@
 import { D, B, S, P } from '../utils/EffectImports';
 import { constant } from '@effect/data/Function';
-import { Brand_refined, Either_fromPredicate, Struct_get } from '../utils/ShouldBeBuiltin';
+import { Brand_refined, Either_fromPredicate, Struct_get } from '../utils/Effect';
 
 export interface Card extends D.Case {
     _tag: "Card";

@@ -1,6 +1,6 @@
 import { D, B, S, O, E, P } from '../utils/EffectImports';
 import { flow, constant, pipe } from '@effect/data/Function';
-import { Brand_refined, Either_fromPredicate, Option_fromRefinement, Struct_get } from '../utils/ShouldBeBuiltin';
+import { Brand_refined, Either_fromPredicate, Option_fromRefinement, Struct_get } from '../utils/Effect';
 
 export interface CaseFile extends D.Case {
     _tag: "CaseFile";
