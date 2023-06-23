@@ -370,7 +370,7 @@ export const playerHasNoLessThanMinNumCards: DeductionRule = (
     return yield* $(modifyConclusions(knownConclusions));
 });
 
-export const playerHasNoCardsOutsideNumCardsRage: DeductionRule =
+export const playerHasNoCardsOutsideNumCardsRange: DeductionRule =
     SemigroupUnion.combine(playerHasNoMoreThanMaxNumCards, playerHasNoLessThanMinNumCards);
 
 // If indentify a card in the case file, it's none of the other ones of that type

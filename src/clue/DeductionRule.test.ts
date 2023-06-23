@@ -1,15 +1,19 @@
-import { pipe } from "@effect/data/Function";
-import { E, EQ, HS, T } from "../utils/EffectImports";
+import { flow, pipe } from "@effect/data/Function";
+import { E, EQ, HS, ROA, T } from "../utils/EffectImports";
 import { Effect_expectSucceed, Effect_test } from "../utils/EffectTest";
+import { mockValue } from "../utils/JestTest";
 
 import * as DeductionRule from './DeductionRule';
 import * as ConclusionMapSet from "./ConclusionMapSet";
 import * as Player from "./Player";
 import * as Conclusion from "./Conclusion";
+import * as CardSet from './CardSet';
+import * as PlayerSet from './PlayerSet';
 import * as Game from "./Game";
 import * as GuessSet from "./GuessSet";
 import * as CaseFile from "./CaseFile";
-import { mockValue } from "../utils/JestTest";
+import * as Card from "./Card";
+import { mockCardMustard, mockCaseFileStandard, mockPlayerAlice, testSetupConclusions, testSetupGame, testSetupGuesses } from "./DeductionRule.test-util";
 
 describe('DeductionRule', () => {
     describe('identity', () => {
@@ -54,11 +58,69 @@ describe('DeductionRule', () => {
     });
 
     describe('cardIsHeldAtMostOnce', () => {
-        test.todo('test this function');
+        test('card with a single known owner', async () => {
+            
+        });
+
+        test('card with a single known owner and non-owner', async () => {
+
+        });
+
+        test('no cards with known owners', async () => {
+            await Effect_test(T.gen(function* ($) {
+                const game = yield* $(testSetupGame({
+                    cards: [
+                        mockCardMustard,
+                    ],
+
+                    players: [
+                        mockPlayerAlice,
+                    ],
+
+                    caseFile: mockCaseFileStandard,
+                }));
+
+                const guesses = yield* $(testSetupGuesses({
+                    game,
+                    guesses: [
+
+                    ],
+                }));
+
+                const initialConclusions = yield* $(testSetupConclusions({
+
+                }));
+
+                const expectedConclusions = yield* $(testSetupConclusions({
+
+                }));
+
+                const deducedConclusions =
+                    yield* $(Effect_expectSucceed(pipe(
+                        initialConclusions,
+                        DeductionRule.cardIsHeldAtMostOnce,
+
+                        T.provideService(Game.Tag, game),
+                        T.provideService(GuessSet.Tag, guesses),
+                    )));
+
+                expect(EQ.equals(deducedConclusions, expectedConclusions)).toEqual(true);
+            }));
+        });
     });
 
     describe('cardIsHeldAtLeastOnce', () => {
-        test.todo('test this function');
+        test('card with N-1 known non-owners', () => {
+
+        });
+
+        test('card with only a couple known non-owners', () => {
+
+        });
+
+        test('card with everything already known', () => {
+
+        });
     });
 
     describe('cardIsHeldExactlyOnce', () => {
