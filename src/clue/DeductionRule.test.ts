@@ -9,41 +9,15 @@ import * as Conclusion from "./Conclusion";
 import * as Game from "./Game";
 import * as GuessSet from "./GuessSet";
 import * as CaseFile from "./CaseFile";
+import { mockValue } from "../utils/JestTest";
 
 describe('DeductionRule', () => {
     describe('identity', () => {
         test('returns the original conclusions', async () => {
             await Effect_test(T.gen(function* ($) {
-                const game: Game.Game = Game.Game({
-                    cards: null,
-                    players: null,
-                    caseFile: CaseFile.standard,
-                });
-
-                const guesses: GuessSet.ValidatedGuessSet = pipe(
-                    HS.fromIterable([
-                        // no guesses
-                    ]),
-
-                    GuessSet.GuessSet,
-                    GuessSet.ValidatedGuessSet,
-                    E.getOrThrow,
-                );
-
-                const initialConclusions: ConclusionMapSet.ValidatedConclusionMapSet =
-                    yield* $(Effect_expectSucceed(pipe(
-                        ConclusionMapSet.empty,
-    
-                        ConclusionMapSet.ModificationMonoid.combineAll([
-                            ConclusionMapSet.modifyAddNumCardsExact(
-                                pipe(Player.Player({ name: 'Alice' }), Player.ValidatedPlayer, E.getOrThrow),
-                                2,
-                                Conclusion.Reason({ level: 'observed', explanation: 'Test', }),
-                            ),
-                        ]),
-    
-                        T.provideService(Game.Tag, game),
-                    )));
+                const game = mockValue<Game.Game>('game');
+                const guesses = mockValue<GuessSet.ValidatedGuessSet>('guesses');
+                const initialConclusions = mockValue<ConclusionMapSet.ValidatedConclusionMapSet>('initialConclusions');
 
                 const deducedConclusions =
                     yield* $(Effect_expectSucceed(pipe(
@@ -53,7 +27,7 @@ describe('DeductionRule', () => {
                         T.provideService(Game.Tag, game),
                         T.provideService(GuessSet.Tag, guesses),
                     )));
-                
+
                 expect(EQ.equals(deducedConclusions, initialConclusions)).toEqual(true);
             }));
         });
