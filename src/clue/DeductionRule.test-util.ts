@@ -1,5 +1,6 @@
 import { pipe, flow, identity } from "@effect/data/Function";
-import { E, HM, HS, O, ROA, ROR, ST, T } from "../utils/EffectImports";
+import { D, E, HM, HS, M, O, ROA, ROR, ST, T, TU } from "../utils/EffectImports";
+import { HashSet_of } from "../utils/Effect";
 
 import * as CaseFile from "./CaseFile";
 import * as Game from "./Game";
@@ -13,6 +14,7 @@ import * as ConclusionMap from "./ConclusionMap";
 import * as ConclusionMapSet from "./ConclusionMapSet";
 import * as Range from "./Range";
 import * as Conclusion from "./Conclusion";
+import * as CardOwner from "./CardOwner";
 
 export const MOCK_CARDS = pipe(
     {
@@ -140,6 +142,37 @@ export const mockGuessesInGame = (
         E.getOrThrow,
     );
 
+export const mockReasonObserved = (explanation: string): Conclusion.Reason =>
+    Conclusion.Reason({
+        level: 'observed',
+        explanation,
+    });
+
+export const mockReasonInferred = (explanation: string): Conclusion.Reason =>
+    Conclusion.Reason({
+        level: 'inferred',
+        explanation,
+    });
+
+const toConclusionMapOrThrow: <Q, A>(
+    hashMap: HM.HashMap<Q, {
+        answer: A;
+        reasons: HS.HashSet<Conclusion.Reason>;
+    }>
+) => ConclusionMap.ValidatedConclusionMap<Q, A> =
+    flow(
+        HM.mapWithIndex(flow(
+            Conclusion.ConclusionOf(),
+            Conclusion.ValidatedConclusionOf(),
+            E.getOrThrow,
+        )),
+
+        ConclusionMap.ConclusionMapOf(),
+        ConclusionMap.ValidatedConclusionMapOf(),
+
+        E.getOrThrow,
+    );
+
 export const mockConclusionsInGame = (
     game: Game.Game,
     guesses: GuessSet.ValidatedGuessSet,
@@ -150,18 +183,21 @@ export const mockConclusionsInGame = (
 }: {
     readonly numCards?: readonly [
         Player.ValidatedPlayer, // The player
-        [number, number?],      // An exact count, or (min,max) range of their card count
+        readonly [number, number?],      // An exact count, or (min,max) range of their card count
+        { level: 'observed' | 'inferred', explanation: string }, // The reasoning
     ][];
 
     readonly ownership?: readonly [
-        Player.ValidatedPlayer, // The player
+        Player.ValidatedPlayer | CaseFile.CaseFile, // The card owner
         Card.ValidatedCard,     // The card
         boolean,                // Do they definitely own (true) or not own (false) this card?
+        { level: 'observed' | 'inferred', explanation: string }, // The reasoning
     ][];
 
     readonly refuteCards?: readonly [
-        [ /* TODO guess */ ],   // The guess
-        Card.ValidatedCard,     // Which card was used to refute it
+        Guess.ValidatedGuess,   // The guess
+        readonly [Card.ValidatedCard, 'owned' | 'maybe'][],     // Which card was used to refute it
+        { level: 'observed' | 'inferred', explanation: string }, // The reasoning
     ][];
 } = {
     // By default, pass no individual options
@@ -174,21 +210,56 @@ export const mockConclusionsInGame = (
         },
 
         ST.evolve({
-            numCards: a => a as unknown as HM.HashMap<Player.Player, Conclusion.Conclusion<Range.Range>>,
-            ownership: a => a as unknown as HM.HashMap<any, Conclusion.Conclusion<any>>,
-            refuteCards: a => a as unknown as HM.HashMap<any, Conclusion.Conclusion<any>>,
-        }),
+            numCards: flow(
+                ROA.map(([player, [minNumCards, maxNumCards], reason]) => TU.tuple(
+                    player,
 
-        ST.evolve({
-            numCards: HM.map(flow(Conclusion.ValidatedConclusionOf(), E.getOrThrow)),
-            ownership: HM.map(flow(Conclusion.ValidatedConclusionOf(), E.getOrThrow)),
-            refuteCards: HM.map(flow(Conclusion.ValidatedConclusionOf(), E.getOrThrow)),
-        }),
+                    {
+                        answer: E.getOrThrow(Range.Range(minNumCards, maxNumCards)),
+                        reasons: HashSet_of(Conclusion.Reason(reason)),
+                    },
+                )),
 
-        ST.evolve({
-            numCards: flow(ConclusionMap.ConclusionMapOf(), ConclusionMap.ValidatedConclusionMapOf(), E.getOrThrow),
-            ownership: flow(ConclusionMap.ConclusionMapOf(), ConclusionMap.ValidatedConclusionMapOf(), E.getOrThrow),
-            refuteCards: flow(ConclusionMap.ConclusionMapOf(), ConclusionMap.ValidatedConclusionMapOf(), E.getOrThrow),
+                HM.fromIterable,
+                toConclusionMapOrThrow,
+            ),
+
+            ownership: flow(
+                ROA.map(([owner, card, isOwned, reason]) => TU.tuple(
+                    D.array([
+                        pipe(
+                            M.value(owner),
+                            M.tag('Player', (player) => CardOwner.CardOwnerPlayer({ player })),
+                            M.tag('CaseFile', (caseFile) => CardOwner.CardOwnerCaseFile({ caseFile })),
+                            M.exhaustive,
+                        ),
+
+                        card,
+                    ] as const),
+
+                    {
+                        answer: isOwned,
+                        reasons: HashSet_of(Conclusion.Reason(reason)),
+                    },
+                )),
+
+                HM.fromIterable,
+                toConclusionMapOrThrow,
+            ),
+
+            refuteCards: flow(
+                ROA.map(([guess, cards, reason]) => TU.tuple(
+                    guess,
+
+                    {
+                        answer: HM.fromIterable(cards),
+                        reasons: HashSet_of(Conclusion.Reason(reason)),
+                    },
+                )),
+
+                HM.fromIterable,
+                toConclusionMapOrThrow,
+            ),
         }),
 
         ConclusionMapSet.ConclusionMapSet,
@@ -197,5 +268,5 @@ export const mockConclusionsInGame = (
         T.provideService(Game.Tag, game),
         T.provideService(GuessSet.Tag, guesses),
 
-        E.getOrThrow,
+        T.runSync,
     );

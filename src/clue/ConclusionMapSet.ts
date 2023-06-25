@@ -16,9 +16,9 @@ import * as Range from './Range';
 
 export interface ConclusionMapSet extends D.Case {
     _tag: "ConclusionMapSet";
-    numCards: ConclusionMap.ValidatedConclusionMap<Player.Player, Range.Range>;
+    numCards: ConclusionMap.ValidatedConclusionMap<Player.ValidatedPlayer, Range.Range>;
     ownership: ConclusionMap.ValidatedConclusionMap<D.Data<[CardOwner.CardOwner, Card.ValidatedCard]>, boolean>;
-    refuteCards: ConclusionMap.ValidatedConclusionMap<Guess.Guess, HM.HashMap<Card.ValidatedCard, 'owned' | 'maybe'>>;
+    refuteCards: ConclusionMap.ValidatedConclusionMap<Guess.ValidatedGuess, HM.HashMap<Card.ValidatedCard, 'owned' | 'maybe'>>;
 };
 
 export const ConclusionMapSet = D.tagged<ConclusionMapSet>("ConclusionMapSet");
@@ -157,7 +157,7 @@ export const ModificationMonoid: MON.Monoid<Modification> = MON.fromSemigroup(
 );
 
 export const modifyAddNumCards =
-        (player: Player.Player, [minNumCards, maxNumCards]: [number, number?], reason: Conclusion.Reason):
+        (player: Player.ValidatedPlayer, [minNumCards, maxNumCards]: [number, number?], reason: Conclusion.Reason):
         Modification =>
     flow(
         ST.pick('numCards', 'ownership', 'refuteCards'),
@@ -195,7 +195,7 @@ export const modifyAddOwnership =
     );
 
 export const modifySetRefuteCards =
-        (guess: Guess.Guess, possibleCards: HM.HashMap<Card.ValidatedCard, 'owned' | 'maybe'>, reason: Conclusion.Reason):
+        (guess: Guess.ValidatedGuess, possibleCards: HM.HashMap<Card.ValidatedCard, 'owned' | 'maybe'>, reason: Conclusion.Reason):
         Modification =>
     flow(
         ST.pick('numCards', 'ownership', 'refuteCards'),
