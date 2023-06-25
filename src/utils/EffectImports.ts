@@ -4,6 +4,7 @@ export * as N from '@effect/data/Number';
 export * as D from '@effect/data/Data';
 export * as TU from '@effect/data/Tuple';
 export * as ROA from '@effect/data/ReadonlyArray';
+export * as ROR from '@effect/data/ReadonlyRecord';
 export * as ST from "@effect/data/Struct";
 export * as HS from '@effect/data/HashSet';
 export * as HM from '@effect/data/HashMap';
@@ -19,6 +20,8 @@ export * as AP from '@effect/data/typeclass/Applicative';
 export * as EQV from '@effect/data/typeclass/Equivalence';
 export * as SG from '@effect/data/typeclass/Semigroup';
 export * as MON from '@effect/data/typeclass/Monoid';
+
+export * as HKT from '@effect/data/HKT';
 
 export * as B from '@effect/data/Brand';
 

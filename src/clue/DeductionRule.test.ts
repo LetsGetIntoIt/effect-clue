@@ -1,27 +1,22 @@
-import { flow, pipe } from "@effect/data/Function";
-import { E, EQ, HS, ROA, T } from "../utils/EffectImports";
+import { pipe } from "@effect/data/Function";
+import { EQ, T } from "../utils/EffectImports";
 import { Effect_expectSucceed, Effect_test } from "../utils/EffectTest";
-import { mockValue } from "../utils/JestTest";
 
 import * as DeductionRule from './DeductionRule';
 import * as ConclusionMapSet from "./ConclusionMapSet";
-import * as Player from "./Player";
-import * as Conclusion from "./Conclusion";
-import * as CardSet from './CardSet';
-import * as PlayerSet from './PlayerSet';
 import * as Game from "./Game";
 import * as GuessSet from "./GuessSet";
-import * as CaseFile from "./CaseFile";
-import * as Card from "./Card";
-import { mockCardMustard, mockCaseFileStandard, mockPlayerAlice, testSetupConclusions, testSetupGame, testSetupGuesses } from "./DeductionRule.test-util";
+import { MOCK_CARDS, MOCK_PLAYERS, mockConclusionsInGame, mockGame } from "./DeductionRule.test-util";
 
 describe('DeductionRule', () => {
     describe('identity', () => {
         test('returns the original conclusions', async () => {
             await Effect_test(T.gen(function* ($) {
-                const game = mockValue<Game.Game>('game');
-                const guesses = mockValue<GuessSet.ValidatedGuessSet>('guesses');
-                const initialConclusions = mockValue<ConclusionMapSet.ValidatedConclusionMapSet>('initialConclusions');
+                const game = Game.emptyStandard;
+                const guesses = GuessSet.empty;
+
+                const initialConclusions = ConclusionMapSet.empty;
+                const expectedConclusions = initialConclusions;
 
                 const deducedConclusions =
                     yield* $(Effect_expectSucceed(pipe(
@@ -32,7 +27,7 @@ describe('DeductionRule', () => {
                         T.provideService(GuessSet.Tag, guesses),
                     )));
 
-                expect(EQ.equals(deducedConclusions, initialConclusions)).toEqual(true);
+                expect(EQ.equals(expectedConclusions, deducedConclusions)).toEqual(true);
             }));
         });
     });
@@ -68,32 +63,20 @@ describe('DeductionRule', () => {
 
         test('no cards with known owners', async () => {
             await Effect_test(T.gen(function* ($) {
-                const game = yield* $(testSetupGame({
-                    cards: [
-                        mockCardMustard,
+                const game = mockGame({
+                    cards: [MOCK_CARDS.mustard],
+                    players: [MOCK_PLAYERS.alice, MOCK_PLAYERS.bob],
+                });
+
+                const guesses = GuessSet.empty;
+
+                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false],
                     ],
+                });
 
-                    players: [
-                        mockPlayerAlice,
-                    ],
-
-                    caseFile: mockCaseFileStandard,
-                }));
-
-                const guesses = yield* $(testSetupGuesses({
-                    game,
-                    guesses: [
-
-                    ],
-                }));
-
-                const initialConclusions = yield* $(testSetupConclusions({
-
-                }));
-
-                const expectedConclusions = yield* $(testSetupConclusions({
-
-                }));
+                const expectedConclusions = initialConclusions;
 
                 const deducedConclusions =
                     yield* $(Effect_expectSucceed(pipe(

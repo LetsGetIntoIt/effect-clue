@@ -176,9 +176,9 @@ export const setupKnownConclusions = ({
         // Create the function to add all these conclusions
         const addConclusions = pipe(
             ROA.map(knownNumCards, ([player, numCards]) =>
-                ConclusionMapSet.modifyAddNumCardsExact(
+                ConclusionMapSet.modifyAddNumCards(
                     player,
-                    numCards,
+                    [numCards],
                     Conclusion.Reason({
                         level: 'observed',
                         explanation: 'Manually entered',

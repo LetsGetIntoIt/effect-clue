@@ -156,15 +156,15 @@ export const ModificationMonoid: MON.Monoid<Modification> = MON.fromSemigroup(
     identity,
 );
 
-export const modifyAddNumCardsExact =
-        (player: Player.Player, numCards: number, reason: Conclusion.Reason):
+export const modifyAddNumCards =
+        (player: Player.Player, [minNumCards, maxNumCards]: [number, number?], reason: Conclusion.Reason):
         Modification =>
     flow(
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
         ST.evolve({
             numCards: (numCardsMap) => E.gen(function* ($) {
-                const newRange = yield* $(Range.Range(numCards));
+                const newRange = yield* $(Range.Range(minNumCards, maxNumCards));
                 const updateNumCards = ConclusionMap.setMergeOrFail(player, newRange, HashSet_of(reason));
                 return yield* $(updateNumCards(numCardsMap));
             }),
