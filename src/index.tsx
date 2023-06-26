@@ -29,4 +29,8 @@ export function App() {
 	);
 }
 
-render(<App />, document.getElementById('app'));
+let container;
+if (container = document.getElementById('app')) {
+	render(<App />, container);
+}
+
