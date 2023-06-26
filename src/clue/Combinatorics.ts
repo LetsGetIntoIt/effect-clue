@@ -1,4 +1,4 @@
-import { D, B, P, N, E } from '../utils/EffectImports';
+import { D, B, P, N, E, EQ } from '../utils/EffectImports';
 import { constant, flow, pipe, identity } from '@effect/data/Function';
 import { Brand_refined, Either_fromPredicate, Struct_get } from '../utils/Effect';
 import { ST } from '../utils/EffectImports';
@@ -73,6 +73,15 @@ export const Probability = Brand_refined<Probability>([
         constant(B.error(`'hits' must be <= 'total'`)),
     ),
 ]);
+
+export const isZero: P.Predicate<Probability> =
+    P.contramap(
+        EQ.equals(0),
+        Struct_get('hits'),
+    );
+
+export const isOne: P.Predicate<Probability> =
+    ({ hits, total }) => EQ.equals(hits, total);
 
 export const not: (prob: Probability) => Probability =
     flow(
