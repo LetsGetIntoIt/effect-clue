@@ -334,17 +334,19 @@ export const playerHasNoLessThanMinNumCards: DeductionRule = (
                 )),
             );
 
-            return O.match(
+            const maxNumUnownedCards = O.map(
                 minNumOwnedCards,
+                (minNumOwnedCards) => HS.size(game.cards) - minNumOwnedCards,
+            );
+
+            return O.match(
+                maxNumUnownedCards,
 
                 // We don't know their min number of cards
                 constFalse,
 
                 // We do know their min num cards, and we know what all those cards are
-                minNumOwnedCards => {
-                    const maxNumUnownedCards = HS.size(game.cards) - minNumOwnedCards;
-                    return EQ.equals(maxNumUnownedCards, numUnownedCards);
-                },
+                EQ.equals(numUnownedCards),
             );
         }),
 
