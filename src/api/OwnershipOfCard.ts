@@ -1,5 +1,5 @@
 
-import { D, HS, P, M, O, E, EQ, BOOL } from '../utils/EffectImports';
+import { D, HS, P, M, O, E, EQ, BOOL } from './utils/EffectImports';
 import { pipe, constTrue, constFalse } from '@effect/data/Function';
 import * as CardOwner from './CardOwner';
 

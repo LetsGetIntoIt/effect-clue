@@ -1,5 +1,5 @@
 
-import { T, B } from '../utils/EffectImports';
+import { T, B } from './utils/EffectImports';
 
 import * as ApiSteps from './ApiSteps';
 import * as DeductionSet from './DeductionSet';

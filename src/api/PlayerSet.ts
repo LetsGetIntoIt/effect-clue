@@ -1,6 +1,6 @@
-import { B, HS, E } from '../utils/EffectImports';
+import { B, HS, E } from './utils/EffectImports';
 import { flow, pipe } from '@effect/data/Function';
-import { Brand_refined } from '../utils/Effect';
+import { Brand_refined } from './utils/Effect';
 
 import * as Player from './Player';
 

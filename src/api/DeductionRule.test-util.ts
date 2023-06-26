@@ -1,6 +1,6 @@
 import { pipe, flow, identity } from "@effect/data/Function";
-import { D, E, HM, HS, M, O, ROA, ROR, ST, T, TU } from "../utils/EffectImports";
-import { HashSet_of } from "../utils/Effect";
+import { D, E, HM, HS, M, O, ROA, ROR, ST, T, TU } from "./utils/EffectImports";
+import { HashSet_of } from "./utils/Effect";
 
 import * as CaseFile from "./CaseFile";
 import * as Game from "./Game";

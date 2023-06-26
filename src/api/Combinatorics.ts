@@ -1,8 +1,8 @@
-import { D, B, P, N, E, EQ } from '../utils/EffectImports';
+import { D, B, P, N, E, EQ } from './utils/EffectImports';
 import { constant, flow, pipe, identity } from '@effect/data/Function';
-import { Brand_refined, Either_fromPredicate, Struct_get } from '../utils/Effect';
-import { ST } from '../utils/EffectImports';
-import { M } from '../utils/EffectImports';
+import { Brand_refined, Either_fromPredicate, Struct_get } from './utils/Effect';
+import { ST } from './utils/EffectImports';
+import { M } from './utils/EffectImports';
 
 export interface Counter extends D.Case {
     _tag: "Combinatorics.Counter";

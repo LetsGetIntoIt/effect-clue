@@ -1,6 +1,6 @@
-import { B, D, O, P, S } from '../utils/EffectImports';
+import { B, D, O, P, S } from './utils/EffectImports';
 import { flow, constant } from '@effect/data/Function';
-import { Brand_refined, Either_fromPredicate, Option_fromRefinement, Struct_get } from '../utils/Effect';
+import { Brand_refined, Either_fromPredicate, Option_fromRefinement, Struct_get } from './utils/Effect';
 
 export interface Player extends D.Case {
     _tag: "Player";
