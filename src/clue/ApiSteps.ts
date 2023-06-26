@@ -14,7 +14,7 @@ import * as Guess from './Guess';
 import * as GuessSet from './GuessSet';
 import * as DeductionRule from './DeductionRule';
 import * as Conclusion from './Conclusion';
-import * as ConclusionMapSet from './ConclusionMapSet';
+import * as DeductionSet from './DeductionSet';
 
 
 type RawCard = [string, string];
@@ -137,13 +137,13 @@ export const setupGame = ({
 export const provideGame = (game: Game.Game) =>
     T.provideService(Game.Tag, game);
 
-export const setupKnownConclusions = ({
+export const setupKnownDeductions = ({
     knownNumCards: rawKnownNumCards = [],
     knownCardOwners: rawKnownCardOwners = [],
 }: {
     knownNumCards?: readonly [RawPlayer, number][];
     knownCardOwners?: readonly [RawPlayer, RawCard][];
-}): T.Effect<Game.Game, B.Brand.BrandErrors, ConclusionMapSet.ValidatedConclusionMapSet> =>
+}): T.Effect<Game.Game, B.Brand.BrandErrors, DeductionSet.ValidatedDeductionSet> =>
     T.gen(function* ($) {
         const knownNumCards = yield* $(
             E.validateAll(
@@ -173,10 +173,10 @@ export const setupKnownConclusions = ({
             E.mapLeft(errors => B.errors(...errors)),
         );
 
-        // Create the function to add all these conclusions
-        const addConclusions = pipe(
+        // Create the function to add all these deductions
+        const addDeductions = pipe(
             ROA.map(knownNumCards, ([player, numCards]) =>
-                ConclusionMapSet.modifyAddNumCards(
+                DeductionSet.modifyAddNumCards(
                     player,
                     [numCards],
                     Conclusion.Reason({
@@ -187,7 +187,7 @@ export const setupKnownConclusions = ({
             ),
 
             ROA.appendAll(ROA.map(knownCardOwners, ([player, card]) =>
-                ConclusionMapSet.modifyAddOwnership(
+                DeductionSet.modifyAddOwnership(
                     CardOwner.CardOwnerPlayer({ player }),
                     card,
                     true,
@@ -198,12 +198,12 @@ export const setupKnownConclusions = ({
                 ),
             )),
 
-            ConclusionMapSet.ModificationMonoid.combineAll,
+            DeductionSet.ModificationMonoid.combineAll,
         );
 
         return yield* $(
-            ConclusionMapSet.empty,
-            addConclusions,
+            DeductionSet.empty,
+            addDeductions,
         );
     });
 
@@ -361,7 +361,7 @@ export const setupDeductionRules = (
         E.right,
     );
 
-export const deduceConclusions = (
+export const deduce = (
     deductionRule: DeductionRule.DeductionRule,
     {
         maxIterations,
@@ -371,32 +371,32 @@ export const deduceConclusions = (
         // Default to no options
     }
 ) => (
-    initialConclusions: ConclusionMapSet.ValidatedConclusionMapSet,
+    initialDeductions: DeductionSet.ValidatedDeductionSet,
 ): T.Effect<
     Game.Game | GuessSet.ValidatedGuessSet,
     B.Brand.BrandErrors,
-    ConclusionMapSet.ValidatedConclusionMapSet
+    DeductionSet.ValidatedDeductionSet
 > =>
     T.gen(function* ($) {
-        // Start with the initial conclusions
-        let previousConclusions;
-        let newConclusions = initialConclusions;
+        // Start with the initial deductions
+        let previousDeductions;
+        let newDeductions = initialDeductions;
         let iterationNum = 0;
 
         do {
             iterationNum++;
 
-            // Add more conclusions recursively, tracking the results of the previous iteration
-            previousConclusions = newConclusions;
-            newConclusions = yield* $(deductionRule(newConclusions));
+            // Add more deductions recursively, tracking the results of the previous iteration
+            previousDeductions = newDeductions;
+            newDeductions = yield* $(deductionRule(newDeductions));
         } while (
             // Continue as long as the iteration gave us new results
-            !EQ.equals(previousConclusions, newConclusions)
+            !EQ.equals(previousDeductions, newDeductions)
 
             // Continue forever if no max iterations is provided,
             // or continue as long as we haven't hit that maximum
             && (P.isNullable(maxIterations) || iterationNum < maxIterations)
         );
 
-        return newConclusions;
+        return newDeductions;
     });

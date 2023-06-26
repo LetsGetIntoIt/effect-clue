@@ -11,7 +11,7 @@ import * as PlayerSet from "./PlayerSet";
 import * as Guess from "./Guess";
 import * as GuessSet from "./GuessSet";
 import * as ConclusionMap from "./ConclusionMap";
-import * as ConclusionMapSet from "./ConclusionMapSet";
+import * as DeductionSet from "./DeductionSet";
 import * as Range from "./Range";
 import * as Conclusion from "./Conclusion";
 import * as CardOwner from "./CardOwner";
@@ -180,7 +180,7 @@ const toConclusionMapOrThrow: <Q, A>(
         E.getOrThrow,
     );
 
-export const mockConclusionsInGame = (
+export const mockDeductionsInGame = (
     game: Game.Game,
     guesses: GuessSet.ValidatedGuessSet,
 ) => ({
@@ -208,7 +208,7 @@ export const mockConclusionsInGame = (
     ][];
 } = {
     // By default, pass no individual options
-}): ConclusionMapSet.ValidatedConclusionMapSet =>
+}): DeductionSet.ValidatedDeductionSet =>
     pipe(
         {
             numCards,
@@ -269,8 +269,8 @@ export const mockConclusionsInGame = (
             ),
         }),
 
-        ConclusionMapSet.ConclusionMapSet,
-        ConclusionMapSet.ValidatedConclusionMapSet,
+        DeductionSet.DeductionSet,
+        DeductionSet.ValidatedDeductionSet,
 
         T.provideService(Game.Tag, game),
         T.provideService(GuessSet.Tag, guesses),

@@ -14,21 +14,21 @@ import * as Conclusion from './Conclusion';
 import * as ConclusionMap from './ConclusionMap';
 import * as Range from './Range';
 
-export interface ConclusionMapSet extends D.Case {
-    _tag: "ConclusionMapSet";
+export interface DeductionSet extends D.Case {
+    _tag: "DeductionSet";
     numCards: ConclusionMap.ValidatedConclusionMap<Player.ValidatedPlayer, Range.Range>;
     ownership: ConclusionMap.ValidatedConclusionMap<D.Data<[CardOwner.CardOwner, Card.ValidatedCard]>, boolean>;
     refuteCards: ConclusionMap.ValidatedConclusionMap<Guess.ValidatedGuess, HM.HashMap<Card.ValidatedCard, 'owned' | 'maybe'>>;
 };
 
-export const ConclusionMapSet = D.tagged<ConclusionMapSet>("ConclusionMapSet");
+export const DeductionSet = D.tagged<DeductionSet>("DeductionSet");
 
-export type ValidatedConclusionMapSet = ConclusionMapSet & B.Brand<'ValidatedConclusionMapSet'>;
+export type ValidatedDeductionSet = DeductionSet & B.Brand<'ValidatedDeductionSet'>;
 
-export const ValidatedConclusionMapSet = Brand_refinedEffect<ValidatedConclusionMapSet, Game.Game>(
+export const ValidatedDeductionSet = Brand_refinedEffect<ValidatedDeductionSet, Game.Game>(
     T.gen(function* ($) {
         return [
-            // TODO actually validate the conclusions
+            // TODO actually validate the deductions
             // - all Cards and Players actually exist in the game
             // - all Guesses actaully exist in the Game
             // - numCards cannot exceed total number of cards (minus whatever is in the case file) - where do we read that info from?
@@ -42,17 +42,17 @@ export const ValidatedConclusionMapSet = Brand_refinedEffect<ValidatedConclusion
     }),
 );
 
-export const Tag = CTX.Tag<ValidatedConclusionMapSet>();
+export const Tag = CTX.Tag<ValidatedDeductionSet>();
 
-export const empty: ValidatedConclusionMapSet =
+export const empty: ValidatedDeductionSet =
     pipe(
-        ConclusionMapSet({
+        DeductionSet({
             numCards: ConclusionMap.empty(),
             ownership: ConclusionMap.empty(),
             refuteCards: ConclusionMap.empty(),
         }),
 
-        ValidatedConclusionMapSet,
+        ValidatedDeductionSet,
 
         // We just need an empty game
         T.provideService(Game.Tag, Game.emptyStandard),
@@ -62,15 +62,15 @@ export const empty: ValidatedConclusionMapSet =
         T.runSync,
     );
 
-// TODO store this on the ValidatedConclusionMapSet itself, rather than recomputing it each time
+// TODO store this on the ValidatedDeductionSet itself, rather than recomputing it each time
 export const getOwnershipByCard: (
-    conclusions: ValidatedConclusionMapSet,
+    deductions: ValidatedDeductionSet,
 ) => HM.HashMap<Card.ValidatedCard, OwnershipOfCard.OwnershipOfCard> =
     flow(
         // Pluck out the actual HashMap we care about
         Struct_get('ownership'),
 
-        // We don't care about the conclusions and reasons, just whether its owned or not
+        // We don't care about the deductions and reasons, just whether its owned or not
         HM.map(({ answer }) => answer),
 
         HM.reduceWithIndex(
@@ -108,15 +108,15 @@ export const getOwnershipByCard: (
         )
     );
 
-// TODO store this on the ValidatedConclusionMapSet itself, rather than recomputing it each time
+// TODO store this on the ValidatedDeductionSet itself, rather than recomputing it each time
 export const getOwnershipByOwner: (
-    conclusions: ValidatedConclusionMapSet,
+    deductions: ValidatedDeductionSet,
 ) => HM.HashMap<CardOwner.CardOwner, OwnershipOfOwner.ValidatedOwnershipOfOwner> =
     flow(
         // Pluck out the actual HashMap we care about
         Struct_get('ownership'),
 
-        // We don't care about the conclusions and reasons, just whether its owned or not
+        // We don't care about the deductions and reasons, just whether its owned or not
         HM.map(({ answer }) => answer),
 
         HM.reduceWithIndex(
@@ -141,7 +141,7 @@ export const getOwnershipByOwner: (
         )
     );
 
-export type Modification = ((conclusions: ValidatedConclusionMapSet) => T.Effect<Game.Game, B.Brand.BrandErrors, ValidatedConclusionMapSet>);
+export type Modification = ((deductions: ValidatedDeductionSet) => T.Effect<Game.Game, B.Brand.BrandErrors, ValidatedDeductionSet>);
 
 export const identity: Modification =
     T.succeed;
@@ -174,8 +174,8 @@ export const modifyAddNumCards =
         }),
         E.struct,
 
-        T.map(ConclusionMapSet),
-        T.flatMap(ValidatedConclusionMapSet),
+        T.map(DeductionSet),
+        T.flatMap(ValidatedDeductionSet),
     );
 
 export const modifyAddOwnership =
@@ -191,8 +191,8 @@ export const modifyAddOwnership =
         }),
         E.struct,
 
-        T.map(ConclusionMapSet),
-        T.flatMap(ValidatedConclusionMapSet),
+        T.map(DeductionSet),
+        T.flatMap(ValidatedDeductionSet),
     );
 
 export const modifySetRefuteCards =
@@ -208,12 +208,12 @@ export const modifySetRefuteCards =
         }),
         E.struct,
 
-        T.map(ConclusionMapSet),
-        T.flatMap(ValidatedConclusionMapSet),
+        T.map(DeductionSet),
+        T.flatMap(ValidatedDeductionSet),
     );
 
 export const modifyCombine = (
-    second: ConclusionMapSet,
+    second: DeductionSet,
 ): Modification => (first) =>
     pipe(
         first,
@@ -227,6 +227,6 @@ export const modifyCombine = (
         }),
         E.struct,
 
-        T.map(ConclusionMapSet),
-        T.flatMap(ValidatedConclusionMapSet),
+        T.map(DeductionSet),
+        T.flatMap(ValidatedDeductionSet),
     );

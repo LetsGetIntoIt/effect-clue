@@ -3,31 +3,31 @@ import { T } from "../utils/EffectImports";
 import { Effect_expectSucceed, Effect_test } from "../utils/EffectTest";
 
 import * as DeductionRule from './DeductionRule';
-import * as ConclusionMapSet from "./ConclusionMapSet";
+import * as DeductionSet from "./DeductionSet";
 import * as Game from "./Game";
 import * as GuessSet from "./GuessSet";
-import { MOCK_CARDS, MOCK_PLAYERS, mockConclusionsInGame, mockGame, mockReasonInferred, mockReasonObserved } from "./DeductionRule.test-util";
+import { MOCK_CARDS, MOCK_PLAYERS, mockDeductionsInGame, mockGame, mockReasonInferred, mockReasonObserved } from "./DeductionRule.test-util";
 
 describe('DeductionRule', () => {
     describe('identity', () => {
-        test('returns the original conclusions', async () => {
+        test('returns the original deductions', async () => {
             await Effect_test(T.gen(function* ($) {
                 const game = Game.emptyStandard;
                 const guesses = GuessSet.empty;
 
-                const initialConclusions = ConclusionMapSet.empty;
-                const expectedConclusions = initialConclusions;
+                const initialDeductions = DeductionSet.empty;
+                const expectedDeductions = initialDeductions;
 
-                const deducedConclusions =
+                const deductions =
                     yield* $(Effect_expectSucceed(pipe(
-                        initialConclusions,
+                        initialDeductions,
                         DeductionRule.identity,
 
                         T.provideService(Game.Tag, game),
                         T.provideService(GuessSet.Tag, guesses),
                     )));
 
-                expect(deducedConclusions).toEqual(expectedConclusions);
+                expect(deductions).toEqual(expectedDeductions);
             }));
         });
     });
@@ -62,13 +62,13 @@ describe('DeductionRule', () => {
 
                 const guesses = GuessSet.empty;
 
-                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                const initialDeductions = mockDeductionsInGame(game, guesses)({
                     ownership: [
                         [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, true, mockReasonObserved('Manually entered')],
                     ],
                 });
 
-                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                const expectedDeductions = mockDeductionsInGame(game, guesses)({
                     ownership: [
                         [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, true, mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonInferred('Card is already owned by someone else')],
@@ -76,16 +76,16 @@ describe('DeductionRule', () => {
                     ],
                 });
 
-                const deducedConclusions =
+                const deductions =
                     yield* $(Effect_expectSucceed(pipe(
-                        initialConclusions,
+                        initialDeductions,
                         DeductionRule.cardIsHeldAtMostOnce,
 
                         T.provideService(Game.Tag, game),
                         T.provideService(GuessSet.Tag, guesses),
                     )));
 
-                expect(deducedConclusions).toEqual(expectedConclusions);
+                expect(deductions).toEqual(expectedDeductions);
             }));
         });
 
@@ -98,14 +98,14 @@ describe('DeductionRule', () => {
 
                 const guesses = GuessSet.empty;
 
-                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                const initialDeductions = mockDeductionsInGame(game, guesses)({
                     ownership: [
                         [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, true, mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonObserved('Previously known')],
                     ],
                 });
 
-                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                const expectedDeductions = mockDeductionsInGame(game, guesses)({
                     ownership: [
                         [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, true, mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonObserved('Previously known')],
@@ -113,16 +113,16 @@ describe('DeductionRule', () => {
                     ],
                 });
 
-                const deducedConclusions =
+                const deductions =
                     yield* $(Effect_expectSucceed(pipe(
-                        initialConclusions,
+                        initialDeductions,
                         DeductionRule.cardIsHeldAtMostOnce,
 
                         T.provideService(Game.Tag, game),
                         T.provideService(GuessSet.Tag, guesses),
                     )));
 
-                expect(deducedConclusions).toEqual(expectedConclusions);
+                expect(deductions).toEqual(expectedDeductions);
             }));
         });
 
@@ -135,24 +135,24 @@ describe('DeductionRule', () => {
 
                 const guesses = GuessSet.empty;
 
-                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                const initialDeductions = mockDeductionsInGame(game, guesses)({
                     ownership: [
                         [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
                     ],
                 });
 
-                const expectedConclusions = initialConclusions;
+                const expectedDeductions = initialDeductions;
 
-                const deducedConclusions =
+                const deductions =
                     yield* $(Effect_expectSucceed(pipe(
-                        initialConclusions,
+                        initialDeductions,
                         DeductionRule.cardIsHeldAtMostOnce,
 
                         T.provideService(Game.Tag, game),
                         T.provideService(GuessSet.Tag, guesses),
                     )));
 
-                expect(deducedConclusions).toEqual(expectedConclusions);
+                expect(deductions).toEqual(expectedDeductions);
             }));
         });
     });
@@ -167,14 +167,14 @@ describe('DeductionRule', () => {
 
                 const guesses = GuessSet.empty;
 
-                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                const initialDeductions = mockDeductionsInGame(game, guesses)({
                     ownership: [
                         [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
                     ],
                 });
 
-                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                const expectedDeductions = mockDeductionsInGame(game, guesses)({
                     ownership: [
                         [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
@@ -182,16 +182,16 @@ describe('DeductionRule', () => {
                     ],
                 });
 
-                const deducedConclusions =
+                const deductions =
                     yield* $(Effect_expectSucceed(pipe(
-                        initialConclusions,
+                        initialDeductions,
                         DeductionRule.cardIsHeldAtLeastOnce,
 
                         T.provideService(Game.Tag, game),
                         T.provideService(GuessSet.Tag, guesses),
                     )));
 
-                expect(deducedConclusions).toEqual(expectedConclusions);
+                expect(deductions).toEqual(expectedDeductions);
             }));
         });
 
@@ -204,28 +204,28 @@ describe('DeductionRule', () => {
 
                 const guesses = GuessSet.empty;
 
-                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                const initialDeductions = mockDeductionsInGame(game, guesses)({
                     ownership: [
                         [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
                     ],
                 });
 
-                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                const expectedDeductions = mockDeductionsInGame(game, guesses)({
                     ownership: [
                         [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
                     ],
                 });
 
-                const deducedConclusions =
+                const deductions =
                     yield* $(Effect_expectSucceed(pipe(
-                        initialConclusions,
+                        initialDeductions,
                         DeductionRule.cardIsHeldAtLeastOnce,
 
                         T.provideService(Game.Tag, game),
                         T.provideService(GuessSet.Tag, guesses),
                     )));
 
-                expect(deducedConclusions).toEqual(expectedConclusions);
+                expect(deductions).toEqual(expectedDeductions);
             }));
         });
 
@@ -238,7 +238,7 @@ describe('DeductionRule', () => {
 
                 const guesses = GuessSet.empty;
 
-                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                const initialDeductions = mockDeductionsInGame(game, guesses)({
                     ownership: [
                         [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
@@ -246,7 +246,7 @@ describe('DeductionRule', () => {
                     ],
                 });
 
-                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                const expectedDeductions = mockDeductionsInGame(game, guesses)({
                     ownership: [
                         [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
@@ -254,16 +254,16 @@ describe('DeductionRule', () => {
                     ],
                 });
 
-                const deducedConclusions =
+                const deductions =
                     yield* $(Effect_expectSucceed(pipe(
-                        initialConclusions,
+                        initialDeductions,
                         DeductionRule.cardIsHeldAtLeastOnce,
 
                         T.provideService(Game.Tag, game),
                         T.provideService(GuessSet.Tag, guesses),
                     )));
 
-                expect(deducedConclusions).toEqual(expectedConclusions);
+                expect(deductions).toEqual(expectedDeductions);
             }));
         });
     });
@@ -278,7 +278,7 @@ describe('DeductionRule', () => {
 
                 const guesses = GuessSet.empty;
 
-                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                const initialDeductions = mockDeductionsInGame(game, guesses)({
                     numCards: [
                         [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.bob, [1, 2], mockReasonObserved('Manually entered')],
@@ -293,7 +293,7 @@ describe('DeductionRule', () => {
                     ],
                 });
 
-                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                const expectedDeductions = mockDeductionsInGame(game, guesses)({
                     numCards: [
                         [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.bob, [1, 2], mockReasonObserved('Manually entered')],
@@ -314,16 +314,16 @@ describe('DeductionRule', () => {
                     ],
                 });
 
-                const deducedConclusions =
+                const deductions =
                     yield* $(Effect_expectSucceed(pipe(
-                        initialConclusions,
+                        initialDeductions,
                         DeductionRule.playerHasNoMoreThanMaxNumCards,
 
                         T.provideService(Game.Tag, game),
                         T.provideService(GuessSet.Tag, guesses),
                     )));
 
-                expect(deducedConclusions).toEqual(expectedConclusions);
+                expect(deductions).toEqual(expectedDeductions);
             }));
         });
 
@@ -336,7 +336,7 @@ describe('DeductionRule', () => {
 
                 const guesses = GuessSet.empty;
 
-                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                const initialDeductions = mockDeductionsInGame(game, guesses)({
                     numCards: [
                         [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.bob, [1, 2], mockReasonObserved('Manually entered')],
@@ -355,7 +355,7 @@ describe('DeductionRule', () => {
                     ],
                 });
 
-                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                const expectedDeductions = mockDeductionsInGame(game, guesses)({
                     numCards: [
                         [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.bob, [1, 2], mockReasonObserved('Manually entered')],
@@ -376,16 +376,16 @@ describe('DeductionRule', () => {
                     ],
                 });
 
-                const deducedConclusions =
+                const deductions =
                     yield* $(Effect_expectSucceed(pipe(
-                        initialConclusions,
+                        initialDeductions,
                         DeductionRule.playerHasNoMoreThanMaxNumCards,
 
                         T.provideService(Game.Tag, game),
                         T.provideService(GuessSet.Tag, guesses),
                     )));
 
-                expect(deducedConclusions).toEqual(expectedConclusions);
+                expect(deductions).toEqual(expectedDeductions);
             }));
         });
 
@@ -398,7 +398,7 @@ describe('DeductionRule', () => {
 
                 const guesses = GuessSet.empty;
 
-                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                const initialDeductions = mockDeductionsInGame(game, guesses)({
                     ownership: [
                         [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, true, mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.alice, MOCK_CARDS.plum, true, mockReasonObserved('Manually entered')],
@@ -408,18 +408,18 @@ describe('DeductionRule', () => {
                     ],
                 });
 
-                const expectedConclusions = initialConclusions;
+                const expectedDeductions = initialDeductions;
 
-                const deducedConclusions =
+                const deductions =
                     yield* $(Effect_expectSucceed(pipe(
-                        initialConclusions,
+                        initialDeductions,
                         DeductionRule.playerHasNoMoreThanMaxNumCards,
 
                         T.provideService(Game.Tag, game),
                         T.provideService(GuessSet.Tag, guesses),
                     )));
 
-                expect(deducedConclusions).toEqual(expectedConclusions);
+                expect(deductions).toEqual(expectedDeductions);
             }));
         });
     });
@@ -434,7 +434,7 @@ describe('DeductionRule', () => {
 
                 const guesses = GuessSet.empty;
 
-                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                const initialDeductions = mockDeductionsInGame(game, guesses)({
                     numCards: [
                         [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.bob, [2, 3], mockReasonObserved('Manually entered')],
@@ -451,7 +451,7 @@ describe('DeductionRule', () => {
                     ],
                 });
 
-                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                const expectedDeductions = mockDeductionsInGame(game, guesses)({
                     numCards: [
                         [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.bob, [2, 3], mockReasonObserved('Manually entered')],
@@ -472,16 +472,16 @@ describe('DeductionRule', () => {
                     ],
                 });
 
-                const deducedConclusions =
+                const deductions =
                     yield* $(Effect_expectSucceed(pipe(
-                        initialConclusions,
+                        initialDeductions,
                         DeductionRule.playerHasNoLessThanMinNumCards,
 
                         T.provideService(Game.Tag, game),
                         T.provideService(GuessSet.Tag, guesses),
                     )));
 
-                expect(deducedConclusions).toEqual(expectedConclusions);
+                expect(deductions).toEqual(expectedDeductions);
             }));
         });
 
@@ -494,7 +494,7 @@ describe('DeductionRule', () => {
 
                 const guesses = GuessSet.empty;
 
-                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                const initialDeductions = mockDeductionsInGame(game, guesses)({
                     numCards: [
                         [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.bob, [2, 3], mockReasonObserved('Manually entered')],
@@ -513,7 +513,7 @@ describe('DeductionRule', () => {
                     ],
                 });
 
-                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                const expectedDeductions = mockDeductionsInGame(game, guesses)({
                     numCards: [
                         [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.bob, [2, 3], mockReasonObserved('Manually entered')],
@@ -534,16 +534,16 @@ describe('DeductionRule', () => {
                     ],
                 });
 
-                const deducedConclusions =
+                const deductions =
                     yield* $(Effect_expectSucceed(pipe(
-                        initialConclusions,
+                        initialDeductions,
                         DeductionRule.playerHasNoLessThanMinNumCards,
 
                         T.provideService(Game.Tag, game),
                         T.provideService(GuessSet.Tag, guesses),
                     )));
 
-                expect(deducedConclusions).toEqual(expectedConclusions);
+                expect(deductions).toEqual(expectedDeductions);
             }));
         });
 
@@ -556,7 +556,7 @@ describe('DeductionRule', () => {
 
                 const guesses = GuessSet.empty;
 
-                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                const initialDeductions = mockDeductionsInGame(game, guesses)({
                     ownership: [
                         [MOCK_PLAYERS.alice, MOCK_CARDS.wrench, false, mockReasonObserved('Manually entered')],
                         [MOCK_PLAYERS.alice, MOCK_CARDS.knife, false, mockReasonObserved('Manually entered')],
@@ -568,18 +568,18 @@ describe('DeductionRule', () => {
                     ],
                 });
 
-                const expectedConclusions = initialConclusions;
+                const expectedDeductions = initialDeductions;
 
-                const deducedConclusions =
+                const deductions =
                     yield* $(Effect_expectSucceed(pipe(
-                        initialConclusions,
+                        initialDeductions,
                         DeductionRule.playerHasNoLessThanMinNumCards,
 
                         T.provideService(Game.Tag, game),
                         T.provideService(GuessSet.Tag, guesses),
                     )));
 
-                expect(deducedConclusions).toEqual(expectedConclusions);
+                expect(deductions).toEqual(expectedDeductions);
             }));
         });
     });

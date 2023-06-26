@@ -29,7 +29,7 @@ describe('App', () => {
                         caseFile: ['Murder'],
                     }],
 
-                    knownConclusionsSetup: [{
+                    knownDeductionsSetup: [{
                         knownNumCards: [
                             [['Kapil'], 5],
                             [['Kate'], 10],

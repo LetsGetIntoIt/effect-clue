@@ -3,7 +3,7 @@ import { constant, pipe, flow, identity as F_identity, constFalse } from '@effec
 import { Effect_getSemigroupCombine, Function_getSemigroup, HashMap_filterWithIndexKV, HashSet_differenceFrom, HashSet_fromHashMapMulti, HashSet_isEmpty as HashSet_isEmpty, HashSet_isSize, Option_fromPredicate, Refinement_identity, Struct_get } from '../utils/Effect';
 
 import * as Game from "./Game";
-import * as ConclusionMapSet from "./ConclusionMapSet";
+import * as DeductionSet from "./DeductionSet";
 import * as OwnershipOfCard from './OwnershipOfCard';
 import * as Conclusion from './Conclusion';
 import * as GuessSet from './GuessSet';
@@ -11,8 +11,8 @@ import * as Range from './Range';
 import * as CardOwner from './CardOwner';
 
 export type DeductionRule = (
-    // Accepts a set of "known" conclusions
-    knownConclusions: ConclusionMapSet.ValidatedConclusionMapSet
+    // Accepts a set of "known" deductions
+    knownDeductions: DeductionSet.ValidatedDeductionSet
 ) => T.Effect<
     // Accepts the objects in the game
     | Game.Game
@@ -23,8 +23,8 @@ export type DeductionRule = (
     // Returns an error if we encounter a logical contradiction
     B.Brand.BrandErrors
 ,
-    // Returns the set of conclusions, augmented with new findings
-    ConclusionMapSet.ValidatedConclusionMapSet
+    // Returns the set of deductions, augmented with new findings
+    DeductionSet.ValidatedDeductionSet
 >;
 
 export const identity: DeductionRule =
@@ -33,13 +33,13 @@ export const identity: DeductionRule =
 export const SemigroupUnion: SG.Semigroup<DeductionRule> = 
     Function_getSemigroup(
         Effect_getSemigroupCombine<
-            ConclusionMapSet.ValidatedConclusionMapSet,
+            DeductionSet.ValidatedDeductionSet,
             B.Brand.BrandErrors,
             Game.Game | GuessSet.ValidatedGuessSet
         >(
             (first, second) => pipe(
                 first,
-                ConclusionMapSet.modifyCombine(second),
+                DeductionSet.modifyCombine(second),
             ),
         ),
     )();
@@ -51,7 +51,7 @@ export const MonoidUnion: MON.Monoid<DeductionRule> = MON.fromSemigroup(
 
 // Every player has >=0 cards, and <= ALL_CARDS.size(), of course!
 export const playerHasZeroToNumAllCards: DeductionRule = (
-    knownConclusions
+    knownDeductions
 ) => T.gen(function* ($) {
     const game = yield* $(Game.Tag);
     const numCards = HS.size(game.cards);
@@ -64,7 +64,7 @@ export const playerHasZeroToNumAllCards: DeductionRule = (
 
 // A player can have at most TOTAL_NUM_CARDS - SUM(OTHER_PLAYER.MIN_NUM_CARDS)
 export const playerHasMaxNumCardsRemaining: DeductionRule = (
-    knownConclusions,
+    knownDeductions,
 ) => T.gen(function* ($) {
     const game = yield* $(Game.Tag);
 
@@ -77,7 +77,7 @@ export const playerHasMaxNumCardsRemaining: DeductionRule = (
 
     // How many cards do all players have at a minimum?
     const totalMinPlayerNumCards = pipe(
-        knownConclusions.numCards,
+        knownDeductions.numCards,
         HM.map(flow(Struct_get('answer'), Range.min)),
         HM.values,
         N.MonoidSum.combineAll,
@@ -94,7 +94,7 @@ export const playerHasMaxNumCardsRemaining: DeductionRule = (
 
 // A player's numCard range should update as we learn more about the cards they actually own/don't own
 export const playerHasNarrowestNumCardRange: DeductionRule = (
-    knownConclusions,
+    knownDeductions,
 ) => T.gen(function* ($) {
     return yield* $(T.fail(
         B.error(`DeductionRule playerHasNarrowestNumCardRange not implemented yet`),
@@ -103,7 +103,7 @@ export const playerHasNarrowestNumCardRange: DeductionRule = (
 
 // A player must have at least as many cards as required to make all their refutations
 export const playerHasMinNumCardsRefuted: DeductionRule = (
-    knownConclusions,
+    knownDeductions,
 ) => T.gen(function* ($) {
         // Filter down to all the guesses they have refuted, where we DON'T know which card they refuted with
         // Initialize MIN_NUM_CARDS=0 OR_CARDS={}
@@ -121,15 +121,15 @@ export const playerHasMinNumCardsRefuted: DeductionRule = (
 
 // If a card is held by an owner, it cannot be held by anyone else
 export const cardIsHeldAtMostOnce: DeductionRule = (
-    knownConclusions,
+    knownDeductions,
 ) => T.gen(function* ($) {
     const game = yield* $(Game.Tag);
     const gameOwners = Game.owners(game);
 
-    const ownershipByCard = ConclusionMapSet.getOwnershipByCard(knownConclusions);
+    const ownershipByCard = DeductionSet.getOwnershipByCard(knownDeductions);
 
     // For each card that is owned, mark it as NOT owned by any owner left blank
-    const modifyConclusions = pipe(
+    const modifyDeductions = pipe(
         ownershipByCard,
 
         // Keep only the cards with a known owner
@@ -150,7 +150,7 @@ export const cardIsHeldAtMostOnce: DeductionRule = (
 
         // Now put together all the modifications we need to apply
         HS.map(([card, owner]) =>
-            ConclusionMapSet.modifyAddOwnership(
+            DeductionSet.modifyAddOwnership(
                 owner,
                 card,
 
@@ -167,24 +167,24 @@ export const cardIsHeldAtMostOnce: DeductionRule = (
         ROA.fromIterable,
 
         // Convert them into a single modification
-        ConclusionMapSet.ModificationMonoid.combineAll,
+        DeductionSet.ModificationMonoid.combineAll,
     );
 
-    return yield* $(modifyConclusions(knownConclusions));
+    return yield* $(modifyDeductions(knownDeductions));
 });
 
 // TODO reduce duplication with the other card holding rule
 // If a card is held by everyone except one, then it's held by that one
 export const cardIsHeldAtLeastOnce: DeductionRule = (
-    knownConclusions,
+    knownDeductions,
 ) => T.gen(function* ($) {
     const game = yield* $(Game.Tag);
     const gameOwners = Game.owners(game);
 
-    const ownershipByCard = ConclusionMapSet.getOwnershipByCard(knownConclusions);
+    const ownershipByCard = DeductionSet.getOwnershipByCard(knownDeductions);
 
     // For each card that is not owned, if there is a single unknown, mark it as OWNED
-    const modifyConclusions = pipe(
+    const modifyDeductions = pipe(
         ownershipByCard,
 
         // Keep only the cards with a known owner
@@ -202,7 +202,7 @@ export const cardIsHeldAtLeastOnce: DeductionRule = (
         // Now put together all the modifications we need to apply
         HashSet_fromHashMapMulti,
         HS.map(([card, owner]) =>
-            ConclusionMapSet.modifyAddOwnership(
+            DeductionSet.modifyAddOwnership(
                 owner,
                 card,
 
@@ -219,20 +219,20 @@ export const cardIsHeldAtLeastOnce: DeductionRule = (
         ROA.fromIterable,
 
         // Convert them into a single modification
-        ConclusionMapSet.ModificationMonoid.combineAll,
+        DeductionSet.ModificationMonoid.combineAll,
     );
 
-    return yield* $(modifyConclusions(knownConclusions));
+    return yield* $(modifyDeductions(knownDeductions));
 });
 
 // If all of a player's cards are accounted for, they don't have any others
 export const playerHasNoMoreThanMaxNumCards: DeductionRule = (
-    knownConclusions,
+    knownDeductions,
 ) => T.gen(function* ($) {
     const game = yield* $(Game.Tag);
 
-    const modifyConclusions = pipe(
-        ConclusionMapSet.getOwnershipByOwner(knownConclusions),
+    const modifyDeductions = pipe(
+        DeductionSet.getOwnershipByOwner(knownDeductions),
 
         // We only care about players
         HashMap_filterWithIndexKV(
@@ -249,7 +249,7 @@ export const playerHasNoMoreThanMaxNumCards: DeductionRule = (
             );
 
             const maxNumOwnedCards = pipe(
-                knownConclusions.numCards,
+                knownDeductions.numCards,
                 HM.get(owner.player),
                 O.map(flow(
                     Struct_get('answer'),
@@ -279,7 +279,7 @@ export const playerHasNoMoreThanMaxNumCards: DeductionRule = (
         // Mark all these cards as UNOWNED by this player
         HashSet_fromHashMapMulti,
         HS.map(([owner, card]) =>
-            ConclusionMapSet.modifyAddOwnership(
+            DeductionSet.modifyAddOwnership(
                 owner,
                 card,
 
@@ -296,20 +296,20 @@ export const playerHasNoMoreThanMaxNumCards: DeductionRule = (
         ROA.fromIterable,
 
         // Convert them into a single modification
-        ConclusionMapSet.ModificationMonoid.combineAll,
+        DeductionSet.ModificationMonoid.combineAll,
     );
 
-    return yield* $(modifyConclusions(knownConclusions));
+    return yield* $(modifyDeductions(knownDeductions));
 });
 
 // For each player, if all cards are accounted for except their min number, then they own the rest
 export const playerHasNoLessThanMinNumCards: DeductionRule = (
-    knownConclusions,
+    knownDeductions,
 ) => T.gen(function* ($) {
     const game = yield* $(Game.Tag);
 
-    const modifyConclusions = pipe(
-        ConclusionMapSet.getOwnershipByOwner(knownConclusions),
+    const modifyDeductions = pipe(
+        DeductionSet.getOwnershipByOwner(knownDeductions),
 
         // We only care about players
         HashMap_filterWithIndexKV(
@@ -326,7 +326,7 @@ export const playerHasNoLessThanMinNumCards: DeductionRule = (
             );
 
             const minNumOwnedCards = pipe(
-                knownConclusions.numCards,
+                knownDeductions.numCards,
                 HM.get(owner.player),
                 O.map(flow(
                     Struct_get('answer'),
@@ -361,7 +361,7 @@ export const playerHasNoLessThanMinNumCards: DeductionRule = (
         // Mark all these cards as UNOWNED by this player
         HashSet_fromHashMapMulti,
         HS.map(([owner, card]) =>
-            ConclusionMapSet.modifyAddOwnership(
+            DeductionSet.modifyAddOwnership(
                 owner,
                 card,
 
@@ -378,10 +378,10 @@ export const playerHasNoLessThanMinNumCards: DeductionRule = (
         ROA.fromIterable,
 
         // Convert them into a single modification
-        ConclusionMapSet.ModificationMonoid.combineAll,
+        DeductionSet.ModificationMonoid.combineAll,
     );
 
-    return yield* $(modifyConclusions(knownConclusions));
+    return yield* $(modifyDeductions(knownDeductions));
 });
 
 // If indentify a card in the case file, it's none of the other ones of that type

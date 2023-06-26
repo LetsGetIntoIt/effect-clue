@@ -2,11 +2,11 @@
 import { T, B } from '../utils/EffectImports';
 
 import * as ApiSteps from './ApiSteps';
-import * as ConclusionMapSet from './ConclusionMapSet';
+import * as DeductionSet from './DeductionSet';
 
 // TODO refactors
 // - Add logging, services and spans
-// - Add diagnotics to the result of the deduceConclusions() step (number of iterations, was it exhaustive, etc.)
+// - Add diagnotics to the result of the deduce() step (number of iterations, was it exhaustive, etc.)
 // - All Error strings from the API should be tagged/structured, instead of "string"
 // - Accumulate errors from the API where applicable (instead of failing at the first one)
 // - All Conclusion.Reasons should be tagged/structured, instead of string
@@ -36,21 +36,21 @@ interface ApiInput {
     cardSetup: Parameters<typeof ApiSteps.setupCards>;
     playersSetup: Parameters<typeof ApiSteps.setupPlayers>;
     caseFileSetup: Parameters<typeof ApiSteps.setupCaseFile>;
-    knownConclusionsSetup: Parameters<typeof ApiSteps.setupKnownConclusions>;
+    knownDeductionsSetup: Parameters<typeof ApiSteps.setupKnownDeductions>;
     guessesSetup: Parameters<typeof ApiSteps.setupGuesses>;
     deductionRulesSetup: Parameters<typeof ApiSteps.setupDeductionRules>;
 }
 
 interface ApiOutput {
     // TODO don't leak out this internal type. Convert it to some raw output
-    conclusions: ConclusionMapSet.ValidatedConclusionMapSet;
+    deductions: DeductionSet.ValidatedDeductionSet;
 }
 
 export const run = ({
     cardSetup: cardSetupArgs,
     playersSetup: playersSetupArgs,
     caseFileSetup: caseFileSetupArgs,
-    knownConclusionsSetup: knownConclusionsSetupArgs,
+    knownDeductionsSetup: knownDeductionsSetupArgs,
     guessesSetup: guessesSetupArgs,
     deductionRulesSetup: deductionRulesSetupArgs,
 }: ApiInput): T.Effect<never, B.Brand.BrandErrors, ApiOutput> => T.gen(function* ($) {
@@ -60,8 +60,8 @@ export const run = ({
 
     const game = yield* $(ApiSteps.setupGame({ cards, players, caseFile }));
 
-    const knownConclusions = yield* $(
-        ApiSteps.setupKnownConclusions(...knownConclusionsSetupArgs),
+    const knownDeductions = yield* $(
+        ApiSteps.setupKnownDeductions(...knownDeductionsSetupArgs),
         ApiSteps.provideGame(game),
     );
 
@@ -72,15 +72,15 @@ export const run = ({
 
     const deductionRule = yield* $(ApiSteps.setupDeductionRules(...deductionRulesSetupArgs));
 
-    const deducedConclusions = yield* $(
-        knownConclusions,
-        ApiSteps.deduceConclusions(deductionRule),
+    const deductions = yield* $(
+        knownDeductions,
+        ApiSteps.deduce(deductionRule),
 
         ApiSteps.provideGame(game),
         ApiSteps.provideGuesses(guesses),
     );
 
     return {
-        conclusions: deducedConclusions,
+        deductions,
     };
 });
