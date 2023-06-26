@@ -1,5 +1,5 @@
 :root {
-	font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+	font-family: Futura, Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
 	line-height: 1.5;
 	font-weight: 400;
 
@@ -12,6 +12,8 @@
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
 	-webkit-text-size-adjust: 100%;
+
+	box-sizing: border-box;
 }
 
 body {
@@ -32,8 +34,11 @@ a:hover {
 }
 
 h1 {
-	font-size: 3.2em;
-	line-height: 1.1;
+	font-size: 2rem;
+}
+
+h2 {
+	font-size: 1rem;
 }
 
 button {
@@ -69,27 +74,39 @@ button:focus-visible {
 }
 
 #app {
-	max-width: 1280px;
-	margin: 0 auto;
-	padding: 2rem;
-	text-align: center;
+	height: 100vh;
+	width: 100vw;
+	display: flex;
+
+	background: orange;
 }
 
-.logo {
-	height: 6em;
-	padding: 1.5em;
-}
-.logo:hover {
-	filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.preact:hover {
-	filter: drop-shadow(0 0 2em #673ab8aa);
+.panel {
+	padding: .5rem;
 }
 
-.card {
-	padding: 2em;
+.game-setup {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+
+	.players {
+		flex: 1;
+		background: pink;
+	}
+
+	.cards {
+		flex: 2;
+		background: green;
+	}
 }
 
-.read-the-docs {
-	color: #888;
+.checklist {
+	flex: 3;
+	background: blue;
+}
+
+.guesses {
+	flex: 2;
+	background: red;
 }
