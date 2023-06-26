@@ -77,7 +77,8 @@ describe('App', () => {
                     }],
 
                     deductionRulesSetup: [[
-                        'cardIsHeldExactlyOnce',
+                        'cardIsHeldAtLeastOnce',
+                        'cardIsHeldAtMostOnce',
                     ]],
                 }),
             ));

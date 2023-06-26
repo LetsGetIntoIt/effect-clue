@@ -158,21 +158,114 @@ describe('DeductionRule', () => {
     });
 
     describe('cardIsHeldAtLeastOnce', () => {
-        test('card with N-1 known non-owners', () => {
+        test('card with N-1 known non-owners', async () => {
+            await Effect_test(T.gen(function* ($) {
+                const game = mockGame({
+                    cards: [MOCK_CARDS.mustard],
+                    players: [MOCK_PLAYERS.alice, MOCK_PLAYERS.bob],
+                });
 
+                const guesses = GuessSet.empty;
+
+                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
+                    ],
+                });
+
+                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
+                        [game.caseFile, MOCK_CARDS.mustard, true, mockReasonInferred('Card not owned anywhere else')],
+                    ],
+                });
+
+                const deducedConclusions =
+                    yield* $(Effect_expectSucceed(pipe(
+                        initialConclusions,
+                        DeductionRule.cardIsHeldAtLeastOnce,
+
+                        T.provideService(Game.Tag, game),
+                        T.provideService(GuessSet.Tag, guesses),
+                    )));
+
+                expect(deducedConclusions).toEqual(expectedConclusions);
+            }));
         });
 
-        test('card with only a couple known non-owners', () => {
+        test('card with fewer than N-1 known non-owners', async () => {
+            await Effect_test(T.gen(function* ($) {
+                const game = mockGame({
+                    cards: [MOCK_CARDS.mustard],
+                    players: [MOCK_PLAYERS.alice, MOCK_PLAYERS.bob],
+                });
 
+                const guesses = GuessSet.empty;
+
+                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
+                    ],
+                });
+
+                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
+                    ],
+                });
+
+                const deducedConclusions =
+                    yield* $(Effect_expectSucceed(pipe(
+                        initialConclusions,
+                        DeductionRule.cardIsHeldAtLeastOnce,
+
+                        T.provideService(Game.Tag, game),
+                        T.provideService(GuessSet.Tag, guesses),
+                    )));
+
+                expect(deducedConclusions).toEqual(expectedConclusions);
+            }));
         });
 
-        test('card with everything already known', () => {
+        test('card with everything already known', async () => {
+            await Effect_test(T.gen(function* ($) {
+                const game = mockGame({
+                    cards: [MOCK_CARDS.mustard],
+                    players: [MOCK_PLAYERS.alice, MOCK_PLAYERS.bob],
+                });
 
+                const guesses = GuessSet.empty;
+
+                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
+                        [game.caseFile, MOCK_CARDS.mustard, true, mockReasonObserved('Previously known')],
+                    ],
+                });
+
+                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
+                        [game.caseFile, MOCK_CARDS.mustard, true, mockReasonObserved('Previously known')],
+                    ],
+                });
+
+                const deducedConclusions =
+                    yield* $(Effect_expectSucceed(pipe(
+                        initialConclusions,
+                        DeductionRule.cardIsHeldAtLeastOnce,
+
+                        T.provideService(Game.Tag, game),
+                        T.provideService(GuessSet.Tag, guesses),
+                    )));
+
+                expect(deducedConclusions).toEqual(expectedConclusions);
+            }));
         });
-    });
-
-    describe('cardIsHeldExactlyOnce', () => {
-        test.todo('test this function');
     });
 
     describe('playerHasNoMoreThanMaxNumCards', () => {
@@ -183,19 +276,11 @@ describe('DeductionRule', () => {
         test.todo('test this function');
     });
 
-    describe('playerHasNoCardsOutsideNumCardsRage', () => {
-        test.todo('test this function');
-    });
-
     describe('caseFileHasAtMostOnePerCardType', () => {
         test.todo('test this function');
     });
 
     describe('caseFileHasAtLeastOnePerCardType', () => {
-        test.todo('test this function');
-    });
-
-    describe('caseFileHasExactlyOnePerCardType', () => {
         test.todo('test this function');
     });
 

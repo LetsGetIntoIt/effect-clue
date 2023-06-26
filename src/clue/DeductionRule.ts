@@ -213,9 +213,6 @@ export const cardIsHeldAtLeastOnce: DeductionRule = (
     return yield* $(modifyConclusions(knownConclusions));
 });
 
-export const cardIsHeldExactlyOnce: DeductionRule =
-    SemigroupUnion.combine(cardIsHeldAtMostOnce, cardIsHeldAtLeastOnce);
-
 // If all of a player's cards are accounted for, they don't have any others
 export const playerHasNoMoreThanMaxNumCards: DeductionRule = (
     knownConclusions,
@@ -370,9 +367,6 @@ export const playerHasNoLessThanMinNumCards: DeductionRule = (
     return yield* $(modifyConclusions(knownConclusions));
 });
 
-export const playerHasNoCardsOutsideNumCardsRange: DeductionRule =
-    SemigroupUnion.combine(playerHasNoMoreThanMaxNumCards, playerHasNoLessThanMinNumCards);
-
 // If indentify a card in the case file, it's none of the other ones of that type
 export const caseFileHasAtMostOnePerCardType: DeductionRule =
     constant(
@@ -388,9 +382,6 @@ export const caseFileHasAtLeastOnePerCardType: DeductionRule =
             B.error(`DeductionRule caseFileHasAtLeastOnePerCardType not implemented yet`),
         ),
     );
-
-export const caseFileHasExactlyOnePerCardType: DeductionRule =
-    SemigroupUnion.combine(caseFileHasAtMostOnePerCardType, caseFileHasAtLeastOnePerCardType);
 
 // If someone has refuted a guess, then list the following assumed refute cards:
 // - {player's known owned cards} & {guessed cards} ==> "(owned)"
