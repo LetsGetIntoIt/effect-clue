@@ -56,10 +56,10 @@ export function Clue() {
 
 					{cards.value.map(([cardType, cardName]) => (
 						<tr>
-							<td>
+							<th>
 								<h3>{cardName}</h3>
 								<label>{cardType}</label>
-							</td>
+							</th>
 
 							{players.value.map(([playerName]) => (<td>
 								'yes/no'
