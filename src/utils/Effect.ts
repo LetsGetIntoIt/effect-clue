@@ -192,3 +192,6 @@ export const HashMap_setOrUpdate = <K, V>(
 
         updatedValue => HM.set(hashMap, key, updatedValue),
     );
+
+export const HashSet_differenceFrom = <A>(first: HS.HashSet<A>) => (second: HS.HashSet<A>): HS.HashSet<A> =>
+    HS.difference(first, second);

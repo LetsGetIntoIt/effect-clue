@@ -269,11 +269,319 @@ describe('DeductionRule', () => {
     });
 
     describe('playerHasNoMoreThanMaxNumCards', () => {
-        test.todo('test this function');
+        test('we know all of the max cards of multiple players', async () => {
+            await Effect_test(T.gen(function* ($) {
+                const game = mockGame({
+                    cards: [MOCK_CARDS.mustard, MOCK_CARDS.plum, MOCK_CARDS.wrench, MOCK_CARDS.knife, MOCK_CARDS.conservatory],
+                    players: [MOCK_PLAYERS.alice, MOCK_PLAYERS.bob],
+                });
+
+                const guesses = GuessSet.empty;
+
+                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                    numCards: [
+                        [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, [1, 2], mockReasonObserved('Manually entered')],
+                    ],
+
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, true, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.plum, true, mockReasonObserved('Manually entered')],
+                        
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.wrench, true, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.knife, true, mockReasonObserved('Manually entered')],
+                    ],
+                });
+
+                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                    numCards: [
+                        [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, [1, 2], mockReasonObserved('Manually entered')],
+                    ],
+
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, true, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.plum, true, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.wrench, false, mockReasonInferred(`All of this player's cards have been accounted for already, so they cannot own this one`)],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.knife, false, mockReasonInferred(`All of this player's cards have been accounted for already, so they cannot own this one`)],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.conservatory, false, mockReasonInferred(`All of this player's cards have been accounted for already, so they cannot own this one`)],
+
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonInferred(`All of this player's cards have been accounted for already, so they cannot own this one`)],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.plum, false, mockReasonInferred(`All of this player's cards have been accounted for already, so they cannot own this one`)],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.wrench, true, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.knife, true, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.conservatory, false, mockReasonInferred(`All of this player's cards have been accounted for already, so they cannot own this one`)],
+                    ],
+                });
+
+                const deducedConclusions =
+                    yield* $(Effect_expectSucceed(pipe(
+                        initialConclusions,
+                        DeductionRule.playerHasNoMoreThanMaxNumCards,
+
+                        T.provideService(Game.Tag, game),
+                        T.provideService(GuessSet.Tag, guesses),
+                    )));
+
+                expect(deducedConclusions).toEqual(expectedConclusions);
+            }));
+        });
+
+        test('we know a mix of cards from some players', async () => {
+            await Effect_test(T.gen(function* ($) {
+                const game = mockGame({
+                    cards: [MOCK_CARDS.mustard, MOCK_CARDS.plum, MOCK_CARDS.wrench, MOCK_CARDS.knife, MOCK_CARDS.conservatory],
+                    players: [MOCK_PLAYERS.alice, MOCK_PLAYERS.bob],
+                });
+
+                const guesses = GuessSet.empty;
+
+                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                    numCards: [
+                        [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, [1, 2], mockReasonObserved('Manually entered')],
+                    ],
+
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, true, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.plum, true, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.wrench, false, mockReasonObserved('Previously known')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.knife, false, mockReasonObserved('Previously known')],
+
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonObserved('Previously known')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.plum, false, mockReasonObserved('Previously known')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.wrench, true, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.knife, true, mockReasonObserved('Manually entered')],
+                    ],
+                });
+
+                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                    numCards: [
+                        [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, [1, 2], mockReasonObserved('Manually entered')],
+                    ],
+
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, true, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.plum, true, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.wrench, false, mockReasonObserved('Previously known')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.knife, false, mockReasonObserved('Previously known')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.conservatory, false, mockReasonInferred(`All of this player's cards have been accounted for already, so they cannot own this one`)],
+
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonObserved('Previously known')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.plum, false, mockReasonObserved('Previously known')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.wrench, true, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.knife, true, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.conservatory, false, mockReasonInferred(`All of this player's cards have been accounted for already, so they cannot own this one`)],
+                    ],
+                });
+
+                const deducedConclusions =
+                    yield* $(Effect_expectSucceed(pipe(
+                        initialConclusions,
+                        DeductionRule.playerHasNoMoreThanMaxNumCards,
+
+                        T.provideService(Game.Tag, game),
+                        T.provideService(GuessSet.Tag, guesses),
+                    )));
+
+                expect(deducedConclusions).toEqual(expectedConclusions);
+            }));
+        });
+
+        test('we know many cards of a player, but not how many they have', async () => {
+            await Effect_test(T.gen(function* ($) {
+                const game = mockGame({
+                    cards: [MOCK_CARDS.mustard, MOCK_CARDS.plum, MOCK_CARDS.wrench, MOCK_CARDS.knife, MOCK_CARDS.conservatory],
+                    players: [MOCK_PLAYERS.alice, MOCK_PLAYERS.bob],
+                });
+
+                const guesses = GuessSet.empty;
+
+                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, true, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.plum, true, mockReasonObserved('Manually entered')],
+                        
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.wrench, true, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.knife, true, mockReasonObserved('Manually entered')],
+                    ],
+                });
+
+                const expectedConclusions = initialConclusions;
+
+                const deducedConclusions =
+                    yield* $(Effect_expectSucceed(pipe(
+                        initialConclusions,
+                        DeductionRule.playerHasNoMoreThanMaxNumCards,
+
+                        T.provideService(Game.Tag, game),
+                        T.provideService(GuessSet.Tag, guesses),
+                    )));
+
+                expect(deducedConclusions).toEqual(expectedConclusions);
+            }));
+        });
     });
 
     describe('playerHasNoLessThanMinNumCards', () => {
-        test.todo('test this function');
+        test('we know all except the min cards of multiple players', async () => {
+            await Effect_test(T.gen(function* ($) {
+                const game = mockGame({
+                    cards: [MOCK_CARDS.mustard, MOCK_CARDS.plum, MOCK_CARDS.wrench, MOCK_CARDS.knife, MOCK_CARDS.conservatory],
+                    players: [MOCK_PLAYERS.alice, MOCK_PLAYERS.bob],
+                });
+
+                const guesses = GuessSet.empty;
+
+                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                    numCards: [
+                        [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, [2, 3], mockReasonObserved('Manually entered')],
+                    ],
+
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.wrench, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.knife, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.conservatory, false, mockReasonObserved('Manually entered')],
+
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.plum, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.conservatory, false, mockReasonObserved('Manually entered')],
+                    ],
+                });
+
+                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                    numCards: [
+                        [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, [2, 3], mockReasonObserved('Manually entered')],
+                    ],
+
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, true, mockReasonInferred(`All except this player's min number of cards have been accounted for, so they definitely own the rest`)],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.plum, true, mockReasonInferred(`All except this player's min number of cards have been accounted for, so they definitely own the rest`)],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.wrench, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.knife, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.conservatory, false, mockReasonObserved('Manually entered')],
+
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.plum, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.wrench, true, mockReasonInferred(`All except this player's min number of cards have been accounted for, so they definitely own the rest`)],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.knife, true, mockReasonInferred(`All except this player's min number of cards have been accounted for, so they definitely own the rest`)],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.conservatory, false,mockReasonObserved('Manually entered')],
+                    ],
+                });
+
+                const deducedConclusions =
+                    yield* $(Effect_expectSucceed(pipe(
+                        initialConclusions,
+                        DeductionRule.playerHasNoLessThanMinNumCards,
+
+                        T.provideService(Game.Tag, game),
+                        T.provideService(GuessSet.Tag, guesses),
+                    )));
+
+                expect(deducedConclusions).toEqual(expectedConclusions);
+            }));
+        });
+
+        test('we know a mix of cards from some players', async () => {
+            await Effect_test(T.gen(function* ($) {
+                const game = mockGame({
+                    cards: [MOCK_CARDS.mustard, MOCK_CARDS.plum, MOCK_CARDS.wrench, MOCK_CARDS.knife, MOCK_CARDS.conservatory],
+                    players: [MOCK_PLAYERS.alice, MOCK_PLAYERS.bob],
+                });
+
+                const guesses = GuessSet.empty;
+
+                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                    numCards: [
+                        [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, [2, 3], mockReasonObserved('Manually entered')],
+                    ],
+
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, true, mockReasonObserved('Previously known')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.wrench, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.knife, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.conservatory, false, mockReasonObserved('Manually entered')],
+
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.plum, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.wrench, true, mockReasonObserved('Previously known')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.conservatory, false, mockReasonObserved('Manually entered')],
+                    ],
+                });
+
+                const expectedConclusions = mockConclusionsInGame(game, guesses)({
+                    numCards: [
+                        [MOCK_PLAYERS.alice, [2], mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, [2, 3], mockReasonObserved('Manually entered')],
+                    ],
+
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.mustard, true, mockReasonObserved('Previously known')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.plum, true, mockReasonInferred(`All except this player's min number of cards have been accounted for, so they definitely own the rest`)],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.wrench, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.knife, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.conservatory, false, mockReasonObserved('Manually entered')],
+
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.plum, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.wrench, true, mockReasonObserved('Previously known')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.knife, true, mockReasonInferred(`All except this player's min number of cards have been accounted for, so they definitely own the rest`)],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.conservatory, false,mockReasonObserved('Manually entered')],
+                    ],
+                });
+
+                const deducedConclusions =
+                    yield* $(Effect_expectSucceed(pipe(
+                        initialConclusions,
+                        DeductionRule.playerHasNoLessThanMinNumCards,
+
+                        T.provideService(Game.Tag, game),
+                        T.provideService(GuessSet.Tag, guesses),
+                    )));
+
+                expect(deducedConclusions).toEqual(expectedConclusions);
+            }));
+        });
+
+        test('we know many non-cards of a player, but not how many they have', async () => {
+            await Effect_test(T.gen(function* ($) {
+                const game = mockGame({
+                    cards: [MOCK_CARDS.mustard, MOCK_CARDS.plum, MOCK_CARDS.wrench, MOCK_CARDS.knife, MOCK_CARDS.conservatory],
+                    players: [MOCK_PLAYERS.alice, MOCK_PLAYERS.bob],
+                });
+
+                const guesses = GuessSet.empty;
+
+                const initialConclusions = mockConclusionsInGame(game, guesses)({
+                    ownership: [
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.wrench, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.knife, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.alice, MOCK_CARDS.conservatory, false, mockReasonObserved('Manually entered')],
+
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.mustard, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.plum, false, mockReasonObserved('Manually entered')],
+                        [MOCK_PLAYERS.bob, MOCK_CARDS.conservatory, false, mockReasonObserved('Manually entered')],
+                    ],
+                });
+
+                const expectedConclusions = initialConclusions;
+
+                const deducedConclusions =
+                    yield* $(Effect_expectSucceed(pipe(
+                        initialConclusions,
+                        DeductionRule.playerHasNoLessThanMinNumCards,
+
+                        T.provideService(Game.Tag, game),
+                        T.provideService(GuessSet.Tag, guesses),
+                    )));
+
+                expect(deducedConclusions).toEqual(expectedConclusions);
+            }));
+        });
     });
 
     describe('caseFileHasAtMostOnePerCardType', () => {

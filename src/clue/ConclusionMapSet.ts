@@ -31,7 +31,8 @@ export const ValidatedConclusionMapSet = Brand_refinedEffect<ValidatedConclusion
             // TODO actually validate the conclusions
             // - all Cards and Players actually exist in the game
             // - all Guesses actaully exist in the Game
-            // - numCards cannot exceed total number of cards - where do we read that info from?
+            // - numCards cannot exceed total number of cards (minus whatever is in the case file) - where do we read that info from?
+            // - the number of known owned/unowned cards for a player cannot be outside their numCards range
             // - card can be owned by at most 1 owner
             // - casefile can own at most 1 of each card type
             // - refuteCards must satisfy this requirement

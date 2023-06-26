@@ -308,6 +308,7 @@ export const provideGuesses = (guesses: GuessSet.ValidatedGuessSet) =>
 const ALL_DEDUCTION_RULES = [
     'playerHasAtLeastZeroCards',
     'playerHasMaxNumCardsRemaining',
+    'playerHasNarrowestNumCardRange',
     'playerHasMinNumCardsRefuted',
     'cardIsHeldAtMostOnce',
     'cardIsHeldAtLeastOnce',
@@ -339,6 +340,7 @@ export const setupDeductionRules = (
 
             M.when('playerHasAtLeastZeroCards', () => DeductionRule.playerHasZeroToNumAllCards),
             M.when('playerHasMaxNumCardsRemaining', () => DeductionRule.playerHasMaxNumCardsRemaining),
+            M.when('playerHasNarrowestNumCardRange', () => DeductionRule.playerHasNarrowestNumCardRange),
             M.when('playerHasMinNumCardsRefuted', () => DeductionRule.playerHasMinNumCardsRefuted),
             M.when('cardIsHeldAtMostOnce', () => DeductionRule.cardIsHeldAtMostOnce),
             M.when('cardIsHeldAtLeastOnce', () => DeductionRule.cardIsHeldAtLeastOnce),

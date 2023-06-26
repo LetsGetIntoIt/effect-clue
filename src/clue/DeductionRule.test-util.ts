@@ -19,6 +19,13 @@ import * as CardOwner from "./CardOwner";
 export const MOCK_CARDS = pipe(
     {
         mustard: { cardType: 'Suspect', label: 'Col. Mustard', },
+        plum: { cardType: 'Suspect', label: 'Prof. Plum', },
+
+        wrench: { cardType: 'Weapon', label: 'Wrench', },
+        knife: { cardType: 'Weapon', label: 'Knife', },
+
+        conservatory: { cardType: 'Room', label: 'Conservatory', },
+        ballRoom: { cardType: 'Room', label: 'Ball room', },
     },
 
     ROR.map(flow(Card.Card, Card.ValidatedCard, E.getOrThrow)),
