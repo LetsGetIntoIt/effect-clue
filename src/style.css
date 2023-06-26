@@ -80,33 +80,3 @@ button:focus-visible {
 
 	background: orange;
 }
-
-.panel {
-	padding: .5rem;
-}
-
-.game-setup {
-	flex: 1;
-	display: flex;
-	flex-direction: column;
-
-	.players {
-		flex: 1;
-		background: pink;
-	}
-
-	.cards {
-		flex: 2;
-		background: green;
-	}
-}
-
-.checklist {
-	flex: 3;
-	background: blue;
-}
-
-.guesses {
-	flex: 2;
-	background: red;
-}
