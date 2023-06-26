@@ -9,18 +9,37 @@
 !/.yarn/sdks
 !/.yarn/versions
 
-# Dependencies
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies and build output
 /node_modules/
-
-# Locally linked dependencies
-# See https://www.npmjs.com/package/link
-/link.config.json
-
-# Jest
-/coverage/
-
-# Build output
 dist/
+dist-ssr
+*.local
+
+# VSCode
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/*.code-snippetss
+
+# IntelliJ
+.idea
+
+# Annoying files
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
 # Temp files
 /.tscache/
@@ -28,3 +47,10 @@ dist/
 /.eslintcache
 /*.log
 /*.tsbuildinfo
+
+# Locally linked dependencies
+# See https://www.npmjs.com/package/link
+/link.config.json
+
+# Jest
+/coverage/

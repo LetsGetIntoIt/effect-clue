@@ -1,24 +1,17 @@
 {
-    "compilerOptions": {
-      "target": "ES2022",
-      "module": "ES2022",
-      "moduleResolution": "node",
-      "declaration": true,
-      "sourceMap": true,
-      "strict": true,
-      "noUncheckedIndexedAccess": true,
-      "lib": ["ES2022"],
-      "skipLibCheck": true,
-      "plugins": [
-        { "name": "@effect/language-service" }
-      ],
-  },
-  "include": [
-      "*.ts",
-      "*.cjs",
-      "*.js",
-      "*.json",
-      "*.json5",
-      "src/**/*"
-  ]
+	"compilerOptions": {
+		"target": "ES2020",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"noEmit": true,
+		"allowJs": false,
+		"checkJs": true,
+		"jsx": "react-jsx",
+		"jsxImportSource": "preact",
+		"strict": true,
+		"plugins": [
+			{ "name": "@effect/language-service" }
+		],
+	},
+	"include": ["node_modules/vite/client.d.ts", "**/*"]
 }
