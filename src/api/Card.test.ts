@@ -1,4 +1,4 @@
-import { E } from "./utils/EffectImports";
+import { E } from "../utils/EffectImports";
 import { pipe } from "@effect/data/Function";
 
 import * as Card from "./Card";

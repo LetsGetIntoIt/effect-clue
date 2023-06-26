@@ -1,6 +1,6 @@
-import { B, HS, E, ROA } from './utils/EffectImports';
+import { B, HS, E, ROA } from '../utils/EffectImports';
 import { flow, pipe, apply } from '@effect/data/Function';
-import { Brand_refined, Endomorphism_getMonoid } from './utils/Effect';
+import { Brand_refined, Endomorphism_getMonoid } from '../utils/Effect';
 
 import * as Card from './Card';
 

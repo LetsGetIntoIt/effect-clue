@@ -1,6 +1,6 @@
 
-import { D, B, T, CTX } from './utils/EffectImports';
-import { Brand_refinedEffect } from './utils/Effect';
+import { D, B, T, CTX } from '../utils/EffectImports';
+import { Brand_refinedEffect } from '../utils/Effect';
 
 import * as Card from './Card';
 import * as Game from './Game';

@@ -1,10 +1,10 @@
-import { D, CTX, HS } from "./utils/EffectImports";
+import { D, CTX, HS } from "../utils/EffectImports";
 
 import * as CardSet from "./CardSet";
 import * as PlayerSet from "./PlayerSet";
 import * as CaseFile from './CaseFile';
 import * as CardOwner from './CardOwner';
-import { Struct_get } from "./utils/Effect";
+import { Struct_get } from "../utils/Effect";
 
 export interface Game extends D.Case {
     _tag: 'Game';

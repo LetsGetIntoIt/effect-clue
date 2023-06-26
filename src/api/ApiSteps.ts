@@ -1,7 +1,7 @@
 
-import { E, B, ROA, T, HS, O, ST, EQ, P, M } from './utils/EffectImports';
+import { E, B, ROA, T, HS, O, ST, EQ, P, M } from '../utils/EffectImports';
 import { flow, pipe } from '@effect/data/Function';
-import { Endomorphism_getMonoid } from './utils/Effect';
+import { Endomorphism_getMonoid } from '../utils/Effect';
 
 import * as Card from './Card';
 import * as CardSet from './CardSet';

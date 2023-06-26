@@ -1,6 +1,6 @@
 
-import { T } from './utils/EffectImports';
-import { Effect_expectSucceed, Effect_test } from './utils/EffectTest';
+import { T } from '../utils/EffectImports';
+import { Effect_expectSucceed, Effect_test } from '../utils/EffectTest';
 
 import * as App from './Api';
 

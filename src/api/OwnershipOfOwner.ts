@@ -1,7 +1,7 @@
 
 import { flow, pipe } from '@effect/data/Function';
-import { B, E, HM } from './utils/EffectImports';
-import { Brand_refined } from './utils/Effect';
+import { B, E, HM } from '../utils/EffectImports';
+import { Brand_refined } from '../utils/Effect';
 
 import * as Card from './Card';
 

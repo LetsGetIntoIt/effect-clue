@@ -1,6 +1,6 @@
-import { B, HM, E, HS, O } from './utils/EffectImports';
+import { B, HM, E, HS, O } from '../utils/EffectImports';
 import { pipe } from '@effect/data/Function';
-import { Brand_refined } from './utils/Effect';
+import { Brand_refined } from '../utils/Effect';
 
 import * as Conclusion from './Conclusion';
 

@@ -1,4 +1,4 @@
-import { D, M, P } from './utils/EffectImports';
+import { D, M, P } from '../utils/EffectImports';
 
 import * as Player from './Player';
 import * as CaseFile from './CaseFile';
