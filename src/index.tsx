@@ -1,4 +1,6 @@
 import { render } from 'preact';
+
+import 'normalize.css';
 import './style.css';
 
 import { Clue } from './ui/Clue';
@@ -11,4 +13,3 @@ let container;
 if (container = document.getElementById('app')) {
 	render(<App />, container);
 }
-

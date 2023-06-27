@@ -14,6 +14,7 @@ export * as CTX from "@effect/data/Context";
 export * as O from '@effect/data/Option';
 export * as E from '@effect/data/Either';
 
+export * as H from '@effect/data/Hash';
 export * as EQ from '@effect/data/Equal';
 
 export * as AP from '@effect/data/typeclass/Applicative';

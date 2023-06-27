@@ -1,39 +1,48 @@
-import { signal } from "@preact/signals";
+import { computed, useSignal } from "@preact/signals";
 
-import './Clue.css';
+import { signalToInput } from "./utils/signals";
+
+import InputTextList from "./components/utils/InputTextList";
+
+import './Clue.module.css';
 
 export function Clue() {
-	const standardCards = signal<'North America' | undefined>('North America');
-
-	const cards = signal<[string, string][]>([
-		['Room', 'Dog house'],
+	const caseFileLabel = useSignal<string | undefined>('Murder');
+	const playerNames = useSignal<string[]>(['Kapil', 'Kate', 'Karthik']);
+	const cards = useSignal<[string, string][]>([
+		['Room', 'Living room'],
+		['Weapon', 'Wrench'],
+		['Weapon', 'Knife'],
+		['Suspect', 'Plum'],
 	]);
 
-	const players = signal<[string][]>([
-		['Kapil'],
-		['Kate'],
-	]);
+	const owners = computed(() => [caseFileLabel.value, ...playerNames.value]);
 
 	return (
-		<>
+		<main class="clue">
 			<aside class="game-setup">
-				<section class="panel players">
-					<h2>Players</h2>
-					
-					{players.value.map(player => (
-						<input type="text" value={player[0]} disabled />
-					))}
+				<section class="panel">
+					<h2>Case file</h2>
+					<input type="text" value={caseFileLabel.value} onInput={evt => caseFileLabel.value = evt?.target.value} />
 				</section>
 
-				<section class="panel cards">
+				<section class="panel">
+					<h2>Players</h2>
+					<InputTextList
+						{...signalToInput(playerNames)}
+						placeholderCreate="Add player"
+						confirmRemove="Are you sure you want to remove this player?"
+					/>
+				</section>
+
+				<section class="panel">
 					<h2>Cards</h2>
-
-					<input id="standardCards" type="checkbox" checked={standardCards.value === 'North America'} label="North America" disabled />
-					<label for="#standardCards">North America set</label>
-
-					{cards.value.map(card => (
-						<input type="text" value={`${card[0]}: ${card[1]}`} disabled />
-					))}
+					<InputTextList
+						value={cards.value.map(([type, label]) => `${type}:${label}`)}
+						onChange={newCards => cards.value = newCards.map(card => card.split(':') as [string, string])}
+						placeholderCreate="Add card"
+						confirmRemove="Are you sure you want to remove this card?"
+					/>
 				</section>
 			</aside>
 
@@ -46,9 +55,9 @@ export function Clue() {
 							{/* Blank heading for the cards row */}
 							<th/>
 
-							{/* Player name column headings */}
-							{players.value.map(([playerName]) => <th>
-								<h3>{playerName}</h3>
+							{/* Card owner name column headings */}
+							{owners.value.map((name) => <th>
+								<h3>{name}</h3>
 								<label>_ cards</label>
 							</th>)}
 						</tr>
@@ -61,7 +70,7 @@ export function Clue() {
 								<label>{cardType}</label>
 							</th>
 
-							{players.value.map(([playerName]) => (<td>
+							{owners.value.map((name) => (<td>
 								'yes/no'
 							</td>))}
 						</tr>
@@ -72,6 +81,6 @@ export function Clue() {
 			<aside class="panel guesses">
 				<h2>Guesses</h2>
 			</aside>
-		</>
+		</main>
 	);
 }
