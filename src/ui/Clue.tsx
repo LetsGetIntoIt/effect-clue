@@ -5,9 +5,10 @@ import { signalToInput } from "./utils/signals";
 import InputTextList from "./components/utils/InputTextList";
 
 import './Clue.module.css';
+import ChecklistTable from "./components/ChecklistTable";
 
 export function Clue() {
-	const caseFileLabel = useSignal<string | undefined>('Murder');
+	const caseFileLabel = useSignal<string>('Murder');
 	const playerNames = useSignal<string[]>(['Kapil', 'Kate', 'Karthik']);
 	const cards = useSignal<[string, string][]>([
 		['Room', 'Living room'],
@@ -48,34 +49,10 @@ export function Clue() {
 
 			<main class="panel checklist">
 				<h2>Checklist</h2>
-
-				<table>
-					<thead>
-						<tr>
-							{/* Blank heading for the cards row */}
-							<th/>
-
-							{/* Card owner name column headings */}
-							{owners.value.map((name) => <th>
-								<h3>{name}</h3>
-								<label>_ cards</label>
-							</th>)}
-						</tr>
-					</thead>
-
-					{cards.value.map(([cardType, cardName]) => (
-						<tr>
-							<th>
-								<h3>{cardName}</h3>
-								<label>{cardType}</label>
-							</th>
-
-							{owners.value.map((name) => (<td>
-								'yes/no'
-							</td>))}
-						</tr>
-					))}
-				</table>
+				<ChecklistTable
+					owners={owners.value}
+					cards={cards.value}
+				/>
 			</main>
 
 			<aside class="panel guesses">

@@ -28,15 +28,6 @@
 
 	.checklist {
 		flex: 3;
-	
-		.hi, table {
-			border-collapse: collapse;
-			width: 100%;
-		}
-	
-		.hi, td {
-			border: 1px solid;
-		}
 	}
 	
 	.guesses {
