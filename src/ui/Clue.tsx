@@ -1,15 +1,15 @@
-import { computed, useSignal } from "@preact/signals";
-
-import { signalToInput } from "./utils/signals";
+import { computed, effect, useSignal } from "@preact/signals";
 
 import InputTextList from "./components/utils/InputTextList";
-
-import './Clue.module.css';
 import ChecklistTable from "./components/ChecklistTable";
 
+import * as Api from '../api';
+
+import './Clue.module.css';
+
 export function Clue() {
-	const caseFileLabel = useSignal<string>('Murder');
-	const playerNames = useSignal<string[]>(['Kapil', 'Kate', 'Karthik']);
+	const caseFile = useSignal<string>('Murder');
+	const players = useSignal<string[]>(['Kapil', 'Kate', 'Karthik']);
 	const cards = useSignal<[string, string][]>([
 		['Room', 'Living room'],
 		['Weapon', 'Wrench'],
@@ -17,20 +17,61 @@ export function Clue() {
 		['Suspect', 'Plum'],
 	]);
 
-	const owners = computed(() => [caseFileLabel.value, ...playerNames.value]);
+	const playerNumCards = useSignal<{ [player: string]: number }>({});
+	const ownership = useSignal<{
+		[playerCard: string]: boolean;
+	}>({});
+
+	const apiOutput = computed(() => Api.run({
+		cardSetup: [{
+			useStandard: undefined,
+			extraCards: cards.value,
+		}],
+
+		playersSetup: [{
+			players: players.value.map(name => [name]),
+		}],
+
+		caseFileSetup: [{
+			caseFile: [caseFile.value],
+		}],
+
+		knownDeductionsSetup: [{
+			knownNumCards: Object.entries(playerNumCards.value).map(([player, numCards]) => [[player], numCards]),
+
+			knownCardOwners: Object.entries(ownership.value).map(([playerCard, isOwned]) => {
+				const [player, cardType, cardName] = playerCard.split(':');
+				return [[player], [cardType, cardName], isOwned];
+			}),
+		}],
+
+		guessesSetup: [{
+			guesses: [
+				// TODO
+			],
+		}],
+
+		deductionRulesSetup: [[
+			'cardIsHeldAtLeastOnce',
+			'cardIsHeldAtMostOnce',
+			'playerHasNoMoreThanMaxNumCards',
+			'playerHasNoLessThanMinNumCards',
+		]],
+	}));
 
 	return (
 		<main class="clue">
 			<aside class="game-setup">
 				<section class="panel">
 					<h2>Case file</h2>
-					<input type="text" value={caseFileLabel.value} onInput={evt => caseFileLabel.value = evt?.target.value} />
+					<input type="text" value={caseFile.value} onInput={evt => caseFile.value = evt.target?.value} />
 				</section>
 
 				<section class="panel">
 					<h2>Players</h2>
 					<InputTextList
-						{...signalToInput(playerNames)}
+						value={players.value}
+						onChange={newPlayers => players.value = newPlayers}
 						placeholderCreate="Add player"
 						confirmRemove="Are you sure you want to remove this player?"
 					/>
@@ -40,7 +81,12 @@ export function Clue() {
 					<h2>Cards</h2>
 					<InputTextList
 						value={cards.value.map(([type, label]) => `${type}:${label}`)}
-						onChange={newCards => cards.value = newCards.map(card => card.split(':') as [string, string])}
+						onChange={newCards => {
+							cards.value = newCards.map(card => {
+								const [cardType, cardName] = card.split(':');
+								return [cardType, cardName];
+							});
+						}}
 						placeholderCreate="Add card"
 						confirmRemove="Are you sure you want to remove this card?"
 					/>
@@ -50,8 +96,31 @@ export function Clue() {
 			<main class="panel checklist">
 				<h2>Checklist</h2>
 				<ChecklistTable
-					owners={owners.value}
+					caseFile={caseFile.value}
+					players={players.value}
 					cards={cards.value}
+
+					playerNumCards={playerNumCards.value}
+					onChangePlayerNumCards={(player, numCards) => {
+						playerNumCards.value = {
+							...playerNumCards.value,
+							[player]: numCards,
+						};
+					}}
+
+					onChangeOwnership={(player, [cardType, cardLabel], isOwned) => {
+						if (isOwned === null || isOwned === undefined) {
+							// Remove our information about the ownership
+							const { [`${player}:${cardType}:${cardLabel}`]: _, ...newOwnership } = ownership.value;
+							ownership.value = newOwnership;
+						} else {
+							ownership.value = {
+								...ownership.value,
+								[`${player}:${cardType}:${cardLabel}`]: isOwned,
+							};
+						}
+					}}
+					apiOutput={apiOutput.value}
 				/>
 			</main>
 

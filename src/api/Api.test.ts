@@ -1,90 +1,83 @@
 
-import { T } from '../utils/EffectImports';
-import { Effect_expectSucceed, Effect_test } from '../utils/EffectTest';
-
 import * as App from './Api';
 
 describe('App', () => {
     test('scenario 1', async () => {
-        await Effect_test(T.gen(function* ($) {
-            const result = yield* $(Effect_expectSucceed(
-                App.run({
-                    cardSetup: [{
-                        useStandard: 'North America',
+        const result = await App.run({
+            cardSetup: [{
+                useStandard: 'North America',
 
-                        extraCards: [
+                extraCards: [
+                    ['Room', 'Dog house'],
+                ],
+            }],
+
+            playersSetup: [{
+                players: [
+                    ['Kapil'],
+                    ['Kate'],
+                    ['Karthik'],
+                ],
+            }],
+
+            caseFileSetup: [{
+                caseFile: ['Murder'],
+            }],
+
+            knownDeductionsSetup: [{
+                knownNumCards: [
+                    [['Kapil'], 5],
+                    [['Kate'], 10],
+                ],
+
+                knownCardOwners: [
+                    [['Kapil'], ['Room', 'Dog house'], true],
+                ],
+            }],
+
+            guessesSetup: [{
+                guesses: [
+                    {
+                        cards: [
+                            ['Suspect', 'Col. Mustard'],
+                            ['Weapon', 'Knife'],
                             ['Room', 'Dog house'],
                         ],
-                    }],
-
-                    playersSetup: [{
-                        players: [
-                            ['Kapil'],
-                            ['Kate'],
+                        guesser: ['Kate'],
+                        nonRefuters: [
                             ['Karthik'],
                         ],
-                    }],
-
-                    caseFileSetup: [{
-                        caseFile: ['Murder'],
-                    }],
-
-                    knownDeductionsSetup: [{
-                        knownNumCards: [
-                            [['Kapil'], 5],
-                            [['Kate'], 10],
+                        refutation: [
+                            ['Kate'],
+                            ['Weapon', 'Knife'],
                         ],
+                    },
 
-                        knownCardOwners: [
-                            [['Kapil'], ['Room', 'Dog house']],
+                    {
+                        cards: [
+                            ['Suspect', 'Col. Mustard'],
+                            ['Weapon', 'Knife'],
+                            ['Room', 'Dog house'],
                         ],
-                    }],
-
-                    guessesSetup: [{
-                        guesses: [
-                            {
-                                cards: [
-                                    ['Suspect', 'Col. Mustard'],
-                                    ['Weapon', 'Knife'],
-                                    ['Room', 'Dog house'],
-                                ],
-                                guesser: ['Kate'],
-                                nonRefuters: [
-                                    ['Karthik'],
-                                ],
-                                refutation: [
-                                    ['Kate'],
-                                    ['Weapon', 'Knife'],
-                                ],
-                            },
-
-                            {
-                                cards: [
-                                    ['Suspect', 'Col. Mustard'],
-                                    ['Weapon', 'Knife'],
-                                    ['Room', 'Dog house'],
-                                ],
-                                guesser: ['Kate'],
-                                nonRefuters: [
-                                    // None
-                                ],
-                                refutation: [
-                                    ['Kapil'],
-                                    // Refute card unknown
-                                ],
-                            },
+                        guesser: ['Kate'],
+                        nonRefuters: [
+                            // None
                         ],
-                    }],
+                        refutation: [
+                            ['Kapil'],
+                            // Refute card unknown
+                        ],
+                    },
+                ],
+            }],
 
-                    deductionRulesSetup: [[
-                        'cardIsHeldAtLeastOnce',
-                        'cardIsHeldAtMostOnce',
-                    ]],
-                }),
-            ));
+            deductionRulesSetup: [[
+                'cardIsHeldAtLeastOnce',
+                'cardIsHeldAtMostOnce',
+            ]],
+        });
 
-            // TODO actually write tests and assert stuff
-            expect(result).toBeDefined();
-        }));
+        // TODO actually write tests and assert stuff
+        expect(result).toBeDefined();
     });
 });

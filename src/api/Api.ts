@@ -1,8 +1,11 @@
-
-import { T, B } from '../utils/EffectImports';
+import { pipe } from '@effect/data/Function';
+import { T, B, ROA, E, D, HM, O, HS } from '../utils/EffectImports';
 
 import * as ApiSteps from './ApiSteps';
-import * as DeductionSet from './DeductionSet';
+import * as Player from './Player';
+import * as Card from './Card';
+import * as CardOwner from './CardOwner';
+import * as CaseFile from './CaseFile';
 
 // TODO refactors
 // - Add logging, services and spans
@@ -41,9 +44,11 @@ interface ApiInput {
     deductionRulesSetup: Parameters<typeof ApiSteps.setupDeductionRules>;
 }
 
-interface ApiOutput {
-    // TODO don't leak out this internal type. Convert it to some raw output
-    deductions: DeductionSet.ValidatedDeductionSet;
+export interface ApiOutput {
+    ownership: (type: 'player' | 'caseFile', player: string, card: [string, string]) => {
+        readonly isOwned: boolean;
+        readonly reasons: string[];
+    } | undefined
 }
 
 export const run = ({
@@ -53,34 +58,57 @@ export const run = ({
     knownDeductionsSetup: knownDeductionsSetupArgs,
     guessesSetup: guessesSetupArgs,
     deductionRulesSetup: deductionRulesSetupArgs,
-}: ApiInput): T.Effect<never, B.Brand.BrandErrors, ApiOutput> => T.gen(function* ($) {
-    const cards = yield* $(ApiSteps.setupCards(...cardSetupArgs));
-    const players = yield* $(ApiSteps.setupPlayers(...playersSetupArgs));
-    const caseFile = yield* $(ApiSteps.setupCaseFile(...caseFileSetupArgs));
+}: ApiInput): ApiOutput => pipe(
+    T.gen(function* ($) {
+        const cards = yield* $(ApiSteps.setupCards(...cardSetupArgs));
+        const players = yield* $(ApiSteps.setupPlayers(...playersSetupArgs));
+        const caseFile = yield* $(ApiSteps.setupCaseFile(...caseFileSetupArgs));
 
-    const game = yield* $(ApiSteps.setupGame({ cards, players, caseFile }));
+        const game = yield* $(ApiSteps.setupGame({ cards, players, caseFile }));
 
-    const knownDeductions = yield* $(
-        ApiSteps.setupKnownDeductions(...knownDeductionsSetupArgs),
-        ApiSteps.provideGame(game),
-    );
+        const knownDeductions = yield* $(
+            ApiSteps.setupKnownDeductions(...knownDeductionsSetupArgs),
+            ApiSteps.provideGame(game),
+        );
 
-    const guesses = yield* $(
-        ApiSteps.setupGuesses(...guessesSetupArgs),
-        ApiSteps.provideGame(game),
-    );
+        const guesses = yield* $(
+            ApiSteps.setupGuesses(...guessesSetupArgs),
+            ApiSteps.provideGame(game),
+        );
 
-    const deductionRule = yield* $(ApiSteps.setupDeductionRules(...deductionRulesSetupArgs));
+        const deductionRule = yield* $(ApiSteps.setupDeductionRules(...deductionRulesSetupArgs));
 
-    const deductions = yield* $(
-        knownDeductions,
-        ApiSteps.deduce(deductionRule),
+        const deductions = yield* $(
+            knownDeductions,
+            ApiSteps.deduce(deductionRule),
 
-        ApiSteps.provideGame(game),
-        ApiSteps.provideGuesses(guesses),
-    );
+            ApiSteps.provideGame(game),
+            ApiSteps.provideGuesses(guesses),
+        );
 
-    return {
-        deductions,
-    };
-});
+        return {
+            ownership: (type: 'player' | 'caseFile', ownerName: string, [cardType, cardName]: [string, string]) => {
+                const owner = 
+                    type === 'player'
+                        ? pipe(Player.Player({ name: ownerName }), Player.ValidatedPlayer, E.getOrThrow, player => CardOwner.CardOwnerPlayer({ player }))
+                        : pipe(CaseFile.CaseFile({ label: ownerName }), CaseFile.ValidatedCaseFile, E.getOrThrow, caseFile => CardOwner.CardOwnerCaseFile({ caseFile }))
+                const card = pipe(Card.Card({ cardType, label: cardName }), Card.ValidatedCard, E.getOrThrow);
+
+                const key = D.array([owner, card] as const);
+
+                const ownership = HM.get(deductions.ownership, key);
+
+                if (O.isNone(ownership)) {
+                    return undefined;
+                }
+
+                return {
+                    isOwned: ownership.value.answer,
+                    reasons: pipe(ownership.value.reasons, HS.map((reason) => reason.explanation), HS.values, ROA.fromIterable),
+                };
+            },
+        };
+    }),
+
+    T.runSync,
+);

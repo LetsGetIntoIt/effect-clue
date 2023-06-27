@@ -141,7 +141,7 @@ export const setupKnownDeductions = ({
     knownCardOwners: rawKnownCardOwners = [],
 }: {
     knownNumCards?: readonly [RawPlayer, number][];
-    knownCardOwners?: readonly [RawPlayer, RawCard][];
+    knownCardOwners?: readonly [RawPlayer, RawCard, boolean][];
 }): T.Effect<Game.Game, B.Brand.BrandErrors, DeductionSet.ValidatedDeductionSet> =>
     T.gen(function* ($) {
         const knownNumCards = yield* $(
@@ -162,9 +162,10 @@ export const setupKnownDeductions = ({
             E.validateAll(
                 rawKnownCardOwners,
 
-                ([player, card]) => E.tuple(
+                ([player, card, isOwned]) => E.tuple(
                     parsePlayer(player),
                     parseCard(card),
+                    E.right(isOwned),
                 ),
             ),
 
@@ -185,11 +186,11 @@ export const setupKnownDeductions = ({
                 ),
             ),
 
-            ROA.appendAll(ROA.map(knownCardOwners, ([player, card]) =>
+            ROA.appendAll(ROA.map(knownCardOwners, ([player, card, isOwned]) =>
                 DeductionSet.modifyAddOwnership(
                     CardOwner.CardOwnerPlayer({ player }),
                     card,
-                    true,
+                    isOwned,
                     Conclusion.Reason({
                         level: 'observed',
                         explanation: 'Manually entered',
