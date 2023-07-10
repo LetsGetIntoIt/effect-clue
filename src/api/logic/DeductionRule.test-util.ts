@@ -1,10 +1,10 @@
 import { pipe, flow, identity } from "@effect/data/Function";
-import { D, E, HM, HS, M, O, ROA, ROR, ST, T, TU } from "../utils/EffectImports";
-import { HashSet_of } from "../utils/Effect";
+import { D, E, HM, HS, M, O, ROA, ROR, ST, T, TU } from "./utils/EffectImports";
+import { HashSet_of } from "./utils/Effect";
 
 import * as CaseFile from "./CaseFile";
 import * as Game from "./Game";
-import * as Card from "./Card";
+import * as Card from "./objects/Card";
 import * as CardSet from "./CardSet";
 import * as Player from "./Player";
 import * as PlayerSet from "./PlayerSet";
@@ -13,8 +13,8 @@ import * as GuessSet from "./GuessSet";
 import * as ConclusionMap from "./ConclusionMap";
 import * as DeductionSet from "./DeductionSet";
 import * as Range from "./Range";
-import * as Conclusion from "./Conclusion";
-import * as CardOwner from "./CardOwner";
+import * as Conclusion from "./deductions/utils/Conclusion";
+import * as CardOwner from "./game/CardOwner";
 
 export const MOCK_CARDS = pipe(
     {

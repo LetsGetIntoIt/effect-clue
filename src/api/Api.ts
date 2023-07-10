@@ -1,10 +1,10 @@
 import { pipe } from '@effect/data/Function';
-import { T, B, ROA, E, D, HM, O, HS } from '../utils/EffectImports';
+import { T, B, ROA, E, D, HM, O, HS } from './utils/EffectImports';
 
 import * as ApiSteps from './ApiSteps';
 import * as Player from './Player';
-import * as Card from './Card';
-import * as CardOwner from './CardOwner';
+import * as Card from './objects/Card';
+import * as CardOwner from './game/CardOwner';
 import * as CaseFile from './CaseFile';
 
 // TODO refactors
@@ -87,12 +87,14 @@ export const run = ({
         );
 
         return {
-            ownership: (type: 'player' | 'caseFile', ownerName: string, [cardType, cardName]: [string, string]) => {
+            ownership: (type: 'player' | 'caseFile', ownerName: string, [cardType, cardLabel]: [string, string]) => {
                 const owner = 
                     type === 'player'
                         ? pipe(Player.Player({ name: ownerName }), Player.ValidatedPlayer, E.getOrThrow, player => CardOwner.CardOwnerPlayer({ player }))
                         : pipe(CaseFile.CaseFile({ label: ownerName }), CaseFile.ValidatedCaseFile, E.getOrThrow, caseFile => CardOwner.CardOwnerCaseFile({ caseFile }))
-                const card = pipe(Card.Card({ cardType, label: cardName }), Card.ValidatedCard, E.getOrThrow);
+
+                // TODO actually catch and return this error if this is an invalid card?
+                const card = Card.decode([cardType, cardLabel]);
 
                 const key = D.array([owner, card] as const);
 

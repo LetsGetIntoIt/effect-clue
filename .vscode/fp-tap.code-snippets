@@ -25,13 +25,4 @@
 		],
 		"description": "Log the value in a pipe() or flow()"
 	},
-
-	"Identity": {
-		"scope": "javascript,typescript",
-		"prefix": "aa",
-		"body": [
-			"(a) => a,"
-		],
-		"description": "Add an identity function to a pipe to inspect the type"
-	},
 }

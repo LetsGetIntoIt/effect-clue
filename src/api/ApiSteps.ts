@@ -1,40 +1,28 @@
 
-import { E, B, ROA, T, HS, O, ST, EQ, P, M } from '../utils/EffectImports';
+import { E, B, ROA, T, HS, O, ST, EQ, P, M, S, PR } from './utils/EffectImports';
 import { flow, pipe } from '@effect/data/Function';
-import { Endomorphism_getMonoid } from '../utils/Effect';
+import { Endomorphism_getMonoid } from './utils/effect/Effect';
 
-import * as Card from './Card';
+import * as Card from './objects/Card';
 import * as CardSet from './CardSet';
 import * as Player from './Player';
 import * as CaseFile from './CaseFile';
 import * as PlayerSet from './PlayerSet';
-import * as CardOwner from './CardOwner';
+import * as CardOwner from './game/CardOwner';
 import * as Game from './Game';
 import * as Guess from './Guess';
 import * as GuessSet from './GuessSet';
-import * as DeductionRule from './DeductionRule';
-import * as Conclusion from './Conclusion';
-import * as DeductionSet from './DeductionSet';
-
-type RawCard = [string, string];
-
-const parseCard: (card: RawCard) => E.Either<B.Brand.BrandErrors, Card.ValidatedCard> =
-    flow(
-        ([cardType, label]) => Card.Card({
-            cardType,
-            label,
-        }),
-
-        Card.ValidatedCard,
-    );
+import * as DeductionRule from './logic/DeductionRule';
+import * as Conclusion from './logic/utils/Conclusion';
+import * as DeductionSet from './logic/DeductionSet';
 
 export const setupCards = ({
     useStandard,
     extraCards: rawExtraCards = [],
 }: {
     useStandard?: 'North America';
-    extraCards?: RawCard[];
-}): E.Either<B.Brand.BrandErrors, CardSet.ValidatedCardSet> =>
+    extraCards?: Card.Serialized[];
+}): E.Either<PR.ParseError[], CardSet.ValidatedCardSet> =>
     E.gen(function* ($) {
         // Start with whatever standard set was selected
         const startingSet = pipe(
@@ -51,8 +39,7 @@ export const setupCards = ({
 
         // Create the extra manual cards
         const extraCards = yield* $(
-            E.validateAll(rawExtraCards, parseCard), 
-            E.mapLeft(errors => B.errors(...errors)),
+            E.validateAll(rawExtraCards, Card.decodeEither), 
         );
 
         // Create our function to add all these extra cards

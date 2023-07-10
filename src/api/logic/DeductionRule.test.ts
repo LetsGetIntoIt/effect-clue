@@ -1,6 +1,6 @@
 import { pipe } from "@effect/data/Function";
-import { T } from "../utils/EffectImports";
-import { Effect_expectSucceed, Effect_test } from "../utils/EffectTest";
+import { T } from "./utils/EffectImports";
+import { Effect_expectSucceed, Effect_test } from "./utils/EffectTest";
 
 import * as DeductionRule from './DeductionRule';
 import * as DeductionSet from "./DeductionSet";

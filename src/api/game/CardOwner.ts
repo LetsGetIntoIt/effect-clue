@@ -1,8 +1,7 @@
-import { D, M, P } from '../utils/EffectImports';
-
-import * as Player from './Player';
-import * as CaseFile from './CaseFile';
+import { D, M, P } from '../utils/effect/EffectImports';
 import { constFalse, constTrue, pipe } from '@effect/data/Function';
+
+import { Player, CaseFile } from '../objects';
 
 export interface CardOwnerPlayer extends D.Case {
     _tag: "CardOwnerPlayer";

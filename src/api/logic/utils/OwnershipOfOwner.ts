@@ -1,11 +1,11 @@
 
 import { flow, pipe } from '@effect/data/Function';
-import { B, E, HM } from '../utils/EffectImports';
-import { Brand_refined } from '../utils/Effect';
+import { B, E, HM } from '../../utils/effect/EffectImports';
+import { Brand_refined } from '../../utils/effect/Effect';
 
-import * as Card from './Card';
+import { Card } from '../../objects';
 
-export type OwnershipOfOwner = B.Branded<HM.HashMap<Card.ValidatedCard, boolean>, 'OwnershipOfOwner'>;
+export type OwnershipOfOwner = B.Branded<HM.HashMap<Card.Card, boolean>, 'OwnershipOfOwner'>;
 
 export const OwnershipOfOwner = B.nominal<OwnershipOfOwner>();
 
@@ -23,7 +23,7 @@ export const empty: ValidatedOwnershipOfOwner =
         E.getOrThrow,
     );
 
-export const set = (card: Card.ValidatedCard, isOwned: boolean): ((ownership: ValidatedOwnershipOfOwner) => E.Either<B.Brand.BrandErrors, ValidatedOwnershipOfOwner>) =>
+export const set = (card: Card.Card, isOwned: boolean): ((ownership: ValidatedOwnershipOfOwner) => E.Either<B.Brand.BrandErrors, ValidatedOwnershipOfOwner>) =>
     flow(
         HM.set(card, isOwned),
         OwnershipOfOwner,

@@ -1,6 +1,26 @@
 {
+    "typescript.tsdk": "node_modules/typescript/lib",
+    
+    "eslint.validate": [
+        "javascript",
+        "typescript",
+        "json"
+    ],
+
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": true
+    },
+
     "explorer.fileNesting.enabled": true,
     "explorer.fileNesting.patterns": {
         "*": "${basename}.*.${extname}",
+    },
+
+    "debug.javascript.autoAttachFilter": "onlyWithFlag",
+    "debug.javascript.terminalOptions": {
+        "skipFiles": [
+            "<node_internals>/**",
+            "${FOLDER_NAME:workspaceFolder}/node_modules/**"
+        ]
     }
 }

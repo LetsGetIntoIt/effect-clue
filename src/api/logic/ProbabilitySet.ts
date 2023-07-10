@@ -1,12 +1,12 @@
 
-import { D, B, T, CTX } from '../utils/EffectImports';
-import { Brand_refinedEffect } from '../utils/Effect';
+import { D, B, T, CTX } from './utils/EffectImports';
+import { Brand_refinedEffect } from './utils/effect/Effect';
 
-import * as Card from './Card';
+import * as Card from './objects/Card';
 import * as Game from './Game';
-import * as CardOwner from './CardOwner';
+import * as CardOwner from './game/CardOwner';
 import * as ConclusionMap from './ConclusionMap';
-import * as Combinatorics from './Combinatorics';
+import * as Combinatorics from './utils/Combinatorics';
 
 export interface ProbabilitySet extends D.Case {
     _tag: "ProbabilitySet";

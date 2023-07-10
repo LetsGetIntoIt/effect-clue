@@ -1,27 +1,26 @@
-import { T, B, SG, MON, HM, HS, ROA, N, P, EQ, O, BOOL } from '../utils/EffectImports';
+import { T, SG, MON, HM, HS, ROA, N, P, EQ, O, BOOL } from '../utils/effect/EffectImports';
 import { constant, pipe, flow, identity as F_identity, constFalse } from '@effect/data/Function';
-import { Effect_getSemigroupCombine, Function_getSemigroup, HashMap_filterWithIndexKV, HashSet_differenceFrom, HashSet_fromHashMapMulti, HashSet_isEmpty as HashSet_isEmpty, HashSet_isSize, Option_fromPredicate, Refinement_identity, Struct_get } from '../utils/Effect';
+import { Effect_getSemigroupCombine, Function_getSemigroup, HashMap_filterWithIndexKV, HashSet_differenceFrom, HashSet_fromHashMapMulti, HashSet_isEmpty as HashSet_isEmpty, HashSet_isSize, Option_fromPredicate, Refinement_identity, Struct_get } from '../utils/effect/Effect';
 
-import * as Game from "./Game";
+import { Game, CardOwner } from '../game';
+
 import * as DeductionSet from "./DeductionSet";
-import * as OwnershipOfCard from './OwnershipOfCard';
-import * as Conclusion from './Conclusion';
-import * as GuessSet from './GuessSet';
-import * as Range from './Range';
-import * as CardOwner from './CardOwner';
+import * as OwnershipOfCard from './utils/OwnershipOfCard';
+import * as Conclusion from './utils/Conclusion';
+import * as Range from './utils/Range';
+
+type DeductionError = string;
 
 export type DeductionRule = (
     // Accepts a set of "known" deductions
     knownDeductions: DeductionSet.ValidatedDeductionSet
 ) => T.Effect<
-    // Accepts the objects in the game
-    | Game.Game
-
-    // Accepts the set of gueses that have been made
-    | GuessSet.ValidatedGuessSet
+    // Accepts the game state
+    Game.Game
 ,
+
     // Returns an error if we encounter a logical contradiction
-    B.Brand.BrandErrors
+    DeductionError
 ,
     // Returns the set of deductions, augmented with new findings
     DeductionSet.ValidatedDeductionSet
@@ -34,8 +33,8 @@ export const SemigroupUnion: SG.Semigroup<DeductionRule> =
     Function_getSemigroup(
         Effect_getSemigroupCombine<
             DeductionSet.ValidatedDeductionSet,
-            B.Brand.BrandErrors,
-            Game.Game | GuessSet.ValidatedGuessSet
+            DeductionError,
+            Game.Game
         >(
             (first, second) => pipe(
                 first,
@@ -58,7 +57,7 @@ export const playerHasZeroToNumAllCards: DeductionRule = (
 
     // TODO update our knowledge about each player's number of cards. Camp to [0, numCards]
     return yield* $(T.fail(
-        B.error(`DeductionRule playerHasZeroToNumAllCards not implemented yet`),
+        `DeductionRule playerHasZeroToNumAllCards not implemented yet`,
     ));
 });
 
@@ -88,7 +87,7 @@ export const playerHasMaxNumCardsRemaining: DeductionRule = (
 
     // TODO update our knowledge about each player's number of cards
     return yield* $(T.fail(
-        B.error(`DeductionRule playerHasMaxNumCardsRemaining not implemented yet`),
+        `DeductionRule playerHasMaxNumCardsRemaining not implemented yet`,
     ));
 });
 
@@ -97,7 +96,7 @@ export const playerHasNarrowestNumCardRange: DeductionRule = (
     knownDeductions,
 ) => T.gen(function* ($) {
     return yield* $(T.fail(
-        B.error(`DeductionRule playerHasNarrowestNumCardRange not implemented yet`),
+        `DeductionRule playerHasNarrowestNumCardRange not implemented yet`,
     ));
 });
 
@@ -115,7 +114,7 @@ export const playerHasMinNumCardsRefuted: DeductionRule = (
         // If the new minimum exceeds the max, is that a problem?
 
         return yield* $(T.fail(
-            B.error(`DeductionRule playerHasMinNumCardsRefuted not implemented yet`),
+            `DeductionRule playerHasMinNumCardsRefuted not implemented yet`,
         ));
     });
 
@@ -388,7 +387,7 @@ export const playerHasNoLessThanMinNumCards: DeductionRule = (
 export const caseFileHasAtMostOnePerCardType: DeductionRule =
     constant(
         T.fail(
-            B.error(`DeductionRule caseFileHasAtMostOnePerCardType not implemented yet`),
+            `DeductionRule caseFileHasAtMostOnePerCardType not implemented yet`,
         ),
     );
 
@@ -396,7 +395,7 @@ export const caseFileHasAtMostOnePerCardType: DeductionRule =
 export const caseFileHasAtLeastOnePerCardType: DeductionRule =
     constant(
         T.fail(
-            B.error(`DeductionRule caseFileHasAtLeastOnePerCardType not implemented yet`),
+            `DeductionRule caseFileHasAtLeastOnePerCardType not implemented yet`,
         ),
     );
 
@@ -406,7 +405,7 @@ export const caseFileHasAtLeastOnePerCardType: DeductionRule =
 export const guessIsRefutedByHeldCard: DeductionRule =
     constant(
         T.fail(
-            B.error(`DeductionRule guessIsRefutedByHeldCard not implemented yet`),
+            `DeductionRule guessIsRefutedByHeldCard not implemented yet`,
         ),
     );
 
@@ -414,6 +413,6 @@ export const guessIsRefutedByHeldCard: DeductionRule =
 export const playerWith1CardRefutesWithIntersection: DeductionRule =
     constant(
         T.fail(
-            B.error(`DeductionRule playerWith1CardRefutesWithIntersection not implemented yet`),
+            `DeductionRule playerWith1CardRefutesWithIntersection not implemented yet`,
         ),
     );

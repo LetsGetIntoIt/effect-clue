@@ -1,18 +1,18 @@
 
 import { D, HM, B, T, CTX, BOOL, HS, E, SG, MON, ST } from '../utils/EffectImports';
 import { pipe, flow, constant } from '@effect/data/Function';
-import { Struct_get, HashSet_of, Brand_refinedEffect, HashMap_setOrUpdate } from '../utils/Effect';
+import { Struct_get, HashSet_of, Brand_refinedEffect, HashMap_setOrUpdate } from '../utils/effect/Effect';
 
-import * as Card from './Card';
+import * as Card from '../objects/Card';
 import * as Player from './Player';
 import * as Guess from './Guess';
 import * as Game from './Game';
-import * as CardOwner from './CardOwner';
-import * as OwnershipOfCard from './OwnershipOfCard';
+import * as CardOwner from '../game/CardOwner';
+import * as OwnershipOfCard from './utils/OwnershipOfCard';
 import * as OwnershipOfOwner from './OwnershipOfOwner';
-import * as Conclusion from './Conclusion';
+import * as Conclusion from './utils/Conclusion';
 import * as ConclusionMap from './ConclusionMap';
-import * as Range from './Range';
+import * as Range from './utils/Range';
 
 export interface DeductionSet extends D.Case {
     _tag: "DeductionSet";

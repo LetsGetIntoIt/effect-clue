@@ -1,5 +1,5 @@
 export * as BOOL from '@effect/data/Boolean';
-export * as S from '@effect/data/String';
+export * as STR from '@effect/data/String';
 export * as N from '@effect/data/Number';
 export * as D from '@effect/data/Data';
 export * as TU from '@effect/data/Tuple';
@@ -29,3 +29,7 @@ export * as B from '@effect/data/Brand';
 export * as M from "@effect/match";
 
 export * as T from '@effect/io/Effect';
+
+export * as S from "@effect/schema/Schema";
+export * as PR from "@effect/schema/ParseResult";
+export * as SFMT from '@effect/schema/TreeFormatter';
