@@ -8,55 +8,40 @@ import * as Api from '../api';
 import './Clue.module.css';
 
 export function Clue() {
-	const caseFile = useSignal<string>('Murder');
-	const players = useSignal<string[]>(['Kapil', 'Kate', 'Karthik']);
-	const cards = useSignal<[string, string][]>([
+	const cards = useSignal<Api.Card[]>([
 		['Room', 'Living room'],
 		['Weapon', 'Wrench'],
 		['Weapon', 'Knife'],
 		['Suspect', 'Plum'],
 	]);
+	const players = useSignal<Api.Player[]>([['Kapil'], ['Kate'], ['Karthik']]);
+	const caseFile = useSignal<Api.CaseFile>(['Murder']);
 
 	const playerNumCards = useSignal<{ [player: string]: number }>({});
 	const ownership = useSignal<{
 		[playerCard: string]: boolean;
 	}>({});
 
+	const guesses = useSignal<Api.Guess[]>([]);
+
+	const deductionRules = useSignal<Api.RawDeductionRule[]>([
+		'cardIsHeldAtLeastOnce',
+		'cardIsHeldAtMostOnce',
+		'playerHasNoMoreThanMaxNumCards',
+		'playerHasNoLessThanMinNumCards',
+	]);
+
 	const apiOutput = computed(() => Api.run({
-		cardSetup: [{
-			useStandard: undefined,
-			extraCards: cards.value,
-		}],
+		cards: cards.value,
+		players: players.value,
+		caseFile: caseFile.value,
 
-		playersSetup: [{
-			players: players.value.map(name => [name]),
-		}],
+		// TODO known numCards
+		// TODO know card owners
 
-		caseFileSetup: [{
-			caseFile: [caseFile.value],
-		}],
+		guesses: guesses.value,
 
-		knownDeductionsSetup: [{
-			knownNumCards: Object.entries(playerNumCards.value).map(([player, numCards]) => [[player], numCards]),
-
-			knownCardOwners: Object.entries(ownership.value).map(([playerCard, isOwned]) => {
-				const [player, cardType, cardName] = playerCard.split(':');
-				return [[player], [cardType, cardName], isOwned];
-			}),
-		}],
-
-		guessesSetup: [{
-			guesses: [
-				// TODO
-			],
-		}],
-
-		deductionRulesSetup: [[
-			'cardIsHeldAtLeastOnce',
-			'cardIsHeldAtMostOnce',
-			'playerHasNoMoreThanMaxNumCards',
-			'playerHasNoLessThanMinNumCards',
-		]],
+		deductionRules: deductionRules.value,
 	}));
 
 	return (
