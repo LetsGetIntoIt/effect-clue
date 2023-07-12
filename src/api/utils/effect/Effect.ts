@@ -1,5 +1,5 @@
 import { SG, EQV, P, O, BOOL, MON, HS, HM, TU, ROA, T, E, B, EQ } from "./EffectImports";
-import { constTrue, pipe, flow, identity, apply } from "@effect/data/Function";
+import { constTrue, pipe, identity, apply, compose } from "@effect/data/Function";
 
 export const Function_getSemigroup =
     <B>(SGB: SG.Semigroup<B>) =>
@@ -18,12 +18,12 @@ export const Option_fromRefinement = <A, B extends A>(refinement: P.Refinement<A
     pipe(
         refinement(a),
 
-        BOOL.match(
+        BOOL.match({
             // The value doesn't pass the refinement
-            () => O.none(),
+            onFalse: () => O.none(),
 
-            () => O.some(a as B),
-        ),
+            onTrue: () => O.some(a as B),
+        }),
     );
 
 export const Option_fromPredicate: <A>(predicate: P.Predicate<A>) => (a: A) => O.Option<A> =
@@ -33,12 +33,12 @@ export const Either_fromRefinement = <A, B extends A, E>(refinement: P.Refinemen
     pipe(
         refinement(a),
 
-        BOOL.match(
+        BOOL.match({
             // The value doesn't pass the refinement
-            () => E.left(onFalse(a as Exclude<A, B>)),
+            onFalse: () => E.left(onFalse(a as Exclude<A, B>)),
 
-            () => E.right(a as B),
-        ),
+            onTrue: () => E.right(a as B),
+        }),
     );
 
 export const Either_fromPredicate: <A, E>(refinement: P.Predicate<A>, onFalse: (value: A) => E) => (a: A) => E.Either<E, A> =
@@ -48,7 +48,7 @@ export type Endomorphism<A> = (a: A) => A
 
 export const Endomorphism_getMonoid = <A>(): MON.Monoid<Endomorphism<A>> =>
   MON.fromSemigroup(
-    SG.make((f, g) => flow(f, g)),
+    SG.make((f, g) => compose(f, g)),
     identity
   );
 
@@ -115,33 +115,33 @@ export const Either_validate = <A, E, B>(validations: readonly ((input: A) => E.
             (overallResult, nextValidationResult) => pipe(
                 overallResult,
 
-                E.match(
+                E.match({
                     // We already have an error
-                    (errors) => pipe(
+                    onLeft: (errors) => pipe(
                         nextValidationResult,
 
-                        E.match(
+                        E.match({
                             // Append the new error
-                            (nextError) => E.left([...errors, nextError]),
+                            onLeft: (nextError) => E.left([...errors, nextError]),
 
                             // It doesn't matter if we have a success, because we're already in failures
-                            () => E.left(errors),
-                        ),
+                            onRight: () => E.left(errors),
+                        }),
                     ),
 
                     // We have success
-                    (values) => pipe(
+                    onRight: (values) => pipe(
                         nextValidationResult,
 
-                        E.match(
+                        E.match({
                             // Switch us into the error channel with this first error
-                            (nextError) => E.left([nextError]),
+                           onLeft: (nextError) => E.left([nextError]),
 
                             // Append the new value
-                            (nextValue) => E.right([...values, nextValue]),
-                        ),
+                            onRight: (nextValue) => E.right([...values, nextValue]),
+                        }),
                     ),
-                ),
+                }),
             ),
         ),
     );
@@ -157,10 +157,10 @@ export const Brand_refined = <Branded extends B.Brand<string | symbol>>(
     pipe(
         unbranded,
         Either_validate(refinements),
-        E.bimap(
-            errors => B.errors(...errors),
-            () => B.nominal<Branded>()(unbranded),
-        ),
+        E.mapBoth({
+            onLeft: (errors) => B.errors(...errors),
+            onRight: () => B.nominal<Branded>()(unbranded),
+        }),
     );
 
 export const Brand_refinedEffect = <Branded extends B.Brand<string | symbol>, R>(
@@ -188,7 +188,7 @@ export const HashMap_setOrUpdate = <K, V>(
         HM.get(hashMap, key),
 
         // Decide the updated value to set
-        O.match(set, update),
+        O.match({ onNone: set, onSome: update }),
 
         updatedValue => HM.set(hashMap, key, updatedValue),
     );

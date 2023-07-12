@@ -76,4 +76,4 @@ export type Serialized = S.From<typeof Schema>;
 export type Guess = S.To<typeof Schema>;
 
 export const decodeEither = S.decodeEither(Schema);
-export const decode = S.decode(Schema);
+export const decodeSync = S.decodeSync(Schema);

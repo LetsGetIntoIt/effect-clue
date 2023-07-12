@@ -1,24 +1,21 @@
 
-import { D, HM, B, T, CTX, BOOL, HS, E, SG, MON, ST } from '../utils/EffectImports';
-import { pipe, flow, constant } from '@effect/data/Function';
+import { D, HM, B, T, CTX, BOOL, HS, E, SG, MON, ST } from '../utils/effect/EffectImports';
+import { pipe, constant, compose } from '@effect/data/Function';
 import { Struct_get, HashSet_of, Brand_refinedEffect, HashMap_setOrUpdate } from '../utils/effect/Effect';
 
-import * as Card from '../objects/Card';
-import * as Player from './Player';
-import * as Guess from './Guess';
-import * as Game from './Game';
-import * as CardOwner from '../game/CardOwner';
-import * as OwnershipOfCard from './utils/OwnershipOfCard';
-import * as OwnershipOfOwner from './OwnershipOfOwner';
-import * as Conclusion from './utils/Conclusion';
-import * as ConclusionMap from './ConclusionMap';
+import { Card, Player, Guess } from '../objects';
+import { Game, CardOwner } from '../game';
+
 import * as Range from './utils/Range';
+import * as ConclusionMap from './utils/ConclusionMap';
+import * as OwnershipOfCard from './utils/OwnershipOfCard';
+import * as Conclusion from './utils/Conclusion';
 
 export interface DeductionSet extends D.Case {
     _tag: "DeductionSet";
-    numCards: ConclusionMap.ValidatedConclusionMap<Player.ValidatedPlayer, Range.Range>;
-    ownership: ConclusionMap.ValidatedConclusionMap<D.Data<[CardOwner.CardOwner, Card.ValidatedCard]>, boolean>;
-    refuteCards: ConclusionMap.ValidatedConclusionMap<Guess.ValidatedGuess, HM.HashMap<Card.ValidatedCard, 'owned' | 'maybe'>>;
+    numCards: ConclusionMap.ValidatedConclusionMap<Player.Player, Range.Range>;
+    ownership: ConclusionMap.ValidatedConclusionMap<D.Data<[CardOwner.CardOwner, Card.Card]>, boolean>;
+    refuteCards: ConclusionMap.ValidatedConclusionMap<Guess.Guess, HM.HashMap<Card.Card, 'owned' | 'maybe'>>;
 };
 
 export const DeductionSet = D.tagged<DeductionSet>("DeductionSet");
@@ -63,11 +60,12 @@ export const empty: ValidatedDeductionSet =
     );
 
 // TODO store this on the ValidatedDeductionSet itself, rather than recomputing it each time
-export const getOwnershipByCard: (
+export const getOwnershipByCard = (
     deductions: ValidatedDeductionSet,
-) => HM.HashMap<Card.ValidatedCard, OwnershipOfCard.OwnershipOfCard> =
-    flow(
+): HM.HashMap<Card.Card, OwnershipOfCard.OwnershipOfCard> =>
+    pipe(
         // Pluck out the actual HashMap we care about
+        deductions,
         Struct_get('ownership'),
 
         // We don't care about the deductions and reasons, just whether its owned or not
@@ -100,7 +98,7 @@ export const getOwnershipByCard: (
                     constant(newOwnership),
 
                     // If we already have ownership information for the card
-                    flow(OwnershipOfCard.combine(newOwnership), E.getOrThrow),
+                    compose(OwnershipOfCard.combine(newOwnership), E.getOrThrow),
                 )(
                     ownershipByCard,
                 )
@@ -109,11 +107,12 @@ export const getOwnershipByCard: (
     );
 
 // TODO store this on the ValidatedDeductionSet itself, rather than recomputing it each time
-export const getOwnershipByOwner: (
+export const getOwnershipByOwner = (
     deductions: ValidatedDeductionSet,
-) => HM.HashMap<CardOwner.CardOwner, OwnershipOfOwner.ValidatedOwnershipOfOwner> =
-    flow(
+): HM.HashMap<CardOwner.CardOwner, OwnershipOfOwner.ValidatedOwnershipOfOwner> =>
+    pipe(
         // Pluck out the actual HashMap we care about
+        deductions,
         Struct_get('ownership'),
 
         // We don't care about the deductions and reasons, just whether its owned or not
@@ -158,14 +157,15 @@ export const ModificationMonoid: MON.Monoid<Modification> = MON.fromSemigroup(
 );
 
 export const modifyAddNumCards =
-        (player: Player.ValidatedPlayer, [minNumCards, maxNumCards]: [number, number?], reason: Conclusion.Reason):
+        (player: Player.Player, [minNumCards, maxNumCards]: [number, number?], reason: Conclusion.Reason):
         Modification =>
-    flow(
+    (deductions) => pipe(
+        deductions,
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
         ST.evolve({
-            numCards: (numCardsMap) => E.gen(function* ($) {
-                const newRange = yield* $(Range.Range(minNumCards, maxNumCards));
+            numCards: (numCardsMap) => T.gen(function* ($) {
+                const newRange = yield* $(Range.decodeEither([minNumCards, maxNumCards]));
                 const updateNumCards = ConclusionMap.setMergeOrFail(player, newRange, HashSet_of(reason));
                 return yield* $(updateNumCards(numCardsMap));
             }),

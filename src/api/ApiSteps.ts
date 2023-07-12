@@ -1,5 +1,5 @@
 
-import { E, B, ROA, T, HS, O, ST, EQ, P, M, S, PR } from './utils/EffectImports';
+import { E, B, ROA, T, HS, O, ST, EQ, P, M, S, PR } from './utils/effect/EffectImports';
 import { flow, pipe } from '@effect/data/Function';
 import { Endomorphism_getMonoid } from './utils/effect/Effect';
 
@@ -291,23 +291,6 @@ export const setupGuesses = ({
 
 export const provideGuesses = (guesses: GuessSet.ValidatedGuessSet) =>
     T.provideService(GuessSet.Tag, guesses);
-
-const ALL_DEDUCTION_RULES = [
-    'playerHasAtLeastZeroCards',
-    'playerHasMaxNumCardsRemaining',
-    'playerHasNarrowestNumCardRange',
-    'playerHasMinNumCardsRefuted',
-    'cardIsHeldAtMostOnce',
-    'cardIsHeldAtLeastOnce',
-    'playerHasNoMoreThanMaxNumCards',
-    'playerHasNoLessThanMinNumCards',
-    'caseFileHasAtMostOnePerCardType',
-    'caseFileHasAtLeastOnePerCardType',
-    'guessIsRefutedByHeldCard',
-    'playerWith1CardRefutesWithIntersection',
-] as const;
-
-type RawDeductionRule = typeof ALL_DEDUCTION_RULES[number];
 
 export const setupDeductionRules = (
     rules: 'all' | readonly RawDeductionRule[] = 'all',

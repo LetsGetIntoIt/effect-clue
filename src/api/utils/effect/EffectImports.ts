@@ -17,10 +17,10 @@ export * as E from '@effect/data/Either';
 export * as H from '@effect/data/Hash';
 export * as EQ from '@effect/data/Equal';
 
-export * as AP from '@effect/data/typeclass/Applicative';
-export * as EQV from '@effect/data/typeclass/Equivalence';
-export * as SG from '@effect/data/typeclass/Semigroup';
-export * as MON from '@effect/data/typeclass/Monoid';
+export * as AP from '@effect/typeclass/Applicative';
+export * as EQV from '@effect/data/Equivalence';
+export * as SG from '@effect/typeclass/Semigroup';
+export * as MON from '@effect/typeclass/Monoid';
 
 export * as HKT from '@effect/data/HKT';
 

@@ -1,4 +1,4 @@
-import { B, HM, E, HS, O } from '../../utils/effect/EffectImports';
+import { B, HM, E, HS, O, T } from '../../utils/effect/EffectImports';
 import { pipe } from '@effect/data/Function';
 import { Brand_refined } from '../../utils/effect/Effect';
 
@@ -19,7 +19,7 @@ export const empty = <Q, A>(): ValidatedConclusionMap<Q, A> =>
         HM.empty<Q, Conclusion.ValidatedConclusion<A>>(),
         ConclusionMapOf(),
         ValidatedConclusionMapOf(),
-        E.getOrThrow,
+        T.runSync,
     );
 
 export const setMergeOrOverwriteOrFail = (
@@ -30,8 +30,8 @@ export const setMergeOrOverwriteOrFail = (
     reasons: HS.HashSet<Conclusion.Reason>,
 ) => (
     deductions: ValidatedConclusionMap<Q, A>,
-) : E.Either<B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =>
-    E.gen(function* ($) {
+) : T.Effect<never, B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =>
+    T.gen(function* ($) {
         // Prepare our function to combine deductions
         const combine = Conclusion.combine<A>(collisionStrategy);
 
@@ -47,13 +47,13 @@ export const setMergeOrOverwriteOrFail = (
             // Get any existing conclusion
             HM.get(deductions, question),
 
-            O.match(
+            O.match({
                 // There is no existing conclusion, so just use the new one
-                () => E.right(newConclusion),
+                onNone: () => E.right(newConclusion),
 
                 // Combine the new conclusion into the existing one
-                combine(newConclusion),
-            ),
+                onSome: combine(newConclusion),
+            }),
         );
 
         // Insert the new conclusion
@@ -70,7 +70,7 @@ export const setMergeOrFail: <Q, A>(
     reasons: HS.HashSet<Conclusion.Reason>,
 ) => (
     deductions: ValidatedConclusionMap<Q, A>,
-) => E.Either<B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =
+) => T.Effect<never, B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =
     setMergeOrOverwriteOrFail('fail');
 
 export const setMergeOrOverwrite: <Q, A>(
@@ -79,7 +79,7 @@ export const setMergeOrOverwrite: <Q, A>(
     reasons: HS.HashSet<Conclusion.Reason>,
 ) => (
     deductions: ValidatedConclusionMap<Q, A>,
-) => E.Either<B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =
+) => T.Effect<never, B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =
     setMergeOrOverwriteOrFail('overwrite');
 
 export const combineMergeOrOverwriteOrFail = (
@@ -88,20 +88,20 @@ export const combineMergeOrOverwriteOrFail = (
     second: ValidatedConclusionMap<Q, A>,
 ) => (
     first: ValidatedConclusionMap<Q, A>,
-): E.Either<B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =>
+): T.Effect<never, B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =>
         HM.reduceWithIndex<
-            E.Either<B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>>,
+            T.Effect<never, B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>>,
             Conclusion.Conclusion<A>,
             Q
         >(
             second,
 
-            E.right(first),
+            T.succeed(first),
 
             (combinedEither, { answer, reasons }, question) => pipe(
                 combinedEither,
 
-                E.flatMap(
+                T.flatMap(
                     setMergeOrOverwriteOrFail(collisionStrategy)(question, answer, reasons),
                 ),
             ),
@@ -111,12 +111,12 @@ export const combineMergeOrFail: <Q, A>(
     second: ValidatedConclusionMap<Q, A>,
 ) => (
     deductions: ValidatedConclusionMap<Q, A>,
-) => E.Either<B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =
+) => T.Effect<never, B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =
     combineMergeOrOverwriteOrFail('fail');
 
 export const combineMergeOrOverwrite: <Q, A>(
     second: ValidatedConclusionMap<Q, A>,
 ) => (
     deductions: ValidatedConclusionMap<Q, A>,
-) => E.Either<B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =
+) => T.Effect<never, B.Brand.BrandErrors, ValidatedConclusionMap<Q, A>> =
     combineMergeOrOverwriteOrFail('overwrite');

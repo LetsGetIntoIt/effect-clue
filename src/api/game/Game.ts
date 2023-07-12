@@ -1,9 +1,9 @@
-import { CTX, HS, B, E, PR } from "../utils/effect/EffectImports";
-import { pipe } from '@effect/data/Function';
+import { CTX, HS, B, E, PR, T } from "../utils/effect/EffectImports";
 import { Struct_get } from "../utils/effect/Effect";
 
-import * as CardOwner from './CardOwner';
 import { Card, Player, CaseFile, Guess } from "../objects";
+import * as CardOwner from './CardOwner';
+import { tag } from "@effect/match";
 
 export type Game  = B.Branded<{
     readonly cards: HS.HashSet<Card.Card>;
@@ -29,14 +29,8 @@ export const Game = ({
     readonly players: HS.HashSet<Player.Player>;
     readonly caseFile: CaseFile.CaseFile;
     readonly guesses: HS.HashSet<Guess.Guess>;
-}): E.Either<PR.ParseErrors, Game> =>
-    E.gen(function* ($) {
-        // Validate the card set
-
-        // Validate the players
-        
-        // Validate the case file
-
+}): T.Effect<never, PR.ParseErrors, Game> =>
+    T.gen(function* ($) {
         // Validate the guesses
         // - All guessed cards should be part of the Game
         // - The guessed cards cover all card types in the Game
@@ -70,3 +64,14 @@ export const Game = ({
             owners,
         })));
     });
+
+export const emptyStandard: Game = Game({
+    cards: HS.empty(),
+    players: HS.empty(),
+    caseFile: CaseFile.standard,
+    guesses: HS.empty(),
+}).pipe(
+    // We know this should succeed, so error immediately if there's a bug
+    T.orDie,
+    T.runSync,
+);

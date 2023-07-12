@@ -1,100 +1,76 @@
-import { constTrue, constant, flow, pipe } from '@effect/data/Function';
-import { B, D, E, M, N, P, ROA, ST } from '../../utils/effect/EffectImports';
-import { Brand_refined, Either_fromPredicate, Either_validateNonEmpty, Struct_get } from '../../utils/effect/Effect';
+import { compose, constTrue, pipe } from '@effect/data/Function';
+import { B, E, N, O, P, PR, ROA, S, T, TU } from '../../utils/effect/EffectImports';
+import { Either_fromPredicate, Either_validateNonEmpty } from '../../utils/effect/Effect';
 
-export interface RangeExact extends D.Case {
-    _tag: "RangeExact";
-    readonly value: number;
-};
+export const Schema = pipe(
+    S.tuple(S.number, S.optionFromNullable(S.number)),
 
-const RangeExact = D.tagged<RangeExact>("RangeExact");
+    // Default the max to equal the min, and make sure they are in the right order
+    S.transformResult(
+        S.tuple(S.number, S.number),
 
-type ValidatedRangeExact = RangeExact & B.Brand<'ValidatedRangeExact'>;
+        ([min, max]) => O.match(max, {
+            onNone: () => PR.success(TU.tuple(min, min)),
 
-const ValidatedRangeExact = Brand_refined<ValidatedRangeExact>([
-    // nothing to validate
-]);
-
-export interface RangeBounded extends D.Case {
-    _tag: "RangeBounded";
-    readonly min: number;
-    readonly max: number;
-};
-
-const RangeBounded = D.tagged<RangeBounded>("RangeBounded");
-
-type ValidatedRangeBounded = RangeBounded & B.Brand<'ValidatedRangeBounded'>;
-
-const ValidatedRangeBounded = Brand_refined<ValidatedRangeBounded>([
-    Either_fromPredicate(
-        ({ min, max }) => min < max,
-        constant(B.error(`min should be strictly less than max`)),
-    ),
-]);
-
-export type Range = ValidatedRangeExact | ValidatedRangeBounded;
-
-export const Range = (min: number, max?: number): E.Either<B.Brand.BrandErrors, Range> =>
-    P.isNotNullable(max)
-        ? min === max
-            ? pipe(RangeExact({ value: min }), ValidatedRangeExact)
-            : pipe(RangeBounded({ min, max }), ValidatedRangeBounded)
-        : pipe(RangeExact({ value: min }), ValidatedRangeExact);
-
-// TODO can this be baked in as a property of the objects themselves, so that its just directly available?
-export const min: (range: Range) => number =
-    pipe(
-        M.type<Range>(),
-        M.tag('RangeExact', ({ value }) => value),
-        M.tag('RangeBounded', ({ min }) => min),
-        M.exhaustive,
-    );
-
-// TODO can this be baked in as a property of the objects themselves, so that its just directly available?
-export const max: (range: Range) => number =
-    pipe(
-        M.type<Range>(),
-        M.tag('RangeExact', ({ value }) => value),
-        M.tag('RangeBounded', ({ max }) => max),
-        M.exhaustive,
-    );
-
-const narrowInternal = (newMin?: number, newMax?: number): ((range: Range) => E.Either<B.Brand.BrandErrors, Range>) =>
-    flow(
-        range => ({
-            min: min(range),
-            max: max(range),
+            onSome: (max) => min <= max
+                ? PR.success(TU.tuple(min, max))
+                : PR.failure(PR.unexpected([min, max])) // TODO use a good error message
         }),
+
+        ([min, max]) => PR.success(TU.tuple(min, O.some(max))),
+    ),
+
+    // Provide Brand and Equal implementation
+    S.brand('Range'),
+    S.data,
+);
+
+export type SerializedRange = S.From<typeof Schema>;
+export type Range = S.To<typeof Schema>;
+
+export const decodeEither = S.decodeEither(Schema);
+export const decodeSync = S.decodeSync(Schema);
+
+export const exact = (n: number): Range => decodeSync([n, null], { errors: 'all' });
+export const bounded = (min: number, max: number): E.Either<PR.ParseError, Range> => decodeEither([min, max], { errors: 'all' });
+export const boundedSync = (min: number, max: number): Range => decodeSync([min, max], { errors: 'all' });
+
+export const getMin = (range: Range): number => TU.getFirst(range);
+export const getMax = (range: Range): number => TU.getSecond(range);
+
+const narrowInternal = (newMin?: number, newMax?: number) => (range: Range): T.Effect<never, PR.ParseError | B.Brand.BrandErrors, Range> =>
+    pipe(
+        range,
 
         Either_validateNonEmpty([
             Either_fromPredicate(
                 P.isNotNullable(newMin)
-                    ? pipe(N.lessThanOrEqualTo(newMin), P.contramap(Struct_get('min')))
+                    ? pipe(N.lessThanOrEqualTo(newMin), P.mapInput(getMin))
                     : constTrue,
-                ({ min }) => B.error(`Cannot clamp existing min=${min} to newMin=${newMin}. min is already narrower (greater) than newMin`),
+                ([min]) => B.error(`Cannot clamp existing min=${min} to newMin=${newMin}. min is already narrower (greater) than newMin`),
             ),
 
             Either_fromPredicate(
                 P.isNotNullable(newMax)
-                    ? pipe(N.greaterThanOrEqualTo(newMax), P.contramap(Struct_get('max')))
+                    ? pipe(N.greaterThanOrEqualTo(newMax), P.mapInput(getMax))
                     : constTrue,
-                    ({ max }) => B.error(`Cannot clamp existing max=${max} to newMax=${newMax}. max is already narrower (less) than newMax`),
+                    ([, max]) => B.error(`Cannot clamp existing max=${max} to newMax=${newMax}. max is already narrower (less) than newMax`),
             ),
         ]),
 
-        E.bimap(
-            (errors) => B.errors(...errors),
-            ROA.headNonEmpty,
-        ),
+        E.mapBoth({
+            onLeft: (errors) => B.errors(...errors),
+            onRight: ROA.headNonEmpty,
+        }),
 
-        E.flatMap(({ min, max }) => Range(min, max)),
+        T.flatMap(S.decodeEither(Schema)),
     );
 
-export const narrowMin = (newMin: number): ((range: Range) => E.Either<B.Brand.BrandErrors, Range>) =>
+export const narrowMin = (newMin: number): ((range: Range) => T.Effect<never, PR.ParseError | B.Brand.BrandErrors, Range>) =>
     narrowInternal(newMin, undefined);
 
-export const narrowMax = (newMax: number): ((range: Range) => E.Either<B.Brand.BrandErrors, Range>) =>
+export const narrowMax = (newMax: number): ((range: Range) => T.Effect<never, PR.ParseError | B.Brand.BrandErrors, Range>) =>
     narrowInternal(undefined, newMax);
 
-export const narrow = (newMin: number, newMax: number): ((range: Range) => E.Either<B.Brand.BrandErrors, Range>) =>
+export const narrow = (newMin: number, newMax: number): ((range: Range) => T.Effect<never, PR.ParseError | B.Brand.BrandErrors, Range>) =>
     narrowInternal(newMin, newMax);

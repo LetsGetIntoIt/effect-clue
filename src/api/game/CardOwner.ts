@@ -20,6 +20,7 @@ export const CardOwnerCaseFile = D.tagged<CardOwnerCaseFile>("CardOwnerCaseFile"
 export type CardOwner = CardOwnerPlayer | CardOwnerCaseFile;
 
 // TODO can Data.Case give this for free?
+// https://discord.com/channels/795981131316985866/1080904799857418430/threads/1128729195623751690
 export const isPlayer: P.Refinement<CardOwner, CardOwnerPlayer> =
     (ownership): ownership is CardOwnerPlayer =>
         pipe(
@@ -30,6 +31,7 @@ export const isPlayer: P.Refinement<CardOwner, CardOwnerPlayer> =
         );
 
 // TODO can Data.Case give this for free?
+// https://discord.com/channels/795981131316985866/1080904799857418430/threads/1128729195623751690
 export const isCaseFile: P.Refinement<CardOwner, CardOwnerCaseFile> =
     (ownership): ownership is CardOwnerCaseFile =>
         pipe(

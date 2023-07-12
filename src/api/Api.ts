@@ -1,13 +1,12 @@
 import { pipe } from '@effect/data/Function';
-import { T, B, ROA, E, D, HM, O, HS } from './utils/EffectImports';
+import { T, B, ROA, E, D, HM, O, HS } from './utils/effect/EffectImports';
 
 import * as ApiSteps from './ApiSteps';
-import * as Player from './Player';
-import * as Card from './objects/Card';
-import * as CardOwner from './game/CardOwner';
-import * as CaseFile from './CaseFile';
+import { Card, CaseFile, Guess, Player } from './objects';
+import { RawDeductionRule } from './logic';
 
 // TODO refactors
+// - Replace Either<E, A> with Effect<never, E, A> per this thread: https://discord.com/channels/795981131316985866/1128449901324406784
 // - Add logging, services and spans
 // - Add diagnotics to the result of the deduce() step (number of iterations, was it exhaustive, etc.)
 // - All Error strings from the API should be tagged/structured, instead of "string"
@@ -36,16 +35,25 @@ import * as CaseFile from './CaseFile';
 // - Allow each casefile to have a KNOWN 0-many of a card type (ex. a killer and victim, two weapons, no weapons, etc.)
 
 interface ApiInput {
-    cardSetup: Parameters<typeof ApiSteps.setupCards>;
-    playersSetup: Parameters<typeof ApiSteps.setupPlayers>;
-    caseFileSetup: Parameters<typeof ApiSteps.setupCaseFile>;
-    knownDeductionsSetup: Parameters<typeof ApiSteps.setupKnownDeductions>;
-    guessesSetup: Parameters<typeof ApiSteps.setupGuesses>;
-    deductionRulesSetup: Parameters<typeof ApiSteps.setupDeductionRules>;
+    readonly cards: readonly Card.Serialized[];
+    readonly players: readonly Player.Serialized[];
+    readonly caseFile: CaseFile.Serialized;
+    
+    // TODO known numCards
+    // TODO known card ownership
+
+    readonly guesses: readonly Guess.Serialized[];
+    
+    readonly deductionRules: readonly RawDeductionRule[];
 }
 
 export interface ApiOutput {
-    ownership: (type: 'player' | 'caseFile', player: string, card: [string, string]) => {
+    ownership: (
+        owner:
+            | { type: 'caseFile '}
+            | { type: 'player'; player: Player.Serialized },
+        card: Card.Serialized,
+    ) => {
         readonly isOwned: boolean;
         readonly reasons: string[];
     } | undefined
@@ -94,7 +102,7 @@ export const run = ({
                         : pipe(CaseFile.CaseFile({ label: ownerName }), CaseFile.ValidatedCaseFile, E.getOrThrow, caseFile => CardOwner.CardOwnerCaseFile({ caseFile }))
 
                 // TODO actually catch and return this error if this is an invalid card?
-                const card = Card.decode([cardType, cardLabel]);
+                const card = Card.decodeSync([cardType, cardLabel]);
 
                 const key = D.array([owner, card] as const);
 

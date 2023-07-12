@@ -1,5 +1,5 @@
-import { T, SG, MON, HM, HS, ROA, N, P, EQ, O, BOOL } from '../utils/effect/EffectImports';
-import { constant, pipe, flow, identity as F_identity, constFalse } from '@effect/data/Function';
+import { T, SG, MON, HM, HS, ROA, N, P, EQ, O, BOOL, B } from '../utils/effect/EffectImports';
+import { constant, pipe, identity as F_identity, constFalse, compose } from '@effect/data/Function';
 import { Effect_getSemigroupCombine, Function_getSemigroup, HashMap_filterWithIndexKV, HashSet_differenceFrom, HashSet_fromHashMapMulti, HashSet_isEmpty as HashSet_isEmpty, HashSet_isSize, Option_fromPredicate, Refinement_identity, Struct_get } from '../utils/effect/Effect';
 
 import { Game, CardOwner } from '../game';
@@ -20,7 +20,7 @@ export type DeductionRule = (
 ,
 
     // Returns an error if we encounter a logical contradiction
-    DeductionError
+    DeductionError | B.Brand.BrandErrors
 ,
     // Returns the set of deductions, augmented with new findings
     DeductionSet.ValidatedDeductionSet
@@ -33,7 +33,7 @@ export const SemigroupUnion: SG.Semigroup<DeductionRule> =
     Function_getSemigroup(
         Effect_getSemigroupCombine<
             DeductionSet.ValidatedDeductionSet,
-            DeductionError,
+            DeductionError | B.Brand.BrandErrors,
             Game.Game
         >(
             (first, second) => pipe(
@@ -47,6 +47,25 @@ export const MonoidUnion: MON.Monoid<DeductionRule> = MON.fromSemigroup(
     SemigroupUnion,
     identity,
 );
+
+// TODO define this here or somewhere else?
+export const ALL_DEDUCTION_RULES = [
+    'playerHasAtLeastZeroCards',
+    'playerHasMaxNumCardsRemaining',
+    'playerHasNarrowestNumCardRange',
+    'playerHasMinNumCardsRefuted',
+    'cardIsHeldAtMostOnce',
+    'cardIsHeldAtLeastOnce',
+    'playerHasNoMoreThanMaxNumCards',
+    'playerHasNoLessThanMinNumCards',
+    'caseFileHasAtMostOnePerCardType',
+    'caseFileHasAtLeastOnePerCardType',
+    'guessIsRefutedByHeldCard',
+    'playerWith1CardRefutesWithIntersection',
+] as const;
+
+// TODO define this here or somewhere else?
+export type RawDeductionRule = typeof ALL_DEDUCTION_RULES[number];
 
 // Every player has >=0 cards, and <= ALL_CARDS.size(), of course!
 export const playerHasZeroToNumAllCards: DeductionRule = (
@@ -72,14 +91,14 @@ export const playerHasMaxNumCardsRemaining: DeductionRule = (
 
     // How many are in the case file?
     // TODO this logic will need to update if case files can have more of any type of card
-    const caseFileNumCards = HS.size(Game.cardTypes(game));
+    const caseFileNumCards = HS.size(game.cardTypes);
 
     // How many cards do all players have at a minimum?
     const totalMinPlayerNumCards = pipe(
         knownDeductions.numCards,
-        HM.map(flow(Struct_get('answer'), Range.min)),
+        HM.map(compose(Struct_get('answer'), Range.getMin)),
         HM.values,
-        N.MonoidSum.combineAll,
+        N.sumAll,
     );
 
     // What is the maximum number of cards any player has?
@@ -123,7 +142,6 @@ export const cardIsHeldAtMostOnce: DeductionRule = (
     knownDeductions,
 ) => T.gen(function* ($) {
     const game = yield* $(Game.Tag);
-    const gameOwners = Game.owners(game);
 
     const ownershipByCard = DeductionSet.getOwnershipByCard(knownDeductions);
 
@@ -135,13 +153,13 @@ export const cardIsHeldAtMostOnce: DeductionRule = (
         HM.filter(OwnershipOfCard.isOwned),
 
         // Figure out the owners we DON'T know about
-        HM.map(flow(
+        HM.map(compose(
             // Put together a set of all the owners we know about
             ({ owner, nonOwners }) => HS.add(nonOwners, owner),
 
             // Find the difference from all owners in the game
             // This is the owners that are blank for this card
-            HashSet_differenceFrom(gameOwners),
+            HashSet_differenceFrom(game.owners),
         )),
 
         // Convert to a nice set of pairs
@@ -178,7 +196,6 @@ export const cardIsHeldAtLeastOnce: DeductionRule = (
     knownDeductions,
 ) => T.gen(function* ($) {
     const game = yield* $(Game.Tag);
-    const gameOwners = Game.owners(game);
 
     const ownershipByCard = DeductionSet.getOwnershipByCard(knownDeductions);
 
@@ -190,9 +207,9 @@ export const cardIsHeldAtLeastOnce: DeductionRule = (
         HM.filter(OwnershipOfCard.isUnowned),
 
         // Figure out the owners we DON'T know about
-        HM.map(flow(
+        HM.map(compose(
             Struct_get('nonOwners'),
-            HashSet_differenceFrom(gameOwners),
+            HashSet_differenceFrom(game.owners),
         )),
 
         // Keep only the cards that have exactly 1 unknown owner
@@ -250,29 +267,25 @@ export const playerHasNoMoreThanMaxNumCards: DeductionRule = (
             const maxNumOwnedCards = pipe(
                 knownDeductions.numCards,
                 HM.get(owner.player),
-                O.map(flow(
+                O.map(compose(
                     Struct_get('answer'),
-                    Range.max,
+                    Range.getMax,
                 )),
             );
 
-            return O.match(
-                maxNumOwnedCards,
-                
+            return O.match(maxNumOwnedCards, {
                 // We don't know their max number of cards
-                constFalse,
+                onNone: constFalse,
 
                 // We do know their max num cards, and we know what all those cards are
-                EQ.equals(numOwnedCards),
-            );
+                onTrue: EQ.equals(numOwnedCards),
+            });
         }),
 
-        // For these players, figure out which cards we DON'T know their ownership of
-        // and only proceed if there are any cards with unknown ownership
-        HM.filterMap(flow(
+        // For these players, figure out which cards we DON'T know their ownership
+        HM.map(compose(
             HM.keySet,
             HashSet_differenceFrom(game.cards),
-            Option_fromPredicate(P.not(HashSet_isEmpty()))
         )),
 
         // Mark all these cards as UNOWNED by this player
@@ -327,9 +340,9 @@ export const playerHasNoLessThanMinNumCards: DeductionRule = (
             const minNumOwnedCards = pipe(
                 knownDeductions.numCards,
                 HM.get(owner.player),
-                O.map(flow(
+                O.map(compose(
                     Struct_get('answer'),
-                    Range.min,
+                    Range.getMin,
                 )),
             );
 
@@ -338,23 +351,19 @@ export const playerHasNoLessThanMinNumCards: DeductionRule = (
                 (minNumOwnedCards) => HS.size(game.cards) - minNumOwnedCards,
             );
 
-            return O.match(
-                maxNumUnownedCards,
-
+            return O.match(maxNumUnownedCards, {
                 // We don't know their min number of cards
-                constFalse,
+                onNone: constFalse,
 
                 // We do know their min num cards, and we know what all those cards are
-                EQ.equals(numUnownedCards),
-            );
+                onSome: EQ.equals(numUnownedCards),
+            });
         }),
 
-        // For these players, figure out which cards we DON'T know their ownership of
-        // and only proceed if there are any cards with unknown ownership
-        HM.filterMap(flow(
+        // For these players, figure out which cards we DON'T know their ownership
+        HM.map(compose(
             HM.keySet,
             HashSet_differenceFrom(game.cards),
-            Option_fromPredicate(P.not(HashSet_isEmpty()))
         )),
 
         // Mark all these cards as UNOWNED by this player

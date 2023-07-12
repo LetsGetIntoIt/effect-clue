@@ -43,9 +43,9 @@ export const combine = <A>(
     pipe(
         EquivalenceIgnoreReasons(newConclusion, oldConclusion),
 
-        BOOL.match(
+        BOOL.match({
             // The values are not equal
-            constant(pipe(
+            onFalse: () => pipe(
                 M.value(collisionStrategy),
 
                 // If the strategy is to overwrite, just use the new conclusion
@@ -55,10 +55,10 @@ export const combine = <A>(
                 M.when('fail', () => E.left(B.error(`New conclusion ${newConclusion} conflicts with existing conclusion ${oldConclusion}`))),
 
                 M.exhaustive,
-            )),
+            ),
 
             // The values are equal, so just merge the reasons
-            () => pipe(
+            onTrue: () => pipe(
                 {
                     answer: newConclusion.answer,
                     reasons: HS.union(newConclusion.reasons, oldConclusion.reasons),
@@ -67,5 +67,5 @@ export const combine = <A>(
                 ConclusionOf(),
                 ValidatedConclusionOf(),
             ),
-        ),
+        }),
     );

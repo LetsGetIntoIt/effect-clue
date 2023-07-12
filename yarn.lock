@@ -576,10 +576,11 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@bipgopakap/effect-clue@workspace:."
   dependencies:
-    "@effect/data": 0.12.6
-    "@effect/io": 0.26.0
-    "@effect/match": 0.24.1
-    "@effect/schema": 0.21.0
+    "@effect/data": 0.14.1
+    "@effect/io": 0.32.1
+    "@effect/match": 0.26.0
+    "@effect/schema": 0.26.0
+    "@effect/typeclass": 0.1.0
     "@preact/preset-vite": 2.5.0
     "@preact/signals": 1.1.3
     "@types/jest": 29.5.2
@@ -626,51 +627,49 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@effect/data@npm:0.12.6":
-  version: 0.12.6
-  resolution: "@effect/data@npm:0.12.6"
-  checksum: 7ff0298e1d2748610e4fee0597a45973f815f82968e26b38b7638b58ddeb99de9a15e1d4e0bd5abdd7c74c3f69c9309155cd6eeec3aa61d817509fd6517ee511
+"@effect/data@npm:0.14.1":
+  version: 0.14.1
+  resolution: "@effect/data@npm:0.14.1"
+  checksum: db6400c48caac5c34761368e9179b2d32651c49849356fc4c3812c746b92b3728d3f10824d10d040569cb0fb0d09fe60bb799ecb3d54b3dc25ad1560e97db00e
   languageName: node
   linkType: hard
 
-"@effect/io@npm:0.26.0":
+"@effect/io@npm:0.32.1":
+  version: 0.32.1
+  resolution: "@effect/io@npm:0.32.1"
+  dependencies:
+    "@effect/data": ^0.14.1
+  checksum: 40671894fe2ee0936ca76475c56637bbdddabf86114f6877ee57612a43f3aefc16a1a07c581bbb05972728a3d0fd4daf2568d7b2bfe98c323119297f91009cd8
+  languageName: node
+  linkType: hard
+
+"@effect/match@npm:0.26.0":
   version: 0.26.0
-  resolution: "@effect/io@npm:0.26.0"
+  resolution: "@effect/match@npm:0.26.0"
   dependencies:
-    "@effect/data": ~0.12.2
-  checksum: 5363d94d502dbf40eb726c253a6d66990079b832b2cd63e086cd00a8e8b4f5adfe13f953aa0ce6f838ce4626f4b1a7a69733d4a271e096100c94620502d22f8f
+    "@effect/data": ^0.14.1
+    "@effect/schema": ^0.26.0
+  checksum: de50d3c59052c0125b5bcd7130ffb04dc1294bc9c73720f628652d17d7bd4571f3b615941f32ac0ccf06beec4f205698067fca494b2de97aa5f9a4191d11533b
   languageName: node
   linkType: hard
 
-"@effect/match@npm:0.24.1":
-  version: 0.24.1
-  resolution: "@effect/match@npm:0.24.1"
+"@effect/schema@npm:0.26.0":
+  version: 0.26.0
+  resolution: "@effect/schema@npm:0.26.0"
   dependencies:
-    "@effect/data": ^0.12.6
-    "@effect/schema": ^0.20.1
-  checksum: fe6470447c3702fd3841335641f4c2934c82fe89beca73c545c85f1174e318196b1350b7abc4fd38334f47f618f3ddc8a752e0f327e2ce0422e8b27e79f6429d
+    "@effect/data": ^0.14.1
+    "@effect/io": ^0.32.1
+    fast-check: ^3.11.0
+  checksum: 78cf703b54ae74635a8de94fb338ace808598459a40eae8882c138d92eee1be3c238d8f719c64f5ce8300a19eaa2841f2d1de7ef109b5b5af1868201ac8ca1c0
   languageName: node
   linkType: hard
 
-"@effect/schema@npm:0.21.0":
-  version: 0.21.0
-  resolution: "@effect/schema@npm:0.21.0"
+"@effect/typeclass@npm:0.1.0":
+  version: 0.1.0
+  resolution: "@effect/typeclass@npm:0.1.0"
   dependencies:
-    "@effect/data": ^0.12.9
-    "@effect/io": ^0.27.0
-    fast-check: ^3.10.0
-  checksum: 9d6a317272a2afb19c27edd772217f37404e185ed6da25fcf4ba380c600a155f3b44a7e2811333dd58de1e6aa9963fd20fe2c6ed5711586dc213ce649655e702
-  languageName: node
-  linkType: hard
-
-"@effect/schema@npm:^0.20.1":
-  version: 0.20.3
-  resolution: "@effect/schema@npm:0.20.3"
-  dependencies:
-    "@effect/data": ^0.12.7
-    "@effect/io": ^0.26.0
-    fast-check: ^3.10.0
-  checksum: 811a3ab25097a5c1de4f1434fe9d74ff5fc90c98b549e87f0695e650e20e1b60a91aac53ecd9fc198b315d9e7088aac8b4fd7e5a651cc1090edf785dc33cffe4
+    "@effect/data": ^0.13.5
+  checksum: 610ae667cf7a160bbcd66ceb268b4a5b175fe9f0cf0ac78669c7a8003d5677a7a8282473b563b8b8e770510ccdbfe20f4c0daee37407f064f52bc25791991aa3
   languageName: node
   linkType: hard
 
@@ -2942,12 +2941,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fast-check@npm:^3.10.0":
-  version: 3.10.0
-  resolution: "fast-check@npm:3.10.0"
+"fast-check@npm:^3.11.0":
+  version: 3.11.0
+  resolution: "fast-check@npm:3.11.0"
   dependencies:
     pure-rand: ^6.0.0
-  checksum: 8937e2dc8416e44bd23d6330fcb2c54a2c538944d40d53e6f379a01b79b1490cd8a4a81cd47ffa5aa8a7df71a0eccaae007371c639fd2dd43ae7507e9de8ec57
+  checksum: 6ec642fcfe69faa56a42785cb7b373905357db3c7373add4b84d97b8b0fa2a7efa0e119159d42e5fe5607f64cb3948a1986c45a0484156060ce168186bdbdb4a
   languageName: node
   linkType: hard
 

@@ -66,15 +66,15 @@ export const combine: (
                 // They can only be combined if their owners are the same
                 EQ.equals(first.owner, second.owner),
 
-                BOOL.match(
+                BOOL.match({
                     // They do not match
-                    () => E.left('Conflicting ownership'),
+                    onFalse: () => E.left('Conflicting ownership'),
 
-                    () => E.right(OwnershipOfOwnedCard({
+                    onTrue: () => E.right(OwnershipOfOwnedCard({
                         owner: first.owner,
                         nonOwners: HS.union(first.nonOwners, second.nonOwners),
                     })),
-                ),
+                }),
             )),
 
             M.tag('OwnershipOfUnownedCard', (first) => pipe(

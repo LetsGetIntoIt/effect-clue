@@ -1,6 +1,6 @@
 
-import { flow, pipe } from '@effect/data/Function';
-import { B, E, HM } from '../../utils/effect/EffectImports';
+import { pipe } from '@effect/data/Function';
+import { B, E, HM, T } from '../../utils/effect/EffectImports';
 import { Brand_refined } from '../../utils/effect/Effect';
 
 import { Card } from '../../objects';
@@ -20,11 +20,12 @@ export const empty: ValidatedOwnershipOfOwner =
         HM.empty(),
         OwnershipOfOwner,
         ValidatedOwnershipOfOwner,
-        E.getOrThrow,
+        T.runSync,
     );
 
-export const set = (card: Card.Card, isOwned: boolean): ((ownership: ValidatedOwnershipOfOwner) => E.Either<B.Brand.BrandErrors, ValidatedOwnershipOfOwner>) =>
-    flow(
+export const set = (card: Card.Card, isOwned: boolean) => (ownership: ValidatedOwnershipOfOwner): E.Either<B.Brand.BrandErrors, ValidatedOwnershipOfOwner> =>
+    pipe(
+        ownership,
         HM.set(card, isOwned),
         OwnershipOfOwner,
         ValidatedOwnershipOfOwner,
