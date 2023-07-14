@@ -18,11 +18,13 @@ export type {
 };
 
 import type {
-    RawDeductionRule
+    DeductionRule as DeductionRuleInternal
 } from './logic';
 
+type DeductionRule = DeductionRuleInternal.Name;
+
 export type {
-    RawDeductionRule,
+    DeductionRule,
 };
 
 export {

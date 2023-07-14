@@ -1,4 +1,4 @@
-import { SG, EQV, P, O, BOOL, MON, HS, HM, TU, ROA, T, E, B, EQ } from "./EffectImports";
+import { SG, EQV, P, O, BOOL, MON, HS, HM, TU, ROA, T, E, B, EQ, ROR } from "./EffectImports";
 import { constTrue, pipe, identity, apply, compose } from "@effect/data/Function";
 
 export const Function_getSemigroup =
@@ -195,3 +195,13 @@ export const HashMap_setOrUpdate = <K, V>(
 
 export const HashSet_differenceFrom = <A>(first: HS.HashSet<A>) => (second: HS.HashSet<A>): HS.HashSet<A> =>
     HS.difference(first, second);
+
+export const undefinedToNull = <A>(a: NonNullable<A> | undefined): NonNullable<A> | null =>
+    P.isUndefined(a) ? null : a;
+
+export const ROR_values = <K extends PropertyKey, A>(record: Readonly<Record<K, A>>): A[] =>
+    pipe(
+        record,
+        ROR.toArray,
+        ROA.map(TU.getSecond),
+    );

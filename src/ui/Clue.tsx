@@ -24,7 +24,7 @@ export function Clue() {
 
 	const guesses = useSignal<Api.Guess[]>([]);
 
-	const deductionRules = useSignal<Api.RawDeductionRule[]>([
+	const deductionRules = useSignal<Api.DeductionRule[]>([
 		'cardIsHeldAtLeastOnce',
 		'cardIsHeldAtMostOnce',
 		'playerHasNoMoreThanMaxNumCards',

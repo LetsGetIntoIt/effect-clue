@@ -1,10 +1,10 @@
-import { B, HM, E, HS, O, T } from '../../utils/effect/EffectImports';
+import { B, HM, E, HS, O, T, ROA } from '../../utils/effect/EffectImports';
 import { pipe } from '@effect/data/Function';
 import { Brand_refined } from '../../utils/effect/Effect';
 
 import * as Conclusion from './Conclusion';
 
-export type ConclusionMap<Q, A> = B.Branded<HM.HashMap<Q, Conclusion.ValidatedConclusion<A>>, 'ConclusionMap'>;
+export type ConclusionMap<Q, A> = B.Branded<HM.HashMap<Q, Conclusion.Conclusion<A>>, 'ConclusionMap'>;
 
 export const ConclusionMapOf = <Q, A>() => B.nominal<ConclusionMap<Q, A>>();
 
@@ -16,7 +16,7 @@ export const ValidatedConclusionMapOf = <Q, A>() => Brand_refined<ValidatedConcl
 
 export const empty = <Q, A>(): ValidatedConclusionMap<Q, A> =>
     pipe(
-        HM.empty<Q, Conclusion.ValidatedConclusion<A>>(),
+        HM.empty<Q, Conclusion.Conclusion<A>>(),
         ConclusionMapOf(),
         ValidatedConclusionMapOf(),
         T.runSync,
@@ -36,11 +36,7 @@ export const setMergeOrOverwriteOrFail = (
         const combine = Conclusion.combine<A>(collisionStrategy);
 
         // Create the new conclusion
-        const newConclusion = yield* $(
-            { answer, reasons, },
-            Conclusion.ConclusionOf(),
-            Conclusion.ValidatedConclusionOf(),
-        );
+        const newConclusion = Conclusion.of(answer, reasons);
 
         // Create the conclusion to add
         const combinedConclusion = yield* $(

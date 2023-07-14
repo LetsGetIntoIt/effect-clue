@@ -1,6 +1,6 @@
-import { D, HS, B, EQV, ST, EQ, E, BOOL, M } from '../../utils/effect/EffectImports';
-import { pipe, constant } from '@effect/data/Function';
-import { Brand_refined, Equivalence_constTrue } from '../../utils/effect/Effect';
+import { D, HS, B, EQV, ST, EQ, E, BOOL, M, ROA } from '../../utils/effect/EffectImports';
+import { pipe } from '@effect/data/Function';
+import { Equivalence_constTrue } from '../../utils/effect/Effect';
 
 export interface Reason extends D.Case {
     _tag: "Reason";
@@ -10,21 +10,34 @@ export interface Reason extends D.Case {
 
 export const Reason = D.tagged<Reason>("Reason");
 
+export const ReasonObserved = (explanation: string): Reason =>
+    Reason({
+        level: 'observed',
+        explanation,
+    });
+
+export const ReasonInferred = (explanation: string): Reason =>
+    Reason({
+        level: 'inferred',
+        explanation,
+    });
+
 export interface Conclusion<A> extends D.Case {
     _tag: "Conclusion";
     readonly answer: A,
     readonly reasons: HS.HashSet<Reason>;
 };
 
-export const ConclusionOf = <A>() => D.tagged<Conclusion<A>>("Conclusion");
+const ConclusionOf = <A>() => D.tagged<Conclusion<A>>("Conclusion");
 
-export type ValidatedConclusion<A> = Conclusion<A> & B.Brand<'ValidatedConclusion'>;
+// TODO validate that there is at least 1 reason
+export const of = <A>(answer: A, reasons: HS.HashSet<Reason>): Conclusion<A> =>
+    ConclusionOf<A>()({
+        answer,
+        reasons,
+    });
 
-export const ValidatedConclusionOf = <A>() => Brand_refined<ValidatedConclusion<A>>([
-    // TODO validate this in any way?
-]);
-
-const EquivalenceIgnoreReasons: EQV.Equivalence<ValidatedConclusion<unknown>> =
+const EquivalenceIgnoreReasons: EQV.Equivalence<Conclusion<unknown>> =
     ST.getEquivalence({
         answer: EQ.equivalence(),
 
@@ -35,11 +48,11 @@ const EquivalenceIgnoreReasons: EQV.Equivalence<ValidatedConclusion<unknown>> =
 export const combine = <A>(
     collisionStrategy: 'overwrite' | 'fail',
 ) => (
-    newConclusion: ValidatedConclusion<A>,
+    newConclusion: Conclusion<A>,
 ) => (
-    oldConclusion: ValidatedConclusion<A>,
-// TODO don't mix brand errors with logical paradox errors
-): E.Either<B.Brand.BrandErrors, ValidatedConclusion<A>> =>
+    oldConclusion: Conclusion<A>,
+    // TODO don't mix brand errors with logical paradox errors
+): E.Either<B.Brand.BrandErrors, Conclusion<A>> =>
     pipe(
         EquivalenceIgnoreReasons(newConclusion, oldConclusion),
 
@@ -58,14 +71,11 @@ export const combine = <A>(
             ),
 
             // The values are equal, so just merge the reasons
-            onTrue: () => pipe(
-                {
+            onTrue: () => E.right(
+                ConclusionOf<A>()({
                     answer: newConclusion.answer,
                     reasons: HS.union(newConclusion.reasons, oldConclusion.reasons),
-                },
-
-                ConclusionOf(),
-                ValidatedConclusionOf(),
+                }),
             ),
         }),
     );

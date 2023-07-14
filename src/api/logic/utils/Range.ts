@@ -35,6 +35,8 @@ export const exact = (n: number): Range => decodeSync([n, null], { errors: 'all'
 export const bounded = (min: number, max: number): E.Either<PR.ParseError, Range> => decodeEither([min, max], { errors: 'all' });
 export const boundedSync = (min: number, max: number): Range => decodeSync([min, max], { errors: 'all' });
 
+export const is = S.is(Schema);
+
 export const getMin = (range: Range): number => TU.getFirst(range);
 export const getMax = (range: Range): number => TU.getSecond(range);
 

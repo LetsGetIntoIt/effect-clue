@@ -1,13 +1,14 @@
 
-import { D, HM, B, T, CTX, BOOL, HS, E, SG, MON, ST } from '../utils/effect/EffectImports';
+import { D, HM, B, T, CTX, BOOL, HS, E, SG, MON, ST, PR } from '../utils/effect/EffectImports';
 import { pipe, constant, compose } from '@effect/data/Function';
-import { Struct_get, HashSet_of, Brand_refinedEffect, HashMap_setOrUpdate } from '../utils/effect/Effect';
+import { Struct_get, HashSet_of, Brand_refinedEffect, HashMap_setOrUpdate, undefinedToNull } from '../utils/effect/Effect';
 
 import { Card, Player, Guess } from '../objects';
 import { Game, CardOwner } from '../game';
 
 import * as Range from './utils/Range';
 import * as ConclusionMap from './utils/ConclusionMap';
+import * as OwnershipOfOwner from './utils/OwnershipOfOwner';
 import * as OwnershipOfCard from './utils/OwnershipOfCard';
 import * as Conclusion from './utils/Conclusion';
 
@@ -79,16 +80,16 @@ export const getOwnershipByCard = (
                     isOwned,
 
                     // TODO make better constructors for these
-                    BOOL.match(
-                        constant(OwnershipOfCard.OwnershipOfUnownedCard({
+                    BOOL.match({
+                        onFalse: constant(OwnershipOfCard.OwnershipOfUnownedCard({
                             nonOwners: HashSet_of(owner),
                         })),
 
-                        constant(OwnershipOfCard.OwnershipOfOwnedCard({
+                        onTrue: constant(OwnershipOfCard.OwnershipOfOwnedCard({
                             owner,
                             nonOwners: HS.empty(),
                         })),
-                    ),
+                    }),
                 );
 
                 return HashMap_setOrUpdate(
@@ -98,7 +99,7 @@ export const getOwnershipByCard = (
                     constant(newOwnership),
 
                     // If we already have ownership information for the card
-                    compose(OwnershipOfCard.combine(newOwnership), E.getOrThrow),
+                    compose(OwnershipOfCard.combine(newOwnership), T.runSync),
                 )(
                     ownershipByCard,
                 )
@@ -129,18 +130,18 @@ export const getOwnershipByOwner = (
                     constant(pipe(
                         OwnershipOfOwner.empty,
                         OwnershipOfOwner.set(card, isOwned),
-                        E.getOrThrow
+                        T.runSync
                     )),
 
                     // If we already have ownership information for the card
-                    flow(OwnershipOfOwner.set(card, isOwned), E.getOrThrow)
+                    compose(OwnershipOfOwner.set(card, isOwned), T.runSync)
                 )(
                     ownershipByOwner
                 ),
         )
     );
 
-export type Modification = ((deductions: ValidatedDeductionSet) => T.Effect<Game.Game, B.Brand.BrandErrors, ValidatedDeductionSet>);
+export type Modification = ((deductions: ValidatedDeductionSet) => T.Effect<Game.Game, PR.ParseError | B.Brand.BrandErrors, ValidatedDeductionSet>);
 
 export const identity: Modification =
     T.succeed;
@@ -163,50 +164,55 @@ export const modifyAddNumCards =
         deductions,
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
-        ST.evolve({
-            numCards: (numCardsMap) => T.gen(function* ($) {
-                const newRange = yield* $(Range.decodeEither([minNumCards, maxNumCards]));
+        ({ numCards: numCardsMap, ownership, refuteCards }) => T.all({
+            numCards: T.gen(function* ($) {
+                const newRange = yield* $(Range.decodeEither([minNumCards, undefinedToNull(maxNumCards)]));
                 const updateNumCards = ConclusionMap.setMergeOrFail(player, newRange, HashSet_of(reason));
                 return yield* $(updateNumCards(numCardsMap));
             }),
-            ownership: (_) => E.right(_),
-            refuteCards: (_) => E.right(_),
+            ownership: E.right(ownership),
+            refuteCards: E.right(refuteCards),
         }),
-        E.struct,
 
         T.map(DeductionSet),
         T.flatMap(ValidatedDeductionSet),
     );
 
 export const modifyAddOwnership =
-        (owner: CardOwner.CardOwner, card: Card.ValidatedCard, isOwned: boolean, reason: Conclusion.Reason):
+        (owner: CardOwner.CardOwner, card: Card.Card, isOwned: boolean, reason: Conclusion.Reason):
         Modification =>
-    flow(
+    (deductions) => pipe(
+        deductions,
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
-        ST.evolve({
-            numCards: (_) => E.right(_),
-            ownership: ConclusionMap.setMergeOrFail(D.array([owner, card] as const), isOwned, HashSet_of(reason)),
-            refuteCards: (_) => E.right(_),
+        ({ numCards, ownership, refuteCards }) => T.all({
+            numCards: E.right(numCards),
+            ownership: pipe(
+                ownership,
+                ConclusionMap.setMergeOrFail(D.array([owner, card] as const), isOwned, HashSet_of(reason))
+            ),
+            refuteCards: E.right(refuteCards),
         }),
-        E.struct,
 
         T.map(DeductionSet),
         T.flatMap(ValidatedDeductionSet),
     );
 
 export const modifySetRefuteCards =
-        (guess: Guess.ValidatedGuess, possibleCards: HM.HashMap<Card.ValidatedCard, 'owned' | 'maybe'>, reason: Conclusion.Reason):
+        (guess: Guess.Guess, possibleCards: HM.HashMap<Card.Card, 'owned' | 'maybe'>, reason: Conclusion.Reason):
         Modification =>
-    flow(
+    (deductions) => pipe(
+        deductions,
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
-        ST.evolve({
-            numCards: (_) => E.right(_),
-            ownership: (_) => E.right(_),
-            refuteCards: ConclusionMap.setMergeOrOverwrite(guess, possibleCards, HashSet_of(reason)),
+        ({ numCards, ownership, refuteCards }) => T.all({
+            numCards: E.right(numCards),
+            ownership: E.right(ownership),
+            refuteCards: pipe(
+                refuteCards,
+                ConclusionMap.setMergeOrOverwrite(guess, possibleCards, HashSet_of(reason)),
+            ),
         }),
-        E.struct,
 
         T.map(DeductionSet),
         T.flatMap(ValidatedDeductionSet),
@@ -220,12 +226,11 @@ export const modifyCombine = (
 
         ST.pick('numCards', 'ownership', 'refuteCards'),
 
-        ST.evolve({
-            numCards: ConclusionMap.combineMergeOrFail(second.numCards),
-            ownership: ConclusionMap.combineMergeOrFail(second.ownership),
-            refuteCards: ConclusionMap.combineMergeOrFail(second.refuteCards),
+        ({ numCards, ownership, refuteCards }) => T.all({
+            numCards: pipe(numCards, ConclusionMap.combineMergeOrFail(second.numCards)),
+            ownership: pipe(ownership, ConclusionMap.combineMergeOrFail(second.ownership)),
+            refuteCards: pipe(refuteCards, ConclusionMap.combineMergeOrFail(second.refuteCards)),
         }),
-        E.struct,
 
         T.map(DeductionSet),
         T.flatMap(ValidatedDeductionSet),

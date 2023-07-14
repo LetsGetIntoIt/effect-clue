@@ -3,18 +3,17 @@ import { T, B, ROA, E, D, HM, O, HS } from './utils/effect/EffectImports';
 
 import * as ApiSteps from './ApiSteps';
 import { Card, CaseFile, Guess, Player } from './objects';
-import { RawDeductionRule } from './logic';
+import { DeductionRule } from './logic';
 
 // TODO refactors
 // - Replace Either<E, A> with Effect<never, E, A> per this thread: https://discord.com/channels/795981131316985866/1128449901324406784
 // - Add logging, services and spans
-// - Add diagnotics to the result of the deduce() step (number of iterations, was it exhaustive, etc.)
+// - Add diagnostics to the result of the deduce() step (number of iterations, was it exhaustive, etc.)
 // - All Error strings from the API should be tagged/structured, instead of "string"
 // - Accumulate errors from the API where applicable (instead of failing at the first one)
 // - All Conclusion.Reasons should be tagged/structured, instead of string
 // - Conclusion.Reasons should be ordered from simplest to most complex
 // - DeductionRules should be ordered from simplest to most complex
-// - use @effect/schema to validate data into the Api
 // - use TSPlus and see if a lot of interfaces/typeclasses/classes/constuctor code can be deduped
 // - Simplify Guess by converting to a tagged class for the 3 different possible cases: Unrefuted, RefutedUnknown, RefutedKnown
 // - ^ Update DeductionRule to only add refuted cards for RefutedUnknown guesses
@@ -28,7 +27,6 @@ import { RawDeductionRule } from './logic';
 // - Best next guesses to make (not taking map into account)
 // - Best next guesses to make, given you're in a particular room
 // - Test hypotheses to find paradoxes
-// - Percent likelihood
 // - Take the map into account, update which is next best guess to make
 // - Take the map into account, who should I pull away from their goal
 // - Allow for multiple case files
@@ -38,13 +36,13 @@ interface ApiInput {
     readonly cards: readonly Card.Serialized[];
     readonly players: readonly Player.Serialized[];
     readonly caseFile: CaseFile.Serialized;
-    
+
     // TODO known numCards
     // TODO known card ownership
 
     readonly guesses: readonly Guess.Serialized[];
     
-    readonly deductionRules: readonly RawDeductionRule[];
+    readonly deductionRules: readonly DeductionRule.Name[];
 }
 
 export interface ApiOutput {

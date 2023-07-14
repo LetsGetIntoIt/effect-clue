@@ -77,3 +77,5 @@ export type Guess = S.To<typeof Schema>;
 
 export const decodeEither = S.decodeEither(Schema);
 export const decodeSync = S.decodeSync(Schema);
+
+export const is = S.is(Schema);

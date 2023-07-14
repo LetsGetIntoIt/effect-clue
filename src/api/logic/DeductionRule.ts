@@ -1,6 +1,6 @@
-import { T, SG, MON, HM, HS, ROA, N, P, EQ, O, BOOL, B } from '../utils/effect/EffectImports';
+import { T, SG, MON, HM, HS, ROA, N, EQ, O, BOOL, B, PR } from '../utils/effect/EffectImports';
 import { constant, pipe, identity as F_identity, constFalse, compose } from '@effect/data/Function';
-import { Effect_getSemigroupCombine, Function_getSemigroup, HashMap_filterWithIndexKV, HashSet_differenceFrom, HashSet_fromHashMapMulti, HashSet_isEmpty as HashSet_isEmpty, HashSet_isSize, Option_fromPredicate, Refinement_identity, Struct_get } from '../utils/effect/Effect';
+import { Effect_getSemigroupCombine, Function_getSemigroup, HashMap_filterWithIndexKV, HashSet_differenceFrom, HashSet_fromHashMapMulti, HashSet_isSize, Refinement_identity, Struct_get } from '../utils/effect/Effect';
 
 import { Game, CardOwner } from '../game';
 
@@ -20,7 +20,7 @@ export type DeductionRule = (
 ,
 
     // Returns an error if we encounter a logical contradiction
-    DeductionError | B.Brand.BrandErrors
+    DeductionError | B.Brand.BrandErrors | PR.ParseError
 ,
     // Returns the set of deductions, augmented with new findings
     DeductionSet.ValidatedDeductionSet
@@ -33,7 +33,7 @@ export const SemigroupUnion: SG.Semigroup<DeductionRule> =
     Function_getSemigroup(
         Effect_getSemigroupCombine<
             DeductionSet.ValidatedDeductionSet,
-            DeductionError | B.Brand.BrandErrors,
+            DeductionError | B.Brand.BrandErrors | PR.ParseError,
             Game.Game
         >(
             (first, second) => pipe(
@@ -65,7 +65,7 @@ export const ALL_DEDUCTION_RULES = [
 ] as const;
 
 // TODO define this here or somewhere else?
-export type RawDeductionRule = typeof ALL_DEDUCTION_RULES[number];
+export type Name = typeof ALL_DEDUCTION_RULES[number];
 
 // Every player has >=0 cards, and <= ALL_CARDS.size(), of course!
 export const playerHasZeroToNumAllCards: DeductionRule = (
@@ -173,10 +173,9 @@ export const cardIsHeldAtMostOnce: DeductionRule = (
 
                 false,
 
-                Conclusion.Reason({
-                    level: 'inferred',
-                    explanation: `Card is already owned by someone else`
-                }),
+                Conclusion.ReasonInferred(
+                    `Card is already owned by someone else`,
+                ),
             ),
         ),
 
@@ -224,10 +223,9 @@ export const cardIsHeldAtLeastOnce: DeductionRule = (
 
                 true,
                 
-                Conclusion.Reason({
-                    level: 'inferred',
-                    explanation: `Card not owned anywhere else`,
-                }),
+                Conclusion.ReasonInferred(
+                    `Card not owned anywhere else`,
+                ),
             ),
         ),
 
@@ -278,7 +276,7 @@ export const playerHasNoMoreThanMaxNumCards: DeductionRule = (
                 onNone: constFalse,
 
                 // We do know their max num cards, and we know what all those cards are
-                onTrue: EQ.equals(numOwnedCards),
+                onSome: EQ.equals(numOwnedCards),
             });
         }),
 
@@ -297,10 +295,9 @@ export const playerHasNoMoreThanMaxNumCards: DeductionRule = (
 
                 false,
 
-                Conclusion.Reason({
-                    level: 'inferred',
-                    explanation: `All of this player's cards have been accounted for already, so they cannot own this one`,
-                }),
+                Conclusion.ReasonInferred(
+                    `All of this player's cards have been accounted for already, so they cannot own this one`,
+                ),
             ),
         ),
 
@@ -375,10 +372,9 @@ export const playerHasNoLessThanMinNumCards: DeductionRule = (
 
                 true,
 
-                Conclusion.Reason({
-                    level: 'inferred',
-                    explanation: `All except this player's min number of cards have been accounted for, so they definitely own the rest`,
-                }),
+                Conclusion.ReasonInferred(
+                    `All except this player's min number of cards have been accounted for, so they definitely own the rest`,
+                ),
             ),
         ),
 

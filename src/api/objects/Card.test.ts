@@ -36,9 +36,9 @@ describe('Card', () => {
                 E.left(dedent`
                     error(s) found
                     ├─ [0]
-                    │  └─ cardType should be non-empty
+                    │  └─ Card type cannot be blank
                     └─ [1]
-                       └─ cardLabel should be non-empty
+                       └─ Card label cannot be blank
                 `),
             );
         });
