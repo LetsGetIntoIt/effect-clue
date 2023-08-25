@@ -5,14 +5,8 @@
         "description": "Effect-TS with generator function"
     },
 
-    "Effect-TS Either.gen()": {
-        "prefix": "egen",
-        "body": ["E.gen(function* ($) {\n\t$0\n})"],
-        "description": "Effect-TS with generator function"
-    },
-
     "Effect-TS yield": {
-        "prefix": "yld",
+        "prefix": "ty",
         "body": ["yield* $($0);"],
         "description": "Effect-TS yield within generator function"
     },

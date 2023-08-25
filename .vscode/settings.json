@@ -22,5 +22,6 @@
             "<node_internals>/**",
             "${FOLDER_NAME:workspaceFolder}/node_modules/**"
         ]
-    }
+    },
+    "editor.selectionHighlight": false
 }
