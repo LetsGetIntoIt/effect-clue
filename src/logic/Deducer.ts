@@ -1,11 +1,11 @@
-import { Equal, ReadonlyArray } from "effect";
-import { Knowledge } from "./Knowledge";
+import { Either, Equal, ReadonlyArray } from "effect";
+import { Knowledge, LogicalParadox } from "./Knowledge";
 import { cardsAreOwnedAtMostOnce, cardsAreOwnedAtLeastOnce, playerOwnsAtMostHandSize, playerOwnsAtLeastHandSize, caseFileOwnsAtMost1PerCategory, caseFileOwnsAtLeast1PerCategory } from "./ConsistencyRules";
 import { nonRefutersDontHaveSuggestedCards, refuterUsedOnlyCardTheyOwn, refuterUsedSeenCard } from "./DeductionRules";
 
 export type Deducer = (
     knowledge: Knowledge,
-) => Knowledge;
+) => Either.Either<LogicalParadox, Knowledge>;
 
 const deducer: Deducer = (knowledge) => {
     const allRules = [

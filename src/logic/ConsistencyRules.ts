@@ -1,9 +1,9 @@
-import { Data, Number, ReadonlyArray, pipe } from "effect";
-import { ChecklistValue, Knowledge, updateCaseFileChecklist, updatePlayerChecklist } from "./Knowledge";
+import { Data, Either, Number, ReadonlyArray, pipe } from "effect";
+import { ChecklistValue, Knowledge, LogicalParadox, updateCaseFileChecklist, updatePlayerChecklist } from "./Knowledge";
 import { ALL_CARDS, ALL_PLAYERS, ALL_ROOM_CARDS, ALL_SUSPECT_CARDS, ALL_WEAPON_CARDS } from "./GameObjects";
 import { getOrUndefined } from "./utils/Effect";
 
-export type ConsistencyRule = (knowledge: Knowledge) => Knowledge;
+export type ConsistencyRule = (knowledge: Knowledge) => Either.Either<LogicalParadox, Knowledge>;
 
 export const cardsAreOwnedAtMostOnce: ConsistencyRule =
     (knowledge) => ReadonlyArray.reduce(

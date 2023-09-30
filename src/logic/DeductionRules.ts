@@ -1,10 +1,10 @@
-import { Data, HashMap, HashSet, ReadonlyArray } from "effect";
-import { ChecklistValue, Knowledge, updatePlayerChecklist } from "./Knowledge";
+import { Data, Either, HashMap, HashSet, ReadonlyArray } from "effect";
+import { ChecklistValue, Knowledge, LogicalParadox, updatePlayerChecklist } from "./Knowledge";
 import { getOrUndefined } from "./utils/Effect";
 
 export type DeductionRule = (
     knowledge: Knowledge,
-) => Knowledge;
+) => Either.Either<LogicalParadox, Knowledge>;
 
 export const nonRefutersDontHaveSuggestedCards: DeductionRule =
     (knowledge) => ReadonlyArray.reduce(
