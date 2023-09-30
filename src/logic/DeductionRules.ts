@@ -1,17 +1,14 @@
 import { Data, HashMap, HashSet, ReadonlyArray } from "effect";
-import { ChecklistValue, Knowledge, updateKnowledge } from "./Knowledge";
-import { Suggestion } from "./Suggestion";
+import { ChecklistValue, Knowledge, updatePlayerChecklist } from "./Knowledge";
 import { getOrUndefined } from "./utils/Effect";
 
 export type DeductionRule = (
-    suggestions: HashSet.HashSet<Suggestion>,
-) => (
     knowledge: Knowledge,
 ) => Knowledge;
 
 export const nonRefutersDontHaveSuggestedCards: DeductionRule =
-    (suggestions) => (knowledge) => ReadonlyArray.reduce(
-        suggestions,
+    (knowledge) => ReadonlyArray.reduce(
+        knowledge.suggestions,
         knowledge,
 
         (knowledge, suggestion) => ReadonlyArray.reduce(
@@ -31,19 +28,17 @@ export const nonRefutersDontHaveSuggestedCards: DeductionRule =
                 }
 
                 // Set unknown ownership to N
-                return updateKnowledge(knowledge, {
-                    playerChecklist: HashMap.set(
+                return updatePlayerChecklist(
                         Data.tuple(nonRefuter, suggestedCard),
                         ChecklistValue("N"),
-                    ),
-                });
+                )(knowledge);
             },
         ),
     );
 
 export const refuterUsedSeenCard: DeductionRule =
-    (suggestions) => (knowledge) => ReadonlyArray.reduce(
-        suggestions,
+    (knowledge) => ReadonlyArray.reduce(
+        knowledge.suggestions,
         knowledge,
 
         (knowledge, suggestion) => {
@@ -63,18 +58,16 @@ export const refuterUsedSeenCard: DeductionRule =
             }
 
             // Set unknown ownership to N
-            return updateKnowledge(knowledge, {
-                playerChecklist: HashMap.set(
-                    Data.tuple(suggestion.refuter, suggestion.seenCard),
-                    ChecklistValue("Y"),
-                ),
-            });
+            return updatePlayerChecklist(
+                Data.tuple(suggestion.refuter, suggestion.seenCard),
+                ChecklistValue("Y"),
+            )(knowledge);
         },
     );
 
 export const refuterUsedOnlyCardTheyOwn: DeductionRule =
-    (suggestions) => (knowledge) => ReadonlyArray.reduce(
-        suggestions,
+    (knowledge) => ReadonlyArray.reduce(
+        knowledge.suggestions,
         knowledge,
 
         (knowledge, suggestion) => {

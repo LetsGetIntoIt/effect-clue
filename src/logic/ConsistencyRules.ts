@@ -1,5 +1,5 @@
-import { Data, HashMap, Number, ReadonlyArray, pipe } from "effect";
-import { ChecklistValue, Knowledge, updateKnowledge } from "./Knowledge";
+import { Data, Number, ReadonlyArray, pipe } from "effect";
+import { ChecklistValue, Knowledge, updateCaseFileChecklist, updatePlayerChecklist } from "./Knowledge";
 import { ALL_CARDS, ALL_PLAYERS, ALL_ROOM_CARDS, ALL_SUSPECT_CARDS, ALL_WEAPON_CARDS } from "./GameObjects";
 import { getOrUndefined } from "./utils/Effect";
 
@@ -48,12 +48,10 @@ export const cardsAreOwnedAtMostOnce: ConsistencyRule =
                     }
 
                     // Set unknown players to N
-                    return updateKnowledge(knowledge, {
-                        playerChecklist: HashMap.set(
-                            Data.tuple(player, card),
-                            ChecklistValue("N"),
-                        ),
-                    });
+                    return updatePlayerChecklist(
+                        Data.tuple(player, card),
+                        ChecklistValue("N"),
+                    )(knowledge);
                 },
             );
 
@@ -62,12 +60,10 @@ export const cardsAreOwnedAtMostOnce: ConsistencyRule =
                 knowledge.caseFileChecklist,
                 card,
             ) === undefined) {
-                knowledge = updateKnowledge(knowledge, {
-                    caseFileChecklist: HashMap.set(
-                        card,
-                        ChecklistValue("N"),
-                    ),
-                });
+                knowledge = updateCaseFileChecklist(
+                    card,
+                    ChecklistValue("N"),
+                )(knowledge);
             }
 
             return knowledge;
@@ -127,12 +123,10 @@ export const cardsAreOwnedAtLeastOnce: ConsistencyRule =
                     }
 
                     // Set unknown players to Y
-                    return updateKnowledge(knowledge, {
-                        playerChecklist: HashMap.set(
-                            Data.tuple(player, card),
-                            ChecklistValue("Y"),
-                        ),
-                    });
+                    return updatePlayerChecklist(
+                        Data.tuple(player, card),
+                        ChecklistValue("Y"),
+                    )(knowledge);
                 },
             );
 
@@ -141,12 +135,10 @@ export const cardsAreOwnedAtLeastOnce: ConsistencyRule =
                 knowledge.caseFileChecklist,
                 card,
             ) === undefined) {
-                knowledge = updateKnowledge(knowledge, {
-                    caseFileChecklist: HashMap.set(
-                        card,
-                        ChecklistValue("Y"),
-                    ),
-                });
+                knowledge = updateCaseFileChecklist(
+                    card,
+                    ChecklistValue("Y"),
+                )(knowledge);
             }
 
             return knowledge;
@@ -208,12 +200,10 @@ export const playerOwnsAtMostHandSize: ConsistencyRule =
                     }
 
                     // Set unknown cards to N
-                    return updateKnowledge(knowledge, {
-                        playerChecklist: HashMap.set(
-                            Data.tuple(player, card),
-                            ChecklistValue("N"),
-                        ),
-                    });
+                    return updatePlayerChecklist(
+                        Data.tuple(player, card),
+                        ChecklistValue("N"),
+                    )(knowledge);
                 }
             );
         },
@@ -274,12 +264,10 @@ export const playerOwnsAtLeastHandSize: ConsistencyRule =
                     }
 
                     // Set unknown cards to N
-                    return updateKnowledge(knowledge, {
-                        playerChecklist: HashMap.set(
-                            Data.tuple(player, card),
-                            ChecklistValue("Y"),
-                        ),
-                    });
+                    return updatePlayerChecklist(
+                        Data.tuple(player, card),
+                        ChecklistValue("Y"),
+                    )(knowledge);
                 }
             );
         },
@@ -322,12 +310,10 @@ export const caseFileOwnsAtMost1PerCategory: ConsistencyRule =
                     }
 
                     // Set unknown cards to N
-                    return updateKnowledge(knowledge, {
-                        caseFileChecklist: HashMap.set(
-                            card,
-                            ChecklistValue("N"),
-                        ),
-                    });
+                    return updateCaseFileChecklist(
+                        card,
+                        ChecklistValue("N"),
+                    )(knowledge);
                 }
             );
         },
@@ -376,12 +362,10 @@ export const caseFileOwnsAtLeast1PerCategory: ConsistencyRule =
                     }
 
                     // Set unknown cards to N
-                    return updateKnowledge(knowledge, {
-                        caseFileChecklist: HashMap.set(
-                            card,
-                            ChecklistValue("Y"),
-                        ),
-                    });
+                    return updateCaseFileChecklist(
+                        card,
+                        ChecklistValue("Y"),
+                    )(knowledge);
                 }
             );
         },
