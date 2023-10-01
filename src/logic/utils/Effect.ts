@@ -1,10 +1,14 @@
 import { Either, HashMap, Option, flow } from "effect";
-import { dual } from "effect/Function";
+import { dual, pipe } from "effect/Function";
 
 export const getOrUndefined: {
     <K1>(key: K1): <K, V>(self: HashMap.HashMap<K, V>) => V | undefined
     <K, V, K1>(self: HashMap.HashMap<K, V>, key: K1): V | undefined
-} = flow(HashMap.get, Option.getOrUndefined) as any;
+} = dual(
+    2,
+    <K, V, K1>(self: HashMap.HashMap<K, V>, key: K1): V | undefined =>
+        pipe(HashMap.get(self, key), Option.getOrUndefined),
+);
 
 export const modifyAtOrFail: {
     <K, E, V>(
