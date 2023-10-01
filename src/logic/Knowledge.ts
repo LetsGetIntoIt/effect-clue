@@ -1,6 +1,7 @@
-import { Data, Either, HashMap, HashSet, Match, Option, pipe } from "effect";
+import { Data, Either, HashMap, Match, Option, pipe } from "effect";
 import { Card, Player } from "./GameObjects";
 import { modifyAtOrFail } from "./utils/Effect";
+import { LogicalParadox, LogicalParadoxCaseFileChecklistValueNY, LogicalParadoxCaseFileChecklistValueYN, LogicalParadoxPlayerChecklistValueNY, LogicalParadoxPlayerChecklistValueYN, LogicalParadoxPlayerHandSizeValue } from "./LogicalParadox";
 
 export const ChecklistValue = (value: "Y" | "N"): "Y" | "N" => value;
 
@@ -19,7 +20,6 @@ export const emptyKnowledge: Knowledge = Data.struct({
     playerChecklist: HashMap.empty(),
     caseFileChecklist: HashMap.empty(),
     playerHandSize: HashMap.empty(),
-    suggestions: HashSet.empty(),
 });
 
 export const updatePlayerChecklist = (
@@ -27,7 +27,7 @@ export const updatePlayerChecklist = (
     value: "Y" | "N",
 ) => (
     knowledge: Knowledge,
-): Either.Either<LogicalParadoxPlayerChecklistValueNY | LogicalParadoxPlayerChecklistValueYN, Knowledge> => pipe(
+): Either.Either<LogicalParadox, Knowledge> => pipe(
     Either.all({
         playerChecklist: modifyAtOrFail(knowledge.playerChecklist, key, Option.match({
             // There is no existing value
@@ -69,7 +69,7 @@ export const updateCaseFileChecklist = (
     value: "Y" | "N",
 ) => (
     knowledge: Knowledge,
-): Either.Either<LogicalParadoxCaseFileChecklistValueNY | LogicalParadoxCaseFileChecklistValueYN, Knowledge> => pipe(
+): Either.Either<LogicalParadox, Knowledge> => pipe(
     Either.all({
         playerChecklist: Either.right(knowledge.playerChecklist),
 
@@ -112,12 +112,7 @@ export const updatePlayerHandSize = (
     value: number,
 ) => (
     knowledge: Knowledge,
-): Either.Either<
-    | LogicalParadoxPlayerHandSizeValue
-    | LogicalParadoxPlayerHandSizeNegative
-    | LogicalParadoxPlayerHandSizeExceedsNumCards,
-    Knowledge
-> => pipe(
+): Either.Either<LogicalParadox, Knowledge> => pipe(
     Either.all({
         playerChecklist: Either.right(knowledge.playerChecklist),
         caseFileChecklist: Either.right(knowledge.caseFileChecklist),
@@ -147,56 +142,3 @@ export const updatePlayerHandSize = (
 
     Either.map(Data.struct),
 );
-
-export type LogicalParadox =
-    | LogicalParadoxPlayerChecklistValueYN
-    | LogicalParadoxPlayerChecklistValueNY
-    | LogicalParadoxCaseFileChecklistValueYN
-    | LogicalParadoxCaseFileChecklistValueNY
-    | LogicalParadoxPlayerHandSizeValue
-    | LogicalParadoxPlayerHandSizeNegative
-    | LogicalParadoxPlayerHandSizeExceedsNumCards;
-
-interface LogicalParadoxConflictingValue<K, V, VEnumerable extends boolean, V1 extends V, V2 extends (VEnumerable extends true ? Exclude<V, V1> : V)> extends Data.Case {
-    key: K;
-    existingValue: V1;
-    conflictingUpdatedValue: V2;
-}
-
-interface LogicalParadoxPlayerChecklistValueYN extends LogicalParadoxConflictingValue<Data.Data<[Player, Card]>, "Y" | "N", true, "Y", "N"> {
-    _tag: "LogicalParadoxPlayerChecklistValueYN";
-}
-
-const LogicalParadoxPlayerChecklistValueYN = Data.tagged<LogicalParadoxPlayerChecklistValueYN>("LogicalParadoxPlayerChecklistValueYN");
-
-interface LogicalParadoxPlayerChecklistValueNY extends LogicalParadoxConflictingValue<Data.Data<[Player, Card]>, "Y" | "N", true, "N", "Y"> {
-    _tag: "LogicalParadoxPlayerChecklistValueNY";
-}
-
-const LogicalParadoxPlayerChecklistValueNY = Data.tagged<LogicalParadoxPlayerChecklistValueNY>("LogicalParadoxPlayerChecklistValueNY");
-
-interface LogicalParadoxCaseFileChecklistValueYN extends LogicalParadoxConflictingValue<Card, "Y" | "N", true, "Y", "N"> {
-    _tag: "LogicalParadoxCaseFileChecklistValueYN";
-}
-
-const LogicalParadoxCaseFileChecklistValueYN = Data.tagged<LogicalParadoxCaseFileChecklistValueYN>("LogicalParadoxCaseFileChecklistValueYN");
-
-interface LogicalParadoxCaseFileChecklistValueNY extends LogicalParadoxConflictingValue<Card, "Y" | "N", true, "N", "Y"> {
-    _tag: "LogicalParadoxCaseFileChecklistValueNY";
-}
-
-const LogicalParadoxCaseFileChecklistValueNY = Data.tagged<LogicalParadoxCaseFileChecklistValueNY>("LogicalParadoxCaseFileChecklistValueNY");
-
-interface LogicalParadoxPlayerHandSizeValue extends LogicalParadoxConflictingValue<Player, number, false, number, number> {
-    _tag: "LogicalParadoxPlayerHandSizeValue";
-}
-
-const LogicalParadoxPlayerHandSizeValue = Data.tagged<LogicalParadoxPlayerHandSizeValue>("LogicalParadoxPlayerHandSizeValue");
-
-interface LogicalParadoxPlayerHandSizeNegative extends Data.Case {
-    _tag: "LogicalParadoxPlayerHandSizeNegative";
-}
-
-interface LogicalParadoxPlayerHandSizeExceedsNumCards extends Data.Case {
-    _tag: "LogicalParadoxPlayerHandSizeNegative";
-}

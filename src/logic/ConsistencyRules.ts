@@ -1,16 +1,19 @@
 import { Data, Either, Number, ReadonlyArray, pipe } from "effect";
-import { ChecklistValue, Knowledge, LogicalParadox, updateCaseFileChecklist, updatePlayerChecklist } from "./Knowledge";
+import { ChecklistValue, Knowledge, updateCaseFileChecklist, updatePlayerChecklist } from "./Knowledge";
 import { ALL_CARDS, ALL_PLAYERS, ALL_ROOM_CARDS, ALL_SUSPECT_CARDS, ALL_WEAPON_CARDS } from "./GameObjects";
 import { getOrUndefined } from "./utils/Effect";
+import { LogicalParadox } from "./LogicalParadox";
 
 export type ConsistencyRule = (knowledge: Knowledge) => Either.Either<LogicalParadox, Knowledge>;
 
 export const cardsAreOwnedAtMostOnce: ConsistencyRule =
     (knowledge) => ReadonlyArray.reduce(
         ALL_CARDS,
-        knowledge,
 
-        (knowledge, card) => {
+        // This typecast is annoying. See Discord thread: https://discord.com/channels/795981131316985866/1158093341855060048
+        Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
+
+        (knowledge, card) => Either.flatMap(knowledge, knowledge => {
             // Is this card owned by a player?
             const isOwnedBySomePlayer = ReadonlyArray.some(
                 ALL_PLAYERS,
@@ -30,21 +33,23 @@ export const cardsAreOwnedAtMostOnce: ConsistencyRule =
             // If we don't know the owner of the card,
             // there's no new knowledge to learn
             if (!isOwnedBySomePlayer && !isOwnedByCaseFile) {
-                return knowledge;
+                return Either.right(knowledge);
             }
 
             // Otherwise set Ns for every other player
-            knowledge = ReadonlyArray.reduce(
+            return ReadonlyArray.reduce(
                 ALL_PLAYERS,
-                knowledge,
+                
+                // This typecast is annoying. See Discord thread: https://discord.com/channels/795981131316985866/1158093341855060048
+                Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
 
-                (knowledge, player) => {
+                (knowledge, player) => Either.flatMap(knowledge, knowledge => {
                     // Skip players with known ownership
                     if (getOrUndefined(
                         knowledge.playerChecklist,
                         Data.tuple(player, card)
                     ) !== undefined) {
-                        return knowledge;
+                        return Either.right(knowledge);
                     }
 
                     // Set unknown players to N
@@ -52,30 +57,34 @@ export const cardsAreOwnedAtMostOnce: ConsistencyRule =
                         Data.tuple(player, card),
                         ChecklistValue("N"),
                     )(knowledge);
-                },
+                }),
+            ).pipe(
+                Either.flatMap(knowledge => {
+                    // Set case file to N if unknown
+                    if (getOrUndefined(
+                        knowledge.caseFileChecklist,
+                        card,
+                    ) === undefined) {
+                        return updateCaseFileChecklist(
+                            card,
+                            ChecklistValue("N"),
+                        )(knowledge);
+                    }
+
+                    return Either.right(knowledge);
+                }),
             );
-
-            // Set case file to N if unknown
-            if (getOrUndefined(
-                knowledge.caseFileChecklist,
-                card,
-            ) === undefined) {
-                knowledge = updateCaseFileChecklist(
-                    card,
-                    ChecklistValue("N"),
-                )(knowledge);
-            }
-
-            return knowledge;
-        },
+        }),
     );
 
 export const cardsAreOwnedAtLeastOnce: ConsistencyRule =
     (knowledge) => ReadonlyArray.reduce(
         ALL_CARDS,
-        knowledge,
 
-        (knowledge, card) => {
+        // This typecast is annoying. See Discord thread: https://discord.com/channels/795981131316985866/1158093341855060048
+        Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
+
+        (knowledge, card) => Either.flatMap(knowledge, knowledge => {
             // How many players definitely do NOT own this card?
             const playerNs = pipe(
                 ALL_PLAYERS,
@@ -105,21 +114,23 @@ export const cardsAreOwnedAtLeastOnce: ConsistencyRule =
             // If there is not exactly one cell that is blank or Y,
             // there's no new knowledge to learn
             if (totalNs !== ALL_PLAYERS.length) {
-                return knowledge;
+                return Either.right(knowledge);
             }
 
             // Otherwise set Ys for every other player
-            knowledge = ReadonlyArray.reduce(
+            return ReadonlyArray.reduce(
                 ALL_PLAYERS,
-                knowledge,
 
-                (knowledge, player) => {
+                // This typecast is annoying. See Discord thread: https://discord.com/channels/795981131316985866/1158093341855060048
+                Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
+
+                (knowledge, player) => Either.flatMap(knowledge, knowledge => {
                     // Skip players with known ownership
                     if (getOrUndefined(
                         knowledge.playerChecklist,
                         Data.tuple(player, card)
                     ) !== undefined) {
-                        return knowledge;
+                        return Either.right(knowledge);
                     }
 
                     // Set unknown players to Y
@@ -127,30 +138,34 @@ export const cardsAreOwnedAtLeastOnce: ConsistencyRule =
                         Data.tuple(player, card),
                         ChecklistValue("Y"),
                     )(knowledge);
-                },
+                }),
+            ).pipe(
+                Either.flatMap(knowledge => {
+                    // Set case file to Y if unknown
+                    if (getOrUndefined(
+                        knowledge.caseFileChecklist,
+                        card,
+                    ) === undefined) {
+                        return updateCaseFileChecklist(
+                            card,
+                            ChecklistValue("Y"),
+                        )(knowledge);
+                    }
+
+                    return Either.right(knowledge);
+                }),
             );
-
-            // Set case file to Y if unknown
-            if (getOrUndefined(
-                knowledge.caseFileChecklist,
-                card,
-            ) === undefined) {
-                knowledge = updateCaseFileChecklist(
-                    card,
-                    ChecklistValue("Y"),
-                )(knowledge);
-            }
-
-            return knowledge;
-        },
+        }),
     );
 
 export const playerOwnsAtMostHandSize: ConsistencyRule =
     (knowledge) => ReadonlyArray.reduce(
         ALL_PLAYERS,
-        knowledge,
 
-        (knowledge, player) => {
+        // This typecast is annoying. See Discord thread: https://discord.com/channels/795981131316985866/1158093341855060048
+        Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
+
+        (knowledge, player) => Either.flatMap(knowledge, knowledge => {
             // Get the hand size for the player
             const handSize = getOrUndefined(
                 knowledge.playerHandSize,
@@ -160,7 +175,7 @@ export const playerOwnsAtMostHandSize: ConsistencyRule =
             // If we don't know their hand size,
             // there's no new knowledge to learn
             if (handSize === undefined) {
-                return knowledge;
+                return Either.right(knowledge);
             }
 
             // Check if we have accounted for all their cards
@@ -182,21 +197,23 @@ export const playerOwnsAtMostHandSize: ConsistencyRule =
             // If we haven't accounted for all their cards,
             // there's no new knowledge to learn
             if (cardYs < handSize) {
-                return knowledge;
+                return Either.right(knowledge);
             }
 
             // Otherwise, mark the rest of the cards as Ns
             return ReadonlyArray.reduce(
                 ALL_CARDS,
-                knowledge,
+                
+                // This typecast is annoying. See Discord thread: https://discord.com/channels/795981131316985866/1158093341855060048
+                Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
 
-                (knowledge, card) => {
+                (knowledge, card) => Either.flatMap(knowledge, knowledge => {
                     // Skip cards where we know the ownership already
                     if (getOrUndefined(
                         knowledge.playerChecklist,
                         Data.tuple(player, card)
                     ) !== undefined) {
-                        return knowledge;
+                        return Either.right(knowledge);
                     }
 
                     // Set unknown cards to N
@@ -204,17 +221,19 @@ export const playerOwnsAtMostHandSize: ConsistencyRule =
                         Data.tuple(player, card),
                         ChecklistValue("N"),
                     )(knowledge);
-                }
+                }),
             );
-        },
+        }),
     );
 
 export const playerOwnsAtLeastHandSize: ConsistencyRule =
     (knowledge) => ReadonlyArray.reduce(
         ALL_PLAYERS,
-        knowledge,
 
-        (knowledge, player) => {
+        // This typecast is annoying. See Discord thread: https://discord.com/channels/795981131316985866/1158093341855060048
+        Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
+
+        (knowledge, player) => Either.flatMap(knowledge, knowledge => {
             // Get the hand size for the player
             const handSize = getOrUndefined(
                 knowledge.playerHandSize,
@@ -224,7 +243,7 @@ export const playerOwnsAtLeastHandSize: ConsistencyRule =
             // If we don't know their hand size,
             // there's no new knowledge to learn
             if (handSize === undefined) {
-                return knowledge;
+                return Either.right(knowledge);
             }
 
             // Check if we have accounted for all their Ns
@@ -246,21 +265,23 @@ export const playerOwnsAtLeastHandSize: ConsistencyRule =
             // If we haven't accounted for all their Ns,
             // there's no new knowledge to learn
             if (cardNs < (ALL_CARDS.length - handSize)) {
-                return knowledge;
+                return Either.right(knowledge);
             }
 
             // Otherwise, mark the rest of the cards as Ys
             return ReadonlyArray.reduce(
                 ALL_CARDS,
-                knowledge,
+                
+                // This typecast is annoying. See Discord thread: https://discord.com/channels/795981131316985866/1158093341855060048
+                Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
 
-                (knowledge, card) => {
+                (knowledge, card) => Either.flatMap(knowledge, knowledge => {
                     // Skip cards where we know the ownership already
                     if (getOrUndefined(
                         knowledge.playerChecklist,
                         Data.tuple(player, card)
                     ) !== undefined) {
-                        return knowledge;
+                        return Either.right(knowledge);
                     }
 
                     // Set unknown cards to N
@@ -268,17 +289,19 @@ export const playerOwnsAtLeastHandSize: ConsistencyRule =
                         Data.tuple(player, card),
                         ChecklistValue("Y"),
                     )(knowledge);
-                }
+                }),
             );
-        },
+        }),
     );
 
 export const caseFileOwnsAtMost1PerCategory: ConsistencyRule =
     (knowledge) => ReadonlyArray.reduce(
         [ALL_SUSPECT_CARDS, ALL_WEAPON_CARDS, ALL_ROOM_CARDS],
-        knowledge,
+        
+        // This typecast is annoying. See Discord thread: https://discord.com/channels/795981131316985866/1158093341855060048
+        Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
 
-        (knowledge, cardsOfCategory) => {
+        (knowledge, cardsOfCategory) => Either.flatMap(knowledge, knowledge => {
             // Check if we have accounted for 1 of the category
             const isSomeCardOwned = ReadonlyArray.some(
                 cardsOfCategory,
@@ -292,21 +315,23 @@ export const caseFileOwnsAtMost1PerCategory: ConsistencyRule =
             // If we haven't gotten 1 Y for the category,
             // there's no new knowledge to learn
             if (!isSomeCardOwned) {
-                return knowledge;
+                return Either.right(knowledge);
             }
 
             // Otherwise, mark the rest of the cards as Ns
             return ReadonlyArray.reduce(
                 cardsOfCategory,
-                knowledge,
+                
+                // This typecast is annoying. See Discord thread: https://discord.com/channels/795981131316985866/1158093341855060048
+                Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
 
-                (knowledge, card) => {
+                (knowledge, card) => Either.flatMap(knowledge, knowledge => {
                     // Skip cards with known ownership
                     if (getOrUndefined(
                         knowledge.caseFileChecklist,
                         card,
                     ) !== undefined) {
-                        return knowledge;
+                        return Either.right(knowledge);
                     }
 
                     // Set unknown cards to N
@@ -314,17 +339,19 @@ export const caseFileOwnsAtMost1PerCategory: ConsistencyRule =
                         card,
                         ChecklistValue("N"),
                     )(knowledge);
-                }
+                }),
             );
-        },
+        }),
     );
 
 export const caseFileOwnsAtLeast1PerCategory: ConsistencyRule =
     (knowledge) => ReadonlyArray.reduce(
         [ALL_SUSPECT_CARDS, ALL_WEAPON_CARDS, ALL_ROOM_CARDS],
-        knowledge,
+        
+        // This typecast is annoying. See Discord thread: https://discord.com/channels/795981131316985866/1158093341855060048
+        Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
 
-        (knowledge, cardsOfCategory) => {
+        (knowledge, cardsOfCategory) => Either.flatMap(knowledge, knowledge => {
             // Check if we have accounted for all but 1 Ns
             const cardNs = pipe(
                 cardsOfCategory,
@@ -344,21 +371,23 @@ export const caseFileOwnsAtLeast1PerCategory: ConsistencyRule =
             // If we haven't accounted for all but 1 Ns,
             // there's no new knowledge to learn
             if (cardNs < (cardsOfCategory.length - 1)) {
-                return knowledge;
+                return Either.right(knowledge);
             }
 
             // Otherwise, mark the rest of the cards as Ys
             return ReadonlyArray.reduce(
                 cardsOfCategory,
-                knowledge,
+                
+                // This typecast is annoying. See Discord thread: https://discord.com/channels/795981131316985866/1158093341855060048
+                Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
 
-                (knowledge, card) => {
+                (knowledge, card) => Either.flatMap(knowledge, knowledge => {
                     // Skip cards where we know the ownership already
                     if (getOrUndefined(
                         knowledge.caseFileChecklist,
                         card,
                     ) !== undefined) {
-                        return knowledge;
+                        return Either.right(knowledge);
                     }
 
                     // Set unknown cards to N
@@ -366,7 +395,7 @@ export const caseFileOwnsAtLeast1PerCategory: ConsistencyRule =
                         card,
                         ChecklistValue("Y"),
                     )(knowledge);
-                }
+                }),
             );
-        },
+        }),
     );
