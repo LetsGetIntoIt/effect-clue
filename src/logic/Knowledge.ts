@@ -15,7 +15,7 @@ export type Knowledge = Data.Data<{
     playerHandSize: HashMap.HashMap<Player, number>;
 }>;
 
-export const empty: Knowledge = Data.struct({
+export const emptyKnowledge: Knowledge = Data.struct({
     playerChecklist: HashMap.empty(),
     caseFileChecklist: HashMap.empty(),
     playerHandSize: HashMap.empty(),
