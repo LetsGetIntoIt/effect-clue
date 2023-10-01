@@ -1,5 +1,5 @@
-import { Data, Either, HashMap, HashSet, Match, Number, Option, ReadonlyArray, Tuple, pipe } from "effect";
-import { tupled } from "effect/Function";
+import { Data, Either, Hash, HashMap, HashSet, Match, Number, Option, Predicate, ReadonlyArray, Tuple, pipe } from "effect";
+import { dual, tupled } from "effect/Function";
 import { ChecklistValue, Knowledge, updateCaseFileChecklist as updateKnowledgeCaseFileChecklist, updatePlayerChecklist as updateKnowledgePlayerChecklist } from "./Knowledge";
 import { ALL_CARDS, ALL_PLAYERS, Card, Player } from "./GameObjects";
 import { deduce } from "./Deducer";
@@ -15,8 +15,10 @@ export type Predictor = (
 ) => Prediction;
 
 export const predict: Predictor = (suggestions) => (knowledge) => {
+    const cache = {};
+
     // Count the number of ways our current knowledge is possible
-    const currentKnowledgeNumWays = countWays(suggestions)(knowledge);
+    const currentKnowledgeNumWays = countWays(cache, suggestions)(knowledge);
 
     // For each blank key, see how many ways we can get a Y there
     return pipe(
@@ -24,7 +26,6 @@ export const predict: Predictor = (suggestions) => (knowledge) => {
         // Get all the knowledge possiblities for which we want to determine probability
         allKnowledgePossibilities,
         // getNextKnowledgePossibilities(knowledge),
-
         ReadonlyArray.map(nextPossibility => Tuple.tuple(
             nextPossibility,
 
@@ -36,57 +37,77 @@ export const predict: Predictor = (suggestions) => (knowledge) => {
                     onLeft: () => 0,
 
                     // Count how many ways this is possible
-                    onRight: countWays(suggestions),
+                    onRight: countWays(cache, suggestions),
                 }),
 
                 // Save these results as a probability for this key
-                possibleYNumWays => Probability(possibleYNumWays, currentKnowledgeNumWays),
-            ),
+                possibleYNumWays => Probability(possibleYNumWays, currentKnowledgeNumWays)
+            )
         )),
 
         // Build our map of predictions
         ReadonlyArray.reduce(
             emptyPrediction,
-            (prediction, [possibility, probability]) =>
-                updatePrediction(possibility, probability)(prediction),
-        ),
+            (prediction, [possibility, probability]) => updatePrediction(possibility, probability)(prediction)
+        )
     );
 }
 
 const countWays = (
+    cache: Record<number, number>,
     suggestions: HashSet.HashSet<Suggestion>,
 ) => (
     knowledge: Knowledge,
-): number => pipe(
-    // Get the next blank key to set to a value
-    getKnowledgePossibilities(knowledge),
-    ReadonlyArray.head,
+): number => {
+        const cached = cache[Hash.hash(knowledge)];
+        if (Predicate.isNotNullable(cached)) {
+            return cached;
+        }
 
-    Option.match({
-        // If there is no next blank key, then we've filled in everything!
-        // That means there's exactly 1 way to have this arrangement
-        onNone: () => 1,
+        return pipe(
+            // Get the next blank key to set to a value
+            getKnowledgePossibilities(knowledge),
+            ReadonlyArray.head,
 
-        // Otherwise, try all possible values
-        onSome: (nextPossibility) => pipe(
-            // List the possible values we can assign to the blank key
-            [ChecklistValue("Y"), ChecklistValue("N")],
+            Option.match({
+                // If there is no next blank key, then we've filled in everything!
+                // That means there's exactly 1 way to have this arrangement
+                onNone: () => cacheAndReturn(1, Hash.hash(knowledge), cache),
 
-            // Update our knowledge by setting that value
-            ReadonlyArray.map(value => updateKnowledge(nextPossibility, value)(knowledge)),
-            // We only care about non-paradoxical states
-            ReadonlyArray.filterMap(Either.getRight),
+                // Otherwise, try all possible values
+                onSome: (nextPossibility) => pipe(
+                    // List the possible values we can assign to the blank key
+                    [ChecklistValue("Y"), ChecklistValue("N")],
 
-            // For each of these valid knowledge states, deduce as much definite knowledge as possible
-            ReadonlyArray.map(deduce(suggestions)),
-            // We only care about non-paradoxical states
-            ReadonlyArray.filterMap(Either.getRight),
+                    // Update our knowledge by setting that value
+                    ReadonlyArray.map(value => updateKnowledge(nextPossibility, value)(knowledge)),
+                    // We only care about non-paradoxical states
+                    ReadonlyArray.filterMap(Either.getRight),
 
-            // Recurse into all these possible states, and sum up the number of ways they are possible
-            ReadonlyArray.map(countWays(suggestions)),
-            Number.sumAll,
-        ),
-    }),
+                    // For each of these valid knowledge states, deduce as much definite knowledge as possible
+                    ReadonlyArray.map(deduce(suggestions)),
+                    // We only care about non-paradoxical states
+                    ReadonlyArray.filterMap(Either.getRight),
+
+                    // Recurse into all these possible states, and sum up the number of ways they are possible
+                    ReadonlyArray.map(countWays(cache, suggestions)),
+                    Number.sumAll,
+
+                    cacheAndReturn(Hash.hash(knowledge), cache),
+                ),
+            })
+        );
+    };
+
+export const cacheAndReturn: {
+    <K extends PropertyKey, V>(k: K, cache: Record<K, V>): (self: V) => V,
+    <K extends PropertyKey, V>(self: V, k: K, cache: Record<K, V>): V
+} = dual(
+    3,
+    <K extends PropertyKey, V>(self: V, k: K, cache: Record<K, V>): V => {
+        cache[k] = self;
+        return self;
+    }
 );
 
 type KnowledgePossibility = CaseFileChecklistPossibility | PlayerChecklistPossibility;
