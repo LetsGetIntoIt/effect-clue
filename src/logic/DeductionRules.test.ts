@@ -1,4 +1,4 @@
-import { Data, HashMap, HashSet } from "effect";
+import { Data, Either, HashMap, HashSet } from "effect";
 import { ChecklistValue, Knowledge } from "./Knowledge";
 import { Suggestion } from "./Suggestion";
 import { nonRefutersDontHaveSuggestedCards, refuterUsedSeenCard, refuterUsedOnlyCardTheyOwn } from "./DeductionRules";
@@ -20,7 +20,7 @@ describe(nonRefutersDontHaveSuggestedCards, () => {
             = nonRefutersDontHaveSuggestedCards(suggestions)(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('some non-refuters', () => {
@@ -51,7 +51,7 @@ describe(nonRefutersDontHaveSuggestedCards, () => {
         const newKnowledge
             = nonRefutersDontHaveSuggestedCards(suggestions)(initialKnowledge);
 
-        expect(newKnowledge).toEqual(Data.struct({
+        expect(newKnowledge).toEqual(Either.right(Data.struct({
             playerChecklist: HashMap.make(
                 // Ns from the first suggestion
                 [Data.tuple(Player("Bob"), Card("Prof. Plum")), ChecklistValue("N")],
@@ -69,7 +69,7 @@ describe(nonRefutersDontHaveSuggestedCards, () => {
             caseFileChecklist: HashMap.empty(),
 
             playerHandSize: HashMap.empty(),
-        }));
+        })));
     });
 
     test('we already know everything', () => {
@@ -115,7 +115,7 @@ describe(nonRefutersDontHaveSuggestedCards, () => {
             = nonRefutersDontHaveSuggestedCards(suggestions)(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('no non-refuters', () => {
@@ -147,7 +147,7 @@ describe(nonRefutersDontHaveSuggestedCards, () => {
             = nonRefutersDontHaveSuggestedCards(suggestions)(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 });
 
@@ -165,7 +165,7 @@ describe(refuterUsedSeenCard, () => {
             = refuterUsedSeenCard(suggestions)(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('some refuted suggestions', () => {
@@ -204,7 +204,7 @@ describe(refuterUsedSeenCard, () => {
         const newKnowledge
             = refuterUsedSeenCard(suggestions)(initialKnowledge);
 
-        expect(newKnowledge).toEqual(Data.struct({
+        expect(newKnowledge).toEqual(Either.right(Data.struct({
             playerChecklist: HashMap.make(
                 // Ys from the first suggestion
                 [Data.tuple(Player("Bob"), Card("Knife")), ChecklistValue("Y")],
@@ -219,7 +219,7 @@ describe(refuterUsedSeenCard, () => {
             caseFileChecklist: HashMap.empty(),
 
             playerHandSize: HashMap.empty(),
-        }));
+        })));
     });
 
     test('we already know everything', () => {
@@ -270,7 +270,7 @@ describe(refuterUsedSeenCard, () => {
             = refuterUsedSeenCard(suggestions)(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('no refuter', () => {
@@ -294,7 +294,7 @@ describe(refuterUsedSeenCard, () => {
             = refuterUsedSeenCard(suggestions)(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('no seen card', () => {
@@ -318,7 +318,7 @@ describe(refuterUsedSeenCard, () => {
             = refuterUsedSeenCard(suggestions)(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 });
 
@@ -336,7 +336,7 @@ describe(refuterUsedOnlyCardTheyOwn, () => {
             = refuterUsedOnlyCardTheyOwn(suggestions)(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('we can narrow it down', () => {
@@ -371,7 +371,7 @@ describe(refuterUsedOnlyCardTheyOwn, () => {
         const newKnowledge
             = refuterUsedOnlyCardTheyOwn(suggestions)(initialKnowledge);
 
-        expect(newKnowledge).toEqual(Data.struct({
+        expect(newKnowledge).toEqual(Either.right(Data.struct({
             playerChecklist: HashMap.make(
                 [Data.tuple(Player("Bob"), Card("Revolver")), ChecklistValue("N")],
                 [Data.tuple(Player("Bob"), Card("Col. Mustard")), ChecklistValue("Y")],
@@ -382,7 +382,7 @@ describe(refuterUsedOnlyCardTheyOwn, () => {
 
             caseFileChecklist: HashMap.empty(),
             playerHandSize: HashMap.empty(),
-        }));
+        })));
     });
 
     test('not enough information to narrow it down', () => {
@@ -418,7 +418,7 @@ describe(refuterUsedOnlyCardTheyOwn, () => {
             = refuterUsedOnlyCardTheyOwn(suggestions)(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('we already know everything', () => {
@@ -457,7 +457,7 @@ describe(refuterUsedOnlyCardTheyOwn, () => {
             = refuterUsedOnlyCardTheyOwn(suggestions)(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('no refuter', () => {
@@ -493,7 +493,7 @@ describe(refuterUsedOnlyCardTheyOwn, () => {
             = refuterUsedOnlyCardTheyOwn(suggestions)(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('the card was seen', () => {
@@ -529,6 +529,6 @@ describe(refuterUsedOnlyCardTheyOwn, () => {
             = refuterUsedOnlyCardTheyOwn(suggestions)(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 });

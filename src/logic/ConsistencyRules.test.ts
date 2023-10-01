@@ -1,6 +1,6 @@
 import { ChecklistValue, Knowledge } from "./Knowledge";
 import { cardsAreOwnedAtLeastOnce, cardsAreOwnedAtMostOnce, caseFileOwnsAtLeast1PerCategory, caseFileOwnsAtMost1PerCategory, playerOwnsAtLeastHandSize, playerOwnsAtMostHandSize } from "./ConsistencyRules";
-import { Data, HashMap, Tuple } from "effect";
+import { Data, Either, HashMap, Tuple } from "effect";
 import { ALL_CARDS, ALL_ROOM_CARDS, ALL_WEAPON_CARDS, Card, Player } from "./GameObjects";
 
 import "./test-utils/EffectExpectEquals";
@@ -17,7 +17,7 @@ describe(cardsAreOwnedAtMostOnce, () => {
             = cardsAreOwnedAtMostOnce(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('some cards are owned by some players', () => {
@@ -33,7 +33,7 @@ describe(cardsAreOwnedAtMostOnce, () => {
         const newKnowledge
             = cardsAreOwnedAtMostOnce(initialKnowledge);
 
-        expect(newKnowledge).toEqual(Data.struct({
+        expect(newKnowledge).toEqual(Either.right(Data.struct({
             playerChecklist: HashMap.make(
                 [Data.tuple(Player("Anisha"), Card("Prof. Plum")), ChecklistValue("Y")],
 
@@ -52,7 +52,7 @@ describe(cardsAreOwnedAtMostOnce, () => {
             ),
 
             playerHandSize: HashMap.empty(),
-        }));
+        })));
     });
 
     test('one card is in the casefile', () => {
@@ -69,7 +69,7 @@ describe(cardsAreOwnedAtMostOnce, () => {
         const newKnowledge
             = cardsAreOwnedAtMostOnce(initialKnowledge);
 
-        expect(newKnowledge).toEqual(Data.struct({
+        expect(newKnowledge).toEqual(Either.right(Data.struct({
             playerChecklist: HashMap.make(
                 [Data.tuple(Player("Anisha"), Card("Col. Mustard")), ChecklistValue("N")],
                 [Data.tuple(Player("Bob"), Card("Col. Mustard")), ChecklistValue("N")],
@@ -81,7 +81,7 @@ describe(cardsAreOwnedAtMostOnce, () => {
             ),
 
             playerHandSize: HashMap.empty(),
-        }));
+        })));
     });
 
     test('fully filled row', () => {
@@ -108,7 +108,7 @@ describe(cardsAreOwnedAtMostOnce, () => {
             = cardsAreOwnedAtMostOnce(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 });
 
@@ -124,7 +124,7 @@ describe(cardsAreOwnedAtLeastOnce, () => {
             = cardsAreOwnedAtLeastOnce(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('not enough Ns in row', () => {
@@ -141,7 +141,7 @@ describe(cardsAreOwnedAtLeastOnce, () => {
             = cardsAreOwnedAtLeastOnce(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('enough Ns in row', () => {
@@ -167,7 +167,7 @@ describe(cardsAreOwnedAtLeastOnce, () => {
         const newKnowledge
             = cardsAreOwnedAtLeastOnce(initialKnowledge);
 
-        expect(newKnowledge).toEqual(Data.struct({
+        expect(newKnowledge).toEqual(Either.right(Data.struct({
             playerChecklist: HashMap.make(
                 [Data.tuple(Player("Anisha"), Card("Prof. Plum")), ChecklistValue("N")],
                 [Data.tuple(Player("Bob"), Card("Prof. Plum")), ChecklistValue("N")],
@@ -184,7 +184,7 @@ describe(cardsAreOwnedAtLeastOnce, () => {
             ),
     
             playerHandSize: HashMap.empty(),
-        }));
+        })));
     });
 
     test('fully filled row', () => {
@@ -211,7 +211,7 @@ describe(cardsAreOwnedAtLeastOnce, () => {
             = cardsAreOwnedAtLeastOnce(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 });
 
@@ -227,7 +227,7 @@ describe(playerOwnsAtMostHandSize, () => {
             = playerOwnsAtMostHandSize(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('accounted for all', () => {
@@ -247,7 +247,7 @@ describe(playerOwnsAtMostHandSize, () => {
         const newKnowledge
             = playerOwnsAtMostHandSize(initialKnowledge);
 
-        expect(newKnowledge).toEqual(Data.struct({
+        expect(newKnowledge).toEqual(Either.right(Data.struct({
             playerChecklist: HashMap.make(
                 ...ALL_CARDS.map(card =>
                     Tuple.tuple(Data.tuple(Player("Bob"), card), ChecklistValue("N")),
@@ -262,7 +262,7 @@ describe(playerOwnsAtMostHandSize, () => {
             playerHandSize: HashMap.make(
                 [Player("Bob"), 2],
             ),
-        }));
+        })));
     });
 
     test('hand size unknown', () => {
@@ -280,7 +280,7 @@ describe(playerOwnsAtMostHandSize, () => {
             = playerOwnsAtMostHandSize(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('accounted for some but not all', () => {
@@ -301,7 +301,7 @@ describe(playerOwnsAtMostHandSize, () => {
             = playerOwnsAtMostHandSize(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('fully filled column', () => {
@@ -326,7 +326,7 @@ describe(playerOwnsAtMostHandSize, () => {
             = playerOwnsAtMostHandSize(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 });
 
@@ -342,7 +342,7 @@ describe(playerOwnsAtLeastHandSize, () => {
             = playerOwnsAtLeastHandSize(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('accounted for all', () => {
@@ -364,7 +364,7 @@ describe(playerOwnsAtLeastHandSize, () => {
         const newKnowledge
             = playerOwnsAtLeastHandSize(initialKnowledge);
 
-        expect(newKnowledge).toEqual(Data.struct({
+        expect(newKnowledge).toEqual(Either.right(Data.struct({
             playerChecklist: HashMap.make(
                 ...ALL_CARDS.map(card =>
                     Tuple.tuple(Data.tuple(Player("Bob"), card), ChecklistValue("Y")),
@@ -379,7 +379,7 @@ describe(playerOwnsAtLeastHandSize, () => {
             playerHandSize: HashMap.make(
                 [Player("Bob"), ALL_CARDS.length - 2],
             ),
-        }));
+        })));
     });
 
     test('hand size unknown', () => {
@@ -398,7 +398,7 @@ describe(playerOwnsAtLeastHandSize, () => {
             = playerOwnsAtLeastHandSize(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('accounted for some but not all', () => {
@@ -420,7 +420,7 @@ describe(playerOwnsAtLeastHandSize, () => {
             = playerOwnsAtLeastHandSize(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('fully filled column', () => {
@@ -445,7 +445,7 @@ describe(playerOwnsAtLeastHandSize, () => {
             = playerOwnsAtLeastHandSize(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 });
 
@@ -461,7 +461,7 @@ describe(caseFileOwnsAtMost1PerCategory, () => {
             = caseFileOwnsAtMost1PerCategory(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('accounted for all in a few categories', () => {
@@ -479,7 +479,7 @@ describe(caseFileOwnsAtMost1PerCategory, () => {
         const newKnowledge
             = caseFileOwnsAtMost1PerCategory(initialKnowledge);
 
-        expect(newKnowledge).toEqual(Data.struct({
+        expect(newKnowledge).toEqual(Either.right(Data.struct({
             playerChecklist: HashMap.empty(),
 
             caseFileChecklist: HashMap.make(
@@ -495,7 +495,7 @@ describe(caseFileOwnsAtMost1PerCategory, () => {
             ),
     
             playerHandSize: HashMap.empty(),
-        }));
+        })));
     });
 
     test('fully filled column', () => {
@@ -523,7 +523,7 @@ describe(caseFileOwnsAtMost1PerCategory, () => {
             = caseFileOwnsAtMost1PerCategory(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 });
 
@@ -539,7 +539,7 @@ describe(caseFileOwnsAtLeast1PerCategory, () => {
             = caseFileOwnsAtLeast1PerCategory(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('accounted for all in a few categories', () => {
@@ -566,7 +566,7 @@ describe(caseFileOwnsAtLeast1PerCategory, () => {
         const newKnowledge
             = caseFileOwnsAtLeast1PerCategory(initialKnowledge);
 
-        expect(newKnowledge).toEqual(Data.struct({
+        expect(newKnowledge).toEqual(Either.right(Data.struct({
             playerChecklist: HashMap.empty(),
 
             caseFileChecklist: HashMap.make(
@@ -582,7 +582,7 @@ describe(caseFileOwnsAtLeast1PerCategory, () => {
             ),
 
             playerHandSize: HashMap.empty(),
-        }));
+        })));
     });
 
     test('fully filled column', () => {
@@ -610,6 +610,6 @@ describe(caseFileOwnsAtLeast1PerCategory, () => {
             = caseFileOwnsAtMost1PerCategory(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 });

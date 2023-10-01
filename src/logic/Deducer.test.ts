@@ -1,4 +1,4 @@
-import { Data, HashMap, HashSet, ReadonlyArray, Tuple } from "effect";
+import { Data, Either, HashMap, HashSet, ReadonlyArray, Tuple } from "effect";
 import { ChecklistValue, Knowledge } from "./Knowledge";
 import { Suggestion } from "./Suggestion";
 import { ALL_CARDS, Card, Player } from "./GameObjects";
@@ -20,7 +20,7 @@ describe(deducer, () => {
             = deducer(suggestions)(initialKnowledge);
 
         // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+        expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('applies all rules', () => {
@@ -68,7 +68,7 @@ describe(deducer, () => {
         const newKnowledge
             = deducer(suggestions)(initialKnowledge);
 
-        expect(newKnowledge).toEqual(Data.struct({
+        expect(newKnowledge).toEqual(Either.right(Data.struct({
             playerChecklist: HashMap.make(
                 // By the end, we will have accounted for all these players' cards
                 // and we'll know that doesn't have any of the rest
@@ -129,6 +129,6 @@ describe(deducer, () => {
                 [Player("Anisha"), 3],
                 [Player("Bob"), 2],
             ),
-        }));
+        })));
     });
 });
