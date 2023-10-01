@@ -2,17 +2,19 @@ import { Data, Either, HashMap, HashSet, Match, Number, Option, ReadonlyArray, T
 import { tupled } from "effect/Function";
 import { ChecklistValue, Knowledge, updateCaseFileChecklist as updateKnowledgeCaseFileChecklist, updatePlayerChecklist as updateKnowledgePlayerChecklist } from "./Knowledge";
 import { ALL_CARDS, ALL_PLAYERS, Card, Player } from "./GameObjects";
-import deducer from "./Deducer";
+import { deduce } from "./Deducer";
 import { Suggestion } from "./Suggestion";
 import { Prediction, emptyPrediction, updateCaseFileChecklist as updatePredictionCaseFileChecklist, updatePlayerChecklist as updatePredictionPlayerChecklist } from "./Prediction";
 import { Probability } from "./Probability";
 import { LogicalParadox } from "./LogicalParadox";
 
-export const predict = (
+export type Predictor = (
     suggestions: HashSet.HashSet<Suggestion>,
 ) => (
     knowledge: Knowledge,
-): Prediction => {
+) => Prediction;
+
+export const predict: Predictor = (suggestions) => (knowledge) => {
     // Count the number of ways our current knowledge is possible
     const currentKnowledgeNumWays = countWays(suggestions)(knowledge);
 
@@ -76,7 +78,7 @@ const countWays = (
             ReadonlyArray.filterMap(Either.getRight),
 
             // For each of these valid knowledge states, deduce as much definite knowledge as possible
-            ReadonlyArray.map(deducer(suggestions)),
+            ReadonlyArray.map(deduce(suggestions)),
             // We only care about non-paradoxical states
             ReadonlyArray.filterMap(Either.getRight),
 

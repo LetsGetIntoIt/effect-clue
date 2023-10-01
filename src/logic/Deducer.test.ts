@@ -2,11 +2,11 @@ import { Data, Either, HashMap, HashSet, ReadonlyArray, Tuple } from "effect";
 import { ChecklistValue, Knowledge } from "./Knowledge";
 import { Suggestion } from "./Suggestion";
 import { ALL_CARDS, Card, Player } from "./GameObjects";
-import deducer from "./Deducer";
+import { deduce } from "./Deducer";
 
 import "./test-utils/EffectExpectEquals";
 
-describe(deducer, () => {
+describe(deduce, () => {
     test('no hallucinations', () => {
         const initialKnowledge: Knowledge = Data.struct({
             playerChecklist: HashMap.empty(),
@@ -17,7 +17,7 @@ describe(deducer, () => {
         const suggestions: HashSet.HashSet<Suggestion> = HashSet.empty();
 
         const newKnowledge
-            = deducer(suggestions)(initialKnowledge);
+            = deduce(suggestions)(initialKnowledge);
 
         // We learned nothing new
         expect(newKnowledge).toEqual(Either.right(initialKnowledge));
@@ -66,7 +66,7 @@ describe(deducer, () => {
         );
 
         const newKnowledge
-            = deducer(suggestions)(initialKnowledge);
+            = deduce(suggestions)(initialKnowledge);
 
         expect(newKnowledge).toEqual(Either.right(Data.struct({
             playerChecklist: HashMap.make(

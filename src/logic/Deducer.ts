@@ -12,7 +12,7 @@ export type Deducer = (
     knowledge: Knowledge,
 ) => Either.Either<LogicalParadox, Knowledge>;
 
-const deducer: Deducer = (suggestions) => {
+export const deduce: Deducer = (suggestions) => {
     const allRules = [
         // All consistency rules
         cardsAreOwnedAtMostOnce,
@@ -71,5 +71,3 @@ const deducer: Deducer = (suggestions) => {
             Either.map(({ currentKnowledge }) => currentKnowledge),
         );
 };
-
-export default deducer;
