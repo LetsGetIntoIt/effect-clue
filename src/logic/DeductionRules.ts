@@ -1,14 +1,17 @@
 import { Data, Either, HashMap, HashSet, ReadonlyArray } from "effect";
 import { ChecklistValue, Knowledge, LogicalParadox, updatePlayerChecklist } from "./Knowledge";
 import { getOrUndefined } from "./utils/Effect";
+import { Suggestion } from "./Suggestion";
 
 export type DeductionRule = (
+    suggestions: HashSet.HashSet<Suggestion>;
+) => (
     knowledge: Knowledge,
 ) => Either.Either<LogicalParadox, Knowledge>;
 
 export const nonRefutersDontHaveSuggestedCards: DeductionRule =
-    (knowledge) => ReadonlyArray.reduce(
-        knowledge.suggestions,
+    (suggestions) => (knowledge) => ReadonlyArray.reduce(
+        suggestions,
         knowledge,
 
         (knowledge, suggestion) => ReadonlyArray.reduce(
@@ -37,8 +40,8 @@ export const nonRefutersDontHaveSuggestedCards: DeductionRule =
     );
 
 export const refuterUsedSeenCard: DeductionRule =
-    (knowledge) => ReadonlyArray.reduce(
-        knowledge.suggestions,
+    (suggestions) => (knowledge) => ReadonlyArray.reduce(
+        suggestions,
         knowledge,
 
         (knowledge, suggestion) => {

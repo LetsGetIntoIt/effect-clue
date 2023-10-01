@@ -1,6 +1,5 @@
-import { Data, Either, Equal, HashMap, HashSet, Match, Option, Struct, pipe } from "effect";
+import { Data, Either, HashMap, HashSet, Match, Option, pipe } from "effect";
 import { Card, Player } from "./GameObjects";
-import { Suggestion } from "./Suggestion";
 import { modifyAtOrFail } from "./utils/Effect";
 
 export const ChecklistValue = (value: "Y" | "N"): "Y" | "N" => value;
@@ -14,8 +13,6 @@ export type Knowledge = Data.Data<{
     caseFileChecklist: HashMap.HashMap<Card, "Y" | "N">;
 
     playerHandSize: HashMap.HashMap<Player, number>;
-
-    suggestions: HashSet.HashSet<Suggestion>,
 }>;
 
 export const empty: Knowledge = Data.struct({
@@ -62,7 +59,6 @@ export const updatePlayerChecklist = (
 
         caseFileChecklist: Either.right(knowledge.caseFileChecklist),
         playerHandSize: Either.right(knowledge.playerHandSize),
-        suggestions: Either.right(knowledge.suggestions),
     }),
 
     Either.map(Data.struct),
@@ -106,7 +102,6 @@ export const updateCaseFileChecklist = (
         })),
 
         playerHandSize: Either.right(knowledge.playerHandSize),
-        suggestions: Either.right(knowledge.suggestions),
     }),
 
     Either.map(Data.struct),
@@ -148,23 +143,9 @@ export const updatePlayerHandSize = (
             // Let's sanity check some basic constraints
             // TODO do this
         ),
-
-        suggestions: Either.right(knowledge.suggestions),
     }),
 
     Either.map(Data.struct),
-);
-
-export const updateSuggestions = (
-    suggestion: Suggestion,
-) => (
-    knowledge: Knowledge,
-): Knowledge => pipe(
-    knowledge,
-    Struct.evolve({
-        suggestions: HashSet.add(suggestion),
-    }),
-    Data.struct,
 );
 
 export type LogicalParadox =

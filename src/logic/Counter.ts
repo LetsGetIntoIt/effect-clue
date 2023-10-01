@@ -1,12 +1,17 @@
-import { Data, Either, HashMap, Match, Number, Option, ReadonlyArray, Tuple, pipe } from "effect";
+import { Data, Either, HashMap, HashSet, Match, Number, Option, ReadonlyArray, Tuple, pipe } from "effect";
 import { compose, tupled } from "effect/Function";
 import { ChecklistValue, Knowledge, LogicalParadox, updateCaseFileChecklist, updatePlayerChecklist } from "./Knowledge";
 import { ALL_CARDS, ALL_PLAYERS, Card, Player } from "./GameObjects";
 import deducer from "./Deducer";
+import { Suggestion } from "./Suggestion";
 
-export const countWays = (knowledge: Knowledge): number => Option.match(
+export const countWays = (
+    suggestions: HashSet.HashSet<Suggestion>,
+) => (
+    knowledge: Knowledge,
+): number => Option.match(
     // Get the next blank key to set to a value
-    getNextBlankKey(knowledge),
+    getNextKnowledgePossibility(knowledge),
 
     {
         // If there is no next blank key, then we've filled in everything!
@@ -16,7 +21,6 @@ export const countWays = (knowledge: Knowledge): number => Option.match(
         // Otherwise, try all possible values
         onSome: (nextBlankKey) => pipe(
             // List the possible values we can assign to the blank key
-            // TODO: do we need to try both values, or is setting Ys enough?
             [ChecklistValue("Y"), ChecklistValue("N")],
 
             // Update our knowledge by setting that value
@@ -25,44 +29,42 @@ export const countWays = (knowledge: Knowledge): number => Option.match(
             compose(ReadonlyArray.separate, Tuple.getSecond),
 
             // For each of these valid knowledge states, deduce as much definite knowledge as possible
-            ReadonlyArray.map(deducer),
+            ReadonlyArray.map(deducer(suggestions)),
             // We only care about non-paradoxical states
             compose(ReadonlyArray.separate, Tuple.getSecond),
 
             // Recurse into all these possible states, and sum up the number of ways they are possible
-            ReadonlyArray.map(countWays),
+            ReadonlyArray.map(countWays(suggestions)),
             Number.sumAll,
         ),
     },
 );
 
-type KnowledgeKey = CaseFileChecklistKey | PlayerChecklistKey;
+type KnowledgePossibility = CaseFileChecklistPossibility | PlayerChecklistPossibility;
 
-interface CaseFileChecklistKey extends Data.Case {
-    _tag: "CaseFileChecklistKey";
+interface CaseFileChecklistPossibility extends Data.Case {
+    _tag: "CaseFileChecklistPossibility";
     key: Card;
 }
 
-const CaseFileChecklistKey = (key: Card) => Data.tagged<CaseFileChecklistKey>("CaseFileChecklistKey")({
-    key,
-});
+const CaseFileChecklistPossiblity = Data.tagged<CaseFileChecklistPossibility>("CaseFileChecklistPossibility");
 
-interface PlayerChecklistKey extends Data.Case {
-    _tag: "PlayerChecklistKey";
+interface PlayerChecklistPossibility extends Data.Case {
+    _tag: "PlayerChecklistPossibility";
     key: Data.Data<[Player, Card]>;
 }
 
-const PlayerChecklistKey = (key: Data.Data<[Player, Card]>) => Data.tagged<PlayerChecklistKey>("PlayerChecklistKey")({
-    key,
-});
+const PlayerChecklistPossibility =  Data.tagged<PlayerChecklistPossibility>("PlayerChecklistPossibility");
 
-export const getNextBlankKey = (knowledge: Knowledge): Option.Option<KnowledgeKey> =>
+export const getNextKnowledgePossibility = (knowledge: Knowledge): Option.Option<KnowledgePossibility> =>
     Option.orElse(
         // Try blank case file keys
         pipe(
             ALL_CARDS,
             ReadonlyArray.findFirst(card => !HashMap.has(knowledge.caseFileChecklist, card)),
-            Option.map(CaseFileChecklistKey),
+            Option.map(card => CaseFileChecklistPossiblity({
+                key: card,
+            })),
         ),
 
         // Try blank player checklist keys
@@ -70,14 +72,16 @@ export const getNextBlankKey = (knowledge: Knowledge): Option.Option<KnowledgeKe
             ReadonlyArray.cartesian(ALL_PLAYERS, ALL_CARDS),
             ReadonlyArray.map(tupled(Data.tuple)),
             ReadonlyArray.findFirst(playerCard => !HashMap.has(knowledge.playerChecklist, playerCard)),
-            Option.map(PlayerChecklistKey),
+            Option.map(playerCard => PlayerChecklistPossibility({
+                key: playerCard,
+            })),
         ),
     );
 
-export const updateKnowledge = (key: KnowledgeKey, value: "Y" | "N"): (knowledge: Knowledge) => Either.Either<LogicalParadox, Knowledge> =>
+export const updateKnowledge = (key: KnowledgePossibility, value: "Y" | "N"): (knowledge: Knowledge) => Either.Either<LogicalParadox, Knowledge> =>
     Match.value(key).pipe(
         Match.tagsExhaustive({
-            CaseFileChecklistKey: ({ key }) => updateCaseFileChecklist(key, value),
-            PlayerChecklistKey: ({ key }) => updatePlayerChecklist(key, value),
+            CaseFileChecklistPossibility: ({ key }) => updateCaseFileChecklist(key, value),
+            PlayerChecklistPossibility: ({ key }) => updatePlayerChecklist(key, value),
         }),
     );
