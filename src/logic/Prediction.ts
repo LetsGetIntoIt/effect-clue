@@ -1,15 +1,15 @@
 import { HashMap } from "effect";
 import { Data } from "effect/index";
 import { Player, Card } from "./GameObjects";
-import { Probability } from "./Probability";
+import { Probability, toPercent } from "./Probability";
 
 export type Prediction = Data.Data<{
     playerChecklist: HashMap.HashMap<
         Data.Data<[Player, Card]>,
-        Probability
+        number
     >;
 
-    caseFileChecklist: HashMap.HashMap<Card, Probability>;
+    caseFileChecklist: HashMap.HashMap<Card, number>;
 }>;
 
 export const emptyPrediction: Prediction = Data.struct({
@@ -23,7 +23,7 @@ export const updatePlayerChecklist = (
 ) => (
     prediction: Prediction,
 ): Prediction => Data.struct({
-    playerChecklist: HashMap.set(prediction.playerChecklist, key, value),
+    playerChecklist: HashMap.set(prediction.playerChecklist, key, toPercent(value)),
     caseFileChecklist: prediction.caseFileChecklist,
 });
 
@@ -34,5 +34,5 @@ export const updateCaseFileChecklist = (
     prediction: Prediction,
 ): Prediction => Data.struct({
     playerChecklist: prediction.playerChecklist,
-    caseFileChecklist: HashMap.set(prediction.caseFileChecklist, key, value),
+    caseFileChecklist: HashMap.set(prediction.caseFileChecklist, key, toPercent(value)),
 });

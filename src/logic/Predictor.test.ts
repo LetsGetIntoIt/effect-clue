@@ -18,6 +18,7 @@ describe(predict, () => {
 
         const prediction = yield* $(predict(suggestions, initialKnowledge).pipe(
             effectOrFail,
+            Effect.withConcurrency('unbounded'),
         ));
 
         expect(prediction).toEqual(Data.struct({

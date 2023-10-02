@@ -47,14 +47,14 @@ export const predict: Predictor = (suggestions, knowledge) => Effect.gen(functio
                 onRight: knowledge => countWaysGivenSuggestionsAndCache.get(knowledge),
             }),
 
-            // Convert this count to a probability
-            Effect.map(possibleYNumWays => Probability(possibleYNumWays, currentKnowledgeNumWays)),
-
-            // Save the possible knowledge state along with its probability
-            Effect.map(probability => Tuple.tuple(nextPossibility, probability)),
+            // Convert this count to a probability, associated with the key
+            Effect.map(possibleYNumWays => Tuple.tuple(
+                nextPossibility,
+                Probability(possibleYNumWays, currentKnowledgeNumWays),
+            )),
         )),
 
-        Effect.all,
+        allPossibilityCases => Effect.all(allPossibilityCases, { concurrency: 'inherit' }),
 
         // Build our map of predictions
         Effect.map(ReadonlyArray.reduce(
@@ -102,7 +102,7 @@ const countWays = (
 
             // Recurse into all these possible states, and sum up the number of ways they are possible
             ReadonlyArray.map(knowledge => cachedSelf.get(knowledge)),
-            Effect.all,
+            recursiveCases => Effect.all(recursiveCases, { concurrency: 'inherit' }),
             Effect.map(EffectNumber.sumAll)
         ),
     })

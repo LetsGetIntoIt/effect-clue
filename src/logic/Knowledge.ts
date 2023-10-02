@@ -1,11 +1,11 @@
-import { Data, Either, HashMap, Match, Option, pipe } from "effect";
+import { Data, Either, Equal, Hash, HashMap, Match, Option, ReadonlyArray, pipe } from "effect";
 import { Card, Player } from "./GameObjects";
 import { modifyAtOrFail } from "./utils/Effect";
 import { LogicalParadox, LogicalParadoxCaseFileChecklistValueNY, LogicalParadoxCaseFileChecklistValueYN, LogicalParadoxPlayerChecklistValueNY, LogicalParadoxPlayerChecklistValueYN, LogicalParadoxPlayerHandSizeValue } from "./LogicalParadox";
 
 export const ChecklistValue = (value: "Y" | "N"): "Y" | "N" => value;
 
-export type Knowledge = Data.Data<{
+class Knowledge extends Data.Class<{
     playerChecklist: HashMap.HashMap<
         Data.Data<[Player, Card]>,
         "Y" | "N"
@@ -14,9 +14,29 @@ export type Knowledge = Data.Data<{
     caseFileChecklist: HashMap.HashMap<Card, "Y" | "N">;
 
     playerHandSize: HashMap.HashMap<Player, number>;
-}>;
+}> {
+    [Hash.symbol](): number {
+        // A maybe slightly optimized version of hash for this object
+        return Hash.hash(this.playerHandSize)
+            ^ Hash.hash(this.caseFileChecklist)
+            ^ Hash.hash(this.playerChecklist);
+    }
 
-export const emptyKnowledge: Knowledge = Data.struct({
+    [Equal.symbol](other: Equal.Equal): boolean {
+        if (!(other instanceof Knowledge)) {
+            return false;
+        }
+
+        // Check equality of each individual map in order of their complexity
+        return Equal.equals(this.playerHandSize, other.playerHandSize)
+            && Equal.equals(this.caseFileChecklist, other.caseFileChecklist)
+            && Equal.equals(this.playerChecklist, other.playerChecklist);
+    }
+}
+
+export type { Knowledge };
+
+export const emptyKnowledge: Knowledge = new Knowledge({
     playerChecklist: HashMap.empty(),
     caseFileChecklist: HashMap.empty(),
     playerHandSize: HashMap.empty(),
@@ -61,7 +81,7 @@ export const updatePlayerChecklist = (
         playerHandSize: Either.right(knowledge.playerHandSize),
     }),
 
-    Either.map(Data.struct),
+    Either.map(props => new Knowledge(props)),
 );
 
 export const updateCaseFileChecklist = (
@@ -104,7 +124,7 @@ export const updateCaseFileChecklist = (
         playerHandSize: Either.right(knowledge.playerHandSize),
     }),
 
-    Either.map(Data.struct),
+    Either.map(props => new Knowledge(props)),
 );
 
 export const updatePlayerHandSize = (
@@ -140,5 +160,5 @@ export const updatePlayerHandSize = (
         ),
     }),
 
-    Either.map(Data.struct),
+    Either.map(props => new Knowledge(props)),
 );

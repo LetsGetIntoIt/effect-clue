@@ -347,7 +347,7 @@ export const caseFileOwnsAtMost1PerCategory: ConsistencyRule =
 export const caseFileOwnsAtLeast1PerCategory: ConsistencyRule =
     (knowledge) => ReadonlyArray.reduce(
         [ALL_SUSPECT_CARDS, ALL_WEAPON_CARDS, ALL_ROOM_CARDS],
-        
+
         // This typecast is annoying. See Discord thread: https://discord.com/channels/795981131316985866/1158093341855060048
         Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
 
