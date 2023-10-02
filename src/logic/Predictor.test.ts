@@ -8,7 +8,7 @@ import "./test-utils/EffectExpectEquals";
 
 describe(predict, () => {
     effectTest('no hallucinations', Effect.gen(function* ($) {
-        const initialKnowledge: Knowledge = Data.struct({
+        const initialKnowledge: Knowledge = new Knowledge({
             playerChecklist: HashMap.empty(),
             caseFileChecklist: HashMap.empty(),
             playerHandSize: HashMap.empty(),
