@@ -1,4 +1,4 @@
-import { Cache, Data, Either, HashMap, HashSet, Match, Number as EffectNumber, Option, ReadonlyArray, Tuple, pipe, Effect, String } from "effect";
+import { Data, Either, HashMap, HashSet, Match, Number as EffectNumber, Option, ReadonlyArray, Tuple, pipe, Effect, MutableHashMap, Cache } from "effect";
 import { tupled } from "effect/Function";
 import { ChecklistValue, Knowledge, updateCaseFileChecklist as updateKnowledgeCaseFileChecklist, updatePlayerChecklist as updateKnowledgePlayerChecklist } from "./Knowledge";
 import { ALL_CARDS, ALL_PLAYERS, Card, Player } from "./GameObjects";
@@ -14,16 +14,17 @@ export type Predictor = (
 ) => Effect.Effect<never, never, Prediction>;
 
 export const predict: Predictor = (suggestions, knowledge) => Effect.gen(function* ($) {
-    const cachedCountWays: Cache.Cache<CountWaysCacheKey, never, number> = yield* $(
-        Cache.make({
-            capacity: Number.MAX_SAFE_INTEGER,
-            timeToLive: Infinity,
-            lookup: (key: CountWaysCacheKey) => countWays(key, cachedCountWays),
-        }),
-    );
+    const countWaysGivenSuggestions = countWays(suggestions);
+
+    const countWaysGivenSuggestionsAndCache: Cache.Cache<Knowledge, never, number> = yield* $(Cache.make({
+        capacity: Number.MAX_SAFE_INTEGER,
+        timeToLive: Infinity,
+        lookup: (knowledge: Knowledge) =>
+            countWaysGivenSuggestions(knowledge, countWaysGivenSuggestionsAndCache),
+    }));
 
     // Count the number of ways our current knowledge is possible
-    const currentKnowledgeNumWays = yield* $(cachedCountWays.get(Data.tuple(suggestions, knowledge)));
+    const currentKnowledgeNumWays = yield* $(countWaysGivenSuggestionsAndCache.get(knowledge));
 
     // For each blank key, see how many ways we can get a Y there
     return yield* $(
@@ -43,7 +44,7 @@ export const predict: Predictor = (suggestions, knowledge) => Effect.gen(functio
                 onLeft: () => Effect.succeed(0),
 
                 // Count how many ways this is possible
-                onRight: knowledge => cachedCountWays.get(Data.tuple(suggestions, knowledge)),
+                onRight: knowledge => countWaysGivenSuggestionsAndCache.get(knowledge),
             }),
 
             // Convert this count to a probability
@@ -61,19 +62,19 @@ export const predict: Predictor = (suggestions, knowledge) => Effect.gen(functio
             (prediction, [possibility, probability]) => updatePrediction(possibility, probability)(prediction)
         )),
 
-        // Print the cache stats
+        // Print out the cache stats
         Effect.tap(() => Effect.gen(function* ($) {
-            const stats = yield* $(cachedCountWays.cacheStats());
+            const stats = yield* $(countWaysGivenSuggestionsAndCache.cacheStats());
             console.log(stats);
         })),
     );
 });
 
-type CountWaysCacheKey = Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>;
-
 const countWays = (
-    [suggestions, knowledge]: CountWaysCacheKey,
-    cachedSelf: Cache.Cache<CountWaysCacheKey, never, number>,
+    suggestions: HashSet.HashSet<Suggestion>,
+) => (
+    knowledge: Knowledge,
+    cachedSelf: Cache.Cache<Knowledge, never, number>
 ): Effect.Effect<never, never, number> => pipe(
     // Get the next blank key to set to a value
     getKnowledgePossibilities(knowledge),
@@ -100,11 +101,11 @@ const countWays = (
             ReadonlyArray.filterMap(Either.getRight),
 
             // Recurse into all these possible states, and sum up the number of ways they are possible
-            ReadonlyArray.map(knowledge => countWays(Data.tuple(suggestions, knowledge), cachedSelf)),
+            ReadonlyArray.map(knowledge => cachedSelf.get(knowledge)),
             Effect.all,
-            Effect.map(EffectNumber.sumAll),
+            Effect.map(EffectNumber.sumAll)
         ),
-    }),
+    })
 );
 
 type KnowledgePossibility = CaseFileChecklistPossibility | PlayerChecklistPossibility;
