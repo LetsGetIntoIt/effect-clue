@@ -1,5 +1,4 @@
-import { Data, Either, HashMap, HashSet, Match, Number as EffectNumber, Option, ReadonlyArray, Tuple, pipe, Effect, MutableHashMap, Cache } from "effect";
-import { tupled } from "effect/Function";
+import { Data, Either, HashMap, HashSet, Match, Number as EffectNumber, ReadonlyArray, Tuple, pipe, Effect, Cache, Stream, Chunk } from "effect";
 import { ChecklistValue, Knowledge, updateCaseFileChecklist as updateKnowledgeCaseFileChecklist, updatePlayerChecklist as updateKnowledgePlayerChecklist } from "./Knowledge";
 import { ALL_CARDS, ALL_PLAYERS, Card, Player } from "./GameObjects";
 import { deduce } from "./Deducer";
@@ -29,7 +28,7 @@ export const predict: Predictor = (suggestions, knowledge) => Effect.gen(functio
     // For each blank key, see how many ways we can get a Y there
     return yield* $(
         // Get all the knowledge possiblities for which we want to determine probability
-        allKnowledgePossibilities,
+        allKnowledgePossibilitiesSync,
         // // Get all the BLANK knowledge possiblities for which we want to determine probability
         // // Use this if we want to save some resources calculating the whole thing
         // getNextKnowledgePossibilities(knowledge),
@@ -76,36 +75,31 @@ const countWays = (
     knowledge: Knowledge,
     cachedSelf: Cache.Cache<Knowledge, never, number>
 ): Effect.Effect<never, never, number> => pipe(
-    // Get the next blank key to set to a value
+    // Get all the blank keys
     getKnowledgePossibilities(knowledge),
-    ReadonlyArray.head,
 
-    Option.match({
-        // If there is no next blank key, then we've filled in everything!
-        // That means there's exactly 1 way to have this arrangement
-        onNone: () => Effect.succeed(1),
+    // List all the possible values we can set for those blank cells
+    Stream.cross(
+        Stream.fromIterable([ChecklistValue("Y"), ChecklistValue("N")]),
+    ),
 
-        // Otherwise, try all possible values
-        onSome: (nextPossibility) => pipe(
-            // List the possible values we can assign to the blank key
-            [ChecklistValue("Y"), ChecklistValue("N")],
+    // Update our knowledge to set those values
+    Stream.map(([possibility, value]) => updateKnowledge(possibility, value)(knowledge)),
+    // Keep only the non-paradoxical resulting states
+    Stream.filterMap(Either.getRight),
 
-            // Update our knowledge by setting that value
-            ReadonlyArray.map(value => updateKnowledge(nextPossibility, value)(knowledge)),
-            // We only care about non-paradoxical states
-            ReadonlyArray.filterMap(Either.getRight),
+    // For each of these valid knowledge states, deduce as much definite knowledge as possible
+    Stream.map(deduce(suggestions)),
+    // Keep only the non-paradoxical resulting states
+    Stream.filterMap(Either.getRight),
 
-            // For each of these valid knowledge states, deduce as much definite knowledge as possible
-            ReadonlyArray.map(deduce(suggestions)),
-            // We only care about non-paradoxical states
-            ReadonlyArray.filterMap(Either.getRight),
-
-            // Recurse into all these possible states, and sum up the number of ways they are possible
-            ReadonlyArray.map(knowledge => cachedSelf.get(knowledge)),
-            recursiveCases => Effect.all(recursiveCases, { concurrency: 'inherit' }),
-            Effect.map(EffectNumber.sumAll)
+    // Recurse into each of these valid states
+    Stream.runFoldEffect(
+        0, // There are initially no valid ways to arrive at the initial knowledge state
+        (totalNumWays, knowledge) => cachedSelf.get(knowledge).pipe(
+            Effect.map(EffectNumber.sum(totalNumWays)),
         ),
-    })
+    ),
 );
 
 type KnowledgePossibility = CaseFileChecklistPossibility | PlayerChecklistPossibility;
@@ -124,35 +118,47 @@ interface PlayerChecklistPossibility extends Data.Case {
 
 const PlayerChecklistPossibility =  Data.tagged<PlayerChecklistPossibility>("PlayerChecklistPossibility");
 
-const getKnowledgePossibilities = (knowledge: Knowledge): readonly KnowledgePossibility[] =>
-    pipe(
+const getKnowledgePossibilities = (knowledge: Knowledge): Stream.Stream<never, never, KnowledgePossibility> =>
+    Stream.filter(
         allKnowledgePossibilities,
 
         // Only include cells that we don't know anything about
-        ReadonlyArray.filter(Match.type<KnowledgePossibility>().pipe(
+        Match.type<KnowledgePossibility>().pipe(
             Match.tagsExhaustive({
                 CaseFileChecklistPossibility: ({ key }) => !HashMap.has(knowledge.caseFileChecklist, key),
                 PlayerChecklistPossibility: ({ key }) => !HashMap.has(knowledge.playerChecklist, key),
             }),
-        )),
+        ),
     );
 
-const allKnowledgePossibilities: readonly KnowledgePossibility[] =
-    ReadonlyArray.appendAll(
+const allKnowledgePossibilities: Stream.Stream<never, never, KnowledgePossibility> =
+    Stream.concat(
         // All possible case file checklist keys
-        ReadonlyArray.map(ALL_CARDS, card => CaseFileChecklistPossiblity({
-            key: card,
-        })),
+        pipe(
+            Stream.fromIterable(ALL_CARDS),
+            Stream.map(card => CaseFileChecklistPossiblity({
+                key: card,
+            })),
+        ),
 
         // All possible player checklist keys
         pipe(
-            ReadonlyArray.cartesian(ALL_PLAYERS, ALL_CARDS),
-            ReadonlyArray.map(tupled(Data.tuple)),
-            ReadonlyArray.map(playerCard => PlayerChecklistPossibility({
+            Stream.cross(
+                Stream.fromIterable(ALL_PLAYERS),
+                Stream.fromIterable(ALL_CARDS),
+            ),
+            Stream.map(Data.array),
+            Stream.map(playerCard => PlayerChecklistPossibility({
                 key: playerCard,
             })),
         ),
     );
+
+// TODO remove this
+const allKnowledgePossibilitiesSync: readonly KnowledgePossibility[] =
+    Effect.runSync(Stream.runCollect(allKnowledgePossibilities).pipe(
+        Effect.map(Chunk.toReadonlyArray),
+    ));
 
 const updateKnowledge = (key: KnowledgePossibility, value: "Y" | "N"): (knowledge: Knowledge) => Either.Either<LogicalParadox, Knowledge> =>
     Match.value(key).pipe(
