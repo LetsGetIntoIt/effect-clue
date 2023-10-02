@@ -16,25 +16,10 @@ export const ALL_PLAYERS = [
 export type Card = Brand.Branded<
     | "Miss Scarlet"
     | "Col. Mustard"
-    | "Mrs. White"
-    | "Mr. Green"
-    | "Mrs. Peacock"
-    | "Prof. Plum"
     | "Candlestick"
     | "Knife"
-    | "Lead pipe"
-    | "Revolver"
-    | "Rope"
-    | "Wrench"
     | "Kitchen"
-    | "Ball room"
-    | "Conservatory"
-    | "Dining room"
-    | "Billiard room"
-    | "Library"
-    | "Lounge"
-    | "Hall"
-    | "Study",
+    | "Ball room",
     'Card'
 >;
 export const Card = Brand.nominal<Card>();
@@ -42,31 +27,16 @@ export const Card = Brand.nominal<Card>();
 export const ALL_SUSPECT_CARDS: Card[] = [
     Card("Miss Scarlet"),
     Card("Col. Mustard"),
-    Card("Mrs. White"),
-    Card("Mr. Green"),
-    Card("Mrs. Peacock"),
-    Card("Prof. Plum"),
 ];
 
 export const ALL_WEAPON_CARDS: Card[] = [
     Card("Candlestick"),
     Card("Knife"),
-    Card("Lead pipe"),
-    Card("Revolver"),
-    Card("Rope"),
-    Card("Wrench"),
 ];
 
 export const ALL_ROOM_CARDS: Card[] = [
     Card("Kitchen"),
     Card("Ball room"),
-    Card("Conservatory"),
-    Card("Dining room"),
-    Card("Billiard room"),
-    Card("Library"),
-    Card("Lounge"),
-    Card("Hall"),
-    Card("Study"),
 ];
 
 export const ALL_CARDS: Card[] = [
