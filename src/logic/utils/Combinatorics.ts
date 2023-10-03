@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, pipe, Cache, Bigint, Match } from "effect";
+import { Context, Effect, Layer, pipe, Cache, Bigint, Match, Data } from "effect";
 import { CacheStats } from "effect/Cache";
 
 export interface Combinatorics {
@@ -23,12 +23,12 @@ export const combinatoricsLive: Layer.Layer<never, never, Combinatorics> = Layer
     const cachedBinomial = yield* $(Cache.make({
         capacity: Number.MAX_SAFE_INTEGER,
         timeToLive: Infinity,
-        lookup: ([n, k]: [number, number]) => binomial(n, k, cachedFactorial),
+        lookup: ([n, k]: Data.Data<[number, number]>) => binomial(n, k, cachedFactorial),
     }));
 
     return Combinatorics.of({
         factorial: (n) => cachedFactorial.get(n),
-        binomial: (n, k) => cachedBinomial.get([n, k]),
+        binomial: (n, k) => cachedBinomial.get(Data.tuple(n, k)),
 
         cacheStats: () => Effect.all({
             factorial: cachedFactorial.cacheStats(),
