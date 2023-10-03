@@ -1,7 +1,7 @@
 import { test as jest_test } from '@jest/globals';
 import { Effect } from 'effect';
 
-export const effectTest = (name: string, effect: Effect.Effect<never, never, void>): void =>
+export const test = (name: string, effect: Effect.Effect<never, never, void>): void =>
     jest_test(name, async () => {
         await Effect.runPromise(effect);
     });

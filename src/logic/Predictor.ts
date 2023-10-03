@@ -42,7 +42,7 @@ export const predict: Predictor = (suggestions, knowledge) => Effect.gen(functio
         allKnowledgePossibilities,
         // // Get all the BLANK knowledge possiblities for which we want to determine probability
         // // Use this if we want to save some resources calculating the whole thing
-        // getNextKnowledgePossibilities(knowledge),
+        // getKnowledgePossibilities(knowledge),
 
         ReadonlyArray.map(nextPossibility => pipe(
             // Set this possiblity to a Y and count how many ways it's possible
@@ -92,7 +92,7 @@ export const predict: Predictor = (suggestions, knowledge) => Effect.gen(functio
     Effect.provideLayer(combinatoricsLive),
 );
 
-export const countWays = (
+const countWays = (
     [suggestions, knowledge]: Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>,
     allKnowledgeBranches: Cache.Cache<Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>, never, readonly Knowledge[]>,
     countWaysDefinite: Cache.Cache<Knowledge, never, bigint>,

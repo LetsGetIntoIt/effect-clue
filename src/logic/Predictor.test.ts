@@ -1,13 +1,14 @@
 import { Data, Effect, HashMap, HashSet } from "effect";
-import { Knowledge } from "./Knowledge";
+import { ChecklistValue, Knowledge } from "./Knowledge";
 import { Suggestion } from "./Suggestion";
 import { predict } from "./Predictor";
 
-import { effectOrFail, effectTest } from "./test-utils/EffectTest";
+import { effectOrFail, test } from "./test-utils/EffectTest";
 import "./test-utils/EffectExpectEquals";
+import { Card } from "./GameObjects";
 
 describe(predict, () => {
-    effectTest('no hallucinations', Effect.gen(function* ($) {
+    test('no hallucinations', Effect.gen(function* ($) {
         const initialKnowledge: Knowledge = new Knowledge({
             playerChecklist: HashMap.empty(),
             caseFileChecklist: HashMap.empty(),
