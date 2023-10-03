@@ -6,10 +6,10 @@ import { Probability, toPercent } from "./Probability";
 export type Prediction = Data.Data<{
     playerChecklist: HashMap.HashMap<
         Data.Data<[Player, Card]>,
-        bigint
+        number
     >;
 
-    caseFileChecklist: HashMap.HashMap<Card, bigint>;
+    caseFileChecklist: HashMap.HashMap<Card, number>;
 }>;
 
 export const emptyPrediction: Prediction = Data.struct({

@@ -40,31 +40,31 @@ export type Card = Brand.Branded<
 export const Card = Brand.nominal<Card>();
 
 export const ALL_SUSPECT_CARDS: Card[] = [
-    // Card("Miss Scarlet"),
-    // Card("Col. Mustard"),
-    // Card("Mrs. White"),
-    // Card("Mr. Green"),
+    Card("Miss Scarlet"),
+    Card("Col. Mustard"),
+    Card("Mrs. White"),
+    Card("Mr. Green"),
     Card("Mrs. Peacock"),
     Card("Prof. Plum"),
 ];
 
 export const ALL_WEAPON_CARDS: Card[] = [
-    // Card("Candlestick"),
-    // Card("Knife"),
-    // Card("Lead pipe"),
-    // Card("Revolver"),
+    Card("Candlestick"),
+    Card("Knife"),
+    Card("Lead pipe"),
+    Card("Revolver"),
     Card("Rope"),
     Card("Wrench"),
 ];
 
 export const ALL_ROOM_CARDS: Card[] = [
-    // Card("Kitchen"),
-    // Card("Ball room"),
-    // Card("Conservatory"),
-    // Card("Dining room"),
-    // Card("Billiard room"),
-    // Card("Library"),
-    // Card("Lounge"),
+    Card("Kitchen"),
+    Card("Ball room"),
+    Card("Conservatory"),
+    Card("Dining room"),
+    Card("Billiard room"),
+    Card("Library"),
+    Card("Lounge"),
     Card("Hall"),
     Card("Study"),
 ];

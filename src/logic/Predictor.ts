@@ -6,6 +6,7 @@ import { Suggestion } from "./Suggestion";
 import { Prediction, emptyPrediction, updateCaseFileChecklist as updatePredictionCaseFileChecklist, updatePlayerChecklist as updatePredictionPlayerChecklist } from "./Prediction";
 import { Probability } from "./Probability";
 import { LogicalParadox } from "./LogicalParadox";
+import { Combinatorics, combinatoricsLive } from "./utils/Combinatorics";
 
 export type Predictor = (
     suggestions: HashSet.HashSet<Suggestion>,
@@ -16,7 +17,7 @@ export const predict: Predictor = (suggestions, knowledge) => Effect.gen(functio
     const cachedCountWaysDefinite = yield* $(Cache.make({
         capacity: Number.MAX_SAFE_INTEGER,
         timeToLive: Infinity,
-        lookup: (knowledge: Knowledge) => Effect.sync(() => countWaysDefinite(knowledge)),
+        lookup: (knowledge: Knowledge) => countWaysDefinite(knowledge),
     }));
 
     const cachedAllKnowledgeBranches = yield* $(Cache.make({
@@ -43,7 +44,7 @@ export const predict: Predictor = (suggestions, knowledge) => Effect.gen(functio
         // // Use this if we want to save some resources calculating the whole thing
         // getNextKnowledgePossibilities(knowledge),
 
-        Stream.mapEffect(nextPossibility => pipe(
+        ReadonlyArray.map(nextPossibility => pipe(
             // Set this possiblity to a Y and count how many ways it's possible
             updateKnowledge(nextPossibility, ChecklistValue("Y"))(knowledge),
 
@@ -64,48 +65,61 @@ export const predict: Predictor = (suggestions, knowledge) => Effect.gen(functio
         )),
 
         // // Build our map of predictions
-        Stream.runFold(
+        Effect.all,
+        Effect.map(ReadonlyArray.reduce(
             emptyPrediction,
             (prediction, [possibility, probability]) => updatePrediction(possibility, probability)(prediction)
-        ),
+        )),
 
         // Print out the cache stats
         Effect.tap(() => Effect.gen(function* ($) {
+            const combinatorics = yield* $(Combinatorics);
+
+            const combinatoricsStats = yield* $(combinatorics.cacheStats());
             const cachedCountWaysDefiniteStats = yield* $(cachedCountWaysDefinite.cacheStats());
             const cachedAllKnowledgeBranchesStats = yield* $(cachedAllKnowledgeBranches.cacheStats());
             const cachedCountWaysStats = yield* $(cachedCountWays.cacheStats());
 
             console.log({
+                combinatoricsStats,
                 cachedCountWaysDefiniteStats,
                 cachedAllKnowledgeBranchesStats,
                 cachedCountWaysStats,
             });
         })),
     );
-});
+}).pipe(
+    Effect.provideLayer(combinatoricsLive),
+);
 
-const countWays = (
-    suggestionsAndKnowledge: Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>,
-    allKnowledgeBranches: Cache.Cache<Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>, never, Stream.Stream<never, never, Knowledge>>,
+export const countWays = (
+    [suggestions, knowledge]: Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>,
+    allKnowledgeBranches: Cache.Cache<Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>, never, readonly Knowledge[]>,
     countWaysDefinite: Cache.Cache<Knowledge, never, bigint>,
-): Effect.Effect<never, never, bigint> => Effect.gen(function* ($) {
+): Effect.Effect<never, never, bigint> => pipe(
     // Get all possible places the suggestions could take our knowledge
-    // This function will apply deduction rules to the leaf knowledges, so we will remove as many paradoxical knowledge states as possible
-    const knowledgeBranches = yield* $(allKnowledgeBranches.get(suggestionsAndKnowledge));
+    allKnowledgeBranches.get(Data.tuple(suggestions, knowledge)),
 
-    return yield* $(Stream.runFoldEffect(
-        knowledgeBranches,
+    // Maximally deduce the knowledge
+    // Our counter relies on this
+    Effect.map(ReadonlyArray.filterMap(flow(
+        deduce(suggestions),
+        // Discard any paradoxical knowledge states 
+        Either.getRight,
+    ))),
+
+    Effect.flatMap(Effect.reduce(
         0n,
         (totalNumWays, knowledgeBranch) => countWaysDefinite.get(knowledgeBranch).pipe(
             // TODO can this be tail-recursion optimized? Probably not, with the cache
             Effect.map(Bigint.sum(totalNumWays)),
         ),
-    ));
-});
+    )),
+);
 
 const allKnowledgeBranches = (
     [suggestions, knowledge]: Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>,
-): Stream.Stream<never, never, Knowledge> => pipe(
+): readonly Knowledge[] => pipe(
     HashSet.values(suggestions),
 
     // We only want suggestions that were refuted with an unknown card
@@ -120,47 +134,54 @@ const allKnowledgeBranches = (
         return Option.none();
     }),
 
-    // For each suggestion, create an individual stream of the possible [refuter, card] pairs
-    ReadonlyArray.map(({ cards, refuter }) => pipe(
-        Stream.fromIterable(cards),
-        Stream.map(card => Tuple.tuple(refuter, card))
-    )),
+    // If there are no such suggestions, then we don't need to branch! We're already at the leaf node
+    Option.liftPredicate(ReadonlyArray.isNonEmptyArray),
+    Option.match({
+        onNone: () => ReadonlyArray.of(knowledge),
 
-    // Now between these, we want every possible combination of all of them
-    ReadonlyArray.reduce(
-        Stream.empty as Stream.Stream<never, never, [Player, Card][]>,
+        onSome: flow(
+            // For each suggestion, create an individual stream of the possible [refuter, card] pairs
+            ReadonlyArray.map(({ cards, refuter }) => pipe(
+                cards,
+                HashSet.map(card => Tuple.tuple(refuter, card)),
+            )),
 
-        // For every branch, track every [player, card] pair we have to set to get there
-        (chainSoFar, nextBranches) => Stream.crossWith(
-            chainSoFar,
-            nextBranches,
-            (chainSoFar, nextBranch) => [...chainSoFar, nextBranch]
-        )
-    ),
+            // Now between these, we want every possible combination of all of them
+            ReadonlyArray.reduce(
+                ReadonlyArray.empty<[Player, Card][]>(), 
 
-    // For each branch of possiblities, apply those changes sequentially until
-    // we arrive at an end knowledge state
-    // Only keep the Knowledge states we could reach without any logical paradoxes
-    Stream.filterMap(flow(
-        ReadonlyArray.reduce(
-            Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
-            (knowledge, [player, card]) => Either.flatMap(knowledge, updateKnowledgePlayerChecklist(
-                Data.tuple(player, card),
-                ChecklistValue("Y")
-            ))
+                // For every branch, track every [player, card] pair we have to set to get there
+                (allChainsSoFar, nextBranches) => ReadonlyArray.cartesianWith(
+                    allChainsSoFar,
+                    ReadonlyArray.fromIterable(nextBranches),
+                    (chainSoFar, nextBranch) => ReadonlyArray.append(chainSoFar, nextBranch),
+                ),
+            ),
+
+            // For each branch of possiblities, apply those changes sequentially until
+            // we arrive at an end knowledge state
+            // Only keep the Knowledge states we could reach without any logical paradoxes
+            ReadonlyArray.filterMap(flow(
+                ReadonlyArray.reduce(
+                    Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
+                    (knowledge, [player, card]) => Either.flatMap(knowledge, updateKnowledgePlayerChecklist(
+                        Data.tuple(player, card),
+                        ChecklistValue("Y")
+                    ))
+                ),
+
+                // Keep only non-paradoxical knowledge states
+                Either.getRight
+            )),
         ),
-
-        // Run our deducer to maybe uncover other logical paradoxes
-        Either.flatMap(deduce(suggestions)),
-
-        // Keep only non-paradoxical knowledge states
-        Either.getRight
-    )),
+    }),
 );
 
 const countWaysDefinite = (
     knowledge: Knowledge,
-): bigint => {
+): Effect.Effect<Combinatorics, never, bigint> => Effect.gen(function* ($) {
+    const { binomial } = yield* $(Combinatorics);
+
     // Assume that the given knowledge has been deduced as much as possible
     // Particularly, we rely on:
     // - Every row with a Y should have N's everywhere else
@@ -197,14 +218,16 @@ const countWaysDefinite = (
         ),
     );
 
-    const numWaysToAssignCaseFile = pipe(
+    const numWaysToAssignCaseFile = yield* $(
         caseFilePreWork,
 
-        ReadonlyArray.map(({ numCards, numNs, numExpectedYs, numYs }) =>
-            binomial(numCards - numNs, numExpectedYs - numYs),
+        Effect.reduce(
+            1n,
+            (total, { numCards, numNs, numExpectedYs, numYs}) =>
+                binomial(numCards - numNs, numExpectedYs - numYs).pipe(
+                    Effect.map(Bigint.multiply(total)),
+                ),
         ),
-
-        Bigint.multiplyAll,
     );
 
     const numFreeCardsAllocatedToCaseFile = pipe(
@@ -227,34 +250,39 @@ const countWaysDefinite = (
         ReadonlyArray.separate,
     );
 
-    const numWaysToAssignPlayersWithHandSize = pipe(
+    const numWaysToAssignPlayersWithHandSize = yield* $(
         playersWithHandSize,
-        ReadonlyArray.map(([player, handSize]) => {
-            const { numNs, numYs } = ReadonlyArray.reduce(
-                ALL_CARDS,
-                { numNs: 0, numYs: 0},
-                ({ numNs, numYs}, card) => {
-                    const cardKnowledge = HashMap.get(knowledge.playerChecklist, Data.tuple(player, card));
 
-                    return {
-                        numNs: numNs + Option.match(cardKnowledge, {
-                            onNone: () => 0,
-                            onSome: cardKnowledge => (cardKnowledge === 'N' ? 1 : 0),
-                        }),
-                        numYs: numYs + Option.match(cardKnowledge, {
-                            onNone: () => 0,
-                            onSome: cardKnowledge => (cardKnowledge === 'Y' ? 1 : 0),
-                        }),
-                    };
-                },
-            );
+        ReadonlyArray.map(([player, handSize]) => ReadonlyArray.reduce(
+            ALL_CARDS,
+            { handSize, numNs: 0, numYs: 0 },
+            ({ handSize, numNs, numYs }, card) => {
+                const cardKnowledge = HashMap.get(knowledge.playerChecklist, Data.tuple(player, card));
 
-            return binomial(
-                numNs - numFreeCardsAllocatedToCaseFile,
-                handSize - numYs,
-            );
-        }),
-        Bigint.multiplyAll,
+                return {
+                    handSize,
+                    numNs: numNs + Option.match(cardKnowledge, {
+                        onNone: () => 0,
+                        onSome: cardKnowledge => (cardKnowledge === 'N' ? 1 : 0),
+                    }),
+                    numYs: numYs + Option.match(cardKnowledge, {
+                        onNone: () => 0,
+                        onSome: cardKnowledge => (cardKnowledge === 'Y' ? 1 : 0),
+                    }),
+                };
+            }
+        )),
+
+        Effect.reduce(
+            1n,
+            (total, { numNs, handSize, numYs }) =>
+                binomial(
+                    numNs - numFreeCardsAllocatedToCaseFile,
+                    handSize - numYs,
+                ).pipe(
+                    Effect.map(Bigint.multiply(total)),
+                ),
+        ),
     );
 
     const numBlanksPlayersWithoutHandSize = pipe(
@@ -266,42 +294,35 @@ const countWaysDefinite = (
         ReadonlyArray.length,
     );
 
-    const numCardsLeftToAssignToPlayersWithoutHandSize =
+    const numCardsLeftToAssignToPlayersWithoutHandSize = pipe(
         // How many cards are in the game
-        ALL_CARDS.length
-        
+        ALL_CARDS.length,
+
         // How many cards are committed to the case file
-        - pipe(
+        EffectNumber.subtract(pipe(
             caseFilePreWork,
             ReadonlyArray.map(({ numExpectedYs }) => numExpectedYs),
             EffectNumber.sumAll,
-        )
+        )),
 
         // How many cards are committed to players with known hand size
-        - pipe(
+        EffectNumber.subtract(pipe(
             playersWithHandSize,
             ReadonlyArray.map(Tuple.getSecond),
             EffectNumber.sumAll,
-        );
+        )),
+    );
 
-    const numWaysToAssignPlayersWithoutHandSize = binomial(
+    const numWaysToAssignPlayersWithoutHandSize = yield* $(binomial(
         numBlanksPlayersWithoutHandSize,
         numCardsLeftToAssignToPlayersWithoutHandSize,
-    );
+    ));
 
     return numWaysToAssignAllYs
         * numWaysToAssignCaseFile
         * numWaysToAssignPlayersWithHandSize
         * numWaysToAssignPlayersWithoutHandSize;
-}
-
-// TODO make this more efficient
-const binomial = (n: number, k: number): bigint =>
-    factorial(n) / (factorial(n - k) * factorial(k));
-
-// TODO make this more efficient
-const factorial = (n: number): bigint =>
-    BigInt(n) * factorial(n - 1);
+});
 
 type KnowledgePossibility = CaseFileChecklistPossibility | PlayerChecklistPossibility;
 
@@ -319,8 +340,8 @@ interface PlayerChecklistPossibility extends Data.Case {
 
 const PlayerChecklistPossibility =  Data.tagged<PlayerChecklistPossibility>("PlayerChecklistPossibility");
 
-const getKnowledgePossibilities = (knowledge: Knowledge): Stream.Stream<never, never, KnowledgePossibility> =>
-    Stream.filter(
+const getKnowledgePossibilities = (knowledge: Knowledge): readonly KnowledgePossibility[] =>
+    ReadonlyArray.filter(
         allKnowledgePossibilities,
 
         // Only include cells that we don't know anything about
@@ -332,24 +353,21 @@ const getKnowledgePossibilities = (knowledge: Knowledge): Stream.Stream<never, n
         ),
     );
 
-const allKnowledgePossibilities: Stream.Stream<never, never, KnowledgePossibility> =
-    Stream.concat(
+const allKnowledgePossibilities: readonly KnowledgePossibility[] =
+    ReadonlyArray.appendAll(
         // All possible case file checklist keys
         pipe(
-            Stream.fromIterable(ALL_CARDS),
-            Stream.map(card => CaseFileChecklistPossiblity({
+            ALL_CARDS,
+            ReadonlyArray.map(card => CaseFileChecklistPossiblity({
                 key: card,
             })),
         ),
 
         // All possible player checklist keys
         pipe(
-            Stream.cross(
-                Stream.fromIterable(ALL_PLAYERS),
-                Stream.fromIterable(ALL_CARDS),
-            ),
-            Stream.map(Data.array),
-            Stream.map(playerCard => PlayerChecklistPossibility({
+            ReadonlyArray.cartesian(ALL_PLAYERS, ALL_CARDS),
+            ReadonlyArray.map(Data.array),
+            ReadonlyArray.map(playerCard => PlayerChecklistPossibility({
                 key: playerCard,
             })),
         ),
