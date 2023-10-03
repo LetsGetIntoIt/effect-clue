@@ -1,21 +1,21 @@
-import { Data, Number, Predicate } from "effect";
+import { Bigint, Data, Predicate } from "effect";
 import { dual, flow } from "effect/Function";
 
 export type Probability = Data.Data<{
-    numerator: number;
-    denominator: number;
+    numerator: bigint;
+    denominator: bigint;
 }>;
 
-export const Probability = (numerator: number, denominator: number): Probability =>
+export const Probability = (numerator: bigint, denominator: bigint): Probability =>
     Data.struct({ numerator, denominator });
 
 export const isAlways: Predicate.Predicate<Probability> = ({ numerator, denominator }) =>
     numerator === denominator;
 
 export const isNever: Predicate.Predicate<Probability> = ({ numerator }) =>
-    numerator === 0;
+    numerator === 0n;
 
-export const toDecimal = (probability: Probability): number =>
+export const toDecimal = (probability: Probability): bigint =>
     probability.numerator / probability.denominator;
 
 export const match: {
@@ -70,9 +70,9 @@ export const match: {
     },
 );
 
-export const toPercent = (probability: Probability): number =>
+export const toPercent = (probability: Probability): bigint =>
     match(probability, {
-        onAlways: () => 100,
-        onNever: () => 0,
-        otherwise: flow(toDecimal, Number.multiply(100)),
+        onAlways: () => 100n,
+        onNever: () => 0n,
+        otherwise: flow(toDecimal, Bigint.multiply(100n)),
     });
