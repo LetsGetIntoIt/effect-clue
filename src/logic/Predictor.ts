@@ -64,8 +64,8 @@ export const predict: Predictor = (suggestions, knowledge) => Effect.gen(functio
             )),
         )),
 
-        // // Build our map of predictions
-        Effect.all,
+        // Build our map of predictions
+        recursiveCases => Effect.all(recursiveCases, { concurrency: 'inherit' }),
         Effect.map(ReadonlyArray.reduce(
             emptyPrediction,
             (prediction, [possibility, probability]) => updatePrediction(possibility, probability)(prediction)

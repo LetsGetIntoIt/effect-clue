@@ -8,7 +8,13 @@ export type LogicalParadox =
     | CaseFileChecklistValueConflictNY
     | PlayerHandSizeValueConflict
     | PlayerHandSizeNegative
-    | PlayerHandSizeTooBig;
+    | PlayerHandSizeTooBig
+    | CardHasTooManyOwners
+    | CardHasTooFewOwners
+    | PlayerHasTooManyCards
+    | PlayerHasTooFewCards
+    | CaseFileHasTooManyCards
+    | CaseFileHasTooFewCards;
 
 interface LogicalParadoxConflictingValue<K, V, VEnumerable extends boolean, V1 extends V, V2 extends (VEnumerable extends true ? Exclude<V, V1> : V)> extends Data.Case {
     key: K;
@@ -61,3 +67,55 @@ interface PlayerHandSizeTooBig extends Data.Case {
 }
 
 export const PlayerHandSizeTooBig = Data.tagged<PlayerHandSizeTooBig>("PlayerHandSizeTooBig");
+
+interface CardHasTooManyOwners extends Data.Case {
+    _tag: "CardHasTooManyOwners";
+    card: Card;
+    numOwners: number;
+    expectedMaxNumOwners: number;
+}
+
+export const CardHasTooManyOwners = Data.tagged<CardHasTooManyOwners>("CardHasTooManyOwners");
+
+interface CardHasTooFewOwners extends Data.Case {
+    _tag: "CardHasTooFewOwners";
+    card: Card;
+    numNonOwners: number;
+    expectedMinNumOwners: number;
+}
+
+export const CardHasTooFewOwners = Data.tagged<CardHasTooFewOwners>("CardHasTooFewOwners");
+
+interface PlayerHasTooManyCards extends Data.Case {
+    _tag: "PlayerHasTooManyCards";
+    player: Player;
+    numOwned: number;
+    expectedMaxNumCards: number;
+}
+
+export const PlayerHasTooManyCards = Data.tagged<PlayerHasTooManyCards>("PlayerHasTooManyCards");
+
+interface PlayerHasTooFewCards extends Data.Case {
+    _tag: "PlayerHasTooFewCards";
+    player: Player;
+    numNotOwned: number;
+    expectedMinNumCards: number;
+}
+
+export const PlayerHasTooFewCards = Data.tagged<PlayerHasTooFewCards>("PlayerHasTooFewCards");
+
+interface CaseFileHasTooManyCards extends Data.Case {
+    _tag: "CaseFileHasTooManyCards";
+    numOwned: number;
+    expectedMaxNumCards: number;
+}
+
+export const CaseFileHasTooManyCards = Data.tagged<CaseFileHasTooManyCards>("CaseFileHasTooManyCards");
+
+interface CaseFileHasTooFewCards extends Data.Case {
+    _tag: "CaseFileHasTooFewCards";
+    numNotOwned: number;
+    expectedMinNumCards: number;
+}
+
+export const CaseFileHasTooFewCards = Data.tagged<CaseFileHasTooFewCards>("CaseFileHasTooFewCards");

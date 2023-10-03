@@ -1,7 +1,7 @@
 import { Data, Either, Equal, Hash, HashMap, HashSet, Match, Option, pipe } from "effect";
 import { Card, Player } from "./GameObjects";
 import { modifyAtOrFail } from "./utils/Effect";
-import { LogicalParadox, LogicalParadoxCaseFileChecklistValueNY, LogicalParadoxCaseFileChecklistValueYN, LogicalParadoxPlayerChecklistValueNY, LogicalParadoxPlayerChecklistValueYN, LogicalParadoxPlayerHandSizeValue } from "./LogicalParadox";
+import { CaseFileChecklistValueConflictNY, CaseFileChecklistValueConflictYN, LogicalParadox, PlayerChecklistValueConflictNY, PlayerChecklistValueConflictYN, PlayerHandSizeValueConflict } from "./LogicalParadox";
 
 export const ChecklistValue = (value: "Y" | "N"): "Y" | "N" => value;
 
@@ -83,12 +83,12 @@ export class Knowledge extends Data.Class<{
                         Match.when(["N", "N"], ([, value]) => Either.right(value)),
         
                         // If they conflict, return an error
-                        Match.when(["Y", "N"], ([existingValue, value]) => Either.left(LogicalParadoxPlayerChecklistValueYN({
+                        Match.when(["Y", "N"], ([existingValue, value]) => Either.left(PlayerChecklistValueConflictYN({
                             key,
                             existingValue,
                             conflictingUpdatedValue: value,
                         }))),
-                        Match.when(["N", "Y"], ([existingValue, value]) => Either.left(LogicalParadoxPlayerChecklistValueNY({
+                        Match.when(["N", "Y"], ([existingValue, value]) => Either.left(PlayerChecklistValueConflictNY({
                             key,
                             existingValue,
                             conflictingUpdatedValue: value,
@@ -131,12 +131,12 @@ export class Knowledge extends Data.Class<{
                         Match.when(["N", "N"], ([, value]) => Either.right(value)),
         
                         // If they conflict, return an error
-                        Match.when(["Y", "N"], ([existingValue, value]) => Either.left(LogicalParadoxCaseFileChecklistValueYN({
+                        Match.when(["Y", "N"], ([existingValue, value]) => Either.left(CaseFileChecklistValueConflictYN({
                             key,
                             existingValue,
                             conflictingUpdatedValue: value,
                         }))),
-                        Match.when(["N", "Y"], ([existingValue, value]) => Either.left(LogicalParadoxCaseFileChecklistValueNY({
+                        Match.when(["N", "Y"], ([existingValue, value]) => Either.left(CaseFileChecklistValueConflictNY({
                             key,
                             existingValue,
                             conflictingUpdatedValue: value,
@@ -176,7 +176,7 @@ export class Knowledge extends Data.Class<{
                         // There is an existing value. Let's make sure it's not conflicting
                         onSome: (existingValue) => existingValue === value
                             ? Either.right(value)
-                            : Either.left(LogicalParadoxPlayerHandSizeValue({
+                            : Either.left(PlayerHandSizeValueConflict({
                                 key,
                                 existingValue,
                                 conflictingUpdatedValue: value,

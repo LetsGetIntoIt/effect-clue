@@ -2,9 +2,15 @@ import { Data, Either, Number, ReadonlyArray, pipe } from "effect";
 import { ChecklistValue, Knowledge, updateCaseFileChecklist, updatePlayerChecklist } from "./Knowledge";
 import { ALL_CARDS, ALL_PLAYERS, ALL_ROOM_CARDS, ALL_SUSPECT_CARDS, ALL_WEAPON_CARDS } from "./GameObjects";
 import { getOrUndefined } from "./utils/Effect";
-import { LogicalParadox } from "./LogicalParadox";
+import { CardHasTooFewOwners, CardHasTooManyOwners, CaseFileHasTooFewCards, CaseFileHasTooManyCards, LogicalParadox, PlayerHasTooFewCards, PlayerHasTooManyCards } from "./LogicalParadox";
 
 export type ConsistencyRule = (knowledge: Knowledge) => Either.Either<LogicalParadox, Knowledge>;
+
+const NUM_CASE_FILES = 1;
+const EXPECTED_MIN_NUM_OWNERS_PER_CARD = 1;
+const EXPECTED_MAX_NUM_OWNERS_PER_CARD = 1;
+const EXPECTED_MIN_NUM_CARDS_IN_CASE_FILE_PER_CATEGORY = 1;
+const EXPECTED_MAX_NUM_CARDS_IN_CASE_FILE_PER_CATEGORY = 1;
 
 export const cardsAreOwnedAtMostOnce: ConsistencyRule =
     (knowledge) => ReadonlyArray.reduce(
@@ -15,31 +21,40 @@ export const cardsAreOwnedAtMostOnce: ConsistencyRule =
 
         (knowledge, card) => Either.flatMap(knowledge, knowledge => {
             // Is this card owned by a player?
-            const isOwnedBySomePlayer = ReadonlyArray.some(
+            const numPlayerOwners = ReadonlyArray.filter(
                 ALL_PLAYERS,
 
                 player => getOrUndefined(
                     knowledge.playerChecklist,
                     Data.tuple(player, card)
-                ) === ChecklistValue("Y"),
-            );
+                ) === ChecklistValue("Y")
+            ).length;
 
             // Is this card owned by the case file?
-            const isOwnedByCaseFile = getOrUndefined(
+            const numCaseFileOwners = getOrUndefined(
                 knowledge.caseFileChecklist,
                 card
-            ) === ChecklistValue("Y");
+            ) === ChecklistValue("Y") ? 1 : 0;
 
             // If we don't know the owner of the card,
             // there's no new knowledge to learn
-            if (!isOwnedBySomePlayer && !isOwnedByCaseFile) {
+            if (numPlayerOwners + numCaseFileOwners < EXPECTED_MIN_NUM_OWNERS_PER_CARD) {
                 return Either.right(knowledge);
+            }
+
+            // If we've accounted for too many owners, that's an error
+            if (numPlayerOwners + numCaseFileOwners > EXPECTED_MAX_NUM_OWNERS_PER_CARD) {
+                return Either.left(CardHasTooManyOwners({
+                    card,
+                    numOwners: numPlayerOwners + numCaseFileOwners,
+                    expectedMaxNumOwners: EXPECTED_MAX_NUM_OWNERS_PER_CARD,
+                }));
             }
 
             // Otherwise set Ns for every other player
             return ReadonlyArray.reduce(
                 ALL_PLAYERS,
-                
+
                 // This typecast is annoying. See Discord thread: https://discord.com/channels/795981131316985866/1158093341855060048
                 Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
 
@@ -55,26 +70,26 @@ export const cardsAreOwnedAtMostOnce: ConsistencyRule =
                     // Set unknown players to N
                     return updatePlayerChecklist(
                         Data.tuple(player, card),
-                        ChecklistValue("N"),
+                        ChecklistValue("N")
                     )(knowledge);
-                }),
+                })
             ).pipe(
                 Either.flatMap(knowledge => {
                     // Set case file to N if unknown
                     if (getOrUndefined(
                         knowledge.caseFileChecklist,
-                        card,
+                        card
                     ) === undefined) {
                         return updateCaseFileChecklist(
                             card,
-                            ChecklistValue("N"),
+                            ChecklistValue("N")
                         )(knowledge);
                     }
 
                     return Either.right(knowledge);
-                }),
+                })
             );
-        }),
+        })
     );
 
 export const cardsAreOwnedAtLeastOnce: ConsistencyRule =
@@ -98,23 +113,30 @@ export const cardsAreOwnedAtLeastOnce: ConsistencyRule =
                         : 0
                 ),
 
-                ReadonlyArray.reduce(0, Number.sum),
+                ReadonlyArray.reduce(0, Number.sum)
             );
 
             // Does the casefile NOT own this card?
             const caseFileN = getOrUndefined(
                 knowledge.caseFileChecklist,
-                card,
+                card
             ) === ChecklistValue("N")
                 ? 1
                 : 0;
 
-            const totalNs = playerNs + caseFileN;
-
             // If there is not exactly one cell that is blank or Y,
             // there's no new knowledge to learn
-            if (totalNs !== ALL_PLAYERS.length) {
+            if (playerNs + caseFileN + EXPECTED_MAX_NUM_OWNERS_PER_CARD < ALL_PLAYERS.length + NUM_CASE_FILES) {
                 return Either.right(knowledge);
+            }
+
+             // If we've accounted for too many non-owners, that's a paradox
+            if (playerNs + caseFileN + EXPECTED_MIN_NUM_OWNERS_PER_CARD > ALL_PLAYERS.length + NUM_CASE_FILES) {
+                return Either.left(CardHasTooFewOwners({
+                    card,
+                    numNonOwners: playerNs + caseFileN,
+                    expectedMinNumOwners: EXPECTED_MIN_NUM_OWNERS_PER_CARD,
+                }));
             }
 
             // Otherwise set Ys for every other player
@@ -136,26 +158,26 @@ export const cardsAreOwnedAtLeastOnce: ConsistencyRule =
                     // Set unknown players to Y
                     return updatePlayerChecklist(
                         Data.tuple(player, card),
-                        ChecklistValue("Y"),
+                        ChecklistValue("Y")
                     )(knowledge);
-                }),
+                })
             ).pipe(
                 Either.flatMap(knowledge => {
                     // Set case file to Y if unknown
                     if (getOrUndefined(
                         knowledge.caseFileChecklist,
-                        card,
+                        card
                     ) === undefined) {
                         return updateCaseFileChecklist(
                             card,
-                            ChecklistValue("Y"),
+                            ChecklistValue("Y")
                         )(knowledge);
                     }
 
                     return Either.right(knowledge);
-                }),
+                })
             );
-        }),
+        })
     );
 
 export const playerOwnsAtMostHandSize: ConsistencyRule =
@@ -169,7 +191,7 @@ export const playerOwnsAtMostHandSize: ConsistencyRule =
             // Get the hand size for the player
             const handSize = getOrUndefined(
                 knowledge.playerHandSize,
-                player,
+                player
             );
 
             // If we don't know their hand size,
@@ -191,7 +213,7 @@ export const playerOwnsAtMostHandSize: ConsistencyRule =
                         : 0
                 ),
 
-                ReadonlyArray.reduce(0, Number.sum),
+                ReadonlyArray.reduce(0, Number.sum)
             );
 
             // If we haven't accounted for all their cards,
@@ -200,10 +222,20 @@ export const playerOwnsAtMostHandSize: ConsistencyRule =
                 return Either.right(knowledge);
             }
 
+            // If we've accounted for more than their hand size,
+            // that's a paradox
+            if (cardYs > handSize) {
+                return Either.left(PlayerHasTooManyCards({
+                    player,
+                    numOwned: cardYs,
+                    expectedMaxNumCards: handSize,
+                }));
+            }
+
             // Otherwise, mark the rest of the cards as Ns
             return ReadonlyArray.reduce(
                 ALL_CARDS,
-                
+
                 // This typecast is annoying. See Discord thread: https://discord.com/channels/795981131316985866/1158093341855060048
                 Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
 
@@ -219,11 +251,11 @@ export const playerOwnsAtMostHandSize: ConsistencyRule =
                     // Set unknown cards to N
                     return updatePlayerChecklist(
                         Data.tuple(player, card),
-                        ChecklistValue("N"),
+                        ChecklistValue("N")
                     )(knowledge);
-                }),
+                })
             );
-        }),
+        })
     );
 
 export const playerOwnsAtLeastHandSize: ConsistencyRule =
@@ -264,8 +296,17 @@ export const playerOwnsAtLeastHandSize: ConsistencyRule =
 
             // If we haven't accounted for all their Ns,
             // there's no new knowledge to learn
-            if (cardNs < (ALL_CARDS.length - handSize)) {
+            if (cardNs + handSize < ALL_CARDS.length) {
                 return Either.right(knowledge);
+            }
+
+            // If we've accounted for more than their share of Ns
+            if (cardNs + handSize > ALL_CARDS.length) {
+                return Either.left(PlayerHasTooFewCards({
+                    player,
+                    numNotOwned: cardNs,
+                    expectedMinNumCards: handSize,
+                }));
             }
 
             // Otherwise, mark the rest of the cards as Ys
@@ -303,19 +344,27 @@ export const caseFileOwnsAtMost1PerCategory: ConsistencyRule =
 
         (knowledge, cardsOfCategory) => Either.flatMap(knowledge, knowledge => {
             // Check if we have accounted for 1 of the category
-            const isSomeCardOwned = ReadonlyArray.some(
+            const numYs = ReadonlyArray.filter(
                 cardsOfCategory,
 
                 card => getOrUndefined(
                     knowledge.caseFileChecklist,
                     card,
                 ) === ChecklistValue("Y"),
-            );
+            ).length;
 
             // If we haven't gotten 1 Y for the category,
             // there's no new knowledge to learn
-            if (!isSomeCardOwned) {
+            if (numYs < EXPECTED_MIN_NUM_CARDS_IN_CASE_FILE_PER_CATEGORY) {
                 return Either.right(knowledge);
+            }
+
+            // If we've account for too many cards, that's an error
+            if (numYs > EXPECTED_MAX_NUM_CARDS_IN_CASE_FILE_PER_CATEGORY) {
+                return Either.left(CaseFileHasTooManyCards({
+                    numOwned: numYs,
+                    expectedMaxNumCards: EXPECTED_MAX_NUM_CARDS_IN_CASE_FILE_PER_CATEGORY,
+                }))
             }
 
             // Otherwise, mark the rest of the cards as Ns
@@ -370,8 +419,16 @@ export const caseFileOwnsAtLeast1PerCategory: ConsistencyRule =
 
             // If we haven't accounted for all but 1 Ns,
             // there's no new knowledge to learn
-            if (cardNs < (cardsOfCategory.length - 1)) {
+            if (cardNs + EXPECTED_MAX_NUM_CARDS_IN_CASE_FILE_PER_CATEGORY < cardsOfCategory.length) {
                 return Either.right(knowledge);
+            }
+
+            // If we've accounted for too many Ns, that's a paradox
+            if (cardNs + EXPECTED_MIN_NUM_CARDS_IN_CASE_FILE_PER_CATEGORY > cardsOfCategory.length) {
+                return Either.left(CaseFileHasTooFewCards({
+                    numNotOwned: cardNs,
+                    expectedMinNumCards: EXPECTED_MIN_NUM_CARDS_IN_CASE_FILE_PER_CATEGORY,
+                }));
             }
 
             // Otherwise, mark the rest of the cards as Ys
