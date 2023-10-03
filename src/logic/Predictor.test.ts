@@ -1,11 +1,10 @@
 import { Data, Effect, HashMap, HashSet } from "effect";
-import { ChecklistValue, Knowledge } from "./Knowledge";
+import { Knowledge } from "./Knowledge";
 import { Suggestion } from "./Suggestion";
 import { predict } from "./Predictor";
 
 import { effectOrFail, test } from "./test-utils/EffectTest";
 import "./test-utils/EffectExpectEquals";
-import { Card } from "./GameObjects";
 
 describe(predict, () => {
     test('no hallucinations', Effect.gen(function* ($) {

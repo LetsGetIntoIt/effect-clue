@@ -2,13 +2,13 @@ import { Data } from "effect";
 import { Card, Player } from "./GameObjects";
 
 export type LogicalParadox =
-    | LogicalParadoxPlayerChecklistValueYN
-    | LogicalParadoxPlayerChecklistValueNY
-    | LogicalParadoxCaseFileChecklistValueYN
-    | LogicalParadoxCaseFileChecklistValueNY
-    | LogicalParadoxPlayerHandSizeValue
-    | LogicalParadoxPlayerHandSizeNegative
-    | LogicalParadoxPlayerHandSizeTooBig;
+    | PlayerChecklistValueConflictYN
+    | PlayerChecklistValueConflictNY
+    | CaseFileChecklistValueConflictYN
+    | CaseFileChecklistValueConflictNY
+    | PlayerHandSizeValueConflict
+    | PlayerHandSizeNegative
+    | PlayerHandSizeTooBig;
 
 interface LogicalParadoxConflictingValue<K, V, VEnumerable extends boolean, V1 extends V, V2 extends (VEnumerable extends true ? Exclude<V, V1> : V)> extends Data.Case {
     key: K;
@@ -16,48 +16,48 @@ interface LogicalParadoxConflictingValue<K, V, VEnumerable extends boolean, V1 e
     conflictingUpdatedValue: V2;
 }
 
-interface LogicalParadoxPlayerChecklistValueYN extends LogicalParadoxConflictingValue<Data.Data<[Player, Card]>, "Y" | "N", true, "Y", "N"> {
-    _tag: "LogicalParadoxPlayerChecklistValueYN";
+interface PlayerChecklistValueConflictYN extends LogicalParadoxConflictingValue<Data.Data<[Player, Card]>, "Y" | "N", true, "Y", "N"> {
+    _tag: "PlayerChecklistValueConflictYN";
 }
 
-export const LogicalParadoxPlayerChecklistValueYN = Data.tagged<LogicalParadoxPlayerChecklistValueYN>("LogicalParadoxPlayerChecklistValueYN");
+export const PlayerChecklistValueConflictYN = Data.tagged<PlayerChecklistValueConflictYN>("PlayerChecklistValueConflictYN");
 
-interface LogicalParadoxPlayerChecklistValueNY extends LogicalParadoxConflictingValue<Data.Data<[Player, Card]>, "Y" | "N", true, "N", "Y"> {
-    _tag: "LogicalParadoxPlayerChecklistValueNY";
+interface PlayerChecklistValueConflictNY extends LogicalParadoxConflictingValue<Data.Data<[Player, Card]>, "Y" | "N", true, "N", "Y"> {
+    _tag: "PlayerChecklistValueConflictNY";
 }
 
-export const LogicalParadoxPlayerChecklistValueNY = Data.tagged<LogicalParadoxPlayerChecklistValueNY>("LogicalParadoxPlayerChecklistValueNY");
+export const PlayerChecklistValueConflictNY = Data.tagged<PlayerChecklistValueConflictNY>("PlayerChecklistValueConflictNY");
 
-interface LogicalParadoxCaseFileChecklistValueYN extends LogicalParadoxConflictingValue<Card, "Y" | "N", true, "Y", "N"> {
-    _tag: "LogicalParadoxCaseFileChecklistValueYN";
+interface CaseFileChecklistValueConflictYN extends LogicalParadoxConflictingValue<Card, "Y" | "N", true, "Y", "N"> {
+    _tag: "CaseFileChecklistValueConflictYN";
 }
 
-export const LogicalParadoxCaseFileChecklistValueYN = Data.tagged<LogicalParadoxCaseFileChecklistValueYN>("LogicalParadoxCaseFileChecklistValueYN");
+export const CaseFileChecklistValueConflictYN = Data.tagged<CaseFileChecklistValueConflictYN>("CaseFileChecklistValueConflictYN");
 
-interface LogicalParadoxCaseFileChecklistValueNY extends LogicalParadoxConflictingValue<Card, "Y" | "N", true, "N", "Y"> {
-    _tag: "LogicalParadoxCaseFileChecklistValueNY";
+interface CaseFileChecklistValueConflictNY extends LogicalParadoxConflictingValue<Card, "Y" | "N", true, "N", "Y"> {
+    _tag: "CaseFileChecklistValueConflictNY";
 }
 
-export const LogicalParadoxCaseFileChecklistValueNY = Data.tagged<LogicalParadoxCaseFileChecklistValueNY>("LogicalParadoxCaseFileChecklistValueNY");
+export const CaseFileChecklistValueConflictNY = Data.tagged<CaseFileChecklistValueConflictNY>("CaseFileChecklistValueConflictNY");
 
-interface LogicalParadoxPlayerHandSizeValue extends LogicalParadoxConflictingValue<Player, number, false, number, number> {
-    _tag: "LogicalParadoxPlayerHandSizeValue";
+interface PlayerHandSizeValueConflict extends LogicalParadoxConflictingValue<Player, number, false, number, number> {
+    _tag: "PlayerHandSizeValueConflict";
 }
 
-export const LogicalParadoxPlayerHandSizeValue = Data.tagged<LogicalParadoxPlayerHandSizeValue>("LogicalParadoxPlayerHandSizeValue");
+export const PlayerHandSizeValueConflict = Data.tagged<PlayerHandSizeValueConflict>("PlayerHandSizeValueConflict");
 
-interface LogicalParadoxPlayerHandSizeNegative extends Data.Case {
-    _tag: "LogicalParadoxPlayerHandSizeNegative";
+interface PlayerHandSizeNegative extends Data.Case {
+    _tag: "PlayerHandSizeNegative";
     player: Player;
     negativeHandSize: number;
 }
 
-export const LogicalParadoxPlayerHandSizeNegative = Data.tagged<LogicalParadoxPlayerHandSizeNegative>("LogicalParadoxPlayerHandSizeNegative");
+export const PlayerHandSizeNegative = Data.tagged<PlayerHandSizeNegative>("PlayerHandSizeNegative");
 
-interface LogicalParadoxPlayerHandSizeTooBig extends Data.Case {
-    _tag: "LogicalParadoxPlayerHandSizeTooBig";
+interface PlayerHandSizeTooBig extends Data.Case {
+    _tag: "PlayerHandSizeTooBig";
     player: Player;
     tooBigHandSize: number;
 }
 
-export const LogicalParadoxPlayerHandSizeTooBig = Data.tagged<LogicalParadoxPlayerHandSizeTooBig>("LogicalParadoxPlayerHandSizeTooBig");
+export const PlayerHandSizeTooBig = Data.tagged<PlayerHandSizeTooBig>("PlayerHandSizeTooBig");
