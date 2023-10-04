@@ -1,76 +1,31 @@
-import { Brand } from "effect";
+import { Brand, Data, HashMap, HashSet } from "effect";
 
-export type Player = Brand.Branded<
-    | "Anisha"
-    | "Bob"
-    | "Cho",
-    'Player'
->;
+export type Player = Brand.Branded<string, "Player">;
 export const Player = Brand.nominal<Player>();
-export const ALL_PLAYERS = [
-    Player("Anisha"),
-    Player("Bob"),
-    Player("Cho"),
-];
 
-export type Card = Brand.Branded<
-    | "Miss Scarlet"
-    | "Col. Mustard"
-    | "Mrs. White"
-    | "Mr. Green"
-    | "Mrs. Peacock"
-    | "Prof. Plum"
-    | "Candlestick"
-    | "Knife"
-    | "Lead pipe"
-    | "Revolver"
-    | "Rope"
-    | "Wrench"
-    | "Kitchen"
-    | "Ball room"
-    | "Conservatory"
-    | "Dining room"
-    | "Billiard room"
-    | "Library"
-    | "Lounge"
-    | "Hall"
-    | "Study",
-    'Card'
->;
+export type CardCategory = Brand.Branded<string, "CardCategory">;
+export const CardCategory = Brand.nominal<CardCategory>();
+
+export type Card = Brand.Branded<[CardCategory, string], "Card">;
 export const Card = Brand.nominal<Card>();
 
-export const ALL_SUSPECT_CARDS: Card[] = [
-    Card("Miss Scarlet"),
-    Card("Col. Mustard"),
-    Card("Mrs. White"),
-    Card("Mr. Green"),
-    Card("Mrs. Peacock"),
-    Card("Prof. Plum"),
-];
+export class GameObjects extends Data.Class<{
+    players: HashSet.HashSet<Player>;
+    cards: HashSet.HashSet<Card>;
+}> {
+    private _cardCategories: HashSet.HashSet<CardCategory> | undefined;
+    get cardCategories() {
+        if (!this._cardCategories) {
+            this._cardCategories = HashSet.map(this.cards, ([category]) => category);
+        }
+        return this._cardCategories;
+    }
 
-export const ALL_WEAPON_CARDS: Card[] = [
-    Card("Candlestick"),
-    Card("Knife"),
-    Card("Lead pipe"),
-    Card("Revolver"),
-    Card("Rope"),
-    Card("Wrench"),
-];
-
-export const ALL_ROOM_CARDS: Card[] = [
-    Card("Kitchen"),
-    Card("Ball room"),
-    Card("Conservatory"),
-    Card("Dining room"),
-    Card("Billiard room"),
-    Card("Library"),
-    Card("Lounge"),
-    Card("Hall"),
-    Card("Study"),
-];
-
-export const ALL_CARDS: Card[] = [
-    ...ALL_SUSPECT_CARDS,
-    ...ALL_WEAPON_CARDS,
-    ...ALL_ROOM_CARDS,
-];
+    private _cardsByCategory: HashMap.HashMap<CardCategory, HashSet.HashSet<Card>> | undefined;
+    get cardsByCategory() {
+        if (!this._cardsByCategory) {
+            this._cardsByCategory = null as unknown as HashMap.HashMap<CardCategory, HashSet.HashSet<Card>>;
+        }
+        return this._cardsByCategory;
+    }
+}

@@ -5,22 +5,27 @@ import { nonRefutersDontHaveSuggestedCards, refuterUsedOnlyCardTheyOwn, refuterU
 import { Suggestion } from "./Suggestion";
 import { LogicalParadox } from "./LogicalParadox";
 import { compose } from "effect/Function";
+import { GameObjects } from "./GameObjects";
 
 export type Deducer = (
+    gameObjects: GameObjects,
+) => (
     suggestions: HashSet.HashSet<Suggestion>,
 ) => (
     knowledge: Knowledge,
 ) => Either.Either<LogicalParadox, Knowledge>;
 
-export const deduce: Deducer = (suggestions) => {
+export const deduce: Deducer = (gameObjects) => (suggestions) => {
     const allRules = [
         // All consistency rules
-        cardsAreOwnedAtMostOnce,
-        cardsAreOwnedAtLeastOnce,
-        playerOwnsAtMostHandSize,
-        playerOwnsAtLeastHandSize,
-        caseFileOwnsAtMost1PerCategory,
-        caseFileOwnsAtLeast1PerCategory,
+        ...ReadonlyArray.map([
+            cardsAreOwnedAtMostOnce,
+            cardsAreOwnedAtLeastOnce,
+            playerOwnsAtMostHandSize,
+            playerOwnsAtLeastHandSize,
+            caseFileOwnsAtMost1PerCategory,
+            caseFileOwnsAtLeast1PerCategory,
+        ], (consistencyRule) => consistencyRule(gameObjects)),
 
         // All deduction rules
         ...ReadonlyArray.map([
