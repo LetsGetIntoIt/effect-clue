@@ -1,4 +1,4 @@
-import { Data, Either, HashMap, HashSet, Match, ReadonlyArray, Tuple, pipe, Effect, Cache, Stream, Option, Number as EffectNumber, Bigint, Predicate, flow } from "effect";
+import { Data, Either, HashMap, HashSet, Match, ReadonlyArray, Tuple, pipe, Effect, Cache, Option, Number as EffectNumber, Bigint, Equal } from "effect";
 import { ChecklistValue, Knowledge, updateCaseFileChecklist as updateKnowledgeCaseFileChecklist, updatePlayerChecklist as updateKnowledgePlayerChecklist } from "./Knowledge";
 import { ALL_CARDS, ALL_PLAYERS, ALL_ROOM_CARDS, ALL_SUSPECT_CARDS, ALL_WEAPON_CARDS, Card, Player } from "./GameObjects";
 import { deduce } from "./Deducer";
@@ -14,24 +14,10 @@ export type Predictor = (
 ) => Effect.Effect<never, never, Prediction>;
 
 export const predict: Predictor = (suggestions, knowledge) => Effect.gen(function* ($) {
-    const cachedCountWaysDefinite = yield* $(Cache.make({
+    const cachedCountWays: Cache.Cache<Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>, never, bigint> = yield* $(Cache.make({
         capacity: Number.MAX_SAFE_INTEGER,
         timeToLive: Infinity,
-        lookup: (knowledge: Knowledge) => countWaysDefinite(knowledge),
-    }));
-
-    const cachedAllKnowledgeBranches = yield* $(Cache.make({
-        capacity: Number.MAX_SAFE_INTEGER,
-        timeToLive: Infinity,
-        lookup: (suggestionsAndKnowledge: Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>) =>
-            Effect.sync(() => allKnowledgeBranches(suggestionsAndKnowledge)),
-    }));
-
-    const cachedCountWays = yield* $(Cache.make({
-        capacity: Number.MAX_SAFE_INTEGER,
-        timeToLive: Infinity,
-        lookup: (suggestionsAndKnowledge: Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>) =>
-            countWays(suggestionsAndKnowledge, cachedAllKnowledgeBranches, cachedCountWaysDefinite),
+        lookup: (key: Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>) => countWays(key, cachedCountWays),
     }));
 
     const currentKnowledgeNumWays = yield* $(cachedCountWays.get(Data.tuple(suggestions, knowledge)));
@@ -76,14 +62,10 @@ export const predict: Predictor = (suggestions, knowledge) => Effect.gen(functio
             const combinatorics = yield* $(Combinatorics);
 
             const combinatoricsStats = yield* $(combinatorics.cacheStats());
-            const cachedCountWaysDefiniteStats = yield* $(cachedCountWaysDefinite.cacheStats());
-            const cachedAllKnowledgeBranchesStats = yield* $(cachedAllKnowledgeBranches.cacheStats());
             const cachedCountWaysStats = yield* $(cachedCountWays.cacheStats());
 
             console.log({
                 combinatoricsStats,
-                cachedCountWaysDefiniteStats,
-                cachedAllKnowledgeBranchesStats,
                 cachedCountWaysStats,
             });
         })),
@@ -94,99 +76,31 @@ export const predict: Predictor = (suggestions, knowledge) => Effect.gen(functio
 
 const countWays = (
     [suggestions, knowledge]: Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>,
-    allKnowledgeBranches: Cache.Cache<Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>, never, readonly Knowledge[]>,
-    countWaysDefinite: Cache.Cache<Knowledge, never, bigint>,
-): Effect.Effect<never, never, bigint> => pipe(
-    // Get all possible places the suggestions could take our knowledge
-    allKnowledgeBranches.get(Data.tuple(suggestions, knowledge)),
-
-    // Maximally deduce the knowledge
-    // Our counter relies on this
-    Effect.map(ReadonlyArray.filterMap(flow(
-        deduce(suggestions),
-        // Discard any paradoxical knowledge states 
-        Either.getRight,
-    ))),
-
-    Effect.flatMap(Effect.reduce(
-        0n,
-        (totalNumWays, knowledgeBranch) => countWaysDefinite.get(knowledgeBranch).pipe(
-            // TODO can this be tail-recursion optimized? Probably not, with the cache
-            Effect.map(Bigint.sum(totalNumWays)),
-        ),
-    )),
-);
-
-const allKnowledgeBranches = (
-    [suggestions, knowledge]: Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>,
-): readonly Knowledge[] => pipe(
-    HashSet.values(suggestions),
-
-    // We only want suggestions that were refuted with an unknown card
-    ReadonlyArray.filterMap(({ cards, refuter, seenCard }) => {
-        if (Predicate.isNotNullable(refuter) && Predicate.isNullable(seenCard)) {
-            return Option.some({
-                cards,
-                refuter,
-            });
-        }
-
-        return Option.none();
-    }),
-
-    // If there are no such suggestions, then we don't need to branch! We're already at the leaf node
-    Option.liftPredicate(ReadonlyArray.isNonEmptyArray),
-    Option.match({
-        onNone: () => ReadonlyArray.of(knowledge),
-
-        onSome: flow(
-            // For each suggestion, create an individual stream of the possible [refuter, card] pairs
-            ReadonlyArray.map(({ cards, refuter }) => pipe(
-                cards,
-                HashSet.map(card => Tuple.tuple(refuter, card)),
-            )),
-
-            // Now between these, we want every possible combination of all of them
-            ReadonlyArray.reduce(
-                ReadonlyArray.empty<[Player, Card][]>(), 
-
-                // For every branch, track every [player, card] pair we have to set to get there
-                (allChainsSoFar, nextBranches) => ReadonlyArray.cartesianWith(
-                    allChainsSoFar,
-                    ReadonlyArray.fromIterable(nextBranches),
-                    (chainSoFar, nextBranch) => ReadonlyArray.append(chainSoFar, nextBranch),
-                ),
-            ),
-
-            // For each branch of possiblities, apply those changes sequentially until
-            // we arrive at an end knowledge state
-            // Only keep the Knowledge states we could reach without any logical paradoxes
-            ReadonlyArray.filterMap(flow(
-                ReadonlyArray.reduce(
-                    Either.right(knowledge) as Either.Either<LogicalParadox, Knowledge>,
-                    (knowledge, [player, card]) => Either.flatMap(knowledge, updateKnowledgePlayerChecklist(
-                        Data.tuple(player, card),
-                        ChecklistValue("Y")
-                    ))
-                ),
-
-                // Keep only non-paradoxical knowledge states
-                Either.getRight
-            )),
-        ),
-    }),
-);
-
-const countWaysDefinite = (
-    knowledge: Knowledge,
+    cachedSelf: Cache.Cache<Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>, never, bigint>,
 ): Effect.Effect<Combinatorics, never, bigint> => Effect.gen(function* ($) {
-    const { binomial } = yield* $(Combinatorics);
-
-    // Assume that the given knowledge has been deduced as much as possible
+    // First, run our hardcoded deductions to learn as much as we can
     // Particularly, we rely on:
     // - Every row with a Y should have N's everywhere else
     // - Every non-refuter has been assigned an N for the suggested cards
+    const advancedKnowledgeEither = deduce(suggestions)(knowledge);
+    if (Either.isLeft(advancedKnowledgeEither)) {
+        // There was a paradox! That means this state is impossible
+        return 0n;
+    }
+    const advancedKnowledge = advancedKnowledgeEither.right;
+    // If we've learned something new, recursively call the cached version of this
+    // function. That ensures the ensuing result will be cached for both the input
+    // knowledge and the futher-deduced knowledge
+    if (!Equal.equals(knowledge, advancedKnowledge)) {
+        return yield* $(cachedSelf.get(Data.tuple(suggestions, advancedKnowledge)));
+    }
+    // Otherwise, the input knowledge is advanced as possible, so we can continue
+
+    // Now that we've run our deductions, count the number of ways there are to
+    // assign all the known Ys in the checklist (this is easy - it's just 1)
     const numWaysToAssignAllYs = 1n;
+
+    const { binomial } = yield* $(Combinatorics);
 
     const caseFilePreWork = ReadonlyArray.map(
         [ALL_SUSPECT_CARDS, ALL_WEAPON_CARDS, ALL_ROOM_CARDS],
@@ -339,19 +253,6 @@ interface PlayerChecklistPossibility extends Data.Case {
 }
 
 const PlayerChecklistPossibility =  Data.tagged<PlayerChecklistPossibility>("PlayerChecklistPossibility");
-
-const getKnowledgePossibilities = (knowledge: Knowledge): readonly KnowledgePossibility[] =>
-    ReadonlyArray.filter(
-        allKnowledgePossibilities,
-
-        // Only include cells that we don't know anything about
-        Match.type<KnowledgePossibility>().pipe(
-            Match.tagsExhaustive({
-                CaseFileChecklistPossibility: ({ key }) => !HashMap.has(knowledge.caseFileChecklist, key),
-                PlayerChecklistPossibility: ({ key }) => !HashMap.has(knowledge.playerChecklist, key),
-            }),
-        ),
-    );
 
 const allKnowledgePossibilities: readonly KnowledgePossibility[] =
     ReadonlyArray.appendAll(

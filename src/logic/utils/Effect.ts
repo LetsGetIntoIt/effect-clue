@@ -1,5 +1,5 @@
-import { Either, HashMap, Option } from "effect";
-import { dual, pipe } from "effect/Function";
+import { Either, HashMap, Option, pipe } from "effect";
+import { dual } from "effect/Function";
 
 export const getOrUndefined: {
     <K1>(key: K1): <K, V>(self: HashMap.HashMap<K, V>) => V | undefined

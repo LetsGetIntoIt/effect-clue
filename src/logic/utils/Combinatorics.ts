@@ -1,13 +1,15 @@
-import { Context, Effect, Layer, pipe, Cache, Bigint, Match, Data } from "effect";
+import { Context, Effect, Layer, pipe, Cache, Bigint, Match, Data, HashSet, Hash } from "effect";
 import { CacheStats } from "effect/Cache";
 
 export interface Combinatorics {
     factorial: (n: number) => Effect.Effect<never, never, bigint>;
     binomial: (n: number, k: number) => Effect.Effect<never, never, bigint>;
+    subsets: <A>(self: HashSet.HashSet<A>) => Effect.Effect<never, never, HashSet.HashSet<HashSet.HashSet<A>>>;
 
     cacheStats: () => Effect.Effect<never, never, {
         factorial: CacheStats;
         binomial: CacheStats;
+        subsets: CacheStats;
     }>;
 }
 
@@ -26,13 +28,21 @@ export const combinatoricsLive: Layer.Layer<never, never, Combinatorics> = Layer
         lookup: ([n, k]: Data.Data<[number, number]>) => binomial(n, k, cachedFactorial),
     }));
 
+    const cachedSubsets = yield* $(Cache.make({
+        capacity: Number.MAX_SAFE_INTEGER,
+        timeToLive: Infinity,
+        lookup: (set: HashSet.HashSet<unknown>) => Effect.sync(() => subsets(set)),
+    }));
+
     return Combinatorics.of({
         factorial: (n) => cachedFactorial.get(n),
         binomial: (n, k) => cachedBinomial.get(Data.tuple(n, k)),
+        subsets: <A>(set: HashSet.HashSet<A>) => cachedSubsets.get(set) as Effect.Effect<never, never, HashSet.HashSet<HashSet.HashSet<A>>>,
 
         cacheStats: () => Effect.all({
             factorial: cachedFactorial.cacheStats(),
             binomial: cachedBinomial.cacheStats(),
+            subsets: cachedSubsets.cacheStats(),
         }),
     });
 }));
@@ -54,3 +64,14 @@ const factorial = (n: number, factorial: Cache.Cache<number, never, bigint>): Ef
         : factorial.get(n - 1).pipe(
             Effect.map(Bigint.multiply(BigInt(n))),
         );
+
+export const subsets = <A>(hashSet: HashSet.HashSet<A>): HashSet.HashSet<HashSet.HashSet<A>> =>
+    // TODO can make this maybe more performant by using recursion (which will maybe put more in the cache)
+    HashSet.reduce(
+        hashSet,
+        HashSet.make(HashSet.empty<A>()),
+        (subsets, nextElement) => HashSet.union(
+            subsets,
+            HashSet.map(subsets, HashSet.add(nextElement)),
+        ),
+    );
