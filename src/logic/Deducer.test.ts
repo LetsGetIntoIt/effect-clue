@@ -1,14 +1,19 @@
-import { Data, Either, HashMap, HashSet, ReadonlyArray, Tuple } from "effect";
+import { Data, Either, HashMap, HashSet, Tuple } from "effect";
 import { ChecklistValue, Knowledge } from "./Knowledge";
 import { Suggestion } from "./Suggestion";
-import { ALL_CARDS, Card, Player } from "./GameObjects";
+import { GameObjects, Player, cardsNorthAmerica, cardsNorthAmericaSet } from "./GameObjects";
 import { deduce } from "./Deducer";
 
 import "./test-utils/EffectExpectEquals";
 
 describe(deduce, () => {
     test('no hallucinations', () => {
-        const initialKnowledge: Knowledge = Data.struct({
+        const gameObjects = new GameObjects({
+            cards: cardsNorthAmericaSet,
+            players: HashSet.make(Player("Anisha"), Player("Bob"), Player("Cho")),
+        });
+
+        const initialKnowledge: Knowledge = new Knowledge({
             playerChecklist: HashMap.empty(),
             caseFileChecklist: HashMap.empty(),
             playerHandSize: HashMap.empty(),
@@ -17,18 +22,23 @@ describe(deduce, () => {
         const suggestions: HashSet.HashSet<Suggestion> = HashSet.empty();
 
         const newKnowledge
-            = deduce(suggestions)(initialKnowledge);
+            = deduce(gameObjects)(suggestions)(initialKnowledge);
 
         // We learned nothing new
         expect(newKnowledge).toEqual(Either.right(initialKnowledge));
     });
 
     test('applies all rules', () => {
-        const initialKnowledge: Knowledge = Data.struct({
+        const gameObjects = new GameObjects({
+            cards: cardsNorthAmericaSet,
+            players: HashSet.make(Player("Anisha"), Player("Bob"), Player("Cho")),
+        });
+
+        const initialKnowledge: Knowledge = new Knowledge({
             playerChecklist: HashMap.make(
-                [Data.tuple(Player("Anisha"), Card("Col. Mustard")), ChecklistValue("Y")],
-                [Data.tuple(Player("Anisha"), Card("Revolver")), ChecklistValue("Y")],
-                [Data.tuple(Player("Anisha"), Card("Library")), ChecklistValue("Y")],
+                [Data.tuple(Player("Anisha"), cardsNorthAmerica.colMustard), ChecklistValue("Y")],
+                [Data.tuple(Player("Anisha"), cardsNorthAmerica.revolver), ChecklistValue("Y")],
+                [Data.tuple(Player("Anisha"), cardsNorthAmerica.library), ChecklistValue("Y")],
             ),
 
             caseFileChecklist: HashMap.empty(),
@@ -42,15 +52,15 @@ describe(deduce, () => {
         const suggestions: HashSet.HashSet<Suggestion> = HashSet.make(
             Data.struct({
                 suggester: Player("Anisha"),
-                cards: HashSet.make(Card("Prof. Plum"), Card("Knife"), Card("Conservatory")),
+                cards: HashSet.make(cardsNorthAmerica.profPlum, cardsNorthAmerica.knife, cardsNorthAmerica.conservatory),
                 nonRefuters: HashSet.empty(),
                 refuter: Player("Bob"),
-                seenCard: Card("Conservatory"),
+                seenCard: cardsNorthAmerica.conservatory,
             }),
 
             Data.struct({
                 suggester: Player("Cho"),
-                cards: HashSet.make(Card("Col. Mustard"), Card("Revolver"), Card("Kitchen")),
+                cards: HashSet.make(cardsNorthAmerica.colMustard, cardsNorthAmerica.revolver, cardsNorthAmerica.kitchen),
                 nonRefuters: HashSet.make(Player("Bob")),
                 refuter: undefined,
                 seenCard: undefined,
@@ -58,7 +68,7 @@ describe(deduce, () => {
 
             Data.struct({
                 suggester: Player("Cho"),
-                cards: HashSet.make(Card("Col. Mustard"), Card("Rope"), Card("Kitchen")),
+                cards: HashSet.make(cardsNorthAmerica.colMustard, cardsNorthAmerica.rope, cardsNorthAmerica.kitchen),
                 nonRefuters: HashSet.empty(),
                 refuter: Player("Bob"),
                 seenCard: undefined,
@@ -66,63 +76,63 @@ describe(deduce, () => {
         );
 
         const newKnowledge
-            = deduce(suggestions)(initialKnowledge);
+            = deduce(gameObjects)(suggestions)(initialKnowledge);
 
-        expect(newKnowledge).toEqual(Either.right(Data.struct({
+        expect(newKnowledge).toEqual(Either.right(new Knowledge({
             playerChecklist: HashMap.make(
                 // By the end, we will have accounted for all these players' cards
                 // and we'll know that doesn't have any of the rest
                 // So by default, all the cards are Ns for her unless otherwise specified
-                ...ReadonlyArray.flatMap(ALL_CARDS, card => [
+                ...HashSet.flatMap(gameObjects.cards, card => [
                     Tuple.tuple(Data.tuple(Player("Anisha"), card), ChecklistValue("N")),
                     Tuple.tuple(Data.tuple(Player("Bob"), card), ChecklistValue("N")),
                 ]),
 
                 // Our initial knowledge
-                [Data.tuple(Player("Anisha"), Card("Col. Mustard")), ChecklistValue("Y")],
-                [Data.tuple(Player("Anisha"), Card("Revolver")), ChecklistValue("Y")],
-                [Data.tuple(Player("Anisha"), Card("Library")), ChecklistValue("Y")],
+                [Data.tuple(Player("Anisha"), cardsNorthAmerica.colMustard), ChecklistValue("Y")],
+                [Data.tuple(Player("Anisha"), cardsNorthAmerica.revolver), ChecklistValue("Y")],
+                [Data.tuple(Player("Anisha"), cardsNorthAmerica.library), ChecklistValue("Y")],
 
                 // Nobody else has Anisha's cards
-                [Data.tuple(Player("Bob"), Card("Col. Mustard")), ChecklistValue("N")],
-                [Data.tuple(Player("Bob"), Card("Revolver")), ChecklistValue("N")],
-                [Data.tuple(Player("Bob"), Card("Library")), ChecklistValue("N")],
-                [Data.tuple(Player("Cho"), Card("Col. Mustard")), ChecklistValue("N")],
-                [Data.tuple(Player("Cho"), Card("Revolver")), ChecklistValue("N")],
-                [Data.tuple(Player("Cho"), Card("Library")), ChecklistValue("N")],
+                [Data.tuple(Player("Bob"), cardsNorthAmerica.colMustard), ChecklistValue("N")],
+                [Data.tuple(Player("Bob"), cardsNorthAmerica.revolver), ChecklistValue("N")],
+                [Data.tuple(Player("Bob"), cardsNorthAmerica.library), ChecklistValue("N")],
+                [Data.tuple(Player("Cho"), cardsNorthAmerica.colMustard), ChecklistValue("N")],
+                [Data.tuple(Player("Cho"), cardsNorthAmerica.revolver), ChecklistValue("N")],
+                [Data.tuple(Player("Cho"), cardsNorthAmerica.library), ChecklistValue("N")],
 
                 // Bob has the conservatory because we saw it
-                [Data.tuple(Player("Bob"), Card("Conservatory")), ChecklistValue("Y")],
+                [Data.tuple(Player("Bob"), cardsNorthAmerica.conservatory), ChecklistValue("Y")],
 
                 // Nobody else has Bob's cards
-                [Data.tuple(Player("Cho"), Card("Conservatory")), ChecklistValue("N")],
+                [Data.tuple(Player("Cho"), cardsNorthAmerica.conservatory), ChecklistValue("N")],
 
                 // Bob doesn't have the Kitchen because he couldn't refute
-                [Data.tuple(Player("Bob"), Card("Kitchen")), ChecklistValue("N")],
+                [Data.tuple(Player("Bob"), cardsNorthAmerica.kitchen), ChecklistValue("N")],
 
                 // Bob has the rope because its the only card he could have refuted with
-                [Data.tuple(Player("Bob"), Card("Rope")), ChecklistValue("Y")],
+                [Data.tuple(Player("Bob"), cardsNorthAmerica.rope), ChecklistValue("Y")],
 
                 // Nobody else has Bob's cards
-                [Data.tuple(Player("Anisha"), Card("Rope")), ChecklistValue("N")],
-                [Data.tuple(Player("Cho"), Card("Rope")), ChecklistValue("N")],
+                [Data.tuple(Player("Anisha"), cardsNorthAmerica.rope), ChecklistValue("N")],
+                [Data.tuple(Player("Cho"), cardsNorthAmerica.rope), ChecklistValue("N")],
             ),
 
             caseFileChecklist: HashMap.make(
                 // Nobody else has Anisha's cards
-                [Card("Col. Mustard"), ChecklistValue("N")],
-                [Card("Revolver"), ChecklistValue("N")],
-                [Card("Library"), ChecklistValue("N")],
-                [Card("Col. Mustard"), ChecklistValue("N")],
-                [Card("Revolver"), ChecklistValue("N")],
-                [Card("Library"), ChecklistValue("N")],
+                [cardsNorthAmerica.colMustard, ChecklistValue("N")],
+                [cardsNorthAmerica.revolver, ChecklistValue("N")],
+                [cardsNorthAmerica.library, ChecklistValue("N")],
+                [cardsNorthAmerica.colMustard, ChecklistValue("N")],
+                [cardsNorthAmerica.revolver, ChecklistValue("N")],
+                [cardsNorthAmerica.library, ChecklistValue("N")],
 
                 // Nobody else has Bob's cards
-                [Card("Conservatory"), ChecklistValue("N")],
+                [cardsNorthAmerica.conservatory, ChecklistValue("N")],
 
                 // Nobody else has Bob's cards
-                [Card("Rope"), ChecklistValue("N")],
-                [Card("Rope"), ChecklistValue("N")],
+                [cardsNorthAmerica.rope, ChecklistValue("N")],
+                [cardsNorthAmerica.rope, ChecklistValue("N")],
             ),
 
             playerHandSize: HashMap.make(

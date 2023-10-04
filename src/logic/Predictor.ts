@@ -1,6 +1,6 @@
 import { Data, Either, HashMap, HashSet, Match, ReadonlyArray, Tuple, pipe, Effect, Cache, Option, Number as EffectNumber, Bigint, Equal } from "effect";
 import { ChecklistValue, Knowledge, updateCaseFileChecklist as updateKnowledgeCaseFileChecklist, updatePlayerChecklist as updateKnowledgePlayerChecklist } from "./Knowledge";
-import { ALL_CARDS, ALL_PLAYERS, ALL_ROOM_CARDS, ALL_SUSPECT_CARDS, ALL_WEAPON_CARDS, Card, Player } from "./GameObjects";
+import { Card, GameObjects, Player } from "./GameObjects";
 import { deduce } from "./Deducer";
 import { Suggestion } from "./Suggestion";
 import { Prediction, emptyPrediction, updateCaseFileChecklist as updatePredictionCaseFileChecklist, updatePlayerChecklist as updatePredictionPlayerChecklist } from "./Prediction";
@@ -9,23 +9,26 @@ import { LogicalParadox } from "./LogicalParadox";
 import { Combinatorics, combinatoricsLive } from "./utils/Combinatorics";
 
 export type Predictor = (
+    gameObjects: GameObjects,
     suggestions: HashSet.HashSet<Suggestion>,
     knowledge: Knowledge,
 ) => Effect.Effect<never, never, Prediction>;
 
-export const predict: Predictor = (suggestions, knowledge) => Effect.gen(function* ($) {
-    const cachedCountWays: Cache.Cache<Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>, never, bigint> = yield* $(Cache.make({
+type PredictorLookupKey = Data.Data<[GameObjects, HashSet.HashSet<Suggestion>, Knowledge]>;
+
+export const predict: Predictor = (gameObjects, suggestions, knowledge) => Effect.gen(function* ($) {
+    const cachedCountWays: Cache.Cache<PredictorLookupKey, never, bigint> = yield* $(Cache.make({
         capacity: Number.MAX_SAFE_INTEGER,
         timeToLive: Infinity,
-        lookup: (key: Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>) => countWays(key, cachedCountWays),
+        lookup: (key: PredictorLookupKey) => countWays(key, cachedCountWays),
     }));
 
-    const currentKnowledgeNumWays = yield* $(cachedCountWays.get(Data.tuple(suggestions, knowledge)));
+    const currentKnowledgeNumWays = yield* $(cachedCountWays.get(Data.tuple(gameObjects, suggestions, knowledge)));
 
     // For each blank key, see how many ways we can get a Y there
     return yield* $(
         // Get all the knowledge possiblities for which we want to determine probability
-        allKnowledgePossibilities,
+        allKnowledgePossibilities(gameObjects),
         // // Get all the BLANK knowledge possiblities for which we want to determine probability
         // // Use this if we want to save some resources calculating the whole thing
         // getKnowledgePossibilities(knowledge),
@@ -40,7 +43,7 @@ export const predict: Predictor = (suggestions, knowledge) => Effect.gen(functio
                 onLeft: () => Effect.succeed(0n),
 
                 // Count how many ways this is possible
-                onRight: knowledge => cachedCountWays.get(Data.tuple(suggestions, knowledge)),
+                onRight: knowledge => cachedCountWays.get(Data.tuple(gameObjects, suggestions, knowledge)),
             }),
 
             // Convert this count to a probability, associated with the key
@@ -75,14 +78,14 @@ export const predict: Predictor = (suggestions, knowledge) => Effect.gen(functio
 );
 
 const countWays = (
-    [suggestions, knowledge]: Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>,
-    cachedSelf: Cache.Cache<Data.Data<[HashSet.HashSet<Suggestion>, Knowledge]>, never, bigint>,
+    [gameObjects, suggestions, knowledge]: PredictorLookupKey,
+    cachedSelf: Cache.Cache<PredictorLookupKey, never, bigint>,
 ): Effect.Effect<Combinatorics, never, bigint> => Effect.gen(function* ($) {
     // First, run our hardcoded deductions to learn as much as we can
     // Particularly, we rely on:
     // - Every row with a Y should have N's everywhere else
     // - Every non-refuter has been assigned an N for the suggested cards
-    const advancedKnowledgeEither = deduce(suggestions)(knowledge);
+    const advancedKnowledgeEither = deduce(gameObjects)(suggestions)(knowledge);
     if (Either.isLeft(advancedKnowledgeEither)) {
         // There was a paradox! That means this state is impossible
         return 0n;
@@ -92,7 +95,7 @@ const countWays = (
     // function. That ensures the ensuing result will be cached for both the input
     // knowledge and the futher-deduced knowledge
     if (!Equal.equals(knowledge, advancedKnowledge)) {
-        return yield* $(cachedSelf.get(Data.tuple(suggestions, advancedKnowledge)));
+        return yield* $(cachedSelf.get(Data.tuple(gameObjects, suggestions, advancedKnowledge)));
     }
     // Otherwise, the input knowledge is advanced as possible, so we can continue
 
@@ -102,10 +105,11 @@ const countWays = (
 
     const { binomial } = yield* $(Combinatorics);
 
-    const caseFilePreWork = ReadonlyArray.map(
-        [ALL_SUSPECT_CARDS, ALL_WEAPON_CARDS, ALL_ROOM_CARDS],
+    const caseFilePreWork = pipe(
+        HashMap.values(gameObjects.cardsByCategory),
+        ReadonlyArray.fromIterable,
 
-        ReadonlyArray.reduce(
+        ReadonlyArray.map(HashSet.reduce(
             {
                 numCards: 0,
                 numNs: 0,
@@ -129,7 +133,7 @@ const countWays = (
                     }),
                 };
             }
-        ),
+        )),
     );
 
     const numWaysToAssignCaseFile = yield* $(
@@ -155,8 +159,8 @@ const countWays = (
     );
 
     const [playersWithoutHandSize, playersWithHandSize] = pipe(
-        ALL_PLAYERS,
-        ReadonlyArray.map(player => pipe(
+        gameObjects.players,
+        HashSet.map(player => pipe(
             HashMap.get(knowledge.playerHandSize, player),
             Either.fromOption(() => player),
             Either.map(handSize => Tuple.tuple(player, handSize)),
@@ -168,7 +172,7 @@ const countWays = (
         playersWithHandSize,
 
         ReadonlyArray.map(([player, handSize]) => ReadonlyArray.reduce(
-            ALL_CARDS,
+            gameObjects.cards,
             { handSize, numNs: 0, numYs: 0 },
             ({ handSize, numNs, numYs }, card) => {
                 const cardKnowledge = HashMap.get(knowledge.playerChecklist, Data.tuple(player, card));
@@ -202,7 +206,7 @@ const countWays = (
     const numBlanksPlayersWithoutHandSize = pipe(
         ReadonlyArray.cartesian(
             playersWithoutHandSize,
-            ALL_CARDS,
+            ReadonlyArray.fromIterable(gameObjects.cards),
         ),
         ReadonlyArray.filter(([player, card]) => !HashMap.has(knowledge.playerChecklist, Data.tuple(player, card))),
         ReadonlyArray.length,
@@ -210,7 +214,7 @@ const countWays = (
 
     const numCardsLeftToAssignToPlayersWithoutHandSize = pipe(
         // How many cards are in the game
-        ALL_CARDS.length,
+        HashSet.size(gameObjects.cards),
 
         // How many cards are committed to the case file
         EffectNumber.subtract(pipe(
@@ -254,19 +258,22 @@ interface PlayerChecklistPossibility extends Data.Case {
 
 const PlayerChecklistPossibility =  Data.tagged<PlayerChecklistPossibility>("PlayerChecklistPossibility");
 
-const allKnowledgePossibilities: readonly KnowledgePossibility[] =
+const allKnowledgePossibilities = (gameObjects: GameObjects): readonly KnowledgePossibility[] =>
     ReadonlyArray.appendAll(
         // All possible case file checklist keys
         pipe(
-            ALL_CARDS,
-            ReadonlyArray.map(card => CaseFileChecklistPossiblity({
+            gameObjects.cards,
+            HashSet.map(card => CaseFileChecklistPossiblity({
                 key: card,
             })),
         ),
 
         // All possible player checklist keys
         pipe(
-            ReadonlyArray.cartesian(ALL_PLAYERS, ALL_CARDS),
+            ReadonlyArray.cartesian(
+                ReadonlyArray.fromIterable(gameObjects.players),
+                ReadonlyArray.fromIterable(gameObjects.cards),
+            ),
             ReadonlyArray.map(Data.array),
             ReadonlyArray.map(playerCard => PlayerChecklistPossibility({
                 key: playerCard,

@@ -1,4 +1,4 @@
-import { Data, Either, HashMap, HashSet, Number, ReadonlyArray, pipe } from "effect";
+import { Data, Either, HashMap, HashSet, Predicate, ReadonlyArray, pipe } from "effect";
 import { ChecklistValue, Knowledge, updateCaseFileChecklist, updatePlayerChecklist } from "./Knowledge";
 import { GameObjects } from "./GameObjects";
 import { getOrUndefined } from "./utils/Effect";
@@ -106,16 +106,14 @@ export const cardsAreOwnedAtLeastOnce: ConsistencyRule =
             const playerNs = pipe(
                 gameObjects.players,
 
-                HashSet.map(
+                HashSet.filter(
                     (player) => getOrUndefined(
                         knowledge.playerChecklist,
                         Data.tuple(player, card)
-                    ) === ChecklistValue("N")
-                        ? 1
-                        : 0
+                    ) === ChecklistValue("N"),
                 ),
 
-                HashSet.reduce(0, Number.sum)
+                HashSet.size,
             );
 
             // Does the casefile NOT own this card?
@@ -198,24 +196,22 @@ export const playerOwnsAtMostHandSize: ConsistencyRule =
 
             // If we don't know their hand size,
             // there's no new knowledge to learn
-            if (handSize === undefined) {
+            if (Predicate.isNullable(handSize)) {
                 return Either.right(knowledge);
             }
 
             // Check if we have accounted for all their cards
             const cardYs = pipe(
-                gameObjects.players,
+                gameObjects.cards,
 
-                HashSet.map(
+                HashSet.filter(
                     (card) => getOrUndefined(
                         knowledge.playerChecklist,
                         Data.tuple(player, card)
                     ) === ChecklistValue("Y")
-                        ? 1
-                        : 0
                 ),
 
-                HashSet.reduce(0, Number.sum)
+                HashSet.size,
             );
 
             // If we haven't accounted for all their cards,
@@ -276,7 +272,7 @@ export const playerOwnsAtLeastHandSize: ConsistencyRule =
 
             // If we don't know their hand size,
             // there's no new knowledge to learn
-            if (handSize === undefined) {
+            if (Predicate.isNullable(handSize)) {
                 return Either.right(knowledge);
             }
 
@@ -284,16 +280,14 @@ export const playerOwnsAtLeastHandSize: ConsistencyRule =
             const cardNs = pipe(
                 gameObjects.cards,
 
-                HashSet.map(
+                HashSet.filter(
                     (card) => getOrUndefined(
                         knowledge.playerChecklist,
                         Data.tuple(player, card)
                     ) === ChecklistValue("N")
-                        ? 1
-                        : 0
                 ),
 
-                HashSet.reduce(0, Number.sum),
+                HashSet.size,
             );
 
             // If we haven't accounted for all their Ns,
@@ -409,16 +403,14 @@ export const caseFileOwnsAtLeast1PerCategory: ConsistencyRule =
             const cardNs = pipe(
                 cardsOfCategory,
 
-                HashSet.map(
+                HashSet.filter(
                     (card) => getOrUndefined(
                         knowledge.caseFileChecklist,
                         card,
                     ) === ChecklistValue("N")
-                        ? 1
-                        : 0
                 ),
 
-                HashSet.reduce(0, Number.sum),
+                HashSet.size,
             );
 
             // If we haven't accounted for all but 1 Ns,
