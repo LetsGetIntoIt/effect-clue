@@ -2,7 +2,7 @@
 import { Either, Match } from "effect";
 import { LogicalParadox } from "../logic/LogicalParadox";
 
-import './Checklist.module.css';
+import styles from './Checklist.module.css';
 import { ReadonlySignal, Signal } from "@preact/signals";
 import { Card, Knowledge, KnownCaseFileOwnership, KnownPlayerHandSize, KnownPlayerOwnership, Player } from "../logic";
 import { SelectChecklistValue } from "./forms/SelectChecklistValue";
@@ -98,7 +98,7 @@ export function Checklist({
                 }
             )}
 
-            <table class="table">
+            <table class={styles.table}>
                 <thead>
                     <tr>
                         <th>Case file</th>
@@ -201,7 +201,7 @@ function CaseFileCell({
     });
 
     return (
-        <td class={value ? `cell-${value}` : undefined}>
+        <td className={value ? styles[`cell-${value}`] : undefined}>
             <SelectChecklistValue
                 name={key}
                 value={value}
@@ -244,7 +244,7 @@ function PlayerCell({
     });
 
     return (
-        <td class={value ? `cell-${value}` : undefined}>
+        <td className={value ? styles[`cell-${value}`] : undefined}>
             <SelectChecklistValue
                 name={key}
                 value={value}
