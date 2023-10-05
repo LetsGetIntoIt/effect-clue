@@ -6,3 +6,11 @@
         padding: 8px;
     }
 }
+
+.cell-Y {
+    background-color: greenyellow;
+}
+
+.cell-N {
+    background-color: lightcoral;
+}

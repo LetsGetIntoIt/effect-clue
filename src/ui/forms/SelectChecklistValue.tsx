@@ -1,4 +1,3 @@
-import { useId } from "preact/hooks";
 import { ChecklistValue } from "../../logic"
 
 export function SelectChecklistValue({
@@ -10,18 +9,13 @@ export function SelectChecklistValue({
     value: ChecklistValue | undefined;
     onSelect: (value: ChecklistValue | undefined) => void;
 }) {
-    const yId = useId();
-    const nId = useId();
-    const unknownId = useId();
-
     return (
         <form onSubmit={(evt) => {
             // Stop the browser from reloading
             evt.preventDefault();
         }}>
-            <label for={yId}>
+            <label>
                 <input
-                    id={yId}
                     type="radio"
                     name={name}
                     value="Y"
@@ -31,9 +25,8 @@ export function SelectChecklistValue({
                 Y
             </label>
 
-            <label for={nId}>
+            <label>
                 <input
-                    id={nId}
                     type="radio"
                     name={name}
                     value="N"
@@ -43,9 +36,8 @@ export function SelectChecklistValue({
                 N
             </label>
 
-            <label for={unknownId}>
+            <label>
                 <input
-                    id={unknownId}
                     type="radio"
                     name={name}
                     value={undefined}

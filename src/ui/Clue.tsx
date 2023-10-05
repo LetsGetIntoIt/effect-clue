@@ -6,6 +6,7 @@ import { Checklist } from './Checklist';
 import { Suggestions } from './Suggestions';
 import { Card, KnownCaseFileOwnership, KnownPlayerHandSize, KnownPlayerOwnership, Player, deduce } from '../logic';
 import { useMemo } from 'preact/hooks';
+import { Either } from 'effect';
 
 export function Clue() {
     const idGenerator = useMemo(() => newIdGenerator(), []);
@@ -26,7 +27,16 @@ export function Clue() {
             knownCaseFileOwnerships: knownCaseFileOwnerships.value,
             knownPlayerOwnerships: knownPlayerOwnerships.value,
             knownPlayerHandSizes: knownPlayerHandSizes.value,
-        }),
+        }).pipe(
+            Either.mapLeft(paradox => ({
+                paradox,
+                fallbackKnowledge: ({
+                    knownCaseFileOwnerships: knownCaseFileOwnerships.value,
+                    knownPlayerOwnerships: knownPlayerOwnerships.value,
+                    knownPlayerHandSizes: knownPlayerHandSizes.value,
+                }),
+            })),
+        ),
     );
 
     return (

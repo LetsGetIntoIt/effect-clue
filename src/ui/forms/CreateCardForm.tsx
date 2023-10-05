@@ -11,7 +11,6 @@ export function CreateCardForm({
 
     return (
         <form
-            class="container"
             onSubmit={(evt) => {
                 // Submit the card name
                 onSubmit([cardCategoryName.value, cardName.value]);
