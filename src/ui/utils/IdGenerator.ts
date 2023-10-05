@@ -5,8 +5,10 @@ export interface IdGenerator<A> {
 
 export const newIdGenerator = (): IdGenerator<string> => {
     const generator = (function* () {
-        for (let i = 0; i++; true) {
-            yield* String(i);
+        let nextId = 0;
+        while (true) {
+            yield String(nextId);
+            nextId++;
         }
     })();
 

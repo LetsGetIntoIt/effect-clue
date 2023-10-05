@@ -6,7 +6,9 @@ import { Suggestion } from "./Suggestion";
 import { deduce } from './Deducer';
 
 export type ApiPlayer = string;
-export type ApiCard = [string, string];
+export type ApiCardCategory = string;
+export type ApiCardName = string;
+export type ApiCard = [ApiCardCategory, ApiCardName];
 
 export type ApiChecklistValue = "Y" | "N";
 

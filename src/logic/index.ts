@@ -1,5 +1,7 @@
 export type {
     ApiPlayer as Player,
+    ApiCardCategory as CardCategory,
+    ApiCardName as CardName,
     ApiCard as Card,
     ApiChecklistValue as ChecklistValue,
     ApiKnownCaseFileOwnership as KnownCaseFileOwnership,
