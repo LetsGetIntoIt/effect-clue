@@ -40,7 +40,8 @@ export function Checklist({
                         <tr>
                             <td>
                                 <SelectChecklistValue
-                                    name={`${cardCategory}-${card}-CF`} 
+                                    name={`${cardCategory}-${card}-CF`}
+                                    value="N"
                                     onSelect={(value) => {
                                         debugger;
                                     }}
@@ -52,7 +53,8 @@ export function Checklist({
                             {players.value.map(player => (
                                 <td>
                                     <SelectChecklistValue
-                                        name={`P-${cardCategory}-${card}-P-${player}`} 
+                                        name={`P-${cardCategory}-${card}-P-${player}`}
+                                        value="Y"
                                         onSelect={(value) => {
                                             debugger;
                                         }}
