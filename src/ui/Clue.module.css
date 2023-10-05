@@ -1,0 +1,22 @@
+.clue {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+
+    display: flex;
+
+    .gameObjects {
+        flex: 0 0 auto;
+        height: 100%;
+    }
+
+    .checklist {
+        flex: 1 1 auto;
+        height: 100%;
+    }
+
+    .suggestions {
+        flex: 0 0 auto;
+        height: 100%;
+    }
+}

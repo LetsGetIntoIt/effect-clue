@@ -1,13 +1,38 @@
+import './Clue.module.css';
+import { useSignal } from '@preact/signals';
+import { newIdGenerator } from './utils/IdGenerator';
+import { GameObjects } from './GameObjects';
+import { Checklist } from './Checklist';
+import { Suggestions } from './Suggestions';
+import { Card, Player } from '../logic';
+
 export function Clue() {
-	return (
-		<main>
-			<h1>Welcome to our Clue solver!</h1>
+    const idGenerator = useSignal(newIdGenerator());
+    const idsToLabels = useSignal<Record<string, string>>({});
 
-			<h2>
-				<a href="https://www.youtube.com/playlist?list=PLbh8a41dlxTHhaZsqEd9J1dIftbsI77Z_">Follow the full series on Youtube</a>
-			</h2>
+    const players = useSignal<Player[]>([]);
+    const cards = useSignal<Card[]>([]);
 
-			<iframe width="560" height="315" src="https://www.youtube.com/embed/videoseries?si=yAJA6z0gULWE7dth&amp;list=PLbh8a41dlxTHhaZsqEd9J1dIftbsI77Z_" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-		</main>
-	);
+    return (
+        <div class="clue">
+            <aside class="gameObjects">
+                <GameObjects
+                    players={players}
+                    cards={cards}
+                />
+            </aside>
+
+            <main class="checklist">
+                <Checklist
+                    players={players}
+                    cards={cards}
+                />
+            </main>
+
+            <aside class="suggestions">
+                <Suggestions />
+            </aside>
+
+        </div>
+    );
 }
