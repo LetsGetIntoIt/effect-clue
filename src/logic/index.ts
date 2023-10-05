@@ -11,5 +11,8 @@ export type {
 } from './Api';
 
 export {
-    apiDeduce as deduce
+    apiDeduce as deduce,
+    ApiKnownCaseFileOwnershipKey as KnownCaseFileOwnershipKey,
+    ApiKnownPlayerOwnershipKey as KnownPlayerOwnershipKey,
+    ApiKnownPlayerHandSizeKey as KnownPlayerHandSizeKey,
 } from './Api';

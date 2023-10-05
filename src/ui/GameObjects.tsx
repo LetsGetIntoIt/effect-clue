@@ -8,31 +8,43 @@ import { useMemo } from "preact/hooks";
 export function GameObjects({
     idGenerator,
     idsToLabels,
+    labelsToIds,
     players,
     cards,
 }: {
     idGenerator: IdGenerator<string>;
     idsToLabels: Signal<Record<string, string>>;
+    labelsToIds: Signal<Record<string, string>>;
     players: Signal<Player[]>;
     cards: Signal<Card[]>;
 }) {
-    const createPlayer = useMemo(() => (playerName: string): void => {
-        const playerId = idGenerator.next();
+    const getOrGenerateId = (label: string) => {
+        const existingId = labelsToIds.value[label];
+        if (existingId) {
+            return existingId;
+        }
+
+        const newId = idGenerator.next();
         idsToLabels.value = {
             ...idsToLabels.value,
-            [playerId]: playerName,
+            [newId]: label,
         };
+        labelsToIds.value = {
+            ...labelsToIds.value,
+            [label]: newId,
+        }
+
+        return newId;
+    }
+    
+    const createPlayer = useMemo(() => (playerName: string): void => {
+        const playerId = getOrGenerateId(playerName);
         players.value = [...players.value, playerId];
     }, []);
 
     const createCard = useMemo(() => ([cardCategoryName, cardName]: [string, string]): void => {
-        const cardCategoryId = idGenerator.next();
-        const cardId = idGenerator.next();
-        idsToLabels.value = {
-            ...idsToLabels.value,
-            [cardCategoryId]: cardCategoryName,
-            [cardId]: cardName,
-        };
+        const cardCategoryId = getOrGenerateId(cardCategoryName);
+        const cardId = getOrGenerateId(cardName);
         cards.value = [...cards.value, [cardCategoryId, cardId]];
     }, []);
 

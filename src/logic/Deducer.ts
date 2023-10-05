@@ -55,7 +55,7 @@ export const deduce: Deducer = (gameObjects) => (suggestions) => {
                         Option.getOrElse(() => true),
                     ),
 
-                body: ({ previousIterationKnowledge, currentKnowledge }) => Either.all({
+                body: ({ currentKnowledge }) => Either.all({
                     // Save our current knowledge as the previous iteration
                     previousIterationKnowledge: Either.right(Option.some(currentKnowledge)),
 

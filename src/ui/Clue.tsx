@@ -10,13 +10,14 @@ import { useMemo } from 'preact/hooks';
 export function Clue() {
     const idGenerator = useMemo(() => newIdGenerator(), []);
     const idsToLabels = useSignal<Record<string, string>>({});
+    const labelsToIds = useSignal<Record<string, string>>({});
 
     const players = useSignal<Player[]>([]);
     const cards = useSignal<Card[]>([]);
 
-    const knownCaseFileOwnerships = useSignal<KnownCaseFileOwnership[]>([]);
-    const knownPlayerOwnerships = useSignal<KnownPlayerOwnership[]>([]);
-    const knownPlayerHandSizes = useSignal<KnownPlayerHandSize[]>([]);
+    const knownCaseFileOwnerships = useSignal<KnownCaseFileOwnership>({});
+    const knownPlayerOwnerships = useSignal<KnownPlayerOwnership>({});
+    const knownPlayerHandSizes = useSignal<KnownPlayerHandSize>({});
 
     const deducedKnowledge = useComputed(() =>
         deduce({
@@ -34,6 +35,7 @@ export function Clue() {
                 <GameObjects
                     idGenerator={idGenerator}
                     idsToLabels={idsToLabels}
+                    labelsToIds={labelsToIds}
                     players={players}
                     cards={cards}
                 />
@@ -44,6 +46,9 @@ export function Clue() {
                     idsToLabels={idsToLabels}
                     players={players}
                     cards={cards}
+                    knownCaseFileOwnerships={knownCaseFileOwnerships}
+                    knownPlayerOwnerships={knownPlayerOwnerships}
+                    knownPlayerHandSizes={knownPlayerHandSizes}
                     deducedKnowledge={deducedKnowledge}
                 />
             </main>

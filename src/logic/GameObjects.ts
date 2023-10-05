@@ -6,7 +6,7 @@ export const Player = Brand.nominal<Player>();
 export type CardCategory = Brand.Branded<string, "CardCategory">;
 export const CardCategory = Brand.nominal<CardCategory>();
 
-export type Card = Brand.Branded<[CardCategory, string], "Card">;
+export type Card = Brand.Branded<Data.Data<[CardCategory, string]>, "Card">;
 export const Card = Brand.nominal<Card>();
 
 export class GameObjects extends Data.Class<{
@@ -57,27 +57,27 @@ export const cardCategoriesNorthAmerica = {
 } as const;
 
 export const cardsNorthAmerica = {
-    missScarlet: Card([cardCategoriesNorthAmerica.suspect, "Miss Scarlet"]),
-    colMustard: Card([cardCategoriesNorthAmerica.suspect, "Col. Mustard"]),
-    mrsWhite: Card([cardCategoriesNorthAmerica.suspect, "Mrs. White"]),
-    mrGreen: Card([cardCategoriesNorthAmerica.suspect, "Mr. Green"]),
-    mrsPeacock: Card([cardCategoriesNorthAmerica.suspect, "Mrs. Peacock"]),
-    profPlum: Card([cardCategoriesNorthAmerica.suspect, "Prof. Plum"]),
-    candlestick: Card([cardCategoriesNorthAmerica.weapon, "Candlestick"]),
-    knife: Card([cardCategoriesNorthAmerica.weapon, "Knife"]),
-    leadPipe: Card([cardCategoriesNorthAmerica.weapon, "Lead pipe"]),
-    revolver: Card([cardCategoriesNorthAmerica.weapon, "Revolver"]),
-    rope: Card([cardCategoriesNorthAmerica.weapon, "Rope"]),
-    wrench: Card([cardCategoriesNorthAmerica.weapon, "Wrench"]),
-    kitchen: Card([cardCategoriesNorthAmerica.room, "Kitchen"]),
-    ballRoom: Card([cardCategoriesNorthAmerica.room, "Ball room"]),
-    conservatory: Card([cardCategoriesNorthAmerica.room, "Conservatory"]),
-    diningRoom: Card([cardCategoriesNorthAmerica.room, "Dining room"]),
-    billiardRoom: Card([cardCategoriesNorthAmerica.room, "Billiard room"]),
-    library: Card([cardCategoriesNorthAmerica.room, "Library"]),
-    lounge: Card([cardCategoriesNorthAmerica.room, "Lounge"]),
-    hall: Card([cardCategoriesNorthAmerica.room, "Hall"]),
-    study: Card([cardCategoriesNorthAmerica.room, "Study"]),
+    missScarlet: Card(Data.tuple(cardCategoriesNorthAmerica.suspect, "Miss Scarlet")),
+    colMustard: Card(Data.tuple(cardCategoriesNorthAmerica.suspect, "Col. Mustard")),
+    mrsWhite: Card(Data.tuple(cardCategoriesNorthAmerica.suspect, "Mrs. White")),
+    mrGreen: Card(Data.tuple(cardCategoriesNorthAmerica.suspect, "Mr. Green")),
+    mrsPeacock: Card(Data.tuple(cardCategoriesNorthAmerica.suspect, "Mrs. Peacock")),
+    profPlum: Card(Data.tuple(cardCategoriesNorthAmerica.suspect, "Prof. Plum")),
+    candlestick: Card(Data.tuple(cardCategoriesNorthAmerica.weapon, "Candlestick")),
+    knife: Card(Data.tuple(cardCategoriesNorthAmerica.weapon, "Knife")),
+    leadPipe: Card(Data.tuple(cardCategoriesNorthAmerica.weapon, "Lead pipe")),
+    revolver: Card(Data.tuple(cardCategoriesNorthAmerica.weapon, "Revolver")),
+    rope: Card(Data.tuple(cardCategoriesNorthAmerica.weapon, "Rope")),
+    wrench: Card(Data.tuple(cardCategoriesNorthAmerica.weapon, "Wrench")),
+    kitchen: Card(Data.tuple(cardCategoriesNorthAmerica.room, "Kitchen")),
+    ballRoom: Card(Data.tuple(cardCategoriesNorthAmerica.room, "Ball room")),
+    conservatory: Card(Data.tuple(cardCategoriesNorthAmerica.room, "Conservatory")),
+    diningRoom: Card(Data.tuple(cardCategoriesNorthAmerica.room, "Dining room")),
+    billiardRoom: Card(Data.tuple(cardCategoriesNorthAmerica.room, "Billiard room")),
+    library: Card(Data.tuple(cardCategoriesNorthAmerica.room, "Library")),
+    lounge: Card(Data.tuple(cardCategoriesNorthAmerica.room, "Lounge")),
+    hall: Card(Data.tuple(cardCategoriesNorthAmerica.room, "Hall")),
+    study: Card(Data.tuple(cardCategoriesNorthAmerica.room, "Study")),
 } as const;
 
 export const cardsNorthAmericaSet: HashSet.HashSet<Card> = pipe(
