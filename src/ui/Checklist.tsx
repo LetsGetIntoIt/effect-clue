@@ -1,12 +1,11 @@
 import { ReadonlySignal } from "@preact/signals";
-import { Card, Player } from "../logic";
 
 export function Checklist({
     players,
     cards,
 }: {
-    players: ReadonlySignal<Player[]>;
-    cards: ReadonlySignal<Card[]>;
+    players: ReadonlySignal<string[]>;
+    cards: ReadonlySignal<[string, string][]>;
 }) {
     return (<>
         <div>
@@ -26,10 +25,10 @@ export function Checklist({
                 <tbody>
                     {cards.value
                         .sort()
-                        .map(card => (
+                        .map(([cardCategory, cardName]) => (
                         <tr>
                             <td>cf</td>
-                            <td>{card}</td>
+                            <td>{cardName}</td>
                             
                             {players.value.map(player => (
                                 <td>{player}</td>

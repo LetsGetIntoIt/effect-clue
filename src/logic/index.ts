@@ -1,5 +1,13 @@
+export type {
+    ApiPlayer as Player,
+    ApiCard as Card,
+    ApiChecklistValue as ChecklistValue,
+    ApiKnownCaseFileOwnership as KnownCaseFileOwnership,
+    ApiKnownPlayerOwnership as KnownPlayerOwnership,
+    ApiKnownPlayerHandSize as KnownPlayerHandSize,
+    ApiKnowledge as Knowledge,
+} from './Api';
 
 export {
-    Player,
-    Card,
-} from './GameObjects';
+    apiDeduce as deduce
+} from './Api';

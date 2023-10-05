@@ -1,6 +1,5 @@
 import { Signal } from "@preact/signals"
 import { Card, Player } from "../logic";
-import { CardCategory } from "../logic/GameObjects";
 
 export function GameObjects({
     players,
@@ -17,7 +16,7 @@ export function GameObjects({
             ))}
             <input type="text" onBlur={(evt) => {
                 const value: string = (evt as any).target.value;
-                players.value = [...players.value, Player(value)];
+                players.value = [...players.value, value];
             }} />
         </div>
 
@@ -32,7 +31,7 @@ export function GameObjects({
             <input type="text" onBlur={(evt) => {
                 const value: string = (evt as any).target.value;
                 const [cardCategory, cardName] = value.split(":");
-                cards.value = [...cards.value, Card([CardCategory(cardCategory), cardName])];
+                cards.value = [...cards.value, [cardCategory, cardName]];
             }} />
         </div>
     </>)

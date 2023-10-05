@@ -4,7 +4,7 @@ import { newIdGenerator } from './utils/IdGenerator';
 import { GameObjects } from './GameObjects';
 import { Checklist } from './Checklist';
 import { Suggestions } from './Suggestions';
-import { Card, Player } from '../logic';
+import { Card, KnownCaseFileOwnership, KnownPlayerHandSize, KnownPlayerOwnership, Player } from '../logic';
 
 export function Clue() {
     const idGenerator = useSignal(newIdGenerator());
@@ -12,6 +12,9 @@ export function Clue() {
 
     const players = useSignal<Player[]>([]);
     const cards = useSignal<Card[]>([]);
+    const knownCaseFileOwnerships = useSignal<KnownCaseFileOwnership[]>([]);
+    const knownPlayerOwnerships = useSignal<KnownPlayerOwnership[]>([]);
+    const knownPlayerHandSizes = useSignal<KnownPlayerHandSize[]>([]);
 
     return (
         <div class="clue">
