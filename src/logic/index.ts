@@ -3,6 +3,7 @@ export type {
     ApiCardCategory as CardCategory,
     ApiCardName as CardName,
     ApiCard as Card,
+    ApiSuggestion as Suggestion,
     ApiChecklistValue as ChecklistValue,
     ApiKnownCaseFileOwnership as KnownCaseFileOwnership,
     ApiKnownPlayerOwnership as KnownPlayerOwnership,

@@ -12,6 +12,8 @@ export type ApiCard = [ApiCardCategory, ApiCardName];
 
 export type ApiChecklistValue = "Y" | "N";
 
+export type ApiSuggestion = [ApiPlayer, ApiCard[], ApiPlayer?, ApiCard?];
+
 export type ApiKnownCaseFileOwnership = Record<string, ApiChecklistValue>;
 export const ApiKnownCaseFileOwnershipKey = ([category, card]: ApiCard): string => `CF-${category}-${card}`;
 
@@ -20,6 +22,11 @@ export const ApiKnownPlayerOwnershipKey = (player: ApiPlayer, [category, card]: 
 
 export type ApiKnownPlayerHandSize = Record<string, number>;
 export const ApiKnownPlayerHandSizeKey = (player: ApiPlayer): string => `P-${player}`;
+
+export interface ApiGameObjects {
+    readonly players: readonly ApiPlayer[];
+    readonly cards: readonly ApiCard[];
+}
 
 export interface ApiKnowledge {
     readonly knownCaseFileOwnerships: ApiKnownCaseFileOwnership;
@@ -30,13 +37,17 @@ export interface ApiKnowledge {
 export const apiDeduce = ({
     players: rawPlayers,
     cards: rawCards,
+    suggestions: rawSuggestions,
     knownCaseFileOwnerships: rawKnownCaseFileOwnerships,
     knownPlayerOwnerships: rawKnownPlayerOwnerships,
     knownPlayerHandSizes: rawKnownPlayerHandSizes,
-}: {
-    readonly players: readonly ApiPlayer[];
-    readonly cards: readonly ApiCard[];
-} & ApiKnowledge): Either.Either<LogicalParadox, ApiKnowledge> => Either.gen(function* ($) {
+}:
+    & ApiGameObjects
+    & {
+        readonly suggestions: readonly ApiSuggestion[];
+    }
+    & ApiKnowledge
+): Either.Either<LogicalParadox, ApiKnowledge> => Either.gen(function* ($) {
     const players = pipe(
         rawPlayers,
         ReadonlyArray.map(player => Player(player)),

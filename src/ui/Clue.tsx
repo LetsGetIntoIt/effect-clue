@@ -4,7 +4,7 @@ import { newIdGenerator } from './utils/IdGenerator';
 import { GameObjects } from './GameObjects';
 import { Checklist } from './Checklist';
 import { Suggestions } from './Suggestions';
-import { Card, KnownCaseFileOwnership, KnownPlayerHandSize, KnownPlayerOwnership, Player, deduce } from '../logic';
+import { Card, KnownCaseFileOwnership, KnownPlayerHandSize, KnownPlayerOwnership, Player, Suggestion, deduce } from '../logic';
 import { useMemo } from 'preact/hooks';
 import { Either } from 'effect';
 
@@ -15,6 +15,7 @@ export function Clue() {
 
     const players = useSignal<Player[]>([]);
     const cards = useSignal<Card[]>([]);
+    const suggestions = useSignal<Suggestion[]>([]);
 
     const knownCaseFileOwnerships = useSignal<KnownCaseFileOwnership>({});
     const knownPlayerOwnerships = useSignal<KnownPlayerOwnership>({});
@@ -24,6 +25,7 @@ export function Clue() {
         deduce({
             players: players.value,
             cards: cards.value,
+            suggestions: suggestions.value,
             knownCaseFileOwnerships: knownCaseFileOwnerships.value,
             knownPlayerOwnerships: knownPlayerOwnerships.value,
             knownPlayerHandSizes: knownPlayerHandSizes.value,
@@ -64,9 +66,13 @@ export function Clue() {
             </main>
 
             <aside class="suggestions">
-                <Suggestions />
+                <Suggestions
+                    idsToLabels={idsToLabels}
+                    players={players}
+                    cards={cards}
+                    suggestions={suggestions}
+                />
             </aside>
-
         </div>
     );
 }

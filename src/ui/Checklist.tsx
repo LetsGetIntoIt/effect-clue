@@ -19,8 +19,8 @@ export function Checklist({
     deducedKnowledge,
 }: {
     idsToLabels: ReadonlySignal<Record<string, string>>;
-    players: ReadonlySignal<string[]>;
-    cards: ReadonlySignal<[string, string][]>;
+    players: ReadonlySignal<Player[]>;
+    cards: ReadonlySignal<Card[]>;
     knownCaseFileOwnerships: Signal<KnownCaseFileOwnership>;
     knownPlayerOwnerships: Signal<KnownPlayerOwnership>;
     knownPlayerHandSizes: Signal<KnownPlayerHandSize>;
