@@ -2,3 +2,12 @@ ol, ul {
     padding: 0;
     list-style-type: none;
 }
+
+li {
+    padding: 8px 0;
+    border-bottom: solid 1px black;
+
+    &:last-child {
+        border-bottom: 0;
+    }
+}

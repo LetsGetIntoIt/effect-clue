@@ -1,4 +1,4 @@
-import { ReadonlySignal } from "@preact/signals";
+import { ReadonlySignal, useComputed } from "@preact/signals";
 import { Suggestion } from "../../logic";
 
 export function SuggestionLabel({
@@ -8,18 +8,34 @@ export function SuggestionLabel({
     idsToLabels: ReadonlySignal<Record<string, string>>;
     suggestion: Suggestion;
 }) {
-    const [guesser, cards, refuter, seenRefuteCard] = suggestion;
+    const [guesser, cards, nonRefuters, refuter, seenRefuteCard] = suggestion;
 
-    return (<>
-        <span>{idsToLabels.value[guesser]} suggested</span>
-        <span>{cards.map(([, card]) => idsToLabels.value[card]).join(', ')}</span>.
-        <span>{refuter
-            ? (<>{idsToLabels.value[guesser]} refuted</>)
-            : (<>Nobody refuted</>)
-        }</span>
-        <span>{seenRefuteCard
-            ? (<>with {idsToLabels.value[seenRefuteCard[0]]}</>)
-            : (<>with unknown card</>)
-        }</span>.
-    </>);
+    const getLabel = useComputed(() => (id: string): string =>
+        idsToLabels.value[id],
+    );
+
+    return (<div>
+        <div>
+            <span>{getLabel.value(guesser)} suggested</span>
+            <span> {cards.map(([, card]) => getLabel.value(card)).join(', ')}.</span>
+        </div>
+
+        {nonRefuters.length > 0 && (
+            <div>
+                <span>{nonRefuters.join(', ')} passed.</span>
+            </div>
+        )}
+
+        <div>
+            {refuter
+                ? (<span>{getLabel.value(guesser)} refuted</span>)
+                : (<span><i>Nobody</i> refuted</span>)
+            }
+
+            {seenRefuteCard
+                ? (<span> with {getLabel.value(seenRefuteCard[1])}</span>)
+                : (refuter && <span> with <i>unknown</i> card</span>)
+            }.
+        </div>
+    </div>);
 }

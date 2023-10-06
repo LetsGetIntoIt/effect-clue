@@ -15,7 +15,11 @@ export function Clue() {
 
     const players = useSignal<Player[]>([]);
     const cards = useSignal<Card[]>([]);
-    const suggestions = useSignal<Suggestion[]>([]);
+    const suggestions = useSignal<Suggestion[]>([
+        ['Kapil', [['Suspect', 'Mustard'], ['Room', 'Library']], ['Kate', 'Karthik']],
+        ['Kapil', [['Suspect', 'Mustard'], ['Room', 'Library']], ['Kate', 'Karthik'], 'Reagan'],
+        ['Kapil', [['Suspect', 'Mustard'], ['Room', 'Library']], ['Kate', 'Karthik'], 'Reagan', ['Suspect', 'Mustard']],
+    ]);
 
     const knownCaseFileOwnerships = useSignal<KnownCaseFileOwnership>({});
     const knownPlayerOwnerships = useSignal<KnownPlayerOwnership>({});

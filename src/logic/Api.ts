@@ -12,7 +12,7 @@ export type ApiCard = [ApiCardCategory, ApiCardName];
 
 export type ApiChecklistValue = "Y" | "N";
 
-export type ApiSuggestion = [ApiPlayer, ApiCard[], ApiPlayer?, ApiCard?];
+export type ApiSuggestion = [ApiPlayer, ApiCard[], ApiPlayer[], ApiPlayer?, ApiCard?];
 
 export type ApiKnownCaseFileOwnership = Record<string, ApiChecklistValue>;
 export const ApiKnownCaseFileOwnershipKey = ([category, card]: ApiCard): string => `CF-${category}-${card}`;
