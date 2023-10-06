@@ -10,12 +10,12 @@
     }
 
     .checklist {
-        flex: 1 1 auto;
+        flex: 3 3 auto;
         height: 100%;
     }
 
     .suggestions {
-        flex: 0 0 auto;
+        flex: 1 1 auto;
         height: 100%;
     }
 }
