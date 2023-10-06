@@ -4,7 +4,7 @@ import { newIdGenerator } from './utils/IdGenerator';
 import { GameObjects } from './GameObjects';
 import { Checklist } from './Checklist';
 import { Suggestions } from './Suggestions';
-import { Card, KnownCaseFileOwnership, KnownPlayerHandSize, KnownPlayerOwnership, Player, Suggestion, deduce } from '../logic';
+import { Card, KnownCaseFileOwnership, KnownPlayerHandSize, KnownPlayerOwnership, Player, Suggestion, deduce, predict } from '../logic';
 import { useMemo } from 'preact/hooks';
 import { Either } from 'effect';
 
@@ -41,6 +41,17 @@ export function Clue() {
         ),
     );
 
+    const predictedKnowledge = useComputed(() =>
+        predict({
+            players: players.value,
+            cards: cards.value,
+            suggestions: suggestions.value,
+            knownCaseFileOwnerships: knownCaseFileOwnerships.value,
+            knownPlayerOwnerships: knownPlayerOwnerships.value,
+            knownPlayerHandSizes: knownPlayerHandSizes.value,
+        }),
+    );
+
     return (
         <div class="clue">
             <aside class="gameObjects">
@@ -62,6 +73,7 @@ export function Clue() {
                     knownPlayerOwnerships={knownPlayerOwnerships}
                     knownPlayerHandSizes={knownPlayerHandSizes}
                     deducedKnowledge={deducedKnowledge}
+                    predictedKnowledge={predictedKnowledge}
                 />
             </main>
 

@@ -1,9 +1,12 @@
-import { Data, Either, HashMap, HashSet, ReadonlyArray, ReadonlyRecord, Tuple, pipe } from "effect";
+import { Data, Effect, Either, HashMap, HashSet, ReadonlyArray, ReadonlyRecord, Tuple, pipe } from "effect";
 import { LogicalParadox } from "./LogicalParadox";
 import { Knowledge } from "./Knowledge";
 import { deduce } from './Deducer';
 import { Card, CardCategory, GameObjects, Player } from "./GameObjects";
 import { Suggestion } from "./Suggestion";
+import { predict } from "./Predictor";
+import { Prediction } from "./Prediction";
+import { toPercent } from "./Probability";
 
 export type ApiPlayer = string;
 export type ApiCardCategory = string;
@@ -15,9 +18,11 @@ export type ApiChecklistValue = "Y" | "N";
 export type ApiSuggestion = [ApiPlayer, ApiCard[], ApiPlayer[], ApiPlayer?, ApiCard?];
 
 export type ApiKnownCaseFileOwnership = Record<string, ApiChecklistValue>;
+export type ApiPredictedCaseFileOwnership = Record<string, number>;
 export const ApiKnownCaseFileOwnershipKey = ([category, card]: ApiCard): string => `CF-${category}-${card}`;
 
 export type ApiKnownPlayerOwnership = Record<string, ApiChecklistValue>;
+export type ApiPredictedPlayerOwnership = Record<string, number>;
 export const ApiKnownPlayerOwnershipKey = (player: ApiPlayer, [category, card]: ApiCard): string => `P-${player}-${category}-${card}`;
 
 export type ApiKnownPlayerHandSize = Record<string, number>;
@@ -32,6 +37,11 @@ export interface ApiKnowledge {
     readonly knownCaseFileOwnerships: ApiKnownCaseFileOwnership;
     readonly knownPlayerOwnerships: ApiKnownPlayerOwnership;
     readonly knownPlayerHandSizes: ApiKnownPlayerHandSize;
+}
+
+export interface ApiPrediction {
+    readonly predictedCaseFileOwnerships: ApiPredictedCaseFileOwnership;
+    readonly predictedPlayerOwnerships: ApiPredictedPlayerOwnership;
 }
 
 export const apiDeduce = ({
@@ -155,4 +165,90 @@ const encodeKnowledge = (knowledge: Knowledge): ApiKnowledge => ({
         ReadonlyArray.map(Tuple.mapFirst(ApiKnownPlayerHandSizeKey)),
         ReadonlyRecord.fromEntries
     ),
-})
+});
+
+export const apiPredict = ({
+    players: rawPlayers,
+    cards: rawCards,
+    suggestions: rawSuggestions,
+    knownCaseFileOwnerships: rawKnownCaseFileOwnerships,
+    knownPlayerOwnerships: rawKnownPlayerOwnerships,
+    knownPlayerHandSizes: rawKnownPlayerHandSizes,
+}:
+    & ApiGameObjects
+    & {
+        readonly suggestions: readonly ApiSuggestion[];
+    }
+    & ApiKnowledge
+): Promise<ApiPrediction> => Effect.gen(function* ($) {
+    const players = pipe(
+        rawPlayers,
+        ReadonlyArray.map(player => Player(player)),
+        HashSet.fromIterable,
+    );
+
+    const cards = pipe(
+        rawCards,
+        ReadonlyArray.map(([cardCategory, cardName]) => Card(Data.tuple(CardCategory(cardCategory), cardName))),
+        HashSet.fromIterable,
+    );
+
+    const gameObjects = new GameObjects({ players, cards });
+
+    const suggestions: HashSet.HashSet<Suggestion> = pipe(
+        rawSuggestions,
+
+        ReadonlyArray.map(([guesser, cards, nonRefuters, refuter, seenRefuteCard]) => Data.struct({
+            suggester: Player(guesser),
+            cards: pipe(
+                cards,
+                ReadonlyArray.map(([cardCategory, cardName]) => Card(Data.tuple(CardCategory(cardCategory), cardName))),
+                HashSet.fromIterable,
+            ),
+            nonRefuters: pipe(
+                nonRefuters,
+                ReadonlyArray.map(player => Player(player)),
+                HashSet.fromIterable,
+            ),
+            refuter: refuter ? Player(refuter) : undefined,
+            seenCard: seenRefuteCard ? Card(Data.tuple(CardCategory(seenRefuteCard[0]), seenRefuteCard[1])) : undefined,
+        })),
+
+        HashSet.fromIterable,
+    );
+
+    const knowledge = decodeKnowledge({
+        knownCaseFileOwnerships: rawKnownCaseFileOwnerships,
+        knownPlayerOwnerships: rawKnownPlayerOwnerships,
+        knownPlayerHandSizes: rawKnownPlayerHandSizes,
+    });
+
+    return yield* $(
+        predict(gameObjects, suggestions, knowledge),
+        Effect.map(encodePrediction),
+    );
+}).pipe(
+    Effect.runPromise,
+);
+
+const encodePrediction = (prediction: Prediction): ApiPrediction => ({
+    predictedCaseFileOwnerships: pipe(
+        prediction.caseFileChecklist,
+        ReadonlyArray.fromIterable,
+        ReadonlyArray.map(Tuple.mapBoth({
+            onFirst: ([category, card]) => ApiKnownCaseFileOwnershipKey([category, card]),
+            onSecond: toPercent,
+        })),
+        ReadonlyRecord.fromEntries
+    ),
+
+    predictedPlayerOwnerships: pipe(
+        prediction.playerChecklist,
+        ReadonlyArray.fromIterable,
+        ReadonlyArray.map(Tuple.mapBoth({
+            onFirst: ([player, [category, card]]) => ApiKnownPlayerOwnershipKey(player, [category, card]),
+            onSecond: toPercent,
+        })),
+        ReadonlyRecord.fromEntries
+    ),
+});

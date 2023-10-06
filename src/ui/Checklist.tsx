@@ -3,8 +3,8 @@ import { Either, Match } from "effect";
 import { LogicalParadox } from "../logic/LogicalParadox";
 
 import styles from './Checklist.module.css';
-import { ReadonlySignal, Signal } from "@preact/signals";
-import { Card, Knowledge, KnownCaseFileOwnership, KnownPlayerHandSize, KnownPlayerOwnership, Player } from "../logic";
+import { ReadonlySignal, Signal, useSignal } from "@preact/signals";
+import { Card, Knowledge, KnownCaseFileOwnership, KnownPlayerHandSize, KnownPlayerOwnership, Player, Prediction } from "../logic";
 import { SelectChecklistValue } from "./forms/SelectChecklistValue";
 import { ApiKnownCaseFileOwnershipKey, ApiKnownPlayerHandSizeKey, ApiKnownPlayerOwnershipKey } from "../logic/Api";
 import { SelectHandSize } from "./forms/SelectHandSize";
@@ -17,6 +17,7 @@ export function Checklist({
     knownPlayerOwnerships,
     knownPlayerHandSizes,
     deducedKnowledge,
+    predictedKnowledge,
 }: {
     idsToLabels: ReadonlySignal<Record<string, string>>;
     players: ReadonlySignal<Player[]>;
@@ -27,6 +28,7 @@ export function Checklist({
     deducedKnowledge: ReadonlySignal<
         Either.Either<{ paradox: LogicalParadox; fallbackKnowledge: Knowledge }, Knowledge>
     >;
+    predictedKnowledge: ReadonlySignal<Promise<Prediction>>;
 }) {
     return (<>
         <div>
@@ -125,9 +127,10 @@ export function Checklist({
                                 card={card}
                                 knownCaseFileOwnerships={knownCaseFileOwnerships}
                                 deducedKnowledge={deducedKnowledge}
+                                predictedKnowledge={predictedKnowledge}
                             />
 
-                            <td className={styles.dataCell}>{idsToLabels.value[card[1]]}</td>
+                            <td className={styles.headCell}>{idsToLabels.value[card[1]]}</td>
 
                             {players.value.map(player => (
                                 <PlayerCell
@@ -135,6 +138,7 @@ export function Checklist({
                                     card={card}
                                     knownPlayerOwnerships={knownPlayerOwnerships}
                                     deducedKnowledge={deducedKnowledge}
+                                    predictedKnowledge={predictedKnowledge}
                                 />
                             ))}
                         </tr>
@@ -187,17 +191,25 @@ function CaseFileCell({
     card,
     knownCaseFileOwnerships,
     deducedKnowledge,
+    predictedKnowledge,
 }: {
     card: Card;
     knownCaseFileOwnerships: Signal<KnownCaseFileOwnership>;
     deducedKnowledge: ReadonlySignal<
         Either.Either<{ paradox: LogicalParadox; fallbackKnowledge: Knowledge }, Knowledge>
     >;
+    predictedKnowledge: ReadonlySignal<Promise<Prediction>>;
 }) {
     const key = ApiKnownCaseFileOwnershipKey(card);
+
     const value = Either.match(deducedKnowledge.value, {
         onLeft: ({ fallbackKnowledge }) => fallbackKnowledge.knownCaseFileOwnerships[key],
         onRight: (deducedKnowledge) => deducedKnowledge.knownCaseFileOwnerships[key]
+    });
+
+    const predictedValue = useSignal<number | undefined>(undefined);
+    predictedKnowledge.value.then((predictedKnowledge) => {
+        predictedValue.value = predictedKnowledge.predictedCaseFileOwnerships[key];
     });
 
     return (
@@ -221,6 +233,13 @@ function CaseFileCell({
                     }
                 }}
             />
+
+            <div>
+                {predictedValue.value === undefined
+                    ? (<i>Predicting...</i>)
+                    : (<span>{predictedValue.value.toFixed(1)}%</span>)
+                }
+            </div>
         </td>
     );
 }
@@ -230,6 +249,7 @@ function PlayerCell({
     card,
     knownPlayerOwnerships,
     deducedKnowledge,
+    predictedKnowledge,
 }: {
     player: Player;
     card: Card;
@@ -237,11 +257,18 @@ function PlayerCell({
     deducedKnowledge: ReadonlySignal<
         Either.Either<{ paradox: LogicalParadox; fallbackKnowledge: Knowledge }, Knowledge>
     >;
+    predictedKnowledge: ReadonlySignal<Promise<Prediction>>;
 }) {
     const key = ApiKnownPlayerOwnershipKey(player, card);
+
     const value = Either.match(deducedKnowledge.value, {
         onLeft: ({ fallbackKnowledge }) => fallbackKnowledge.knownPlayerOwnerships[key],
         onRight: (deducedKnowledge) => deducedKnowledge.knownPlayerOwnerships[key]
+    });
+
+    const predictedValue = useSignal<number | undefined>(undefined);
+    predictedKnowledge.value.then((predictedKnowledge) => {
+        predictedValue.value = predictedKnowledge.predictedPlayerOwnerships[key];
     });
 
     return (
@@ -265,6 +292,13 @@ function PlayerCell({
                     }
                 }}
             />
+
+            <div>
+                {predictedValue.value === undefined
+                    ? (<i>Predicting...</i>)
+                    : (<span>{predictedValue.value.toFixed(1)}%</span>)
+                }
+            </div>
         </td>
     );
 }
