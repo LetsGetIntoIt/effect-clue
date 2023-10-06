@@ -2,22 +2,25 @@
     width: 100%;
     border-collapse: collapse;
 
-    &, th, td {
-        border: 1px solid;
-        padding: 8px;
+    .headCell {
+        padding: 8px 16px;
     }
 
-    label:has(input[type="radio"]),
-    label:has(input[type="checkbox"]) {
+    .dataCell {
+        border: 1px solid;
+        padding: 8px 16px;
+    }
+
+    .toggleInput {
         display: block;
     }
 
-    .cell-Y {
+    .cellY {
         background-color: blue;
         color: white;
     }
     
-    .cell-N {
+    .cellN {
         background-color: #DDDDDD;
         color: #666666;
     }    

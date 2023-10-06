@@ -1,6 +1,5 @@
 .create-suggestion-form {
-    label:has(input[type="radio"]),
-    label:has(input[type="checkbox"]) {
+    .toggleInput {
         display: block;
     }
 }

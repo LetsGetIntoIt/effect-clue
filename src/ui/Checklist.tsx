@@ -98,13 +98,13 @@ export function Checklist({
                 }
             )}
 
-            <table class={styles.table}>
+            <table className={styles.table}>
                 <thead>
                     <tr>
-                        <th>Case file</th>
-                        <th>{/* Column for card names */}</th>
+                        <th className={styles.headCell}>Case file</th>
+                        <th className={styles.headCell}>{/* Column for card names */}</th>
                         {players.value.map(player =>(
-                            <th>
+                            <th className={styles.headCell}>
                                 {idsToLabels.value[player]}
                                 <HandSizeSelect
                                     player={player}
@@ -127,7 +127,7 @@ export function Checklist({
                                 deducedKnowledge={deducedKnowledge}
                             />
 
-                            <td>{idsToLabels.value[card[1]]}</td>
+                            <td className={styles.dataCell}>{idsToLabels.value[card[1]]}</td>
 
                             {players.value.map(player => (
                                 <PlayerCell
@@ -201,8 +201,9 @@ function CaseFileCell({
     });
 
     return (
-        <td className={value ? `cell-${value}` : undefined}>
+        <td className={`${styles.dataCell} ${value ? styles[`cell${value}`] : ''}`}>
             <SelectChecklistValue
+                formElementClassName={styles.toggleInput}
                 name={key}
                 value={value}
                 onSelect={(value) => {
@@ -244,8 +245,9 @@ function PlayerCell({
     });
 
     return (
-        <td className={value ? `cell-${value}` : undefined}>
+        <td className={`${styles.dataCell} ${value ? styles[`cell${value}`] : ''}`}>
             <SelectChecklistValue
+                formElementClassName={styles.toggleInput}
                 name={key}
                 value={value}
                 onSelect={(value) => {

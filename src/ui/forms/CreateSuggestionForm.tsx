@@ -1,4 +1,4 @@
-import './CreateSuggestionForm.module.css';
+import styles from './CreateSuggestionForm.module.css';
 import { ReadonlySignal, useSignal } from "@preact/signals";
 import { Card, Player, Suggestion } from "../../logic";
 
@@ -50,7 +50,7 @@ export function CreateSuggestionForm({
             <fieldset>
                 <legend>Guesser</legend>
                 {allPlayers.value.map(player => (
-                    <label>
+                    <label className={styles.toggleInput}>
                         <input
                             type="radio"
                             name="guesser"
@@ -67,8 +67,8 @@ export function CreateSuggestionForm({
 
             <fieldset>
                 <legend>Cards</legend>
-                {allCards.value.map(card => (
-                    <label>
+                {allCards.value.sort().map(card => (
+                    <label className={styles.toggleInput}>
                         <input
                             type="checkbox"
                             name="cards"
@@ -106,7 +106,7 @@ export function CreateSuggestionForm({
             <fieldset>
                 <legend>Non-refuters</legend>
                 {allPlayers.value.map(player => (
-                    <label>
+                    <label className={styles.toggleInput}>
                         <input
                             type="checkbox"
                             name="nonRefuters"
@@ -131,7 +131,7 @@ export function CreateSuggestionForm({
                 <fieldset>
                     <legend>Refuter</legend>
                     {allPlayers.value.map(player => (
-                        <label>
+                        <label className={styles.toggleInput}>
                             <input
                                 type="radio"
                                 name="refuter"
@@ -145,7 +145,7 @@ export function CreateSuggestionForm({
                         </label>
                     ))}
 
-                    <label>
+                    <label className={styles.toggleInput}>
                         <input
                             type="radio"
                             name="refuter"
@@ -163,8 +163,8 @@ export function CreateSuggestionForm({
                     <legend>Seen refute card</legend>
 
                     {cards.value.length > 0 && (<>
-                        {cards.value.map(card => (
-                            <label>
+                        {cards.value.sort().map(card => (
+                            <label className={styles.toggleInput}>
                                 <input
                                     type="radio"
                                     name="seenRefuteCard"
@@ -178,10 +178,10 @@ export function CreateSuggestionForm({
                             </label>
                         ))}
 
-                        <label>
+                        <label className={styles.toggleInput}>
                             <input
                                 type="radio"
-                                name="refuter"
+                                name="seenRefuteCard"
                                 value={undefined}
                                 checked={refuter.value === undefined}
                                 onClick={() => {

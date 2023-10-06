@@ -1,10 +1,12 @@
 import { ChecklistValue } from "../../logic"
 
 export function SelectChecklistValue({
+    formElementClassName,
     name,
     value,
     onSelect,
 }: {
+    formElementClassName?: string;
     name: string;
     value: ChecklistValue | undefined;
     onSelect: (value: ChecklistValue | undefined) => void;
@@ -14,7 +16,7 @@ export function SelectChecklistValue({
             // Stop the browser from reloading
             evt.preventDefault();
         }}>
-            <label>
+            <label className={formElementClassName}>
                 <input
                     type="radio"
                     name={name}
@@ -25,7 +27,7 @@ export function SelectChecklistValue({
                 Y
             </label>
 
-            <label>
+            <label className={formElementClassName}>
                 <input
                     type="radio"
                     name={name}
@@ -36,7 +38,7 @@ export function SelectChecklistValue({
                 N
             </label>
 
-            <label>
+            <label className={formElementClassName}>
                 <input
                     type="radio"
                     name={name}

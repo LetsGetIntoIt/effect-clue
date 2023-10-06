@@ -1,9 +1,9 @@
 import { Data, Either, HashMap, HashSet, ReadonlyArray, ReadonlyRecord, Tuple, pipe } from "effect";
 import { LogicalParadox } from "./LogicalParadox";
 import { Knowledge } from "./Knowledge";
-import { Suggestion } from "./Suggestion";
 import { deduce } from './Deducer';
 import { Card, CardCategory, GameObjects, Player } from "./GameObjects";
+import { Suggestion } from "./Suggestion";
 
 export type ApiPlayer = string;
 export type ApiCardCategory = string;
@@ -62,7 +62,27 @@ export const apiDeduce = ({
 
     const gameObjects = new GameObjects({ players, cards });
 
-    const suggestions = HashSet.empty<Suggestion>();
+    const suggestions: HashSet.HashSet<Suggestion> = pipe(
+        rawSuggestions,
+
+        ReadonlyArray.map(([guesser, cards, nonRefuters, refuter, seenRefuteCard]) => Data.struct({
+            suggester: Player(guesser),
+            cards: pipe(
+                cards,
+                ReadonlyArray.map(([cardCategory, cardName]) => Card(Data.tuple(CardCategory(cardCategory), cardName))),
+                HashSet.fromIterable,
+            ),
+            nonRefuters: pipe(
+                nonRefuters,
+                ReadonlyArray.map(player => Player(player)),
+                HashSet.fromIterable,
+            ),
+            refuter: refuter ? Player(refuter) : undefined,
+            seenCard: seenRefuteCard ? Card(Data.tuple(CardCategory(seenRefuteCard[0]), seenRefuteCard[1])) : undefined,
+        })),
+
+        HashSet.fromIterable,
+    );
 
     const knowledge = decodeKnowledge({
         knownCaseFileOwnerships: rawKnownCaseFileOwnerships,
