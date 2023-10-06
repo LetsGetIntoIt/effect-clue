@@ -22,7 +22,7 @@ export function SuggestionLabel({
 
         {nonRefuters.length > 0 && (
             <div>
-                <span>{nonRefuters.join(', ')} passed.</span>
+                <span>{nonRefuters.map(getLabel.value).join(', ')} passed.</span>
             </div>
         )}
 

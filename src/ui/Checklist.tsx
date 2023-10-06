@@ -201,7 +201,7 @@ function CaseFileCell({
     });
 
     return (
-        <td className={value ? styles[`cell-${value}`] : undefined}>
+        <td className={value ? `cell-${value}` : undefined}>
             <SelectChecklistValue
                 name={key}
                 value={value}
@@ -244,7 +244,7 @@ function PlayerCell({
     });
 
     return (
-        <td className={value ? styles[`cell-${value}`] : undefined}>
+        <td className={value ? `cell-${value}` : undefined}>
             <SelectChecklistValue
                 name={key}
                 value={value}
