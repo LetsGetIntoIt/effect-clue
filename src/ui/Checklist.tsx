@@ -1,13 +1,15 @@
 // TODO these imports definitely need to be refactored out
-import { Either, Match } from "effect";
+import { Either, Match, ReadonlyArray, ReadonlyRecord, pipe } from "effect";
 import { LogicalParadox } from "../logic/LogicalParadox";
 
 import styles from './Checklist.module.css';
-import { ReadonlySignal, Signal, useSignal } from "@preact/signals";
-import { Card, Knowledge, KnownCaseFileOwnership, KnownPlayerHandSize, KnownPlayerOwnership, Player, Prediction } from "../logic";
+import { ReadonlySignal, Signal, useComputed, useSignal } from "@preact/signals";
+import { Card, CardCategory, Knowledge, KnownCaseFileOwnership, KnownPlayerHandSize, KnownPlayerOwnership, Player, Prediction } from "../logic";
 import { SelectChecklistValue } from "./forms/SelectChecklistValue";
 import { ApiKnownCaseFileOwnershipKey, ApiKnownPlayerHandSizeKey, ApiKnownPlayerOwnershipKey } from "../logic/Api";
 import { SelectHandSize } from "./forms/SelectHandSize";
+
+const NUM_CASE_FILES = 1;
 
 export function Checklist({
     idsToLabels,
@@ -30,6 +32,22 @@ export function Checklist({
     >;
     predictedKnowledge: ReadonlySignal<Promise<Prediction>>;
 }) {
+    const cardsByCategory = useComputed((): Record<CardCategory, Card[]> => pipe(
+        cards.value,
+
+        ReadonlyArray.reduce<Record<CardCategory, Card[]>, Card>(
+            {},
+            (cardsByCategory, card) => {
+                const [category] = card;
+                const otherCardsInCategory = cardsByCategory[category] ?? [];
+                return {
+                    ...cardsByCategory,
+                    [category]: [...otherCardsInCategory, card] ,
+                };
+            }
+        ),
+    ));
+
     return (<>
         <div>
             <h2>Checklist</h2>
@@ -119,30 +137,42 @@ export function Checklist({
                 </thead>
 
                 <tbody>
-                    {cards.value
+                    {ReadonlyRecord.toEntries(cardsByCategory.value)
                         .sort()
-                        .map(card => (
-                        <tr>
-                            <CaseFileCell
-                                card={card}
-                                knownCaseFileOwnerships={knownCaseFileOwnerships}
-                                deducedKnowledge={deducedKnowledge}
-                                predictedKnowledge={predictedKnowledge}
-                            />
+                        .map(([category, cardsInCategory]) => (<>
+                            <tr>
+                                <td>{/* blank cell in case file column */}</td>
+                                <td className={styles.headCell}>
+                                    <strong>{idsToLabels.value[category]}</strong>
+                                </td>
+                            </tr>
 
-                            <td className={styles.headCell}>{idsToLabels.value[card[1]]}</td>
+                            {cardsInCategory
+                                .sort()
+                                .map(card => (
+                                <tr>
+                                    <CaseFileCell
+                                        card={card}
+                                        knownCaseFileOwnerships={knownCaseFileOwnerships}
+                                        deducedKnowledge={deducedKnowledge}
+                                        predictedKnowledge={predictedKnowledge}
+                                    />
 
-                            {players.value.map(player => (
-                                <PlayerCell
-                                    player={player}
-                                    card={card}
-                                    knownPlayerOwnerships={knownPlayerOwnerships}
-                                    deducedKnowledge={deducedKnowledge}
-                                    predictedKnowledge={predictedKnowledge}
-                                />
+                                    <td className={styles.headCell}>{idsToLabels.value[card[1]]}</td>
+
+                                    {players.value.map(player => (
+                                        <PlayerCell
+                                            player={player}
+                                            card={card}
+                                            knownPlayerOwnerships={knownPlayerOwnerships}
+                                            deducedKnowledge={deducedKnowledge}
+                                            predictedKnowledge={predictedKnowledge}
+                                        />
+                                    ))}
+                                </tr>
                             ))}
-                        </tr>
-                    ))}
+                        </>))
+                    }
                 </tbody>
             </table>
         </div>

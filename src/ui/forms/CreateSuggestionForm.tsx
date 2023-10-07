@@ -1,6 +1,7 @@
 import styles from './CreateSuggestionForm.module.css';
-import { ReadonlySignal, useSignal } from "@preact/signals";
-import { Card, Player, Suggestion } from "../../logic";
+import { ReadonlySignal, useComputed, useSignal } from "@preact/signals";
+import { Card, CardCategory, Player, Suggestion } from "../../logic";
+import { ReadonlyArray, ReadonlyRecord, pipe } from 'effect';
 
 export function CreateSuggestionForm({
     idsToLabels,
@@ -13,6 +14,22 @@ export function CreateSuggestionForm({
     cards: ReadonlySignal<Card[]>;
     onSubmit: (suggestion: Suggestion) => void;
 }) {
+    const allCardsByCategory = useComputed((): Record<CardCategory, Card[]> => pipe(
+        allCards.value,
+
+        ReadonlyArray.reduce<Record<CardCategory, Card[]>, Card>(
+            {},
+            (cardsByCategory, card) => {
+                const [category] = card;
+                const otherCardsInCategory = cardsByCategory[category] ?? [];
+                return {
+                    ...cardsByCategory,
+                    [category]: [...otherCardsInCategory, card] ,
+                };
+            }
+        ),
+    ));
+
     const guesser = useSignal<Player | undefined>(undefined);
     const cards = useSignal<Card[]>([]);
     const nonRefuters = useSignal<Player[]>([]);
@@ -67,40 +84,47 @@ export function CreateSuggestionForm({
 
             <fieldset>
                 <legend>Cards</legend>
-                {allCards.value.sort().map(card => (
-                    <label className={styles.toggleInput}>
-                        <input
-                            type="checkbox"
-                            name="cards"
-                            value={card}
-                            checked={Boolean(
-                                cards
-                                    .value
-                                    .find(selectedCard =>
-                                            selectedCard[0] === card[0]
-                                            && selectedCard[1] === card[1]
-                                    )
-                            )}
-                            onClick={() => {
-                                if (cards
-                                    .value
-                                    .find(selectedCard =>
-                                            selectedCard[0] === card[0]
-                                            && selectedCard[1] === card[1]
-                                    )
-                                ) {
-                                    cards.value = cards.value.filter(selectedCard =>
-                                        !(selectedCard[0] === card[0]
-                                        && selectedCard[1] === card[1])
-                                    );
-                                } else {
-                                    cards.value = [...cards.value, card];
-                                }
-                            }}
-                        />
-                        {idsToLabels.value[card[1]]}
-                    </label>
-                ))}
+                {ReadonlyRecord.toEntries(allCardsByCategory.value)
+                    .sort()
+                    .map(([category, cardsInCategory]) => (<>
+                        <label><strong>{idsToLabels.value[category]}</strong></label>
+
+                        {cardsInCategory.map(card => (
+                            <label className={styles.toggleInput}>
+                                <input
+                                    type="checkbox"
+                                    name="cards"
+                                    value={card}
+                                    checked={Boolean(
+                                        cards
+                                            .value
+                                            .find(selectedCard =>
+                                                selectedCard[0] === card[0]
+                                                && selectedCard[1] === card[1]
+                                            )
+                                    )}
+                                    onClick={() => {
+                                        if (cards
+                                            .value
+                                            .find(selectedCard =>
+                                                selectedCard[0] === card[0]
+                                                && selectedCard[1] === card[1]
+                                            )
+                                        ) {
+                                            cards.value = cards.value.filter(selectedCard =>
+                                                !(selectedCard[0] === card[0]
+                                                && selectedCard[1] === card[1])
+                                            );
+                                        } else {
+                                            cards.value = [...cards.value, card];
+                                        }
+                                    }}
+                                />
+                                {idsToLabels.value[card[1]]}
+                            </label>
+                        ))}
+                    </>))
+                }
             </fieldset>
 
             <fieldset>
