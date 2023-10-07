@@ -183,12 +183,12 @@ export function CreateSuggestionForm({
                                 type="radio"
                                 name="seenRefuteCard"
                                 value={undefined}
-                                checked={refuter.value === undefined}
+                                checked={seenRefuteCard.value === undefined}
                                 onClick={() => {
-                                    refuter.value = undefined;
+                                    seenRefuteCard.value = undefined;
                                 }}
                             />
-                            <i>No refuter</i>
+                            <i>No refute card</i>
                         </label>
                     </>)}
 
