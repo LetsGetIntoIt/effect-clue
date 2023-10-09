@@ -28,7 +28,7 @@ export function SuggestionLabel({
 
         <div>
             {refuter
-                ? (<span>{getLabel.value(guesser)} refuted</span>)
+                ? (<span>{getLabel.value(refuter)} refuted</span>)
                 : (<span><i>Nobody</i> refuted</span>)
             }
 

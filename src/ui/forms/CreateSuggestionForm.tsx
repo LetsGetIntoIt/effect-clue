@@ -138,7 +138,7 @@ export function CreateSuggestionForm({
 
                 <fieldset>
                     <legend>Refuter</legend>
-                    {allPlayers.value.map(player => (
+                    {[...allPlayers.value, undefined].map(player => (
                         <label className={styles.toggleInput}>
                             <input
                                 type="radio"
@@ -149,29 +149,16 @@ export function CreateSuggestionForm({
                                     refuter.value = player;
                                 }}
                             />
-                            {idsToLabels.value[player]}
+                            {player ? idsToLabels.value[player] : <i>No refuter</i>}
                         </label>
                     ))}
-
-                    <label className={styles.toggleInput}>
-                        <input
-                            type="radio"
-                            name="refuter"
-                            value={undefined}
-                            checked={refuter.value === undefined}
-                            onClick={() => {
-                                refuter.value = undefined;
-                            }}
-                        />
-                        <i>No refuter</i>
-                    </label>
                 </fieldset>
 
                 <fieldset>
                     <legend>Seen refute card</legend>
 
                     {cards.value.length > 0 && (<>
-                        {cards.value.sort().map(card => (
+                        {[...cards.value.sort(), undefined].map(card => (
                             <label className={styles.toggleInput}>
                                 <input
                                     type="radio"
@@ -182,22 +169,9 @@ export function CreateSuggestionForm({
                                         seenRefuteCard.value = card;
                                     }}
                                 />
-                                {idsToLabels.value[card[1]]}
+                                {card ? idsToLabels.value[card[1]] : <i>No refute card</i>}
                             </label>
                         ))}
-
-                        <label className={styles.toggleInput}>
-                            <input
-                                type="radio"
-                                name="seenRefuteCard"
-                                value={undefined}
-                                checked={seenRefuteCard.value === undefined}
-                                onClick={() => {
-                                    seenRefuteCard.value = undefined;
-                                }}
-                            />
-                            <i>No refute card</i>
-                        </label>
                     </>)}
 
                     {cards.value.length <= 0 && (
