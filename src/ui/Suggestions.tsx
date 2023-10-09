@@ -1,17 +1,17 @@
 import { ReadonlySignal, Signal } from "@preact/signals";
-import { Card, Player, Suggestion } from "../logic";
+import { Card, CardCategory, Player, Suggestion } from "../logic";
 import { CreateSuggestionForm } from "./forms/CreateSuggestionForm";
 import { SuggestionLabel } from "./utils/SuggestionLabel";
 
 export function Suggestions({
     idsToLabels,
     players,
-    cards,
+    cardsByCategory,
     suggestions,
 }: {
     idsToLabels: ReadonlySignal<Record<string, string>>;
     players: ReadonlySignal<Player[]>;
-    cards: ReadonlySignal<Card[]>;
+    cardsByCategory: ReadonlySignal<Record<CardCategory, Card[]>>;
     suggestions: Signal<Suggestion[]>;
 }) {
     return (<>
@@ -32,7 +32,7 @@ export function Suggestions({
                 <CreateSuggestionForm
                     idsToLabels={idsToLabels}
                     players={players}
-                    cards={cards}
+                    allCardsByCategory={cardsByCategory}
                     onSubmit={(suggestion) => {
                         suggestions.value = [...suggestions.value, suggestion];
                     }}

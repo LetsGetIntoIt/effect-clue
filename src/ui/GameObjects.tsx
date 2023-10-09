@@ -1,5 +1,5 @@
-import { Signal } from "@preact/signals"
-import { Card, Player } from "../logic";
+import { ReadonlySignal, Signal } from "@preact/signals"
+import { Card, CardCategory, Player } from "../logic";
 import { CreatePlayerForm } from "./forms/CreatePlayerForm";
 import { CreateCardForm } from "./forms/CreateCardForm";
 import { IdGenerator } from "./utils/IdGenerator";
@@ -11,12 +11,14 @@ export function GameObjects({
     labelsToIds,
     players,
     cards,
+    cardsByCategory,
 }: {
     idGenerator: IdGenerator<string>;
     idsToLabels: Signal<Record<string, string>>;
     labelsToIds: Signal<Record<string, string>>;
     players: Signal<Player[]>;
     cards: Signal<Card[]>;
+    cardsByCategory: ReadonlySignal<Record<CardCategory, Card[]>>;
 }) {
     const getOrGenerateId = (label: string) => {
         const existingId = labelsToIds.value[label];
@@ -78,6 +80,8 @@ export function GameObjects({
             )}
 
             <CreateCardForm
+                idsToLabels={idsToLabels}
+                existingCardsByCategory={cardsByCategory}
                 onSubmit={createCard}
             />
 

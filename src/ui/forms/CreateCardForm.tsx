@@ -1,13 +1,21 @@
-import { useSignal } from "@preact/signals";
+import { ReadonlySignal, useSignal } from "@preact/signals";
 import { Card, CardCategory, CardName } from "../../logic";
+import { useId } from "preact/hooks";
+import { ReadonlyArray, ReadonlyRecord, pipe } from "effect";
 
 export function CreateCardForm({
+    idsToLabels,
+    existingCardsByCategory,
     onSubmit,
 }: {
+    idsToLabels: ReadonlySignal<Record<string, string>>;
+    existingCardsByCategory: ReadonlySignal<Record<CardCategory, Card[]>>;
     onSubmit: (card: Card) => void;
 }) {
     const cardCategoryName = useSignal<CardCategory>('');
     const cardName = useSignal<CardName>('');
+
+    const categoryListId = useId();
 
     return (
         <form
@@ -27,11 +35,20 @@ export function CreateCardForm({
                 name="newCardCategory"
                 type="text"
                 placeholder="Category name"
+                list={categoryListId}
                 value={cardCategoryName.value}
                 onInput={evt => {
                     cardCategoryName.value = evt.currentTarget.value;
                 }}
             />
+            <datalist id={categoryListId}>
+                {pipe(
+                    ReadonlyRecord.toEntries(existingCardsByCategory.value),
+                    ReadonlyArray.map(([category]) => (<>
+                        <option value={idsToLabels.value[category]}></option>
+                    </>))
+                )}
+            </datalist>
 
             <input
                 name="newCardName"

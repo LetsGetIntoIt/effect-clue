@@ -1,20 +1,18 @@
 // TODO these imports definitely need to be refactored out
-import { Either, Match, ReadonlyArray, ReadonlyRecord, pipe } from "effect";
+import { Either, Match, ReadonlyRecord } from "effect";
 import { LogicalParadox } from "../logic/LogicalParadox";
 
 import styles from './Checklist.module.css';
-import { ReadonlySignal, Signal, useComputed, useSignal } from "@preact/signals";
+import { ReadonlySignal, Signal, useSignal } from "@preact/signals";
 import { Card, CardCategory, Knowledge, KnownCaseFileOwnership, KnownPlayerHandSize, KnownPlayerOwnership, Player, Prediction } from "../logic";
 import { SelectChecklistValue } from "./forms/SelectChecklistValue";
 import { ApiKnownCaseFileOwnershipKey, ApiKnownPlayerHandSizeKey, ApiKnownPlayerOwnershipKey } from "../logic/Api";
 import { SelectHandSize } from "./forms/SelectHandSize";
 
-const NUM_CASE_FILES = 1;
-
 export function Checklist({
     idsToLabels,
     players,
-    cards,
+    cardsByCategory,
     knownCaseFileOwnerships,
     knownPlayerOwnerships,
     knownPlayerHandSizes,
@@ -23,7 +21,7 @@ export function Checklist({
 }: {
     idsToLabels: ReadonlySignal<Record<string, string>>;
     players: ReadonlySignal<Player[]>;
-    cards: ReadonlySignal<Card[]>;
+    cardsByCategory: ReadonlySignal<Record<CardCategory, Card[]>>;
     knownCaseFileOwnerships: Signal<KnownCaseFileOwnership>;
     knownPlayerOwnerships: Signal<KnownPlayerOwnership>;
     knownPlayerHandSizes: Signal<KnownPlayerHandSize>;
@@ -32,22 +30,6 @@ export function Checklist({
     >;
     predictedKnowledge: ReadonlySignal<Promise<Prediction>>;
 }) {
-    const cardsByCategory = useComputed((): Record<CardCategory, Card[]> => pipe(
-        cards.value,
-
-        ReadonlyArray.reduce<Record<CardCategory, Card[]>, Card>(
-            {},
-            (cardsByCategory, card) => {
-                const [category] = card;
-                const otherCardsInCategory = cardsByCategory[category] ?? [];
-                return {
-                    ...cardsByCategory,
-                    [category]: [...otherCardsInCategory, card] ,
-                };
-            }
-        ),
-    ));
-
     return (<>
         <div>
             <h2>Checklist</h2>

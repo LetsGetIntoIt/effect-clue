@@ -7,6 +7,7 @@ import { Suggestions } from './Suggestions';
 import { Card, KnownCaseFileOwnership, KnownPlayerHandSize, KnownPlayerOwnership, Player, Suggestion, deduce, predict } from '../logic';
 import { useMemo } from 'preact/hooks';
 import { Either } from 'effect';
+import { cardsByCategory as groupCardsByCategory } from './utils/cardsByCategory';
 
 export function Clue() {
     const idGenerator = useMemo(() => newIdGenerator(), []);
@@ -15,6 +16,7 @@ export function Clue() {
 
     const players = useSignal<Player[]>([]);
     const cards = useSignal<Card[]>([]);
+    const cardsByCategory = useComputed(() => groupCardsByCategory(cards.value))
     const suggestions = useSignal<Suggestion[]>([]);
 
     const knownCaseFileOwnerships = useSignal<KnownCaseFileOwnership>({});
@@ -61,6 +63,7 @@ export function Clue() {
                     labelsToIds={labelsToIds}
                     players={players}
                     cards={cards}
+                    cardsByCategory={cardsByCategory}
                 />
             </aside>
 
@@ -68,7 +71,7 @@ export function Clue() {
                 <Checklist
                     idsToLabels={idsToLabels}
                     players={players}
-                    cards={cards}
+                    cardsByCategory={cardsByCategory}
                     knownCaseFileOwnerships={knownCaseFileOwnerships}
                     knownPlayerOwnerships={knownPlayerOwnerships}
                     knownPlayerHandSizes={knownPlayerHandSizes}
@@ -81,7 +84,7 @@ export function Clue() {
                 <Suggestions
                     idsToLabels={idsToLabels}
                     players={players}
-                    cards={cards}
+                    cardsByCategory={cardsByCategory}
                     suggestions={suggestions}
                 />
             </aside>

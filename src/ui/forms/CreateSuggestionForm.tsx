@@ -1,35 +1,19 @@
 import styles from './CreateSuggestionForm.module.css';
-import { ReadonlySignal, useComputed, useSignal } from "@preact/signals";
+import { ReadonlySignal, useSignal } from "@preact/signals";
 import { Card, CardCategory, Player, Suggestion } from "../../logic";
-import { ReadonlyArray, ReadonlyRecord, pipe } from 'effect';
+import { ReadonlyRecord } from 'effect';
 
 export function CreateSuggestionForm({
     idsToLabels,
     players: allPlayers,
-    cards: allCards,
+    allCardsByCategory,
     onSubmit,
 }: {
     idsToLabels: ReadonlySignal<Record<string, string>>;
     players: ReadonlySignal<Player[]>;
-    cards: ReadonlySignal<Card[]>;
+    allCardsByCategory: ReadonlySignal<Record<CardCategory, Card[]>>;
     onSubmit: (suggestion: Suggestion) => void;
 }) {
-    const allCardsByCategory = useComputed((): Record<CardCategory, Card[]> => pipe(
-        allCards.value,
-
-        ReadonlyArray.reduce<Record<CardCategory, Card[]>, Card>(
-            {},
-            (cardsByCategory, card) => {
-                const [category] = card;
-                const otherCardsInCategory = cardsByCategory[category] ?? [];
-                return {
-                    ...cardsByCategory,
-                    [category]: [...otherCardsInCategory, card] ,
-                };
-            }
-        ),
-    ));
-
     const guesser = useSignal<Player | undefined>(undefined);
     const cards = useSignal<Card[]>([]);
     const nonRefuters = useSignal<Player[]>([]);
