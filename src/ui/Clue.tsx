@@ -86,6 +86,7 @@ export function Clue() {
                     players={players}
                     cardsByCategory={cardsByCategory}
                     suggestions={suggestions}
+                    deducedKnowledge={deducedKnowledge}
                 />
             </aside>
         </div>
