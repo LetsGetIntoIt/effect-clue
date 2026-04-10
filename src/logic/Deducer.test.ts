@@ -1,134 +1,185 @@
-import { Data, HashMap, HashSet, ReadonlyArray, Tuple } from "effect";
-import { ChecklistValue, Knowledge } from "./Knowledge";
+import { HashMap } from "effect";
+import { Card, CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
+import { CLASSIC_SETUP_3P } from "./GameSetup";
+import {
+    Cell,
+    emptyKnowledge,
+    getCellByOwnerCard,
+    N,
+    setCell,
+    setHandSize,
+    Y,
+} from "./Knowledge";
 import { Suggestion } from "./Suggestion";
-import { ALL_CARDS, Card, Player } from "./GameObjects";
-import deducer from "./Deducer";
+import deduce from "./Deducer";
 
 import "./test-utils/EffectExpectEquals";
 
-describe(deducer, () => {
-    test('no hallucinations', () => {
-        const initialKnowledge: Knowledge = Data.struct({
-            playerChecklist: HashMap.empty(),
-            caseFileChecklist: HashMap.empty(),
-            playerHandSize: HashMap.empty(),
-        });
+const setup = CLASSIC_SETUP_3P;
+const A = Player("Anisha");
+const B = Player("Bob");
+const C = Player("Cho");
 
-        const suggestions: HashSet.HashSet<Suggestion> = HashSet.empty();
+// Shorthands for a handful of cards we'll reference in tests.
+const MUSTARD  = Card("Col. Mustard");
+const PLUM     = Card("Prof. Plum");
+const KNIFE    = Card("Knife");
+const REVOLVER = Card("Revolver");
+const ROPE     = Card("Rope");
+const KITCHEN  = Card("Kitchen");
+const LIBRARY  = Card("Library");
+const CONSERV  = Card("Conservatory");
 
-        const newKnowledge
-            = deducer(suggestions)(initialKnowledge);
-
-        // We learned nothing new
-        expect(newKnowledge).toEqual(initialKnowledge);
+describe("deduce", () => {
+    test("empty inputs produce empty knowledge", () => {
+        const result = deduce(setup, [])(emptyKnowledge);
+        expect(result._tag).toBe("Ok");
+        if (result._tag !== "Ok") return;
+        expect(HashMap.size(result.knowledge.checklist)).toBe(0);
     });
 
-    test('applies all rules', () => {
-        const initialKnowledge: Knowledge = Data.struct({
-            playerChecklist: HashMap.make(
-                [Data.tuple(Player("Anisha"), Card("Col. Mustard")), ChecklistValue("Y")],
-                [Data.tuple(Player("Anisha"), Card("Revolver")), ChecklistValue("Y")],
-                [Data.tuple(Player("Anisha"), Card("Library")), ChecklistValue("Y")],
-            ),
+    test("card ownership propagates: one Y forces Ns elsewhere", () => {
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(PlayerOwner(A), MUSTARD), Y);
 
-            caseFileChecklist: HashMap.empty(),
+        const result = deduce(setup, [])(knowledge);
+        expect(result._tag).toBe("Ok");
+        if (result._tag !== "Ok") return;
 
-            playerHandSize: HashMap.make(
-                [Player("Anisha"), 3],
-                [Player("Bob"), 2],
-            ),
-        });
+        // Every other owner now has N for Col. Mustard.
+        expect(getCellByOwnerCard(result.knowledge, PlayerOwner(B), MUSTARD)).toBe(N);
+        expect(getCellByOwnerCard(result.knowledge, PlayerOwner(C), MUSTARD)).toBe(N);
+        expect(getCellByOwnerCard(result.knowledge, CaseFileOwner(), MUSTARD)).toBe(N);
+    });
 
-        const suggestions: HashSet.HashSet<Suggestion> = HashSet.make(
-            Data.struct({
-                suggester: Player("Anisha"),
-                cards: HashSet.make(Card("Prof. Plum"), Card("Knife"), Card("Conservatory")),
-                nonRefuters: HashSet.empty(),
-                refuter: Player("Bob"),
-                seenCard: Card("Conservatory"),
+    test("case file category narrows to single candidate", () => {
+        let knowledge = emptyKnowledge;
+        // If nobody owns 5 of the 6 suspects, the 6th must be in the case file.
+        for (const card of setup.suspects.slice(0, 5)) {
+            knowledge = setCell(knowledge, Cell(PlayerOwner(A), card), Y);
+        }
+        // Anisha has 5 cards; tell the solver the size so it can fill Ns.
+        knowledge = setHandSize(knowledge, PlayerOwner(A), 5);
+
+        const result = deduce(setup, [])(knowledge);
+        expect(result._tag).toBe("Ok");
+        if (result._tag !== "Ok") return;
+
+        const sixth = setup.suspects[5];
+        // The last suspect must be in the case file.
+        expect(getCellByOwnerCard(result.knowledge, CaseFileOwner(), sixth)).toBe(Y);
+    });
+
+    test("non-refuters don't have the suggested cards", () => {
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [B, C],
+        })];
+
+        const result = deduce(setup, suggestions)(emptyKnowledge);
+        expect(result._tag).toBe("Ok");
+        if (result._tag !== "Ok") return;
+
+        for (const card of [PLUM, KNIFE, CONSERV]) {
+            expect(getCellByOwnerCard(result.knowledge, PlayerOwner(B), card)).toBe(N);
+            expect(getCellByOwnerCard(result.knowledge, PlayerOwner(C), card)).toBe(N);
+        }
+    });
+
+    test("refuter with seen card marks ownership", () => {
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [],
+            refuter: B,
+            seenCard: CONSERV,
+        })];
+
+        const result = deduce(setup, suggestions)(emptyKnowledge);
+        expect(result._tag).toBe("Ok");
+        if (result._tag !== "Ok") return;
+
+        expect(getCellByOwnerCard(result.knowledge, PlayerOwner(B), CONSERV)).toBe(Y);
+    });
+
+    test("refuter forced to own the only non-excluded card", () => {
+        let knowledge = emptyKnowledge;
+        // We already know Bob doesn't own two of the three suggested cards.
+        knowledge = setCell(knowledge, Cell(PlayerOwner(B), PLUM),  N);
+        knowledge = setCell(knowledge, Cell(PlayerOwner(B), KNIFE), N);
+
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [],
+            refuter: B,
+        })];
+
+        const result = deduce(setup, suggestions)(knowledge);
+        expect(result._tag).toBe("Ok");
+        if (result._tag !== "Ok") return;
+
+        expect(getCellByOwnerCard(result.knowledge, PlayerOwner(B), CONSERV)).toBe(Y);
+    });
+
+    test("full scenario: multiple suggestions converge", () => {
+        // Matches the original Deducer integration test.
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(PlayerOwner(A), MUSTARD),  Y);
+        knowledge = setCell(knowledge, Cell(PlayerOwner(A), REVOLVER), Y);
+        knowledge = setCell(knowledge, Cell(PlayerOwner(A), LIBRARY),  Y);
+        knowledge = setHandSize(knowledge, PlayerOwner(A), 3);
+        knowledge = setHandSize(knowledge, PlayerOwner(B), 2);
+
+        const suggestions = [
+            Suggestion({
+                suggester: A,
+                cards: [PLUM, KNIFE, CONSERV],
+                nonRefuters: [],
+                refuter: B,
+                seenCard: CONSERV,
             }),
-
-            Data.struct({
-                suggester: Player("Cho"),
-                cards: HashSet.make(Card("Col. Mustard"), Card("Revolver"), Card("Kitchen")),
-                nonRefuters: HashSet.make(Player("Bob")),
-                refuter: undefined,
-                seenCard: undefined,
+            Suggestion({
+                suggester: C,
+                cards: [MUSTARD, REVOLVER, KITCHEN],
+                nonRefuters: [B],
             }),
-
-            Data.struct({
-                suggester: Player("Cho"),
-                cards: HashSet.make(Card("Col. Mustard"), Card("Rope"), Card("Kitchen")),
-                nonRefuters: HashSet.empty(),
-                refuter: Player("Bob"),
-                seenCard: undefined,
+            Suggestion({
+                suggester: C,
+                cards: [MUSTARD, ROPE, KITCHEN],
+                nonRefuters: [],
+                refuter: B,
             }),
-        );
+        ];
 
-        const newKnowledge
-            = deducer(suggestions)(initialKnowledge);
+        const result = deduce(setup, suggestions)(knowledge);
+        expect(result._tag).toBe("Ok");
+        if (result._tag !== "Ok") return;
 
-        expect(newKnowledge).toEqual(Data.struct({
-            playerChecklist: HashMap.make(
-                // By the end, we will have accounted for all these players' cards
-                // and we'll know that doesn't have any of the rest
-                // So by default, all the cards are Ns for her unless otherwise specified
-                ...ReadonlyArray.flatMap(ALL_CARDS, card => [
-                    Tuple.tuple(Data.tuple(Player("Anisha"), card), ChecklistValue("N")),
-                    Tuple.tuple(Data.tuple(Player("Bob"), card), ChecklistValue("N")),
-                ]),
+        const k = result.knowledge;
+        // Anisha's known cards.
+        expect(getCellByOwnerCard(k, PlayerOwner(A), MUSTARD)).toBe(Y);
+        expect(getCellByOwnerCard(k, PlayerOwner(A), REVOLVER)).toBe(Y);
+        expect(getCellByOwnerCard(k, PlayerOwner(A), LIBRARY)).toBe(Y);
 
-                // Our initial knowledge
-                [Data.tuple(Player("Anisha"), Card("Col. Mustard")), ChecklistValue("Y")],
-                [Data.tuple(Player("Anisha"), Card("Revolver")), ChecklistValue("Y")],
-                [Data.tuple(Player("Anisha"), Card("Library")), ChecklistValue("Y")],
+        // Bob has the conservatory (we saw it) and the rope (only card he
+        // could have used to refute the third suggestion).
+        expect(getCellByOwnerCard(k, PlayerOwner(B), CONSERV)).toBe(Y);
+        expect(getCellByOwnerCard(k, PlayerOwner(B), ROPE)).toBe(Y);
 
-                // Nobody else has Anisha's cards
-                [Data.tuple(Player("Bob"), Card("Col. Mustard")), ChecklistValue("N")],
-                [Data.tuple(Player("Bob"), Card("Revolver")), ChecklistValue("N")],
-                [Data.tuple(Player("Bob"), Card("Library")), ChecklistValue("N")],
-                [Data.tuple(Player("Cho"), Card("Col. Mustard")), ChecklistValue("N")],
-                [Data.tuple(Player("Cho"), Card("Revolver")), ChecklistValue("N")],
-                [Data.tuple(Player("Cho"), Card("Library")), ChecklistValue("N")],
+        // Bob couldn't refute the kitchen suggestion, so he doesn't own it.
+        expect(getCellByOwnerCard(k, PlayerOwner(B), KITCHEN)).toBe(N);
+    });
 
-                // Bob has the conservatory because we saw it
-                [Data.tuple(Player("Bob"), Card("Conservatory")), ChecklistValue("Y")],
+    test("contradiction is surfaced as a result", () => {
+        let knowledge = emptyKnowledge;
+        // Both Anisha and Bob have Knife? That's a contradiction once the
+        // card-ownership rule fires.
+        knowledge = setCell(knowledge, Cell(PlayerOwner(A), KNIFE), Y);
+        knowledge = setCell(knowledge, Cell(PlayerOwner(B), KNIFE), Y);
 
-                // Nobody else has Bob's cards
-                [Data.tuple(Player("Cho"), Card("Conservatory")), ChecklistValue("N")],
-
-                // Bob doesn't have the Kitchen because he couldn't refute
-                [Data.tuple(Player("Bob"), Card("Kitchen")), ChecklistValue("N")],
-
-                // Bob has the rope because its the only card he could have refuted with
-                [Data.tuple(Player("Bob"), Card("Rope")), ChecklistValue("Y")],
-
-                // Nobody else has Bob's cards
-                [Data.tuple(Player("Anisha"), Card("Rope")), ChecklistValue("N")],
-                [Data.tuple(Player("Cho"), Card("Rope")), ChecklistValue("N")],
-            ),
-
-            caseFileChecklist: HashMap.make(
-                // Nobody else has Anisha's cards
-                [Card("Col. Mustard"), ChecklistValue("N")],
-                [Card("Revolver"), ChecklistValue("N")],
-                [Card("Library"), ChecklistValue("N")],
-                [Card("Col. Mustard"), ChecklistValue("N")],
-                [Card("Revolver"), ChecklistValue("N")],
-                [Card("Library"), ChecklistValue("N")],
-
-                // Nobody else has Bob's cards
-                [Card("Conservatory"), ChecklistValue("N")],
-
-                // Nobody else has Bob's cards
-                [Card("Rope"), ChecklistValue("N")],
-                [Card("Rope"), ChecklistValue("N")],
-            ),
-
-            playerHandSize: HashMap.make(
-                [Player("Anisha"), 3],
-                [Player("Bob"), 2],
-            ),
-        }));
+        const result = deduce(setup, [])(knowledge);
+        expect(result._tag).toBe("Contradiction");
     });
 });

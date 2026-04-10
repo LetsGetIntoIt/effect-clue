@@ -1,4 +1,371 @@
+:root {
+    --color-bg: #fafafa;
+    --color-panel: #ffffff;
+    --color-border: #e1e1e8;
+    --color-muted: #6b6b78;
+    --color-accent: #3456a6;
+    --color-yes: #2e7d32;
+    --color-yes-bg: #d9efdb;
+    --color-no: #b71c1c;
+    --color-no-bg: #fde0e0;
+    --color-unknown: #b5b5be;
+    --color-danger-bg: #fdecea;
+    --color-danger: #7a1212;
+    --radius: 6px;
+    --spacing: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Roboto, "Helvetica Neue", sans-serif;
+}
+
+html, body {
+    background: var(--color-bg);
+    color: #1a1a24;
+    margin: 0;
+}
+
 #app {
-	height: 100vh;
-	width: 100vw;
+    min-height: 100vh;
+    width: 100%;
+}
+
+.clue-app {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px 20px 60px;
+}
+
+.clue-app header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.clue-app h1 {
+    margin: 0;
+    font-size: 28px;
+    color: var(--color-accent);
+}
+
+.toolbar {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.toolbar button {
+    padding: 6px 14px;
+    border: 1px solid var(--color-border);
+    background: white;
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+.toolbar button:hover {
+    background: #f0f0f5;
+}
+
+.layout {
+    display: grid;
+    grid-template-columns: minmax(320px, 1fr) minmax(400px, 2fr);
+    gap: 20px;
+    align-items: start;
+}
+
+@media (max-width: 900px) {
+    .layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+.column {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+.panel {
+    background: var(--color-panel);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: 16px;
+}
+
+.panel h2 {
+    margin: 0 0 12px;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-accent);
+}
+
+.panel h3 {
+    margin: 16px 0 8px;
+    font-size: 14px;
+}
+
+.muted {
+    color: var(--color-muted);
+    font-size: 13px;
+}
+
+.link {
+    background: none;
+    border: none;
+    color: var(--color-accent);
+    cursor: pointer;
+    padding: 0;
+    font-size: 12px;
+    text-decoration: underline;
+}
+
+/* ---- Known hands ---------------------------------------------------- */
+
+.hand-sizes {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 8px;
+}
+
+.hand-sizes th, .hand-sizes td {
+    padding: 4px 6px;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 13px;
+}
+
+.hand-sizes input {
+    width: 60px;
+    padding: 4px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+}
+
+.known-card-form {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.known-card-form select {
+    flex: 1;
+    min-width: 0;
+    padding: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+}
+
+.known-card-form button {
+    padding: 6px 14px;
+    background: var(--color-accent);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.known-card-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+.known-card-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 13px;
+}
+
+/* ---- Suggestion form ------------------------------------------------- */
+
+.suggestion-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.suggestion-form label {
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.suggestion-form select {
+    flex: 1;
+    padding: 6px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+}
+
+.suggestion-form button {
+    padding: 8px;
+    background: var(--color-accent);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.suggestion-form button:disabled {
+    background: var(--color-unknown);
+    cursor: not-allowed;
+}
+
+/* ---- Suggestion list ------------------------------------------------- */
+
+.suggestion-list {
+    list-style: decimal;
+    padding-left: 24px;
+    margin: 0;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.suggestion-list li {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 13px;
+}
+
+.suggestion-list li:last-child {
+    border-bottom: none;
+}
+
+/* ---- Case file ------------------------------------------------------- */
+
+.case-file dl {
+    margin: 0;
+}
+
+.case-file-row {
+    display: flex;
+    gap: 16px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.case-file-row:last-child {
+    border-bottom: none;
+}
+
+.case-file-row dt {
+    font-weight: 600;
+    min-width: 80px;
+}
+
+.case-file-row dd {
+    margin: 0;
+    flex: 1;
+    font-size: 14px;
+}
+
+.progress {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    font-size: 13px;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--color-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-bar > div {
+    height: 100%;
+    background: var(--color-accent);
+    transition: width 200ms ease;
+}
+
+/* ---- Checklist grid ------------------------------------------------- */
+
+.checklist-grid {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.checklist-grid th, .checklist-grid td {
+    border: 1px solid var(--color-border);
+    padding: 4px 8px;
+    text-align: center;
+}
+
+.checklist-grid thead th {
+    background: #f3f3f8;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+}
+
+.checklist-grid .category-row th {
+    background: var(--color-accent);
+    color: white;
+    text-align: left;
+    padding: 6px 8px;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+}
+
+.checklist-grid .card-name {
+    text-align: left;
+    font-weight: normal;
+}
+
+.cell {
+    width: 36px;
+    min-width: 36px;
+    font-weight: 600;
+    cursor: default;
+}
+
+.cell-yes {
+    background: var(--color-yes-bg);
+    color: var(--color-yes);
+}
+
+.cell-no {
+    background: var(--color-no-bg);
+    color: var(--color-no);
+}
+
+.cell-unknown {
+    background: white;
+}
+
+/* ---- Recommender ---------------------------------------------------- */
+
+.rec-list {
+    padding-left: 24px;
+    margin: 8px 0 0;
+    font-size: 13px;
+}
+
+.rec-list li {
+    padding: 4px 0;
+}
+
+/* ---- Contradiction --------------------------------------------------- */
+
+.contradiction {
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+    border: 1px solid #f5c2c2;
+    border-radius: var(--radius);
+    padding: 12px;
+    font-size: 13px;
 }

@@ -6,10 +6,10 @@ import './style.css';
 import { Clue } from './ui/Clue';
 
 export function App() {
-	return Clue();
+	return <Clue />;
 }
 
-let container;
-if (container = document.getElementById('app')) {
+const container = document.getElementById('app');
+if (container) {
 	render(<App />, container);
 }
