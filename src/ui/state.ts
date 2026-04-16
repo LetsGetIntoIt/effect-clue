@@ -5,8 +5,9 @@ import {
     PlayerOwner,
 } from "../logic/GameObjects";
 import {
-    CLASSIC_SETUP_3P,
+    DEFAULT_SETUP,
     GameSetup,
+    newGameSetup,
 } from "../logic/GameSetup";
 import {
     emptyKnowledge,
@@ -56,7 +57,7 @@ export interface DraftSuggestion {
 
 // ---- Root signals ------------------------------------------------------
 
-export const setupSignal: Signal<GameSetup> = signal(CLASSIC_SETUP_3P);
+export const setupSignal: Signal<GameSetup> = signal(DEFAULT_SETUP);
 
 export const handSizesSignal: Signal<ReadonlyArray<readonly [Player, number]>> =
     signal([]);
@@ -143,13 +144,34 @@ export const provenanceSignal: ReadonlySignal<Provenance | undefined> =
 
 // ---- Actions -----------------------------------------------------------
 
-export const loadPreset = (preset: GameSetup): void => {
-    setupSignal.value = preset;
-    // Reset everything else — different decks don't mix cleanly.
+/**
+ * Reset to a fresh game with the default 4-player setup. Caller is
+ * responsible for warning the user before discarding existing data —
+ * see `hasGameData()`.
+ */
+export const newGame = (): void => {
+    setupSignal.value = newGameSetup(4);
     knownCardsSignal.value = [];
     handSizesSignal.value = [];
     suggestionsSignal.value = [];
     persist();
+};
+
+/**
+ * True when the user has entered any game data — known cards, hand
+ * sizes, suggestions, or customized players (different from the
+ * default `Player 1..N`). Used to gate the "New game" confirm dialog.
+ */
+export const hasGameData = (): boolean => {
+    if (knownCardsSignal.value.length > 0) return true;
+    if (handSizesSignal.value.length > 0) return true;
+    if (suggestionsSignal.value.length > 0) return true;
+    const players = setupSignal.value.players;
+    if (players.length !== DEFAULT_SETUP.players.length) return true;
+    for (let i = 0; i < players.length; i++) {
+        if (players[i] !== DEFAULT_SETUP.players[i]) return true;
+    }
+    return false;
 };
 
 export const addKnownCard = (card: KnownCard): void => {
@@ -184,6 +206,61 @@ export const resetAll = (): void => {
     knownCardsSignal.value = [];
     handSizesSignal.value = [];
     suggestionsSignal.value = [];
+    persist();
+};
+
+/**
+ * Append a new player to the setup. Picks the next free `Player N` name
+ * by inspecting existing names — so removing "Player 2" and then adding
+ * yields "Player 2" again rather than colliding with "Player 4".
+ */
+export const addPlayer = (): void => {
+    const setup = setupSignal.value;
+    const existing = new Set(setup.players.map(p => String(p)));
+    let n = 1;
+    while (existing.has(`Player ${n}`)) n++;
+    const newName = Player(`Player ${n}`);
+    setupSignal.value = GameSetup({
+        players: [...setup.players, newName],
+        suspects: setup.suspects,
+        weapons: setup.weapons,
+        rooms: setup.rooms,
+    });
+    persist();
+};
+
+/**
+ * Remove a player from the setup and scrub every reference to them
+ * from known cards, hand sizes, and suggestions. Suggestions where the
+ * removed player was the suggester are dropped entirely; otherwise the
+ * player is filtered out of nonRefuters and the refuter field cleared
+ * if matched.
+ */
+export const removePlayer = (player: Player): void => {
+    const setup = setupSignal.value;
+    setupSignal.value = GameSetup({
+        players: setup.players.filter(p => p !== player),
+        suspects: setup.suspects,
+        weapons: setup.weapons,
+        rooms: setup.rooms,
+    });
+
+    knownCardsSignal.value = knownCardsSignal.value.filter(
+        kc => kc.player !== player,
+    );
+
+    handSizesSignal.value = handSizesSignal.value.filter(
+        ([p]) => p !== player,
+    );
+
+    suggestionsSignal.value = suggestionsSignal.value
+        .filter(s => s.suggester !== player)
+        .map(s => ({
+            ...s,
+            nonRefuters: s.nonRefuters.filter(p => p !== player),
+            refuter: s.refuter === player ? undefined : s.refuter,
+        }));
+
     persist();
 };
 

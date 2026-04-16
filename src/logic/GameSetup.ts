@@ -90,119 +90,66 @@ export const defaultHandSizes = (
 
 // ---- Presets -----------------------------------------------------------
 
-const suspects = (names: ReadonlyArray<string>): ReadonlyArray<Card> =>
+const cards = (names: ReadonlyArray<string>): ReadonlyArray<Card> =>
     names.map(Card);
-
-const weapons = suspects;
-const rooms = suspects;
 const players = (names: ReadonlyArray<string>): ReadonlyArray<Player> =>
     names.map(Player);
 
+const CLASSIC_SUSPECTS = cards([
+    "Miss Scarlet",
+    "Col. Mustard",
+    "Mrs. White",
+    "Mr. Green",
+    "Mrs. Peacock",
+    "Prof. Plum",
+]);
+
+const CLASSIC_WEAPONS = cards([
+    "Candlestick",
+    "Knife",
+    "Lead pipe",
+    "Revolver",
+    "Rope",
+    "Wrench",
+]);
+
+const CLASSIC_ROOMS = cards([
+    "Kitchen",
+    "Ball room",
+    "Conservatory",
+    "Dining room",
+    "Billiard room",
+    "Library",
+    "Lounge",
+    "Hall",
+    "Study",
+]);
+
 /**
- * Classic three-player Clue, matching the hardcoded setup from the
- * original codebase.
+ * Build a fresh classic-Clue setup with N generically-named players. Used
+ * as the "new game" default — users can rename the players and add or
+ * remove rows from the UI grid.
+ */
+export const newGameSetup = (playerCount: number = 4): GameSetup => GameSetup({
+    players: players(
+        Array.from({ length: playerCount }, (_, i) => `Player ${i + 1}`),
+    ),
+    suspects: CLASSIC_SUSPECTS,
+    weapons: CLASSIC_WEAPONS,
+    rooms: CLASSIC_ROOMS,
+});
+
+/**
+ * The single default preset surfaced in the UI's "New game" button.
+ */
+export const DEFAULT_SETUP: GameSetup = newGameSetup(4);
+
+/**
+ * Classic three-player Clue. Kept for tests; not exposed in the UI.
  */
 export const CLASSIC_SETUP_3P: GameSetup = GameSetup({
     players: players(["Anisha", "Bob", "Cho"]),
-    suspects: suspects([
-        "Miss Scarlet",
-        "Col. Mustard",
-        "Mrs. White",
-        "Mr. Green",
-        "Mrs. Peacock",
-        "Prof. Plum",
-    ]),
-    weapons: weapons([
-        "Candlestick",
-        "Knife",
-        "Lead pipe",
-        "Revolver",
-        "Rope",
-        "Wrench",
-    ]),
-    rooms: rooms([
-        "Kitchen",
-        "Ball room",
-        "Conservatory",
-        "Dining room",
-        "Billiard room",
-        "Library",
-        "Lounge",
-        "Hall",
-        "Study",
-    ]),
+    suspects: CLASSIC_SUSPECTS,
+    weapons: CLASSIC_WEAPONS,
+    rooms: CLASSIC_ROOMS,
 });
-
-/**
- * Classic Clue with the default 6 suspects as 6 players — useful for the
- * full board-game experience.
- */
-export const CLASSIC_SETUP_6P: GameSetup = GameSetup({
-    players: players([
-        "Miss Scarlet",
-        "Col. Mustard",
-        "Mrs. White",
-        "Mr. Green",
-        "Mrs. Peacock",
-        "Prof. Plum",
-    ]),
-    suspects: CLASSIC_SETUP_3P.suspects,
-    weapons: CLASSIC_SETUP_3P.weapons,
-    rooms: CLASSIC_SETUP_3P.rooms,
-});
-
-/**
- * Master Detective edition: more suspects, weapons, and rooms.
- */
-export const MASTER_DETECTIVE_SETUP: GameSetup = GameSetup({
-    players: players([
-        "Miss Scarlet",
-        "Col. Mustard",
-        "Mrs. White",
-        "Mr. Green",
-        "Mrs. Peacock",
-        "Prof. Plum",
-    ]),
-    suspects: suspects([
-        "Miss Scarlet",
-        "Col. Mustard",
-        "Mrs. White",
-        "Mr. Green",
-        "Mrs. Peacock",
-        "Prof. Plum",
-        "Miss Peach",
-        "Mon. Brunette",
-        "Madame Rose",
-        "Sgt. Gray",
-    ]),
-    weapons: weapons([
-        "Candlestick",
-        "Knife",
-        "Lead pipe",
-        "Revolver",
-        "Rope",
-        "Wrench",
-        "Horseshoe",
-        "Poison",
-    ]),
-    rooms: rooms([
-        "Kitchen",
-        "Ball room",
-        "Conservatory",
-        "Dining room",
-        "Billiard room",
-        "Library",
-        "Lounge",
-        "Hall",
-        "Study",
-        "Courtyard",
-        "Gazebo",
-        "Trophy room",
-    ]),
-});
-
-export const PRESETS: ReadonlyArray<{ name: string; setup: GameSetup }> = [
-    { name: "Classic (3 players)", setup: CLASSIC_SETUP_3P },
-    { name: "Classic (6 players)", setup: CLASSIC_SETUP_6P },
-    { name: "Master Detective (6 players)", setup: MASTER_DETECTIVE_SETUP },
-];

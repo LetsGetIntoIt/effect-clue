@@ -1,9 +1,11 @@
 import {
+    ALL_CATEGORIES,
     Card,
+    CardCategory,
     Owner,
     ownerLabel,
 } from "../../logic/GameObjects";
-import { allOwners, GameSetup } from "../../logic/GameSetup";
+import { allOwners } from "../../logic/GameSetup";
 import {
     CellValue,
     getCellByOwnerCard,
@@ -13,20 +15,26 @@ import {
 } from "../../logic/Knowledge";
 import { explainCell } from "../../logic/Provenance";
 import {
+    caseFileAnswerFor,
+    caseFileCandidatesFor,
+    caseFileProgress,
+} from "../../logic/Recommender";
+import {
     deductionResultSignal,
     provenanceSignal,
     setupSignal,
 } from "../state";
 
 /**
- * The main visual: a grid with one row per card and one column per owner
+ * The main visual: a header strip showing case-file progress on top, and
+ * underneath a grid with one row per card and one column per owner
  * (players + case file). Cells show Y / N / blank and are coloured by
- * status. If explanations are enabled, hovering a cell displays the rule
+ * status. If explanations are enabled, hovering a cell shows the rule
  * that filled it in.
  *
- * We put cards on the rows (rather than the columns) because there are
- * typically many more cards than players and this makes the table scroll
- * vertically rather than horizontally.
+ * The case-file header was previously a separate panel — folding it in
+ * here puts the most-actionable summary right next to the grid that
+ * justifies it.
  */
 export function ChecklistGrid() {
     const setup = setupSignal.value;
@@ -57,6 +65,7 @@ export function ChecklistGrid() {
     return (
         <section class="panel">
             <h2>Deduction grid</h2>
+            <CaseFileHeader knowledge={knowledge} />
             <table class="checklist-grid">
                 <thead>
                     <tr>
@@ -104,6 +113,53 @@ export function ChecklistGrid() {
     );
 }
 
+function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
+    const setup = setupSignal.value;
+    const progress = caseFileProgress(setup, knowledge);
+    return (
+        <div class="case-file-header">
+            <div class="case-file-progress">
+                <span class="case-file-progress-label">
+                    Case file · {(progress * 100).toFixed(0)}% solved
+                </span>
+                <div class="progress-bar">
+                    <div style={{ width: `${progress * 100}%` }} />
+                </div>
+            </div>
+            <div class="case-file-slots">
+                {ALL_CATEGORIES.map(category => {
+                    const solved = caseFileAnswerFor(setup, knowledge, category);
+                    const candidates = caseFileCandidatesFor(
+                        setup, knowledge, category);
+                    return (
+                        <div class="case-file-slot" key={category}>
+                            <div class="case-file-slot-label">
+                                {categoryLabel(category)}
+                            </div>
+                            {solved ? (
+                                <div class="case-file-slot-answer">{solved}</div>
+                            ) : (
+                                <div class="case-file-slot-candidates muted">
+                                    {candidates.length} candidate
+                                    {candidates.length === 1 ? "" : "s"}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+const categoryLabel = (category: CardCategory): string => {
+    switch (category) {
+        case "suspect": return "Suspect";
+        case "weapon":  return "Weapon";
+        case "room":    return "Room";
+    }
+};
+
 const ownerKey = (owner: Owner): string =>
     owner._tag === "Player" ? `p-${owner.player}` : "case-file";
 
@@ -118,4 +174,3 @@ const cellClass = (value: CellValue | undefined): string => {
     if (value === N) return "cell cell-no";
     return "cell cell-unknown";
 };
-

@@ -1,8 +1,33 @@
 import { useState } from "preact/hooks";
 import { Card, Player } from "../../logic/GameObjects";
-import { addSuggestion, setupSignal } from "../state";
+import { recommendSuggestions } from "../../logic/Recommender";
+import {
+    addSuggestion,
+    deductionResultSignal,
+    removeSuggestion,
+    setupSignal,
+    suggestionsSignal,
+} from "../state";
 
-export function SuggestionForm() {
+/**
+ * Consolidated card for everything the solver's primary loop touches:
+ * adding a suggestion, getting recommendations for the next one, and
+ * reviewing / editing the log of prior suggestions.
+ */
+export function SuggestionLogPanel() {
+    return (
+        <section class="panel suggestion-log">
+            <h2>Suggestion log</h2>
+            <div class="suggestion-log-grid">
+                <AddSuggestion />
+                <Recommendations />
+            </div>
+            <PriorSuggestions />
+        </section>
+    );
+}
+
+function AddSuggestion() {
     const setup = setupSignal.value;
     const [suspect, setSuspect] = useState<string>("");
     const [weapon, setWeapon] = useState<string>("");
@@ -12,6 +37,11 @@ export function SuggestionForm() {
     const [refuter, setRefuter] = useState<string>("");
     const [seenCard, setSeenCard] = useState<string>("");
     const [passedPlayers, setPassedPlayers] = useState<Set<string>>(new Set());
+
+    // Keep the suggester dropdown's value valid when players come and go.
+    if (suggester && !setup.players.some(p => String(p) === suggester)) {
+        setSuggester(setup.players[0] ?? "");
+    }
 
     const canSubmit = suspect && weapon && room && suggester;
 
@@ -62,8 +92,8 @@ export function SuggestionForm() {
     );
 
     return (
-        <section class="panel">
-            <h2>Add a suggestion</h2>
+        <div class="suggestion-log-section">
+            <h3>Add a suggestion</h3>
             <form onSubmit={onSubmit} class="suggestion-form">
                 <div>
                     <label>
@@ -85,7 +115,8 @@ export function SuggestionForm() {
                         Suspect:
                         <select
                             value={suspect}
-                            onChange={e => setSuspect((e.target as HTMLSelectElement).value)}
+                            onChange={e => setSuspect(
+                                (e.target as HTMLSelectElement).value)}
                             required
                         >
                             <option value="">—</option>
@@ -100,7 +131,8 @@ export function SuggestionForm() {
                         Weapon:
                         <select
                             value={weapon}
-                            onChange={e => setWeapon((e.target as HTMLSelectElement).value)}
+                            onChange={e => setWeapon(
+                                (e.target as HTMLSelectElement).value)}
                             required
                         >
                             <option value="">—</option>
@@ -115,7 +147,8 @@ export function SuggestionForm() {
                         Room:
                         <select
                             value={room}
-                            onChange={e => setRoom((e.target as HTMLSelectElement).value)}
+                            onChange={e => setRoom(
+                                (e.target as HTMLSelectElement).value)}
                             required
                         >
                             <option value="">—</option>
@@ -183,6 +216,118 @@ export function SuggestionForm() {
                     Add suggestion
                 </button>
             </form>
-        </section>
+        </div>
+    );
+}
+
+function Recommendations() {
+    const setup = setupSignal.value;
+    const result = deductionResultSignal.value;
+    const [asPlayer, setAsPlayer] = useState<string>(setup.players[0] ?? "");
+
+    // Keep player selection valid as players come and go.
+    if (asPlayer && !setup.players.some(p => String(p) === asPlayer)) {
+        setAsPlayer(setup.players[0] ?? "");
+    }
+
+    if (result._tag === "Contradiction" || !asPlayer) {
+        return (
+            <div class="suggestion-log-section">
+                <h3>Next-suggestion recommendations</h3>
+                <div class="muted">
+                    {result._tag === "Contradiction"
+                        ? "Resolve the contradiction to see recommendations."
+                        : "Add players to see recommendations."}
+                </div>
+            </div>
+        );
+    }
+
+    const rec = recommendSuggestions(setup, result.knowledge, Player(asPlayer), 5);
+
+    return (
+        <div class="suggestion-log-section">
+            <h3>Next-suggestion recommendations</h3>
+            <label>
+                Suggesting as:&nbsp;
+                <select
+                    value={asPlayer}
+                    onChange={e => setAsPlayer(
+                        (e.target as HTMLSelectElement).value)}
+                >
+                    {setup.players.map(p => (
+                        <option key={p} value={p}>{p}</option>
+                    ))}
+                </select>
+            </label>
+            {rec.locked ? (
+                <div
+                    class="recommender-locked"
+                    title={`${rec.topCount} candidates tied for the top score`}
+                >
+                    Gather more leads to unlock recommendations.
+                </div>
+            ) : rec.recommendations.length === 0 ? (
+                <div class="muted">
+                    Nothing useful to ask — you've already narrowed everything
+                    down.
+                </div>
+            ) : (
+                <ol class="rec-list">
+                    {rec.recommendations.map((r, i) => (
+                        <li key={i}>
+                            <strong>{r.suspect}</strong> with the&nbsp;
+                            <strong>{r.weapon}</strong> in the&nbsp;
+                            <strong>{r.room}</strong>
+                            <span class="muted"> · score {r.score}</span>
+                        </li>
+                    ))}
+                </ol>
+            )}
+        </div>
+    );
+}
+
+function PriorSuggestions() {
+    const suggestions = suggestionsSignal.value;
+    return (
+        <div class="suggestion-log-section suggestions-prior">
+            <h3>
+                Prior suggestions
+                {suggestions.length > 0 && ` (${suggestions.length})`}
+            </h3>
+            {suggestions.length === 0 ? (
+                <div class="muted">No suggestions yet. Add one above.</div>
+            ) : (
+                <ol class="suggestion-list">
+                    {suggestions.map(s => (
+                        <li key={s.id}>
+                            <div>
+                                <strong>{s.suggester}</strong> suggested&nbsp;
+                                {s.cards.join(" + ")}
+                            </div>
+                            <div class="muted">
+                                {s.refuter
+                                    ? <>
+                                        refuted by <strong>{s.refuter}</strong>
+                                        {s.seenCard && <> (showed {s.seenCard})</>}
+                                    </>
+                                    : "nobody could refute"}
+                                {s.nonRefuters.length > 0 && (
+                                    <> · passed: {s.nonRefuters.join(", ")}</>
+                                )}
+                            </div>
+                            <button
+                                type="button"
+                                class="link"
+                                onClick={() => removeSuggestion(s.id)}
+                            >
+                                remove
+                            </button>
+                        </li>
+                    ))}
+                </ol>
+            )}
+        </div>
     );
 }

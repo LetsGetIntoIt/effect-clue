@@ -66,11 +66,9 @@ export const caseFileCandidatesFor = (
 };
 
 /**
- * A simple suggestion recommender: enumerate all possible (suspect,
- * weapon, room) triples whose components are still open (not ruled out
- * for the case file), and rank them by how many "unknown" cells they
- * would touch in the suggester's non-refuter neighbours. The goal is to
- * maximise information gain in the next turn.
+ * A single ranked recommendation: which (suspect, weapon, room) to ask
+ * about, scored by the count of currently-unknown cells the question
+ * would touch in the suggester's other-player neighbours.
  */
 export interface Recommendation {
     readonly suggester: Player;
@@ -80,12 +78,31 @@ export interface Recommendation {
     readonly score: number;
 }
 
+/**
+ * Output of the recommender. When `locked` is true, the top score is
+ * shared by too many candidate suggestions to give meaningful guidance
+ * — the UI should show a "gather more leads" message instead. The
+ * `topCount` field is exposed for tooltips/debug.
+ */
+export interface RecommendationResult {
+    readonly recommendations: ReadonlyArray<Recommendation>;
+    readonly locked: boolean;
+    readonly topCount: number;
+}
+
+/**
+ * Threshold for "too many candidates tied for the best score". Below
+ * this many ties, recommendations are useful; above, the user should
+ * make more suggestions to narrow things down first.
+ */
+const TOP_TIE_THRESHOLD = 5;
+
 export const recommendSuggestions = (
     setup: GameSetup,
     knowledge: Knowledge,
     suggester: Player,
     maxResults: number = 5,
-): ReadonlyArray<Recommendation> => {
+): RecommendationResult => {
     const suspects = caseFileCandidatesFor(setup, knowledge, "suspect");
     const weapons  = caseFileCandidatesFor(setup, knowledge, "weapon");
     const rooms    = caseFileCandidatesFor(setup, knowledge, "room");
@@ -96,9 +113,6 @@ export const recommendSuggestions = (
     for (const suspect of suspects) {
         for (const weapon of weapons) {
             for (const room of rooms) {
-                // Count unknown (suggester-doesn't-know) cells among the
-                // three cards × other players. Higher = more potential
-                // information from asking.
                 let unknownCount = 0;
                 for (const p of otherPlayers) {
                     for (const card of [suspect, weapon, room]) {
@@ -118,8 +132,20 @@ export const recommendSuggestions = (
         }
     }
 
+    if (results.length === 0) {
+        return { recommendations: [], locked: false, topCount: 0 };
+    }
+
     results.sort((a, b) => b.score - a.score);
-    return results.slice(0, maxResults);
+    const topScore = results[0].score;
+    const topCount = results.filter(r => r.score === topScore).length;
+    const locked = topCount > TOP_TIE_THRESHOLD;
+
+    return {
+        recommendations: locked ? [] : results.slice(0, maxResults),
+        locked,
+        topCount,
+    };
 };
 
 // ---- Probabilistic mode ------------------------------------------------
