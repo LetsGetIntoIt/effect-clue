@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { Card, Player } from "../../logic/GameObjects";
 import {
     allCards,
@@ -33,10 +33,13 @@ function PlayerNameInput({ player, allPlayers }: {
     const [editing, setEditing] = useState(String(player));
     const [error, setError] = useState("");
 
-    // Sync local state if the signal-level name changed (e.g. preset load).
-    if (editing !== String(player) && !error) {
+    // Resync local state only when the player prop itself changes
+    // (rename committed elsewhere, "New game" pressed, etc.). Doing this
+    // unconditionally during render would clobber every keystroke.
+    useEffect(() => {
         setEditing(String(player));
-    }
+        setError("");
+    }, [player]);
 
     const commit = () => {
         const trimmed = editing.trim();
