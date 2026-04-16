@@ -197,6 +197,13 @@ export const addSuggestion = (suggestion: DraftSuggestion): void => {
     persist();
 };
 
+export const updateSuggestion = (updated: DraftSuggestion): void => {
+    suggestionsSignal.value = suggestionsSignal.value.map(
+        s => s.id === updated.id ? updated : s,
+    );
+    persist();
+};
+
 export const removeSuggestion = (id: string): void => {
     suggestionsSignal.value = suggestionsSignal.value.filter(s => s.id !== id);
     persist();

@@ -403,6 +403,71 @@ html, body {
     font-size: 13px;
 }
 
+.suggestion-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.link-danger {
+    color: var(--color-danger);
+}
+
+.edit-suggestion {
+    padding: 8px 0;
+}
+
+.edit-suggestion-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.edit-suggestion-fields label {
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.edit-suggestion-fields select {
+    flex: 1;
+    padding: 5px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.edit-suggestion-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.save-btn {
+    padding: 5px 14px;
+    background: var(--color-accent);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.save-btn:disabled {
+    background: var(--color-unknown);
+    cursor: not-allowed;
+}
+
+.cancel-btn {
+    padding: 5px 14px;
+    background: white;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
 .suggestion-list li:last-child {
     border-bottom: none;
 }
