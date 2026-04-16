@@ -55,3 +55,6 @@ dist-ssr
 
 # Jest
 /coverage/
+
+# Claude Code worktrees
+.claude/worktrees/
