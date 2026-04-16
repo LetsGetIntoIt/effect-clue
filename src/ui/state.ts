@@ -187,6 +187,35 @@ export const resetAll = (): void => {
     persist();
 };
 
+export const renamePlayer = (oldName: Player, newName: Player): void => {
+    if (oldName === newName) return;
+
+    const setup = setupSignal.value;
+    setupSignal.value = GameSetup({
+        players: setup.players.map(p => p === oldName ? newName : p),
+        suspects: setup.suspects,
+        weapons: setup.weapons,
+        rooms: setup.rooms,
+    });
+
+    knownCardsSignal.value = knownCardsSignal.value.map(kc =>
+        kc.player === oldName ? { ...kc, player: newName } : kc,
+    );
+
+    handSizesSignal.value = handSizesSignal.value.map(([p, size]) =>
+        p === oldName ? [newName, size] as const : [p, size] as const,
+    );
+
+    suggestionsSignal.value = suggestionsSignal.value.map(s => ({
+        ...s,
+        suggester: s.suggester === oldName ? newName : s.suggester,
+        nonRefuters: s.nonRefuters.map(p => p === oldName ? newName : p),
+        refuter: s.refuter === oldName ? newName : s.refuter,
+    }));
+
+    persist();
+};
+
 // ---- Persistence glue --------------------------------------------------
 
 const currentSession = (): GameSession => ({

@@ -2,19 +2,6 @@ import { useState } from "preact/hooks";
 import { Card, Player } from "../../logic/GameObjects";
 import { addSuggestion, setupSignal } from "../state";
 
-/**
- * Form for adding a new suggestion. Collects:
- *  - Who suggested (dropdown from setup.players)
- *  - One suspect, one weapon, one room (dropdowns)
- *  - Who refuted, if anyone (dropdown including "no one")
- *  - Which card was seen, if known (dropdown constrained to the three
- *    suggested cards)
- *
- * Non-refuters are derived automatically: any players between the
- * suggester and the refuter (following turn order) who weren't able to
- * refute. We approximate "turn order" as `setup.players` order — this is
- * the standard way the game is played.
- */
 export function SuggestionForm() {
     const setup = setupSignal.value;
     const [suspect, setSuspect] = useState<string>("");
@@ -24,17 +11,38 @@ export function SuggestionForm() {
         setup.players[0] ?? "");
     const [refuter, setRefuter] = useState<string>("");
     const [seenCard, setSeenCard] = useState<string>("");
+    const [passedPlayers, setPassedPlayers] = useState<Set<string>>(new Set());
 
     const canSubmit = suspect && weapon && room && suggester;
+
+    const onSuggesterChange = (value: string) => {
+        setSuggester(value);
+        const next = new Set(passedPlayers);
+        next.delete(value);
+        setPassedPlayers(next);
+    };
+
+    const onRefuterChange = (value: string) => {
+        setRefuter(value);
+        setSeenCard("");
+        const next = new Set(passedPlayers);
+        next.delete(value);
+        setPassedPlayers(next);
+    };
+
+    const togglePassed = (name: string, checked: boolean) => {
+        const next = new Set(passedPlayers);
+        if (checked) next.add(name);
+        else next.delete(name);
+        setPassedPlayers(next);
+    };
 
     const onSubmit = (e: Event) => {
         e.preventDefault();
         if (!canSubmit) return;
         const cards = [Card(suspect), Card(weapon), Card(room)];
-        const nonRefuters = computeNonRefuters(
-            setup.players,
-            Player(suggester),
-            refuter ? Player(refuter) : undefined,
+        const nonRefuters = setup.players.filter(p =>
+            passedPlayers.has(String(p)),
         );
         addSuggestion({
             id: `s-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -44,10 +52,14 @@ export function SuggestionForm() {
             refuter: refuter ? Player(refuter) : undefined,
             seenCard: seenCard ? Card(seenCard) : undefined,
         });
-        // Reset narrow fields but keep the suggester chosen for fast entry.
         setSuspect(""); setWeapon(""); setRoom("");
         setRefuter(""); setSeenCard("");
+        setPassedPlayers(new Set());
     };
+
+    const eligibleForPassed = setup.players.filter(
+        p => String(p) !== suggester && String(p) !== refuter,
+    );
 
     return (
         <section class="panel">
@@ -58,7 +70,8 @@ export function SuggestionForm() {
                         Suggester:
                         <select
                             value={suggester}
-                            onChange={e => setSuggester((e.target as HTMLSelectElement).value)}
+                            onChange={e => onSuggesterChange(
+                                (e.target as HTMLSelectElement).value)}
                             required
                         >
                             {setup.players.map(p => (
@@ -117,11 +130,12 @@ export function SuggestionForm() {
                         Refuted by:
                         <select
                             value={refuter}
-                            onChange={e => setRefuter((e.target as HTMLSelectElement).value)}
+                            onChange={e => onRefuterChange(
+                                (e.target as HTMLSelectElement).value)}
                         >
                             <option value="">— none —</option>
                             {setup.players
-                                .filter(p => p !== suggester)
+                                .filter(p => String(p) !== suggester)
                                 .map(p => (
                                     <option key={p} value={p}>{p}</option>
                                 ))}
@@ -134,7 +148,8 @@ export function SuggestionForm() {
                             Card shown (optional):
                             <select
                                 value={seenCard}
-                                onChange={e => setSeenCard((e.target as HTMLSelectElement).value)}
+                                onChange={e => setSeenCard(
+                                    (e.target as HTMLSelectElement).value)}
                             >
                                 <option value="">— unknown —</option>
                                 {[suspect, weapon, room]
@@ -146,6 +161,24 @@ export function SuggestionForm() {
                         </label>
                     </div>
                 )}
+                {eligibleForPassed.length > 0 && (
+                    <fieldset class="non-refuters">
+                        <legend>Could not refute</legend>
+                        {eligibleForPassed.map(p => (
+                            <label key={p} class="checkbox-label">
+                                <input
+                                    type="checkbox"
+                                    checked={passedPlayers.has(String(p))}
+                                    onChange={e => togglePassed(
+                                        String(p),
+                                        (e.target as HTMLInputElement).checked,
+                                    )}
+                                />
+                                {p}
+                            </label>
+                        ))}
+                    </fieldset>
+                )}
                 <button type="submit" disabled={!canSubmit}>
                     Add suggestion
                 </button>
@@ -153,25 +186,3 @@ export function SuggestionForm() {
         </section>
     );
 }
-
-/**
- * Given a turn order, the suggester, and (optionally) the refuter,
- * return the players who had a chance to refute but passed. These are
- * the players who sit between the suggester and the refuter in the
- * standard Clue turn order (or everyone else, if nobody refuted).
- */
-const computeNonRefuters = (
-    players: ReadonlyArray<Player>,
-    suggester: Player,
-    refuter: Player | undefined,
-): ReadonlyArray<Player> => {
-    const startIdx = players.indexOf(suggester);
-    if (startIdx < 0) return [];
-    const ordered: Player[] = [];
-    for (let i = 1; i < players.length; i++) {
-        const p = players[(startIdx + i) % players.length];
-        if (p === refuter) break;
-        ordered.push(p);
-    }
-    return ordered;
-};

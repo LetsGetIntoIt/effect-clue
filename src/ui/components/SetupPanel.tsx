@@ -1,15 +1,56 @@
+import { useState } from "preact/hooks";
+import { Player } from "../../logic/GameObjects";
 import { PRESETS, GameSetup } from "../../logic/GameSetup";
-import { loadPreset, setupSignal } from "../state";
+import { loadPreset, renamePlayer, setupSignal } from "../state";
 
-/**
- * Preset picker + summary of the current game setup.
- *
- * We intentionally keep this minimal: picking a preset resets all other
- * state because a different deck composition invalidates any existing
- * suggestions or known hands. Users who want custom setups can still
- * edit the JSON in localStorage directly — a full custom setup editor
- * is out of scope for the initial build-out.
- */
+function PlayerNameInput({ player, allPlayers }: {
+    player: Player;
+    allPlayers: ReadonlyArray<Player>;
+}) {
+    const [editing, setEditing] = useState(String(player));
+    const [error, setError] = useState("");
+
+    // Sync local state if the signal-level name changed (e.g. preset load).
+    if (editing !== String(player) && !error) {
+        setEditing(String(player));
+    }
+
+    const commit = () => {
+        const trimmed = editing.trim();
+        if (!trimmed) {
+            setEditing(String(player));
+            setError("");
+            return;
+        }
+        if (trimmed === String(player)) {
+            setError("");
+            return;
+        }
+        if (allPlayers.some(p => String(p) === trimmed)) {
+            setError("Duplicate name");
+            return;
+        }
+        renamePlayer(player, Player(trimmed));
+        setError("");
+    };
+
+    return (
+        <div class="player-name-row">
+            <input
+                type="text"
+                value={editing}
+                onInput={e => {
+                    setEditing((e.target as HTMLInputElement).value);
+                    setError("");
+                }}
+                onBlur={commit}
+                onKeyDown={e => { if (e.key === "Enter") commit(); }}
+            />
+            {error && <span class="error-text">{error}</span>}
+        </div>
+    );
+}
+
 export function SetupPanel() {
     const setup: GameSetup = setupSignal.value;
 
@@ -44,8 +85,15 @@ export function SetupPanel() {
                 {setup.weapons.length} weapons,&nbsp;
                 {setup.rooms.length} rooms
             </div>
-            <div class="muted">
-                Players: {setup.players.join(", ")}
+            <div class="player-names">
+                <h3>Players</h3>
+                {setup.players.map((player, i) => (
+                    <PlayerNameInput
+                        key={i}
+                        player={player}
+                        allPlayers={setup.players}
+                    />
+                ))}
             </div>
         </section>
     );
