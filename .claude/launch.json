@@ -2,13 +2,16 @@
     "version": "0.0.1",
     "configurations": [
         {
+            "name": "vite-dev",
+            "runtimeExecutable": "pnpm",
+            "runtimeArgs": ["dev", "--host"],
+            "port": 5173
+        },
+        {
             "name": "vite-preview",
-            "runtimeExecutable": "yarn",
+            "runtimeExecutable": "pnpm",
             "runtimeArgs": ["preview", "--host"],
-            "port": 4173,
-            "env": {
-                "GITHUB_PACKAGES_PROJITECT_AUTH_TOKEN": "unused"
-            }
+            "port": 4173
         }
     ]
 }

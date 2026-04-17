@@ -4,9 +4,10 @@
 	"description": "A solver for the board game Clue",
 	"private": true,
 	"type": "module",
+	"packageManager": "pnpm@10.32.1",
 	"scripts": {
-		"test": "yarn jest",
-		"test:debug": "yarn run --inspect=9229 jest --runInBand",
+		"test": "jest",
+		"test:debug": "node --inspect=9229 node_modules/.bin/jest --runInBand",
 		"dev": "vite",
 		"build": "vite build",
 		"preview": "vite preview"
