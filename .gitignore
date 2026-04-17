@@ -28,6 +28,7 @@ dist-ssr
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+!.vscode/launch.json
 !.vscode/*.code-snippetss
 
 # IntelliJ
@@ -54,3 +55,6 @@ dist-ssr
 
 # Jest
 /coverage/
+
+# Claude Code worktrees
+.claude/worktrees/

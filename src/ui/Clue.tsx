@@ -1,13 +1,34 @@
+import { useEffect } from "preact/hooks";
+import { ChecklistGrid } from "./components/ChecklistGrid";
+import { GameSetupPanel } from "./components/GameSetupPanel";
+import { SuggestionLogPanel } from "./components/SuggestionLogPanel";
+import { Toolbar } from "./components/Toolbar";
+import { hydrateFromStorage } from "./state";
+
+/**
+ * Top-level Clue solver app. The suggestion log sits at the top because
+ * it's where the user spends most of their time; the game-setup grid
+ * and the deduction grid sit side-by-side below it on wide screens and
+ * stack on mobile.
+ */
 export function Clue() {
-	return (
-		<main>
-			<h1>Welcome to our Clue solver!</h1>
+    useEffect(() => {
+        hydrateFromStorage();
+    }, []);
 
-			<h2>
-				<a href="https://www.youtube.com/playlist?list=PLbh8a41dlxTHhaZsqEd9J1dIftbsI77Z_">Follow the full series on Youtube</a>
-			</h2>
+    return (
+        <main class="clue-app">
+            <header>
+                <h1>Clue solver</h1>
+                <Toolbar />
+            </header>
 
-			<iframe width="560" height="315" src="https://www.youtube.com/embed/videoseries?si=yAJA6z0gULWE7dth&amp;list=PLbh8a41dlxTHhaZsqEd9J1dIftbsI77Z_" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-		</main>
-	);
+            <SuggestionLogPanel />
+
+            <div class="bottom-row">
+                <GameSetupPanel />
+                <ChecklistGrid />
+            </div>
+        </main>
+    );
 }

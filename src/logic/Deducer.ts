@@ -1,53 +1,56 @@
-import { Equal, HashSet, ReadonlyArray } from "effect";
-import { Knowledge } from "./Knowledge";
+import { Equal } from "effect";
+import { Contradiction, Knowledge } from "./Knowledge";
+import { GameSetup } from "./GameSetup";
+import { applyAllRules } from "./Rules";
 import { Suggestion } from "./Suggestion";
-import { cardsAreOwnedAtMostOnce, cardsAreOwnedAtLeastOnce, playerOwnsAtMostHandSize, playerOwnsAtLeastHandSize, caseFileOwnsAtMost1PerCategory, caseFileOwnsAtLeast1PerCategory } from "./ConsistencyRules";
-import { nonRefutersDontHaveSuggestedCards, refuterUsedOnlyCardTheyOwn, refuterUsedSeenCard } from "./DeductionRules";
 
-export type Deducer = (
-    suggestions: HashSet.HashSet<Suggestion>,
+/**
+ * The result of running the deducer. Either we converged to a consistent
+ * fixed point, or we hit a contradiction and the game state is
+ * internally inconsistent.
+ */
+export type DeductionResult =
+    | { readonly _tag: "Ok"; readonly knowledge: Knowledge }
+    | { readonly _tag: "Contradiction"; readonly error: Contradiction };
+
+export const Ok = (knowledge: Knowledge): DeductionResult =>
+    ({ _tag: "Ok", knowledge });
+
+export const Err = (error: Contradiction): DeductionResult =>
+    ({ _tag: "Contradiction", error });
+
+/**
+ * Main entry point: given a game setup, a set of suggestions, and some
+ * initial knowledge (typically the solver's own hand), run rules to a
+ * fixed point and return the derived knowledge — or a Contradiction if
+ * the inputs are inconsistent.
+ *
+ * Fixed-point loop: each rule is monotone (only adds cells, never
+ * removes), so this is guaranteed to terminate in at most
+ * |owners| × |cards| iterations.
+ */
+export const deduce = (
+    setup: GameSetup,
+    suggestions: Iterable<Suggestion>,
 ) => (
-    knowledge: Knowledge,
-) => Knowledge;
-
-const deducer: Deducer = (suggestions) => {
-    const allRules = [
-        // All consistency rules
-        cardsAreOwnedAtMostOnce,
-        cardsAreOwnedAtLeastOnce,
-        playerOwnsAtMostHandSize,
-        playerOwnsAtLeastHandSize,
-        caseFileOwnsAtMost1PerCategory,
-        caseFileOwnsAtLeast1PerCategory,
-
-        // All deduction rules, tied to the suggestions
-        ...ReadonlyArray.map(
-            [
-                nonRefutersDontHaveSuggestedCards,
-                refuterUsedSeenCard,
-                refuterUsedOnlyCardTheyOwn,
-            ],
-
-            (deductionRule) => deductionRule(suggestions),
-        ),
-    ];
-
-    return (knowledge) => {
-        let knowledgeIterationIn: Knowledge;
-        let knowledgeOut: Knowledge = knowledge;
-        do {
-            knowledgeIterationIn = knowledgeOut;
-            knowledgeOut = ReadonlyArray.reduce(
-                allRules,
-                knowledgeIterationIn,
-                (knowledge, rule) => rule(knowledge),
-            );
-        } while (
-            !Equal.equals(knowledgeOut, knowledgeIterationIn)
-        );
-
-        return knowledgeOut;
-    };
+    initial: Knowledge,
+): DeductionResult => {
+    const rule = applyAllRules(setup, suggestions);
+    let current = initial;
+    try {
+        // Bound the loop defensively — one iteration per cell would be
+        // the worst case, so an order of magnitude above that is plenty.
+        const maxIterations = 1000;
+        for (let i = 0; i < maxIterations; i++) {
+            const next = rule(current);
+            if (Equal.equals(next, current)) return Ok(next);
+            current = next;
+        }
+        return Ok(current);
+    } catch (e) {
+        if (e instanceof Contradiction) return Err(e);
+        throw e;
+    }
 };
 
-export default deducer;
+export default deduce;
