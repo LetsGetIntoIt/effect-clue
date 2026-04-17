@@ -1,4 +1,4 @@
-import { Card, Player } from "./GameObjects";
+import { Card, CardCategory, Player } from "./GameObjects";
 import { GameSetup } from "./GameSetup";
 import { Suggestion, suggestionCards, suggestionNonRefuters } from "./Suggestion";
 
@@ -11,14 +11,18 @@ import { Suggestion, suggestionCards, suggestionNonRefuters } from "./Suggestion
  * because (a) the on-disk shape is tiny, (b) we want stable keys we
  * control for future migrations, and (c) the main codebase's `effect`
  * version doesn't include Schema.
+ *
+ * v1 hardcoded suspects/weapons/rooms; v2 generalized to a `categories`
+ * array so decks can have any number of categories with any names.
  */
-export interface PersistedGame {
-    readonly version: 1;
+export interface PersistedGameV2 {
+    readonly version: 2;
     readonly setup: {
         readonly players: ReadonlyArray<string>;
-        readonly suspects: ReadonlyArray<string>;
-        readonly weapons: ReadonlyArray<string>;
-        readonly rooms: ReadonlyArray<string>;
+        readonly categories: ReadonlyArray<{
+            readonly name: string;
+            readonly cards: ReadonlyArray<string>;
+        }>;
     };
     readonly hands: ReadonlyArray<{
         readonly player: string;
@@ -37,6 +41,25 @@ export interface PersistedGame {
     }>;
 }
 
+/**
+ * Legacy v1 shape — hardcoded suspects/weapons/rooms. Kept only to let
+ * `decodeSession` migrate old localStorage / URL sessions forward.
+ */
+interface PersistedGameV1 {
+    readonly version: 1;
+    readonly setup: {
+        readonly players: ReadonlyArray<string>;
+        readonly suspects: ReadonlyArray<string>;
+        readonly weapons: ReadonlyArray<string>;
+        readonly rooms: ReadonlyArray<string>;
+    };
+    readonly hands: PersistedGameV2["hands"];
+    readonly handSizes: PersistedGameV2["handSizes"];
+    readonly suggestions: PersistedGameV2["suggestions"];
+}
+
+export type PersistedGame = PersistedGameV2;
+
 export interface GameSession {
     setup: GameSetup;
     hands: ReadonlyArray<{ player: Player; cards: ReadonlyArray<Card> }>;
@@ -45,12 +68,13 @@ export interface GameSession {
 }
 
 export const encodeSession = (session: GameSession): PersistedGame => ({
-    version: 1,
+    version: 2,
     setup: {
         players: session.setup.players.map(p => String(p)),
-        suspects: session.setup.suspects.map(c => String(c)),
-        weapons: session.setup.weapons.map(c => String(c)),
-        rooms: session.setup.rooms.map(c => String(c)),
+        categories: session.setup.categories.map(c => ({
+            name: String(c.name),
+            cards: c.cards.map(card => String(card)),
+        })),
     },
     hands: session.hands.map(h => ({
         player: String(h.player),
@@ -69,22 +93,63 @@ export const encodeSession = (session: GameSession): PersistedGame => ({
     })),
 });
 
+const migrateV1ToV2 = (v1: PersistedGameV1): PersistedGameV2 => ({
+    version: 2,
+    setup: {
+        players: v1.setup.players,
+        categories: [
+            { name: "Suspects", cards: v1.setup.suspects },
+            { name: "Weapons",  cards: v1.setup.weapons  },
+            { name: "Rooms",    cards: v1.setup.rooms    },
+        ],
+    },
+    hands: v1.hands,
+    handSizes: v1.handSizes,
+    suggestions: v1.suggestions,
+});
+
 export const decodeSession = (data: unknown): GameSession | undefined => {
     if (!data || typeof data !== "object") return undefined;
-    const obj = data as Partial<PersistedGame>;
-    if (obj.version !== 1) return undefined;
-    if (!obj.setup || !obj.suggestions || !obj.hands || !obj.handSizes) {
+    const obj = data as { version?: number };
+
+    let v2: PersistedGameV2;
+    if (obj.version === 1) {
+        const v1 = data as Partial<PersistedGameV1>;
+        if (!v1.setup || !v1.hands || !v1.handSizes || !v1.suggestions) {
+            return undefined;
+        }
+        const s = v1.setup;
+        if (!s.players || !s.suspects || !s.weapons || !s.rooms) {
+            return undefined;
+        }
+        v2 = migrateV1ToV2(v1 as PersistedGameV1);
+    } else if (obj.version === 2) {
+        const candidate = data as Partial<PersistedGameV2>;
+        if (
+            !candidate.setup ||
+            !candidate.suggestions ||
+            !candidate.hands ||
+            !candidate.handSizes
+        ) {
+            return undefined;
+        }
+        if (!candidate.setup.players || !candidate.setup.categories) {
+            return undefined;
+        }
+        v2 = candidate as PersistedGameV2;
+    } else {
         return undefined;
     }
 
     const setup: GameSetup = GameSetup({
-        players: obj.setup.players.map(Player),
-        suspects: obj.setup.suspects.map(Card),
-        weapons: obj.setup.weapons.map(Card),
-        rooms: obj.setup.rooms.map(Card),
+        players: v2.setup.players.map(Player),
+        categories: v2.setup.categories.map(c => ({
+            name: CardCategory(c.name),
+            cards: c.cards.map(Card),
+        })),
     });
 
-    const suggestions = obj.suggestions.map(s => Suggestion({
+    const suggestions = v2.suggestions.map(s => Suggestion({
         suggester: Player(s.suggester),
         cards: s.cards.map(Card),
         nonRefuters: s.nonRefuters.map(Player),
@@ -94,11 +159,11 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
 
     return {
         setup,
-        hands: obj.hands.map(h => ({
+        hands: v2.hands.map(h => ({
             player: Player(h.player),
             cards: h.cards.map(Card),
         })),
-        handSizes: obj.handSizes.map(h => ({
+        handSizes: v2.handSizes.map(h => ({
             player: Player(h.player),
             size: h.size,
         })),
@@ -106,12 +171,16 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
     };
 };
 
-const STORAGE_KEY = "effect-clue.session.v1";
+// Keep the legacy v1 key so existing users pick their session up once on
+// upgrade; new writes go to v2. A future migration can delete v1 after
+// we're confident everyone has rolled forward.
+const STORAGE_KEY_V2 = "effect-clue.session.v2";
+const STORAGE_KEY_V1 = "effect-clue.session.v1";
 
 export const saveToLocalStorage = (session: GameSession): void => {
     try {
         const encoded = encodeSession(session);
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(encoded));
+        window.localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(encoded));
     } catch {
         // Quota exceeded, private mode, etc. — non-fatal.
     }
@@ -119,9 +188,11 @@ export const saveToLocalStorage = (session: GameSession): void => {
 
 export const loadFromLocalStorage = (): GameSession | undefined => {
     try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
-        if (!raw) return undefined;
-        return decodeSession(JSON.parse(raw));
+        const rawV2 = window.localStorage.getItem(STORAGE_KEY_V2);
+        if (rawV2) return decodeSession(JSON.parse(rawV2));
+        const rawV1 = window.localStorage.getItem(STORAGE_KEY_V1);
+        if (rawV1) return decodeSession(JSON.parse(rawV1));
+        return undefined;
     } catch {
         return undefined;
     }
@@ -129,7 +200,8 @@ export const loadFromLocalStorage = (): GameSession | undefined => {
 
 export const clearLocalStorage = (): void => {
     try {
-        window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem(STORAGE_KEY_V2);
+        window.localStorage.removeItem(STORAGE_KEY_V1);
     } catch {
         // Ignore.
     }
@@ -154,4 +226,3 @@ export const decodeSessionFromUrl = (encoded: string): GameSession | undefined =
         return undefined;
     }
 };
-

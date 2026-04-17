@@ -93,7 +93,7 @@ export function GameSetupPanel() {
     const result = deductionResultSignal.value;
     const defaults = new Map(defaultHandSizes(setup));
 
-    const totalDealt = allCards(setup).length - caseFileSize();
+    const totalDealt = allCards(setup).length - caseFileSize(setup);
     const setHandSizes = setup.players
         .map(p => handSizeMap.get(p))
         .filter((n): n is number => typeof n === "number");
@@ -131,11 +131,8 @@ export function GameSetupPanel() {
         }
     };
 
-    const categories: ReadonlyArray<{ name: string; cards: ReadonlyArray<Card> }> = [
-        { name: "Suspects", cards: setup.suspects },
-        { name: "Weapons",  cards: setup.weapons },
-        { name: "Rooms",    cards: setup.rooms },
-    ];
+    const categories: ReadonlyArray<{ name: string; cards: ReadonlyArray<Card> }> =
+        setup.categories.map(c => ({ name: String(c.name), cards: c.cards }));
 
     const cardSpan = setup.players.length + 2; // label + players + add column
 
@@ -156,7 +153,7 @@ export function GameSetupPanel() {
                 <div class="validation-banner warning">
                     Hand sizes total {handSizesTotal} card
                     {handSizesTotal === 1 ? "" : "s"}; should total
-                    &nbsp;{totalDealt} after the {caseFileSize()} case-file
+                    &nbsp;{totalDealt} after the {caseFileSize(setup)} case-file
                     cards.
                 </div>
             )}

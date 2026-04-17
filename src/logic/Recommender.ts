@@ -1,6 +1,5 @@
 import { N, Y, getCellByOwnerCard, Knowledge } from "./Knowledge";
 import {
-    ALL_CATEGORIES,
     CardCategory,
     Card,
     CaseFileOwner,
@@ -22,13 +21,14 @@ export const caseFileProgress = (
     setup: GameSetup,
     knowledge: Knowledge,
 ): number => {
+    if (setup.categories.length === 0) return 1;
     let solved = 0;
-    for (const category of ALL_CATEGORIES) {
-        if (caseFileAnswerFor(setup, knowledge, category) !== undefined) {
+    for (const category of setup.categories) {
+        if (caseFileAnswerFor(setup, knowledge, category.name) !== undefined) {
             solved += 1;
         }
     }
-    return solved / ALL_CATEGORIES.length;
+    return solved / setup.categories.length;
 };
 
 /**
@@ -66,15 +66,13 @@ export const caseFileCandidatesFor = (
 };
 
 /**
- * A single ranked recommendation: which (suspect, weapon, room) to ask
- * about, scored by the count of currently-unknown cells the question
- * would touch in the suggester's other-player neighbours.
+ * A single ranked recommendation: one card per category (in the setup's
+ * category order) that would, if asked, touch unknown cells and help
+ * narrow the case file down.
  */
 export interface Recommendation {
     readonly suggester: Player;
-    readonly suspect: Card;
-    readonly weapon: Card;
-    readonly room: Card;
+    readonly cards: ReadonlyArray<Card>;
     readonly score: number;
 }
 
@@ -97,39 +95,57 @@ export interface RecommendationResult {
  */
 const TOP_TIE_THRESHOLD = 5;
 
+/**
+ * Enumerate every combination of one card per category, drawing only
+ * from cards still possible for the case file. Short-circuits to an
+ * empty generator if any category has zero remaining candidates.
+ */
+const cartesianCandidates = function* (
+    setup: GameSetup,
+    knowledge: Knowledge,
+): Generator<ReadonlyArray<Card>, void, undefined> {
+    const perCategory = setup.categories.map(c =>
+        caseFileCandidatesFor(setup, knowledge, c.name));
+    if (perCategory.some(list => list.length === 0)) return;
+
+    const idx = new Array<number>(perCategory.length).fill(0);
+    while (true) {
+        yield perCategory.map((list, i) => list[idx[i]]);
+        // Increment least-significant digit, carrying upward.
+        let i = perCategory.length - 1;
+        while (i >= 0) {
+            idx[i]++;
+            if (idx[i] < perCategory[i].length) break;
+            idx[i] = 0;
+            i--;
+        }
+        if (i < 0) return;
+    }
+};
+
 export const recommendSuggestions = (
     setup: GameSetup,
     knowledge: Knowledge,
     suggester: Player,
     maxResults: number = 5,
 ): RecommendationResult => {
-    const suspects = caseFileCandidatesFor(setup, knowledge, "suspect");
-    const weapons  = caseFileCandidatesFor(setup, knowledge, "weapon");
-    const rooms    = caseFileCandidatesFor(setup, knowledge, "room");
-
     const otherPlayers = setup.players.filter(p => p !== suggester);
 
     const results: Recommendation[] = [];
-    for (const suspect of suspects) {
-        for (const weapon of weapons) {
-            for (const room of rooms) {
-                let unknownCount = 0;
-                for (const p of otherPlayers) {
-                    for (const card of [suspect, weapon, room]) {
-                        const v = getCellByOwnerCard(knowledge, PlayerOwner(p), card);
-                        if (v === undefined) unknownCount += 1;
-                    }
-                }
-                if (unknownCount === 0) continue;
-                results.push({
-                    suggester,
-                    suspect,
-                    weapon,
-                    room,
-                    score: unknownCount,
-                });
+    for (const cards of cartesianCandidates(setup, knowledge)) {
+        let unknownCount = 0;
+        for (const p of otherPlayers) {
+            for (const card of cards) {
+                const v = getCellByOwnerCard(knowledge, PlayerOwner(p), card);
+                if (v === undefined) unknownCount += 1;
             }
         }
+        if (unknownCount === 0) continue;
+        results.push({
+            suggester,
+            cards,
+            score: unknownCount,
+        });
     }
 
     if (results.length === 0) {

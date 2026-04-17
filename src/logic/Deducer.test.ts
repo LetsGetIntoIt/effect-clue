@@ -1,6 +1,6 @@
 import { HashMap } from "effect";
-import { Card, CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
-import { CLASSIC_SETUP_3P } from "./GameSetup";
+import { Card, CardCategory, CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
+import { cardsInCategory, CLASSIC_SETUP_3P } from "./GameSetup";
 import {
     Cell,
     emptyKnowledge,
@@ -16,6 +16,7 @@ import deduce from "./Deducer";
 import "./test-utils/EffectExpectEquals";
 
 const setup = CLASSIC_SETUP_3P;
+const suspects = cardsInCategory(setup, CardCategory("Suspects"));
 const A = Player("Anisha");
 const B = Player("Bob");
 const C = Player("Cho");
@@ -55,7 +56,7 @@ describe("deduce", () => {
     test("case file category narrows to single candidate", () => {
         let knowledge = emptyKnowledge;
         // If nobody owns 5 of the 6 suspects, the 6th must be in the case file.
-        for (const card of setup.suspects.slice(0, 5)) {
+        for (const card of suspects.slice(0, 5)) {
             knowledge = setCell(knowledge, Cell(PlayerOwner(A), card), Y);
         }
         // Anisha has 5 cards; tell the solver the size so it can fill Ns.
@@ -65,7 +66,7 @@ describe("deduce", () => {
         expect(result._tag).toBe("Ok");
         if (result._tag !== "Ok") return;
 
-        const sixth = setup.suspects[5];
+        const sixth = suspects[5];
         // The last suspect must be in the case file.
         expect(getCellByOwnerCard(result.knowledge, CaseFileOwner(), sixth)).toBe(Y);
     });

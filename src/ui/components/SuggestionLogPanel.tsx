@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import { Card, Player } from "../../logic/GameObjects";
+import { categoryOf } from "../../logic/GameSetup";
 import { recommendSuggestions } from "../../logic/Recommender";
 import {
     addSuggestion,
@@ -29,11 +30,28 @@ export function SuggestionLogPanel() {
     );
 }
 
+/**
+ * Map a suggestion's `cards` array back to one card per category, keyed
+ * by the category's name. Cards whose category isn't in the current
+ * setup are dropped — the form falls back to blank for that slot.
+ */
+const pickCardsByCategory = (
+    suggestion: DraftSuggestion | undefined,
+    setup = setupSignal.value,
+): Map<string, string> => {
+    const out = new Map<string, string>();
+    if (!suggestion) return out;
+    for (const card of suggestion.cards) {
+        const cat = categoryOf(setup, card);
+        if (cat) out.set(String(cat), String(card));
+    }
+    return out;
+};
+
 function AddSuggestion() {
     const setup = setupSignal.value;
-    const [suspect, setSuspect] = useState<string>("");
-    const [weapon, setWeapon] = useState<string>("");
-    const [room, setRoom] = useState<string>("");
+    const [cardByCategory, setCardByCategory] =
+        useState<Map<string, string>>(new Map());
     const [suggester, setSuggester] = useState<string>(
         setup.players[0] ?? "");
     const [refuter, setRefuter] = useState<string>("");
@@ -45,7 +63,19 @@ function AddSuggestion() {
         setSuggester(setup.players[0] ?? "");
     }
 
-    const canSubmit = suspect && weapon && room && suggester;
+    // Form is submittable once every category has a card picked.
+    const canSubmit =
+        suggester !== "" &&
+        setup.categories.length > 0 &&
+        setup.categories.every(c =>
+            (cardByCategory.get(String(c.name)) ?? "") !== "");
+
+    const setCardForCategory = (categoryName: string, value: string) => {
+        const next = new Map(cardByCategory);
+        if (value === "") next.delete(categoryName);
+        else next.set(categoryName, value);
+        setCardByCategory(next);
+    };
 
     const onSuggesterChange = (value: string) => {
         setSuggester(value);
@@ -72,7 +102,8 @@ function AddSuggestion() {
     const onSubmit = (e: Event) => {
         e.preventDefault();
         if (!canSubmit) return;
-        const cards = [Card(suspect), Card(weapon), Card(room)];
+        const cards = setup.categories.map(c =>
+            Card(cardByCategory.get(String(c.name)) ?? ""));
         const nonRefuters = setup.players.filter(p =>
             passedPlayers.has(String(p)),
         );
@@ -84,7 +115,7 @@ function AddSuggestion() {
             refuter: refuter ? Player(refuter) : undefined,
             seenCard: seenCard ? Card(seenCard) : undefined,
         });
-        setSuspect(""); setWeapon(""); setRoom("");
+        setCardByCategory(new Map());
         setRefuter(""); setSeenCard("");
         setPassedPlayers(new Set());
     };
@@ -92,6 +123,10 @@ function AddSuggestion() {
     const eligibleForPassed = setup.players.filter(
         p => String(p) !== suggester && String(p) !== refuter,
     );
+
+    const pickedCards = setup.categories
+        .map(c => cardByCategory.get(String(c.name)) ?? "")
+        .filter(c => c !== "");
 
     return (
         <div class="suggestion-log-section">
@@ -112,54 +147,29 @@ function AddSuggestion() {
                         </select>
                     </label>
                 </div>
-                <div>
-                    <label>
-                        Suspect:
-                        <select
-                            value={suspect}
-                            onChange={e => setSuspect(
-                                (e.target as HTMLSelectElement).value)}
-                            required
-                        >
-                            <option value="">—</option>
-                            {setup.suspects.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
-                    </label>
-                </div>
-                <div>
-                    <label>
-                        Weapon:
-                        <select
-                            value={weapon}
-                            onChange={e => setWeapon(
-                                (e.target as HTMLSelectElement).value)}
-                            required
-                        >
-                            <option value="">—</option>
-                            {setup.weapons.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
-                    </label>
-                </div>
-                <div>
-                    <label>
-                        Room:
-                        <select
-                            value={room}
-                            onChange={e => setRoom(
-                                (e.target as HTMLSelectElement).value)}
-                            required
-                        >
-                            <option value="">—</option>
-                            {setup.rooms.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
-                    </label>
-                </div>
+                {setup.categories.map(category => {
+                    const name = String(category.name);
+                    const value = cardByCategory.get(name) ?? "";
+                    return (
+                        <div key={name}>
+                            <label>
+                                {name}:
+                                <select
+                                    value={value}
+                                    onChange={e => setCardForCategory(
+                                        name,
+                                        (e.target as HTMLSelectElement).value)}
+                                    required
+                                >
+                                    <option value="">—</option>
+                                    {category.cards.map(c => (
+                                        <option key={c} value={c}>{c}</option>
+                                    ))}
+                                </select>
+                            </label>
+                        </div>
+                    );
+                })}
                 <div>
                     <label>
                         Refuted by:
@@ -187,11 +197,9 @@ function AddSuggestion() {
                                     (e.target as HTMLSelectElement).value)}
                             >
                                 <option value="">— unknown —</option>
-                                {[suspect, weapon, room]
-                                    .filter(c => c !== "")
-                                    .map(c => (
-                                        <option key={c} value={c}>{c}</option>
-                                    ))}
+                                {pickedCards.map(c => (
+                                    <option key={c} value={c}>{c}</option>
+                                ))}
                             </select>
                         </label>
                     </div>
@@ -278,9 +286,12 @@ function Recommendations() {
                 <ol class="rec-list">
                     {rec.recommendations.map((r, i) => (
                         <li key={i}>
-                            <strong>{r.suspect}</strong> with the&nbsp;
-                            <strong>{r.weapon}</strong> in the&nbsp;
-                            <strong>{r.room}</strong>
+                            {r.cards.map((c, ci) => (
+                                <span key={ci}>
+                                    {ci > 0 && " + "}
+                                    <strong>{c}</strong>
+                                </span>
+                            ))}
                             <span class="muted"> · score {r.score}</span>
                         </li>
                     ))}
@@ -364,9 +375,8 @@ function EditSuggestionRow({ suggestion, onSave, onCancel }: {
 }) {
     const setup = setupSignal.value;
     const [suggester, setSuggester] = useState(String(suggestion.suggester));
-    const [suspect, setSuspect] = useState(String(suggestion.cards[0] ?? ""));
-    const [weapon, setWeapon] = useState(String(suggestion.cards[1] ?? ""));
-    const [room, setRoom] = useState(String(suggestion.cards[2] ?? ""));
+    const [cardByCategory, setCardByCategory] = useState<Map<string, string>>(
+        pickCardsByCategory(suggestion, setup));
     const [refuter, setRefuter] = useState(
         suggestion.refuter ? String(suggestion.refuter) : "");
     const [seenCard, setSeenCard] = useState(
@@ -374,7 +384,18 @@ function EditSuggestionRow({ suggestion, onSave, onCancel }: {
     const [passedPlayers, setPassedPlayers] = useState<Set<string>>(
         new Set(suggestion.nonRefuters.map(p => String(p))));
 
-    const canSave = suspect && weapon && room && suggester;
+    const canSave =
+        suggester !== "" &&
+        setup.categories.length > 0 &&
+        setup.categories.every(c =>
+            (cardByCategory.get(String(c.name)) ?? "") !== "");
+
+    const setCardForCategory = (categoryName: string, value: string) => {
+        const next = new Map(cardByCategory);
+        if (value === "") next.delete(categoryName);
+        else next.set(categoryName, value);
+        setCardByCategory(next);
+    };
 
     const onRefuterChange = (value: string) => {
         setRefuter(value);
@@ -393,12 +414,14 @@ function EditSuggestionRow({ suggestion, onSave, onCancel }: {
 
     const handleSave = () => {
         if (!canSave) return;
+        const cards = setup.categories.map(c =>
+            Card(cardByCategory.get(String(c.name)) ?? ""));
         const nonRefuters = setup.players.filter(p =>
             passedPlayers.has(String(p)));
         onSave({
             ...suggestion,
             suggester: Player(suggester),
-            cards: [Card(suspect), Card(weapon), Card(room)],
+            cards,
             nonRefuters,
             refuter: refuter ? Player(refuter) : undefined,
             seenCard: seenCard ? Card(seenCard) : undefined,
@@ -407,6 +430,10 @@ function EditSuggestionRow({ suggestion, onSave, onCancel }: {
 
     const eligibleForPassed = setup.players.filter(
         p => String(p) !== suggester && String(p) !== refuter);
+
+    const pickedCards = setup.categories
+        .map(c => cardByCategory.get(String(c.name)) ?? "")
+        .filter(c => c !== "");
 
     return (
         <div class="edit-suggestion">
@@ -421,39 +448,25 @@ function EditSuggestionRow({ suggestion, onSave, onCancel }: {
                         ))}
                     </select>
                 </label>
-                <label>
-                    Suspect:
-                    <select value={suspect}
-                        onChange={e => setSuspect(
-                            (e.target as HTMLSelectElement).value)}>
-                        <option value="">—</option>
-                        {setup.suspects.map(c => (
-                            <option key={c} value={c}>{c}</option>
-                        ))}
-                    </select>
-                </label>
-                <label>
-                    Weapon:
-                    <select value={weapon}
-                        onChange={e => setWeapon(
-                            (e.target as HTMLSelectElement).value)}>
-                        <option value="">—</option>
-                        {setup.weapons.map(c => (
-                            <option key={c} value={c}>{c}</option>
-                        ))}
-                    </select>
-                </label>
-                <label>
-                    Room:
-                    <select value={room}
-                        onChange={e => setRoom(
-                            (e.target as HTMLSelectElement).value)}>
-                        <option value="">—</option>
-                        {setup.rooms.map(c => (
-                            <option key={c} value={c}>{c}</option>
-                        ))}
-                    </select>
-                </label>
+                {setup.categories.map(category => {
+                    const name = String(category.name);
+                    const value = cardByCategory.get(name) ?? "";
+                    return (
+                        <label key={name}>
+                            {name}:
+                            <select
+                                value={value}
+                                onChange={e => setCardForCategory(
+                                    name,
+                                    (e.target as HTMLSelectElement).value)}>
+                                <option value="">—</option>
+                                {category.cards.map(c => (
+                                    <option key={c} value={c}>{c}</option>
+                                ))}
+                            </select>
+                        </label>
+                    );
+                })}
                 <label>
                     Refuted by:
                     <select value={refuter}
@@ -474,11 +487,9 @@ function EditSuggestionRow({ suggestion, onSave, onCancel }: {
                             onChange={e => setSeenCard(
                                 (e.target as HTMLSelectElement).value)}>
                             <option value="">— unknown —</option>
-                            {[suspect, weapon, room]
-                                .filter(c => c !== "")
-                                .map(c => (
-                                    <option key={c} value={c}>{c}</option>
-                                ))}
+                            {pickedCards.map(c => (
+                                <option key={c} value={c}>{c}</option>
+                            ))}
                         </select>
                     </label>
                 )}

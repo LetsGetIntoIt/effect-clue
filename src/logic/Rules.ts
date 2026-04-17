@@ -1,6 +1,5 @@
 import { pipe } from "effect";
 import {
-    ALL_CATEGORIES,
     CaseFileOwner,
     PlayerOwner,
 } from "./GameObjects";
@@ -17,7 +16,6 @@ import {
 import {
     allCards,
     allOwners,
-    cardsInCategory,
     GameSetup,
 } from "./GameSetup";
 import { Suggestion, suggestionCards, suggestionNonRefuters } from "./Suggestion";
@@ -139,11 +137,10 @@ export const caseFileCategorySlices = (
     setup: GameSetup,
 ): ReadonlyArray<Slice> => {
     const caseFile = CaseFileOwner();
-    return ALL_CATEGORIES.map(category => ({
-        cells: cardsInCategory(setup, category).map(card =>
-            Cell(caseFile, card)),
+    return setup.categories.map(category => ({
+        cells: category.cards.map(card => Cell(caseFile, card)),
         yCount: 1,
-        label: `case file: ${category}`,
+        label: `case file: ${category.name}`,
     }));
 };
 

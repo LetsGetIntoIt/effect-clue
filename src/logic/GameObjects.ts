@@ -18,16 +18,16 @@ export type Card = Brand.Branded<string, "Card">;
 export const Card = Brand.nominal<Card>();
 
 /**
- * Which of the three card categories a card belongs to. The case file
- * contains exactly one card of each category.
+ * A card category name (e.g. "Suspects", "Weapons", "Rooms", or anything
+ * the user defines). The case file contains exactly one card per category.
+ *
+ * We brand instead of using a string literal union because the categories
+ * themselves are data-driven: presets ship with suspects/weapons/rooms, but
+ * users can add, rename, or remove categories. The actual list of
+ * categories in play lives on the `GameSetup`.
  */
-export type CardCategory = "suspect" | "weapon" | "room";
-
-export const ALL_CATEGORIES: ReadonlyArray<CardCategory> = [
-    "suspect",
-    "weapon",
-    "room",
-];
+export type CardCategory = Brand.Branded<string, "CardCategory">;
+export const CardCategory = Brand.nominal<CardCategory>();
 
 /**
  * Who owns a given card — either a player or the "case file" (the envelope

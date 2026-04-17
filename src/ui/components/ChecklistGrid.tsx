@@ -1,7 +1,5 @@
 import {
-    ALL_CATEGORIES,
     Card,
-    CardCategory,
     Owner,
     ownerLabel,
 } from "../../logic/GameObjects";
@@ -41,11 +39,8 @@ export function ChecklistGrid() {
     const result = deductionResultSignal.value;
     const provenance = provenanceSignal.value;
 
-    const categories: ReadonlyArray<{ name: string; cards: ReadonlyArray<Card> }> = [
-        { name: "Suspects", cards: setup.suspects },
-        { name: "Weapons",  cards: setup.weapons },
-        { name: "Rooms",    cards: setup.rooms },
-    ];
+    const categories: ReadonlyArray<{ name: string; cards: ReadonlyArray<Card> }> =
+        setup.categories.map(c => ({ name: String(c.name), cards: c.cards }));
 
     const owners: ReadonlyArray<Owner> = allOwners(setup);
 
@@ -127,14 +122,14 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
                 </div>
             </div>
             <div class="case-file-slots">
-                {ALL_CATEGORIES.map(category => {
-                    const solved = caseFileAnswerFor(setup, knowledge, category);
+                {setup.categories.map(category => {
+                    const solved = caseFileAnswerFor(setup, knowledge, category.name);
                     const candidates = caseFileCandidatesFor(
-                        setup, knowledge, category);
+                        setup, knowledge, category.name);
                     return (
-                        <div class="case-file-slot" key={category}>
+                        <div class="case-file-slot" key={String(category.name)}>
                             <div class="case-file-slot-label">
-                                {categoryLabel(category)}
+                                {String(category.name)}
                             </div>
                             {solved ? (
                                 <div class="case-file-slot-answer">{solved}</div>
@@ -151,14 +146,6 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
         </div>
     );
 }
-
-const categoryLabel = (category: CardCategory): string => {
-    switch (category) {
-        case "suspect": return "Suspect";
-        case "weapon":  return "Weapon";
-        case "room":    return "Room";
-    }
-};
 
 const ownerKey = (owner: Owner): string =>
     owner._tag === "Player" ? `p-${owner.player}` : "case-file";

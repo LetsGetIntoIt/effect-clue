@@ -5,6 +5,7 @@ import {
     PlayerOwner,
 } from "../logic/GameObjects";
 import {
+    allCards,
     DEFAULT_SETUP,
     GameSetup,
     newGameSetup,
@@ -82,15 +83,12 @@ const buildInitialKnowledge = (
     handSizes: ReadonlyArray<readonly [Player, number]>,
 ): Knowledge => {
     let k = emptyKnowledge;
+    const deck = new Set(allCards(setup));
     for (const { player, card } of knownCards) {
         // Ignore cards that don't belong to this setup (e.g. after a
         // preset change).
         if (!setup.players.includes(player)) continue;
-        const inDeck =
-            setup.suspects.includes(card) ||
-            setup.weapons.includes(card) ||
-            setup.rooms.includes(card);
-        if (!inDeck) continue;
+        if (!deck.has(card)) continue;
         try {
             k = setCell(k, Cell(PlayerOwner(player), card), Y);
         } catch {
@@ -229,9 +227,7 @@ export const addPlayer = (): void => {
     const newName = Player(`Player ${n}`);
     setupSignal.value = GameSetup({
         players: [...setup.players, newName],
-        suspects: setup.suspects,
-        weapons: setup.weapons,
-        rooms: setup.rooms,
+        categories: setup.categories,
     });
     persist();
 };
@@ -247,9 +243,7 @@ export const removePlayer = (player: Player): void => {
     const setup = setupSignal.value;
     setupSignal.value = GameSetup({
         players: setup.players.filter(p => p !== player),
-        suspects: setup.suspects,
-        weapons: setup.weapons,
-        rooms: setup.rooms,
+        categories: setup.categories,
     });
 
     knownCardsSignal.value = knownCardsSignal.value.filter(
@@ -277,9 +271,7 @@ export const renamePlayer = (oldName: Player, newName: Player): void => {
     const setup = setupSignal.value;
     setupSignal.value = GameSetup({
         players: setup.players.map(p => p === oldName ? newName : p),
-        suspects: setup.suspects,
-        weapons: setup.weapons,
-        rooms: setup.rooms,
+        categories: setup.categories,
     });
 
     knownCardsSignal.value = knownCardsSignal.value.map(kc =>

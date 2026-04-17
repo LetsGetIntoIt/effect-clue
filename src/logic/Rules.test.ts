@@ -1,5 +1,5 @@
-import { Card, CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
-import { CLASSIC_SETUP_3P } from "./GameSetup";
+import { Card, CardCategory, CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
+import { cardsInCategory, CLASSIC_SETUP_3P } from "./GameSetup";
 import {
     Cell,
     Contradiction,
@@ -26,6 +26,9 @@ import { Suggestion } from "./Suggestion";
 import "./test-utils/EffectExpectEquals";
 
 const setup = CLASSIC_SETUP_3P;
+const suspects = cardsInCategory(setup, CardCategory("Suspects"));
+const weapons = cardsInCategory(setup, CardCategory("Weapons"));
+const rooms = cardsInCategory(setup, CardCategory("Rooms"));
 const A = Player("Anisha");
 const B = Player("Bob");
 const C = Player("Cho");
@@ -94,9 +97,9 @@ describe("slice generators", () => {
     test("caseFileCategorySlices has exactly three category slices", () => {
         const slices = caseFileCategorySlices(setup);
         expect(slices).toHaveLength(3);
-        expect(slices[0].cells).toHaveLength(setup.suspects.length);
-        expect(slices[1].cells).toHaveLength(setup.weapons.length);
-        expect(slices[2].cells).toHaveLength(setup.rooms.length);
+        expect(slices[0].cells).toHaveLength(suspects.length);
+        expect(slices[1].cells).toHaveLength(weapons.length);
+        expect(slices[2].cells).toHaveLength(rooms.length);
     });
 
     test("playerHandSlices only include players with known sizes", () => {
@@ -111,7 +114,7 @@ describe("applyConsistencyRules (fixed-point via slices)", () => {
     test("knowing all but one suspect for case file forces the last", () => {
         let k = emptyKnowledge;
         // Mark Anisha as holding 5 of the 6 suspects.
-        for (const card of setup.suspects.slice(0, 5)) {
+        for (const card of suspects.slice(0, 5)) {
             k = setCell(k, Cell(PlayerOwner(A), card), Y);
         }
         k = setHandSize(k, PlayerOwner(A), 5);
@@ -119,7 +122,7 @@ describe("applyConsistencyRules (fixed-point via slices)", () => {
         // After propagation, the 6th suspect must be in the case file
         // (nobody else can hold any suspect: Bob/Cho have N for the five,
         // and Anisha's row is at capacity).
-        const sixth = setup.suspects[5];
+        const sixth = suspects[5];
         expect(getCellByOwnerCard(k, CaseFileOwner(), sixth)).toBe(Y);
     });
 });
