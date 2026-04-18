@@ -30,6 +30,7 @@ import deduce from "./Deducer";
 import { decodeSession, encodeSession } from "./Persistence";
 import { Suggestion } from "./Suggestion";
 import { cardByName } from "./test-utils/CardByName";
+import { expectAt } from "./test-utils/Expect";
 
 import "./test-utils/EffectExpectEquals";
 
@@ -134,12 +135,14 @@ describe("Persistence v2 → v3 migration", () => {
 
         // Anisha's known card comes through with id = "Col. Mustard".
         expect(decoded.hands).toHaveLength(1);
-        expect(String(decoded.hands[0]!.cards[0])).toBe("Col. Mustard");
+        const firstHand = expectAt(decoded.hands, 0, "decoded.hands[0]");
+        expect(String(expectAt(firstHand.cards, 0, "first hand cards[0]")))
+            .toBe("Col. Mustard");
 
         // Suggestion references use ids = names too. Suggester/refuter
         // are unchanged (they're still just strings).
         expect(decoded.suggestions).toHaveLength(1);
-        const s = decoded.suggestions[0]!;
+        const s = expectAt(decoded.suggestions, 0, "decoded.suggestions[0]");
         expect(String(s.suggester)).toBe("Anisha");
         expect(String(s.refuter)).toBe("Bob");
         expect(String(s.seenCard)).toBe("Knife");
@@ -148,13 +151,19 @@ describe("Persistence v2 → v3 migration", () => {
         // card and category. Round-trip decodes to the same ids.
         const reEncoded = encodeSession(decoded);
         expect(reEncoded.version).toBe(3);
-        expect(reEncoded.setup.categories[0]!.id).toBe("Suspects");
-        expect(reEncoded.setup.categories[0]!.cards[0]!.id).toBe(
-            "Miss Scarlet",
+        const firstCat = expectAt(
+            reEncoded.setup.categories,
+            0,
+            "reEncoded.setup.categories[0]",
         );
-        expect(reEncoded.setup.categories[0]!.cards[0]!.name).toBe(
-            "Miss Scarlet",
+        expect(firstCat.id).toBe("Suspects");
+        const firstCatFirstCard = expectAt(
+            firstCat.cards,
+            0,
+            "first category cards[0]",
         );
+        expect(firstCatFirstCard.id).toBe("Miss Scarlet");
+        expect(firstCatFirstCard.name).toBe("Miss Scarlet");
 
         const reDecoded = decodeSession(reEncoded);
         expect(reDecoded).toBeDefined();

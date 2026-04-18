@@ -209,17 +209,17 @@ export const recommendSuggestions = (
         });
     }
 
-    if (results.length === 0) {
-        return { recommendations: [], topCount: 0 };
-    }
-
     // Primary: descending score. Tiebreak: lexicographic by joined names.
     results.sort((a, b) => {
         if (a.score !== b.score) return b.score - a.score;
         return a.cards.join("|").localeCompare(b.cards.join("|"));
     });
-    // Safe: we checked results.length === 0 above.
-    const topScore = results[0]!.score;
+
+    const first = results[0];
+    if (first === undefined) {
+        return { recommendations: [], topCount: 0 };
+    }
+    const topScore = first.score;
     const topCount = results.filter(r => r.score === topScore).length;
 
     return {

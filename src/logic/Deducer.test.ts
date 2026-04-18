@@ -2,6 +2,7 @@ import { HashMap } from "effect";
 import { CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
 import { cardIdsInCategory, CLASSIC_SETUP_3P } from "./GameSetup";
 import { cardByName } from "./test-utils/CardByName";
+import { expectAt, expectDefined } from "./test-utils/Expect";
 import {
     Cell,
     emptyKnowledge,
@@ -19,7 +20,10 @@ import "./test-utils/EffectExpectEquals";
 const setup = CLASSIC_SETUP_3P;
 // Suspects category id is the branded string "category-suspects" in the
 // preset. Look up by the category's own id.
-const suspectsCategory = setup.categories.find(c => c.name === "Suspects")!;
+const suspectsCategory = expectDefined(
+    setup.categories.find(c => c.name === "Suspects"),
+    "Suspects category",
+);
 const suspects = cardIdsInCategory(setup, suspectsCategory.id);
 const A = Player("Anisha");
 const B = Player("Bob");
@@ -72,7 +76,7 @@ describe("deduce", () => {
         expect(result._tag).toBe("Ok");
         if (result._tag !== "Ok") return;
 
-        const sixth = suspects[5]!;
+        const sixth = expectAt(suspects, 5, "suspects[5]");
         // The last suspect must be in the case file.
         expect(getCellByOwnerCard(result.knowledge, CaseFileOwner(), sixth)).toBe(Y);
     });

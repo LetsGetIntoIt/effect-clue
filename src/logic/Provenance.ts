@@ -97,15 +97,18 @@ export const chainFor = (
     const seen = new Set<string>();
     const out: Reason[] = [];
     const stack: Cell[] = [cell];
-    while (stack.length > 0) {
-        const next = stack.pop()!;
+    let next = stack.pop();
+    while (next !== undefined) {
         const key = keyOf(next);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const reason = provenance.get(key);
-        if (!reason) continue;
-        out.push(reason);
-        for (const dep of reason.dependsOn) stack.push(dep);
+        if (!seen.has(key)) {
+            seen.add(key);
+            const reason = provenance.get(key);
+            if (reason !== undefined) {
+                out.push(reason);
+                for (const dep of reason.dependsOn) stack.push(dep);
+            }
+        }
+        next = stack.pop();
     }
     return out.reverse();
 };

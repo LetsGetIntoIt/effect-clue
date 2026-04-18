@@ -11,6 +11,7 @@ import {
     recommendSuggestions,
 } from "./Recommender";
 import { cardByName } from "./test-utils/CardByName";
+import { expectDefined } from "./test-utils/Expect";
 
 import "./test-utils/EffectExpectEquals";
 
@@ -19,7 +20,10 @@ const A = Player("Anisha");
 const B = Player("Bob");
 const C = Player("Cho");
 
-const suspectsCategory = setup.categories.find(c => c.name === "Suspects")!;
+const suspectsCategory = expectDefined(
+    setup.categories.find(c => c.name === "Suspects"),
+    "Suspects category",
+);
 
 describe("recommendSuggestions", () => {
     test("fresh game returns 5 non-empty recommendations", () => {
