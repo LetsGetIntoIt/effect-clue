@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
 import { cardName, categoryOfCard } from "../../logic/GameSetup";
 import { recommendSuggestions } from "../../logic/Recommender";
+import { newSuggestionId } from "../../logic/Suggestion";
 import {
     DraftSuggestion,
     useClue,
@@ -135,9 +136,7 @@ function AddSuggestion() {
         dispatch({
             type: "addSuggestion",
             suggestion: {
-                id: `s-${Date.now()}-${Math.random()
-                    .toString(36)
-                    .slice(2, 7)}`,
+                id: newSuggestionId(),
                 suggester: Player(suggester),
                 cards,
                 nonRefuters,

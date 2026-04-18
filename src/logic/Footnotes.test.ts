@@ -9,7 +9,7 @@ import {
 } from "./Knowledge";
 import { refuterCandidateFootnotes, footnotesForCell } from "./Footnotes";
 import { keyOf } from "./Provenance";
-import { Suggestion } from "./Suggestion";
+import { Suggestion, SuggestionId } from "./Suggestion";
 import { cardByName } from "./test-utils/CardByName";
 
 import "./test-utils/EffectExpectEquals";
@@ -34,7 +34,7 @@ const expectNumbers = (actual: ReadonlyArray<number>, expected: number[]) => {
 describe("refuterCandidateFootnotes", () => {
     test("a single unseen-refuted suggestion tags each suggested card", () => {
         const suggestion = Suggestion({
-            id: "s1",
+            id: SuggestionId("s1"),
             suggester: A,
             cards: [PLUM, KNIFE, CONSERV],
             nonRefuters: [],
@@ -60,7 +60,7 @@ describe("refuterCandidateFootnotes", () => {
 
     test("skips suggestions where we saw the refuting card", () => {
         const suggestion = Suggestion({
-            id: "s1",
+            id: SuggestionId("s1"),
             suggester: A,
             cards: [PLUM, KNIFE, CONSERV],
             nonRefuters: [],
@@ -76,7 +76,7 @@ describe("refuterCandidateFootnotes", () => {
 
     test("skips cells already ruled out for the refuter", () => {
         const suggestion = Suggestion({
-            id: "s1",
+            id: SuggestionId("s1"),
             suggester: A,
             cards: [PLUM, KNIFE, CONSERV],
             nonRefuters: [],
@@ -102,7 +102,7 @@ describe("refuterCandidateFootnotes", () => {
 
     test("drops the suggestion entirely once refuter owns a suggested card", () => {
         const suggestion = Suggestion({
-            id: "s1",
+            id: SuggestionId("s1"),
             suggester: A,
             cards: [PLUM, KNIFE, CONSERV],
             nonRefuters: [],
@@ -119,21 +119,21 @@ describe("refuterCandidateFootnotes", () => {
 
     test("cells hit by multiple suggestions collect both numbers in order", () => {
         const s1 = Suggestion({
-            id: "s1",
+            id: SuggestionId("s1"),
             suggester: A,
             cards: [PLUM, KNIFE, CONSERV],
             nonRefuters: [],
             refuter: B,
         });
         const s2 = Suggestion({
-            id: "s2",
+            id: SuggestionId("s2"),
             suggester: A,
             cards: [PLUM],
             nonRefuters: [],
             refuter: B,
         });
         const s3 = Suggestion({
-            id: "s3",
+            id: SuggestionId("s3"),
             suggester: A,
             cards: [PLUM],
             nonRefuters: [],

@@ -33,7 +33,11 @@ import {
     type KnownCard,
 } from "../logic/InitialKnowledge";
 import deduce, { type DeductionResult } from "../logic/Deducer";
-import { Suggestion } from "../logic/Suggestion";
+import {
+    newSuggestionId,
+    Suggestion,
+    SuggestionId,
+} from "../logic/Suggestion";
 import {
     decodeSessionFromUrl,
     encodeSessionToUrl,
@@ -57,7 +61,7 @@ import {
  * the state layer converts them on submit.
  */
 export interface DraftSuggestion {
-    readonly id: string;
+    readonly id: SuggestionId;
     readonly suggester: Player;
     readonly cards: ReadonlyArray<Card>;
     readonly nonRefuters: ReadonlyArray<Player>;
@@ -88,7 +92,7 @@ type ClueAction =
     | { type: "setHandSize"; player: Player; size: number | undefined }
     | { type: "addSuggestion"; suggestion: DraftSuggestion }
     | { type: "updateSuggestion"; suggestion: DraftSuggestion }
-    | { type: "removeSuggestion"; id: string }
+    | { type: "removeSuggestion"; id: SuggestionId }
     | { type: "addPlayer" }
     | { type: "removePlayer"; player: Player }
     | { type: "renamePlayer"; oldName: Player; newName: Player }
@@ -400,8 +404,10 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 handSizes: session.handSizes.map(
                     ({ player, size }) => [player, size] as const,
                 ),
-                suggestions: session.suggestions.map((s, i) => ({
-                    id: s.id || `restored-${i}`,
+                suggestions: session.suggestions.map(s => ({
+                    id: s.id === SuggestionId("")
+                        ? newSuggestionId()
+                        : s.id,
                     suggester: s.suggester,
                     cards: Array.from(s.cards),
                     nonRefuters: Array.from(s.nonRefuters),

@@ -28,7 +28,7 @@ import {
 } from "./Knowledge";
 import deduce from "./Deducer";
 import { decodeSession, encodeSession } from "./Persistence";
-import { Suggestion } from "./Suggestion";
+import { Suggestion, SuggestionId } from "./Suggestion";
 import { cardByName } from "./test-utils/CardByName";
 import { expectAt } from "./test-utils/Expect";
 
@@ -48,7 +48,7 @@ describe("rename preserves references", () => {
 
         const suggestions = [
             Suggestion({
-                id: "s1",
+                id: SuggestionId("s1"),
                 suggester: A,
                 cards: [plum, knife, conserv],
                 nonRefuters: [],
