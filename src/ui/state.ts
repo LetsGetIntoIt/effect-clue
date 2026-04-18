@@ -5,19 +5,15 @@ import {
     PlayerOwner,
 } from "../logic/GameObjects";
 import {
-    allCards,
     DEFAULT_SETUP,
     GameSetup,
     newGameSetup,
 } from "../logic/GameSetup";
+import { Knowledge } from "../logic/Knowledge";
 import {
-    emptyKnowledge,
-    Knowledge,
-    setCell,
-    setHandSize,
-    Y,
-    Cell,
-} from "../logic/Knowledge";
+    buildInitialKnowledge,
+    KnownCard,
+} from "../logic/InitialKnowledge";
 import deduce, { DeductionResult } from "../logic/Deducer";
 import { Suggestion } from "../logic/Suggestion";
 import {
@@ -38,14 +34,9 @@ import {
 } from "../logic/Footnotes";
 
 /**
- * A single known card held by a specific player — either the solver's own
- * hand or cards publicly revealed during play. These get folded into the
- * initial knowledge before every deduction.
+ * Re-exported from the logic layer so UI code keeps importing from state.
  */
-export interface KnownCard {
-    readonly player: Player;
-    readonly card: Card;
-}
+export type { KnownCard };
 
 /**
  * UI-level shape of a suggestion that hasn't been converted to a Data
@@ -81,32 +72,6 @@ export const suggestionsSignal: Signal<ReadonlyArray<DraftSuggestion>> =
 export const explanationsEnabledSignal: Signal<boolean> = signal(true);
 
 // ---- Derived computations ----------------------------------------------
-
-const buildInitialKnowledge = (
-    setup: GameSetup,
-    knownCards: ReadonlyArray<KnownCard>,
-    handSizes: ReadonlyArray<readonly [Player, number]>,
-): Knowledge => {
-    let k = emptyKnowledge;
-    const deck = new Set(allCards(setup));
-    for (const { player, card } of knownCards) {
-        // Ignore cards that don't belong to this setup (e.g. after a
-        // preset change).
-        if (!setup.players.includes(player)) continue;
-        if (!deck.has(card)) continue;
-        try {
-            k = setCell(k, Cell(PlayerOwner(player), card), Y);
-        } catch {
-            // swallow duplicates — they'll show up in the deducer's
-            // contradiction output instead.
-        }
-    }
-    for (const [player, size] of handSizes) {
-        if (!setup.players.includes(player)) continue;
-        k = setHandSize(k, PlayerOwner(player), size);
-    }
-    return k;
-};
 
 export const suggestionsAsDataSignal: ReadonlySignal<ReadonlyArray<Suggestion>> =
     computed(() => suggestionsSignal.value.map(s => Suggestion({
