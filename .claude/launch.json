@@ -2,13 +2,16 @@
     "version": "0.0.1",
     "configurations": [
         {
-            "name": "vite-preview",
-            "runtimeExecutable": "yarn",
-            "runtimeArgs": ["preview", "--host"],
-            "port": 4173,
-            "env": {
-                "GITHUB_PACKAGES_PROJITECT_AUTH_TOKEN": "unused"
-            }
+            "name": "next-dev",
+            "runtimeExecutable": "pnpm",
+            "runtimeArgs": ["dev"],
+            "port": 3000
+        },
+        {
+            "name": "next-start",
+            "runtimeExecutable": "pnpm",
+            "runtimeArgs": ["start"],
+            "port": 3000
         }
     ]
 }

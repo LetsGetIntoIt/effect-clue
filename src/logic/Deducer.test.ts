@@ -1,6 +1,8 @@
 import { HashMap } from "effect";
-import { Card, CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
-import { CLASSIC_SETUP_3P } from "./GameSetup";
+import { CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
+import { cardIdsInCategory, CLASSIC_SETUP_3P } from "./GameSetup";
+import { cardByName } from "./test-utils/CardByName";
+import { expectAt, expectDefined } from "./test-utils/Expect";
 import {
     Cell,
     emptyKnowledge,
@@ -16,19 +18,28 @@ import deduce from "./Deducer";
 import "./test-utils/EffectExpectEquals";
 
 const setup = CLASSIC_SETUP_3P;
+// Suspects category id is the branded string "category-suspects" in the
+// preset. Look up by the category's own id.
+const suspectsCategory = expectDefined(
+    setup.categories.find(c => c.name === "Suspects"),
+    "Suspects category",
+);
+const suspects = cardIdsInCategory(setup, suspectsCategory.id);
 const A = Player("Anisha");
 const B = Player("Bob");
 const C = Player("Cho");
 
-// Shorthands for a handful of cards we'll reference in tests.
-const MUSTARD  = Card("Col. Mustard");
-const PLUM     = Card("Prof. Plum");
-const KNIFE    = Card("Knife");
-const REVOLVER = Card("Revolver");
-const ROPE     = Card("Rope");
-const KITCHEN  = Card("Kitchen");
-const LIBRARY  = Card("Library");
-const CONSERV  = Card("Conservatory");
+// Shorthands: look up card ids by display name from the preset. With the
+// id/name split, raw `Card("Col. Mustard")` would construct a brand new
+// unrelated id.
+const MUSTARD  = cardByName(setup, "Col. Mustard");
+const PLUM     = cardByName(setup, "Prof. Plum");
+const KNIFE    = cardByName(setup, "Knife");
+const REVOLVER = cardByName(setup, "Revolver");
+const ROPE     = cardByName(setup, "Rope");
+const KITCHEN  = cardByName(setup, "Kitchen");
+const LIBRARY  = cardByName(setup, "Library");
+const CONSERV  = cardByName(setup, "Conservatory");
 
 describe("deduce", () => {
     test("empty inputs produce empty knowledge", () => {
@@ -55,7 +66,7 @@ describe("deduce", () => {
     test("case file category narrows to single candidate", () => {
         let knowledge = emptyKnowledge;
         // If nobody owns 5 of the 6 suspects, the 6th must be in the case file.
-        for (const card of setup.suspects.slice(0, 5)) {
+        for (const card of suspects.slice(0, 5)) {
             knowledge = setCell(knowledge, Cell(PlayerOwner(A), card), Y);
         }
         // Anisha has 5 cards; tell the solver the size so it can fill Ns.
@@ -65,7 +76,7 @@ describe("deduce", () => {
         expect(result._tag).toBe("Ok");
         if (result._tag !== "Ok") return;
 
-        const sixth = setup.suspects[5];
+        const sixth = expectAt(suspects, 5, "suspects[5]");
         // The last suspect must be in the case file.
         expect(getCellByOwnerCard(result.knowledge, CaseFileOwner(), sixth)).toBe(Y);
     });
@@ -181,5 +192,40 @@ describe("deduce", () => {
 
         const result = deduce(setup, [])(knowledge);
         expect(result._tag).toBe("Contradiction");
+    });
+
+    test("contradiction trace highlights offending cells and slice", () => {
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(PlayerOwner(A), KNIFE), Y);
+        knowledge = setCell(knowledge, Cell(PlayerOwner(B), KNIFE), Y);
+
+        const result = deduce(setup, [])(knowledge);
+        expect(result._tag).toBe("Contradiction");
+        if (result._tag !== "Contradiction") return;
+
+        expect(result.trace.sliceLabel).toContain("Knife");
+        expect(result.trace.offendingCells).toHaveLength(2);
+        expect(result.trace.offendingSuggestionIndices).toHaveLength(0);
+    });
+
+    test("contradiction trace names the offending suggestion", () => {
+        let knowledge = emptyKnowledge;
+        // Bob can't own Plum (pre-marked N by the user).
+        knowledge = setCell(knowledge, Cell(PlayerOwner(B), PLUM), N);
+
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [],
+            refuter: B,
+            seenCard: PLUM, // claims Bob showed Plum — contradicts prior N
+        })];
+
+        const result = deduce(setup, suggestions)(knowledge);
+        expect(result._tag).toBe("Contradiction");
+        if (result._tag !== "Contradiction") return;
+
+        expect(result.trace.offendingSuggestionIndices).toHaveLength(1);
+        expect(result.trace.offendingSuggestionIndices[0]).toBe(0);
     });
 });

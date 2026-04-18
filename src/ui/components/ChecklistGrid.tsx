@@ -1,61 +1,64 @@
+"use client";
+
+import { Card, Owner, ownerLabel } from "../../logic/GameObjects";
+import { allOwners, cardName } from "../../logic/GameSetup";
 import {
-    ALL_CATEGORIES,
-    Card,
-    CardCategory,
-    Owner,
-    ownerLabel,
-} from "../../logic/GameObjects";
-import { allOwners } from "../../logic/GameSetup";
-import {
+    Cell,
     CellValue,
     getCellByOwnerCard,
     Knowledge,
     N,
     Y,
 } from "../../logic/Knowledge";
-import { explainCell } from "../../logic/Provenance";
+import { footnotesForCell } from "../../logic/Footnotes";
+import {
+    chainFor,
+    describeReason,
+    Provenance,
+} from "../../logic/Provenance";
 import {
     caseFileAnswerFor,
     caseFileCandidatesFor,
     caseFileProgress,
 } from "../../logic/Recommender";
-import {
-    deductionResultSignal,
-    provenanceSignal,
-    setupSignal,
-} from "../state";
+import { Suggestion } from "../../logic/Suggestion";
+import { useClue } from "../state";
+import { ContradictionBanner } from "./ContradictionBanner";
 
 /**
- * The main visual: a header strip showing case-file progress on top, and
- * underneath a grid with one row per card and one column per owner
- * (players + case file). Cells show Y / N / blank and are coloured by
- * status. If explanations are enabled, hovering a cell shows the rule
- * that filled it in.
+ * The main visual: a case-file header strip on top; a grid with one row
+ * per card and one column per owner underneath. Cells show Y / N / blank,
+ * are coloured by status, and show a native browser tooltip (via the
+ * `title` attribute) with the full explanation chain when you hover.
+ * Blank cells that are still candidates for a refuter's unseen card
+ * get footnote superscripts (the "number system"), also described via
+ * the title tooltip.
  *
- * The case-file header was previously a separate panel — folding it in
- * here puts the most-actionable summary right next to the grid that
- * justifies it.
+ * We deliberately stick to `title` rather than a custom popover so the
+ * hover affordance is the same everywhere — no difference between a
+ * ✓ / · cell and a blank-with-footnote cell.
  */
 export function ChecklistGrid() {
-    const setup = setupSignal.value;
-    const result = deductionResultSignal.value;
-    const provenance = provenanceSignal.value;
-
-    const categories: ReadonlyArray<{ name: string; cards: ReadonlyArray<Card> }> = [
-        { name: "Suspects", cards: setup.suspects },
-        { name: "Weapons",  cards: setup.weapons },
-        { name: "Rooms",    cards: setup.rooms },
-    ];
+    const { state, derived } = useClue();
+    const setup = state.setup;
+    const result = derived.deductionResult;
+    const footnotes = derived.footnotes;
+    const provenance = derived.provenance;
+    const suggestions = derived.suggestionsAsData;
 
     const owners: ReadonlyArray<Owner> = allOwners(setup);
 
     if (result._tag === "Contradiction") {
         return (
-            <section class="panel">
-                <h2>Deduction grid</h2>
-                <div class="contradiction">
-                    <strong>Contradiction:</strong> {result.error.reason}
-                </div>
+            <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">
+                <h2 className="mb-3 text-[16px] uppercase tracking-[0.05em] text-accent">
+                    Deduction grid
+                </h2>
+                <ContradictionBanner trace={result.trace} />
+                <p className="text-[13px] text-muted">
+                    Use a quick-fix above to resolve the contradiction, or
+                    adjust your inputs directly.
+                </p>
             </section>
         );
     }
@@ -63,44 +66,70 @@ export function ChecklistGrid() {
     const knowledge: Knowledge = result.knowledge;
 
     return (
-        <section class="panel">
-            <h2>Deduction grid</h2>
+        <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">
+            <h2 className="mb-3 text-[16px] uppercase tracking-[0.05em] text-accent">
+                Deduction grid
+            </h2>
             <CaseFileHeader knowledge={knowledge} />
-            <table class="checklist-grid">
+            <table className="w-full border-collapse text-[13px]">
                 <thead>
                     <tr>
-                        <th></th>
+                        <th className="sticky top-0 z-10 border border-border bg-row-header px-2 py-1 text-center font-semibold"></th>
                         {owners.map(owner => (
-                            <th key={ownerKey(owner)}>{ownerLabel(owner)}</th>
+                            <th
+                                key={ownerKey(owner)}
+                                className="sticky top-0 z-10 border border-border bg-row-header px-2 py-1 text-center font-semibold"
+                            >
+                                {ownerLabel(owner)}
+                            </th>
                         ))}
                     </tr>
                 </thead>
                 <tbody>
-                    {categories.flatMap(category => [
-                        <tr class="category-row" key={`h-${category.name}`}>
-                            <th colSpan={1 + owners.length}>{category.name}</th>
+                    {setup.categories.flatMap(category => [
+                        <tr key={`h-${String(category.id)}`}>
+                            <th
+                                colSpan={1 + owners.length}
+                                className="border border-border bg-accent px-2 py-1.5 text-left text-[11px] uppercase tracking-[0.05em] text-white"
+                            >
+                                {category.name}
+                            </th>
                         </tr>,
-                        ...category.cards.map(card => (
-                            <tr key={card}>
-                                <th class="card-name">{card}</th>
+                        ...category.cards.map(entry => (
+                            <tr key={String(entry.id)}>
+                                <th className="border border-border px-2 py-1 text-left font-normal">
+                                    {entry.name}
+                                </th>
                                 {owners.map(owner => {
                                     const value = getCellByOwnerCard(
                                         knowledge,
                                         owner,
-                                        card,
+                                        entry.id,
                                     );
-                                    const reason = provenance
-                                        ? explainCell(provenance, owner, card)
-                                        : undefined;
+                                    const footnoteNumbers = footnotesForCell(
+                                        footnotes,
+                                        Cell(owner, entry.id),
+                                    );
                                     return (
                                         <td
-                                            key={`${ownerKey(owner)}-${card}`}
-                                            class={cellClass(value)}
-                                            title={reason
-                                                ? `${reason.rule} @ iter ${reason.iteration}\n${reason.detail}`
-                                                : undefined}
+                                            key={`${ownerKey(owner)}-${String(entry.id)}`}
+                                            className={cellClass(value)}
+                                            title={buildCellTitle({
+                                                provenance,
+                                                suggestions,
+                                                setup,
+                                                owner,
+                                                card: entry.id,
+                                                footnoteNumbers,
+                                            })}
                                         >
                                             {cellLabel(value)}
+                                            {footnoteNumbers.length > 0 &&
+                                                value === undefined && (
+                                                    <sup className="ml-0.5 text-[9px] font-normal text-accent">
+                                                        {footnoteNumbers.join(",")}
+                                                    </sup>
+                                                )}
                                         </td>
                                     );
                                 })}
@@ -113,33 +142,101 @@ export function ChecklistGrid() {
     );
 }
 
+/**
+ * Assemble the title= string shown on hover. For known Y/N cells we walk
+ * the dependency chain backwards and render each step as a numbered line
+ * so the user sees *why* the cell has that value, not just the last
+ * rule. For blank cells with refuter-candidate footnotes we explain the
+ * footnote numbers. For everything else, no tooltip at all.
+ */
+const buildCellTitle = (args: {
+    provenance: Provenance | undefined;
+    suggestions: ReadonlyArray<Suggestion>;
+    setup: ReturnType<typeof useClue>["state"]["setup"];
+    owner: Owner;
+    card: Card;
+    footnoteNumbers: ReadonlyArray<number>;
+}): string | undefined => {
+    const { provenance, suggestions, setup, owner, card, footnoteNumbers } = args;
+
+    const footnoteLine =
+        footnoteNumbers.length > 0
+            ? `Candidate for suggestion ${footnoteNumbers
+                  .map(n => `#${n}`)
+                  .join(", ")} — refuter's unseen card could be here.`
+            : undefined;
+
+    const chain = provenance
+        ? chainFor(provenance, Cell(owner, card))
+        : [];
+    const chainLines: string[] = chain.map((reason, i) => {
+        const { headline, detail } = describeReason(
+            reason,
+            setup,
+            suggestions,
+        );
+        const iter = reason.iteration > 0 ? ` (iter ${reason.iteration})` : "";
+        return `${i + 1}. ${headline}${iter}: ${detail}`;
+    });
+
+    const parts: string[] = [];
+    if (chainLines.length > 0) {
+        parts.push("Why this value:");
+        parts.push(...chainLines);
+    }
+    if (footnoteLine) parts.push(footnoteLine);
+
+    return parts.length > 0 ? parts.join("\n") : undefined;
+};
+
 function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
-    const setup = setupSignal.value;
+    const { state } = useClue();
+    const setup = state.setup;
     const progress = caseFileProgress(setup, knowledge);
     return (
-        <div class="case-file-header">
-            <div class="case-file-progress">
-                <span class="case-file-progress-label">
+        <div className="mb-4 rounded-[var(--radius)] border border-border bg-case-file-bg p-3">
+            <div className="mb-2.5 flex items-center gap-3 text-[13px]">
+                <span className="whitespace-nowrap font-semibold text-accent">
                     Case file · {(progress * 100).toFixed(0)}% solved
                 </span>
-                <div class="progress-bar">
-                    <div style={{ width: `${progress * 100}%` }} />
+                <div className="h-2 flex-1 overflow-hidden rounded bg-border">
+                    <div
+                        className="h-full bg-accent transition-[width] duration-200"
+                        style={{ width: `${progress * 100}%` }}
+                    />
                 </div>
             </div>
-            <div class="case-file-slots">
-                {ALL_CATEGORIES.map(category => {
-                    const solved = caseFileAnswerFor(setup, knowledge, category);
+            <div
+                className="grid gap-2"
+                style={{
+                    gridTemplateColumns: `repeat(${setup.categories.length || 1}, minmax(0, 1fr))`,
+                }}
+            >
+                {setup.categories.map(category => {
+                    const solved = caseFileAnswerFor(
+                        setup,
+                        knowledge,
+                        category.id,
+                    );
                     const candidates = caseFileCandidatesFor(
-                        setup, knowledge, category);
+                        setup,
+                        knowledge,
+                        category.id,
+                    );
                     return (
-                        <div class="case-file-slot" key={category}>
-                            <div class="case-file-slot-label">
-                                {categoryLabel(category)}
+                        <div
+                            key={String(category.id)}
+                            className="rounded-[var(--radius)] border border-border bg-white p-2 text-center"
+                        >
+                            <div className="mb-1 text-[11px] uppercase tracking-[0.05em] text-muted">
+                                {category.name}
                             </div>
                             {solved ? (
-                                <div class="case-file-slot-answer">{solved}</div>
+                                <div className="text-[14px] font-semibold text-yes">
+                                    {cardName(setup, solved)}
+                                </div>
                             ) : (
-                                <div class="case-file-slot-candidates muted">
+                                <div className="text-[13px] text-muted">
                                     {candidates.length} candidate
                                     {candidates.length === 1 ? "" : "s"}
                                 </div>
@@ -152,14 +249,6 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
     );
 }
 
-const categoryLabel = (category: CardCategory): string => {
-    switch (category) {
-        case "suspect": return "Suspect";
-        case "weapon":  return "Weapon";
-        case "room":    return "Room";
-    }
-};
-
 const ownerKey = (owner: Owner): string =>
     owner._tag === "Player" ? `p-${owner.player}` : "case-file";
 
@@ -169,8 +258,11 @@ const cellLabel = (value: CellValue | undefined): string => {
     return "";
 };
 
+const CELL_BASE =
+    "w-9 min-w-9 border border-border px-2 py-1 text-center font-semibold relative";
+
 const cellClass = (value: CellValue | undefined): string => {
-    if (value === Y) return "cell cell-yes";
-    if (value === N) return "cell cell-no";
-    return "cell cell-unknown";
+    if (value === Y) return `${CELL_BASE} bg-yes-bg text-yes`;
+    if (value === N) return `${CELL_BASE} bg-no-bg text-no`;
+    return `${CELL_BASE} bg-white`;
 };

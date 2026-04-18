@@ -1,6 +1,5 @@
 import { N, Y, getCellByOwnerCard, Knowledge } from "./Knowledge";
 import {
-    ALL_CATEGORIES,
     CardCategory,
     Card,
     CaseFileOwner,
@@ -8,8 +7,8 @@ import {
     PlayerOwner,
 } from "./GameObjects";
 import {
-    allCards,
-    cardsInCategory,
+    allCardIds,
+    cardIdsInCategory,
     GameSetup,
 } from "./GameSetup";
 
@@ -22,13 +21,14 @@ export const caseFileProgress = (
     setup: GameSetup,
     knowledge: Knowledge,
 ): number => {
+    if (setup.categories.length === 0) return 1;
     let solved = 0;
-    for (const category of ALL_CATEGORIES) {
-        if (caseFileAnswerFor(setup, knowledge, category) !== undefined) {
+    for (const category of setup.categories) {
+        if (caseFileAnswerFor(setup, knowledge, category.id) !== undefined) {
             solved += 1;
         }
     }
-    return solved / ALL_CATEGORIES.length;
+    return solved / setup.categories.length;
 };
 
 /**
@@ -41,7 +41,7 @@ export const caseFileAnswerFor = (
     category: CardCategory,
 ): Card | undefined => {
     const caseFile = CaseFileOwner();
-    const cards = cardsInCategory(setup, category);
+    const cards = cardIdsInCategory(setup, category);
     for (const card of cards) {
         if (getCellByOwnerCard(knowledge, caseFile, card) === Y) {
             return card;
@@ -60,90 +60,170 @@ export const caseFileCandidatesFor = (
     category: CardCategory,
 ): ReadonlyArray<Card> => {
     const caseFile = CaseFileOwner();
-    return cardsInCategory(setup, category).filter(
+    return cardIdsInCategory(setup, category).filter(
         card => getCellByOwnerCard(knowledge, caseFile, card) !== N,
     );
 };
 
 /**
- * A single ranked recommendation: which (suspect, weapon, room) to ask
- * about, scored by the count of currently-unknown cells the question
- * would touch in the suggester's other-player neighbours.
+ * A single ranked recommendation: one card per category (in the setup's
+ * category order) that would, if asked, touch unknown cells and help
+ * narrow the case file down.
+ *
+ * The three score factors are exposed separately so the UI can show
+ * "why is this recommended" alongside the overall score.
  */
 export interface Recommendation {
     readonly suggester: Player;
-    readonly suspect: Card;
-    readonly weapon: Card;
-    readonly room: Card;
+    readonly cards: ReadonlyArray<Card>;
     readonly score: number;
+    readonly cellInfoScore: number;
+    readonly caseFileOpennessScore: number;
+    readonly refuterUncertaintyScore: number;
 }
 
 /**
- * Output of the recommender. When `locked` is true, the top score is
- * shared by too many candidate suggestions to give meaningful guidance
- * — the UI should show a "gather more leads" message instead. The
- * `topCount` field is exposed for tooltips/debug.
+ * Output of the recommender. `topCount` is exposed for debug tooltips.
+ * There's no "locked" gate — we always return the top-N; at the very
+ * start of a game every triple ties, but tie-breaks (see below) pick
+ * a stable subset so the user gets something to work with.
  */
 export interface RecommendationResult {
     readonly recommendations: ReadonlyArray<Recommendation>;
-    readonly locked: boolean;
     readonly topCount: number;
 }
 
 /**
- * Threshold for "too many candidates tied for the best score". Below
- * this many ties, recommendations are useful; above, the user should
- * make more suggestions to narrow things down first.
+ * Enumerate every combination of one card per category, drawing only
+ * from cards still possible for the case file. Short-circuits to an
+ * empty generator if any category has zero remaining candidates.
  */
-const TOP_TIE_THRESHOLD = 5;
+const cartesianCandidates = function* (
+    setup: GameSetup,
+    knowledge: Knowledge,
+): Generator<ReadonlyArray<Card>, void, undefined> {
+    const perCategory = setup.categories.map(c =>
+        caseFileCandidatesFor(setup, knowledge, c.id));
+    if (perCategory.some(list => list.length === 0)) return;
 
+    const idx = new Array<number>(perCategory.length).fill(0);
+    while (true) {
+        // Each list[idx[i]] is valid because we checked all lists are
+        // non-empty above, and idx[i] is bounded by list.length below.
+        yield perCategory.map((list, i) => list[idx[i] ?? 0] as Card);
+        // Increment least-significant digit, carrying upward.
+        let i = perCategory.length - 1;
+        while (i >= 0) {
+            const current = idx[i] ?? 0;
+            const listLen = perCategory[i]?.length ?? 0;
+            if (current + 1 < listLen) {
+                idx[i] = current + 1;
+                break;
+            }
+            idx[i] = 0;
+            i--;
+        }
+        if (i < 0) return;
+    }
+};
+
+/**
+ * Recommender scoring has three factors, multiplied together:
+ *
+ * 1. `cellInfoScore`: count of currently-unknown cells the question
+ *    touches in other players' rows. "How many blanks does this
+ *    suggestion probe?" — the original heuristic.
+ *
+ * 2. `caseFileOpennessScore`: product over the triple's categories of
+ *    |caseFileCandidatesFor(category)|. Big when the case file still
+ *    has many candidates per category, forcing this score to 0 when
+ *    the case file is fully solved (we multiply, so 1×1×1 still gives
+ *    a floor of 1). Captures "this triple actually probes cards that
+ *    could still be in the case file".
+ *
+ * 3. `refuterUncertaintyScore`: number of other players who could
+ *    still plausibly refute — players not known to lack *all* the
+ *    suggested cards. 1 = refuter is predictable (we already know it
+ *    has to be a specific player), ≥2 = we'll learn who. Penalises
+ *    asking questions whose refuter we can already pin down.
+ *
+ * A triple with any factor = 0 contributes nothing useful (no cells
+ * to probe, or no case-file possibility), and gets filtered out.
+ *
+ * Tie-breaking when two triples have identical scores: sort by the
+ * joined card names alphabetically. Deterministic, reproducible, and
+ * independent of category count.
+ */
 export const recommendSuggestions = (
     setup: GameSetup,
     knowledge: Knowledge,
     suggester: Player,
     maxResults: number = 5,
 ): RecommendationResult => {
-    const suspects = caseFileCandidatesFor(setup, knowledge, "suspect");
-    const weapons  = caseFileCandidatesFor(setup, knowledge, "weapon");
-    const rooms    = caseFileCandidatesFor(setup, knowledge, "room");
-
     const otherPlayers = setup.players.filter(p => p !== suggester);
 
     const results: Recommendation[] = [];
-    for (const suspect of suspects) {
-        for (const weapon of weapons) {
-            for (const room of rooms) {
-                let unknownCount = 0;
-                for (const p of otherPlayers) {
-                    for (const card of [suspect, weapon, room]) {
-                        const v = getCellByOwnerCard(knowledge, PlayerOwner(p), card);
-                        if (v === undefined) unknownCount += 1;
-                    }
-                }
-                if (unknownCount === 0) continue;
-                results.push({
-                    suggester,
-                    suspect,
-                    weapon,
-                    room,
-                    score: unknownCount,
-                });
+    for (const cards of cartesianCandidates(setup, knowledge)) {
+        // Factor 1: unknown cells touched in others' rows.
+        let cellInfoScore = 0;
+        for (const p of otherPlayers) {
+            for (const card of cards) {
+                const v = getCellByOwnerCard(knowledge, PlayerOwner(p), card);
+                if (v === undefined) cellInfoScore += 1;
             }
         }
+        if (cellInfoScore === 0) continue;
+
+        // Factor 2: case-file openness. Product over categories of
+        // candidate counts; at least 1 per category (we're iterating
+        // only live candidates), so this is always ≥1.
+        let caseFileOpennessScore = 1;
+        for (const category of setup.categories) {
+            const candidates = caseFileCandidatesFor(
+                setup, knowledge, category.id);
+            caseFileOpennessScore *= candidates.length;
+        }
+
+        // Factor 3: how many distinct other players could refute this
+        // suggestion? A player who's known to lack all three suggested
+        // cards cannot refute. If we're down to just one possible
+        // refuter, the answer is predictable — we learn less.
+        let refuterUncertaintyScore = 0;
+        for (const p of otherPlayers) {
+            const allN = cards.every(card =>
+                getCellByOwnerCard(knowledge, PlayerOwner(p), card) === N);
+            if (!allN) refuterUncertaintyScore += 1;
+        }
+        if (refuterUncertaintyScore === 0) continue;
+
+        const score =
+            cellInfoScore * caseFileOpennessScore * refuterUncertaintyScore;
+
+        results.push({
+            suggester,
+            cards,
+            score,
+            cellInfoScore,
+            caseFileOpennessScore,
+            refuterUncertaintyScore,
+        });
     }
 
-    if (results.length === 0) {
-        return { recommendations: [], locked: false, topCount: 0 };
-    }
+    // Primary: descending score. Tiebreak: lexicographic by joined names.
+    results.sort((a, b) => {
+        if (a.score !== b.score) return b.score - a.score;
+        return a.cards.join("|").localeCompare(b.cards.join("|"));
+    });
 
-    results.sort((a, b) => b.score - a.score);
-    const topScore = results[0].score;
+    const first = results[0];
+    if (first === undefined) {
+        return { recommendations: [], topCount: 0 };
+    }
+    const topScore = first.score;
     const topCount = results.filter(r => r.score === topScore).length;
-    const locked = topCount > TOP_TIE_THRESHOLD;
 
     return {
-        recommendations: locked ? [] : results.slice(0, maxResults),
-        locked,
+        recommendations: results.slice(0, maxResults),
         topCount,
     };
 };
@@ -216,4 +296,4 @@ export const probabilitiesForAllCards = (
     setup: GameSetup,
     knowledge: Knowledge,
 ): ReadonlyArray<CardProbabilities> =>
-    allCards(setup).map(card => probabilitiesForCard(setup, knowledge, card));
+    allCardIds(setup).map(card => probabilitiesForCard(setup, knowledge, card));

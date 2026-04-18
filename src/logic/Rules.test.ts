@@ -1,5 +1,7 @@
 import { Card, CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
-import { CLASSIC_SETUP_3P } from "./GameSetup";
+import { cardIdsInCategory, CLASSIC_SETUP_3P } from "./GameSetup";
+import { cardByName } from "./test-utils/CardByName";
+import { expectAt, expectDefined } from "./test-utils/Expect";
 import {
     Cell,
     Contradiction,
@@ -10,6 +12,7 @@ import {
     setHandSize,
     Y,
 } from "./Knowledge";
+import type { SetCellRecord, Tracer } from "./Provenance";
 import {
     applyConsistencyRules,
     applySlice,
@@ -26,13 +29,28 @@ import { Suggestion } from "./Suggestion";
 import "./test-utils/EffectExpectEquals";
 
 const setup = CLASSIC_SETUP_3P;
+const suspectsCategory = expectDefined(
+    setup.categories.find(c => c.name === "Suspects"),
+    "Suspects category",
+);
+const weaponsCategory = expectDefined(
+    setup.categories.find(c => c.name === "Weapons"),
+    "Weapons category",
+);
+const roomsCategory = expectDefined(
+    setup.categories.find(c => c.name === "Rooms"),
+    "Rooms category",
+);
+const suspects = cardIdsInCategory(setup, suspectsCategory.id);
+const weapons = cardIdsInCategory(setup, weaponsCategory.id);
+const rooms = cardIdsInCategory(setup, roomsCategory.id);
 const A = Player("Anisha");
 const B = Player("Bob");
 const C = Player("Cho");
 
-const PLUM    = Card("Prof. Plum");
-const KNIFE   = Card("Knife");
-const CONSERV = Card("Conservatory");
+const PLUM    = cardByName(setup, "Prof. Plum");
+const KNIFE   = cardByName(setup, "Knife");
+const CONSERV = cardByName(setup, "Conservatory");
 
 describe("applySlice", () => {
     const threeOwnerSlice = (card: Card): Slice => ({
@@ -44,6 +62,7 @@ describe("applySlice", () => {
         ],
         yCount: 1,
         label: `ownership: ${card}`,
+        kind: { kind: "card-ownership", card },
     });
 
     test("no-op when nothing is known", () => {
@@ -94,16 +113,16 @@ describe("slice generators", () => {
     test("caseFileCategorySlices has exactly three category slices", () => {
         const slices = caseFileCategorySlices(setup);
         expect(slices).toHaveLength(3);
-        expect(slices[0].cells).toHaveLength(setup.suspects.length);
-        expect(slices[1].cells).toHaveLength(setup.weapons.length);
-        expect(slices[2].cells).toHaveLength(setup.rooms.length);
+        expect(expectAt(slices, 0).cells).toHaveLength(suspects.length);
+        expect(expectAt(slices, 1).cells).toHaveLength(weapons.length);
+        expect(expectAt(slices, 2).cells).toHaveLength(rooms.length);
     });
 
     test("playerHandSlices only include players with known sizes", () => {
         const k1 = setHandSize(emptyKnowledge, PlayerOwner(A), 3);
         const slices = playerHandSlices(setup, k1);
         expect(slices).toHaveLength(1);
-        expect(slices[0].yCount).toBe(3);
+        expect(expectAt(slices, 0).yCount).toBe(3);
     });
 });
 
@@ -111,7 +130,7 @@ describe("applyConsistencyRules (fixed-point via slices)", () => {
     test("knowing all but one suspect for case file forces the last", () => {
         let k = emptyKnowledge;
         // Mark Anisha as holding 5 of the 6 suspects.
-        for (const card of setup.suspects.slice(0, 5)) {
+        for (const card of suspects.slice(0, 5)) {
             k = setCell(k, Cell(PlayerOwner(A), card), Y);
         }
         k = setHandSize(k, PlayerOwner(A), 5);
@@ -119,7 +138,7 @@ describe("applyConsistencyRules (fixed-point via slices)", () => {
         // After propagation, the 6th suspect must be in the case file
         // (nobody else can hold any suspect: Bob/Cho have N for the five,
         // and Anisha's row is at capacity).
-        const sixth = setup.suspects[5];
+        const sixth = expectAt(suspects, 5, "suspects[5]");
         expect(getCellByOwnerCard(k, CaseFileOwner(), sixth)).toBe(Y);
     });
 });
@@ -191,5 +210,212 @@ describe("deduction rules", () => {
         })];
         k = refuterOwnsOneOf(suggestions)(k);
         expect(getCellByOwnerCard(k, PlayerOwner(B), KNIFE)).toBeUndefined();
+    });
+});
+
+describe("provenance tracer", () => {
+    const makeTracer = (): { tracer: Tracer; records: SetCellRecord[] } => {
+        const records: SetCellRecord[] = [];
+        return { tracer: r => records.push(r), records };
+    };
+
+    test("applySlice reports dependsOn = all Y cells when forcing Ns", () => {
+        const card = KNIFE;
+        const slice: Slice = {
+            cells: [
+                Cell(PlayerOwner(A), card),
+                Cell(PlayerOwner(B), card),
+                Cell(PlayerOwner(C), card),
+                Cell(CaseFileOwner(), card),
+            ],
+            yCount: 1,
+            label: `ownership: ${card}`,
+            kind: { kind: "card-ownership", card },
+        };
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(PlayerOwner(A), card), Y);
+
+        const { tracer, records } = makeTracer();
+        applySlice(slice, tracer)(k);
+
+        // Three cells were forced to N: B, C, and the case file.
+        expect(records).toHaveLength(3);
+        for (const r of records) {
+            expect(r.value).toBe(N);
+            expect(r.kind.kind).toBe("card-ownership");
+            expect((r.kind as { card: Card }).card).toBe(card);
+            expect(r.dependsOn).toHaveLength(1);
+            expect(r.dependsOn[0]).toEqual(Cell(PlayerOwner(A), card));
+        }
+    });
+
+    test("applySlice reports dependsOn = all N cells when forcing a Y", () => {
+        const card = KNIFE;
+        const slice: Slice = {
+            cells: [
+                Cell(PlayerOwner(A), card),
+                Cell(PlayerOwner(B), card),
+                Cell(PlayerOwner(C), card),
+                Cell(CaseFileOwner(), card),
+            ],
+            yCount: 1,
+            label: `ownership: ${card}`,
+            kind: { kind: "card-ownership", card },
+        };
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(PlayerOwner(A), card), N);
+        k = setCell(k, Cell(PlayerOwner(B), card), N);
+        k = setCell(k, Cell(PlayerOwner(C), card), N);
+
+        const { tracer, records } = makeTracer();
+        applySlice(slice, tracer)(k);
+
+        expect(records).toHaveLength(1);
+        const rec = expectAt(records, 0);
+        expect(rec.cell).toEqual(Cell(CaseFileOwner(), card));
+        expect(rec.value).toBe(Y);
+        // dependsOn = the three N cells.
+        expect(rec.dependsOn).toHaveLength(3);
+    });
+
+    test("nonRefutersDontHaveSuggestedCards tags records with suggestionIndex", () => {
+        const { tracer, records } = makeTracer();
+        const suggestions = [
+            // index 0: Anisha's suggestion passed by nobody
+            Suggestion({
+                suggester: A, cards: [PLUM], nonRefuters: [],
+            }),
+            // index 1: Bob's suggestion that Cho passed
+            Suggestion({
+                suggester: B, cards: [KNIFE], nonRefuters: [C],
+            }),
+        ];
+        nonRefutersDontHaveSuggestedCards(suggestions, tracer)(emptyKnowledge);
+
+        expect(records).toHaveLength(1);
+        const rec = expectAt(records, 0);
+        expect(rec.cell).toEqual(Cell(PlayerOwner(C), KNIFE));
+        expect(rec.value).toBe(N);
+        expect(rec.kind.kind).toBe("non-refuters");
+        expect(
+            (rec.kind as { suggestionIndex: number }).suggestionIndex,
+        ).toBe(1);
+    });
+
+    test("refuterShowedCard tags records with suggestionIndex", () => {
+        const { tracer, records } = makeTracer();
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [],
+            refuter: B,
+            seenCard: KNIFE,
+        })];
+        refuterShowedCard(suggestions, tracer)(emptyKnowledge);
+
+        expect(records).toHaveLength(1);
+        const rec = expectAt(records, 0);
+        expect(rec.value).toBe(Y);
+        expect(rec.kind.kind).toBe("refuter-showed");
+        expect(
+            (rec.kind as { suggestionIndex: number }).suggestionIndex,
+        ).toBe(0);
+    });
+
+    test("refuterOwnsOneOf dependsOn = the N cells that narrowed it down", () => {
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(PlayerOwner(B), PLUM), N);
+        k = setCell(k, Cell(PlayerOwner(B), KNIFE), N);
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [],
+            refuter: B,
+        })];
+        const { tracer, records } = makeTracer();
+        refuterOwnsOneOf(suggestions, tracer)(k);
+
+        expect(records).toHaveLength(1);
+        const rec = expectAt(records, 0);
+        expect(rec.cell).toEqual(Cell(PlayerOwner(B), CONSERV));
+        expect(rec.value).toBe(Y);
+        expect(rec.kind.kind).toBe("refuter-owns-one-of");
+        expect(
+            (rec.kind as { suggestionIndex: number }).suggestionIndex,
+        ).toBe(0);
+        expect(rec.dependsOn).toHaveLength(2);
+        // HashSet iteration order isn't guaranteed; just check both
+        // expected cells are present.
+        const depKeys = rec.dependsOn.map(c =>
+            `${(c as unknown as [unknown, string])[1]}`);
+        expect(depKeys).toContain(String(PLUM));
+        expect(depKeys).toContain(String(KNIFE));
+    });
+});
+
+describe("structured Contradiction info", () => {
+    test("slice over-saturation reports offendingCells and sliceLabel", () => {
+        const slice: Slice = {
+            cells: [
+                Cell(PlayerOwner(A), KNIFE),
+                Cell(PlayerOwner(B), KNIFE),
+                Cell(PlayerOwner(C), KNIFE),
+                Cell(CaseFileOwner(), KNIFE),
+            ],
+            yCount: 1,
+            label: `ownership: ${KNIFE}`,
+            kind: { kind: "card-ownership", card: KNIFE },
+        };
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(PlayerOwner(A), KNIFE), Y);
+        k = setCell(k, Cell(PlayerOwner(B), KNIFE), Y);
+
+        try {
+            applySlice(slice)(k);
+            fail("expected Contradiction");
+        } catch (e) {
+            expect(e).toBeInstanceOf(Contradiction);
+            const c = e as Contradiction;
+            expect(c.sliceLabel).toBe(`ownership: ${KNIFE}`);
+            expect(c.offendingCells).toHaveLength(2);
+        }
+    });
+
+    test("setCell conflict reports the single offending cell", () => {
+        const k = setCell(emptyKnowledge, Cell(PlayerOwner(A), KNIFE), Y);
+        try {
+            setCell(k, Cell(PlayerOwner(A), KNIFE), N);
+            fail("expected Contradiction");
+        } catch (e) {
+            expect(e).toBeInstanceOf(Contradiction);
+            const c = e as Contradiction;
+            expect(c.offendingCells).toHaveLength(1);
+            expect(c.offendingCells[0]).toEqual(Cell(PlayerOwner(A), KNIFE));
+        }
+    });
+
+    test("suggestion rule propagates suggestionIndex on contradiction", () => {
+        // Bob already owns Plum. Then a suggestion where Bob refutes and
+        // shows Plum, but the non-refuters list also contains Bob would
+        // be malformed — but more easily: pre-mark Bob as N on Plum, then
+        // have a suggestion where Bob showed Plum. That forces a setCell
+        // conflict attributable to the suggestion.
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(PlayerOwner(B), PLUM), N);
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [],
+            refuter: B,
+            seenCard: PLUM,
+        })];
+        try {
+            refuterShowedCard(suggestions)(k);
+            fail("expected Contradiction");
+        } catch (e) {
+            expect(e).toBeInstanceOf(Contradiction);
+            const c = e as Contradiction;
+            expect(c.suggestionIndex).toBe(0);
+        }
     });
 });

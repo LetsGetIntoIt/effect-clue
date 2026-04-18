@@ -1,6 +1,5 @@
 import { Data } from "effect";
 import {
-    ALL_CATEGORIES,
     Card,
     CardCategory,
     CaseFileOwner,
@@ -10,50 +9,108 @@ import {
 } from "./GameObjects";
 
 /**
+ * A card entry in a category. Keeps identity (`id`) separate from
+ * display name — see GameObjects.ts for why.
+ */
+export interface CardEntry {
+    readonly id: Card;
+    readonly name: string;
+}
+
+/**
+ * One category of cards (Suspects / Weapons / Rooms, or any custom
+ * deck). Carries its own opaque id so renames don't orphan references.
+ */
+export interface Category {
+    readonly id: CardCategory;
+    readonly name: string;
+    readonly cards: ReadonlyArray<CardEntry>;
+}
+
+/**
  * Everything needed to fully describe a game of Clue: who's playing and
- * which cards are in the deck. Previously these were hardcoded globals;
- * making them data lets us support 2–6 player games, Master Detective's
- * 30-card deck, Harry Potter Clue, or custom homebrews without touching
- * the solver.
+ * which cards (organised into categories) are in the deck. The solver is
+ * completely category-agnostic — pass in 2 categories, 10 categories, or
+ * the classic 3, and the inference rules work identically.
  */
 export type GameSetup = Data.Data<{
     readonly players: ReadonlyArray<Player>;
-    readonly suspects: ReadonlyArray<Card>;
-    readonly weapons: ReadonlyArray<Card>;
-    readonly rooms: ReadonlyArray<Card>;
+    readonly categories: ReadonlyArray<Category>;
 }>;
 
 export const GameSetup = (params: {
     players: ReadonlyArray<Player>;
-    suspects: ReadonlyArray<Card>;
-    weapons: ReadonlyArray<Card>;
-    rooms: ReadonlyArray<Card>;
+    categories: ReadonlyArray<Category>;
 }): GameSetup => Data.struct(params);
 
-export const cardsInCategory = (
+// ---- Id / name lookups --------------------------------------------------
+
+/**
+ * Find a category by id. Returns `undefined` if the id isn't in this
+ * setup — the caller decides whether that's a bug or just "stale".
+ */
+export const findCategoryEntry = (
     setup: GameSetup,
-    category: CardCategory,
-): ReadonlyArray<Card> => {
-    switch (category) {
-        case "suspect": return setup.suspects;
-        case "weapon":  return setup.weapons;
-        case "room":    return setup.rooms;
+    id: CardCategory,
+): Category | undefined =>
+    setup.categories.find(c => c.id === id);
+
+export const findCardEntry = (
+    setup: GameSetup,
+    id: Card,
+): CardEntry | undefined => {
+    for (const cat of setup.categories) {
+        const hit = cat.cards.find(c => c.id === id);
+        if (hit) return hit;
     }
+    return undefined;
 };
 
-export const allCards = (setup: GameSetup): ReadonlyArray<Card> => [
-    ...setup.suspects,
-    ...setup.weapons,
-    ...setup.rooms,
-];
+/** Pretty-print a card id. Falls back to the id itself if unknown. */
+export const cardName = (setup: GameSetup, id: Card): string =>
+    findCardEntry(setup, id)?.name ?? String(id);
 
-export const categoryOf = (
+/** Pretty-print a category id. Falls back to the id itself if unknown. */
+export const categoryName = (setup: GameSetup, id: CardCategory): string =>
+    findCategoryEntry(setup, id)?.name ?? String(id);
+
+/**
+ * Card ids in a category, in order. Used by the solver's slice
+ * generators and deducer — everything the solver touches is ids.
+ */
+export const cardIdsInCategory = (
     setup: GameSetup,
-    card: Card,
+    categoryId: CardCategory,
+): ReadonlyArray<Card> =>
+    findCategoryEntry(setup, categoryId)?.cards.map(c => c.id) ?? [];
+
+/** Card entries in a category, in order. Used by UI rendering. */
+export const cardEntriesInCategory = (
+    setup: GameSetup,
+    categoryId: CardCategory,
+): ReadonlyArray<CardEntry> =>
+    findCategoryEntry(setup, categoryId)?.cards ?? [];
+
+export const allCategoryIds = (
+    setup: GameSetup,
+): ReadonlyArray<CardCategory> => setup.categories.map(c => c.id);
+
+export const allCardIds = (setup: GameSetup): ReadonlyArray<Card> =>
+    setup.categories.flatMap(c => c.cards.map(e => e.id));
+
+export const allCardEntries = (
+    setup: GameSetup,
+): ReadonlyArray<CardEntry> =>
+    setup.categories.flatMap(c => c.cards);
+
+/** Which category does this card id belong to? */
+export const categoryOfCard = (
+    setup: GameSetup,
+    cardId: Card,
 ): CardCategory | undefined => {
-    if (setup.suspects.includes(card)) return "suspect";
-    if (setup.weapons.includes(card))  return "weapon";
-    if (setup.rooms.includes(card))    return "room";
+    for (const cat of setup.categories) {
+        if (cat.cards.some(e => e.id === cardId)) return cat.id;
+    }
     return undefined;
 };
 
@@ -69,7 +126,8 @@ export const allOwners = (setup: GameSetup): ReadonlyArray<Owner> => [
 /**
  * How many cards are in the case file (one per category).
  */
-export const caseFileSize = (): number => ALL_CATEGORIES.length;
+export const caseFileSize = (setup: GameSetup): number =>
+    setup.categories.length;
 
 /**
  * The default hand size each player gets when the deck is dealt out
@@ -79,7 +137,7 @@ export const caseFileSize = (): number => ALL_CATEGORIES.length;
 export const defaultHandSizes = (
     setup: GameSetup,
 ): ReadonlyArray<readonly [Player, number]> => {
-    const dealt = allCards(setup).length - caseFileSize();
+    const dealt = allCardIds(setup).length - caseFileSize(setup);
     const n = setup.players.length;
     if (n === 0) return [];
     const base = Math.floor(dealt / n);
@@ -88,42 +146,231 @@ export const defaultHandSizes = (
         [player, base + (i < extras ? 1 : 0)] as const);
 };
 
+// ---- Validation --------------------------------------------------------
+
+export interface SetupValidationError {
+    readonly kind:
+        | "empty-category-name"
+        | "duplicate-category-name"
+        | "category-has-no-cards"
+        | "empty-card-name"
+        | "duplicate-card-name"
+        | "duplicate-player-name"
+        | "empty-player-name"
+        | "no-players"
+        | "no-categories";
+    readonly message: string;
+}
+
+/**
+ * Validate a setup. Returns all errors found, so the UI can display them
+ * all at once rather than dribble them in one-by-one. Empty array means
+ * the setup is well-formed and safe to solve against.
+ *
+ * Name uniqueness is validated even though identity is now by id — this
+ * keeps the UX comprehensible ("why do I see two Knifes?"). Auto-suffix
+ * should have already handled collisions before we get here, but
+ * validation is a safety net for paths that don't go through the
+ * reducer (e.g. direct `replaceSession` with a crafted URL).
+ */
+export const validateSetup = (
+    setup: GameSetup,
+): ReadonlyArray<SetupValidationError> => {
+    const errors: SetupValidationError[] = [];
+
+    if (setup.players.length === 0) {
+        errors.push({
+            kind: "no-players",
+            message: "At least one player is required.",
+        });
+    }
+
+    const seenPlayers = new Set<string>();
+    for (const p of setup.players) {
+        const s = String(p).trim();
+        if (s.length === 0) {
+            errors.push({
+                kind: "empty-player-name",
+                message: "Player names cannot be blank.",
+            });
+        } else if (seenPlayers.has(s)) {
+            errors.push({
+                kind: "duplicate-player-name",
+                message: `Duplicate player name: "${s}".`,
+            });
+        } else {
+            seenPlayers.add(s);
+        }
+    }
+
+    if (setup.categories.length === 0) {
+        errors.push({
+            kind: "no-categories",
+            message: "At least one category is required.",
+        });
+    }
+
+    const seenCategories = new Set<string>();
+    const seenCards = new Set<string>();
+    for (const cat of setup.categories) {
+        const name = cat.name.trim();
+        if (name.length === 0) {
+            errors.push({
+                kind: "empty-category-name",
+                message: "Category names cannot be blank.",
+            });
+        } else if (seenCategories.has(name)) {
+            errors.push({
+                kind: "duplicate-category-name",
+                message: `Duplicate category name: "${name}".`,
+            });
+        } else {
+            seenCategories.add(name);
+        }
+
+        if (cat.cards.length === 0) {
+            errors.push({
+                kind: "category-has-no-cards",
+                message: `Category "${name}" must have at least one card.`,
+            });
+        }
+        for (const entry of cat.cards) {
+            const cn = entry.name.trim();
+            if (cn.length === 0) {
+                errors.push({
+                    kind: "empty-card-name",
+                    message: "Card names cannot be blank.",
+                });
+            } else if (seenCards.has(cn)) {
+                errors.push({
+                    kind: "duplicate-card-name",
+                    message: `Duplicate card name: "${cn}".`,
+                });
+            } else {
+                seenCards.add(cn);
+            }
+        }
+    }
+
+    return errors;
+};
+
+// ---- Name disambiguation ----------------------------------------------
+
+/**
+ * Roman numeral suffix used when a proposed name collides with an
+ * existing one. Starts at ii (not i) because the first occurrence
+ * keeps its bare name — only duplicates get a suffix.
+ *
+ * We go Roman deliberately: user-entered parenthesised suffixes like
+ * "(2)", "(v2)", "(alt)" stay verbatim and don't get clobbered.
+ */
+const ROMAN_DIGITS: ReadonlyArray<readonly [number, string]> = [
+    [1000, "m"], [900, "cm"], [500, "d"], [400, "cd"],
+    [100, "c"], [90, "xc"], [50, "l"], [40, "xl"],
+    [10, "x"], [9, "ix"], [5, "v"], [4, "iv"], [1, "i"],
+];
+
+export const toRoman = (n: number): string => {
+    if (n <= 0) return "";
+    let remaining = n;
+    let out = "";
+    for (const [value, symbol] of ROMAN_DIGITS) {
+        while (remaining >= value) {
+            out += symbol;
+            remaining -= value;
+        }
+    }
+    return out;
+};
+
+/**
+ * Given a proposed name and a set of existing names, return a
+ * guaranteed-unique variant. If `proposed` itself is free, it comes
+ * back unchanged. Otherwise we append " (ii)", " (iii)", ... until
+ * we find a free slot.
+ *
+ * The `existing` argument is the set of names we're disambiguating
+ * *against* (callers exclude the current entry's own name when
+ * renaming, so an idempotent rename doesn't double up).
+ */
+export const disambiguateName = (
+    proposed: string,
+    existing: ReadonlyArray<string>,
+): string => {
+    const trimmed = proposed.trim();
+    if (trimmed.length === 0) return trimmed;
+    const taken = new Set(existing.map(s => s.trim()));
+    if (!taken.has(trimmed)) return trimmed;
+    for (let n = 2; n < 10000; n++) {
+        const candidate = `${trimmed} (${toRoman(n)})`;
+        if (!taken.has(candidate)) return candidate;
+    }
+    // Absurd fallback — we're not rendering 10k card names.
+    return `${trimmed} (${Date.now().toString(36)})`;
+};
+
 // ---- Presets -----------------------------------------------------------
 
-const cards = (names: ReadonlyArray<string>): ReadonlyArray<Card> =>
-    names.map(Card);
+/**
+ * Build a CardEntry with a stable id derived from the human-readable
+ * slug. Using deterministic ids in presets keeps share-URL decoding
+ * stable across users (two people loading Classic 4p get the same ids)
+ * and makes IDs legible in dev tools.
+ */
+const presetCard = (name: string, slug: string): CardEntry => ({
+    id: Card(`card-${slug}`),
+    name,
+});
+
+const presetCategory = (
+    name: string,
+    slug: string,
+    cards: ReadonlyArray<CardEntry>,
+): Category => ({
+    id: CardCategory(`category-${slug}`),
+    name,
+    cards,
+});
+
 const players = (names: ReadonlyArray<string>): ReadonlyArray<Player> =>
     names.map(Player);
 
-const CLASSIC_SUSPECTS = cards([
-    "Miss Scarlet",
-    "Col. Mustard",
-    "Mrs. White",
-    "Mr. Green",
-    "Mrs. Peacock",
-    "Prof. Plum",
-]);
+const CLASSIC_SUSPECTS: ReadonlyArray<CardEntry> = [
+    presetCard("Miss Scarlet", "miss-scarlet"),
+    presetCard("Col. Mustard", "col-mustard"),
+    presetCard("Mrs. White", "mrs-white"),
+    presetCard("Mr. Green", "mr-green"),
+    presetCard("Mrs. Peacock", "mrs-peacock"),
+    presetCard("Prof. Plum", "prof-plum"),
+];
 
-const CLASSIC_WEAPONS = cards([
-    "Candlestick",
-    "Knife",
-    "Lead pipe",
-    "Revolver",
-    "Rope",
-    "Wrench",
-]);
+const CLASSIC_WEAPONS: ReadonlyArray<CardEntry> = [
+    presetCard("Candlestick", "candlestick"),
+    presetCard("Knife", "knife"),
+    presetCard("Lead pipe", "lead-pipe"),
+    presetCard("Revolver", "revolver"),
+    presetCard("Rope", "rope"),
+    presetCard("Wrench", "wrench"),
+];
 
-const CLASSIC_ROOMS = cards([
-    "Kitchen",
-    "Ball room",
-    "Conservatory",
-    "Dining room",
-    "Billiard room",
-    "Library",
-    "Lounge",
-    "Hall",
-    "Study",
-]);
+const CLASSIC_ROOMS: ReadonlyArray<CardEntry> = [
+    presetCard("Kitchen", "kitchen"),
+    presetCard("Ball room", "ball-room"),
+    presetCard("Conservatory", "conservatory"),
+    presetCard("Dining room", "dining-room"),
+    presetCard("Billiard room", "billiard-room"),
+    presetCard("Library", "library"),
+    presetCard("Lounge", "lounge"),
+    presetCard("Hall", "hall"),
+    presetCard("Study", "study"),
+];
+
+const CLASSIC_CATEGORIES: ReadonlyArray<Category> = [
+    presetCategory("Suspects", "suspects", CLASSIC_SUSPECTS),
+    presetCategory("Weapons", "weapons", CLASSIC_WEAPONS),
+    presetCategory("Rooms", "rooms", CLASSIC_ROOMS),
+];
 
 /**
  * Build a fresh classic-Clue setup with N generically-named players. Used
@@ -134,9 +381,7 @@ export const newGameSetup = (playerCount: number = 4): GameSetup => GameSetup({
     players: players(
         Array.from({ length: playerCount }, (_, i) => `Player ${i + 1}`),
     ),
-    suspects: CLASSIC_SUSPECTS,
-    weapons: CLASSIC_WEAPONS,
-    rooms: CLASSIC_ROOMS,
+    categories: CLASSIC_CATEGORIES,
 });
 
 /**
@@ -149,7 +394,97 @@ export const DEFAULT_SETUP: GameSetup = newGameSetup(4);
  */
 export const CLASSIC_SETUP_3P: GameSetup = GameSetup({
     players: players(["Anisha", "Bob", "Cho"]),
-    suspects: CLASSIC_SUSPECTS,
-    weapons: CLASSIC_WEAPONS,
-    rooms: CLASSIC_ROOMS,
+    categories: CLASSIC_CATEGORIES,
 });
+
+/**
+ * Classic Clue with the six standard suspects as six players.
+ */
+export const CLASSIC_SETUP_6P: GameSetup = GameSetup({
+    players: players([
+        "Miss Scarlet",
+        "Col. Mustard",
+        "Mrs. White",
+        "Mr. Green",
+        "Mrs. Peacock",
+        "Prof. Plum",
+    ]),
+    categories: CLASSIC_CATEGORIES,
+});
+
+/**
+ * Master Detective edition: more suspects, weapons, and rooms.
+ */
+export const MASTER_DETECTIVE_SETUP: GameSetup = GameSetup({
+    players: players([
+        "Miss Scarlet",
+        "Col. Mustard",
+        "Mrs. White",
+        "Mr. Green",
+        "Mrs. Peacock",
+        "Prof. Plum",
+    ]),
+    categories: [
+        presetCategory("Suspects", "md-suspects", [
+            ...CLASSIC_SUSPECTS,
+            presetCard("Miss Peach", "miss-peach"),
+            presetCard("Mon. Brunette", "mon-brunette"),
+            presetCard("Madame Rose", "madame-rose"),
+            presetCard("Sgt. Gray", "sgt-gray"),
+        ]),
+        presetCategory("Weapons", "md-weapons", [
+            ...CLASSIC_WEAPONS,
+            presetCard("Horseshoe", "horseshoe"),
+            presetCard("Poison", "poison"),
+        ]),
+        presetCategory("Rooms", "md-rooms", [
+            ...CLASSIC_ROOMS,
+            presetCard("Courtyard", "courtyard"),
+            presetCard("Gazebo", "gazebo"),
+            presetCard("Trophy room", "trophy-room"),
+        ]),
+    ],
+});
+
+export interface SetupPreset {
+    readonly id: string;
+    readonly label: string;
+    readonly build: () => GameSetup;
+}
+
+/**
+ * Preset definitions surfaced as buttons in the GameSetupPanel. `build`
+ * is a thunk rather than a direct GameSetup so callers can't accidentally
+ * mutate shared data.
+ */
+export const PRESETS: ReadonlyArray<SetupPreset> = [
+    { id: "classic-4p",        label: "Classic (4 players)",         build: () => newGameSetup(4) },
+    { id: "classic-6p",        label: "Classic (6 players)",         build: () => CLASSIC_SETUP_6P },
+    { id: "master-detective",  label: "Master Detective (6 players)", build: () => MASTER_DETECTIVE_SETUP },
+];
+
+// ---- Back-compat shims (named to match old API surface) -----------------
+
+/**
+ * @deprecated Use `cardIdsInCategory` for solver work or
+ * `cardEntriesInCategory` for UI iteration.
+ *
+ * Kept temporarily for callers that haven't been migrated to the new
+ * shape yet. Returns ids — which is what the solver always wanted.
+ */
+export const cardsInCategory = cardIdsInCategory;
+
+/**
+ * @deprecated Use `allCardIds` for solver work.
+ */
+export const allCards = allCardIds;
+
+/**
+ * @deprecated Use `categoryOfCard`.
+ */
+export const categoryOf = categoryOfCard;
+
+/**
+ * @deprecated Use `allCategoryIds`.
+ */
+export const allCategories = allCategoryIds;

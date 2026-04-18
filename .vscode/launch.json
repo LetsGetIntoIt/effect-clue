@@ -2,10 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "yarn preview",
+            "name": "pnpm preview",
             "type": "node",
             "request": "launch",
-            "runtimeExecutable": "yarn",
+            "runtimeExecutable": "pnpm",
             "runtimeArgs": ["preview"],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",

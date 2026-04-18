@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens ported from the old src/style.css. With Tailwind v4 these
+ * become CSS custom properties plus utility classes like bg-panel /
+ * text-accent / border-border. We keep the same palette so the port is
+ * purely a framework swap, not a visual redesign.
+ */
+@theme {
+    --color-bg: #fafafa;
+    --color-panel: #ffffff;
+    --color-border: #e1e1e8;
+    --color-muted: #6b6b78;
+    --color-accent: #3456a6;
+    --color-accent-hover: #2a4585;
+    --color-yes: #2e7d32;
+    --color-yes-bg: #d9efdb;
+    --color-no: #b71c1c;
+    --color-no-bg: #fde0e0;
+    --color-unknown-bg: #ffffff;
+    --color-warning: #735100;
+    --color-warning-bg: #fff4d6;
+    --color-warning-border: #efd58a;
+    --color-danger: #7a1212;
+    --color-danger-bg: #fdecea;
+    --color-danger-border: #f5c2c2;
+    --color-row-header: #f3f3f8;
+    --color-case-file-bg: #f7f8fc;
+    --radius: 6px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", sans-serif;
+}
+
+html,
+body {
+    background: var(--color-bg);
+    color: #1a1a24;
+    margin: 0;
+    font-family: var(--font-sans);
+}

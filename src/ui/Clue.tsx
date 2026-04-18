@@ -1,9 +1,10 @@
-import { useEffect } from "preact/hooks";
+"use client";
+
 import { ChecklistGrid } from "./components/ChecklistGrid";
 import { GameSetupPanel } from "./components/GameSetupPanel";
 import { SuggestionLogPanel } from "./components/SuggestionLogPanel";
 import { Toolbar } from "./components/Toolbar";
-import { hydrateFromStorage } from "./state";
+import { ClueProvider } from "./state";
 
 /**
  * Top-level Clue solver app. The suggestion log sits at the top because
@@ -12,23 +13,23 @@ import { hydrateFromStorage } from "./state";
  * stack on mobile.
  */
 export function Clue() {
-    useEffect(() => {
-        hydrateFromStorage();
-    }, []);
-
     return (
-        <main class="clue-app">
-            <header>
-                <h1>Clue solver</h1>
-                <Toolbar />
-            </header>
+        <ClueProvider>
+            <main className="mx-auto flex max-w-[1400px] flex-col gap-5 px-5 pb-15 pt-6">
+                <header className="flex flex-wrap items-center justify-between gap-4">
+                    <h1 className="m-0 text-[28px] text-accent">
+                        Clue solver
+                    </h1>
+                    <Toolbar />
+                </header>
 
-            <SuggestionLogPanel />
+                <SuggestionLogPanel />
 
-            <div class="bottom-row">
-                <GameSetupPanel />
-                <ChecklistGrid />
-            </div>
-        </main>
+                <div className="grid grid-cols-1 items-start gap-5 [@media(min-width:1100px)]:grid-cols-[minmax(380px,1fr)_minmax(400px,1fr)]">
+                    <GameSetupPanel />
+                    <ChecklistGrid />
+                </div>
+            </main>
+        </ClueProvider>
     );
 }

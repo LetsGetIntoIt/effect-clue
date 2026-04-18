@@ -1,15 +1,22 @@
-import { useState } from "preact/hooks";
+"use client";
+
+import { useEffect, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
+import { cardName, categoryOfCard } from "../../logic/GameSetup";
 import { recommendSuggestions } from "../../logic/Recommender";
 import {
-    addSuggestion,
-    deductionResultSignal,
     DraftSuggestion,
-    removeSuggestion,
-    setupSignal,
-    suggestionsSignal,
-    updateSuggestion,
+    useClue,
 } from "../state";
+
+const SECTION_TITLE = "mt-0 mb-2 text-[14px] font-semibold";
+const SELECT_CLASS =
+    "flex-1 rounded border border-border p-1.5 text-[13px]";
+const LABEL_ROW = "flex items-center gap-1.5 text-[13px]";
+const FORM_BTN_ACCENT =
+    "cursor-pointer rounded border-none bg-accent p-2 text-white disabled:cursor-not-allowed disabled:bg-unknown";
+const FORM_BTN_GHOST =
+    "cursor-pointer rounded border border-border bg-white px-3.5 py-1 text-[13px]";
 
 /**
  * Consolidated card for everything the solver's primary loop touches:
@@ -18,9 +25,11 @@ import {
  */
 export function SuggestionLogPanel() {
     return (
-        <section class="panel suggestion-log">
-            <h2>Suggestion log</h2>
-            <div class="suggestion-log-grid">
+        <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">
+            <h2 className="m-0 mb-3 text-[16px] uppercase tracking-[0.05em] text-accent">
+                Suggestion log
+            </h2>
+            <div className="grid gap-5 [@media(min-width:800px)]:grid-cols-[minmax(280px,1fr)_minmax(280px,1fr)]">
                 <AddSuggestion />
                 <Recommendations />
             </div>
@@ -29,23 +38,68 @@ export function SuggestionLogPanel() {
     );
 }
 
+/**
+ * Map a suggestion's `cards` array back to one card per category, keyed
+ * by the category's name. Cards whose category isn't in the current
+ * setup are dropped — the form falls back to blank for that slot.
+ */
+/**
+ * Map a suggestion's `cards` array (ids) back to one card id per category,
+ * keyed by the category id (as a string). Cards whose category isn't in
+ * the current setup are dropped — the form falls back to blank for that
+ * slot. Cards are indexed by id here, not name, so renames don't break
+ * the form's pre-population.
+ */
+const pickCardsByCategory = (
+    suggestion: DraftSuggestion,
+    setup: ReturnType<typeof useClue>["state"]["setup"],
+): Map<string, string> => {
+    const out = new Map<string, string>();
+    for (const cardId of suggestion.cards) {
+        const catId = categoryOfCard(setup, cardId);
+        if (catId) out.set(String(catId), String(cardId));
+    }
+    return out;
+};
+
 function AddSuggestion() {
-    const setup = setupSignal.value;
-    const [suspect, setSuspect] = useState<string>("");
-    const [weapon, setWeapon] = useState<string>("");
-    const [room, setRoom] = useState<string>("");
+    const { state, dispatch } = useClue();
+    const setup = state.setup;
+    const [cardByCategory, setCardByCategory] = useState<
+        Map<string, string>
+    >(new Map());
     const [suggester, setSuggester] = useState<string>(
-        setup.players[0] ?? "");
+        setup.players[0] ?? "",
+    );
     const [refuter, setRefuter] = useState<string>("");
     const [seenCard, setSeenCard] = useState<string>("");
-    const [passedPlayers, setPassedPlayers] = useState<Set<string>>(new Set());
+    const [passedPlayers, setPassedPlayers] = useState<Set<string>>(
+        new Set(),
+    );
 
-    // Keep the suggester dropdown's value valid when players come and go.
-    if (suggester && !setup.players.some(p => String(p) === suggester)) {
+    // Keep the suggester dropdown valid when players come and go.
+    useEffect(() => {
+        if (
+            suggester &&
+            setup.players.some(p => String(p) === suggester)
+        )
+            return;
         setSuggester(setup.players[0] ?? "");
-    }
+    }, [setup.players, suggester]);
 
-    const canSubmit = suspect && weapon && room && suggester;
+    const canSubmit =
+        suggester !== "" &&
+        setup.categories.length > 0 &&
+        setup.categories.every(
+            c => (cardByCategory.get(String(c.id)) ?? "") !== "",
+        );
+
+    const setCardForCategory = (categoryName: string, value: string) => {
+        const next = new Map(cardByCategory);
+        if (value === "") next.delete(categoryName);
+        else next.set(categoryName, value);
+        setCardByCategory(next);
+    };
 
     const onSuggesterChange = (value: string) => {
         setSuggester(value);
@@ -69,23 +123,31 @@ function AddSuggestion() {
         setPassedPlayers(next);
     };
 
-    const onSubmit = (e: Event) => {
+    const onSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!canSubmit) return;
-        const cards = [Card(suspect), Card(weapon), Card(room)];
+        const cards = setup.categories.map(c =>
+            Card(cardByCategory.get(String(c.id)) ?? ""),
+        );
         const nonRefuters = setup.players.filter(p =>
             passedPlayers.has(String(p)),
         );
-        addSuggestion({
-            id: `s-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-            suggester: Player(suggester),
-            cards,
-            nonRefuters,
-            refuter: refuter ? Player(refuter) : undefined,
-            seenCard: seenCard ? Card(seenCard) : undefined,
+        dispatch({
+            type: "addSuggestion",
+            suggestion: {
+                id: `s-${Date.now()}-${Math.random()
+                    .toString(36)
+                    .slice(2, 7)}`,
+                suggester: Player(suggester),
+                cards,
+                nonRefuters,
+                refuter: refuter ? Player(refuter) : undefined,
+                seenCard: seenCard ? Card(seenCard) : undefined,
+            },
         });
-        setSuspect(""); setWeapon(""); setRoom("");
-        setRefuter(""); setSeenCard("");
+        setCardByCategory(new Map());
+        setRefuter("");
+        setSeenCard("");
         setPassedPlayers(new Set());
     };
 
@@ -93,128 +155,141 @@ function AddSuggestion() {
         p => String(p) !== suggester && String(p) !== refuter,
     );
 
+    const pickedCards = setup.categories
+        .map(c => cardByCategory.get(String(c.id)) ?? "")
+        .filter(c => c !== "");
+
     return (
-        <div class="suggestion-log-section">
-            <h3>Add a suggestion</h3>
-            <form onSubmit={onSubmit} class="suggestion-form">
+        <div>
+            <h3 className={SECTION_TITLE}>Add a suggestion</h3>
+            <form
+                onSubmit={onSubmit}
+                className="flex flex-col gap-2"
+            >
                 <div>
-                    <label>
+                    <label className={LABEL_ROW}>
                         Suggester:
                         <select
                             value={suggester}
-                            onChange={e => onSuggesterChange(
-                                (e.target as HTMLSelectElement).value)}
+                            onChange={e =>
+                                onSuggesterChange(e.currentTarget.value)
+                            }
+                            className={SELECT_CLASS}
                             required
                         >
                             {setup.players.map(p => (
-                                <option key={p} value={p}>{p}</option>
+                                <option key={p} value={p}>
+                                    {p}
+                                </option>
                             ))}
                         </select>
                     </label>
                 </div>
+                {setup.categories.map(category => {
+                    const catKey = String(category.id);
+                    const value = cardByCategory.get(catKey) ?? "";
+                    return (
+                        <div key={catKey}>
+                            <label className={LABEL_ROW}>
+                                {category.name}:
+                                <select
+                                    value={value}
+                                    onChange={e =>
+                                        setCardForCategory(
+                                            catKey,
+                                            e.currentTarget.value,
+                                        )
+                                    }
+                                    className={SELECT_CLASS}
+                                    required
+                                >
+                                    <option value="">—</option>
+                                    {category.cards.map(entry => (
+                                        <option
+                                            key={String(entry.id)}
+                                            value={String(entry.id)}
+                                        >
+                                            {entry.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        </div>
+                    );
+                })}
                 <div>
-                    <label>
-                        Suspect:
-                        <select
-                            value={suspect}
-                            onChange={e => setSuspect(
-                                (e.target as HTMLSelectElement).value)}
-                            required
-                        >
-                            <option value="">—</option>
-                            {setup.suspects.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
-                    </label>
-                </div>
-                <div>
-                    <label>
-                        Weapon:
-                        <select
-                            value={weapon}
-                            onChange={e => setWeapon(
-                                (e.target as HTMLSelectElement).value)}
-                            required
-                        >
-                            <option value="">—</option>
-                            {setup.weapons.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
-                    </label>
-                </div>
-                <div>
-                    <label>
-                        Room:
-                        <select
-                            value={room}
-                            onChange={e => setRoom(
-                                (e.target as HTMLSelectElement).value)}
-                            required
-                        >
-                            <option value="">—</option>
-                            {setup.rooms.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
-                    </label>
-                </div>
-                <div>
-                    <label>
+                    <label className={LABEL_ROW}>
                         Refuted by:
                         <select
                             value={refuter}
-                            onChange={e => onRefuterChange(
-                                (e.target as HTMLSelectElement).value)}
+                            onChange={e =>
+                                onRefuterChange(e.currentTarget.value)
+                            }
+                            className={SELECT_CLASS}
                         >
                             <option value="">— none —</option>
                             {setup.players
                                 .filter(p => String(p) !== suggester)
                                 .map(p => (
-                                    <option key={p} value={p}>{p}</option>
+                                    <option key={p} value={p}>
+                                        {p}
+                                    </option>
                                 ))}
                         </select>
                     </label>
                 </div>
                 {refuter && (
                     <div>
-                        <label>
+                        <label className={LABEL_ROW}>
                             Card shown (optional):
                             <select
                                 value={seenCard}
-                                onChange={e => setSeenCard(
-                                    (e.target as HTMLSelectElement).value)}
+                                onChange={e =>
+                                    setSeenCard(e.currentTarget.value)
+                                }
+                                className={SELECT_CLASS}
                             >
                                 <option value="">— unknown —</option>
-                                {[suspect, weapon, room]
-                                    .filter(c => c !== "")
-                                    .map(c => (
-                                        <option key={c} value={c}>{c}</option>
-                                    ))}
+                                {pickedCards.map(cardId => (
+                                    <option key={cardId} value={cardId}>
+                                        {cardName(setup, Card(cardId))}
+                                    </option>
+                                ))}
                             </select>
                         </label>
                     </div>
                 )}
                 {eligibleForPassed.length > 0 && (
-                    <fieldset class="non-refuters">
-                        <legend>Could not refute</legend>
+                    <fieldset className="my-1 rounded-[var(--radius)] border border-border px-3 py-2">
+                        <legend className="px-1 text-[13px] font-semibold">
+                            Could not refute
+                        </legend>
                         {eligibleForPassed.map(p => (
-                            <label key={p} class="checkbox-label">
+                            <label
+                                key={p}
+                                className="flex cursor-pointer items-center gap-1.5 py-0.5 text-[13px]"
+                            >
                                 <input
                                     type="checkbox"
+                                    className="m-0"
                                     checked={passedPlayers.has(String(p))}
-                                    onChange={e => togglePassed(
-                                        String(p),
-                                        (e.target as HTMLInputElement).checked,
-                                    )}
+                                    onChange={e =>
+                                        togglePassed(
+                                            String(p),
+                                            e.currentTarget.checked,
+                                        )
+                                    }
                                 />
                                 {p}
                             </label>
                         ))}
                     </fieldset>
                 )}
-                <button type="submit" disabled={!canSubmit}>
+                <button
+                    type="submit"
+                    className={FORM_BTN_ACCENT}
+                    disabled={!canSubmit}
+                >
                     Add suggestion
                 </button>
             </form>
@@ -223,20 +298,26 @@ function AddSuggestion() {
 }
 
 function Recommendations() {
-    const setup = setupSignal.value;
-    const result = deductionResultSignal.value;
-    const [asPlayer, setAsPlayer] = useState<string>(setup.players[0] ?? "");
+    const { state, derived } = useClue();
+    const setup = state.setup;
+    const result = derived.deductionResult;
+    const [asPlayer, setAsPlayer] = useState<string>(
+        setup.players[0] ?? "",
+    );
 
-    // Keep player selection valid as players come and go.
-    if (asPlayer && !setup.players.some(p => String(p) === asPlayer)) {
+    useEffect(() => {
+        if (asPlayer && setup.players.some(p => String(p) === asPlayer))
+            return;
         setAsPlayer(setup.players[0] ?? "");
-    }
+    }, [setup.players, asPlayer]);
 
     if (result._tag === "Contradiction" || !asPlayer) {
         return (
-            <div class="suggestion-log-section">
-                <h3>Next-suggestion recommendations</h3>
-                <div class="muted">
+            <div>
+                <h3 className={SECTION_TITLE}>
+                    Next-suggestion recommendations
+                </h3>
+                <div className="text-[13px] text-muted">
                     {result._tag === "Contradiction"
                         ? "Resolve the contradiction to see recommendations."
                         : "Add players to see recommendations."}
@@ -245,43 +326,64 @@ function Recommendations() {
         );
     }
 
-    const rec = recommendSuggestions(setup, result.knowledge, Player(asPlayer), 5);
+    const rec = recommendSuggestions(
+        setup,
+        result.knowledge,
+        Player(asPlayer),
+        5,
+    );
 
     return (
-        <div class="suggestion-log-section">
-            <h3>Next-suggestion recommendations</h3>
-            <label>
+        <div>
+            <h3 className={SECTION_TITLE}>
+                Next-suggestion recommendations
+            </h3>
+            <label className={LABEL_ROW}>
                 Suggesting as:&nbsp;
                 <select
                     value={asPlayer}
-                    onChange={e => setAsPlayer(
-                        (e.target as HTMLSelectElement).value)}
+                    onChange={e => setAsPlayer(e.currentTarget.value)}
+                    className={SELECT_CLASS}
                 >
                     {setup.players.map(p => (
-                        <option key={p} value={p}>{p}</option>
+                        <option key={p} value={p}>
+                            {p}
+                        </option>
                     ))}
                 </select>
             </label>
-            {rec.locked ? (
-                <div
-                    class="recommender-locked"
-                    title={`${rec.topCount} candidates tied for the top score`}
-                >
-                    Gather more leads to unlock recommendations.
-                </div>
-            ) : rec.recommendations.length === 0 ? (
-                <div class="muted">
-                    Nothing useful to ask — you've already narrowed everything
-                    down.
+            {rec.recommendations.length === 0 ? (
+                <div className="mt-2 text-[13px] text-muted">
+                    Nothing useful to ask — you&apos;ve already narrowed
+                    everything down.
                 </div>
             ) : (
-                <ol class="rec-list">
+                <ol className="mt-2 list-decimal pl-6 text-[13px]">
                     {rec.recommendations.map((r, i) => (
-                        <li key={i}>
-                            <strong>{r.suspect}</strong> with the&nbsp;
-                            <strong>{r.weapon}</strong> in the&nbsp;
-                            <strong>{r.room}</strong>
-                            <span class="muted"> · score {r.score}</span>
+                        <li
+                            key={i}
+                            className="py-1"
+                            title={
+                                `${r.cellInfoScore} unknown cell` +
+                                `${r.cellInfoScore === 1 ? "" : "s"}` +
+                                ` × ${r.caseFileOpennessScore} case-file ` +
+                                `combination` +
+                                `${r.caseFileOpennessScore === 1 ? "" : "s"}` +
+                                ` × ${r.refuterUncertaintyScore} possible ` +
+                                `refuter` +
+                                `${r.refuterUncertaintyScore === 1 ? "" : "s"}`
+                            }
+                        >
+                            {r.cards.map((c, ci) => (
+                                <span key={ci}>
+                                    {ci > 0 && " + "}
+                                    <strong>{cardName(setup, c)}</strong>
+                                </span>
+                            ))}
+                            <span className="text-muted">
+                                {" "}
+                                · score {r.score}
+                            </span>
                         </li>
                     ))}
                 </ol>
@@ -291,59 +393,94 @@ function Recommendations() {
 }
 
 function PriorSuggestions() {
-    const suggestions = suggestionsSignal.value;
+    const { state, dispatch } = useClue();
+    const setup = state.setup;
+    const suggestions = state.suggestions;
     const [editingId, setEditingId] = useState<string | null>(null);
     return (
-        <div class="suggestion-log-section suggestions-prior">
-            <h3>
+        <div className="mt-4 border-t border-border pt-4">
+            <h3 className={SECTION_TITLE}>
                 Prior suggestions
                 {suggestions.length > 0 && ` (${suggestions.length})`}
             </h3>
             {suggestions.length === 0 ? (
-                <div class="muted">No suggestions yet. Add one above.</div>
+                <div className="text-[13px] text-muted">
+                    No suggestions yet. Add one above.
+                </div>
             ) : (
-                <ol class="suggestion-list">
+                <ol className="m-0 max-h-[300px] list-decimal overflow-y-auto pl-6">
                     {suggestions.map(s =>
                         editingId === s.id ? (
-                            <li key={s.id}>
+                            <li
+                                key={s.id}
+                                className="border-b border-border py-2 text-[13px] last:border-b-0"
+                            >
                                 <EditSuggestionRow
                                     suggestion={s}
                                     onSave={updated => {
-                                        updateSuggestion(updated);
+                                        dispatch({
+                                            type: "updateSuggestion",
+                                            suggestion: updated,
+                                        });
                                         setEditingId(null);
                                     }}
                                     onCancel={() => setEditingId(null)}
                                 />
                             </li>
                         ) : (
-                            <li key={s.id}>
+                            <li
+                                key={s.id}
+                                className="border-b border-border py-2 text-[13px] last:border-b-0"
+                            >
                                 <div>
-                                    <strong>{s.suggester}</strong> suggested&nbsp;
-                                    {s.cards.join(" + ")}
+                                    <strong>{s.suggester}</strong>{" "}
+                                    suggested&nbsp;
+                                    {s.cards
+                                        .map(id => cardName(setup, id))
+                                        .join(" + ")}
                                 </div>
-                                <div class="muted">
-                                    {s.refuter
-                                        ? <>
-                                            refuted by <strong>{s.refuter}</strong>
-                                            {s.seenCard && <> (showed {s.seenCard})</>}
+                                <div className="text-[13px] text-muted">
+                                    {s.refuter ? (
+                                        <>
+                                            refuted by{" "}
+                                            <strong>{s.refuter}</strong>
+                                            {s.seenCard && (
+                                                <>
+                                                    {" "}
+                                                    (showed{" "}
+                                                    {cardName(setup, s.seenCard)})
+                                                </>
+                                            )}
                                         </>
-                                        : "nobody could refute"}
+                                    ) : (
+                                        "nobody could refute"
+                                    )}
                                     {s.nonRefuters.length > 0 && (
-                                        <> · passed: {s.nonRefuters.join(", ")}</>
+                                        <>
+                                            {" "}
+                                            · passed: {s.nonRefuters.join(", ")}
+                                        </>
                                     )}
                                 </div>
-                                <div class="suggestion-actions">
+                                <div className="mt-1 flex gap-2">
                                     <button
                                         type="button"
-                                        class="link"
-                                        onClick={() => setEditingId(s.id)}
+                                        className="cursor-pointer border-none bg-transparent p-0 text-[12px] text-accent underline"
+                                        onClick={() =>
+                                            setEditingId(s.id)
+                                        }
                                     >
                                         edit
                                     </button>
                                     <button
                                         type="button"
-                                        class="link link-danger"
-                                        onClick={() => removeSuggestion(s.id)}
+                                        className="cursor-pointer border-none bg-transparent p-0 text-[12px] text-danger underline"
+                                        onClick={() =>
+                                            dispatch({
+                                                type: "removeSuggestion",
+                                                id: s.id,
+                                            })
+                                        }
                                     >
                                         remove
                                     </button>
@@ -357,24 +494,44 @@ function PriorSuggestions() {
     );
 }
 
-function EditSuggestionRow({ suggestion, onSave, onCancel }: {
+function EditSuggestionRow({
+    suggestion,
+    onSave,
+    onCancel,
+}: {
     suggestion: DraftSuggestion;
     onSave: (updated: DraftSuggestion) => void;
     onCancel: () => void;
 }) {
-    const setup = setupSignal.value;
+    const { state } = useClue();
+    const setup = state.setup;
     const [suggester, setSuggester] = useState(String(suggestion.suggester));
-    const [suspect, setSuspect] = useState(String(suggestion.cards[0] ?? ""));
-    const [weapon, setWeapon] = useState(String(suggestion.cards[1] ?? ""));
-    const [room, setRoom] = useState(String(suggestion.cards[2] ?? ""));
+    const [cardByCategory, setCardByCategory] = useState<
+        Map<string, string>
+    >(pickCardsByCategory(suggestion, setup));
     const [refuter, setRefuter] = useState(
-        suggestion.refuter ? String(suggestion.refuter) : "");
+        suggestion.refuter ? String(suggestion.refuter) : "",
+    );
     const [seenCard, setSeenCard] = useState(
-        suggestion.seenCard ? String(suggestion.seenCard) : "");
+        suggestion.seenCard ? String(suggestion.seenCard) : "",
+    );
     const [passedPlayers, setPassedPlayers] = useState<Set<string>>(
-        new Set(suggestion.nonRefuters.map(p => String(p))));
+        new Set(suggestion.nonRefuters.map(p => String(p))),
+    );
 
-    const canSave = suspect && weapon && room && suggester;
+    const canSave =
+        suggester !== "" &&
+        setup.categories.length > 0 &&
+        setup.categories.every(
+            c => (cardByCategory.get(String(c.id)) ?? "") !== "",
+        );
+
+    const setCardForCategory = (categoryName: string, value: string) => {
+        const next = new Map(cardByCategory);
+        if (value === "") next.delete(categoryName);
+        else next.set(categoryName, value);
+        setCardByCategory(next);
+    };
 
     const onRefuterChange = (value: string) => {
         setRefuter(value);
@@ -393,12 +550,16 @@ function EditSuggestionRow({ suggestion, onSave, onCancel }: {
 
     const handleSave = () => {
         if (!canSave) return;
+        const cards = setup.categories.map(c =>
+            Card(cardByCategory.get(String(c.id)) ?? ""),
+        );
         const nonRefuters = setup.players.filter(p =>
-            passedPlayers.has(String(p)));
+            passedPlayers.has(String(p)),
+        );
         onSave({
             ...suggestion,
             suggester: Player(suggester),
-            cards: [Card(suspect), Card(weapon), Card(room)],
+            cards,
             nonRefuters,
             refuter: refuter ? Player(refuter) : undefined,
             seenCard: seenCard ? Card(seenCard) : undefined,
@@ -406,93 +567,119 @@ function EditSuggestionRow({ suggestion, onSave, onCancel }: {
     };
 
     const eligibleForPassed = setup.players.filter(
-        p => String(p) !== suggester && String(p) !== refuter);
+        p => String(p) !== suggester && String(p) !== refuter,
+    );
+
+    const pickedCards = setup.categories
+        .map(c => cardByCategory.get(String(c.id)) ?? "")
+        .filter(c => c !== "");
 
     return (
-        <div class="edit-suggestion">
-            <div class="edit-suggestion-fields">
-                <label>
+        <div className="py-2">
+            <div className="flex flex-col gap-1.5">
+                <label className={LABEL_ROW}>
                     Suggester:
-                    <select value={suggester}
-                        onChange={e => setSuggester(
-                            (e.target as HTMLSelectElement).value)}>
+                    <select
+                        value={suggester}
+                        onChange={e =>
+                            setSuggester(e.currentTarget.value)
+                        }
+                        className={SELECT_CLASS}
+                    >
                         {setup.players.map(p => (
-                            <option key={p} value={p}>{p}</option>
+                            <option key={p} value={p}>
+                                {p}
+                            </option>
                         ))}
                     </select>
                 </label>
-                <label>
-                    Suspect:
-                    <select value={suspect}
-                        onChange={e => setSuspect(
-                            (e.target as HTMLSelectElement).value)}>
-                        <option value="">—</option>
-                        {setup.suspects.map(c => (
-                            <option key={c} value={c}>{c}</option>
-                        ))}
-                    </select>
-                </label>
-                <label>
-                    Weapon:
-                    <select value={weapon}
-                        onChange={e => setWeapon(
-                            (e.target as HTMLSelectElement).value)}>
-                        <option value="">—</option>
-                        {setup.weapons.map(c => (
-                            <option key={c} value={c}>{c}</option>
-                        ))}
-                    </select>
-                </label>
-                <label>
-                    Room:
-                    <select value={room}
-                        onChange={e => setRoom(
-                            (e.target as HTMLSelectElement).value)}>
-                        <option value="">—</option>
-                        {setup.rooms.map(c => (
-                            <option key={c} value={c}>{c}</option>
-                        ))}
-                    </select>
-                </label>
-                <label>
+                {setup.categories.map(category => {
+                    const catKey = String(category.id);
+                    const value = cardByCategory.get(catKey) ?? "";
+                    return (
+                        <label key={catKey} className={LABEL_ROW}>
+                            {category.name}:
+                            <select
+                                value={value}
+                                onChange={e =>
+                                    setCardForCategory(
+                                        catKey,
+                                        e.currentTarget.value,
+                                    )
+                                }
+                                className={SELECT_CLASS}
+                            >
+                                <option value="">—</option>
+                                {category.cards.map(entry => (
+                                    <option
+                                        key={String(entry.id)}
+                                        value={String(entry.id)}
+                                    >
+                                        {entry.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    );
+                })}
+                <label className={LABEL_ROW}>
                     Refuted by:
-                    <select value={refuter}
-                        onChange={e => onRefuterChange(
-                            (e.target as HTMLSelectElement).value)}>
+                    <select
+                        value={refuter}
+                        onChange={e =>
+                            onRefuterChange(e.currentTarget.value)
+                        }
+                        className={SELECT_CLASS}
+                    >
                         <option value="">— none —</option>
                         {setup.players
                             .filter(p => String(p) !== suggester)
                             .map(p => (
-                                <option key={p} value={p}>{p}</option>
+                                <option key={p} value={p}>
+                                    {p}
+                                </option>
                             ))}
                     </select>
                 </label>
                 {refuter && (
-                    <label>
+                    <label className={LABEL_ROW}>
                         Card shown:
-                        <select value={seenCard}
-                            onChange={e => setSeenCard(
-                                (e.target as HTMLSelectElement).value)}>
+                        <select
+                            value={seenCard}
+                            onChange={e =>
+                                setSeenCard(e.currentTarget.value)
+                            }
+                            className={SELECT_CLASS}
+                        >
                             <option value="">— unknown —</option>
-                            {[suspect, weapon, room]
-                                .filter(c => c !== "")
-                                .map(c => (
-                                    <option key={c} value={c}>{c}</option>
-                                ))}
+                            {pickedCards.map(c => (
+                                <option key={c} value={c}>
+                                    {c}
+                                </option>
+                            ))}
                         </select>
                     </label>
                 )}
                 {eligibleForPassed.length > 0 && (
-                    <fieldset class="non-refuters">
-                        <legend>Could not refute</legend>
+                    <fieldset className="my-1 rounded-[var(--radius)] border border-border px-3 py-2">
+                        <legend className="px-1 text-[13px] font-semibold">
+                            Could not refute
+                        </legend>
                         {eligibleForPassed.map(p => (
-                            <label key={p} class="checkbox-label">
+                            <label
+                                key={p}
+                                className="flex cursor-pointer items-center gap-1.5 py-0.5 text-[13px]"
+                            >
                                 <input
                                     type="checkbox"
+                                    className="m-0"
                                     checked={passedPlayers.has(String(p))}
-                                    onChange={e => togglePassed(
-                                        String(p),
-                                        (e.target as HTMLInputElement).checked)}
+                                    onChange={e =>
+                                        togglePassed(
+                                            String(p),
+                                            e.currentTarget.checked,
+                                        )
+                                    }
                                 />
                                 {p}
                             </label>
@@ -500,13 +687,20 @@ function EditSuggestionRow({ suggestion, onSave, onCancel }: {
                     </fieldset>
                 )}
             </div>
-            <div class="edit-suggestion-actions">
-                <button type="button" class="save-btn"
-                    disabled={!canSave} onClick={handleSave}>
+            <div className="mt-2 flex gap-2">
+                <button
+                    type="button"
+                    className="cursor-pointer rounded border-none bg-accent px-3.5 py-1 text-[13px] text-white disabled:cursor-not-allowed disabled:bg-unknown"
+                    disabled={!canSave}
+                    onClick={handleSave}
+                >
                     Save
                 </button>
-                <button type="button" class="cancel-btn"
-                    onClick={onCancel}>
+                <button
+                    type="button"
+                    className={FORM_BTN_GHOST}
+                    onClick={onCancel}
+                >
                     Cancel
                 </button>
             </div>
