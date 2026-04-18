@@ -68,6 +68,8 @@ export interface DraftSuggestion {
  */
 export type ClueAction =
     | { type: "newGame" }
+    | { type: "loadPreset"; setup: GameSetup }
+    | { type: "setSetup"; setup: GameSetup }
     | { type: "addKnownCard"; card: KnownCard }
     | { type: "removeKnownCard"; index: number }
     | { type: "setHandSize"; player: Player; size: number | undefined }
@@ -105,6 +107,27 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 setup: newGameSetup(4),
                 explanationsEnabled: state.explanationsEnabled,
             };
+
+        case "loadPreset":
+            // Swap to a preset deck and discard anything tied to the
+            // previous one. (Hands, suggestions, etc. reference card
+            // and player objects from the old setup, so we can't
+            // keep them.)
+            return {
+                ...state,
+                setup: action.setup,
+                knownCards: [],
+                handSizes: [],
+                suggestions: [],
+            };
+
+        case "setSetup":
+            // Inline category/card/player edits. We DON'T clear the
+            // input state — we just filter it back to things still
+            // present in the new setup. That lets the user rename a
+            // card or add a category mid-game without losing
+            // unrelated progress.
+            return pruneSessionToSetup(state, action.setup);
 
         case "addKnownCard":
             return {
@@ -496,4 +519,52 @@ const groupKnownCardsByPlayer = (
         else by.set(player, [card]);
     }
     return Array.from(by.entries(), ([player, cards]) => ({ player, cards }));
+};
+
+/**
+ * When the user edits the setup inline (e.g. renames a category or
+ * removes a card), filter out references to players/cards that no
+ * longer exist. Suggestions whose suggester is gone or whose card
+ * list references a removed card are dropped — there's no sensible
+ * way to keep them.
+ */
+const pruneSessionToSetup = (
+    state: ClueState,
+    setup: GameSetup,
+): ClueState => {
+    const playerSet = new Set(setup.players.map(p => String(p)));
+    const cardSet = new Set(
+        setup.categories.flatMap(c => c.cards.map(card => String(card))),
+    );
+    return {
+        ...state,
+        setup,
+        knownCards: state.knownCards.filter(
+            kc =>
+                playerSet.has(String(kc.player)) &&
+                cardSet.has(String(kc.card)),
+        ),
+        handSizes: state.handSizes.filter(([p]) =>
+            playerSet.has(String(p)),
+        ),
+        suggestions: state.suggestions
+            .filter(s => playerSet.has(String(s.suggester)))
+            .filter(s =>
+                s.cards.every(c => cardSet.has(String(c))),
+            )
+            .map(s => ({
+                ...s,
+                nonRefuters: s.nonRefuters.filter(p =>
+                    playerSet.has(String(p)),
+                ),
+                refuter:
+                    s.refuter && playerSet.has(String(s.refuter))
+                        ? s.refuter
+                        : undefined,
+                seenCard:
+                    s.seenCard && cardSet.has(String(s.seenCard))
+                        ? s.seenCard
+                        : undefined,
+            })),
+    };
 };

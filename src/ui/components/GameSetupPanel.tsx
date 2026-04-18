@@ -7,13 +7,19 @@ import {
     caseFileSize,
     defaultHandSizes,
     GameSetup,
+    PRESETS,
 } from "../../logic/GameSetup";
 import { useClue } from "../state";
+import { CategoryEditor } from "./CategoryEditor";
 
 const NEW_GAME_CONFIRM =
     "You've already started logging this game. Selecting a new game " +
     "setup preset will lose all unsaved deductions. Would you like to " +
     "continue?";
+
+const PRESET_CONFIRM =
+    "Loading a preset will discard your current hand sizes, known " +
+    "cards, and suggestions. Continue?";
 
 function PlayerNameInput({
     player,
@@ -113,6 +119,11 @@ export function GameSetupPanel() {
         dispatch({ type: "newGame" });
     };
 
+    const onPreset = (preset: (typeof PRESETS)[number]) => {
+        if (hasGameData() && !window.confirm(PRESET_CONFIRM)) return;
+        dispatch({ type: "loadPreset", setup: preset.build() });
+    };
+
     const onHandSizeChange = (player: Player, raw: string) => {
         if (raw === "") {
             dispatch({ type: "setHandSize", player, size: undefined });
@@ -161,6 +172,26 @@ export function GameSetupPanel() {
                 >
                     New game
                 </button>
+            </div>
+
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="text-[12px] font-semibold uppercase tracking-[0.05em] text-muted">
+                    Preset:
+                </span>
+                {PRESETS.map(preset => (
+                    <button
+                        key={preset.id}
+                        type="button"
+                        className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-[#f0f0f5]"
+                        onClick={() => onPreset(preset)}
+                    >
+                        {preset.label}
+                    </button>
+                ))}
+            </div>
+
+            <div className="mb-3">
+                <CategoryEditor />
             </div>
 
             {handSizeMismatch && (
