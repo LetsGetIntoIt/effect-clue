@@ -1,38 +1,43 @@
 "use client";
 
-import { Owner, ownerLabel } from "../../logic/GameObjects";
+import { useState } from "react";
+import { Card, Owner, ownerLabel } from "../../logic/GameObjects";
 import { allOwners, cardName } from "../../logic/GameSetup";
 import {
+    Cell,
     CellValue,
     getCellByOwnerCard,
     Knowledge,
     N,
     Y,
 } from "../../logic/Knowledge";
-import { explainCell } from "../../logic/Provenance";
+import { footnotesForCell } from "../../logic/Footnotes";
 import {
     caseFileAnswerFor,
     caseFileCandidatesFor,
     caseFileProgress,
 } from "../../logic/Recommender";
 import { useClue } from "../state";
+import {
+    ExplanationFocus,
+    ExplanationPanel,
+} from "./ExplanationPanel";
 
 /**
- * The main visual: a header strip showing case-file progress on top, and
- * underneath a grid with one row per card and one column per owner
- * (players + case file). Cells show Y / N / blank and are coloured by
- * status. If explanations are enabled, hovering a cell shows the rule
- * that filled it in.
- *
- * The case-file header was previously a separate panel — folding it in
- * here puts the most-actionable summary right next to the grid that
- * justifies it.
+ * The main visual: a case-file header strip on top; a grid with one row
+ * per card and one column per owner underneath. Cells show Y / N / blank,
+ * are coloured by status, and are clickable: clicking a cell with a known
+ * value opens the ExplanationPanel below the grid. Blank cells that are
+ * still candidates for a refuter's unseen card get footnote superscripts
+ * (the "number system").
  */
 export function ChecklistGrid() {
     const { state, derived } = useClue();
     const setup = state.setup;
     const result = derived.deductionResult;
-    const provenance = derived.provenance;
+    const footnotes = derived.footnotes;
+
+    const [focus, setFocus] = useState<ExplanationFocus | null>(null);
 
     const owners: ReadonlyArray<Owner> = allOwners(setup);
 
@@ -86,35 +91,90 @@ export function ChecklistGrid() {
                                 <th className="border border-border px-2 py-1 text-left font-normal">
                                     {entry.name}
                                 </th>
-                                {owners.map(owner => {
-                                    const value = getCellByOwnerCard(
-                                        knowledge,
-                                        owner,
-                                        entry.id,
-                                    );
-                                    const reason = provenance
-                                        ? explainCell(provenance, owner, entry.id)
-                                        : undefined;
-                                    return (
-                                        <td
-                                            key={`${ownerKey(owner)}-${String(entry.id)}`}
-                                            className={cellClass(value)}
-                                            title={
-                                                reason
-                                                    ? `${reason.kind.kind} @ iter ${reason.iteration}\n${reason.detail}`
-                                                    : undefined
-                                            }
-                                        >
-                                            {cellLabel(value)}
-                                        </td>
-                                    );
-                                })}
+                                {owners.map(owner => (
+                                    <GridCell
+                                        key={`${ownerKey(owner)}-${String(entry.id)}`}
+                                        owner={owner}
+                                        card={entry.id}
+                                        value={getCellByOwnerCard(
+                                            knowledge,
+                                            owner,
+                                            entry.id,
+                                        )}
+                                        footnoteNumbers={footnotesForCell(
+                                            footnotes,
+                                            Cell(owner, entry.id),
+                                        )}
+                                        isFocused={
+                                            focus !== null &&
+                                            focus.owner === owner &&
+                                            focus.card === entry.id
+                                        }
+                                        onSelect={f => setFocus(f)}
+                                    />
+                                ))}
                             </tr>
                         )),
                     ])}
                 </tbody>
             </table>
+            <ExplanationPanel
+                focus={focus}
+                onClose={() => setFocus(null)}
+            />
         </section>
+    );
+}
+
+function GridCell({
+    owner,
+    card,
+    value,
+    footnoteNumbers,
+    isFocused,
+    onSelect,
+}: {
+    owner: Owner;
+    card: Card;
+    value: CellValue | undefined;
+    footnoteNumbers: ReadonlyArray<number>;
+    isFocused: boolean;
+    onSelect: (f: ExplanationFocus | null) => void;
+}) {
+    const canExplain = value !== undefined;
+    const handleClick = () => {
+        if (!canExplain) {
+            onSelect(null);
+            return;
+        }
+        if (isFocused) {
+            onSelect(null);
+        } else {
+            onSelect({ owner, card, value: value as "Y" | "N" });
+        }
+    };
+
+    return (
+        <td
+            className={cellClass(value, isFocused, canExplain)}
+            onClick={handleClick}
+            title={
+                footnoteNumbers.length > 0
+                    ? `Candidate for suggestion ${footnoteNumbers
+                          .map(n => `#${n}`)
+                          .join(", ")} (refuter's unseen card could be here)`
+                    : canExplain
+                        ? "Click for explanation"
+                        : undefined
+            }
+        >
+            {cellLabel(value)}
+            {footnoteNumbers.length > 0 && value === undefined && (
+                <sup className="ml-0.5 text-[9px] font-normal text-accent">
+                    {footnoteNumbers.join(",")}
+                </sup>
+            )}
+        </td>
     );
 }
 
@@ -188,10 +248,16 @@ const cellLabel = (value: CellValue | undefined): string => {
 };
 
 const CELL_BASE =
-    "w-9 min-w-9 border border-border px-2 py-1 text-center font-semibold";
+    "w-9 min-w-9 border border-border px-2 py-1 text-center font-semibold relative";
 
-const cellClass = (value: CellValue | undefined): string => {
-    if (value === Y) return `${CELL_BASE} bg-yes-bg text-yes`;
-    if (value === N) return `${CELL_BASE} bg-no-bg text-no`;
-    return `${CELL_BASE} bg-white`;
+const cellClass = (
+    value: CellValue | undefined,
+    isFocused: boolean,
+    canExplain: boolean,
+): string => {
+    const base = canExplain ? `${CELL_BASE} cursor-pointer` : CELL_BASE;
+    const focus = isFocused ? " ring-2 ring-accent ring-inset" : "";
+    if (value === Y) return `${base} bg-yes-bg text-yes${focus}`;
+    if (value === N) return `${base} bg-no-bg text-no${focus}`;
+    return `${base} bg-white`;
 };

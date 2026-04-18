@@ -2,8 +2,12 @@ import { Equal, HashMap } from "effect";
 import { Card, CardCategory, Owner, ownerLabel, Player } from "./GameObjects";
 import { Cell, CellValue, getCell, Knowledge } from "./Knowledge";
 import { applyConsistencyRules, applyDeductionRules } from "./Rules";
-import { GameSetup } from "./GameSetup";
-import { Suggestion } from "./Suggestion";
+import {
+    cardName,
+    categoryName,
+    GameSetup,
+} from "./GameSetup";
+import { Suggestion, suggestionCards } from "./Suggestion";
 
 /**
  * Structured identity of the rule family that produced a deduction.
@@ -104,6 +108,126 @@ export const chainFor = (
         for (const dep of reason.dependsOn) stack.push(dep);
     }
     return out.reverse();
+};
+
+/**
+ * Turn a single Reason into a user-facing sentence. Uses the setup and
+ * suggestions arrays to resolve ids into display names / suggestion
+ * numbers, so the UI doesn't have to repeat that lookup per render.
+ *
+ * Returns an object with a short `headline` (rule family) and a longer
+ * `detail` (full explanation). The headline is suitable for bold
+ * labels; detail is the prose.
+ */
+export interface DescribedReason {
+    readonly headline: string;
+    readonly detail: string;
+}
+
+export const describeReason = (
+    reason: Reason,
+    setup: GameSetup,
+    suggestions: ReadonlyArray<Suggestion>,
+): DescribedReason => {
+    switch (reason.kind.kind) {
+        case "initial-known-card":
+            return {
+                headline: "Given",
+                detail: "You marked this cell in the known-cards grid.",
+            };
+        case "initial-hand-size":
+            return {
+                headline: "Given",
+                detail: "Known from the player's hand size.",
+            };
+        case "card-ownership":
+            return {
+                headline: "Card ownership",
+                detail:
+                    `Each card has exactly one owner. Once ` +
+                    `${cardName(setup, reason.kind.card)} was ruled in ` +
+                    `or out for other owners, this cell was forced.`,
+            };
+        case "player-hand":
+            return {
+                headline: "Hand size",
+                detail:
+                    `${reason.kind.player}'s hand holds a fixed number of ` +
+                    `cards. Counting the Ys and Ns in their row forced ` +
+                    `this cell.`,
+            };
+        case "case-file-category":
+            return {
+                headline: "Case file",
+                detail:
+                    `The case file contains exactly one ` +
+                    `${categoryName(setup, reason.kind.category)}. ` +
+                    `Narrowing the category forced this cell.`,
+            };
+        case "non-refuters": {
+            const s = suggestions[reason.kind.suggestionIndex];
+            const n = reason.kind.suggestionIndex + 1;
+            if (!s)
+                return {
+                    headline: `Suggestion #${n}`,
+                    detail: "A player who passed can't hold the named cards.",
+                };
+            return {
+                headline: `Suggestion #${n}`,
+                detail:
+                    `The passer couldn't refute ${s.suggester}'s ` +
+                    `suggestion, so they don't own any of the named cards.`,
+            };
+        }
+        case "refuter-showed": {
+            const s = suggestions[reason.kind.suggestionIndex];
+            const n = reason.kind.suggestionIndex + 1;
+            if (!s)
+                return {
+                    headline: `Suggestion #${n}`,
+                    detail: "Refuter showed the card.",
+                };
+            const seen =
+                s.seenCard !== undefined
+                    ? cardName(setup, s.seenCard)
+                    : "the refuting card";
+            return {
+                headline: `Suggestion #${n}`,
+                detail: `${s.refuter} refuted and showed ${seen}.`,
+            };
+        }
+        case "refuter-owns-one-of": {
+            const s = suggestions[reason.kind.suggestionIndex];
+            const n = reason.kind.suggestionIndex + 1;
+            if (!s)
+                return {
+                    headline: `Suggestion #${n}`,
+                    detail:
+                        "Refuter had to own one of the three cards; the " +
+                        "other two were already ruled out.",
+                };
+            const cardLabels = suggestionCards(s)
+                .map(id => cardName(setup, id))
+                .join(", ");
+            return {
+                headline: `Suggestion #${n}`,
+                detail:
+                    `${s.refuter} refuted ${s.suggester}'s suggestion ` +
+                    `(${cardLabels}) but we didn't see the card. Once ` +
+                    `the other two were ruled out, this one was forced.`,
+            };
+        }
+    }
+};
+
+/** Same as describeReason but formats as a flat string. */
+export const describeReasonString = (
+    reason: Reason,
+    setup: GameSetup,
+    suggestions: ReadonlyArray<Suggestion>,
+): string => {
+    const d = describeReason(reason, setup, suggestions);
+    return `${d.headline}: ${d.detail}`;
 };
 
 /**
