@@ -18,6 +18,7 @@ import {
     caseFileProgress,
 } from "../../logic/Recommender";
 import { useClue } from "../state";
+import { ContradictionBanner } from "./ContradictionBanner";
 import {
     ExplanationFocus,
     ExplanationPanel,
@@ -47,9 +48,11 @@ export function ChecklistGrid() {
                 <h2 className="mb-3 text-[16px] uppercase tracking-[0.05em] text-accent">
                     Deduction grid
                 </h2>
-                <div className="rounded-[var(--radius)] border border-danger-border bg-danger-bg p-3 text-[13px] text-danger">
-                    <strong>Contradiction:</strong> {result.error.reason}
-                </div>
+                <ContradictionBanner trace={result.trace} />
+                <p className="text-[13px] text-muted">
+                    Use a quick-fix above to resolve the contradiction, or
+                    adjust your inputs directly.
+                </p>
             </section>
         );
     }

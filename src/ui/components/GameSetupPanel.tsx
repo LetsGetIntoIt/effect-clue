@@ -11,6 +11,7 @@ import {
 } from "../../logic/GameSetup";
 import { useClue } from "../state";
 import { CategoryEditor } from "./CategoryEditor";
+import { ContradictionBanner } from "./ContradictionBanner";
 
 const NEW_GAME_CONFIRM =
     "You've already started logging this game. Selecting a new game " +
@@ -247,9 +248,7 @@ export function GameSetupPanel() {
             )}
 
             {result._tag === "Contradiction" && (
-                <div className="mb-3 rounded-[var(--radius)] border border-danger-border bg-danger-bg px-3 py-2 text-[13px] text-danger">
-                    <strong>Contradiction:</strong> {result.error.reason}
-                </div>
+                <ContradictionBanner trace={result.trace} />
             )}
 
             <div className="overflow-x-auto rounded-[var(--radius)] border border-border">
