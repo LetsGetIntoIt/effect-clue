@@ -68,11 +68,11 @@ export function ChecklistGrid() {
             <table className="w-full border-collapse text-[13px]">
                 <thead>
                     <tr>
-                        <th className="sticky top-0 border border-border bg-row-header px-2 py-1 text-center font-semibold"></th>
+                        <th className="sticky top-0 z-10 border border-border bg-row-header px-2 py-1 text-center font-semibold"></th>
                         {owners.map(owner => (
                             <th
                                 key={ownerKey(owner)}
-                                className="sticky top-0 border border-border bg-row-header px-2 py-1 text-center font-semibold"
+                                className="sticky top-0 z-10 border border-border bg-row-header px-2 py-1 text-center font-semibold"
                             >
                                 {ownerLabel(owner)}
                             </th>
