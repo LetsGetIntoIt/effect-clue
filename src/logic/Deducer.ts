@@ -1,23 +1,66 @@
 import { Equal } from "effect";
-import { Contradiction, Knowledge } from "./Knowledge";
+import { Cell, Contradiction, Knowledge } from "./Knowledge";
 import { GameSetup } from "./GameSetup";
 import { applyAllRules } from "./Rules";
 import { Suggestion } from "./Suggestion";
 
 /**
+ * Structured contradiction information the UI can act on without
+ * parsing the reason string.
+ *
+ * - `reason`:                 free-form human description.
+ * - `offendingCells`:         cells whose values are (part of) the
+ *                             conflict. The UI will highlight these.
+ * - `offendingSuggestionIndices`: the indices of any suggestions in the
+ *                             supplied `suggestions` array whose rules
+ *                             raised (or propagated) the conflict.
+ *                             Empty when the conflict came from slice
+ *                             saturation on purely-known inputs
+ *                             (e.g. two players set to own the same
+ *                             card via known-card checkboxes).
+ * - `sliceLabel`:             the label of the slice that detected the
+ *                             conflict, if applicable.
+ */
+export interface ContradictionTrace {
+    readonly reason: string;
+    readonly offendingCells: ReadonlyArray<Cell>;
+    readonly offendingSuggestionIndices: ReadonlyArray<number>;
+    readonly sliceLabel?: string;
+}
+
+/**
  * The result of running the deducer. Either we converged to a consistent
  * fixed point, or we hit a contradiction and the game state is
  * internally inconsistent.
+ *
+ * On contradiction the result carries both the raw `error` (kept for
+ * backward-compatibility with `result.error.reason`) and a structured
+ * `trace` that the UI reads to render quick-fix buttons.
  */
 export type DeductionResult =
     | { readonly _tag: "Ok"; readonly knowledge: Knowledge }
-    | { readonly _tag: "Contradiction"; readonly error: Contradiction };
+    | {
+        readonly _tag: "Contradiction";
+        readonly error: Contradiction;
+        readonly trace: ContradictionTrace;
+    };
 
 export const Ok = (knowledge: Knowledge): DeductionResult =>
     ({ _tag: "Ok", knowledge });
 
-export const Err = (error: Contradiction): DeductionResult =>
-    ({ _tag: "Contradiction", error });
+export const Err = (error: Contradiction): DeductionResult => ({
+    _tag: "Contradiction",
+    error,
+    trace: {
+        reason: error.reason,
+        offendingCells: error.offendingCells,
+        offendingSuggestionIndices:
+            error.suggestionIndex !== undefined
+                ? [error.suggestionIndex]
+                : [],
+        sliceLabel: error.sliceLabel,
+    },
+});
 
 /**
  * Main entry point: given a game setup, a set of suggestions, and some
@@ -35,7 +78,8 @@ export const deduce = (
 ) => (
     initial: Knowledge,
 ): DeductionResult => {
-    const rule = applyAllRules(setup, suggestions);
+    const suggestionArray = Array.from(suggestions);
+    const rule = applyAllRules(setup, suggestionArray);
     let current = initial;
     try {
         // Bound the loop defensively — one iteration per cell would be

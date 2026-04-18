@@ -92,7 +92,7 @@ export function ChecklistGrid() {
                                             key={`${ownerKey(owner)}-${card}`}
                                             class={cellClass(value)}
                                             title={reason
-                                                ? `${reason.rule} @ iter ${reason.iteration}\n${reason.detail}`
+                                                ? `${reason.kind.kind} @ iter ${reason.iteration}\n${reason.detail}`
                                                 : undefined}
                                         >
                                             {cellLabel(value)}

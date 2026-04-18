@@ -183,4 +183,39 @@ describe("deduce", () => {
         const result = deduce(setup, [])(knowledge);
         expect(result._tag).toBe("Contradiction");
     });
+
+    test("contradiction trace highlights offending cells and slice", () => {
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(PlayerOwner(A), KNIFE), Y);
+        knowledge = setCell(knowledge, Cell(PlayerOwner(B), KNIFE), Y);
+
+        const result = deduce(setup, [])(knowledge);
+        expect(result._tag).toBe("Contradiction");
+        if (result._tag !== "Contradiction") return;
+
+        expect(result.trace.sliceLabel).toContain("Knife");
+        expect(result.trace.offendingCells).toHaveLength(2);
+        expect(result.trace.offendingSuggestionIndices).toHaveLength(0);
+    });
+
+    test("contradiction trace names the offending suggestion", () => {
+        let knowledge = emptyKnowledge;
+        // Bob can't own Plum (pre-marked N by the user).
+        knowledge = setCell(knowledge, Cell(PlayerOwner(B), PLUM), N);
+
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [],
+            refuter: B,
+            seenCard: PLUM, // claims Bob showed Plum — contradicts prior N
+        })];
+
+        const result = deduce(setup, suggestions)(knowledge);
+        expect(result._tag).toBe("Contradiction");
+        if (result._tag !== "Contradiction") return;
+
+        expect(result.trace.offendingSuggestionIndices).toHaveLength(1);
+        expect(result.trace.offendingSuggestionIndices[0]).toBe(0);
+    });
 });

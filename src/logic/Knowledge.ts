@@ -69,6 +69,32 @@ export const getHandSize = (
 // ---- Mutation helpers (immutable) --------------------------------------
 
 /**
+ * Structured info carried by every Contradiction. Lets the UI point at
+ * the inputs that produced the conflict and offer one-click quick fixes
+ * rather than only showing the raw reason string.
+ *
+ * - `offendingCells`: cells whose current values are (part of) the
+ *   conflict. For a cell-set conflict both cells are listed (the existing
+ *   one + the cell we were trying to set — they're the same cell in that
+ *   case, but listing it anyway keeps the UI logic uniform). For a slice
+ *   over-saturation, every Y or N cell that's part of the over-saturated
+ *   side is listed.
+ * - `sliceLabel`: the human-readable label of the slice that detected
+ *   the conflict, when applicable.
+ * - `suggestionIndex`: when a suggestion-driven rule detected the
+ *   contradiction (e.g. `refuterShowedCard` saw the refuter already owns
+ *   a Y cell that conflicts with setting the seen card to Y), the index
+ *   of that suggestion in the suggestions array — so the UI can surface
+ *   a "remove this suggestion" quick fix.
+ */
+export interface ContradictionInfo {
+    readonly reason: string;
+    readonly offendingCells: ReadonlyArray<Cell>;
+    readonly sliceLabel?: string;
+    readonly suggestionIndex?: number;
+}
+
+/**
  * Thrown when a rule tries to set a cell to a value that contradicts
  * what is already known, or when a slice becomes internally impossible
  * (e.g. a "case file has exactly one weapon" slice that ends up with
@@ -76,11 +102,28 @@ export const getHandSize = (
  * to the caller as part of the deduction result so that inconsistent
  * games get a proper error instead of silently producing a bogus
  * answer.
+ *
+ * Accepts either a plain string (legacy, for rules that haven't been
+ * migrated) or a structured ContradictionInfo. Carrying the info inline
+ * on the thrown Error lets rules deep in the call stack attach
+ * provenance without plumbing extra return types up through `applySlice`.
  */
 export class Contradiction extends Error {
     readonly _tag = "Contradiction" as const;
-    constructor(public readonly reason: string) {
-        super(`Contradiction: ${reason}`);
+    readonly reason: string;
+    readonly offendingCells: ReadonlyArray<Cell>;
+    readonly sliceLabel?: string;
+    readonly suggestionIndex?: number;
+    constructor(info: ContradictionInfo | string) {
+        const full: ContradictionInfo =
+            typeof info === "string"
+                ? { reason: info, offendingCells: [] }
+                : info;
+        super(`Contradiction: ${full.reason}`);
+        this.reason = full.reason;
+        this.offendingCells = full.offendingCells;
+        this.sliceLabel = full.sliceLabel;
+        this.suggestionIndex = full.suggestionIndex;
     }
 }
 
@@ -90,10 +133,12 @@ export const cellConflictContradiction = (
     existing: CellValue,
 ): Contradiction => {
     const [owner, card] = cell;
-    return new Contradiction(
-        `tried to set ${ownerLabel(owner)}/${card} to ${attempted} ` +
-        `but it is already ${existing}`,
-    );
+    return new Contradiction({
+        reason:
+            `tried to set ${ownerLabel(owner)}/${card} to ${attempted} ` +
+            `but it is already ${existing}`,
+        offendingCells: [cell],
+    });
 };
 
 /**

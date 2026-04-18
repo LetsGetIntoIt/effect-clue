@@ -19,6 +19,7 @@ import {
     GameSetup,
 } from "./GameSetup";
 import { Suggestion, suggestionCards, suggestionNonRefuters } from "./Suggestion";
+import type { ReasonKind, Tracer } from "./Provenance";
 
 /**
  * A "slice" is a set of cells that has a known exact number of Ys among
@@ -45,6 +46,7 @@ export interface Slice {
     readonly cells: ReadonlyArray<Cell>;
     readonly yCount: number;
     readonly label: string; // for explanations / debugging
+    readonly kind: ReasonKind; // structured identity for provenance
 }
 
 /**
@@ -52,15 +54,25 @@ export interface Slice {
  * fill in every unknown cell with the forced value. If the counts
  * already exceed what's possible, raise a Contradiction (e.g. a slice
  * that should contain exactly 1 Y but already has 2).
+ *
+ * When a tracer is supplied, every newly-set cell is reported along
+ * with the cells in the slice that made the deduction possible — i.e.
+ * every cell in the slice that was already known. The fast `deduce`
+ * path passes no tracer and pays no overhead.
  */
-export const applySlice = (slice: Slice) => (knowledge: Knowledge): Knowledge => {
+export const applySlice = (
+    slice: Slice,
+    tracer?: Tracer,
+) => (knowledge: Knowledge): Knowledge => {
     let ys = 0;
     let ns = 0;
+    const yCells: Cell[] = [];
+    const nCells: Cell[] = [];
     const unknowns: Cell[] = [];
     for (const cell of slice.cells) {
         const v = getCell(knowledge, cell);
-        if      (v === Y) ys++;
-        else if (v === N) ns++;
+        if      (v === Y) { ys++; yCells.push(cell); }
+        else if (v === N) { ns++; nCells.push(cell); }
         else              unknowns.push(cell);
     }
 
@@ -68,26 +80,64 @@ export const applySlice = (slice: Slice) => (knowledge: Knowledge): Knowledge =>
 
     // Over-saturation detection: the slice is already inconsistent.
     if (ys > slice.yCount) {
-        throw new Contradiction(
-            `slice "${slice.label}" has ${ys} Ys but expects exactly ${slice.yCount}`,
-        );
+        throw new Contradiction({
+            reason:
+                `slice "${slice.label}" has ${ys} Ys but expects ` +
+                `exactly ${slice.yCount}`,
+            offendingCells: yCells,
+            sliceLabel: slice.label,
+        });
     }
     if (ns > nCount) {
-        throw new Contradiction(
-            `slice "${slice.label}" has ${ns} Ns but expects at most ${nCount}`,
-        );
+        throw new Contradiction({
+            reason:
+                `slice "${slice.label}" has ${ns} Ns but expects ` +
+                `at most ${nCount}`,
+            offendingCells: nCells,
+            sliceLabel: slice.label,
+        });
     }
 
     if (unknowns.length === 0) return knowledge;
 
     // Rule 1: all Ys accounted for — remaining unknowns are forced N.
     if (ys >= slice.yCount && nCount > ns) {
-        return unknowns.reduce((k, c) => setCell(k, c, N), knowledge);
+        return unknowns.reduce((k, cell) => {
+            const next = setCell(k, cell, N);
+            if (next !== k && tracer) {
+                tracer({
+                    cell,
+                    value: N,
+                    kind: slice.kind,
+                    detail:
+                        `${slice.label}: all ${slice.yCount} Y` +
+                        `${slice.yCount === 1 ? "" : "s"} accounted for, ` +
+                        `so this cell is N`,
+                    dependsOn: yCells,
+                });
+            }
+            return next;
+        }, knowledge);
     }
 
     // Rule 2: all Ns accounted for — remaining unknowns are forced Y.
     if (ns >= nCount && slice.yCount > ys) {
-        return unknowns.reduce((k, c) => setCell(k, c, Y), knowledge);
+        return unknowns.reduce((k, cell) => {
+            const next = setCell(k, cell, Y);
+            if (next !== k && tracer) {
+                tracer({
+                    cell,
+                    value: Y,
+                    kind: slice.kind,
+                    detail:
+                        `${slice.label}: all ${nCount} N` +
+                        `${nCount === 1 ? "" : "s"} accounted for, ` +
+                        `so this cell is Y`,
+                    dependsOn: nCells,
+                });
+            }
+            return next;
+        }, knowledge);
     }
 
     return knowledge;
@@ -106,6 +156,7 @@ export const cardOwnershipSlices = (
         cells: owners.map(owner => Cell(owner, card)),
         yCount: 1,
         label: `card ownership: ${card}`,
+        kind: { kind: "card-ownership" as const, card },
     }));
 };
 
@@ -125,6 +176,7 @@ export const playerHandSlices = (
             cells: allCards(setup).map(card => Cell(owner, card)),
             yCount: handSize,
             label: `hand size: ${player}`,
+            kind: { kind: "player-hand" as const, player },
         }];
     });
 
@@ -141,6 +193,7 @@ export const caseFileCategorySlices = (
         cells: category.cards.map(card => Cell(caseFile, card)),
         yCount: 1,
         label: `case file: ${category.name}`,
+        kind: { kind: "case-file-category" as const, category: category.name },
     }));
 };
 
@@ -166,19 +219,47 @@ export const caseFileCategorySlices = (
  * cards named in that suggestion.
  */
 export const nonRefutersDontHaveSuggestedCards = (
-    suggestions: Iterable<Suggestion>,
+    suggestions: ReadonlyArray<Suggestion>,
+    tracer?: Tracer,
 ) => (knowledge: Knowledge): Knowledge => {
     let k = knowledge;
-    for (const suggestion of suggestions) {
+    suggestions.forEach((suggestion, suggestionIndex) => {
         const cards = suggestionCards(suggestion);
         const nonRefuters = suggestionNonRefuters(suggestion);
         for (const player of nonRefuters) {
             const owner = PlayerOwner(player);
             for (const card of cards) {
-                k = setCell(k, Cell(owner, card), N);
+                const cell = Cell(owner, card);
+                const before = k;
+                try {
+                    k = setCell(k, cell, N);
+                } catch (e) {
+                    if (e instanceof Contradiction) {
+                        throw new Contradiction({
+                            reason: e.reason,
+                            offendingCells: e.offendingCells.length
+                                ? e.offendingCells
+                                : [cell],
+                            sliceLabel: e.sliceLabel,
+                            suggestionIndex,
+                        });
+                    }
+                    throw e;
+                }
+                if (k !== before && tracer) {
+                    tracer({
+                        cell,
+                        value: N,
+                        kind: { kind: "non-refuters", suggestionIndex },
+                        detail:
+                            `${player} passed on suggestion #${suggestionIndex + 1}, ` +
+                            `so doesn't own ${card}`,
+                        dependsOn: [],
+                    });
+                }
             }
         }
-    }
+    });
     return k;
 };
 
@@ -186,18 +267,42 @@ export const nonRefutersDontHaveSuggestedCards = (
  * If a refuter showed us a specific card, they own it.
  */
 export const refuterShowedCard = (
-    suggestions: Iterable<Suggestion>,
+    suggestions: ReadonlyArray<Suggestion>,
+    tracer?: Tracer,
 ) => (knowledge: Knowledge): Knowledge => {
     let k = knowledge;
-    for (const suggestion of suggestions) {
-        if (suggestion.refuter === undefined) continue;
-        if (suggestion.seenCard === undefined) continue;
-        k = setCell(
-            k,
-            Cell(PlayerOwner(suggestion.refuter), suggestion.seenCard),
-            Y,
-        );
-    }
+    suggestions.forEach((suggestion, suggestionIndex) => {
+        if (suggestion.refuter === undefined) return;
+        if (suggestion.seenCard === undefined) return;
+        const cell = Cell(PlayerOwner(suggestion.refuter), suggestion.seenCard);
+        const before = k;
+        try {
+            k = setCell(k, cell, Y);
+        } catch (e) {
+            if (e instanceof Contradiction) {
+                throw new Contradiction({
+                    reason: e.reason,
+                    offendingCells: e.offendingCells.length
+                        ? e.offendingCells
+                        : [cell],
+                    sliceLabel: e.sliceLabel,
+                    suggestionIndex,
+                });
+            }
+            throw e;
+        }
+        if (k !== before && tracer) {
+            tracer({
+                cell,
+                value: Y,
+                kind: { kind: "refuter-showed", suggestionIndex },
+                detail:
+                    `${suggestion.refuter} showed ${suggestion.seenCard} when ` +
+                    `refuting suggestion #${suggestionIndex + 1}`,
+                dependsOn: [],
+            });
+        }
+    });
     return k;
 };
 
@@ -207,31 +312,62 @@ export const refuterShowedCard = (
  * own the remaining one.
  */
 export const refuterOwnsOneOf = (
-    suggestions: Iterable<Suggestion>,
+    suggestions: ReadonlyArray<Suggestion>,
+    tracer?: Tracer,
 ) => (knowledge: Knowledge): Knowledge => {
     let k = knowledge;
-    for (const suggestion of suggestions) {
-        if (suggestion.refuter === undefined) continue;
-        if (suggestion.seenCard !== undefined) continue; // already handled
+    suggestions.forEach((suggestion, suggestionIndex) => {
+        if (suggestion.refuter === undefined) return;
+        if (suggestion.seenCard !== undefined) return; // already handled
         const cards = suggestionCards(suggestion);
         const owner = PlayerOwner(suggestion.refuter);
 
         const unknowns: Cell[] = [];
+        const nCells: Cell[] = [];
         let alreadyYes = false;
         for (const card of cards) {
             const cell = Cell(owner, card);
             const v = getCell(k, cell);
             if      (v === Y) alreadyYes = true;
-            else if (v === undefined) unknowns.push(cell);
+            else if (v === N) nCells.push(cell);
+            else              unknowns.push(cell);
         }
 
-        if (alreadyYes) continue; // nothing new to infer
+        if (alreadyYes) return; // nothing new to infer
 
         // If exactly one card is still unknown, the refuter must own it.
         if (unknowns.length === 1) {
-            k = setCell(k, unknowns[0], Y);
+            const cell = unknowns[0];
+            const before = k;
+            try {
+                k = setCell(k, cell, Y);
+            } catch (e) {
+                if (e instanceof Contradiction) {
+                    throw new Contradiction({
+                        reason: e.reason,
+                        offendingCells: e.offendingCells.length
+                            ? e.offendingCells
+                            : [cell, ...nCells],
+                        sliceLabel: e.sliceLabel,
+                        suggestionIndex,
+                    });
+                }
+                throw e;
+            }
+            if (k !== before && tracer) {
+                tracer({
+                    cell,
+                    value: Y,
+                    kind: { kind: "refuter-owns-one-of", suggestionIndex },
+                    detail:
+                        `${suggestion.refuter} refuted suggestion ` +
+                        `#${suggestionIndex + 1} and we've ruled out the ` +
+                        `other cards, so they must own this one`,
+                    dependsOn: nCells,
+                });
+            }
         }
-    }
+    });
     return k;
 };
 
@@ -244,25 +380,27 @@ export const refuterOwnsOneOf = (
  */
 export const applyConsistencyRules = (
     setup: GameSetup,
+    tracer?: Tracer,
 ) => (knowledge: Knowledge): Knowledge => {
     const slices = [
         ...cardOwnershipSlices(setup),
         ...playerHandSlices(setup, knowledge),
         ...caseFileCategorySlices(setup),
     ];
-    return slices.reduce((k, slice) => applySlice(slice)(k), knowledge);
+    return slices.reduce((k, slice) => applySlice(slice, tracer)(k), knowledge);
 };
 
 /**
  * Apply every suggestion-driven rule once.
  */
 export const applyDeductionRules = (
-    suggestions: Iterable<Suggestion>,
+    suggestions: ReadonlyArray<Suggestion>,
+    tracer?: Tracer,
 ) => (knowledge: Knowledge): Knowledge => pipe(
     knowledge,
-    nonRefutersDontHaveSuggestedCards(suggestions),
-    refuterShowedCard(suggestions),
-    refuterOwnsOneOf(suggestions),
+    nonRefutersDontHaveSuggestedCards(suggestions, tracer),
+    refuterShowedCard(suggestions, tracer),
+    refuterOwnsOneOf(suggestions, tracer),
 );
 
 /**
@@ -271,10 +409,10 @@ export const applyDeductionRules = (
  */
 export const applyAllRules = (
     setup: GameSetup,
-    suggestions: Iterable<Suggestion>,
+    suggestions: ReadonlyArray<Suggestion>,
+    tracer?: Tracer,
 ) => (knowledge: Knowledge): Knowledge => pipe(
     knowledge,
-    applyConsistencyRules(setup),
-    applyDeductionRules(suggestions),
+    applyConsistencyRules(setup, tracer),
+    applyDeductionRules(suggestions, tracer),
 );
-
