@@ -93,7 +93,6 @@ type ClueAction =
     | { type: "addPlayer" }
     | { type: "removePlayer"; player: Player }
     | { type: "renamePlayer"; oldName: Player; newName: Player }
-    | { type: "toggleExplanations" }
     | { type: "replaceSession"; session: GameSession };
 
 interface ClueState {
@@ -101,7 +100,6 @@ interface ClueState {
     readonly handSizes: ReadonlyArray<readonly [Player, number]>;
     readonly knownCards: ReadonlyArray<KnownCard>;
     readonly suggestions: ReadonlyArray<DraftSuggestion>;
-    readonly explanationsEnabled: boolean;
 }
 
 const initialState: ClueState = {
@@ -109,7 +107,6 @@ const initialState: ClueState = {
     handSizes: [],
     knownCards: [],
     suggestions: [],
-    explanationsEnabled: true,
 };
 
 const reducer = (state: ClueState, action: ClueAction): ClueState => {
@@ -118,7 +115,6 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
             return {
                 ...initialState,
                 setup: newGameSetup(4),
-                explanationsEnabled: state.explanationsEnabled,
             };
 
         case "loadPreset":
@@ -402,12 +398,6 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
             };
         }
 
-        case "toggleExplanations":
-            return {
-                ...state,
-                explanationsEnabled: !state.explanationsEnabled,
-            };
-
         case "replaceSession": {
             const { session } = action;
             return {
@@ -455,17 +445,15 @@ const deriveState = (
     deductionResult: DeductionResult,
 ): { provenance: Provenance | undefined; footnotes: FootnoteMap } => {
     let provenance: Provenance | undefined;
-    if (state.explanationsEnabled) {
-        try {
-            const { provenance: p } = deduceWithExplanations(
-                state.setup,
-                suggestionsAsData,
-                initialKnowledge,
-            );
-            provenance = p;
-        } catch {
-            provenance = undefined;
-        }
+    try {
+        const { provenance: p } = deduceWithExplanations(
+            state.setup,
+            suggestionsAsData,
+            initialKnowledge,
+        );
+        provenance = p;
+    } catch {
+        provenance = undefined;
     }
     const footnotes =
         deductionResult._tag === "Ok"

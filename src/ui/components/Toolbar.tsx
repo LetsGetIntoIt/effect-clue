@@ -8,11 +8,11 @@ const buttonClass =
     "text-[13px] cursor-pointer hover:bg-[#f0f0f5]";
 
 /**
- * Top-of-page controls: toggle inference explanations, reset the game,
- * and copy a shareable URL encoding the current state.
+ * Top-of-page controls: reset the game and copy a shareable URL
+ * encoding the current state.
  */
 export function Toolbar() {
-    const { state, dispatch, currentShareUrl } = useClue();
+    const { dispatch, currentShareUrl } = useClue();
     const [copied, setCopied] = useState(false);
 
     const onShare = async () => {
@@ -43,16 +43,6 @@ export function Toolbar() {
 
     return (
         <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-1.5 text-[13px]">
-                <input
-                    type="checkbox"
-                    checked={state.explanationsEnabled}
-                    onChange={() =>
-                        dispatch({ type: "toggleExplanations" })
-                    }
-                />
-                &nbsp;Show &quot;why?&quot; explanations
-            </label>
             <button type="button" className={buttonClass} onClick={onShare}>
                 {copied ? "Copied!" : "Share link"}
             </button>
