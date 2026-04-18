@@ -1,4 +1,6 @@
-import { useEffect, useState } from "preact/hooks";
+"use client";
+
+import { useEffect, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
 import {
     allCards,
@@ -6,30 +8,21 @@ import {
     defaultHandSizes,
     GameSetup,
 } from "../../logic/GameSetup";
-import {
-    addKnownCard,
-    addPlayer,
-    deductionResultSignal,
-    handSizesSignal,
-    hasGameData,
-    knownCardsSignal,
-    newGame,
-    removeKnownCard,
-    removePlayer,
-    renamePlayer,
-    setHandSizeFor,
-    setupSignal,
-} from "../state";
+import { useClue } from "../state";
 
 const NEW_GAME_CONFIRM =
     "You've already started logging this game. Selecting a new game " +
     "setup preset will lose all unsaved deductions. Would you like to " +
     "continue?";
 
-function PlayerNameInput({ player, allPlayers }: {
+function PlayerNameInput({
+    player,
+    allPlayers,
+}: {
     player: Player;
     allPlayers: ReadonlyArray<Player>;
 }) {
+    const { dispatch } = useClue();
     const [editing, setEditing] = useState(String(player));
     const [error, setError] = useState("");
 
@@ -56,29 +49,39 @@ function PlayerNameInput({ player, allPlayers }: {
             setError("Duplicate name");
             return;
         }
-        renamePlayer(player, Player(trimmed));
+        dispatch({
+            type: "renamePlayer",
+            oldName: player,
+            newName: Player(trimmed),
+        });
         setError("");
     };
 
     return (
-        <div class="player-header-cell">
+        <div className="flex flex-col items-stretch gap-0.5">
             <input
                 type="text"
-                class="player-name-input"
+                className="box-border w-full rounded border border-border px-1.5 py-1 text-[12px]"
                 value={editing}
-                onInput={e => {
-                    setEditing((e.target as HTMLInputElement).value);
+                onChange={e => {
+                    setEditing(e.currentTarget.value);
                     setError("");
                 }}
                 onBlur={commit}
-                onKeyDown={e => { if (e.key === "Enter") commit(); }}
+                onKeyDown={e => {
+                    if (e.key === "Enter") commit();
+                }}
             />
-            {error && <span class="error-text">{error}</span>}
+            {error && (
+                <span className="whitespace-nowrap text-[11px] text-danger">
+                    {error}
+                </span>
+            )}
             <button
                 type="button"
-                class="remove-player-btn"
+                className="self-center border-none bg-transparent px-1 text-[14px] leading-none text-muted hover:text-danger"
                 title={`Remove ${player}`}
-                onClick={() => removePlayer(player)}
+                onClick={() => dispatch({ type: "removePlayer", player })}
             >
                 &times;
             </button>
@@ -87,34 +90,38 @@ function PlayerNameInput({ player, allPlayers }: {
 }
 
 export function GameSetupPanel() {
-    const setup: GameSetup = setupSignal.value;
-    const knownCards = knownCardsSignal.value;
-    const handSizeMap = new Map(handSizesSignal.value);
-    const result = deductionResultSignal.value;
+    const { state, dispatch, derived, hasGameData } = useClue();
+    const setup: GameSetup = state.setup;
+    const knownCards = state.knownCards;
+    const handSizeMap = new Map(state.handSizes);
+    const result = derived.deductionResult;
     const defaults = new Map(defaultHandSizes(setup));
 
     const totalDealt = allCards(setup).length - caseFileSize(setup);
-    const setHandSizes = setup.players
+    const setHandSizesArr = setup.players
         .map(p => handSizeMap.get(p))
         .filter((n): n is number => typeof n === "number");
     const allHandSizesSet =
-        setHandSizes.length === setup.players.length && setup.players.length > 0;
-    const handSizesTotal = setHandSizes.reduce((a, b) => a + b, 0);
+        setHandSizesArr.length === setup.players.length &&
+        setup.players.length > 0;
+    const handSizesTotal = setHandSizesArr.reduce((a, b) => a + b, 0);
     const handSizeMismatch =
         allHandSizesSet && handSizesTotal !== totalDealt;
 
     const onNewGame = () => {
         if (hasGameData() && !window.confirm(NEW_GAME_CONFIRM)) return;
-        newGame();
+        dispatch({ type: "newGame" });
     };
 
     const onHandSizeChange = (player: Player, raw: string) => {
         if (raw === "") {
-            setHandSizeFor(player, undefined);
+            dispatch({ type: "setHandSize", player, size: undefined });
             return;
         }
         const n = Number(raw);
-        if (Number.isFinite(n) && n >= 0) setHandSizeFor(player, n);
+        if (Number.isFinite(n) && n >= 0) {
+            dispatch({ type: "setHandSize", player, size: n });
+        }
     };
 
     const isKnown = (player: Player, card: Card): boolean =>
@@ -125,24 +132,31 @@ export function GameSetupPanel() {
             kc => kc.player === player && kc.card === card,
         );
         if (index >= 0) {
-            removeKnownCard(index);
+            dispatch({ type: "removeKnownCard", index });
         } else {
-            addKnownCard({ player, card });
+            dispatch({ type: "addKnownCard", card: { player, card } });
         }
     };
 
-    const categories: ReadonlyArray<{ name: string; cards: ReadonlyArray<Card> }> =
-        setup.categories.map(c => ({ name: String(c.name), cards: c.cards }));
+    const categories: ReadonlyArray<{
+        name: string;
+        cards: ReadonlyArray<Card>;
+    }> = setup.categories.map(c => ({
+        name: String(c.name),
+        cards: c.cards,
+    }));
 
     const cardSpan = setup.players.length + 2; // label + players + add column
 
     return (
-        <section class="panel">
-            <div class="panel-header">
-                <h2>Game setup</h2>
+        <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="m-0 text-[16px] uppercase tracking-[0.05em] text-accent">
+                    Game setup
+                </h2>
                 <button
                     type="button"
-                    class="new-game-btn"
+                    className="cursor-pointer rounded border-none bg-accent px-3.5 py-1.5 text-[13px] text-white hover:bg-accent-hover"
                     onClick={onNewGame}
                 >
                     New game
@@ -150,91 +164,120 @@ export function GameSetupPanel() {
             </div>
 
             {handSizeMismatch && (
-                <div class="validation-banner warning">
+                <div className="mb-3 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning">
                     Hand sizes total {handSizesTotal} card
-                    {handSizesTotal === 1 ? "" : "s"}; should total
-                    &nbsp;{totalDealt} after the {caseFileSize(setup)} case-file
+                    {handSizesTotal === 1 ? "" : "s"}; should total&nbsp;
+                    {totalDealt} after the {caseFileSize(setup)} case-file
                     cards.
                 </div>
             )}
 
             {result._tag === "Contradiction" && (
-                <div class="validation-banner error">
+                <div className="mb-3 rounded-[var(--radius)] border border-danger-border bg-danger-bg px-3 py-2 text-[13px] text-danger">
                     <strong>Contradiction:</strong> {result.error.reason}
                 </div>
             )}
 
-            <div class="game-setup-grid-wrap">
-                <table class="game-setup-grid">
+            <div className="overflow-x-auto rounded-[var(--radius)] border border-border">
+                <table className="w-full border-collapse text-[12px]">
                     <thead>
                         <tr>
-                            <th class="row-label-corner"></th>
+                            <th className="border border-border bg-row-header px-1.5 py-1 text-left"></th>
                             {setup.players.map(p => (
-                                <th key={p} class="player-header">
+                                <th
+                                    key={p}
+                                    className="min-w-[110px] border border-border bg-row-header px-1 py-1 align-top"
+                                >
                                     <PlayerNameInput
                                         player={p}
                                         allPlayers={setup.players}
                                     />
                                 </th>
                             ))}
-                            <th class="add-player-cell">
+                            <th className="w-8 border border-border bg-row-header px-1.5 py-1 text-center">
                                 <button
                                     type="button"
-                                    class="add-player-btn"
+                                    className="h-6 w-6 cursor-pointer rounded border-none bg-accent text-[16px] leading-none text-white hover:bg-accent-hover"
                                     title="Add player"
-                                    onClick={addPlayer}
+                                    onClick={() =>
+                                        dispatch({ type: "addPlayer" })
+                                    }
                                 >
                                     +
                                 </button>
                             </th>
                         </tr>
-                        <tr class="hand-size-row">
-                            <th class="row-label">Hand size</th>
+                        <tr>
+                            <th className="whitespace-nowrap border border-border bg-row-header px-1.5 py-1 text-left font-semibold">
+                                Hand size
+                            </th>
                             {setup.players.map(p => {
                                 const current = handSizeMap.get(p);
                                 const def = defaults.get(p);
                                 return (
-                                    <td key={p}>
+                                    <td
+                                        key={p}
+                                        className="border border-border px-1.5 py-1 text-center"
+                                    >
                                         <input
                                             type="number"
                                             min={0}
                                             max={allCards(setup).length}
-                                            value={current === undefined
-                                                ? ""
-                                                : String(current)}
-                                            placeholder={def === undefined
-                                                ? ""
-                                                : String(def)}
-                                            onInput={e => onHandSizeChange(
-                                                p,
-                                                (e.target as HTMLInputElement).value,
-                                            )}
+                                            className="w-14 rounded border border-border p-0.5 text-center text-[12px]"
+                                            value={
+                                                current === undefined
+                                                    ? ""
+                                                    : String(current)
+                                            }
+                                            placeholder={
+                                                def === undefined
+                                                    ? ""
+                                                    : String(def)
+                                            }
+                                            onChange={e =>
+                                                onHandSizeChange(
+                                                    p,
+                                                    e.currentTarget.value,
+                                                )
+                                            }
                                         />
                                     </td>
                                 );
                             })}
-                            <td></td>
+                            <td className="border border-border"></td>
                         </tr>
                     </thead>
                     <tbody>
                         {categories.flatMap(cat => [
-                            <tr class="category-row" key={`h-${cat.name}`}>
-                                <th colSpan={cardSpan}>{cat.name}</th>
+                            <tr key={`h-${cat.name}`}>
+                                <th
+                                    colSpan={cardSpan}
+                                    className="border border-border bg-accent px-1.5 py-1 text-left text-[10px] uppercase tracking-[0.05em] text-white"
+                                >
+                                    {cat.name}
+                                </th>
                             </tr>,
                             ...cat.cards.map(card => (
                                 <tr key={card}>
-                                    <th class="card-name">{card}</th>
+                                    <th className="whitespace-nowrap border border-border bg-white px-1.5 py-1 text-left font-normal">
+                                        {card}
+                                    </th>
                                     {setup.players.map(p => (
-                                        <td key={p} class="checklist-cell">
+                                        <td
+                                            key={p}
+                                            className="w-8 min-w-8 border border-border px-1.5 py-1 text-center"
+                                        >
                                             <input
                                                 type="checkbox"
+                                                className="m-0 cursor-pointer"
                                                 checked={isKnown(p, card)}
                                                 onChange={() =>
-                                                    toggleKnownCard(p, card)}
+                                                    toggleKnownCard(p, card)
+                                                }
                                             />
                                         </td>
                                     ))}
-                                    <td></td>
+                                    <td className="border border-border"></td>
                                 </tr>
                             )),
                         ])}

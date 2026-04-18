@@ -11,6 +11,11 @@ dist/
 dist-ssr
 *.local
 
+# Next.js
+.next/
+out/
+next-env.d.ts
+
 # VSCode
 .vscode/*
 !.vscode/extensions.json

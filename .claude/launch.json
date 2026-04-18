@@ -2,16 +2,16 @@
     "version": "0.0.1",
     "configurations": [
         {
-            "name": "vite-dev",
+            "name": "next-dev",
             "runtimeExecutable": "pnpm",
-            "runtimeArgs": ["dev", "--host"],
-            "port": 5173
+            "runtimeArgs": ["dev"],
+            "port": 3000
         },
         {
-            "name": "vite-preview",
+            "name": "next-start",
             "runtimeExecutable": "pnpm",
-            "runtimeArgs": ["preview", "--host"],
-            "port": 4173
+            "runtimeArgs": ["start"],
+            "port": 3000
         }
     ]
 }
