@@ -1,6 +1,7 @@
 import { HashMap } from "effect";
-import { Card, CardCategory, CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
-import { cardsInCategory, CLASSIC_SETUP_3P } from "./GameSetup";
+import { CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
+import { cardIdsInCategory, CLASSIC_SETUP_3P } from "./GameSetup";
+import { cardByName } from "./test-utils/CardByName";
 import {
     Cell,
     emptyKnowledge,
@@ -16,20 +17,25 @@ import deduce from "./Deducer";
 import "./test-utils/EffectExpectEquals";
 
 const setup = CLASSIC_SETUP_3P;
-const suspects = cardsInCategory(setup, CardCategory("Suspects"));
+// Suspects category id is the branded string "category-suspects" in the
+// preset. Look up by the category's own id.
+const suspectsCategory = setup.categories.find(c => c.name === "Suspects")!;
+const suspects = cardIdsInCategory(setup, suspectsCategory.id);
 const A = Player("Anisha");
 const B = Player("Bob");
 const C = Player("Cho");
 
-// Shorthands for a handful of cards we'll reference in tests.
-const MUSTARD  = Card("Col. Mustard");
-const PLUM     = Card("Prof. Plum");
-const KNIFE    = Card("Knife");
-const REVOLVER = Card("Revolver");
-const ROPE     = Card("Rope");
-const KITCHEN  = Card("Kitchen");
-const LIBRARY  = Card("Library");
-const CONSERV  = Card("Conservatory");
+// Shorthands: look up card ids by display name from the preset. With the
+// id/name split, raw `Card("Col. Mustard")` would construct a brand new
+// unrelated id.
+const MUSTARD  = cardByName(setup, "Col. Mustard");
+const PLUM     = cardByName(setup, "Prof. Plum");
+const KNIFE    = cardByName(setup, "Knife");
+const REVOLVER = cardByName(setup, "Revolver");
+const ROPE     = cardByName(setup, "Rope");
+const KITCHEN  = cardByName(setup, "Kitchen");
+const LIBRARY  = cardByName(setup, "Library");
+const CONSERV  = cardByName(setup, "Conservatory");
 
 describe("deduce", () => {
     test("empty inputs produce empty knowledge", () => {

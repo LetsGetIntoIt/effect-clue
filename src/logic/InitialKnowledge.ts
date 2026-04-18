@@ -4,7 +4,7 @@ import {
     PlayerOwner,
 } from "./GameObjects";
 import {
-    allCards,
+    allCardIds,
     defaultHandSizes,
     GameSetup,
 } from "./GameSetup";
@@ -49,7 +49,7 @@ export const buildInitialKnowledge = (
     handSizes: ReadonlyArray<readonly [Player, number]>,
 ): Knowledge => {
     let k = emptyKnowledge;
-    const deck = new Set(allCards(setup));
+    const deck = new Set(allCardIds(setup));
     for (const { player, card } of knownCards) {
         if (!setup.players.includes(player)) continue;
         if (!deck.has(card)) continue;

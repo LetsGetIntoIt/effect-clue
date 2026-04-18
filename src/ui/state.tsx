@@ -13,10 +13,17 @@ import {
 import {
     Card,
     CardCategory,
+    newCardId,
+    newCategoryId,
     Player,
 } from "../logic/GameObjects";
 import {
+    allCardEntries,
+    Category,
     DEFAULT_SETUP,
+    disambiguateName,
+    findCardEntry,
+    findCategoryEntry,
     GameSetup,
     newGameSetup,
 } from "../logic/GameSetup";
@@ -66,15 +73,21 @@ export interface DraftSuggestion {
 /**
  * Everything dispatch-able from the UI. One concrete action per
  * thing-the-user-might-do; the reducer below enumerates them exactly.
+ *
+ * Category / card operations come in id-based flavours (for inline grid
+ * edits that know the stable id) and are resolved against the current
+ * setup inside the reducer.
  */
 export type ClueAction =
     | { type: "newGame" }
     | { type: "loadPreset"; setup: GameSetup }
     | { type: "setSetup"; setup: GameSetup }
     | { type: "addCategory" }
-    | { type: "removeCategory"; categoryIndex: number }
-    | { type: "addCardToCategory"; categoryIndex: number }
-    | { type: "removeCard"; categoryIndex: number; cardIndex: number }
+    | { type: "removeCategoryById"; categoryId: CardCategory }
+    | { type: "addCardToCategoryById"; categoryId: CardCategory }
+    | { type: "removeCardById"; cardId: Card }
+    | { type: "renameCategory"; categoryId: CardCategory; name: string }
+    | { type: "renameCard"; cardId: Card; name: string }
     | { type: "addKnownCard"; card: KnownCard }
     | { type: "removeKnownCard"; index: number }
     | { type: "setHandSize"; player: Player; size: number | undefined }
@@ -116,8 +129,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
         case "loadPreset":
             // Swap to a preset deck and discard anything tied to the
             // previous one. (Hands, suggestions, etc. reference card
-            // and player objects from the old setup, so we can't
-            // keep them.)
+            // ids from the old setup.)
             return {
                 ...state,
                 setup: action.setup,
@@ -127,75 +139,138 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
             };
 
         case "setSetup":
-            // Inline category/card/player edits. We DON'T clear the
-            // input state — we just filter it back to things still
-            // present in the new setup. That lets the user rename a
-            // card or add a category mid-game without losing
-            // unrelated progress.
             return pruneSessionToSetup(state, action.setup);
 
         case "addCategory": {
-            const name = nextUniqueCategoryName(state.setup);
-            const card = nextUniqueCardName(state.setup);
+            const existingCategoryNames = state.setup.categories.map(c => c.name);
+            const existingCardNames = allCardEntries(state.setup).map(c => c.name);
+            const catName = disambiguateName(
+                nextNumberedCategoryName(existingCategoryNames),
+                existingCategoryNames,
+            );
+            const cardName = disambiguateName(
+                nextNumberedCardName(existingCardNames),
+                existingCardNames,
+            );
+            const newCat: Category = {
+                id: newCategoryId(),
+                name: catName,
+                cards: [{ id: newCardId(), name: cardName }],
+            };
             return {
                 ...state,
                 setup: GameSetup({
                     players: state.setup.players,
-                    categories: [
-                        ...state.setup.categories,
-                        {
-                            name: CardCategory(name),
-                            cards: [Card(card)],
-                        },
-                    ],
+                    categories: [...state.setup.categories, newCat],
                 }),
             };
         }
 
-        case "removeCategory": {
+        case "removeCategoryById": {
             if (state.setup.categories.length <= 1) return state;
             const nextSetup = GameSetup({
                 players: state.setup.players,
                 categories: state.setup.categories.filter(
-                    (_, i) => i !== action.categoryIndex,
+                    c => c.id !== action.categoryId,
                 ),
             });
             return pruneSessionToSetup(state, nextSetup);
         }
 
-        case "addCardToCategory": {
-            const name = nextUniqueCardName(state.setup);
+        case "addCardToCategoryById": {
+            const existingCardNames = allCardEntries(state.setup).map(c => c.name);
+            const cardName = disambiguateName(
+                nextNumberedCardName(existingCardNames),
+                existingCardNames,
+            );
             return {
                 ...state,
                 setup: GameSetup({
                     players: state.setup.players,
-                    categories: state.setup.categories.map((c, i) =>
-                        i === action.categoryIndex
-                            ? { ...c, cards: [...c.cards, Card(name)] }
+                    categories: state.setup.categories.map(c =>
+                        c.id === action.categoryId
+                            ? {
+                                  ...c,
+                                  cards: [
+                                      ...c.cards,
+                                      { id: newCardId(), name: cardName },
+                                  ],
+                              }
                             : c,
                     ),
                 }),
             };
         }
 
-        case "removeCard": {
-            const target = state.setup.categories[action.categoryIndex];
+        case "removeCardById": {
+            const target = state.setup.categories.find(c =>
+                c.cards.some(e => e.id === action.cardId),
+            );
             if (!target) return state;
             if (target.cards.length <= 1) return state;
             const nextSetup = GameSetup({
                 players: state.setup.players,
-                categories: state.setup.categories.map((c, i) =>
-                    i === action.categoryIndex
+                categories: state.setup.categories.map(c =>
+                    c.id === target.id
                         ? {
                               ...c,
                               cards: c.cards.filter(
-                                  (_, ci) => ci !== action.cardIndex,
+                                  e => e.id !== action.cardId,
                               ),
                           }
                         : c,
                 ),
             });
             return pruneSessionToSetup(state, nextSetup);
+        }
+
+        case "renameCategory": {
+            const current = findCategoryEntry(state.setup, action.categoryId);
+            if (!current) return state;
+            const proposed = action.name.trim();
+            if (proposed.length === 0) return state;
+            if (proposed === current.name) return state;
+            const othersNames = state.setup.categories
+                .filter(c => c.id !== action.categoryId)
+                .map(c => c.name);
+            const finalName = disambiguateName(proposed, othersNames);
+            return {
+                ...state,
+                setup: GameSetup({
+                    players: state.setup.players,
+                    categories: state.setup.categories.map(c =>
+                        c.id === action.categoryId
+                            ? { ...c, name: finalName }
+                            : c,
+                    ),
+                }),
+            };
+        }
+
+        case "renameCard": {
+            const current = findCardEntry(state.setup, action.cardId);
+            if (!current) return state;
+            const proposed = action.name.trim();
+            if (proposed.length === 0) return state;
+            if (proposed === current.name) return state;
+            const othersNames = allCardEntries(state.setup)
+                .filter(e => e.id !== action.cardId)
+                .map(e => e.name);
+            const finalName = disambiguateName(proposed, othersNames);
+            return {
+                ...state,
+                setup: GameSetup({
+                    players: state.setup.players,
+                    categories: state.setup.categories.map(c => ({
+                        ...c,
+                        cards: c.cards.map(e =>
+                            e.id === action.cardId
+                                ? { ...e, name: finalName }
+                                : e,
+                        ),
+                    })),
+                }),
+            };
         }
 
         case "addKnownCard":
@@ -579,20 +654,22 @@ export function ClueProvider({ children }: { children: ReactNode }) {
 }
 
 /** Pick the next "Category N" that doesn't collide with any existing one. */
-const nextUniqueCategoryName = (setup: GameSetup): string => {
-    const existing = new Set(setup.categories.map(c => String(c.name)));
+const nextNumberedCategoryName = (
+    existingNames: ReadonlyArray<string>,
+): string => {
+    const taken = new Set(existingNames);
     let n = 1;
-    while (existing.has(`Category ${n}`)) n++;
+    while (taken.has(`Category ${n}`)) n++;
     return `Category ${n}`;
 };
 
 /** Pick the next "Card N" that doesn't collide anywhere in the deck. */
-const nextUniqueCardName = (setup: GameSetup): string => {
-    const existing = new Set(
-        setup.categories.flatMap(c => c.cards.map(card => String(card))),
-    );
+const nextNumberedCardName = (
+    existingNames: ReadonlyArray<string>,
+): string => {
+    const taken = new Set(existingNames);
     let n = 1;
-    while (existing.has(`Card ${n}`)) n++;
+    while (taken.has(`Card ${n}`)) n++;
     return `Card ${n}`;
 };
 
@@ -609,19 +686,20 @@ const groupKnownCardsByPlayer = (
 };
 
 /**
- * When the user edits the setup inline (e.g. renames a category or
- * removes a card), filter out references to players/cards that no
- * longer exist. Suggestions whose suggester is gone or whose card
- * list references a removed card are dropped — there's no sensible
- * way to keep them.
+ * When the user edits the setup (e.g. removes a card), filter out
+ * references to players/cards that no longer exist. Suggestions whose
+ * suggester or card list references a removed entity are dropped.
+ *
+ * Note: renames do NOT prune anything — ids stay stable, references
+ * continue to resolve. Only add/remove changes the id set.
  */
 const pruneSessionToSetup = (
     state: ClueState,
     setup: GameSetup,
 ): ClueState => {
     const playerSet = new Set(setup.players.map(p => String(p)));
-    const cardSet = new Set(
-        setup.categories.flatMap(c => c.cards.map(card => String(card))),
+    const cardIdSet = new Set(
+        allCardEntries(setup).map(e => String(e.id)),
     );
     return {
         ...state,
@@ -629,7 +707,7 @@ const pruneSessionToSetup = (
         knownCards: state.knownCards.filter(
             kc =>
                 playerSet.has(String(kc.player)) &&
-                cardSet.has(String(kc.card)),
+                cardIdSet.has(String(kc.card)),
         ),
         handSizes: state.handSizes.filter(([p]) =>
             playerSet.has(String(p)),
@@ -637,7 +715,7 @@ const pruneSessionToSetup = (
         suggestions: state.suggestions
             .filter(s => playerSet.has(String(s.suggester)))
             .filter(s =>
-                s.cards.every(c => cardSet.has(String(c))),
+                s.cards.every(c => cardIdSet.has(String(c))),
             )
             .map(s => ({
                 ...s,
@@ -649,7 +727,7 @@ const pruneSessionToSetup = (
                         ? s.refuter
                         : undefined,
                 seenCard:
-                    s.seenCard && cardSet.has(String(s.seenCard))
+                    s.seenCard && cardIdSet.has(String(s.seenCard))
                         ? s.seenCard
                         : undefined,
             })),

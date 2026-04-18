@@ -7,8 +7,8 @@ import {
     PlayerOwner,
 } from "./GameObjects";
 import {
-    allCards,
-    cardsInCategory,
+    allCardIds,
+    cardIdsInCategory,
     GameSetup,
 } from "./GameSetup";
 
@@ -24,7 +24,7 @@ export const caseFileProgress = (
     if (setup.categories.length === 0) return 1;
     let solved = 0;
     for (const category of setup.categories) {
-        if (caseFileAnswerFor(setup, knowledge, category.name) !== undefined) {
+        if (caseFileAnswerFor(setup, knowledge, category.id) !== undefined) {
             solved += 1;
         }
     }
@@ -41,7 +41,7 @@ export const caseFileAnswerFor = (
     category: CardCategory,
 ): Card | undefined => {
     const caseFile = CaseFileOwner();
-    const cards = cardsInCategory(setup, category);
+    const cards = cardIdsInCategory(setup, category);
     for (const card of cards) {
         if (getCellByOwnerCard(knowledge, caseFile, card) === Y) {
             return card;
@@ -60,7 +60,7 @@ export const caseFileCandidatesFor = (
     category: CardCategory,
 ): ReadonlyArray<Card> => {
     const caseFile = CaseFileOwner();
-    return cardsInCategory(setup, category).filter(
+    return cardIdsInCategory(setup, category).filter(
         card => getCellByOwnerCard(knowledge, caseFile, card) !== N,
     );
 };
@@ -103,7 +103,7 @@ const cartesianCandidates = function* (
     knowledge: Knowledge,
 ): Generator<ReadonlyArray<Card>, void, undefined> {
     const perCategory = setup.categories.map(c =>
-        caseFileCandidatesFor(setup, knowledge, c.name));
+        caseFileCandidatesFor(setup, knowledge, c.id));
     if (perCategory.some(list => list.length === 0)) return;
 
     const idx = new Array<number>(perCategory.length).fill(0);
@@ -174,7 +174,7 @@ export const recommendSuggestions = (
         let caseFileOpennessScore = 1;
         for (const category of setup.categories) {
             const candidates = caseFileCandidatesFor(
-                setup, knowledge, category.name);
+                setup, knowledge, category.id);
             caseFileOpennessScore *= candidates.length;
         }
 
@@ -289,4 +289,4 @@ export const probabilitiesForAllCards = (
     setup: GameSetup,
     knowledge: Knowledge,
 ): ReadonlyArray<CardProbabilities> =>
-    allCards(setup).map(card => probabilitiesForCard(setup, knowledge, card));
+    allCardIds(setup).map(card => probabilitiesForCard(setup, knowledge, card));

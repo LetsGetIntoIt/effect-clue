@@ -4,10 +4,13 @@ import { useEffect, useState } from "react";
 import {
     Card,
     CardCategory,
+    newCardId,
+    newCategoryId,
     Player,
 } from "../../logic/GameObjects";
 import {
     Category,
+    disambiguateName,
     GameSetup,
     validateSetup,
 } from "../../logic/GameSetup";
@@ -18,31 +21,65 @@ import { useClue } from "../state";
  * local (not in the reducer) until the user clicks Apply — otherwise
  * every keystroke in a card name field would dispatch a setSetup and
  * prune the session repeatedly.
+ *
+ * Every category / card in the draft carries the stable id it had on
+ * the live setup; newly-added ones get fresh ids. On Apply we build a
+ * new setup preserving those ids, so references (known cards,
+ * suggestions) survive the round trip.
  */
-interface DraftCategory {
+interface DraftCard {
+    readonly id: Card;
     readonly name: string;
-    readonly cards: ReadonlyArray<string>;
+}
+interface DraftCategory {
+    readonly id: CardCategory;
+    readonly name: string;
+    readonly cards: ReadonlyArray<DraftCard>;
 }
 
 const categoriesToDraft = (
     categories: ReadonlyArray<Category>,
 ): ReadonlyArray<DraftCategory> =>
     categories.map(c => ({
-        name: String(c.name),
-        cards: c.cards.map(card => String(card)),
+        id: c.id,
+        name: c.name,
+        cards: c.cards.map(card => ({ id: card.id, name: card.name })),
     }));
 
 const draftToSetup = (
     players: ReadonlyArray<Player>,
     draft: ReadonlyArray<DraftCategory>,
-): GameSetup =>
-    GameSetup({
-        players,
-        categories: draft.map(c => ({
-            name: CardCategory(c.name.trim()),
-            cards: c.cards.map(card => Card(card.trim())),
-        })),
+): GameSetup => {
+    // Disambiguate as we go: every card name must be unique across the
+    // entire deck, every category name must be unique among categories.
+    // Trimming here means blank-ish entries still fail validateSetup,
+    // which is what we want.
+    const seenCategoryNames: string[] = [];
+    const seenCardNames: string[] = [];
+
+    const categories: Category[] = draft.map(c => {
+        const trimmedName = c.name.trim();
+        const resolvedCatName =
+            trimmedName.length === 0
+                ? ""
+                : disambiguateName(trimmedName, seenCategoryNames);
+        seenCategoryNames.push(resolvedCatName);
+
+        const cards = c.cards.map(card => {
+            const trimmedCardName = card.name.trim();
+            const resolvedCardName =
+                trimmedCardName.length === 0
+                    ? ""
+                    : disambiguateName(trimmedCardName, seenCardNames);
+            seenCardNames.push(resolvedCardName);
+            return { id: card.id, name: resolvedCardName };
+        });
+
+        return { id: c.id, name: resolvedCatName, cards };
     });
+
+    return GameSetup({ players, categories });
+};
 
 const BUTTON_ACCENT =
     "cursor-pointer rounded border-none bg-accent px-3 py-1 text-[13px] text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-unknown";
@@ -60,8 +97,6 @@ const INPUT =
  *
  * We mirror the setup into a local draft so we can validate & revert
  * without touching the reducer until the user explicitly confirms.
- * Validation failures keep the Apply button disabled and show a
- * summary block at the top.
  */
 export function CategoryEditor() {
     const { state, dispatch } = useClue();
@@ -72,9 +107,6 @@ export function CategoryEditor() {
         categoriesToDraft(setup.categories),
     );
 
-    // Re-seed the draft when the setup changes externally (e.g. the
-    // user clicks a preset button while the editor is closed, or
-    // state hydrates from the URL).
     useEffect(() => {
         if (!open) setDraft(categoriesToDraft(setup.categories));
     }, [setup.categories, open]);
@@ -92,17 +124,24 @@ export function CategoryEditor() {
         setCategory(index, c => ({ ...c, name }));
     };
 
-    const updateCard = (catIdx: number, cardIdx: number, card: string) => {
+    const updateCard = (
+        catIdx: number,
+        cardIdx: number,
+        nextName: string,
+    ) => {
         setCategory(catIdx, c => ({
             ...c,
             cards: c.cards.map((existing, i) =>
-                i === cardIdx ? card : existing,
+                i === cardIdx ? { ...existing, name: nextName } : existing,
             ),
         }));
     };
 
     const addCard = (catIdx: number) => {
-        setCategory(catIdx, c => ({ ...c, cards: [...c.cards, ""] }));
+        setCategory(catIdx, c => ({
+            ...c,
+            cards: [...c.cards, { id: newCardId(), name: "" }],
+        }));
     };
 
     const removeCard = (catIdx: number, cardIdx: number) => {
@@ -115,7 +154,11 @@ export function CategoryEditor() {
     const addCategory = () => {
         setDraft(prev => [
             ...prev,
-            { name: `Category ${prev.length + 1}`, cards: [""] },
+            {
+                id: newCategoryId(),
+                name: `Category ${prev.length + 1}`,
+                cards: [{ id: newCardId(), name: "" }],
+            },
         ]);
     };
 
@@ -173,7 +216,7 @@ export function CategoryEditor() {
             <div className="flex flex-col gap-3">
                 {draft.map((cat, catIdx) => (
                     <div
-                        key={catIdx}
+                        key={String(cat.id)}
                         className="rounded border border-border bg-white p-2"
                     >
                         <div className="mb-2 flex items-center gap-2">
@@ -200,15 +243,15 @@ export function CategoryEditor() {
                             </button>
                         </div>
                         <ul className="flex flex-col gap-1 pl-0">
-                            {cat.cards.map((cardName, cardIdx) => (
+                            {cat.cards.map((card, cardIdx) => (
                                 <li
-                                    key={cardIdx}
+                                    key={String(card.id)}
                                     className="flex items-center gap-2"
                                 >
                                     <input
                                         type="text"
                                         className={INPUT}
-                                        value={cardName}
+                                        value={card.name}
                                         placeholder="Card name"
                                         onChange={e =>
                                             updateCard(

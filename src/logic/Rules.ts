@@ -14,7 +14,7 @@ import {
     Y,
 } from "./Knowledge";
 import {
-    allCards,
+    allCardIds,
     allOwners,
     GameSetup,
 } from "./GameSetup";
@@ -152,12 +152,14 @@ export const cardOwnershipSlices = (
     setup: GameSetup,
 ): ReadonlyArray<Slice> => {
     const owners = allOwners(setup);
-    return allCards(setup).map(card => ({
-        cells: owners.map(owner => Cell(owner, card)),
-        yCount: 1,
-        label: `card ownership: ${card}`,
-        kind: { kind: "card-ownership" as const, card },
-    }));
+    return setup.categories.flatMap(category =>
+        category.cards.map(entry => ({
+            cells: owners.map(owner => Cell(owner, entry.id)),
+            yCount: 1,
+            label: `card ownership: ${entry.name}`,
+            kind: { kind: "card-ownership" as const, card: entry.id },
+        })),
+    );
 };
 
 /**
@@ -173,7 +175,7 @@ export const playerHandSlices = (
         const handSize = getHandSize(knowledge, owner);
         if (handSize === undefined) return [];
         return [{
-            cells: allCards(setup).map(card => Cell(owner, card)),
+            cells: allCardIds(setup).map(card => Cell(owner, card)),
             yCount: handSize,
             label: `hand size: ${player}`,
             kind: { kind: "player-hand" as const, player },
@@ -190,10 +192,13 @@ export const caseFileCategorySlices = (
 ): ReadonlyArray<Slice> => {
     const caseFile = CaseFileOwner();
     return setup.categories.map(category => ({
-        cells: category.cards.map(card => Cell(caseFile, card)),
+        cells: category.cards.map(entry => Cell(caseFile, entry.id)),
         yCount: 1,
         label: `case file: ${category.name}`,
-        kind: { kind: "case-file-category" as const, category: category.name },
+        kind: {
+            kind: "case-file-category" as const,
+            category: category.id,
+        },
     }));
 };
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
-import { categoryOf } from "../../logic/GameSetup";
+import { cardName, categoryOfCard } from "../../logic/GameSetup";
 import { recommendSuggestions } from "../../logic/Recommender";
 import {
     DraftSuggestion,
@@ -43,14 +43,21 @@ export function SuggestionLogPanel() {
  * by the category's name. Cards whose category isn't in the current
  * setup are dropped — the form falls back to blank for that slot.
  */
+/**
+ * Map a suggestion's `cards` array (ids) back to one card id per category,
+ * keyed by the category id (as a string). Cards whose category isn't in
+ * the current setup are dropped — the form falls back to blank for that
+ * slot. Cards are indexed by id here, not name, so renames don't break
+ * the form's pre-population.
+ */
 const pickCardsByCategory = (
     suggestion: DraftSuggestion,
     setup: ReturnType<typeof useClue>["state"]["setup"],
 ): Map<string, string> => {
     const out = new Map<string, string>();
-    for (const card of suggestion.cards) {
-        const cat = categoryOf(setup, card);
-        if (cat) out.set(String(cat), String(card));
+    for (const cardId of suggestion.cards) {
+        const catId = categoryOfCard(setup, cardId);
+        if (catId) out.set(String(catId), String(cardId));
     }
     return out;
 };
@@ -84,7 +91,7 @@ function AddSuggestion() {
         suggester !== "" &&
         setup.categories.length > 0 &&
         setup.categories.every(
-            c => (cardByCategory.get(String(c.name)) ?? "") !== "",
+            c => (cardByCategory.get(String(c.id)) ?? "") !== "",
         );
 
     const setCardForCategory = (categoryName: string, value: string) => {
@@ -120,7 +127,7 @@ function AddSuggestion() {
         e.preventDefault();
         if (!canSubmit) return;
         const cards = setup.categories.map(c =>
-            Card(cardByCategory.get(String(c.name)) ?? ""),
+            Card(cardByCategory.get(String(c.id)) ?? ""),
         );
         const nonRefuters = setup.players.filter(p =>
             passedPlayers.has(String(p)),
@@ -149,7 +156,7 @@ function AddSuggestion() {
     );
 
     const pickedCards = setup.categories
-        .map(c => cardByCategory.get(String(c.name)) ?? "")
+        .map(c => cardByCategory.get(String(c.id)) ?? "")
         .filter(c => c !== "");
 
     return (
@@ -179,17 +186,17 @@ function AddSuggestion() {
                     </label>
                 </div>
                 {setup.categories.map(category => {
-                    const name = String(category.name);
-                    const value = cardByCategory.get(name) ?? "";
+                    const catKey = String(category.id);
+                    const value = cardByCategory.get(catKey) ?? "";
                     return (
-                        <div key={name}>
+                        <div key={catKey}>
                             <label className={LABEL_ROW}>
-                                {name}:
+                                {category.name}:
                                 <select
                                     value={value}
                                     onChange={e =>
                                         setCardForCategory(
-                                            name,
+                                            catKey,
                                             e.currentTarget.value,
                                         )
                                     }
@@ -197,9 +204,12 @@ function AddSuggestion() {
                                     required
                                 >
                                     <option value="">—</option>
-                                    {category.cards.map(c => (
-                                        <option key={c} value={c}>
-                                            {c}
+                                    {category.cards.map(entry => (
+                                        <option
+                                            key={String(entry.id)}
+                                            value={String(entry.id)}
+                                        >
+                                            {entry.name}
                                         </option>
                                     ))}
                                 </select>
@@ -240,9 +250,9 @@ function AddSuggestion() {
                                 className={SELECT_CLASS}
                             >
                                 <option value="">— unknown —</option>
-                                {pickedCards.map(c => (
-                                    <option key={c} value={c}>
-                                        {c}
+                                {pickedCards.map(cardId => (
+                                    <option key={cardId} value={cardId}>
+                                        {cardName(setup, Card(cardId))}
                                     </option>
                                 ))}
                             </select>
@@ -367,7 +377,7 @@ function Recommendations() {
                             {r.cards.map((c, ci) => (
                                 <span key={ci}>
                                     {ci > 0 && " + "}
-                                    <strong>{c}</strong>
+                                    <strong>{cardName(setup, c)}</strong>
                                 </span>
                             ))}
                             <span className="text-muted">
@@ -384,6 +394,7 @@ function Recommendations() {
 
 function PriorSuggestions() {
     const { state, dispatch } = useClue();
+    const setup = state.setup;
     const suggestions = state.suggestions;
     const [editingId, setEditingId] = useState<string | null>(null);
     return (
@@ -424,7 +435,9 @@ function PriorSuggestions() {
                                 <div>
                                     <strong>{s.suggester}</strong>{" "}
                                     suggested&nbsp;
-                                    {s.cards.join(" + ")}
+                                    {s.cards
+                                        .map(id => cardName(setup, id))
+                                        .join(" + ")}
                                 </div>
                                 <div className="text-[13px] text-muted">
                                     {s.refuter ? (
@@ -434,7 +447,8 @@ function PriorSuggestions() {
                                             {s.seenCard && (
                                                 <>
                                                     {" "}
-                                                    (showed {s.seenCard})
+                                                    (showed{" "}
+                                                    {cardName(setup, s.seenCard)})
                                                 </>
                                             )}
                                         </>
@@ -509,7 +523,7 @@ function EditSuggestionRow({
         suggester !== "" &&
         setup.categories.length > 0 &&
         setup.categories.every(
-            c => (cardByCategory.get(String(c.name)) ?? "") !== "",
+            c => (cardByCategory.get(String(c.id)) ?? "") !== "",
         );
 
     const setCardForCategory = (categoryName: string, value: string) => {
@@ -537,7 +551,7 @@ function EditSuggestionRow({
     const handleSave = () => {
         if (!canSave) return;
         const cards = setup.categories.map(c =>
-            Card(cardByCategory.get(String(c.name)) ?? ""),
+            Card(cardByCategory.get(String(c.id)) ?? ""),
         );
         const nonRefuters = setup.players.filter(p =>
             passedPlayers.has(String(p)),
@@ -557,7 +571,7 @@ function EditSuggestionRow({
     );
 
     const pickedCards = setup.categories
-        .map(c => cardByCategory.get(String(c.name)) ?? "")
+        .map(c => cardByCategory.get(String(c.id)) ?? "")
         .filter(c => c !== "");
 
     return (
@@ -580,25 +594,28 @@ function EditSuggestionRow({
                     </select>
                 </label>
                 {setup.categories.map(category => {
-                    const name = String(category.name);
-                    const value = cardByCategory.get(name) ?? "";
+                    const catKey = String(category.id);
+                    const value = cardByCategory.get(catKey) ?? "";
                     return (
-                        <label key={name} className={LABEL_ROW}>
-                            {name}:
+                        <label key={catKey} className={LABEL_ROW}>
+                            {category.name}:
                             <select
                                 value={value}
                                 onChange={e =>
                                     setCardForCategory(
-                                        name,
+                                        catKey,
                                         e.currentTarget.value,
                                     )
                                 }
                                 className={SELECT_CLASS}
                             >
                                 <option value="">—</option>
-                                {category.cards.map(c => (
-                                    <option key={c} value={c}>
-                                        {c}
+                                {category.cards.map(entry => (
+                                    <option
+                                        key={String(entry.id)}
+                                        value={String(entry.id)}
+                                    >
+                                        {entry.name}
                                     </option>
                                 ))}
                             </select>

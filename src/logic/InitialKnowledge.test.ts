@@ -8,6 +8,7 @@ import {
 } from "./Knowledge";
 import { buildInitialKnowledge } from "./InitialKnowledge";
 import deduce from "./Deducer";
+import { cardByName } from "./test-utils/CardByName";
 
 import "./test-utils/EffectExpectEquals";
 
@@ -40,12 +41,12 @@ describe("buildInitialKnowledge", () => {
         // which matches — so every *other* card in Anisha's row must be
         // forced to N by the hand-size consistency rule.
         const known = [
-            { player: A, card: Card("Miss Scarlet") },
-            { player: A, card: Card("Col. Mustard") },
-            { player: A, card: Card("Candlestick") },
-            { player: A, card: Card("Knife") },
-            { player: A, card: Card("Kitchen") },
-            { player: A, card: Card("Ball room") },
+            { player: A, card: cardByName(setup, "Miss Scarlet") },
+            { player: A, card: cardByName(setup, "Col. Mustard") },
+            { player: A, card: cardByName(setup, "Candlestick") },
+            { player: A, card: cardByName(setup, "Knife") },
+            { player: A, card: cardByName(setup, "Kitchen") },
+            { player: A, card: cardByName(setup, "Ball room") },
         ];
         const initial = buildInitialKnowledge(setup, known, []);
         const result = deduce(setup, [])(initial);
@@ -53,9 +54,9 @@ describe("buildInitialKnowledge", () => {
         if (result._tag !== "Ok") return;
 
         // Cards not in Anisha's known list must be N in her row.
-        const PLUM = Card("Prof. Plum");
-        const ROPE = Card("Rope");
-        const STUDY = Card("Study");
+        const PLUM = cardByName(setup, "Prof. Plum");
+        const ROPE = cardByName(setup, "Rope");
+        const STUDY = cardByName(setup, "Study");
         expect(getCellByOwnerCard(result.knowledge, PlayerOwner(A), PLUM))
             .toBe(N);
         expect(getCellByOwnerCard(result.knowledge, PlayerOwner(A), ROPE))
@@ -77,8 +78,8 @@ describe("buildInitialKnowledge", () => {
     });
 
     test("sets known cards to Y; drops cards not in the deck", () => {
-        const MUSTARD = Card("Col. Mustard");
-        const JOKER = Card("Joker"); // not in classic
+        const MUSTARD = cardByName(setup, "Col. Mustard");
+        const JOKER = Card("card-joker"); // not in classic
         const k = buildInitialKnowledge(
             setup,
             [

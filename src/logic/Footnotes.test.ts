@@ -1,4 +1,5 @@
-import { Card, Player, PlayerOwner } from "./GameObjects";
+import { Player, PlayerOwner } from "./GameObjects";
+import { CLASSIC_SETUP_3P } from "./GameSetup";
 import {
     Cell,
     emptyKnowledge,
@@ -9,15 +10,17 @@ import {
 import { refuterCandidateFootnotes, footnotesForCell } from "./Footnotes";
 import { keyOf } from "./Provenance";
 import { Suggestion } from "./Suggestion";
+import { cardByName } from "./test-utils/CardByName";
 
 import "./test-utils/EffectExpectEquals";
 
+const setup = CLASSIC_SETUP_3P;
 const A = Player("Anisha");
 const B = Player("Bob");
 
-const PLUM    = Card("Prof. Plum");
-const KNIFE   = Card("Knife");
-const CONSERV = Card("Conservatory");
+const PLUM    = cardByName(setup, "Prof. Plum");
+const KNIFE   = cardByName(setup, "Knife");
+const CONSERV = cardByName(setup, "Conservatory");
 
 // The custom effect-equals matcher intercepts array comparisons, so we
 // compare length + element-wise.

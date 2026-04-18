@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
 import {
-    allCards,
+    allCardIds,
     caseFileSize,
     defaultHandSizes,
     GameSetup,
@@ -20,6 +20,57 @@ const NEW_GAME_CONFIRM =
 const PRESET_CONFIRM =
     "Loading a preset will discard your current hand sizes, known " +
     "cards, and suggestions. Continue?";
+
+/**
+ * Editable text cell. Commits the new value on blur or Enter; resets to
+ * the external value on Escape or if the input is cleared. The external
+ * `value` prop wins whenever it changes, so upstream changes (e.g.
+ * preset switch) propagate in cleanly.
+ */
+function InlineTextEdit({
+    value,
+    onCommit,
+    className,
+    title,
+}: {
+    value: string;
+    onCommit: (next: string) => void;
+    className?: string;
+    title?: string;
+}) {
+    const [local, setLocal] = useState(value);
+    useEffect(() => {
+        setLocal(value);
+    }, [value]);
+
+    const commit = () => {
+        const trimmed = local.trim();
+        if (trimmed.length === 0) {
+            setLocal(value);
+            return;
+        }
+        if (trimmed !== value) onCommit(trimmed);
+    };
+
+    return (
+        <input
+            type="text"
+            value={local}
+            className={className}
+            title={title}
+            onChange={e => setLocal(e.currentTarget.value)}
+            onBlur={commit}
+            onKeyDown={e => {
+                if (e.key === "Enter") {
+                    (e.currentTarget as HTMLInputElement).blur();
+                } else if (e.key === "Escape") {
+                    setLocal(value);
+                    (e.currentTarget as HTMLInputElement).blur();
+                }
+            }}
+        />
+    );
+}
 
 function PlayerNameInput({
     player,
@@ -103,7 +154,7 @@ export function GameSetupPanel() {
     const result = derived.deductionResult;
     const defaults = new Map(defaultHandSizes(setup));
 
-    const totalDealt = allCards(setup).length - caseFileSize(setup);
+    const totalDealt = allCardIds(setup).length - caseFileSize(setup);
     const setHandSizesArr = setup.players
         .map(p => handSizeMap.get(p))
         .filter((n): n is number => typeof n === "number");
@@ -148,14 +199,6 @@ export function GameSetupPanel() {
             dispatch({ type: "addKnownCard", card: { player, card } });
         }
     };
-
-    const categories: ReadonlyArray<{
-        name: string;
-        cards: ReadonlyArray<Card>;
-    }> = setup.categories.map(c => ({
-        name: String(c.name),
-        cards: c.cards,
-    }));
 
     const cardSpan = setup.players.length + 2; // label + players + add column
 
@@ -253,7 +296,7 @@ export function GameSetupPanel() {
                                         <input
                                             type="number"
                                             min={0}
-                                            max={allCards(setup).length}
+                                            max={allCardIds(setup).length}
                                             className="w-14 rounded border border-border p-0.5 text-center text-[12px]"
                                             value={
                                                 current === undefined
@@ -279,31 +322,42 @@ export function GameSetupPanel() {
                         </tr>
                     </thead>
                     <tbody>
-                        {setup.categories.flatMap((cat, catIdx) => {
+                        {setup.categories.flatMap((cat) => {
                             const canRemoveCategory =
                                 setup.categories.length > 1;
                             const canRemoveCard = cat.cards.length > 1;
                             return [
-                                <tr key={`h-${catIdx}`}>
+                                <tr key={`h-${String(cat.id)}`}>
                                     <th
                                         colSpan={cardSpan}
                                         className="border border-border bg-accent px-1.5 py-1 text-left text-[10px] uppercase tracking-[0.05em] text-white"
                                     >
                                         <div className="flex items-center justify-between gap-2">
-                                            <span>{String(cat.name)}</span>
+                                            <InlineTextEdit
+                                                value={cat.name}
+                                                className="min-w-0 flex-1 rounded border border-white/30 bg-transparent px-1 py-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-white focus:bg-white/10 focus:outline-none"
+                                                title="Rename category"
+                                                onCommit={next =>
+                                                    dispatch({
+                                                        type: "renameCategory",
+                                                        categoryId: cat.id,
+                                                        name: next,
+                                                    })
+                                                }
+                                            />
                                             <button
                                                 type="button"
                                                 title={
                                                     canRemoveCategory
-                                                        ? `Remove ${String(cat.name)}`
+                                                        ? `Remove ${cat.name}`
                                                         : "At least one category is required"
                                                 }
                                                 disabled={!canRemoveCategory}
                                                 className="cursor-pointer border-none bg-transparent p-0 text-[14px] leading-none text-white/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                                                 onClick={() =>
                                                     dispatch({
-                                                        type: "removeCategory",
-                                                        categoryIndex: catIdx,
+                                                        type: "removeCategoryById",
+                                                        categoryId: cat.id,
                                                     })
                                                 }
                                             >
@@ -312,25 +366,35 @@ export function GameSetupPanel() {
                                         </div>
                                     </th>
                                 </tr>,
-                                ...cat.cards.map((card, cardIdx) => (
-                                    <tr key={`${catIdx}-${String(card)}-${cardIdx}`}>
+                                ...cat.cards.map(entry => (
+                                    <tr key={String(entry.id)}>
                                         <th className="whitespace-nowrap border border-border bg-white px-1.5 py-1 text-left font-normal">
                                             <div className="flex items-center justify-between gap-2">
-                                                <span>{card}</span>
+                                                <InlineTextEdit
+                                                    value={entry.name}
+                                                    className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-[12px] hover:border-border focus:border-accent focus:outline-none"
+                                                    title="Rename card"
+                                                    onCommit={next =>
+                                                        dispatch({
+                                                            type: "renameCard",
+                                                            cardId: entry.id,
+                                                            name: next,
+                                                        })
+                                                    }
+                                                />
                                                 <button
                                                     type="button"
                                                     title={
                                                         canRemoveCard
-                                                            ? `Remove ${card}`
+                                                            ? `Remove ${entry.name}`
                                                             : "At least one card per category is required"
                                                     }
                                                     disabled={!canRemoveCard}
                                                     className="cursor-pointer border-none bg-transparent p-0 text-[14px] leading-none text-muted hover:text-danger disabled:cursor-not-allowed disabled:opacity-40"
                                                     onClick={() =>
                                                         dispatch({
-                                                            type: "removeCard",
-                                                            categoryIndex: catIdx,
-                                                            cardIndex: cardIdx,
+                                                            type: "removeCardById",
+                                                            cardId: entry.id,
                                                         })
                                                     }
                                                 >
@@ -346,9 +410,9 @@ export function GameSetupPanel() {
                                                 <input
                                                     type="checkbox"
                                                     className="m-0 cursor-pointer"
-                                                    checked={isKnown(p, card)}
+                                                    checked={isKnown(p, entry.id)}
                                                     onChange={() =>
-                                                        toggleKnownCard(p, card)
+                                                        toggleKnownCard(p, entry.id)
                                                     }
                                                 />
                                             </td>
@@ -356,7 +420,7 @@ export function GameSetupPanel() {
                                         <td className="border border-border"></td>
                                     </tr>
                                 )),
-                                <tr key={`add-card-${catIdx}`}>
+                                <tr key={`add-card-${String(cat.id)}`}>
                                     <th
                                         colSpan={cardSpan}
                                         className="border border-border bg-[#fafafc] px-1.5 py-1 text-left"
@@ -366,8 +430,8 @@ export function GameSetupPanel() {
                                             className="cursor-pointer border-none bg-transparent p-0 text-[12px] text-accent underline"
                                             onClick={() =>
                                                 dispatch({
-                                                    type: "addCardToCategory",
-                                                    categoryIndex: catIdx,
+                                                    type: "addCardToCategoryById",
+                                                    categoryId: cat.id,
                                                 })
                                             }
                                         >

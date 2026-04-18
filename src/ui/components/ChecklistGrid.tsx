@@ -1,7 +1,7 @@
 "use client";
 
-import { Card, Owner, ownerLabel } from "../../logic/GameObjects";
-import { allOwners } from "../../logic/GameSetup";
+import { Owner, ownerLabel } from "../../logic/GameObjects";
+import { allOwners, cardName } from "../../logic/GameSetup";
 import {
     CellValue,
     getCellByOwnerCard,
@@ -33,14 +33,6 @@ export function ChecklistGrid() {
     const setup = state.setup;
     const result = derived.deductionResult;
     const provenance = derived.provenance;
-
-    const categories: ReadonlyArray<{
-        name: string;
-        cards: ReadonlyArray<Card>;
-    }> = setup.categories.map(c => ({
-        name: String(c.name),
-        cards: c.cards,
-    }));
 
     const owners: ReadonlyArray<Owner> = allOwners(setup);
 
@@ -80,8 +72,8 @@ export function ChecklistGrid() {
                     </tr>
                 </thead>
                 <tbody>
-                    {categories.flatMap(category => [
-                        <tr key={`h-${category.name}`}>
+                    {setup.categories.flatMap(category => [
+                        <tr key={`h-${String(category.id)}`}>
                             <th
                                 colSpan={1 + owners.length}
                                 className="border border-border bg-accent px-2 py-1.5 text-left text-[11px] uppercase tracking-[0.05em] text-white"
@@ -89,23 +81,23 @@ export function ChecklistGrid() {
                                 {category.name}
                             </th>
                         </tr>,
-                        ...category.cards.map(card => (
-                            <tr key={card}>
+                        ...category.cards.map(entry => (
+                            <tr key={String(entry.id)}>
                                 <th className="border border-border px-2 py-1 text-left font-normal">
-                                    {card}
+                                    {entry.name}
                                 </th>
                                 {owners.map(owner => {
                                     const value = getCellByOwnerCard(
                                         knowledge,
                                         owner,
-                                        card,
+                                        entry.id,
                                     );
                                     const reason = provenance
-                                        ? explainCell(provenance, owner, card)
+                                        ? explainCell(provenance, owner, entry.id)
                                         : undefined;
                                     return (
                                         <td
-                                            key={`${ownerKey(owner)}-${card}`}
+                                            key={`${ownerKey(owner)}-${String(entry.id)}`}
                                             className={cellClass(value)}
                                             title={
                                                 reason
@@ -153,24 +145,24 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
                     const solved = caseFileAnswerFor(
                         setup,
                         knowledge,
-                        category.name,
+                        category.id,
                     );
                     const candidates = caseFileCandidatesFor(
                         setup,
                         knowledge,
-                        category.name,
+                        category.id,
                     );
                     return (
                         <div
-                            key={String(category.name)}
+                            key={String(category.id)}
                             className="rounded-[var(--radius)] border border-border bg-white p-2 text-center"
                         >
                             <div className="mb-1 text-[11px] uppercase tracking-[0.05em] text-muted">
-                                {String(category.name)}
+                                {category.name}
                             </div>
                             {solved ? (
                                 <div className="text-[14px] font-semibold text-yes">
-                                    {solved}
+                                    {cardName(setup, solved)}
                                 </div>
                             ) : (
                                 <div className="text-[13px] text-muted">

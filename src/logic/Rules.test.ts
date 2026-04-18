@@ -1,5 +1,6 @@
-import { Card, CardCategory, CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
-import { cardsInCategory, CLASSIC_SETUP_3P } from "./GameSetup";
+import { Card, CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
+import { cardIdsInCategory, CLASSIC_SETUP_3P } from "./GameSetup";
+import { cardByName } from "./test-utils/CardByName";
 import {
     Cell,
     Contradiction,
@@ -27,16 +28,19 @@ import { Suggestion } from "./Suggestion";
 import "./test-utils/EffectExpectEquals";
 
 const setup = CLASSIC_SETUP_3P;
-const suspects = cardsInCategory(setup, CardCategory("Suspects"));
-const weapons = cardsInCategory(setup, CardCategory("Weapons"));
-const rooms = cardsInCategory(setup, CardCategory("Rooms"));
+const suspectsCategory = setup.categories.find(c => c.name === "Suspects")!;
+const weaponsCategory = setup.categories.find(c => c.name === "Weapons")!;
+const roomsCategory = setup.categories.find(c => c.name === "Rooms")!;
+const suspects = cardIdsInCategory(setup, suspectsCategory.id);
+const weapons = cardIdsInCategory(setup, weaponsCategory.id);
+const rooms = cardIdsInCategory(setup, roomsCategory.id);
 const A = Player("Anisha");
 const B = Player("Bob");
 const C = Player("Cho");
 
-const PLUM    = Card("Prof. Plum");
-const KNIFE   = Card("Knife");
-const CONSERV = Card("Conservatory");
+const PLUM    = cardByName(setup, "Prof. Plum");
+const KNIFE   = cardByName(setup, "Knife");
+const CONSERV = cardByName(setup, "Conservatory");
 
 describe("applySlice", () => {
     const threeOwnerSlice = (card: Card): Slice => ({
@@ -326,8 +330,12 @@ describe("provenance tracer", () => {
             (records[0].kind as { suggestionIndex: number }).suggestionIndex,
         ).toBe(0);
         expect(records[0].dependsOn).toHaveLength(2);
-        expect(records[0].dependsOn[0]).toEqual(Cell(PlayerOwner(B), PLUM));
-        expect(records[0].dependsOn[1]).toEqual(Cell(PlayerOwner(B), KNIFE));
+        // HashSet iteration order isn't guaranteed; just check both
+        // expected cells are present.
+        const depKeys = records[0].dependsOn.map(c =>
+            `${(c as unknown as [unknown, string])[1]}`);
+        expect(depKeys).toContain(String(PLUM));
+        expect(depKeys).toContain(String(KNIFE));
     });
 });
 

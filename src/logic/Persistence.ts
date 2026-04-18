@@ -1,5 +1,5 @@
 import { Card, CardCategory, Player } from "./GameObjects";
-import { GameSetup } from "./GameSetup";
+import { CardEntry, Category, GameSetup } from "./GameSetup";
 import { Suggestion, suggestionCards, suggestionNonRefuters } from "./Suggestion";
 
 /**
@@ -12,10 +12,51 @@ import { Suggestion, suggestionCards, suggestionNonRefuters } from "./Suggestion
  * control for future migrations, and (c) the main codebase's `effect`
  * version doesn't include Schema.
  *
- * v1 hardcoded suspects/weapons/rooms; v2 generalized to a `categories`
- * array so decks can have any number of categories with any names.
+ * Schema history:
+ *   v1 — hardcoded suspects/weapons/rooms arrays.
+ *   v2 — generalized to `categories` array with name + cards[]; still
+ *        identified cards by their display name string.
+ *   v3 — split identity from display: each category and card carries
+ *        its own stable `id` alongside `name`. Suggestions, hands,
+ *        etc. reference cards by id so renames don't break them.
  */
-export interface PersistedGameV2 {
+export interface PersistedGameV3 {
+    readonly version: 3;
+    readonly setup: {
+        readonly players: ReadonlyArray<string>;
+        readonly categories: ReadonlyArray<{
+            readonly id: string;
+            readonly name: string;
+            readonly cards: ReadonlyArray<{
+                readonly id: string;
+                readonly name: string;
+            }>;
+        }>;
+    };
+    readonly hands: ReadonlyArray<{
+        readonly player: string;
+        readonly cards: ReadonlyArray<string>; // card ids
+    }>;
+    readonly handSizes: ReadonlyArray<{
+        readonly player: string;
+        readonly size: number;
+    }>;
+    readonly suggestions: ReadonlyArray<{
+        readonly id?: string;
+        readonly suggester: string;
+        readonly cards: ReadonlyArray<string>; // card ids
+        readonly nonRefuters: ReadonlyArray<string>;
+        readonly refuter: string | null;
+        readonly seenCard: string | null; // card id
+    }>;
+}
+
+/**
+ * Legacy v2 shape — card identity was the display name string.
+ * On decode we migrate by using the name as the id (so existing
+ * sessions/URLs keep working, and are stable from then on).
+ */
+interface PersistedGameV2 {
     readonly version: 2;
     readonly setup: {
         readonly players: ReadonlyArray<string>;
@@ -24,22 +65,9 @@ export interface PersistedGameV2 {
             readonly cards: ReadonlyArray<string>;
         }>;
     };
-    readonly hands: ReadonlyArray<{
-        readonly player: string;
-        readonly cards: ReadonlyArray<string>;
-    }>;
-    readonly handSizes: ReadonlyArray<{
-        readonly player: string;
-        readonly size: number;
-    }>;
-    readonly suggestions: ReadonlyArray<{
-        readonly id?: string; // added in stage 3 — older v2 payloads lack it
-        readonly suggester: string;
-        readonly cards: ReadonlyArray<string>;
-        readonly nonRefuters: ReadonlyArray<string>;
-        readonly refuter: string | null;
-        readonly seenCard: string | null;
-    }>;
+    readonly hands: PersistedGameV3["hands"];
+    readonly handSizes: PersistedGameV3["handSizes"];
+    readonly suggestions: PersistedGameV3["suggestions"];
 }
 
 /**
@@ -54,12 +82,12 @@ interface PersistedGameV1 {
         readonly weapons: ReadonlyArray<string>;
         readonly rooms: ReadonlyArray<string>;
     };
-    readonly hands: PersistedGameV2["hands"];
-    readonly handSizes: PersistedGameV2["handSizes"];
-    readonly suggestions: PersistedGameV2["suggestions"];
+    readonly hands: PersistedGameV3["hands"];
+    readonly handSizes: PersistedGameV3["handSizes"];
+    readonly suggestions: PersistedGameV3["suggestions"];
 }
 
-export type PersistedGame = PersistedGameV2;
+export type PersistedGame = PersistedGameV3;
 
 export interface GameSession {
     setup: GameSetup;
@@ -69,12 +97,16 @@ export interface GameSession {
 }
 
 export const encodeSession = (session: GameSession): PersistedGame => ({
-    version: 2,
+    version: 3,
     setup: {
         players: session.setup.players.map(p => String(p)),
         categories: session.setup.categories.map(c => ({
-            name: String(c.name),
-            cards: c.cards.map(card => String(card)),
+            id: String(c.id),
+            name: c.name,
+            cards: c.cards.map(card => ({
+                id: String(card.id),
+                name: card.name,
+            })),
         })),
     },
     hands: session.hands.map(h => ({
@@ -110,11 +142,34 @@ const migrateV1ToV2 = (v1: PersistedGameV1): PersistedGameV2 => ({
     suggestions: v1.suggestions,
 });
 
+/**
+ * Migrate a v2 payload to v3 by treating each display-name string as
+ * its own id. This is the simplest valid migration: references that
+ * used to point at "Miss Scarlet" the name still resolve to "Miss
+ * Scarlet" the id. Users only notice the difference when they rename
+ * a card; at that point the id stays "Miss Scarlet" (now opaque) and
+ * the display name switches.
+ */
+const migrateV2ToV3 = (v2: PersistedGameV2): PersistedGameV3 => ({
+    version: 3,
+    setup: {
+        players: v2.setup.players,
+        categories: v2.setup.categories.map(c => ({
+            id: c.name,
+            name: c.name,
+            cards: c.cards.map(card => ({ id: card, name: card })),
+        })),
+    },
+    hands: v2.hands,
+    handSizes: v2.handSizes,
+    suggestions: v2.suggestions,
+});
+
 export const decodeSession = (data: unknown): GameSession | undefined => {
     if (!data || typeof data !== "object") return undefined;
     const obj = data as { version?: number };
 
-    let v2: PersistedGameV2;
+    let v3: PersistedGameV3;
     if (obj.version === 1) {
         const v1 = data as Partial<PersistedGameV1>;
         if (!v1.setup || !v1.hands || !v1.handSizes || !v1.suggestions) {
@@ -124,7 +179,7 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
         if (!s.players || !s.suspects || !s.weapons || !s.rooms) {
             return undefined;
         }
-        v2 = migrateV1ToV2(v1 as PersistedGameV1);
+        v3 = migrateV2ToV3(migrateV1ToV2(v1 as PersistedGameV1));
     } else if (obj.version === 2) {
         const candidate = data as Partial<PersistedGameV2>;
         if (
@@ -138,20 +193,38 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
         if (!candidate.setup.players || !candidate.setup.categories) {
             return undefined;
         }
-        v2 = candidate as PersistedGameV2;
+        v3 = migrateV2ToV3(candidate as PersistedGameV2);
+    } else if (obj.version === 3) {
+        const candidate = data as Partial<PersistedGameV3>;
+        if (
+            !candidate.setup ||
+            !candidate.suggestions ||
+            !candidate.hands ||
+            !candidate.handSizes
+        ) {
+            return undefined;
+        }
+        if (!candidate.setup.players || !candidate.setup.categories) {
+            return undefined;
+        }
+        v3 = candidate as PersistedGameV3;
     } else {
         return undefined;
     }
 
     const setup: GameSetup = GameSetup({
-        players: v2.setup.players.map(Player),
-        categories: v2.setup.categories.map(c => ({
-            name: CardCategory(c.name),
-            cards: c.cards.map(Card),
+        players: v3.setup.players.map(Player),
+        categories: v3.setup.categories.map<Category>(c => ({
+            id: CardCategory(c.id),
+            name: c.name,
+            cards: c.cards.map<CardEntry>(card => ({
+                id: Card(card.id),
+                name: card.name,
+            })),
         })),
     });
 
-    const suggestions = v2.suggestions.map((s, i) => Suggestion({
+    const suggestions = v3.suggestions.map((s, i) => Suggestion({
         id: s.id ?? `restored-${i}`,
         suggester: Player(s.suggester),
         cards: s.cards.map(Card),
@@ -162,11 +235,11 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
 
     return {
         setup,
-        hands: v2.hands.map(h => ({
+        hands: v3.hands.map(h => ({
             player: Player(h.player),
             cards: h.cards.map(Card),
         })),
-        handSizes: v2.handSizes.map(h => ({
+        handSizes: v3.handSizes.map(h => ({
             player: Player(h.player),
             size: h.size,
         })),
@@ -174,16 +247,16 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
     };
 };
 
-// Keep the legacy v1 key so existing users pick their session up once on
-// upgrade; new writes go to v2. A future migration can delete v1 after
-// we're confident everyone has rolled forward.
+// Keep the older keys readable too, so the one-time migration picks
+// up existing sessions. New writes go to v3.
+const STORAGE_KEY_V3 = "effect-clue.session.v3";
 const STORAGE_KEY_V2 = "effect-clue.session.v2";
 const STORAGE_KEY_V1 = "effect-clue.session.v1";
 
 export const saveToLocalStorage = (session: GameSession): void => {
     try {
         const encoded = encodeSession(session);
-        window.localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(encoded));
+        window.localStorage.setItem(STORAGE_KEY_V3, JSON.stringify(encoded));
     } catch {
         // Quota exceeded, private mode, etc. — non-fatal.
     }
@@ -191,6 +264,8 @@ export const saveToLocalStorage = (session: GameSession): void => {
 
 export const loadFromLocalStorage = (): GameSession | undefined => {
     try {
+        const rawV3 = window.localStorage.getItem(STORAGE_KEY_V3);
+        if (rawV3) return decodeSession(JSON.parse(rawV3));
         const rawV2 = window.localStorage.getItem(STORAGE_KEY_V2);
         if (rawV2) return decodeSession(JSON.parse(rawV2));
         const rawV1 = window.localStorage.getItem(STORAGE_KEY_V1);
@@ -203,6 +278,7 @@ export const loadFromLocalStorage = (): GameSession | undefined => {
 
 export const clearLocalStorage = (): void => {
     try {
+        window.localStorage.removeItem(STORAGE_KEY_V3);
         window.localStorage.removeItem(STORAGE_KEY_V2);
         window.localStorage.removeItem(STORAGE_KEY_V1);
     } catch {
