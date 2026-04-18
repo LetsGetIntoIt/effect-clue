@@ -89,7 +89,6 @@ type ClueAction =
     | { type: "addSuggestion"; suggestion: DraftSuggestion }
     | { type: "updateSuggestion"; suggestion: DraftSuggestion }
     | { type: "removeSuggestion"; id: string }
-    | { type: "resetAll" }
     | { type: "addPlayer" }
     | { type: "removePlayer"; player: Player }
     | { type: "renamePlayer"; oldName: Player; newName: Player }
@@ -311,14 +310,6 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 suggestions: state.suggestions.filter(
                     s => s.id !== action.id,
                 ),
-            };
-
-        case "resetAll":
-            return {
-                ...state,
-                knownCards: [],
-                handSizes: [],
-                suggestions: [],
             };
 
         case "addPlayer": {

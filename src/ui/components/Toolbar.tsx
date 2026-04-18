@@ -8,7 +8,7 @@ const buttonClass =
     "text-[13px] cursor-pointer hover:bg-[#f0f0f5]";
 
 /**
- * Top-of-page controls: reset the game and copy a shareable URL
+ * Top-of-page controls: start a fresh game and copy a shareable URL
  * encoding the current state.
  */
 export function Toolbar() {
@@ -31,13 +31,14 @@ export function Toolbar() {
         }
     };
 
-    const onReset = () => {
+    const onNewGame = () => {
         if (
             window.confirm(
-                "Clear all known cards, hand sizes, and suggestions?",
+                "Start a new game? This will clear all players, cards, " +
+                "known hands, and suggestions.",
             )
         ) {
-            dispatch({ type: "resetAll" });
+            dispatch({ type: "newGame" });
         }
     };
 
@@ -46,8 +47,8 @@ export function Toolbar() {
             <button type="button" className={buttonClass} onClick={onShare}>
                 {copied ? "Copied!" : "Share link"}
             </button>
-            <button type="button" className={buttonClass} onClick={onReset}>
-                Reset
+            <button type="button" className={buttonClass} onClick={onNewGame}>
+                New game
             </button>
         </div>
     );

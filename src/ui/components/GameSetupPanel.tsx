@@ -13,11 +13,6 @@ import { useClue } from "../state";
 import { CategoryEditor } from "./CategoryEditor";
 import { ContradictionBanner } from "./ContradictionBanner";
 
-const NEW_GAME_CONFIRM =
-    "You've already started logging this game. Selecting a new game " +
-    "setup preset will lose all unsaved deductions. Would you like to " +
-    "continue?";
-
 const PRESET_CONFIRM =
     "Loading a preset will discard your current hand sizes, known " +
     "cards, and suggestions. Continue?";
@@ -166,11 +161,6 @@ export function GameSetupPanel() {
     const handSizeMismatch =
         allHandSizesSet && handSizesTotal !== totalDealt;
 
-    const onNewGame = () => {
-        if (hasGameData() && !window.confirm(NEW_GAME_CONFIRM)) return;
-        dispatch({ type: "newGame" });
-    };
-
     const onPreset = (preset: (typeof PRESETS)[number]) => {
         if (hasGameData() && !window.confirm(PRESET_CONFIRM)) return;
         dispatch({ type: "loadPreset", setup: preset.build() });
@@ -209,13 +199,6 @@ export function GameSetupPanel() {
                 <h2 className="m-0 text-[16px] uppercase tracking-[0.05em] text-accent">
                     Game setup
                 </h2>
-                <button
-                    type="button"
-                    className="cursor-pointer rounded border-none bg-accent px-3.5 py-1.5 text-[13px] text-white hover:bg-accent-hover"
-                    onClick={onNewGame}
-                >
-                    New game
-                </button>
             </div>
 
             <div className="mb-3 flex flex-wrap items-center gap-2">
