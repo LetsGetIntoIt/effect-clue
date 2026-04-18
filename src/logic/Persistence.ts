@@ -33,6 +33,7 @@ export interface PersistedGameV2 {
         readonly size: number;
     }>;
     readonly suggestions: ReadonlyArray<{
+        readonly id?: string; // added in stage 3 — older v2 payloads lack it
         readonly suggester: string;
         readonly cards: ReadonlyArray<string>;
         readonly nonRefuters: ReadonlyArray<string>;
@@ -85,6 +86,7 @@ export const encodeSession = (session: GameSession): PersistedGame => ({
         size: h.size,
     })),
     suggestions: session.suggestions.map(s => ({
+        id: s.id,
         suggester: String(s.suggester),
         cards: suggestionCards(s).map(c => String(c)),
         nonRefuters: suggestionNonRefuters(s).map(p => String(p)),
@@ -149,7 +151,8 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
         })),
     });
 
-    const suggestions = v2.suggestions.map(s => Suggestion({
+    const suggestions = v2.suggestions.map((s, i) => Suggestion({
+        id: s.id ?? `restored-${i}`,
         suggester: Player(s.suggester),
         cards: s.cards.map(Card),
         nonRefuters: s.nonRefuters.map(Player),

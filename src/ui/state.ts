@@ -31,6 +31,11 @@ import {
     deduceWithExplanations,
     Provenance,
 } from "../logic/Provenance";
+import {
+    emptyFootnotes,
+    FootnoteMap,
+    refuterCandidateFootnotes,
+} from "../logic/Footnotes";
 
 /**
  * A single known card held by a specific player — either the solver's own
@@ -105,6 +110,7 @@ const buildInitialKnowledge = (
 
 export const suggestionsAsDataSignal: ReadonlySignal<ReadonlyArray<Suggestion>> =
     computed(() => suggestionsSignal.value.map(s => Suggestion({
+        id: s.id,
         suggester: s.suggester,
         cards: s.cards,
         nonRefuters: s.nonRefuters,
@@ -139,6 +145,21 @@ export const provenanceSignal: ReadonlySignal<Provenance | undefined> =
             return undefined;
         }
     });
+
+/**
+ * Footnotes: for each cell, which suggestion numbers contribute a
+ * "refuter owns one of these cards" constraint that still has this cell
+ * as a live candidate. Stage 6 will render these as superscripts; for
+ * now exposing the signal is enough to unblock the UI work.
+ */
+export const footnotesSignal: ReadonlySignal<FootnoteMap> = computed(() => {
+    const result = deductionResultSignal.value;
+    if (result._tag !== "Ok") return emptyFootnotes;
+    return refuterCandidateFootnotes(
+        suggestionsAsDataSignal.value,
+        result.knowledge,
+    );
+});
 
 // ---- Actions -----------------------------------------------------------
 
@@ -323,7 +344,7 @@ const applySession = (session: GameSession): void => {
         ({ player, size }) => [player, size] as const);
     // Convert Suggestion (Data records) back to DraftSuggestion for UI.
     suggestionsSignal.value = session.suggestions.map((s, i) => ({
-        id: `restored-${i}`,
+        id: s.id || `restored-${i}`,
         suggester: s.suggester,
         cards: Array.from(s.cards),
         nonRefuters: Array.from(s.nonRefuters),
