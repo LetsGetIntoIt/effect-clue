@@ -108,12 +108,18 @@ const cartesianCandidates = function* (
 
     const idx = new Array<number>(perCategory.length).fill(0);
     while (true) {
-        yield perCategory.map((list, i) => list[idx[i]]);
+        // Each list[idx[i]] is valid because we checked all lists are
+        // non-empty above, and idx[i] is bounded by list.length below.
+        yield perCategory.map((list, i) => list[idx[i] ?? 0] as Card);
         // Increment least-significant digit, carrying upward.
         let i = perCategory.length - 1;
         while (i >= 0) {
-            idx[i]++;
-            if (idx[i] < perCategory[i].length) break;
+            const current = idx[i] ?? 0;
+            const listLen = perCategory[i]?.length ?? 0;
+            if (current + 1 < listLen) {
+                idx[i] = current + 1;
+                break;
+            }
             idx[i] = 0;
             i--;
         }
@@ -212,7 +218,8 @@ export const recommendSuggestions = (
         if (a.score !== b.score) return b.score - a.score;
         return a.cards.join("|").localeCompare(b.cards.join("|"));
     });
-    const topScore = results[0].score;
+    // Safe: we checked results.length === 0 above.
+    const topScore = results[0]!.score;
     const topCount = results.filter(r => r.score === topScore).length;
 
     return {

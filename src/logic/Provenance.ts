@@ -1,6 +1,6 @@
 import { Equal, HashMap } from "effect";
 import { Card, CardCategory, Owner, ownerLabel, Player } from "./GameObjects";
-import { Cell, CellValue, getCell, Knowledge } from "./Knowledge";
+import { Cell, CellValue, Knowledge } from "./Knowledge";
 import { applyConsistencyRules, applyDeductionRules } from "./Rules";
 import {
     cardName,

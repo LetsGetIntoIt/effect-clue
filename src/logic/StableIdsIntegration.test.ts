@@ -134,12 +134,12 @@ describe("Persistence v2 → v3 migration", () => {
 
         // Anisha's known card comes through with id = "Col. Mustard".
         expect(decoded.hands).toHaveLength(1);
-        expect(String(decoded.hands[0].cards[0])).toBe("Col. Mustard");
+        expect(String(decoded.hands[0]!.cards[0])).toBe("Col. Mustard");
 
         // Suggestion references use ids = names too. Suggester/refuter
         // are unchanged (they're still just strings).
         expect(decoded.suggestions).toHaveLength(1);
-        const s = decoded.suggestions[0];
+        const s = decoded.suggestions[0]!;
         expect(String(s.suggester)).toBe("Anisha");
         expect(String(s.refuter)).toBe("Bob");
         expect(String(s.seenCard)).toBe("Knife");
@@ -148,11 +148,11 @@ describe("Persistence v2 → v3 migration", () => {
         // card and category. Round-trip decodes to the same ids.
         const reEncoded = encodeSession(decoded);
         expect(reEncoded.version).toBe(3);
-        expect(reEncoded.setup.categories[0].id).toBe("Suspects");
-        expect(reEncoded.setup.categories[0].cards[0].id).toBe(
+        expect(reEncoded.setup.categories[0]!.id).toBe("Suspects");
+        expect(reEncoded.setup.categories[0]!.cards[0]!.id).toBe(
             "Miss Scarlet",
         );
-        expect(reEncoded.setup.categories[0].cards[0].name).toBe(
+        expect(reEncoded.setup.categories[0]!.cards[0]!.name).toBe(
             "Miss Scarlet",
         );
 

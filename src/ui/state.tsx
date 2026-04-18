@@ -66,8 +66,8 @@ export interface DraftSuggestion {
     readonly suggester: Player;
     readonly cards: ReadonlyArray<Card>;
     readonly nonRefuters: ReadonlyArray<Player>;
-    readonly refuter?: Player;
-    readonly seenCard?: Card;
+    readonly refuter?: Player | undefined;
+    readonly seenCard?: Card | undefined;
 }
 
 /**

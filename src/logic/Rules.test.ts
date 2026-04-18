@@ -103,16 +103,16 @@ describe("slice generators", () => {
     test("caseFileCategorySlices has exactly three category slices", () => {
         const slices = caseFileCategorySlices(setup);
         expect(slices).toHaveLength(3);
-        expect(slices[0].cells).toHaveLength(suspects.length);
-        expect(slices[1].cells).toHaveLength(weapons.length);
-        expect(slices[2].cells).toHaveLength(rooms.length);
+        expect(slices[0]!.cells).toHaveLength(suspects.length);
+        expect(slices[1]!.cells).toHaveLength(weapons.length);
+        expect(slices[2]!.cells).toHaveLength(rooms.length);
     });
 
     test("playerHandSlices only include players with known sizes", () => {
         const k1 = setHandSize(emptyKnowledge, PlayerOwner(A), 3);
         const slices = playerHandSlices(setup, k1);
         expect(slices).toHaveLength(1);
-        expect(slices[0].yCount).toBe(3);
+        expect(slices[0]!.yCount).toBe(3);
     });
 });
 
@@ -128,7 +128,7 @@ describe("applyConsistencyRules (fixed-point via slices)", () => {
         // After propagation, the 6th suspect must be in the case file
         // (nobody else can hold any suspect: Bob/Cho have N for the five,
         // and Anisha's row is at capacity).
-        const sixth = suspects[5];
+        const sixth = suspects[5]!;
         expect(getCellByOwnerCard(k, CaseFileOwner(), sixth)).toBe(Y);
     });
 });
@@ -261,10 +261,10 @@ describe("provenance tracer", () => {
         applySlice(slice, tracer)(k);
 
         expect(records).toHaveLength(1);
-        expect(records[0].cell).toEqual(Cell(CaseFileOwner(), card));
-        expect(records[0].value).toBe(Y);
+        expect(records[0]!.cell).toEqual(Cell(CaseFileOwner(), card));
+        expect(records[0]!.value).toBe(Y);
         // dependsOn = the three N cells.
-        expect(records[0].dependsOn).toHaveLength(3);
+        expect(records[0]!.dependsOn).toHaveLength(3);
     });
 
     test("nonRefutersDontHaveSuggestedCards tags records with suggestionIndex", () => {
@@ -282,11 +282,11 @@ describe("provenance tracer", () => {
         nonRefutersDontHaveSuggestedCards(suggestions, tracer)(emptyKnowledge);
 
         expect(records).toHaveLength(1);
-        expect(records[0].cell).toEqual(Cell(PlayerOwner(C), KNIFE));
-        expect(records[0].value).toBe(N);
-        expect(records[0].kind.kind).toBe("non-refuters");
+        expect(records[0]!.cell).toEqual(Cell(PlayerOwner(C), KNIFE));
+        expect(records[0]!.value).toBe(N);
+        expect(records[0]!.kind.kind).toBe("non-refuters");
         expect(
-            (records[0].kind as { suggestionIndex: number }).suggestionIndex,
+            (records[0]!.kind as { suggestionIndex: number }).suggestionIndex,
         ).toBe(1);
     });
 
@@ -302,10 +302,10 @@ describe("provenance tracer", () => {
         refuterShowedCard(suggestions, tracer)(emptyKnowledge);
 
         expect(records).toHaveLength(1);
-        expect(records[0].value).toBe(Y);
-        expect(records[0].kind.kind).toBe("refuter-showed");
+        expect(records[0]!.value).toBe(Y);
+        expect(records[0]!.kind.kind).toBe("refuter-showed");
         expect(
-            (records[0].kind as { suggestionIndex: number }).suggestionIndex,
+            (records[0]!.kind as { suggestionIndex: number }).suggestionIndex,
         ).toBe(0);
     });
 
@@ -323,16 +323,16 @@ describe("provenance tracer", () => {
         refuterOwnsOneOf(suggestions, tracer)(k);
 
         expect(records).toHaveLength(1);
-        expect(records[0].cell).toEqual(Cell(PlayerOwner(B), CONSERV));
-        expect(records[0].value).toBe(Y);
-        expect(records[0].kind.kind).toBe("refuter-owns-one-of");
+        expect(records[0]!.cell).toEqual(Cell(PlayerOwner(B), CONSERV));
+        expect(records[0]!.value).toBe(Y);
+        expect(records[0]!.kind.kind).toBe("refuter-owns-one-of");
         expect(
-            (records[0].kind as { suggestionIndex: number }).suggestionIndex,
+            (records[0]!.kind as { suggestionIndex: number }).suggestionIndex,
         ).toBe(0);
-        expect(records[0].dependsOn).toHaveLength(2);
+        expect(records[0]!.dependsOn).toHaveLength(2);
         // HashSet iteration order isn't guaranteed; just check both
         // expected cells are present.
-        const depKeys = records[0].dependsOn.map(c =>
+        const depKeys = records[0]!.dependsOn.map(c =>
             `${(c as unknown as [unknown, string])[1]}`);
         expect(depKeys).toContain(String(PLUM));
         expect(depKeys).toContain(String(KNIFE));

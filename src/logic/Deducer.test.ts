@@ -72,7 +72,7 @@ describe("deduce", () => {
         expect(result._tag).toBe("Ok");
         if (result._tag !== "Ok") return;
 
-        const sixth = suspects[5];
+        const sixth = suspects[5]!;
         // The last suspect must be in the case file.
         expect(getCellByOwnerCard(result.knowledge, CaseFileOwner(), sixth)).toBe(Y);
     });

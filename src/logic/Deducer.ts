@@ -25,7 +25,7 @@ export interface ContradictionTrace {
     readonly reason: string;
     readonly offendingCells: ReadonlyArray<Cell>;
     readonly offendingSuggestionIndices: ReadonlyArray<number>;
-    readonly sliceLabel?: string;
+    readonly sliceLabel?: string | undefined;
 }
 
 /**

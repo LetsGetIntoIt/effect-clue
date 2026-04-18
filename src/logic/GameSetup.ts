@@ -6,8 +6,6 @@ import {
     Owner,
     Player,
     PlayerOwner,
-    newCardId,
-    newCategoryId,
 } from "./GameObjects";
 
 /**

@@ -90,8 +90,8 @@ export const getHandSize = (
 export interface ContradictionInfo {
     readonly reason: string;
     readonly offendingCells: ReadonlyArray<Cell>;
-    readonly sliceLabel?: string;
-    readonly suggestionIndex?: number;
+    readonly sliceLabel?: string | undefined;
+    readonly suggestionIndex?: number | undefined;
 }
 
 /**
@@ -112,8 +112,8 @@ export class Contradiction extends Error {
     readonly _tag = "Contradiction" as const;
     readonly reason: string;
     readonly offendingCells: ReadonlyArray<Cell>;
-    readonly sliceLabel?: string;
-    readonly suggestionIndex?: number;
+    readonly sliceLabel?: string | undefined;
+    readonly suggestionIndex?: number | undefined;
     constructor(info: ContradictionInfo | string) {
         const full: ContradictionInfo =
             typeof info === "string"

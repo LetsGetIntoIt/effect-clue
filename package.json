@@ -8,6 +8,7 @@
 	"scripts": {
 		"test": "jest",
 		"test:debug": "node --inspect=9229 node_modules/.bin/jest --runInBand",
+		"typecheck": "tsc --noEmit",
 		"dev": "next dev",
 		"build": "next build",
 		"start": "next start"

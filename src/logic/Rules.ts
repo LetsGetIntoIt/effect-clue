@@ -342,7 +342,8 @@ export const refuterOwnsOneOf = (
 
         // If exactly one card is still unknown, the refuter must own it.
         if (unknowns.length === 1) {
-            const cell = unknowns[0];
+            // Safe: length===1, so unknowns[0] is defined.
+            const cell = unknowns[0]!;
             const before = k;
             try {
                 k = setCell(k, cell, Y);
