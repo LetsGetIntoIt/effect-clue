@@ -32,6 +32,7 @@ import {
     buildInitialKnowledge,
     type KnownCard,
 } from "../logic/InitialKnowledge";
+import { Either } from "effect";
 import deduce, { type DeductionResult } from "../logic/Deducer";
 import {
     newSuggestionId,
@@ -452,13 +453,12 @@ const deriveState = (
     } catch {
         provenance = undefined;
     }
-    const footnotes =
-        deductionResult._tag === "Ok"
-            ? refuterCandidateFootnotes(
-                  suggestionsAsData,
-                  deductionResult.knowledge,
-              )
-            : emptyFootnotes;
+    const footnotes = Either.isRight(deductionResult)
+        ? refuterCandidateFootnotes(
+              suggestionsAsData,
+              deductionResult.right,
+          )
+        : emptyFootnotes;
     return { provenance, footnotes };
 };
 

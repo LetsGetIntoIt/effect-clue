@@ -1,4 +1,4 @@
-import { Equal } from "effect";
+import { Either, Equal } from "effect";
 import { Cell, Contradiction, Knowledge } from "./Knowledge";
 import { GameSetup } from "./GameSetup";
 import { applyAllRules } from "./Rules";
@@ -29,37 +29,24 @@ export interface ContradictionTrace {
 }
 
 /**
- * The result of running the deducer. Either we converged to a consistent
- * fixed point, or we hit a contradiction and the game state is
- * internally inconsistent.
+ * The result of running the deducer. `Either.right(knowledge)` means we
+ * converged to a consistent fixed point; `Either.left(trace)` means we
+ * hit a contradiction and the game state is internally inconsistent.
  *
- * On contradiction the result carries both the raw `error` (kept for
- * backward-compatibility with `result.error.reason`) and a structured
- * `trace` that the UI reads to render quick-fix buttons.
+ * We return `ContradictionTrace` (not the `Contradiction` Error itself)
+ * on the Left so callers depend only on the structured data they need
+ * for UI quick-fixes, not on the thrown Error's identity.
  */
-export type DeductionResult =
-    | { readonly _tag: "Ok"; readonly knowledge: Knowledge }
-    | {
-        readonly _tag: "Contradiction";
-        readonly error: Contradiction;
-        readonly trace: ContradictionTrace;
-    };
+export type DeductionResult = Either.Either<ContradictionTrace, Knowledge>;
 
-const Ok = (knowledge: Knowledge): DeductionResult =>
-    ({ _tag: "Ok", knowledge });
-
-const Err = (error: Contradiction): DeductionResult => ({
-    _tag: "Contradiction",
-    error,
-    trace: {
-        reason: error.reason,
-        offendingCells: error.offendingCells,
-        offendingSuggestionIndices:
-            error.suggestionIndex !== undefined
-                ? [error.suggestionIndex]
-                : [],
-        sliceLabel: error.sliceLabel,
-    },
+const traceOf = (error: Contradiction): ContradictionTrace => ({
+    reason: error.reason,
+    offendingCells: error.offendingCells,
+    offendingSuggestionIndices:
+        error.suggestionIndex !== undefined
+            ? [error.suggestionIndex]
+            : [],
+    sliceLabel: error.sliceLabel,
 });
 
 /**
@@ -87,12 +74,12 @@ const deduce = (
         const maxIterations = 1000;
         for (let i = 0; i < maxIterations; i++) {
             const next = rule(current);
-            if (Equal.equals(next, current)) return Ok(next);
+            if (Equal.equals(next, current)) return Either.right(next);
             current = next;
         }
-        return Ok(current);
+        return Either.right(current);
     } catch (e) {
-        if (e instanceof Contradiction) return Err(e);
+        if (e instanceof Contradiction) return Either.left(traceOf(e));
         throw e;
     }
 };

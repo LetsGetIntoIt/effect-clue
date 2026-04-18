@@ -1,5 +1,6 @@
 "use client";
 
+import { Either } from "effect";
 import { Card, Owner, ownerLabel } from "../../logic/GameObjects";
 import { allOwners, cardName } from "../../logic/GameSetup";
 import {
@@ -48,13 +49,13 @@ export function ChecklistGrid() {
 
     const owners: ReadonlyArray<Owner> = allOwners(setup);
 
-    if (result._tag === "Contradiction") {
+    if (Either.isLeft(result)) {
         return (
             <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">
                 <h2 className="mb-3 text-[16px] uppercase tracking-[0.05em] text-accent">
                     Deduction grid
                 </h2>
-                <ContradictionBanner trace={result.trace} />
+                <ContradictionBanner trace={result.left} />
                 <p className="text-[13px] text-muted">
                     Use a quick-fix above to resolve the contradiction, or
                     adjust your inputs directly.
@@ -63,7 +64,7 @@ export function ChecklistGrid() {
         );
     }
 
-    const knowledge: Knowledge = result.knowledge;
+    const knowledge: Knowledge = result.right;
 
     return (
         <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">

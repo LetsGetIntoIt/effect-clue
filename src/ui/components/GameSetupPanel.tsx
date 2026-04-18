@@ -1,5 +1,6 @@
 "use client";
 
+import { Either } from "effect";
 import { useEffect, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
 import {
@@ -230,8 +231,8 @@ export function GameSetupPanel() {
                 </div>
             )}
 
-            {result._tag === "Contradiction" && (
-                <ContradictionBanner trace={result.trace} />
+            {Either.isLeft(result) && (
+                <ContradictionBanner trace={result.left} />
             )}
 
             <div className="overflow-x-auto rounded-[var(--radius)] border border-border">

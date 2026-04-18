@@ -1,4 +1,4 @@
-import { HashMap } from "effect";
+import { Either, HashMap } from "effect";
 import { CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
 import { cardIdsInCategory, CLASSIC_SETUP_3P } from "./GameSetup";
 import { cardByName } from "./test-utils/CardByName";
@@ -44,9 +44,9 @@ const CONSERV  = cardByName(setup, "Conservatory");
 describe("deduce", () => {
     test("empty inputs produce empty knowledge", () => {
         const result = deduce(setup, [])(emptyKnowledge);
-        expect(result._tag).toBe("Ok");
-        if (result._tag !== "Ok") return;
-        expect(HashMap.size(result.knowledge.checklist)).toBe(0);
+        expect(Either.isRight(result)).toBe(true);
+        if (!Either.isRight(result)) return;
+        expect(HashMap.size(result.right.checklist)).toBe(0);
     });
 
     test("card ownership propagates: one Y forces Ns elsewhere", () => {
@@ -54,13 +54,13 @@ describe("deduce", () => {
         knowledge = setCell(knowledge, Cell(PlayerOwner(A), MUSTARD), Y);
 
         const result = deduce(setup, [])(knowledge);
-        expect(result._tag).toBe("Ok");
-        if (result._tag !== "Ok") return;
+        expect(Either.isRight(result)).toBe(true);
+        if (!Either.isRight(result)) return;
 
         // Every other owner now has N for Col. Mustard.
-        expect(getCellByOwnerCard(result.knowledge, PlayerOwner(B), MUSTARD)).toBe(N);
-        expect(getCellByOwnerCard(result.knowledge, PlayerOwner(C), MUSTARD)).toBe(N);
-        expect(getCellByOwnerCard(result.knowledge, CaseFileOwner(), MUSTARD)).toBe(N);
+        expect(getCellByOwnerCard(result.right, PlayerOwner(B), MUSTARD)).toBe(N);
+        expect(getCellByOwnerCard(result.right, PlayerOwner(C), MUSTARD)).toBe(N);
+        expect(getCellByOwnerCard(result.right, CaseFileOwner(), MUSTARD)).toBe(N);
     });
 
     test("case file category narrows to single candidate", () => {
@@ -73,12 +73,12 @@ describe("deduce", () => {
         knowledge = setHandSize(knowledge, PlayerOwner(A), 5);
 
         const result = deduce(setup, [])(knowledge);
-        expect(result._tag).toBe("Ok");
-        if (result._tag !== "Ok") return;
+        expect(Either.isRight(result)).toBe(true);
+        if (!Either.isRight(result)) return;
 
         const sixth = expectAt(suspects, 5, "suspects[5]");
         // The last suspect must be in the case file.
-        expect(getCellByOwnerCard(result.knowledge, CaseFileOwner(), sixth)).toBe(Y);
+        expect(getCellByOwnerCard(result.right, CaseFileOwner(), sixth)).toBe(Y);
     });
 
     test("non-refuters don't have the suggested cards", () => {
@@ -89,12 +89,12 @@ describe("deduce", () => {
         })];
 
         const result = deduce(setup, suggestions)(emptyKnowledge);
-        expect(result._tag).toBe("Ok");
-        if (result._tag !== "Ok") return;
+        expect(Either.isRight(result)).toBe(true);
+        if (!Either.isRight(result)) return;
 
         for (const card of [PLUM, KNIFE, CONSERV]) {
-            expect(getCellByOwnerCard(result.knowledge, PlayerOwner(B), card)).toBe(N);
-            expect(getCellByOwnerCard(result.knowledge, PlayerOwner(C), card)).toBe(N);
+            expect(getCellByOwnerCard(result.right, PlayerOwner(B), card)).toBe(N);
+            expect(getCellByOwnerCard(result.right, PlayerOwner(C), card)).toBe(N);
         }
     });
 
@@ -108,10 +108,10 @@ describe("deduce", () => {
         })];
 
         const result = deduce(setup, suggestions)(emptyKnowledge);
-        expect(result._tag).toBe("Ok");
-        if (result._tag !== "Ok") return;
+        expect(Either.isRight(result)).toBe(true);
+        if (!Either.isRight(result)) return;
 
-        expect(getCellByOwnerCard(result.knowledge, PlayerOwner(B), CONSERV)).toBe(Y);
+        expect(getCellByOwnerCard(result.right, PlayerOwner(B), CONSERV)).toBe(Y);
     });
 
     test("refuter forced to own the only non-excluded card", () => {
@@ -128,10 +128,10 @@ describe("deduce", () => {
         })];
 
         const result = deduce(setup, suggestions)(knowledge);
-        expect(result._tag).toBe("Ok");
-        if (result._tag !== "Ok") return;
+        expect(Either.isRight(result)).toBe(true);
+        if (!Either.isRight(result)) return;
 
-        expect(getCellByOwnerCard(result.knowledge, PlayerOwner(B), CONSERV)).toBe(Y);
+        expect(getCellByOwnerCard(result.right, PlayerOwner(B), CONSERV)).toBe(Y);
     });
 
     test("full scenario: multiple suggestions converge", () => {
@@ -165,10 +165,10 @@ describe("deduce", () => {
         ];
 
         const result = deduce(setup, suggestions)(knowledge);
-        expect(result._tag).toBe("Ok");
-        if (result._tag !== "Ok") return;
+        expect(Either.isRight(result)).toBe(true);
+        if (!Either.isRight(result)) return;
 
-        const k = result.knowledge;
+        const k = result.right;
         // Anisha's known cards.
         expect(getCellByOwnerCard(k, PlayerOwner(A), MUSTARD)).toBe(Y);
         expect(getCellByOwnerCard(k, PlayerOwner(A), REVOLVER)).toBe(Y);
@@ -191,7 +191,7 @@ describe("deduce", () => {
         knowledge = setCell(knowledge, Cell(PlayerOwner(B), KNIFE), Y);
 
         const result = deduce(setup, [])(knowledge);
-        expect(result._tag).toBe("Contradiction");
+        expect(Either.isLeft(result)).toBe(true);
     });
 
     test("contradiction trace highlights offending cells and slice", () => {
@@ -200,12 +200,12 @@ describe("deduce", () => {
         knowledge = setCell(knowledge, Cell(PlayerOwner(B), KNIFE), Y);
 
         const result = deduce(setup, [])(knowledge);
-        expect(result._tag).toBe("Contradiction");
-        if (result._tag !== "Contradiction") return;
+        expect(Either.isLeft(result)).toBe(true);
+        if (!Either.isLeft(result)) return;
 
-        expect(result.trace.sliceLabel).toContain("Knife");
-        expect(result.trace.offendingCells).toHaveLength(2);
-        expect(result.trace.offendingSuggestionIndices).toHaveLength(0);
+        expect(result.left.sliceLabel).toContain("Knife");
+        expect(result.left.offendingCells).toHaveLength(2);
+        expect(result.left.offendingSuggestionIndices).toHaveLength(0);
     });
 
     test("contradiction trace names the offending suggestion", () => {
@@ -222,10 +222,10 @@ describe("deduce", () => {
         })];
 
         const result = deduce(setup, suggestions)(knowledge);
-        expect(result._tag).toBe("Contradiction");
-        if (result._tag !== "Contradiction") return;
+        expect(Either.isLeft(result)).toBe(true);
+        if (!Either.isLeft(result)) return;
 
-        expect(result.trace.offendingSuggestionIndices).toHaveLength(1);
-        expect(result.trace.offendingSuggestionIndices[0]).toBe(0);
+        expect(result.left.offendingSuggestionIndices).toHaveLength(1);
+        expect(result.left.offendingSuggestionIndices[0]).toBe(0);
     });
 });

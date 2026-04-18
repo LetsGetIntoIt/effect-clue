@@ -1,5 +1,6 @@
 "use client";
 
+import { Either } from "effect";
 import { useEffect, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
 import { cardName, categoryOfCard } from "../../logic/GameSetup";
@@ -310,14 +311,14 @@ function Recommendations() {
         setAsPlayer(setup.players[0] ?? "");
     }, [setup.players, asPlayer]);
 
-    if (result._tag === "Contradiction" || !asPlayer) {
+    if (Either.isLeft(result) || !asPlayer) {
         return (
             <div>
                 <h3 className={SECTION_TITLE}>
                     Next-suggestion recommendations
                 </h3>
                 <div className="text-[13px] text-muted">
-                    {result._tag === "Contradiction"
+                    {Either.isLeft(result)
                         ? "Resolve the contradiction to see recommendations."
                         : "Add players to see recommendations."}
                 </div>
@@ -327,7 +328,7 @@ function Recommendations() {
 
     const rec = recommendSuggestions(
         setup,
-        result.knowledge,
+        result.right,
         Player(asPlayer),
         5,
     );

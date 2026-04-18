@@ -1,3 +1,4 @@
+import { Either } from "effect";
 import { Card, Player, PlayerOwner } from "./GameObjects";
 import { CLASSIC_SETUP_3P } from "./GameSetup";
 import {
@@ -50,18 +51,18 @@ describe("buildInitialKnowledge", () => {
         ];
         const initial = buildInitialKnowledge(setup, known, []);
         const result = deduce(setup, [])(initial);
-        expect(result._tag).toBe("Ok");
-        if (result._tag !== "Ok") return;
+        expect(Either.isRight(result)).toBe(true);
+        if (!Either.isRight(result)) return;
 
         // Cards not in Anisha's known list must be N in her row.
         const PLUM = cardByName(setup, "Prof. Plum");
         const ROPE = cardByName(setup, "Rope");
         const STUDY = cardByName(setup, "Study");
-        expect(getCellByOwnerCard(result.knowledge, PlayerOwner(A), PLUM))
+        expect(getCellByOwnerCard(result.right, PlayerOwner(A), PLUM))
             .toBe(N);
-        expect(getCellByOwnerCard(result.knowledge, PlayerOwner(A), ROPE))
+        expect(getCellByOwnerCard(result.right, PlayerOwner(A), ROPE))
             .toBe(N);
-        expect(getCellByOwnerCard(result.knowledge, PlayerOwner(A), STUDY))
+        expect(getCellByOwnerCard(result.right, PlayerOwner(A), STUDY))
             .toBe(N);
     });
 
