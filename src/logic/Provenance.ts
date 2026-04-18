@@ -87,8 +87,9 @@ export const explainCell = (
 
 /**
  * Walk the provenance chain for a cell, producing the full list of
- * reasons in dependency order (root causes first). Used by the
- * ExplanationPanel to render the derivation chain.
+ * reasons in dependency order (root causes first). Used by
+ * ChecklistGrid's title-tooltip builder to render the derivation
+ * chain.
  */
 export const chainFor = (
     provenance: Provenance,

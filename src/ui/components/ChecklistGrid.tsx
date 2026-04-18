@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Card, Owner, ownerLabel } from "../../logic/GameObjects";
 import { allOwners, cardName } from "../../logic/GameSetup";
 import {
@@ -13,32 +12,39 @@ import {
 } from "../../logic/Knowledge";
 import { footnotesForCell } from "../../logic/Footnotes";
 import {
+    chainFor,
+    describeReason,
+    Provenance,
+} from "../../logic/Provenance";
+import {
     caseFileAnswerFor,
     caseFileCandidatesFor,
     caseFileProgress,
 } from "../../logic/Recommender";
+import { Suggestion } from "../../logic/Suggestion";
 import { useClue } from "../state";
 import { ContradictionBanner } from "./ContradictionBanner";
-import {
-    ExplanationFocus,
-    ExplanationPanel,
-} from "./ExplanationPanel";
 
 /**
  * The main visual: a case-file header strip on top; a grid with one row
  * per card and one column per owner underneath. Cells show Y / N / blank,
- * are coloured by status, and are clickable: clicking a cell with a known
- * value opens the ExplanationPanel below the grid. Blank cells that are
- * still candidates for a refuter's unseen card get footnote superscripts
- * (the "number system").
+ * are coloured by status, and show a native browser tooltip (via the
+ * `title` attribute) with the full explanation chain when you hover.
+ * Blank cells that are still candidates for a refuter's unseen card
+ * get footnote superscripts (the "number system"), also described via
+ * the title tooltip.
+ *
+ * We deliberately stick to `title` rather than a custom popover so the
+ * hover affordance is the same everywhere — no difference between a
+ * ✓ / · cell and a blank-with-footnote cell.
  */
 export function ChecklistGrid() {
     const { state, derived } = useClue();
     const setup = state.setup;
     const result = derived.deductionResult;
     const footnotes = derived.footnotes;
-
-    const [focus, setFocus] = useState<ExplanationFocus | null>(null);
+    const provenance = derived.provenance;
+    const suggestions = derived.suggestionsAsData;
 
     const owners: ReadonlyArray<Owner> = allOwners(setup);
 
@@ -94,92 +100,94 @@ export function ChecklistGrid() {
                                 <th className="border border-border px-2 py-1 text-left font-normal">
                                     {entry.name}
                                 </th>
-                                {owners.map(owner => (
-                                    <GridCell
-                                        key={`${ownerKey(owner)}-${String(entry.id)}`}
-                                        owner={owner}
-                                        card={entry.id}
-                                        value={getCellByOwnerCard(
-                                            knowledge,
-                                            owner,
-                                            entry.id,
-                                        )}
-                                        footnoteNumbers={footnotesForCell(
-                                            footnotes,
-                                            Cell(owner, entry.id),
-                                        )}
-                                        isFocused={
-                                            focus !== null &&
-                                            focus.owner === owner &&
-                                            focus.card === entry.id
-                                        }
-                                        onSelect={f => setFocus(f)}
-                                    />
-                                ))}
+                                {owners.map(owner => {
+                                    const value = getCellByOwnerCard(
+                                        knowledge,
+                                        owner,
+                                        entry.id,
+                                    );
+                                    const footnoteNumbers = footnotesForCell(
+                                        footnotes,
+                                        Cell(owner, entry.id),
+                                    );
+                                    return (
+                                        <td
+                                            key={`${ownerKey(owner)}-${String(entry.id)}`}
+                                            className={cellClass(value)}
+                                            title={buildCellTitle({
+                                                provenance,
+                                                suggestions,
+                                                setup,
+                                                owner,
+                                                card: entry.id,
+                                                footnoteNumbers,
+                                            })}
+                                        >
+                                            {cellLabel(value)}
+                                            {footnoteNumbers.length > 0 &&
+                                                value === undefined && (
+                                                    <sup className="ml-0.5 text-[9px] font-normal text-accent">
+                                                        {footnoteNumbers.join(",")}
+                                                    </sup>
+                                                )}
+                                        </td>
+                                    );
+                                })}
                             </tr>
                         )),
                     ])}
                 </tbody>
             </table>
-            <ExplanationPanel
-                focus={focus}
-                onClose={() => setFocus(null)}
-            />
         </section>
     );
 }
 
-function GridCell({
-    owner,
-    card,
-    value,
-    footnoteNumbers,
-    isFocused,
-    onSelect,
-}: {
+/**
+ * Assemble the title= string shown on hover. For known Y/N cells we walk
+ * the dependency chain backwards and render each step as a numbered line
+ * so the user sees *why* the cell has that value, not just the last
+ * rule. For blank cells with refuter-candidate footnotes we explain the
+ * footnote numbers. For everything else, no tooltip at all.
+ */
+const buildCellTitle = (args: {
+    provenance: Provenance | undefined;
+    suggestions: ReadonlyArray<Suggestion>;
+    setup: ReturnType<typeof useClue>["state"]["setup"];
     owner: Owner;
     card: Card;
-    value: CellValue | undefined;
     footnoteNumbers: ReadonlyArray<number>;
-    isFocused: boolean;
-    onSelect: (f: ExplanationFocus | null) => void;
-}) {
-    const canExplain = value !== undefined;
-    const handleClick = () => {
-        if (!canExplain) {
-            onSelect(null);
-            return;
-        }
-        if (isFocused) {
-            onSelect(null);
-        } else {
-            onSelect({ owner, card, value: value as "Y" | "N" });
-        }
-    };
+}): string | undefined => {
+    const { provenance, suggestions, setup, owner, card, footnoteNumbers } = args;
 
-    return (
-        <td
-            className={cellClass(value, isFocused, canExplain)}
-            onClick={handleClick}
-            title={
-                footnoteNumbers.length > 0
-                    ? `Candidate for suggestion ${footnoteNumbers
-                          .map(n => `#${n}`)
-                          .join(", ")} (refuter's unseen card could be here)`
-                    : canExplain
-                        ? "Click for explanation"
-                        : undefined
-            }
-        >
-            {cellLabel(value)}
-            {footnoteNumbers.length > 0 && value === undefined && (
-                <sup className="ml-0.5 text-[9px] font-normal text-accent">
-                    {footnoteNumbers.join(",")}
-                </sup>
-            )}
-        </td>
-    );
-}
+    const footnoteLine =
+        footnoteNumbers.length > 0
+            ? `Candidate for suggestion ${footnoteNumbers
+                  .map(n => `#${n}`)
+                  .join(", ")} — refuter's unseen card could be here.`
+            : undefined;
+
+    const chain = provenance
+        ? chainFor(provenance, Cell(owner, card))
+        : [];
+    const chainLines: string[] = chain.map((reason, i) => {
+        const { headline, detail } = describeReason(
+            reason,
+            setup,
+            suggestions,
+        );
+        const iter = reason.iteration > 0 ? ` (iter ${reason.iteration})` : "";
+        return `${i + 1}. ${headline}${iter}: ${detail}`;
+    });
+
+    const parts: string[] = [];
+    if (chainLines.length > 0) {
+        parts.push("Why this value:");
+        parts.push(...chainLines);
+    }
+    if (footnoteLine) parts.push(footnoteLine);
+
+    return parts.length > 0 ? parts.join("\n") : undefined;
+};
 
 function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
     const { state } = useClue();
@@ -253,14 +261,8 @@ const cellLabel = (value: CellValue | undefined): string => {
 const CELL_BASE =
     "w-9 min-w-9 border border-border px-2 py-1 text-center font-semibold relative";
 
-const cellClass = (
-    value: CellValue | undefined,
-    isFocused: boolean,
-    canExplain: boolean,
-): string => {
-    const base = canExplain ? `${CELL_BASE} cursor-pointer` : CELL_BASE;
-    const focus = isFocused ? " ring-2 ring-accent ring-inset" : "";
-    if (value === Y) return `${base} bg-yes-bg text-yes${focus}`;
-    if (value === N) return `${base} bg-no-bg text-no${focus}`;
-    return `${base} bg-white`;
+const cellClass = (value: CellValue | undefined): string => {
+    if (value === Y) return `${CELL_BASE} bg-yes-bg text-yes`;
+    if (value === N) return `${CELL_BASE} bg-no-bg text-no`;
+    return `${CELL_BASE} bg-white`;
 };
