@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { Card, Player } from "../../logic/GameObjects";
 import { categoryOf } from "../../logic/GameSetup";
 import { recommendSuggestions } from "../../logic/Recommender";
@@ -235,10 +235,13 @@ function Recommendations() {
     const result = deductionResultSignal.value;
     const [asPlayer, setAsPlayer] = useState<string>(setup.players[0] ?? "");
 
-    // Keep player selection valid as players come and go.
-    if (asPlayer && !setup.players.some(p => String(p) === asPlayer)) {
+    // Keep player selection valid as players come and go. Run as an
+    // effect so we don't trigger a setState-during-render warning when
+    // the previously selected player is removed/renamed.
+    useEffect(() => {
+        if (asPlayer && setup.players.some(p => String(p) === asPlayer)) return;
         setAsPlayer(setup.players[0] ?? "");
-    }
+    }, [setup.players, asPlayer]);
 
     if (result._tag === "Contradiction" || !asPlayer) {
         return (
@@ -270,14 +273,7 @@ function Recommendations() {
                     ))}
                 </select>
             </label>
-            {rec.locked ? (
-                <div
-                    class="recommender-locked"
-                    title={`${rec.topCount} candidates tied for the top score`}
-                >
-                    Gather more leads to unlock recommendations.
-                </div>
-            ) : rec.recommendations.length === 0 ? (
+            {rec.recommendations.length === 0 ? (
                 <div class="muted">
                     Nothing useful to ask — you've already narrowed everything
                     down.
@@ -285,7 +281,19 @@ function Recommendations() {
             ) : (
                 <ol class="rec-list">
                     {rec.recommendations.map((r, i) => (
-                        <li key={i}>
+                        <li
+                            key={i}
+                            title={
+                                `${r.cellInfoScore} unknown cell` +
+                                `${r.cellInfoScore === 1 ? "" : "s"}` +
+                                ` × ${r.caseFileOpennessScore} case-file ` +
+                                `combination` +
+                                `${r.caseFileOpennessScore === 1 ? "" : "s"}` +
+                                ` × ${r.refuterUncertaintyScore} possible ` +
+                                `refuter` +
+                                `${r.refuterUncertaintyScore === 1 ? "" : "s"}`
+                            }
+                        >
                             {r.cards.map((c, ci) => (
                                 <span key={ci}>
                                     {ci > 0 && " + "}

@@ -69,31 +69,29 @@ export const caseFileCandidatesFor = (
  * A single ranked recommendation: one card per category (in the setup's
  * category order) that would, if asked, touch unknown cells and help
  * narrow the case file down.
+ *
+ * The three score factors are exposed separately so the UI can show
+ * "why is this recommended" alongside the overall score.
  */
 export interface Recommendation {
     readonly suggester: Player;
     readonly cards: ReadonlyArray<Card>;
     readonly score: number;
+    readonly cellInfoScore: number;
+    readonly caseFileOpennessScore: number;
+    readonly refuterUncertaintyScore: number;
 }
 
 /**
- * Output of the recommender. When `locked` is true, the top score is
- * shared by too many candidate suggestions to give meaningful guidance
- * — the UI should show a "gather more leads" message instead. The
- * `topCount` field is exposed for tooltips/debug.
+ * Output of the recommender. `topCount` is exposed for debug tooltips.
+ * There's no "locked" gate — we always return the top-N; at the very
+ * start of a game every triple ties, but tie-breaks (see below) pick
+ * a stable subset so the user gets something to work with.
  */
 export interface RecommendationResult {
     readonly recommendations: ReadonlyArray<Recommendation>;
-    readonly locked: boolean;
     readonly topCount: number;
 }
-
-/**
- * Threshold for "too many candidates tied for the best score". Below
- * this many ties, recommendations are useful; above, the user should
- * make more suggestions to narrow things down first.
- */
-const TOP_TIE_THRESHOLD = 5;
 
 /**
  * Enumerate every combination of one card per category, drawing only
@@ -123,6 +121,33 @@ const cartesianCandidates = function* (
     }
 };
 
+/**
+ * Recommender scoring has three factors, multiplied together:
+ *
+ * 1. `cellInfoScore`: count of currently-unknown cells the question
+ *    touches in other players' rows. "How many blanks does this
+ *    suggestion probe?" — the original heuristic.
+ *
+ * 2. `caseFileOpennessScore`: product over the triple's categories of
+ *    |caseFileCandidatesFor(category)|. Big when the case file still
+ *    has many candidates per category, forcing this score to 0 when
+ *    the case file is fully solved (we multiply, so 1×1×1 still gives
+ *    a floor of 1). Captures "this triple actually probes cards that
+ *    could still be in the case file".
+ *
+ * 3. `refuterUncertaintyScore`: number of other players who could
+ *    still plausibly refute — players not known to lack *all* the
+ *    suggested cards. 1 = refuter is predictable (we already know it
+ *    has to be a specific player), ≥2 = we'll learn who. Penalises
+ *    asking questions whose refuter we can already pin down.
+ *
+ * A triple with any factor = 0 contributes nothing useful (no cells
+ * to probe, or no case-file possibility), and gets filtered out.
+ *
+ * Tie-breaking when two triples have identical scores: sort by the
+ * joined card names alphabetically. Deterministic, reproducible, and
+ * independent of category count.
+ */
 export const recommendSuggestions = (
     setup: GameSetup,
     knowledge: Knowledge,
@@ -133,33 +158,65 @@ export const recommendSuggestions = (
 
     const results: Recommendation[] = [];
     for (const cards of cartesianCandidates(setup, knowledge)) {
-        let unknownCount = 0;
+        // Factor 1: unknown cells touched in others' rows.
+        let cellInfoScore = 0;
         for (const p of otherPlayers) {
             for (const card of cards) {
                 const v = getCellByOwnerCard(knowledge, PlayerOwner(p), card);
-                if (v === undefined) unknownCount += 1;
+                if (v === undefined) cellInfoScore += 1;
             }
         }
-        if (unknownCount === 0) continue;
+        if (cellInfoScore === 0) continue;
+
+        // Factor 2: case-file openness. Product over categories of
+        // candidate counts; at least 1 per category (we're iterating
+        // only live candidates), so this is always ≥1.
+        let caseFileOpennessScore = 1;
+        for (const category of setup.categories) {
+            const candidates = caseFileCandidatesFor(
+                setup, knowledge, category.name);
+            caseFileOpennessScore *= candidates.length;
+        }
+
+        // Factor 3: how many distinct other players could refute this
+        // suggestion? A player who's known to lack all three suggested
+        // cards cannot refute. If we're down to just one possible
+        // refuter, the answer is predictable — we learn less.
+        let refuterUncertaintyScore = 0;
+        for (const p of otherPlayers) {
+            const allN = cards.every(card =>
+                getCellByOwnerCard(knowledge, PlayerOwner(p), card) === N);
+            if (!allN) refuterUncertaintyScore += 1;
+        }
+        if (refuterUncertaintyScore === 0) continue;
+
+        const score =
+            cellInfoScore * caseFileOpennessScore * refuterUncertaintyScore;
+
         results.push({
             suggester,
             cards,
-            score: unknownCount,
+            score,
+            cellInfoScore,
+            caseFileOpennessScore,
+            refuterUncertaintyScore,
         });
     }
 
     if (results.length === 0) {
-        return { recommendations: [], locked: false, topCount: 0 };
+        return { recommendations: [], topCount: 0 };
     }
 
-    results.sort((a, b) => b.score - a.score);
+    // Primary: descending score. Tiebreak: lexicographic by joined names.
+    results.sort((a, b) => {
+        if (a.score !== b.score) return b.score - a.score;
+        return a.cards.join("|").localeCompare(b.cards.join("|"));
+    });
     const topScore = results[0].score;
     const topCount = results.filter(r => r.score === topScore).length;
-    const locked = topCount > TOP_TIE_THRESHOLD;
 
     return {
-        recommendations: locked ? [] : results.slice(0, maxResults),
-        locked,
+        recommendations: results.slice(0, maxResults),
         topCount,
     };
 };
