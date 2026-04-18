@@ -279,39 +279,120 @@ export function GameSetupPanel() {
                         </tr>
                     </thead>
                     <tbody>
-                        {categories.flatMap(cat => [
-                            <tr key={`h-${cat.name}`}>
-                                <th
-                                    colSpan={cardSpan}
-                                    className="border border-border bg-accent px-1.5 py-1 text-left text-[10px] uppercase tracking-[0.05em] text-white"
-                                >
-                                    {cat.name}
-                                </th>
-                            </tr>,
-                            ...cat.cards.map(card => (
-                                <tr key={card}>
-                                    <th className="whitespace-nowrap border border-border bg-white px-1.5 py-1 text-left font-normal">
-                                        {card}
-                                    </th>
-                                    {setup.players.map(p => (
-                                        <td
-                                            key={p}
-                                            className="w-8 min-w-8 border border-border px-1.5 py-1 text-center"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                className="m-0 cursor-pointer"
-                                                checked={isKnown(p, card)}
-                                                onChange={() =>
-                                                    toggleKnownCard(p, card)
+                        {setup.categories.flatMap((cat, catIdx) => {
+                            const canRemoveCategory =
+                                setup.categories.length > 1;
+                            const canRemoveCard = cat.cards.length > 1;
+                            return [
+                                <tr key={`h-${catIdx}`}>
+                                    <th
+                                        colSpan={cardSpan}
+                                        className="border border-border bg-accent px-1.5 py-1 text-left text-[10px] uppercase tracking-[0.05em] text-white"
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span>{String(cat.name)}</span>
+                                            <button
+                                                type="button"
+                                                title={
+                                                    canRemoveCategory
+                                                        ? `Remove ${String(cat.name)}`
+                                                        : "At least one category is required"
                                                 }
-                                            />
-                                        </td>
-                                    ))}
-                                    <td className="border border-border"></td>
-                                </tr>
-                            )),
-                        ])}
+                                                disabled={!canRemoveCategory}
+                                                className="cursor-pointer border-none bg-transparent p-0 text-[14px] leading-none text-white/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                                                onClick={() =>
+                                                    dispatch({
+                                                        type: "removeCategory",
+                                                        categoryIndex: catIdx,
+                                                    })
+                                                }
+                                            >
+                                                &times;
+                                            </button>
+                                        </div>
+                                    </th>
+                                </tr>,
+                                ...cat.cards.map((card, cardIdx) => (
+                                    <tr key={`${catIdx}-${String(card)}-${cardIdx}`}>
+                                        <th className="whitespace-nowrap border border-border bg-white px-1.5 py-1 text-left font-normal">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span>{card}</span>
+                                                <button
+                                                    type="button"
+                                                    title={
+                                                        canRemoveCard
+                                                            ? `Remove ${card}`
+                                                            : "At least one card per category is required"
+                                                    }
+                                                    disabled={!canRemoveCard}
+                                                    className="cursor-pointer border-none bg-transparent p-0 text-[14px] leading-none text-muted hover:text-danger disabled:cursor-not-allowed disabled:opacity-40"
+                                                    onClick={() =>
+                                                        dispatch({
+                                                            type: "removeCard",
+                                                            categoryIndex: catIdx,
+                                                            cardIndex: cardIdx,
+                                                        })
+                                                    }
+                                                >
+                                                    &times;
+                                                </button>
+                                            </div>
+                                        </th>
+                                        {setup.players.map(p => (
+                                            <td
+                                                key={p}
+                                                className="w-8 min-w-8 border border-border px-1.5 py-1 text-center"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    className="m-0 cursor-pointer"
+                                                    checked={isKnown(p, card)}
+                                                    onChange={() =>
+                                                        toggleKnownCard(p, card)
+                                                    }
+                                                />
+                                            </td>
+                                        ))}
+                                        <td className="border border-border"></td>
+                                    </tr>
+                                )),
+                                <tr key={`add-card-${catIdx}`}>
+                                    <th
+                                        colSpan={cardSpan}
+                                        className="border border-border bg-[#fafafc] px-1.5 py-1 text-left"
+                                    >
+                                        <button
+                                            type="button"
+                                            className="cursor-pointer border-none bg-transparent p-0 text-[12px] text-accent underline"
+                                            onClick={() =>
+                                                dispatch({
+                                                    type: "addCardToCategory",
+                                                    categoryIndex: catIdx,
+                                                })
+                                            }
+                                        >
+                                            + add card
+                                        </button>
+                                    </th>
+                                </tr>,
+                            ];
+                        })}
+                        <tr>
+                            <th
+                                colSpan={cardSpan}
+                                className="border border-border bg-[#fafafc] px-1.5 py-2 text-center"
+                            >
+                                <button
+                                    type="button"
+                                    className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-[#f0f0f5]"
+                                    onClick={() =>
+                                        dispatch({ type: "addCategory" })
+                                    }
+                                >
+                                    + add category
+                                </button>
+                            </th>
+                        </tr>
                     </tbody>
                 </table>
             </div>

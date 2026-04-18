@@ -12,6 +12,7 @@ import {
 } from "react";
 import {
     Card,
+    CardCategory,
     Player,
 } from "../logic/GameObjects";
 import {
@@ -70,6 +71,10 @@ export type ClueAction =
     | { type: "newGame" }
     | { type: "loadPreset"; setup: GameSetup }
     | { type: "setSetup"; setup: GameSetup }
+    | { type: "addCategory" }
+    | { type: "removeCategory"; categoryIndex: number }
+    | { type: "addCardToCategory"; categoryIndex: number }
+    | { type: "removeCard"; categoryIndex: number; cardIndex: number }
     | { type: "addKnownCard"; card: KnownCard }
     | { type: "removeKnownCard"; index: number }
     | { type: "setHandSize"; player: Player; size: number | undefined }
@@ -128,6 +133,70 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
             // card or add a category mid-game without losing
             // unrelated progress.
             return pruneSessionToSetup(state, action.setup);
+
+        case "addCategory": {
+            const name = nextUniqueCategoryName(state.setup);
+            const card = nextUniqueCardName(state.setup);
+            return {
+                ...state,
+                setup: GameSetup({
+                    players: state.setup.players,
+                    categories: [
+                        ...state.setup.categories,
+                        {
+                            name: CardCategory(name),
+                            cards: [Card(card)],
+                        },
+                    ],
+                }),
+            };
+        }
+
+        case "removeCategory": {
+            if (state.setup.categories.length <= 1) return state;
+            const nextSetup = GameSetup({
+                players: state.setup.players,
+                categories: state.setup.categories.filter(
+                    (_, i) => i !== action.categoryIndex,
+                ),
+            });
+            return pruneSessionToSetup(state, nextSetup);
+        }
+
+        case "addCardToCategory": {
+            const name = nextUniqueCardName(state.setup);
+            return {
+                ...state,
+                setup: GameSetup({
+                    players: state.setup.players,
+                    categories: state.setup.categories.map((c, i) =>
+                        i === action.categoryIndex
+                            ? { ...c, cards: [...c.cards, Card(name)] }
+                            : c,
+                    ),
+                }),
+            };
+        }
+
+        case "removeCard": {
+            const target = state.setup.categories[action.categoryIndex];
+            if (!target) return state;
+            if (target.cards.length <= 1) return state;
+            const nextSetup = GameSetup({
+                players: state.setup.players,
+                categories: state.setup.categories.map((c, i) =>
+                    i === action.categoryIndex
+                        ? {
+                              ...c,
+                              cards: c.cards.filter(
+                                  (_, ci) => ci !== action.cardIndex,
+                              ),
+                          }
+                        : c,
+                ),
+            });
+            return pruneSessionToSetup(state, nextSetup);
+        }
 
         case "addKnownCard":
             return {
@@ -508,6 +577,24 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         </ClueContext.Provider>
     );
 }
+
+/** Pick the next "Category N" that doesn't collide with any existing one. */
+const nextUniqueCategoryName = (setup: GameSetup): string => {
+    const existing = new Set(setup.categories.map(c => String(c.name)));
+    let n = 1;
+    while (existing.has(`Category ${n}`)) n++;
+    return `Category ${n}`;
+};
+
+/** Pick the next "Card N" that doesn't collide anywhere in the deck. */
+const nextUniqueCardName = (setup: GameSetup): string => {
+    const existing = new Set(
+        setup.categories.flatMap(c => c.cards.map(card => String(card))),
+    );
+    let n = 1;
+    while (existing.has(`Card ${n}`)) n++;
+    return `Card ${n}`;
+};
 
 const groupKnownCardsByPlayer = (
     cards: ReadonlyArray<KnownCard>,
