@@ -1,5 +1,5 @@
-import { Data, Equal, HashMap, Option } from "effect";
-import { Card, Owner, ownerLabel, Player, PlayerOwner } from "./GameObjects";
+import { Data, HashMap, Option } from "effect";
+import { Card, Owner, ownerLabel } from "./GameObjects";
 
 /**
  * Each cell in the checklist has one of two values: "Y" for "this owner
@@ -87,7 +87,7 @@ export const getHandSize = (
  *   of that suggestion in the suggestions array — so the UI can surface
  *   a "remove this suggestion" quick fix.
  */
-export interface ContradictionInfo {
+interface ContradictionInfo {
     readonly reason: string;
     readonly offendingCells: ReadonlyArray<Cell>;
     readonly sliceLabel?: string | undefined;
@@ -127,7 +127,7 @@ export class Contradiction extends Error {
     }
 }
 
-export const cellConflictContradiction = (
+const cellConflictContradiction = (
     cell: Cell,
     attempted: CellValue,
     existing: CellValue,
@@ -171,23 +171,3 @@ export const setHandSize = (
     handSizes: HashMap.set(knowledge.handSizes, owner, size),
 });
 
-/**
- * Given an iterable of (player, cards) pairs, mark each player as owning
- * each card with "Y". Used to seed the knowledge with cards you know about
- * (your own hand, or cards other players have publicly revealed).
- */
-export const seedPlayerHands = (
-    knowledge: Knowledge,
-    hands: Iterable<readonly [Player, Iterable<Card>]>,
-): Knowledge => {
-    let k = knowledge;
-    for (const [player, cards] of hands) {
-        for (const card of cards) {
-            k = setCell(k, Cell(PlayerOwner(player), card), Y);
-        }
-    }
-    return k;
-};
-
-export const knowledgeEquals = (a: Knowledge, b: Knowledge): boolean =>
-    Equal.equals(a, b);

@@ -52,11 +52,6 @@ import {
 } from "../logic/Footnotes";
 
 /**
- * Re-exported from the logic layer so UI code keeps importing from state.
- */
-export type { KnownCard };
-
-/**
  * UI-level shape of a suggestion that hasn't been converted to a Data
  * record yet — matches the form inputs directly. Forms render these and
  * the state layer converts them on submit.
@@ -78,7 +73,7 @@ export interface DraftSuggestion {
  * edits that know the stable id) and are resolved against the current
  * setup inside the reducer.
  */
-export type ClueAction =
+type ClueAction =
     | { type: "newGame" }
     | { type: "loadPreset"; setup: GameSetup }
     | { type: "setSetup"; setup: GameSetup }
@@ -101,7 +96,7 @@ export type ClueAction =
     | { type: "toggleExplanations" }
     | { type: "replaceSession"; session: GameSession };
 
-export interface ClueState {
+interface ClueState {
     readonly setup: GameSetup;
     readonly handSizes: ReadonlyArray<readonly [Player, number]>;
     readonly knownCards: ReadonlyArray<KnownCard>;
@@ -445,7 +440,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
  * the downstream component render memoization, so we don't need useMemo in
  * every consumer.
  */
-export interface ClueDerived {
+interface ClueDerived {
     readonly suggestionsAsData: ReadonlyArray<Suggestion>;
     readonly initialKnowledge: Knowledge;
     readonly deductionResult: DeductionResult;
@@ -484,7 +479,7 @@ const deriveState = (
 
 // ---- Context + hook -----------------------------------------------------
 
-export interface ClueContextValue {
+interface ClueContextValue {
     readonly state: ClueState;
     readonly dispatch: React.Dispatch<ClueAction>;
     readonly derived: ClueDerived;

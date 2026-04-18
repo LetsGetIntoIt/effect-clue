@@ -81,9 +81,3 @@ export const CaseFileOwner = (): Owner =>
 
 export const ownerLabel = (owner: Owner): string =>
     owner._tag === "Player" ? owner.player : "Case file";
-
-export const isCaseFile = (owner: Owner): boolean =>
-    owner._tag === "CaseFile";
-
-export const isPlayer = (owner: Owner): boolean =>
-    owner._tag === "Player";

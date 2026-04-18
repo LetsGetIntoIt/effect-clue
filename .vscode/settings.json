@@ -1,15 +1,5 @@
 {
     "typescript.tsdk": "node_modules/typescript/lib",
-    
-    "eslint.validate": [
-        "javascript",
-        "typescript",
-        "json"
-    ],
-
-    "editor.codeActionsOnSave": {
-        "source.fixAll.eslint": true
-    },
 
     "explorer.fileNesting.enabled": true,
     "explorer.fileNesting.patterns": {

@@ -1,5 +1,5 @@
 import { Equal, HashMap } from "effect";
-import { Card, CardCategory, Owner, ownerLabel, Player } from "./GameObjects";
+import { Card, CardCategory, ownerLabel, Player } from "./GameObjects";
 import { Cell, CellValue, Knowledge } from "./Knowledge";
 import { applyConsistencyRules, applyDeductionRules } from "./Rules";
 import {
@@ -79,12 +79,6 @@ export const keyOf = (cell: Cell): string => {
     return `${ownerLabel(owner)}|${card}`;
 };
 
-export const explainCell = (
-    provenance: Provenance,
-    owner: Owner,
-    card: Card,
-): Reason | undefined => provenance.get(keyOf(Cell(owner, card)));
-
 /**
  * Walk the provenance chain for a cell, producing the full list of
  * reasons in dependency order (root causes first). Used by
@@ -123,7 +117,7 @@ export const chainFor = (
  * `detail` (full explanation). The headline is suitable for bold
  * labels; detail is the prose.
  */
-export interface DescribedReason {
+interface DescribedReason {
     readonly headline: string;
     readonly detail: string;
 }
@@ -222,16 +216,6 @@ export const describeReason = (
             };
         }
     }
-};
-
-/** Same as describeReason but formats as a flat string. */
-export const describeReasonString = (
-    reason: Reason,
-    setup: GameSetup,
-    suggestions: ReadonlyArray<Suggestion>,
-): string => {
-    const d = describeReason(reason, setup, suggestions);
-    return `${d.headline}: ${d.detail}`;
 };
 
 /**

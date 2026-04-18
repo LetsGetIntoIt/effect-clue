@@ -45,10 +45,10 @@ export type DeductionResult =
         readonly trace: ContradictionTrace;
     };
 
-export const Ok = (knowledge: Knowledge): DeductionResult =>
+const Ok = (knowledge: Knowledge): DeductionResult =>
     ({ _tag: "Ok", knowledge });
 
-export const Err = (error: Contradiction): DeductionResult => ({
+const Err = (error: Contradiction): DeductionResult => ({
     _tag: "Contradiction",
     error,
     trace: {
@@ -72,7 +72,7 @@ export const Err = (error: Contradiction): DeductionResult => ({
  * removes), so this is guaranteed to terminate in at most
  * |owners| × |cards| iterations.
  */
-export const deduce = (
+const deduce = (
     setup: GameSetup,
     suggestions: Iterable<Suggestion>,
 ) => (

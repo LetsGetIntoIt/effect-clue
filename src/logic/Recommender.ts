@@ -7,7 +7,6 @@ import {
     PlayerOwner,
 } from "./GameObjects";
 import {
-    allCardIds,
     cardIdsInCategory,
     GameSetup,
 } from "./GameSetup";
@@ -73,7 +72,7 @@ export const caseFileCandidatesFor = (
  * The three score factors are exposed separately so the UI can show
  * "why is this recommended" alongside the overall score.
  */
-export interface Recommendation {
+interface Recommendation {
     readonly suggester: Player;
     readonly cards: ReadonlyArray<Card>;
     readonly score: number;
@@ -88,7 +87,7 @@ export interface Recommendation {
  * start of a game every triple ties, but tie-breaks (see below) pick
  * a stable subset so the user gets something to work with.
  */
-export interface RecommendationResult {
+interface RecommendationResult {
     readonly recommendations: ReadonlyArray<Recommendation>;
     readonly topCount: number;
 }
@@ -228,72 +227,3 @@ export const recommendSuggestions = (
     };
 };
 
-// ---- Probabilistic mode ------------------------------------------------
-
-/**
- * For a given card, compute the fraction of currently-known cells that
- * definitely point to each possible owner. This is a crude approximation
- * of a true probability: we're not enumerating consistent worlds, just
- * reporting what the checklist already directly says. It's extremely
- * cheap (O(owners)) and useful as a UI signal: "70% confidence Bob has
- * the knife" really means "2 of the other 3 possible owners have been
- * ruled out".
- */
-export interface CardProbabilities {
-    readonly card: Card;
-    // probability[ownerKey] where ownerKey is "caseFile" or player name.
-    readonly probability: ReadonlyMap<string, number>;
-}
-
-export const probabilitiesForCard = (
-    setup: GameSetup,
-    knowledge: Knowledge,
-    card: Card,
-): CardProbabilities => {
-    const result = new Map<string, number>();
-    const caseFile = CaseFileOwner();
-
-    // First: does anyone already have a Y for this card? Then they have
-    // probability 1 and everyone else 0.
-    let knownOwner: string | undefined = undefined;
-    if (getCellByOwnerCard(knowledge, caseFile, card) === Y) {
-        knownOwner = "caseFile";
-    }
-    for (const p of setup.players) {
-        if (getCellByOwnerCard(knowledge, PlayerOwner(p), card) === Y) {
-            knownOwner = p;
-        }
-    }
-
-    if (knownOwner !== undefined) {
-        result.set("caseFile", knownOwner === "caseFile" ? 1 : 0);
-        for (const p of setup.players) {
-            result.set(p, knownOwner === p ? 1 : 0);
-        }
-        return { card, probability: result };
-    }
-
-    // Otherwise: distribute 1.0 uniformly across un-ruled-out owners.
-    const candidates: string[] = [];
-    if (getCellByOwnerCard(knowledge, caseFile, card) !== N) {
-        candidates.push("caseFile");
-    }
-    for (const p of setup.players) {
-        if (getCellByOwnerCard(knowledge, PlayerOwner(p), card) !== N) {
-            candidates.push(p);
-        }
-    }
-
-    const prob = candidates.length === 0 ? 0 : 1 / candidates.length;
-    result.set("caseFile", candidates.includes("caseFile") ? prob : 0);
-    for (const p of setup.players) {
-        result.set(p, candidates.includes(p) ? prob : 0);
-    }
-    return { card, probability: result };
-};
-
-export const probabilitiesForAllCards = (
-    setup: GameSetup,
-    knowledge: Knowledge,
-): ReadonlyArray<CardProbabilities> =>
-    allCardIds(setup).map(card => probabilitiesForCard(setup, knowledge, card));

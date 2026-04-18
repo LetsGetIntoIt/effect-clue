@@ -20,7 +20,7 @@ import { Suggestion, suggestionCards, suggestionNonRefuters } from "./Suggestion
  *        its own stable `id` alongside `name`. Suggestions, hands,
  *        etc. reference cards by id so renames don't break them.
  */
-export interface PersistedGameV3 {
+interface PersistedGameV3 {
     readonly version: 3;
     readonly setup: {
         readonly players: ReadonlyArray<string>;
@@ -87,7 +87,7 @@ interface PersistedGameV1 {
     readonly suggestions: PersistedGameV3["suggestions"];
 }
 
-export type PersistedGame = PersistedGameV3;
+type PersistedGame = PersistedGameV3;
 
 export interface GameSession {
     setup: GameSetup;
@@ -273,16 +273,6 @@ export const loadFromLocalStorage = (): GameSession | undefined => {
         return undefined;
     } catch {
         return undefined;
-    }
-};
-
-export const clearLocalStorage = (): void => {
-    try {
-        window.localStorage.removeItem(STORAGE_KEY_V3);
-        window.localStorage.removeItem(STORAGE_KEY_V2);
-        window.localStorage.removeItem(STORAGE_KEY_V1);
-    } catch {
-        // Ignore.
     }
 };
 

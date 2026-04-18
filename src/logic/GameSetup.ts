@@ -84,17 +84,6 @@ export const cardIdsInCategory = (
 ): ReadonlyArray<Card> =>
     findCategoryEntry(setup, categoryId)?.cards.map(c => c.id) ?? [];
 
-/** Card entries in a category, in order. Used by UI rendering. */
-export const cardEntriesInCategory = (
-    setup: GameSetup,
-    categoryId: CardCategory,
-): ReadonlyArray<CardEntry> =>
-    findCategoryEntry(setup, categoryId)?.cards ?? [];
-
-export const allCategoryIds = (
-    setup: GameSetup,
-): ReadonlyArray<CardCategory> => setup.categories.map(c => c.id);
-
 export const allCardIds = (setup: GameSetup): ReadonlyArray<Card> =>
     setup.categories.flatMap(c => c.cards.map(e => e.id));
 
@@ -148,7 +137,7 @@ export const defaultHandSizes = (
 
 // ---- Validation --------------------------------------------------------
 
-export interface SetupValidationError {
+interface SetupValidationError {
     readonly kind:
         | "empty-category-name"
         | "duplicate-category-name"
@@ -400,7 +389,7 @@ export const CLASSIC_SETUP_3P: GameSetup = GameSetup({
 /**
  * Classic Clue with the six standard suspects as six players.
  */
-export const CLASSIC_SETUP_6P: GameSetup = GameSetup({
+const CLASSIC_SETUP_6P: GameSetup = GameSetup({
     players: players([
         "Miss Scarlet",
         "Col. Mustard",
@@ -415,7 +404,7 @@ export const CLASSIC_SETUP_6P: GameSetup = GameSetup({
 /**
  * Master Detective edition: more suspects, weapons, and rooms.
  */
-export const MASTER_DETECTIVE_SETUP: GameSetup = GameSetup({
+const MASTER_DETECTIVE_SETUP: GameSetup = GameSetup({
     players: players([
         "Miss Scarlet",
         "Col. Mustard",
@@ -446,7 +435,7 @@ export const MASTER_DETECTIVE_SETUP: GameSetup = GameSetup({
     ],
 });
 
-export interface SetupPreset {
+interface SetupPreset {
     readonly id: string;
     readonly label: string;
     readonly build: () => GameSetup;
@@ -462,29 +451,3 @@ export const PRESETS: ReadonlyArray<SetupPreset> = [
     { id: "classic-6p",        label: "Classic (6 players)",         build: () => CLASSIC_SETUP_6P },
     { id: "master-detective",  label: "Master Detective (6 players)", build: () => MASTER_DETECTIVE_SETUP },
 ];
-
-// ---- Back-compat shims (named to match old API surface) -----------------
-
-/**
- * @deprecated Use `cardIdsInCategory` for solver work or
- * `cardEntriesInCategory` for UI iteration.
- *
- * Kept temporarily for callers that haven't been migrated to the new
- * shape yet. Returns ids — which is what the solver always wanted.
- */
-export const cardsInCategory = cardIdsInCategory;
-
-/**
- * @deprecated Use `allCardIds` for solver work.
- */
-export const allCards = allCardIds;
-
-/**
- * @deprecated Use `categoryOfCard`.
- */
-export const categoryOf = categoryOfCard;
-
-/**
- * @deprecated Use `allCategoryIds`.
- */
-export const allCategories = allCategoryIds;
