@@ -26,6 +26,7 @@ import {
 import { Suggestion } from "../../logic/Suggestion";
 import { useHover } from "../HoverContext";
 import { useClue } from "../state";
+import { Envelope } from "./Icons";
 import { Tooltip } from "./Tooltip";
 
 /**
@@ -286,7 +287,8 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
     return (
         <div className="mb-4 rounded-[var(--radius)] border border-border bg-case-file-bg p-3">
             <div className="mb-2.5 flex items-center gap-3 text-[13px]">
-                <span className="whitespace-nowrap font-semibold text-accent">
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-semibold text-accent">
+                    <Envelope size={16} />
                     Case file · {(progress * 100).toFixed(0)}% solved
                 </span>
                 <div className="h-2 flex-1 overflow-hidden rounded bg-border">

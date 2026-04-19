@@ -5,7 +5,9 @@ import { useClue } from "../state";
 
 const buttonClass =
     "rounded-[var(--radius)] border border-border bg-white px-3.5 py-1.5 " +
-    "text-[13px] cursor-pointer hover:bg-hover";
+    "text-[13px] cursor-pointer hover:bg-hover " +
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent " +
+    "focus-visible:ring-offset-1 focus-visible:ring-offset-bg";
 
 /**
  * Top-of-page controls: undo/redo, start a fresh game, and copy a

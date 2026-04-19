@@ -3,6 +3,7 @@
 import { ChecklistGrid } from "./components/ChecklistGrid";
 import { GameSetupPanel } from "./components/GameSetupPanel";
 import { GlobalContradictionBanner } from "./components/GlobalContradictionBanner";
+import { MagnifyingGlass } from "./components/Icons";
 import { SuggestionLogPanel } from "./components/SuggestionLogPanel";
 import { Toolbar } from "./components/Toolbar";
 import { TooltipProvider } from "./components/Tooltip";
@@ -23,7 +24,8 @@ export function Clue() {
            <HoverProvider>
             <main className="mx-auto flex max-w-[1400px] flex-col gap-5 px-5 pb-15 pt-6">
                 <header className="flex flex-wrap items-center justify-between gap-4">
-                    <h1 className="m-0 text-[36px] uppercase tracking-[0.08em] text-accent drop-shadow-sm">
+                    <h1 className="m-0 flex items-center gap-3 text-[36px] uppercase tracking-[0.08em] text-accent drop-shadow-sm">
+                        <MagnifyingGlass size={32} className="text-accent" />
                         Clue solver
                     </h1>
                     <Toolbar />
