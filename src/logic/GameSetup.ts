@@ -9,12 +9,12 @@ import {
     PlayerOwner,
 } from "./GameObjects";
 import { PlayerSet } from "./PlayerSet";
-import type { CardEntry, Category } from "./CardSet";
+import { CardEntry, Category } from "./CardSet";
 
 // Re-export the deck-side types + helpers so existing imports
 // (`from "./GameSetup"`) keep working after the split. CardSet.ts is
 // the canonical home for anything that operates on just the card half.
-export { type CardEntry, type Category } from "./CardSet";
+export { CardEntry, Category } from "./CardSet";
 export {
     findCategoryEntry,
     findCardEntry,
@@ -178,20 +178,15 @@ export const disambiguateName = (
  * stable across users (two people loading Classic 4p get the same ids)
  * and makes IDs legible in dev tools.
  */
-const presetCard = (name: string, slug: string): CardEntry => ({
-    id: Card(`card-${slug}`),
-    name,
-});
+const presetCard = (name: string, slug: string): CardEntry =>
+    CardEntry({ id: Card(`card-${slug}`), name });
 
 const presetCategory = (
     name: string,
     slug: string,
     cards: ReadonlyArray<CardEntry>,
-): Category => ({
-    id: CardCategory(`category-${slug}`),
-    name,
-    cards,
-});
+): Category =>
+    Category({ id: CardCategory(`category-${slug}`), name, cards });
 
 const players = (names: ReadonlyArray<string>): ReadonlyArray<Player> =>
     names.map(Player);

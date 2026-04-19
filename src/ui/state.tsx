@@ -19,6 +19,7 @@ import {
 } from "../logic/GameObjects";
 import {
     allCardEntries,
+    CardEntry,
     Category,
     DEFAULT_SETUP,
     disambiguateName,
@@ -175,11 +176,11 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 nextNumberedCardName(existingCardNames),
                 existingCardNames,
             );
-            const newCat: Category = {
+            const newCat: Category = Category({
                 id: newCategoryId(),
                 name: catName,
-                cards: [{ id: newCardId(), name: cardName }],
-            };
+                cards: [CardEntry({ id: newCardId(), name: cardName })],
+            });
             return {
                 ...state,
                 setup: GameSetup({
@@ -212,13 +213,14 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     players: state.setup.players,
                     categories: state.setup.categories.map(c =>
                         c.id === action.categoryId
-                            ? {
-                                  ...c,
+                            ? Category({
+                                  id: c.id,
+                                  name: c.name,
                                   cards: [
                                       ...c.cards,
-                                      { id: newCardId(), name: cardName },
+                                      CardEntry({ id: newCardId(), name: cardName }),
                                   ],
-                              }
+                              })
                             : c,
                     ),
                 }),
@@ -235,12 +237,13 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 players: state.setup.players,
                 categories: state.setup.categories.map(c =>
                     c.id === target.id
-                        ? {
-                              ...c,
+                        ? Category({
+                              id: c.id,
+                              name: c.name,
                               cards: c.cards.filter(
                                   e => e.id !== action.cardId,
                               ),
-                          }
+                          })
                         : c,
                 ),
             });
@@ -263,7 +266,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     players: state.setup.players,
                     categories: state.setup.categories.map(c =>
                         c.id === action.categoryId
-                            ? { ...c, name: finalName }
+                            ? Category({ id: c.id, name: finalName, cards: c.cards })
                             : c,
                     ),
                 }),
@@ -284,11 +287,12 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 ...state,
                 setup: GameSetup({
                     players: state.setup.players,
-                    categories: state.setup.categories.map(c => ({
-                        ...c,
+                    categories: state.setup.categories.map(c => Category({
+                        id: c.id,
+                        name: c.name,
                         cards: c.cards.map(e =>
                             e.id === action.cardId
-                                ? { ...e, name: finalName }
+                                ? CardEntry({ id: e.id, name: finalName })
                                 : e,
                         ),
                     })),

@@ -241,10 +241,10 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
 
     const setup: GameSetup = GameSetup({
         players: v3.setup.players.map(Player),
-        categories: v3.setup.categories.map<Category>(c => ({
+        categories: v3.setup.categories.map(c => Category({
             id: CardCategory(c.id),
             name: c.name,
-            cards: c.cards.map<CardEntry>(card => ({
+            cards: c.cards.map(card => CardEntry({
                 id: Card(card.id),
                 name: card.name,
             })),

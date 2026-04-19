@@ -16,6 +16,7 @@ import {
     PlayerOwner,
 } from "./GameObjects";
 import {
+    CardEntry,
     Category,
     CLASSIC_SETUP_3P,
     findCardEntry,
@@ -224,11 +225,12 @@ const renameCardByEntry = (
 ): GameSetup =>
     GameSetup({
         players: current.players,
-        categories: current.categories.map<Category>(c => ({
-            ...c,
+        categories: current.categories.map(c => Category({
+            id: c.id,
+            name: c.name,
             cards: c.cards.map(entry =>
                 entry.id === cardId
-                    ? { ...entry, name: nextName }
+                    ? CardEntry({ id: entry.id, name: nextName })
                     : entry,
             ),
         })),

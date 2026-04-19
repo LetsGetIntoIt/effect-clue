@@ -53,10 +53,10 @@ const STORAGE_KEY = "effect-clue.custom-presets.v1";
 const decodeCategories = (
     raw: ReadonlyArray<PersistedCustomPresetV1["categories"][number]>,
 ): ReadonlyArray<Category> =>
-    raw.map<Category>(c => ({
+    raw.map(c => Category({
         id: CardCategory(c.id),
         name: c.name,
-        cards: c.cards.map<CardEntry>(card => ({
+        cards: c.cards.map(card => CardEntry({
             id: Card(card.id),
             name: card.name,
         })),
