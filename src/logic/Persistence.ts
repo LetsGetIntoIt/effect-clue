@@ -1,7 +1,11 @@
 import { Result } from "effect";
 import { Card, CardCategory, Player } from "./GameObjects";
 import { CardEntry, Category, GameSetup } from "./GameSetup";
-import { decodeV4Unknown } from "./PersistenceSchema";
+import {
+    decodeV3Unknown,
+    decodeV4Unknown,
+    type PersistedSessionV4,
+} from "./PersistenceSchema";
 import {
     newSuggestionId,
     Suggestion,
@@ -182,45 +186,60 @@ const migrateV2ToV3 = (v2: PersistedGameV2): PersistedGameV3 => ({
     suggestions: v2.suggestions,
 });
 
+/**
+ * Convert a Schema-validated v4 payload into the domain GameSession.
+ * Branded types already flow through the schema, so this is pure
+ * construction — no Player(...) / Card(...) wrapping needed.
+ *
+ * Shared by the v4 branch (direct decode) and the v3 branch (decode
+ * via v3 -> v4 transform); both hand this helper the same shape.
+ */
+const buildSessionFromV4 = (v4: PersistedSessionV4): GameSession => ({
+    setup: GameSetup({
+        players: v4.setup.players,
+        categories: v4.setup.categories.map(c => Category({
+            id: c.id,
+            name: c.name,
+            cards: c.cards.map(card => CardEntry({
+                id: card.id,
+                name: card.name,
+            })),
+        })),
+    }),
+    hands: v4.hands.map(h => ({ player: h.player, cards: h.cards })),
+    handSizes: v4.handSizes.map(h => ({
+        player: h.player,
+        size: h.size,
+    })),
+    suggestions: v4.suggestions.map(s => Suggestion({
+        id: s.id === undefined || s.id === SuggestionId("")
+            ? newSuggestionId()
+            : s.id,
+        suggester: s.suggester,
+        cards: s.cards,
+        nonRefuters: s.nonRefuters,
+        refuter: s.refuter === null ? undefined : s.refuter,
+        seenCard: s.seenCard === null ? undefined : s.seenCard,
+    })),
+});
+
 export const decodeSession = (data: unknown): GameSession | undefined => {
     if (!data || typeof data !== "object") return undefined;
     const obj = data as { version?: number };
 
     if (obj.version === 4) {
-        // v4 decodes through Schema, which hands back branded strings
-        // directly. Build the GameSession without the factory-wrap pass
-        // the legacy (string-typed) paths still need.
         const decoded = decodeV4Unknown(data);
         if (Result.isFailure(decoded)) return undefined;
-        const v4 = decoded.success;
-        return {
-            setup: GameSetup({
-                players: v4.setup.players,
-                categories: v4.setup.categories.map(c => Category({
-                    id: c.id,
-                    name: c.name,
-                    cards: c.cards.map(card => CardEntry({
-                        id: card.id,
-                        name: card.name,
-                    })),
-                })),
-            }),
-            hands: v4.hands.map(h => ({ player: h.player, cards: h.cards })),
-            handSizes: v4.handSizes.map(h => ({
-                player: h.player,
-                size: h.size,
-            })),
-            suggestions: v4.suggestions.map(s => Suggestion({
-                id: s.id === undefined || s.id === SuggestionId("")
-                    ? newSuggestionId()
-                    : s.id,
-                suggester: s.suggester,
-                cards: s.cards,
-                nonRefuters: s.nonRefuters,
-                refuter: s.refuter === null ? undefined : s.refuter,
-                seenCard: s.seenCard === null ? undefined : s.seenCard,
-            })),
-        };
+        return buildSessionFromV4(decoded.success);
+    }
+
+    if (obj.version === 3) {
+        // v3 blobs flow through the Schema.transform v3 -> v4 — same
+        // shape on disk, different version byte. Any validation failure
+        // collapses to undefined so callers fall back to a fresh session.
+        const decoded = decodeV3Unknown(data);
+        if (Result.isFailure(decoded)) return undefined;
+        return buildSessionFromV4(decoded.success);
     }
 
     let v3: PersistedGameV3;
@@ -248,20 +267,6 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
             return undefined;
         }
         v3 = migrateV2ToV3(candidate as PersistedGameV2);
-    } else if (obj.version === 3) {
-        const candidate = data as Partial<PersistedGameV3>;
-        if (
-            !candidate.setup ||
-            !candidate.suggestions ||
-            !candidate.hands ||
-            !candidate.handSizes
-        ) {
-            return undefined;
-        }
-        if (!candidate.setup.players || !candidate.setup.categories) {
-            return undefined;
-        }
-        v3 = candidate as PersistedGameV3;
     } else {
         return undefined;
     }

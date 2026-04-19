@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Schema, SchemaGetter } from "effect";
 import { Card, CardCategory, Player } from "./GameObjects";
 import { SuggestionId } from "./Suggestion";
 
@@ -68,13 +68,47 @@ const PersistedSuggestionSchema = Schema.Struct({
  * version byte so decoders can tell which path to run, not because
  * the bytes on disk changed.
  */
-const PersistedSessionV4Schema = Schema.Struct({
+export const PersistedSessionV4Schema = Schema.Struct({
     version: Schema.Literal(4),
     setup: PersistedGameSetupSchema,
     hands: Schema.Array(PersistedHandSchema),
     handSizes: Schema.Array(PersistedHandSizeSchema),
     suggestions: Schema.Array(PersistedSuggestionSchema),
 });
+
+/**
+ * v3 on-disk schema. Shape is identical to v4 except for the version
+ * discriminator — the only difference between eras is that we run v4
+ * through structured Schema validation on write, whereas v3 blobs
+ * were hand-rolled. Decoded v3 payloads carry fully-branded fields
+ * (same nested schemas as v4).
+ */
+const PersistedSessionV3Schema = Schema.Struct({
+    version: Schema.Literal(3),
+    setup: PersistedGameSetupSchema,
+    hands: Schema.Array(PersistedHandSchema),
+    handSizes: Schema.Array(PersistedHandSizeSchema),
+    suggestions: Schema.Array(PersistedSuggestionSchema),
+});
+
+/**
+ * v3 → v4 migration as a Schema.decodeTo chain: a pure version-byte
+ * bump, but modelled as Schema so the chain can compose. Callers
+ * decode via `decodeV3Unknown` and get back the v4-shaped payload
+ * without a separate hand-rolled migration.
+ */
+const V3ToV4Schema = PersistedSessionV3Schema.pipe(
+    Schema.decodeTo(PersistedSessionV4Schema, {
+        decode: SchemaGetter.transform(
+            (v3: Schema.Schema.Type<typeof PersistedSessionV3Schema>) =>
+                ({ ...v3, version: 4 as const }),
+        ),
+        encode: SchemaGetter.transform(
+            (v4: Schema.Schema.Type<typeof PersistedSessionV4Schema>) =>
+                ({ ...v4, version: 3 as const }),
+        ),
+    }),
+);
 
 /**
  * Result-returning decoder for v4 payloads. Hands back
@@ -84,3 +118,16 @@ const PersistedSessionV4Schema = Schema.Struct({
 export const decodeV4Unknown = Schema.decodeUnknownResult(
     PersistedSessionV4Schema,
 );
+
+/**
+ * Result-returning decoder for v3 payloads. Output is v4-shaped (the
+ * transform runs the version bump). Same error semantics as v4.
+ */
+export const decodeV3Unknown = Schema.decodeUnknownResult(V3ToV4Schema);
+
+/**
+ * Runtime type of a decoded v4 session — the branded, Schema-validated
+ * payload both decodeV4Unknown and decodeV3Unknown hand back. Callers
+ * construct the GameSession domain value from this.
+ */
+export type PersistedSessionV4 = Schema.Schema.Type<typeof PersistedSessionV4Schema>;
