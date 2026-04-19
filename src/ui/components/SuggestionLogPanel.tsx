@@ -4,7 +4,11 @@ import { Either } from "effect";
 import { useEffect, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
 import { cardName, categoryOfCard } from "../../logic/GameSetup";
-import { describeRecommendation, recommendSuggestions } from "../../logic/Recommender";
+import {
+    consolidateRecommendations,
+    describeRecommendation,
+    recommendSuggestions,
+} from "../../logic/Recommender";
 import { newSuggestionId } from "../../logic/Suggestion";
 import {
     DraftSuggestion,
@@ -331,8 +335,13 @@ function Recommendations() {
         setup,
         knowledge,
         Player(asPlayer),
-        5,
+        50,
     );
+    const consolidated = consolidateRecommendations(
+        setup,
+        knowledge,
+        rec.recommendations,
+    ).slice(0, 5);
 
     return (
         <div>
@@ -353,18 +362,25 @@ function Recommendations() {
                     ))}
                 </select>
             </label>
-            {rec.recommendations.length === 0 ? (
+            {consolidated.length === 0 ? (
                 <div className="mt-2 text-[13px] text-muted">
                     Nothing useful to ask — you&apos;ve already narrowed
                     everything down.
                 </div>
             ) : (
                 <ol className="mt-2 list-decimal pl-6 text-[13px]">
-                    {rec.recommendations.map((r, i) => {
+                    {consolidated.map((r, i) => {
                         const explanation = describeRecommendation(
                             setup,
                             knowledge,
-                            r,
+                            {
+                                cards: r.cards.flatMap(c =>
+                                    c === "any" ? [] : [c],
+                                ),
+                                cellInfoScore: r.cellInfoScore,
+                                caseFileOpennessScore: r.caseFileOpennessScore,
+                                refuterUncertaintyScore: r.refuterUncertaintyScore,
+                            },
                         );
                         return (
                             <li
@@ -379,18 +395,35 @@ function Recommendations() {
                                     `${r.caseFileOpennessScore === 1 ? "" : "s"}` +
                                     ` × ${r.refuterUncertaintyScore} possible ` +
                                     `refuter` +
-                                    `${r.refuterUncertaintyScore === 1 ? "" : "s"}`
+                                    `${r.refuterUncertaintyScore === 1 ? "" : "s"}` +
+                                    (r.groupSize > 1
+                                        ? ` (covers ${r.groupSize} tied triples)`
+                                        : "")
                                 }
                             >
                                 <div>
-                                    {r.cards.map((c, ci) => (
-                                        <span key={ci}>
-                                            {ci > 0 && " + "}
-                                            <strong>
-                                                {cardName(setup, c)}
-                                            </strong>
-                                        </span>
-                                    ))}
+                                    {r.cards.map((c, ci) => {
+                                        const catName =
+                                            setup.categories[ci]?.name.toLowerCase() ??
+                                            "card";
+                                        return (
+                                            <span key={ci}>
+                                                {ci > 0 && " + "}
+                                                {c === "any" ? (
+                                                    <em className="text-muted">
+                                                        any {catName}
+                                                    </em>
+                                                ) : (
+                                                    <strong>
+                                                        {cardName(setup, c)}
+                                                    </strong>
+                                                )}
+                                            </span>
+                                        );
+                                    })}
+                                    <span className="ml-1 text-muted">
+                                        (score {r.score})
+                                    </span>
                                 </div>
                                 <div className="text-[12px] text-muted">
                                     {explanation}

@@ -157,7 +157,7 @@ export const recommendSuggestions = (
     setup: GameSetup,
     knowledge: Knowledge,
     suggester: Player,
-    maxResults: number = 5,
+    maxResults: number = 50,
 ): RecommendationResult => {
     const otherPlayers = setup.players.filter(p => p !== suggester);
 
@@ -297,4 +297,150 @@ export const describeRecommendation = (
     }
 
     return "Probes a useful combination.";
+};
+
+/**
+ * A consolidated recommendation row. Each category slot is either a
+ * specific `Card` or the sentinel `"any"`, meaning "any casefile-
+ * candidate card in this category produces the same score as part of
+ * this family of tied recommendations."
+ */
+interface ConsolidatedRecommendation {
+    readonly suggester: Player;
+    readonly cards: ReadonlyArray<Card | "any">;
+    readonly score: number;
+    readonly cellInfoScore: number;
+    readonly caseFileOpennessScore: number;
+    readonly refuterUncertaintyScore: number;
+    /** How many specific recommendations this consolidated row covers. */
+    readonly groupSize: number;
+}
+
+/**
+ * Collapse tied recommendations that differ only by which card was chosen
+ * in one or more categories into a single "any X" row.
+ *
+ * Algorithm:
+ *   1. Group by score.
+ *   2. Within each tier, iteratively look for a category position where
+ *      the distinct values across a fixed-non-position key equal the
+ *      full set of casefile candidates for that category — replace those
+ *      rows with one row whose position = "any". Repeat until stable
+ *      (so "Mustard + any weapon + any room" emerges via two passes).
+ *   3. Concatenate consolidated tiers in the original sorted order.
+ */
+export const consolidateRecommendations = (
+    setup: GameSetup,
+    knowledge: Knowledge,
+    recs: ReadonlyArray<Recommendation>,
+): ReadonlyArray<ConsolidatedRecommendation> => {
+    // Casefile candidate set per category (for equivalence checks).
+    const candidatesByCat: ReadonlyArray<ReadonlySet<Card>> =
+        setup.categories.map(
+            c => new Set(caseFileCandidatesFor(setup, knowledge, c.id)),
+        );
+
+    // Group by score, preserve input order between groups.
+    const scoreOrder: number[] = [];
+    const byScore = new Map<number, Recommendation[]>();
+    for (const r of recs) {
+        let list = byScore.get(r.score);
+        if (!list) {
+            list = [];
+            byScore.set(r.score, list);
+            scoreOrder.push(r.score);
+        }
+        list.push(r);
+    }
+
+    const out: ConsolidatedRecommendation[] = [];
+    for (const score of scoreOrder) {
+        const tier = byScore.get(score)!;
+        // Seed with fully-specific cards.
+        let rows: ConsolidatedRecommendation[] = tier.map(r => ({
+            suggester: r.suggester,
+            cards: r.cards,
+            score: r.score,
+            cellInfoScore: r.cellInfoScore,
+            caseFileOpennessScore: r.caseFileOpennessScore,
+            refuterUncertaintyScore: r.refuterUncertaintyScore,
+            groupSize: 1,
+        }));
+
+        // Iterate: at each pass, look for a position that can be
+        // collapsed. Stop when a pass produces no further collapse.
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (let i = 0; i < setup.categories.length; i++) {
+                const targetCandidates = candidatesByCat[i];
+                if (!targetCandidates || targetCandidates.size < 2) continue;
+
+                // Group by the tuple of other-position values
+                // (serialized as a string key).
+                const groups = new Map<string, ConsolidatedRecommendation[]>();
+                for (const row of rows) {
+                    const key = row.cards
+                        .map((c, j) => (j === i ? "*" : String(c)))
+                        .join("|");
+                    let list = groups.get(key);
+                    if (!list) {
+                        list = [];
+                        groups.set(key, list);
+                    }
+                    list.push(row);
+                }
+
+                // For each group, if the distinct values at position i
+                // cover every candidate and nothing is already "any" at
+                // position i, collapse.
+                const nextRows: ConsolidatedRecommendation[] = [];
+                let didCollapse = false;
+                for (const group of groups.values()) {
+                    const atI = group.map(g => g.cards[i]);
+                    const alreadyAny = atI.some(v => v === "any");
+                    if (alreadyAny) {
+                        nextRows.push(...group);
+                        continue;
+                    }
+                    const specific = new Set<Card>();
+                    for (const v of atI) {
+                        if (v !== "any") specific.add(v as Card);
+                    }
+                    const covers =
+                        specific.size === targetCandidates.size &&
+                        Array.from(targetCandidates).every(c =>
+                            specific.has(c),
+                        );
+                    if (covers && group.length > 1) {
+                        const first = group[0]!;
+                        const mergedCards = first.cards.map((c, j) =>
+                            j === i ? ("any" as const) : c,
+                        );
+                        const groupSize = group.reduce(
+                            (sum, g) => sum + g.groupSize,
+                            0,
+                        );
+                        nextRows.push({
+                            ...first,
+                            cards: mergedCards,
+                            groupSize,
+                        });
+                        didCollapse = true;
+                    } else {
+                        nextRows.push(...group);
+                    }
+                }
+
+                if (didCollapse) {
+                    rows = nextRows;
+                    changed = true;
+                    break; // restart the pass from category 0
+                }
+            }
+        }
+
+        out.push(...rows);
+    }
+    return out;
 };
