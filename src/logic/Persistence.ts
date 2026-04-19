@@ -186,18 +186,45 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
     if (!data || typeof data !== "object") return undefined;
     const obj = data as { version?: number };
 
-    let v3: PersistedGameV3;
     if (obj.version === 4) {
-        // v4 and v3 share a payload shape — v4's only distinction is
-        // that we run it through Schema for structured validation.
-        // Decode via the Schema codec; failure collapses to undefined
-        // so the caller can fall back to a fresh session.
+        // v4 decodes through Schema, which hands back branded strings
+        // directly. Build the GameSession without the factory-wrap pass
+        // the legacy (string-typed) paths still need.
         const decoded = decodeV4Unknown(data);
         if (Result.isFailure(decoded)) return undefined;
-        // Drop the v4 marker so the downstream code can treat the
-        // payload as v3-shaped (same fields).
-        v3 = { ...decoded.success, version: 3 };
-    } else if (obj.version === 1) {
+        const v4 = decoded.success;
+        return {
+            setup: GameSetup({
+                players: v4.setup.players,
+                categories: v4.setup.categories.map(c => Category({
+                    id: c.id,
+                    name: c.name,
+                    cards: c.cards.map(card => CardEntry({
+                        id: card.id,
+                        name: card.name,
+                    })),
+                })),
+            }),
+            hands: v4.hands.map(h => ({ player: h.player, cards: h.cards })),
+            handSizes: v4.handSizes.map(h => ({
+                player: h.player,
+                size: h.size,
+            })),
+            suggestions: v4.suggestions.map(s => Suggestion({
+                id: s.id === undefined || s.id === SuggestionId("")
+                    ? newSuggestionId()
+                    : s.id,
+                suggester: s.suggester,
+                cards: s.cards,
+                nonRefuters: s.nonRefuters,
+                refuter: s.refuter === null ? undefined : s.refuter,
+                seenCard: s.seenCard === null ? undefined : s.seenCard,
+            })),
+        };
+    }
+
+    let v3: PersistedGameV3;
+    if (obj.version === 1) {
         const v1 = data as Partial<PersistedGameV1>;
         if (!v1.setup || !v1.hands || !v1.handSizes || !v1.suggestions) {
             return undefined;
