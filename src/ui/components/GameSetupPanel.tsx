@@ -9,6 +9,12 @@ import {
     GameSetup,
     PRESETS,
 } from "../../logic/GameSetup";
+import {
+    CustomPreset,
+    deleteCustomPreset,
+    loadCustomPresets,
+    saveCustomPreset,
+} from "../../logic/CustomPresets";
 import { useClue } from "../state";
 import { CategoryEditor } from "./CategoryEditor";
 
@@ -148,6 +154,11 @@ export function GameSetupPanel() {
     const handSizeMap = new Map(state.handSizes);
     const defaults = new Map(defaultHandSizes(setup));
 
+    // User-saved card packs, kept in React state so save/delete
+    // re-renders the preset row without a page reload.
+    const [customPresets, setCustomPresets] =
+        useState<ReadonlyArray<CustomPreset>>(() => loadCustomPresets());
+
     const totalDealt = allCardIds(setup).length - caseFileSize(setup);
     const setHandSizesArr = setup.players
         .map(p => handSizeMap.get(p))
@@ -162,6 +173,33 @@ export function GameSetupPanel() {
     const onPreset = (preset: (typeof PRESETS)[number]) => {
         if (hasGameData() && !window.confirm(PRESET_CONFIRM)) return;
         dispatch({ type: "loadPreset", setup: preset.build() });
+    };
+
+    const onCustomPreset = (preset: CustomPreset) => {
+        if (hasGameData() && !window.confirm(PRESET_CONFIRM)) return;
+        // Load the preset's categories on top of the current player list.
+        dispatch({
+            type: "loadPreset",
+            setup: GameSetup({
+                players: setup.players,
+                categories: preset.categories,
+            }),
+        });
+    };
+
+    const onSaveAsPreset = () => {
+        const label = window.prompt(
+            "Save this card pack as a preset. Name it:",
+        );
+        if (!label || !label.trim()) return;
+        saveCustomPreset(label.trim(), setup);
+        setCustomPresets(loadCustomPresets());
+    };
+
+    const onDeleteCustomPreset = (preset: CustomPreset) => {
+        if (!window.confirm(`Delete preset "${preset.label}"?`)) return;
+        deleteCustomPreset(preset.id);
+        setCustomPresets(loadCustomPresets());
     };
 
     const onHandSizeChange = (player: Player, raw: string) => {
@@ -213,6 +251,38 @@ export function GameSetupPanel() {
                         {preset.label}
                     </button>
                 ))}
+                {customPresets.map(preset => (
+                    <span
+                        key={preset.id}
+                        className="inline-flex items-center overflow-hidden rounded border border-border bg-white text-[13px]"
+                    >
+                        <button
+                            type="button"
+                            className="cursor-pointer px-3 py-1 hover:bg-[#f0f0f5]"
+                            onClick={() => onCustomPreset(preset)}
+                            title={`Load custom preset "${preset.label}"`}
+                        >
+                            {preset.label}
+                        </button>
+                        <button
+                            type="button"
+                            className="cursor-pointer border-l border-border px-2 py-1 text-muted hover:bg-[#f0f0f5] hover:text-danger"
+                            onClick={() => onDeleteCustomPreset(preset)}
+                            title={`Delete preset "${preset.label}"`}
+                            aria-label={`Delete preset ${preset.label}`}
+                        >
+                            ×
+                        </button>
+                    </span>
+                ))}
+                <button
+                    type="button"
+                    className="cursor-pointer rounded border border-dashed border-border bg-white px-3 py-1 text-[13px] text-muted hover:bg-[#f0f0f5] hover:text-accent"
+                    onClick={onSaveAsPreset}
+                    title="Save the current category and card set as a reusable preset"
+                >
+                    + Save as preset
+                </button>
             </div>
 
             <div className="mb-3">
