@@ -8,11 +8,12 @@ const buttonClass =
     "text-[13px] cursor-pointer hover:bg-hover";
 
 /**
- * Top-of-page controls: start a fresh game and copy a shareable URL
- * encoding the current state.
+ * Top-of-page controls: undo/redo, start a fresh game, and copy a
+ * shareable URL encoding the current state.
  */
 export function Toolbar() {
-    const { dispatch, currentShareUrl } = useClue();
+    const { dispatch, currentShareUrl, canUndo, canRedo, undo, redo } =
+        useClue();
     const [copied, setCopied] = useState(false);
 
     const onShare = async () => {
@@ -44,6 +45,26 @@ export function Toolbar() {
 
     return (
         <div className="flex flex-wrap items-center gap-3">
+            <button
+                type="button"
+                className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-40`}
+                onClick={undo}
+                disabled={!canUndo}
+                title="Undo (⌘Z / Ctrl+Z)"
+                aria-label="Undo"
+            >
+                ↶ Undo
+            </button>
+            <button
+                type="button"
+                className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-40`}
+                onClick={redo}
+                disabled={!canRedo}
+                title="Redo (⌘⇧Z / Ctrl+Shift+Z)"
+                aria-label="Redo"
+            >
+                ↷ Redo
+            </button>
             <button type="button" className={buttonClass} onClick={onShare}>
                 {copied ? "Copied!" : "Share link"}
             </button>

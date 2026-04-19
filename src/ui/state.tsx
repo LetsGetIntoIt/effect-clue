@@ -498,7 +498,61 @@ interface ClueContextValue {
     readonly derived: ClueDerived;
     readonly hasGameData: () => boolean;
     readonly currentShareUrl: () => string;
+    readonly canUndo: boolean;
+    readonly canRedo: boolean;
+    readonly undo: () => void;
+    readonly redo: () => void;
 }
+
+/**
+ * History wrapper for undo/redo. Each non-ephemeral user action pushes
+ * the previous state to `past` and clears `future`; undo/redo walk the
+ * two stacks. `replaceSession` (hydration from URL/localStorage) and
+ * `setUiMode` (purely presentational) bypass the history so they can't
+ * be undone into — they're not user-visible semantic changes.
+ */
+interface History {
+    readonly past: ReadonlyArray<ClueState>;
+    readonly current: ClueState;
+    readonly future: ReadonlyArray<ClueState>;
+}
+
+type HistoryAction =
+    | ClueAction
+    | { type: "__undo" }
+    | { type: "__redo" };
+
+const historyReducer = (h: History, action: HistoryAction): History => {
+    if (action.type === "__undo") {
+        if (h.past.length === 0) return h;
+        const prev = h.past[h.past.length - 1]!;
+        return {
+            past: h.past.slice(0, -1),
+            current: prev,
+            future: [h.current, ...h.future],
+        };
+    }
+    if (action.type === "__redo") {
+        if (h.future.length === 0) return h;
+        const [next, ...rest] = h.future;
+        return {
+            past: [...h.past, h.current],
+            current: next!,
+            future: rest,
+        };
+    }
+    const newCurrent = reducer(h.current, action);
+    if (newCurrent === h.current) return h;
+    // Ephemeral / restore actions don't participate in history.
+    if (action.type === "replaceSession" || action.type === "setUiMode") {
+        return { ...h, current: newCurrent };
+    }
+    return {
+        past: [...h.past, h.current],
+        current: newCurrent,
+        future: [],
+    };
+};
 
 const ClueContext = createContext<ClueContextValue | undefined>(undefined);
 
@@ -513,7 +567,35 @@ export const useClue = (): ClueContextValue => {
 // ---- Provider -----------------------------------------------------------
 
 export function ClueProvider({ children }: { children: ReactNode }) {
-    const [state, dispatch] = useReducer(reducer, initialState);
+    const [history, dispatchRaw] = useReducer(historyReducer, {
+        past: [],
+        current: initialState,
+        future: [],
+    });
+    const state = history.current;
+    const dispatch = dispatchRaw as React.Dispatch<ClueAction>;
+    const canUndo = history.past.length > 0;
+    const canRedo = history.future.length > 0;
+    const undo = useCallback(() => dispatchRaw({ type: "__undo" }), []);
+    const redo = useCallback(() => dispatchRaw({ type: "__redo" }), []);
+
+    // Keyboard bindings: Cmd/Ctrl+Z for undo, Cmd/Ctrl+Shift+Z for redo.
+    // Swallow the event only when we're going to act on it, so typing
+    // Cmd+Z in an input field still triggers undo (the user intends it).
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            const mod = e.metaKey || e.ctrlKey;
+            if (!mod) return;
+            // Key comparison is case-insensitive: `e.key` is "Z" when
+            // Shift is held, "z" otherwise.
+            if (e.key !== "z" && e.key !== "Z") return;
+            e.preventDefault();
+            if (e.shiftKey) redo();
+            else undo();
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [undo, redo]);
 
     // Derive expensive values. The inner useMemos chain so each only
     // recomputes when its actual inputs change; React Compiler will
@@ -650,8 +732,22 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             derived,
             hasGameData,
             currentShareUrl,
+            canUndo,
+            canRedo,
+            undo,
+            redo,
         }),
-        [state, derived, hasGameData, currentShareUrl],
+        [
+            state,
+            dispatch,
+            derived,
+            hasGameData,
+            currentShareUrl,
+            canUndo,
+            canRedo,
+            undo,
+            redo,
+        ],
     );
 
     return (
