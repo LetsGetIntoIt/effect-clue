@@ -223,6 +223,64 @@ const V2ToV3Schema = PersistedSessionV2Schema.pipe(
 export const decodeV2Unknown = Schema.decodeUnknownResult(V2ToV3Schema);
 
 /**
+ * v1 on-disk schema. v1 predates the categories array entirely —
+ * suspects / weapons / rooms were hardcoded top-level keys under
+ * setup. Everything else matches v2.
+ */
+const PersistedGameSetupV1Schema = Schema.Struct({
+    players: Schema.Array(Schema.String),
+    suspects: Schema.Array(Schema.String),
+    weapons: Schema.Array(Schema.String),
+    rooms: Schema.Array(Schema.String),
+});
+
+const PersistedSessionV1Schema = Schema.Struct({
+    version: Schema.Literal(1),
+    setup: PersistedGameSetupV1Schema,
+    hands: Schema.Array(PersistedHandV2Schema),
+    handSizes: Schema.Array(PersistedHandSizeV2Schema),
+    suggestions: Schema.Array(PersistedSuggestionV2Schema),
+});
+
+/**
+ * v1 → v2 migration as Schema. Converts the three hardcoded category
+ * arrays into the categories array, preserving order
+ * (Suspects / Weapons / Rooms).
+ */
+const V1ToV2Schema = PersistedSessionV1Schema.pipe(
+    Schema.decodeTo(PersistedSessionV2Schema, {
+        decode: SchemaGetter.transform(
+            (v1: Schema.Schema.Type<typeof PersistedSessionV1Schema>) => ({
+                version: 2 as const,
+                setup: {
+                    players: v1.setup.players,
+                    categories: [
+                        { name: "Suspects", cards: v1.setup.suspects },
+                        { name: "Weapons", cards: v1.setup.weapons },
+                        { name: "Rooms", cards: v1.setup.rooms },
+                    ],
+                },
+                hands: v1.hands,
+                handSizes: v1.handSizes,
+                suggestions: v1.suggestions,
+            }),
+        ),
+        encode: SchemaGetter.transform(
+            (_v2: (typeof PersistedSessionV2Schema)["Encoded"]):
+                (typeof PersistedSessionV1Schema)["Type"] => {
+                throw new Error("v1 encode not supported — writes go to v4");
+            },
+        ),
+    }),
+);
+
+/**
+ * Result-returning decoder for v1 payloads. Output is v2-shaped; the
+ * caller runs it through the v2 -> v3 path next.
+ */
+export const decodeV1Unknown = Schema.decodeUnknownResult(V1ToV2Schema);
+
+/**
  * Runtime type of a decoded v4 session — the branded, Schema-validated
  * payload both decodeV4Unknown and decodeV3Unknown hand back. Callers
  * construct the GameSession domain value from this.

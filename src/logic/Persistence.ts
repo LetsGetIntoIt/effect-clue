@@ -1,7 +1,8 @@
 import { Result } from "effect";
-import { Card, CardCategory, Player } from "./GameObjects";
+import { Card, Player } from "./GameObjects";
 import { CardEntry, Category, GameSetup } from "./GameSetup";
 import {
+    decodeV1Unknown,
     decodeV2Unknown,
     decodeV3Unknown,
     decodeV4Unknown,
@@ -28,22 +29,15 @@ import {
  *        its own stable `id` alongside `name`. Suggestions, hands,
  *        etc. reference cards by id so renames don't break them.
  *   v4 — identical payload to v3, but validated via Effect v4 Schema
- *        (`PersistenceSchema.ts`). Malformed payloads now produce a
- *        structured `SchemaError` instead of silent `undefined`. Writes
- *        go to v4; legacy payloads (v1/v2/v3) keep decoding through
- *        the hand-rolled migration chain below and are re-stamped as
- *        v4 the next time they're persisted.
+ *        (`PersistenceSchema.ts`). Malformed payloads produce a
+ *        structured `SchemaError` instead of silent `undefined`.
+ *
+ * Writes always go to v4. Legacy payloads (v1/v2/v3) flow through
+ * the v1 -> v2 -> v3 -> v4 Schema chain in PersistenceSchema.ts and
+ * are re-stamped as v4 the next time they're persisted.
  */
 interface PersistedGameV4 {
     readonly version: 4;
-    readonly setup: PersistedGameV3["setup"];
-    readonly hands: PersistedGameV3["hands"];
-    readonly handSizes: PersistedGameV3["handSizes"];
-    readonly suggestions: PersistedGameV3["suggestions"];
-}
-
-interface PersistedGameV3 {
-    readonly version: 3;
     readonly setup: {
         readonly players: ReadonlyArray<string>;
         readonly categories: ReadonlyArray<{
@@ -57,7 +51,7 @@ interface PersistedGameV3 {
     };
     readonly hands: ReadonlyArray<{
         readonly player: string;
-        readonly cards: ReadonlyArray<string>; // card ids
+        readonly cards: ReadonlyArray<string>;
     }>;
     readonly handSizes: ReadonlyArray<{
         readonly player: string;
@@ -66,47 +60,11 @@ interface PersistedGameV3 {
     readonly suggestions: ReadonlyArray<{
         readonly id?: string | undefined;
         readonly suggester: string;
-        readonly cards: ReadonlyArray<string>; // card ids
+        readonly cards: ReadonlyArray<string>;
         readonly nonRefuters: ReadonlyArray<string>;
         readonly refuter: string | null;
-        readonly seenCard: string | null; // card id
+        readonly seenCard: string | null;
     }>;
-}
-
-/**
- * Legacy v2 shape — card identity was the display name string.
- * On decode we migrate by using the name as the id (so existing
- * sessions/URLs keep working, and are stable from then on).
- */
-interface PersistedGameV2 {
-    readonly version: 2;
-    readonly setup: {
-        readonly players: ReadonlyArray<string>;
-        readonly categories: ReadonlyArray<{
-            readonly name: string;
-            readonly cards: ReadonlyArray<string>;
-        }>;
-    };
-    readonly hands: PersistedGameV3["hands"];
-    readonly handSizes: PersistedGameV3["handSizes"];
-    readonly suggestions: PersistedGameV3["suggestions"];
-}
-
-/**
- * Legacy v1 shape — hardcoded suspects/weapons/rooms. Kept only to let
- * `decodeSession` migrate old localStorage / URL sessions forward.
- */
-interface PersistedGameV1 {
-    readonly version: 1;
-    readonly setup: {
-        readonly players: ReadonlyArray<string>;
-        readonly suspects: ReadonlyArray<string>;
-        readonly weapons: ReadonlyArray<string>;
-        readonly rooms: ReadonlyArray<string>;
-    };
-    readonly hands: PersistedGameV3["hands"];
-    readonly handSizes: PersistedGameV3["handSizes"];
-    readonly suggestions: PersistedGameV3["suggestions"];
 }
 
 type PersistedGame = PersistedGameV4;
@@ -149,51 +107,13 @@ export const encodeSession = (session: GameSession): PersistedGame => ({
     })),
 });
 
-const migrateV1ToV2 = (v1: PersistedGameV1): PersistedGameV2 => ({
-    version: 2,
-    setup: {
-        players: v1.setup.players,
-        categories: [
-            { name: "Suspects", cards: v1.setup.suspects },
-            { name: "Weapons",  cards: v1.setup.weapons  },
-            { name: "Rooms",    cards: v1.setup.rooms    },
-        ],
-    },
-    hands: v1.hands,
-    handSizes: v1.handSizes,
-    suggestions: v1.suggestions,
-});
-
-/**
- * Migrate a v2 payload to v3 by treating each display-name string as
- * its own id. This is the simplest valid migration: references that
- * used to point at "Miss Scarlet" the name still resolve to "Miss
- * Scarlet" the id. Users only notice the difference when they rename
- * a card; at that point the id stays "Miss Scarlet" (now opaque) and
- * the display name switches.
- */
-const migrateV2ToV3 = (v2: PersistedGameV2): PersistedGameV3 => ({
-    version: 3,
-    setup: {
-        players: v2.setup.players,
-        categories: v2.setup.categories.map(c => ({
-            id: c.name,
-            name: c.name,
-            cards: c.cards.map(card => ({ id: card, name: card })),
-        })),
-    },
-    hands: v2.hands,
-    handSizes: v2.handSizes,
-    suggestions: v2.suggestions,
-});
-
 /**
  * Convert a Schema-validated v4 payload into the domain GameSession.
  * Branded types already flow through the schema, so this is pure
  * construction — no Player(...) / Card(...) wrapping needed.
  *
- * Shared by the v4 branch (direct decode) and the v3 branch (decode
- * via v3 -> v4 transform); both hand this helper the same shape.
+ * Shared by every version branch: v4 direct, v3/v2/v1 via Schema
+ * chain -> v4.
  */
 const buildSessionFromV4 = (v4: PersistedSessionV4): GameSession => ({
     setup: GameSetup({
@@ -252,60 +172,21 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
         return buildSessionFromV4({ ...decoded.success, version: 4 as const });
     }
 
-    if (obj.version !== 1) {
-        return undefined;
+    if (obj.version === 1) {
+        // v1 chains through v1 -> v2 -> v3 -> v4 via Schema: the v1
+        // decoder bumps to v2 shape, then we feed that to the v2
+        // decoder to reach v3, then stamp v4 for buildSessionFromV4.
+        const decodedV1 = decodeV1Unknown(data);
+        if (Result.isFailure(decodedV1)) return undefined;
+        const decodedV2 = decodeV2Unknown(decodedV1.success);
+        if (Result.isFailure(decodedV2)) return undefined;
+        return buildSessionFromV4({
+            ...decodedV2.success,
+            version: 4 as const,
+        });
     }
 
-    // v1 still goes through the hand-rolled migration chain (commit 9
-    // replaces this rung with Schema.decodeTo too).
-    const v1 = data as Partial<PersistedGameV1>;
-    if (!v1.setup || !v1.hands || !v1.handSizes || !v1.suggestions) {
-        return undefined;
-    }
-    const vs = v1.setup;
-    if (!vs.players || !vs.suspects || !vs.weapons || !vs.rooms) {
-        return undefined;
-    }
-    const v3: PersistedGameV3 = migrateV2ToV3(migrateV1ToV2(v1 as PersistedGameV1));
-
-    const setup: GameSetup = GameSetup({
-        players: v3.setup.players.map(Player),
-        categories: v3.setup.categories.map(c => Category({
-            id: CardCategory(c.id),
-            name: c.name,
-            cards: c.cards.map(card => CardEntry({
-                id: Card(card.id),
-                name: card.name,
-            })),
-        })),
-    });
-
-    const suggestions = v3.suggestions.map(s => Suggestion({
-        // Pre-migration suggestions from v1/v2 (before ids existed) may
-        // be missing an id; synthesize a fresh one so downstream refs
-        // (provenance, footnotes) stay consistent.
-        id: s.id === undefined || s.id === ""
-            ? newSuggestionId()
-            : SuggestionId(s.id),
-        suggester: Player(s.suggester),
-        cards: s.cards.map(Card),
-        nonRefuters: s.nonRefuters.map(Player),
-        refuter: s.refuter === null ? undefined : Player(s.refuter),
-        seenCard: s.seenCard === null ? undefined : Card(s.seenCard),
-    }));
-
-    return {
-        setup,
-        hands: v3.hands.map(h => ({
-            player: Player(h.player),
-            cards: h.cards.map(Card),
-        })),
-        handSizes: v3.handSizes.map(h => ({
-            player: Player(h.player),
-            size: h.size,
-        })),
-        suggestions,
-    };
+    return undefined;
 };
 
 // Keep the older keys readable too, so the one-time migration picks
