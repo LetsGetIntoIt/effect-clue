@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, Player } from "../../logic/GameObjects";
+import { Player } from "../../logic/GameObjects";
 import {
     allCardIds,
     caseFileSize,
@@ -150,7 +150,6 @@ function PlayerNameInput({
 export function GameSetupPanel() {
     const { state, dispatch, hasGameData } = useClue();
     const setup: GameSetup = state.setup;
-    const knownCards = state.knownCards;
     const handSizeMap = new Map(state.handSizes);
     const defaults = new Map(defaultHandSizes(setup));
 
@@ -213,21 +212,11 @@ export function GameSetupPanel() {
         }
     };
 
-    const isKnown = (player: Player, card: Card): boolean =>
-        knownCards.some(kc => kc.player === player && kc.card === card);
-
-    const toggleKnownCard = (player: Player, card: Card) => {
-        const index = knownCards.findIndex(
-            kc => kc.player === player && kc.card === card,
-        );
-        if (index >= 0) {
-            dispatch({ type: "removeKnownCard", index });
-        } else {
-            dispatch({ type: "addKnownCard", card: { player, card } });
-        }
-    };
-
-    const cardSpan = setup.players.length + 2; // label + players + add column
+    // Card rows span the full table width (label + player columns + the
+    // add-player column) because known-card entry now happens by clicking
+    // cells in the ChecklistGrid — this table is purely about editing
+    // the deck and player roster.
+    const cardSpan = setup.players.length + 2;
 
     return (
         <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">
@@ -414,7 +403,10 @@ export function GameSetupPanel() {
                                 </tr>,
                                 ...cat.cards.map(entry => (
                                     <tr key={String(entry.id)}>
-                                        <th className="whitespace-nowrap border border-border bg-white px-1.5 py-1 text-left font-normal">
+                                        <th
+                                            colSpan={cardSpan}
+                                            className="whitespace-nowrap border border-border bg-white px-1.5 py-1 text-left font-normal"
+                                        >
                                             <div className="flex items-center justify-between gap-2">
                                                 <InlineTextEdit
                                                     value={entry.name}
@@ -448,22 +440,6 @@ export function GameSetupPanel() {
                                                 </button>
                                             </div>
                                         </th>
-                                        {setup.players.map(p => (
-                                            <td
-                                                key={p}
-                                                className="w-8 min-w-8 border border-border px-1.5 py-1 text-center"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    className="m-0 cursor-pointer"
-                                                    checked={isKnown(p, entry.id)}
-                                                    onChange={() =>
-                                                        toggleKnownCard(p, entry.id)
-                                                    }
-                                                />
-                                            </td>
-                                        ))}
-                                        <td className="border border-border"></td>
                                     </tr>
                                 )),
                                 <tr key={`add-card-${String(cat.id)}`}>
