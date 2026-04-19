@@ -9,6 +9,7 @@ import {
     describeRecommendation,
     recommendSuggestions,
 } from "../../logic/Recommender";
+import { Tooltip } from "./Tooltip";
 import { newSuggestionId } from "../../logic/Suggestion";
 import {
     DraftSuggestion,
@@ -382,25 +383,31 @@ function Recommendations() {
                                 refuterUncertaintyScore: r.refuterUncertaintyScore,
                             },
                         );
+                        const scoreBreakdown = (
+                            <div>
+                                <div className="font-semibold">
+                                    Raw score {r.score}
+                                </div>
+                                <div className="mt-1 text-muted">
+                                    {r.cellInfoScore} unknown cell
+                                    {r.cellInfoScore === 1 ? "" : "s"}
+                                    {" × "}
+                                    {r.caseFileOpennessScore} case-file combination
+                                    {r.caseFileOpennessScore === 1 ? "" : "s"}
+                                    {" × "}
+                                    {r.refuterUncertaintyScore} possible refuter
+                                    {r.refuterUncertaintyScore === 1 ? "" : "s"}
+                                </div>
+                                {r.groupSize > 1 && (
+                                    <div className="mt-1 text-muted">
+                                        Covers {r.groupSize} tied triples.
+                                    </div>
+                                )}
+                            </div>
+                        );
                         return (
-                            <li
-                                key={i}
-                                className="py-1.5"
-                                title={
-                                    `Raw score ${r.score} = ` +
-                                    `${r.cellInfoScore} unknown cell` +
-                                    `${r.cellInfoScore === 1 ? "" : "s"}` +
-                                    ` × ${r.caseFileOpennessScore} case-file ` +
-                                    `combination` +
-                                    `${r.caseFileOpennessScore === 1 ? "" : "s"}` +
-                                    ` × ${r.refuterUncertaintyScore} possible ` +
-                                    `refuter` +
-                                    `${r.refuterUncertaintyScore === 1 ? "" : "s"}` +
-                                    (r.groupSize > 1
-                                        ? ` (covers ${r.groupSize} tied triples)`
-                                        : "")
-                                }
-                            >
+                            <Tooltip key={i} content={scoreBreakdown}>
+                            <li className="py-1.5">
                                 <div>
                                     {r.cards.map((c, ci) => {
                                         const rawName =
@@ -437,6 +444,7 @@ function Recommendations() {
                                     {explanation}
                                 </div>
                             </li>
+                            </Tooltip>
                         );
                     })}
                 </ol>

@@ -25,6 +25,7 @@ import {
 } from "../../logic/Recommender";
 import { Suggestion } from "../../logic/Suggestion";
 import { useClue } from "../state";
+import { Tooltip } from "./Tooltip";
 
 /**
  * The main visual: a case-file header strip on top; a grid with one row
@@ -131,57 +132,66 @@ export function ChecklistGrid() {
                                         Cell(owner, entry.id),
                                     );
                                     const isPlayerCell = owner._tag === "Player";
+                                    const tooltipText = buildCellTitle({
+                                        provenance,
+                                        suggestions,
+                                        setup,
+                                        owner,
+                                        card: entry.id,
+                                        footnoteNumbers,
+                                    });
+                                    const tooltipContent = tooltipText ? (
+                                        <div className="whitespace-pre-line">
+                                            {tooltipText}
+                                        </div>
+                                    ) : undefined;
                                     return (
-                                        <td
+                                        <Tooltip
                                             key={`${ownerKey(owner)}-${String(entry.id)}`}
-                                            className={cellClass(
-                                                value,
-                                                isPlayerCell,
-                                            )}
-                                            title={buildCellTitle({
-                                                provenance,
-                                                suggestions,
-                                                setup,
-                                                owner,
-                                                card: entry.id,
-                                                footnoteNumbers,
-                                            })}
-                                            onClick={
-                                                isPlayerCell
-                                                    ? () =>
-                                                          toggleKnownCard(
-                                                              owner,
-                                                              entry.id,
-                                                          )
-                                                    : undefined
-                                            }
-                                            role={isPlayerCell ? "button" : undefined}
-                                            tabIndex={isPlayerCell ? 0 : undefined}
-                                            onKeyDown={
-                                                isPlayerCell
-                                                    ? e => {
-                                                          if (
-                                                              e.key === "Enter" ||
-                                                              e.key === " "
-                                                          ) {
-                                                              e.preventDefault();
+                                            content={tooltipContent}
+                                        >
+                                            <td
+                                                className={cellClass(
+                                                    value,
+                                                    isPlayerCell,
+                                                )}
+                                                onClick={
+                                                    isPlayerCell
+                                                        ? () =>
                                                               toggleKnownCard(
                                                                   owner,
                                                                   entry.id,
-                                                              );
+                                                              )
+                                                        : undefined
+                                                }
+                                                role={isPlayerCell ? "button" : undefined}
+                                                tabIndex={isPlayerCell ? 0 : undefined}
+                                                onKeyDown={
+                                                    isPlayerCell
+                                                        ? e => {
+                                                              if (
+                                                                  e.key === "Enter" ||
+                                                                  e.key === " "
+                                                              ) {
+                                                                  e.preventDefault();
+                                                                  toggleKnownCard(
+                                                                      owner,
+                                                                      entry.id,
+                                                                  );
+                                                              }
                                                           }
-                                                      }
-                                                    : undefined
-                                            }
-                                        >
-                                            {cellLabel(value)}
-                                            {footnoteNumbers.length > 0 &&
-                                                value === undefined && (
-                                                    <sup className="ml-0.5 text-[9px] font-normal text-accent">
-                                                        {footnoteNumbers.join(",")}
-                                                    </sup>
-                                                )}
-                                        </td>
+                                                        : undefined
+                                                }
+                                            >
+                                                {cellLabel(value)}
+                                                {footnoteNumbers.length > 0 &&
+                                                    value === undefined && (
+                                                        <sup className="ml-0.5 text-[9px] font-normal text-accent">
+                                                            {footnoteNumbers.join(",")}
+                                                        </sup>
+                                                    )}
+                                            </td>
+                                        </Tooltip>
                                     );
                                 })}
                             </tr>
