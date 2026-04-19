@@ -1,7 +1,7 @@
+import { MutableHashMap, Option } from "effect";
 import { PlayerOwner } from "./GameObjects";
 import { Cell, getCell, Knowledge } from "./Knowledge";
 import { Suggestion, suggestionCards } from "./Suggestion";
-import { keyOf } from "./Provenance";
 
 /**
  * For each "refuter owns one of these cards but we don't know which"
@@ -19,19 +19,26 @@ import { keyOf } from "./Provenance";
  *
  * Cells that are already marked N for this refuter are excluded
  * automatically — they can't be the refuting card anymore.
+ *
+ * Storage: `byCell` is a `MutableHashMap<Cell, readonly number[]>` so
+ * lookups use structural Cell equality (no string-key surrogate).
+ * The inner number[] stays mutable during construction because we
+ * append as suggestions accumulate; callers read it as
+ * ReadonlyArray<number>.
  */
 export interface FootnoteMap {
-    /** Map from cell key to the 1-indexed suggestion numbers. */
-    readonly byCell: ReadonlyMap<string, ReadonlyArray<number>>;
+    readonly byCell: MutableHashMap.MutableHashMap<Cell, number[]>;
 }
 
-export const emptyFootnotes: FootnoteMap = { byCell: new Map() };
+export const emptyFootnotes: FootnoteMap = {
+    byCell: MutableHashMap.empty<Cell, number[]>(),
+};
 
 export const refuterCandidateFootnotes = (
     suggestions: ReadonlyArray<Suggestion>,
     knowledge: Knowledge,
 ): FootnoteMap => {
-    const byCell = new Map<string, number[]>();
+    const byCell = MutableHashMap.empty<Cell, number[]>();
     suggestions.forEach((suggestion, index) => {
         if (suggestion.refuter === undefined) return;
         if (suggestion.seenCard !== undefined) return;
@@ -50,10 +57,11 @@ export const refuterCandidateFootnotes = (
             const value = getCell(knowledge, cell);
             if (value === "N") continue; // can't be the refuting card
             // Unknown (or Y, but Y was filtered above) → candidate.
-            const key = keyOf(cell);
-            const existing = byCell.get(key);
+            const existing = Option.getOrUndefined(
+                MutableHashMap.get(byCell, cell),
+            );
             if (existing) existing.push(index + 1);
-            else byCell.set(key, [index + 1]);
+            else MutableHashMap.set(byCell, cell, [index + 1]);
         }
     });
     return { byCell };
@@ -62,4 +70,8 @@ export const refuterCandidateFootnotes = (
 export const footnotesForCell = (
     footnotes: FootnoteMap,
     cell: Cell,
-): ReadonlyArray<number> => footnotes.byCell.get(keyOf(cell)) ?? [];
+): ReadonlyArray<number> =>
+    Option.getOrElse(
+        MutableHashMap.get(footnotes.byCell, cell),
+        () => [] as ReadonlyArray<number>,
+    );

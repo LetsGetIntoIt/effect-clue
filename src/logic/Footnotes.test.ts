@@ -7,8 +7,8 @@ import {
     setCell,
     Y,
 } from "./Knowledge";
+import { MutableHashMap } from "effect";
 import { refuterCandidateFootnotes, footnotesForCell } from "./Footnotes";
-import { keyOf } from "./Provenance";
 import { Suggestion, SuggestionId } from "./Suggestion";
 import { cardByName } from "./test-utils/CardByName";
 
@@ -71,7 +71,7 @@ describe("refuterCandidateFootnotes", () => {
             [suggestion],
             emptyKnowledge,
         );
-        expect(footnotes.byCell.size).toBe(0);
+        expect(MutableHashMap.size(footnotes.byCell)).toBe(0);
     });
 
     test("skips cells already ruled out for the refuter", () => {
@@ -88,7 +88,7 @@ describe("refuterCandidateFootnotes", () => {
             N,
         );
         const footnotes = refuterCandidateFootnotes([suggestion], knowledge);
-        expect(footnotes.byCell.has(keyOf(Cell(PlayerOwner(B), PLUM))))
+        expect(MutableHashMap.has(footnotes.byCell, Cell(PlayerOwner(B), PLUM)))
             .toBe(false);
         expectNumbers(
             footnotesForCell(footnotes, Cell(PlayerOwner(B), KNIFE)),
@@ -114,7 +114,7 @@ describe("refuterCandidateFootnotes", () => {
             Y,
         );
         const footnotes = refuterCandidateFootnotes([suggestion], knowledge);
-        expect(footnotes.byCell.size).toBe(0);
+        expect(MutableHashMap.size(footnotes.byCell)).toBe(0);
     });
 
     test("cells hit by multiple suggestions collect both numbers in order", () => {

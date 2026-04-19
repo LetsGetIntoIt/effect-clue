@@ -1,5 +1,5 @@
-import { Equal, HashMap, Match } from "effect";
-import { Card, CardCategory, ownerLabel, Player } from "./GameObjects";
+import { Equal, HashMap, Match, MutableHashMap, MutableHashSet, Option } from "effect";
+import { Card, CardCategory, Player } from "./GameObjects";
 import { Cell, CellValue, Knowledge } from "./Knowledge";
 import { applyConsistencyRules, applyDeductionRules } from "./Rules";
 import {
@@ -49,7 +49,14 @@ export interface Reason {
     readonly dependsOn: ReadonlyArray<Cell>;
 }
 
-export type Provenance = Map<string, Reason>;
+/**
+ * Provenance map: Cell → Reason. Backed by Effect's `MutableHashMap` so
+ * lookups use structural `Equal` on the Cell key (rather than the
+ * `keyOf` string-hash surrogate we used before). Mutable because we
+ * build it imperatively during the deducer's single traced pass and
+ * then hand off a read-only view to the UI.
+ */
+export type Provenance = MutableHashMap.MutableHashMap<Cell, Reason>;
 
 /**
  * A single cell-setting event emitted by a rule while the tracer is
@@ -74,30 +81,29 @@ export interface SetCellRecord {
  */
 export type Tracer = (record: SetCellRecord) => void;
 
-export const keyOf = (cell: Cell): string => {
-    const { owner, card } = cell;
-    return `${ownerLabel(owner)}|${card}`;
-};
-
 /**
  * Walk the provenance chain for a cell, producing the full list of
  * reasons in dependency order (root causes first). Used by
  * ChecklistGrid's title-tooltip builder to render the derivation
  * chain.
+ *
+ * Dedup uses a HashSet keyed on Cell directly (structural Equal), so
+ * no hash-surrogate string is needed.
  */
 export const chainFor = (
     provenance: Provenance,
     cell: Cell,
 ): ReadonlyArray<Reason> => {
-    const seen = new Set<string>();
+    const seen = MutableHashSet.empty<Cell>();
     const out: Reason[] = [];
     const stack: Cell[] = [cell];
     let next = stack.pop();
     while (next !== undefined) {
-        const key = keyOf(next);
-        if (!seen.has(key)) {
-            seen.add(key);
-            const reason = provenance.get(key);
+        if (!MutableHashSet.has(seen, next)) {
+            MutableHashSet.add(seen, next);
+            const reason = Option.getOrUndefined(
+                MutableHashMap.get(provenance, next),
+            );
             if (reason !== undefined) {
                 out.push(reason);
                 for (const dep of reason.dependsOn) stack.push(dep);
@@ -245,14 +251,14 @@ export const deduceWithExplanations = (
     suggestions: ReadonlyArray<Suggestion>,
     initial: Knowledge,
 ): { knowledge: Knowledge; provenance: Provenance } => {
-    const provenance: Provenance = new Map();
+    const provenance: Provenance = MutableHashMap.empty<Cell, Reason>();
     let current = initial;
     let currentIteration = 0;
 
     // Seed provenance with the initial inputs so the UI can explain
     // them as "you told us this".
     HashMap.forEach(initial.checklist, (_value, cell) => {
-        provenance.set(keyOf(cell), {
+        MutableHashMap.set(provenance, cell, {
             iteration: 0,
             kind: { kind: "initial-known-card" },
             detail: "given from starting knowledge",
@@ -261,9 +267,8 @@ export const deduceWithExplanations = (
     });
 
     const tracer: Tracer = (record) => {
-        const key = keyOf(record.cell);
-        if (provenance.has(key)) return; // first-write-wins
-        provenance.set(key, {
+        if (MutableHashMap.has(provenance, record.cell)) return; // first-write-wins
+        MutableHashMap.set(provenance, record.cell, {
             iteration: currentIteration,
             kind: record.kind,
             detail: record.detail,
