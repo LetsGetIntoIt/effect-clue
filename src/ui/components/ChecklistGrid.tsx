@@ -78,9 +78,12 @@ export function ChecklistGrid() {
     // user's known-card inputs visible). The global contradiction banner
     // at the top of the page surfaces the quick-fix UI; we don't block
     // the grid anymore.
-    const knowledge: Knowledge = Either.isRight(result)
-        ? result.right
-        : emptyKnowledge;
+    //
+    // We use Either.getOrUndefined rather than narrowing on isRight so
+    // React Compiler / Next Turbopack don't hoist a `.right` read ahead
+    // of the narrow check in their IR.
+    const knowledge: Knowledge =
+        Either.getOrUndefined(result) ?? emptyKnowledge;
 
     return (
         <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">

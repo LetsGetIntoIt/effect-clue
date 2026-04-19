@@ -245,7 +245,7 @@ export function GameSetupPanel() {
                     <button
                         key={preset.id}
                         type="button"
-                        className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-[#f0f0f5]"
+                        className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-hover"
                         onClick={() => onPreset(preset)}
                     >
                         {preset.label}
@@ -258,7 +258,7 @@ export function GameSetupPanel() {
                     >
                         <button
                             type="button"
-                            className="cursor-pointer px-3 py-1 hover:bg-[#f0f0f5]"
+                            className="cursor-pointer px-3 py-1 hover:bg-hover"
                             onClick={() => onCustomPreset(preset)}
                             title={`Load custom preset "${preset.label}"`}
                         >
@@ -266,7 +266,7 @@ export function GameSetupPanel() {
                         </button>
                         <button
                             type="button"
-                            className="cursor-pointer border-l border-border px-2 py-1 text-muted hover:bg-[#f0f0f5] hover:text-danger"
+                            className="cursor-pointer border-l border-border px-2 py-1 text-muted hover:bg-hover hover:text-danger"
                             onClick={() => onDeleteCustomPreset(preset)}
                             title={`Delete preset "${preset.label}"`}
                             aria-label={`Delete preset ${preset.label}`}
@@ -277,7 +277,7 @@ export function GameSetupPanel() {
                 ))}
                 <button
                     type="button"
-                    className="cursor-pointer rounded border border-dashed border-border bg-white px-3 py-1 text-[13px] text-muted hover:bg-[#f0f0f5] hover:text-accent"
+                    className="cursor-pointer rounded border border-dashed border-border bg-white px-3 py-1 text-[13px] text-muted hover:bg-hover hover:text-accent"
                     onClick={onSaveAsPreset}
                     title="Save the current category and card set as a reusable preset"
                 >
@@ -469,7 +469,7 @@ export function GameSetupPanel() {
                                 <tr key={`add-card-${String(cat.id)}`}>
                                     <th
                                         colSpan={cardSpan}
-                                        className="border border-border bg-[#fafafc] px-1.5 py-1 text-left"
+                                        className="border border-border bg-row-alt px-1.5 py-1 text-left"
                                     >
                                         <button
                                             type="button"
@@ -490,11 +490,11 @@ export function GameSetupPanel() {
                         <tr>
                             <th
                                 colSpan={cardSpan}
-                                className="border border-border bg-[#fafafc] px-1.5 py-2 text-center"
+                                className="border border-border bg-row-alt px-1.5 py-2 text-center"
                             >
                                 <button
                                     type="button"
-                                    className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-[#f0f0f5]"
+                                    className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-hover"
                                     onClick={() =>
                                         dispatch({ type: "addCategory" })
                                     }

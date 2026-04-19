@@ -11,14 +11,19 @@ import { ContradictionBanner } from "./ContradictionBanner";
  * ChecklistGrid; lifting it here means users always see the same quick-fix
  * UI regardless of which panel they're focused on, and we no longer have
  * to render the same banner twice in parallel.
+ *
+ * Uses Either.getLeft + Option unwrap rather than isLeft + .left so the
+ * React Compiler / Turbopack don't hoist a `.left` read ahead of the
+ * narrowing check in their IR.
  */
 export function GlobalContradictionBanner() {
     const { derived } = useClue();
     const result = derived.deductionResult;
-    if (!Either.isLeft(result)) return null;
+    const trace = Either.isLeft(result) ? result.left : undefined;
+    if (!trace) return null;
     return (
         <div className="rounded-[var(--radius)] border border-border bg-panel p-4">
-            <ContradictionBanner trace={result.left} />
+            <ContradictionBanner trace={trace} />
         </div>
     );
 }

@@ -19,7 +19,7 @@ export function Clue() {
         <ClueProvider>
             <main className="mx-auto flex max-w-[1400px] flex-col gap-5 px-5 pb-15 pt-6">
                 <header className="flex flex-wrap items-center justify-between gap-4">
-                    <h1 className="m-0 text-[28px] text-accent">
+                    <h1 className="m-0 text-[36px] uppercase tracking-[0.08em] text-accent drop-shadow-sm">
                         Clue solver
                     </h1>
                     <Toolbar />

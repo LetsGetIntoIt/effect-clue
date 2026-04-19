@@ -315,14 +315,15 @@ function Recommendations() {
         setAsPlayer(setup.players[0] ?? "");
     }, [setup.players, asPlayer]);
 
-    if (Either.isLeft(result) || !asPlayer) {
+    const knowledge = Either.getOrUndefined(result);
+    if (knowledge === undefined || !asPlayer) {
         return (
             <div>
                 <h3 className={SECTION_TITLE}>
                     Next-suggestion recommendations
                 </h3>
                 <div className="text-[13px] text-muted">
-                    {Either.isLeft(result)
+                    {knowledge === undefined
                         ? "Resolve the contradiction to see recommendations."
                         : "Add players to see recommendations."}
                 </div>
@@ -330,7 +331,6 @@ function Recommendations() {
         );
     }
 
-    const knowledge = result.right;
     const rec = recommendSuggestions(
         setup,
         knowledge,

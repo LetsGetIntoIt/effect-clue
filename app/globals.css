@@ -1,40 +1,104 @@
 @import "tailwindcss";
 
 /*
- * Design tokens ported from the old src/style.css. With Tailwind v4 these
- * become CSS custom properties plus utility classes like bg-panel /
- * text-accent / border-border. We keep the same palette so the port is
- * purely a framework swap, not a visual redesign.
+ * Design tokens — Clue-inspired "mystery dossier" palette.
+ *
+ * Warm parchment backgrounds, oxblood-red accents, aged-paper borders,
+ * and a serif typeface evoke the feel of opening a detective's file
+ * folder without fighting the tool's underlying utility (contrast and
+ * hierarchy are preserved from the previous neutral palette).
+ *
+ * All component styling cascades from these tokens via Tailwind
+ * utilities (bg-panel, text-accent, border-border, etc.) — the
+ * components themselves contain no raw hex colors.
  */
 @theme {
-    --color-bg: #fafafa;
-    --color-panel: #ffffff;
-    --color-border: #e1e1e8;
-    --color-muted: #6b6b78;
-    --color-accent: #3456a6;
-    --color-accent-hover: #2a4585;
-    --color-yes: #2e7d32;
-    --color-yes-bg: #d9efdb;
-    --color-no: #b71c1c;
-    --color-no-bg: #fde0e0;
-    --color-unknown-bg: #ffffff;
-    --color-warning: #735100;
-    --color-warning-bg: #fff4d6;
-    --color-warning-border: #efd58a;
-    --color-danger: #7a1212;
-    --color-danger-bg: #fdecea;
-    --color-danger-border: #f5c2c2;
-    --color-row-header: #f3f3f8;
-    --color-case-file-bg: #f7f8fc;
-    --radius: 6px;
-    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-        "Helvetica Neue", sans-serif;
+    /* --- Surfaces --------------------------------------------------- */
+    /* Deep parchment, slightly warm — like aged dossier paper. */
+    --color-bg: #efe6d3;
+    /* Cream panel — one shade lighter than bg, for card/section fills. */
+    --color-panel: #f7f0dc;
+    /* Aged-paper edge, warm taupe-brown. */
+    --color-border: #cbb68c;
+    /* Faded ink for secondary text. */
+    --color-muted: #6d5a3f;
+    /* Warm beige for table row headers / neutral bars. */
+    --color-row-header: #e5d9b8;
+    /* Dossier manila for the case-file header strip. */
+    --color-case-file-bg: #ead9b0;
+    /* Subtle hover tint for interactive neutrals (buttons, preset chips). */
+    --color-hover: #e8ddbf;
+    /* Alternating "striped" row fill for dense tables. */
+    --color-row-alt: #ede0c1;
+
+    /* --- Primary accent: oxblood red (Miss Scarlet's "file sealed"). */
+    --color-accent: #7a1c1c;
+    --color-accent-hover: #5e1414;
+
+    /* --- Y = claimed / confirmed (detective's green tick). */
+    --color-yes: #2f5e1f;
+    --color-yes-bg: #d7e4bf;
+
+    /* --- N = ruled out (faded crimson). */
+    --color-no: #8a1818;
+    --color-no-bg: #f0d4c8;
+
+    /* --- Unknown / blank. */
+    --color-unknown-bg: #f7f0dc;
+
+    /* --- Warning strip (mustard). */
+    --color-warning: #6d4a00;
+    --color-warning-bg: #f3e4b7;
+    --color-warning-border: #d5b763;
+
+    /* --- Danger (contradictions). Deeper oxblood than the accent. */
+    --color-danger: #4a0e0e;
+    --color-danger-bg: #f0cfc6;
+    --color-danger-border: #c99184;
+
+    /* --- Geometry & typography.
+     *
+     * Fonts are loaded by Next.js (`app/layout.tsx`) and exposed here
+     * via CSS custom-property passthrough. The "-loaded" variables get
+     * injected by the Next font loader; we fall through to a serif
+     * stack while the webfont is still fetching / if CSP blocks it.
+     */
+    --radius: 4px;
+    /* Body copy: a readable old-style serif (Crimson Text via next/font). */
+    --font-sans:
+        var(--font-body-loaded),
+        "Iowan Old Style", "Palatino", "Palatino Linotype", "Book Antiqua",
+        "Georgia", serif;
+    /* Display: a heavy slab serif chosen as the closest free match to the
+       classic Clue/Cluedo logo (Alfa Slab One via next/font). */
+    --font-display:
+        var(--font-display-loaded),
+        "Playbill", "Rockwell", "Baskerville", "Iowan Old Style", "Georgia",
+        serif;
 }
 
 html,
 body {
     background: var(--color-bg);
-    color: #1a1a24;
+    /* Ink-brown body text on parchment reads better than pure black. */
+    color: #2a1f12;
     margin: 0;
     font-family: var(--font-sans);
+    /* Very subtle tinted "paper" texture via a repeating gradient — gives
+       the bg a hint of fibre without dominating. */
+    background-image:
+        radial-gradient(
+            rgba(122, 28, 28, 0.035) 1px,
+            transparent 1px
+        );
+    background-size: 18px 18px;
+}
+
+/* Headings default to the display stack. Components apply Tailwind font-
+   weight/size utilities on top, so this only changes the family. */
+h1,
+h2,
+h3 {
+    font-family: var(--font-display);
+    letter-spacing: 0.01em;
 }

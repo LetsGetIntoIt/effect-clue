@@ -5,7 +5,7 @@ import { useClue } from "../state";
 
 const buttonClass =
     "rounded-[var(--radius)] border border-border bg-white px-3.5 py-1.5 " +
-    "text-[13px] cursor-pointer hover:bg-[#f0f0f5]";
+    "text-[13px] cursor-pointer hover:bg-hover";
 
 /**
  * Top-of-page controls: start a fresh game and copy a shareable URL

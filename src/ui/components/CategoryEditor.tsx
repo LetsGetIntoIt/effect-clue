@@ -84,7 +84,7 @@ const draftToSetup = (
 const BUTTON_ACCENT =
     "cursor-pointer rounded border-none bg-accent px-3 py-1 text-[13px] text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-unknown";
 const BUTTON_GHOST =
-    "cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-[#f0f0f5]";
+    "cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-hover";
 const BUTTON_DANGER =
     "cursor-pointer border-none bg-transparent px-1 text-[14px] leading-none text-muted hover:text-danger disabled:cursor-not-allowed disabled:opacity-40";
 const INPUT =
@@ -199,7 +199,7 @@ export function CategoryEditor() {
     const canApply = errors.length === 0;
 
     return (
-        <div className="mt-3 rounded-[var(--radius)] border border-border bg-[#fafafe] p-3">
+        <div className="mt-3 rounded-[var(--radius)] border border-border bg-row-alt p-3">
             <h3 className="m-0 mb-2 text-[14px] font-semibold text-accent">
                 Edit deck
             </h3>
