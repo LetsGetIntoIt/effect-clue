@@ -4,7 +4,7 @@ import { Either } from "effect";
 import { useEffect, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
 import { cardName, categoryOfCard } from "../../logic/GameSetup";
-import { recommendSuggestions } from "../../logic/Recommender";
+import { describeRecommendation, recommendSuggestions } from "../../logic/Recommender";
 import { newSuggestionId } from "../../logic/Suggestion";
 import {
     DraftSuggestion,
@@ -326,9 +326,10 @@ function Recommendations() {
         );
     }
 
+    const knowledge = result.right;
     const rec = recommendSuggestions(
         setup,
-        result.right,
+        knowledge,
         Player(asPlayer),
         5,
     );
@@ -359,33 +360,44 @@ function Recommendations() {
                 </div>
             ) : (
                 <ol className="mt-2 list-decimal pl-6 text-[13px]">
-                    {rec.recommendations.map((r, i) => (
-                        <li
-                            key={i}
-                            className="py-1"
-                            title={
-                                `${r.cellInfoScore} unknown cell` +
-                                `${r.cellInfoScore === 1 ? "" : "s"}` +
-                                ` × ${r.caseFileOpennessScore} case-file ` +
-                                `combination` +
-                                `${r.caseFileOpennessScore === 1 ? "" : "s"}` +
-                                ` × ${r.refuterUncertaintyScore} possible ` +
-                                `refuter` +
-                                `${r.refuterUncertaintyScore === 1 ? "" : "s"}`
-                            }
-                        >
-                            {r.cards.map((c, ci) => (
-                                <span key={ci}>
-                                    {ci > 0 && " + "}
-                                    <strong>{cardName(setup, c)}</strong>
-                                </span>
-                            ))}
-                            <span className="text-muted">
-                                {" "}
-                                · score {r.score}
-                            </span>
-                        </li>
-                    ))}
+                    {rec.recommendations.map((r, i) => {
+                        const explanation = describeRecommendation(
+                            setup,
+                            knowledge,
+                            r,
+                        );
+                        return (
+                            <li
+                                key={i}
+                                className="py-1.5"
+                                title={
+                                    `Raw score ${r.score} = ` +
+                                    `${r.cellInfoScore} unknown cell` +
+                                    `${r.cellInfoScore === 1 ? "" : "s"}` +
+                                    ` × ${r.caseFileOpennessScore} case-file ` +
+                                    `combination` +
+                                    `${r.caseFileOpennessScore === 1 ? "" : "s"}` +
+                                    ` × ${r.refuterUncertaintyScore} possible ` +
+                                    `refuter` +
+                                    `${r.refuterUncertaintyScore === 1 ? "" : "s"}`
+                                }
+                            >
+                                <div>
+                                    {r.cards.map((c, ci) => (
+                                        <span key={ci}>
+                                            {ci > 0 && " + "}
+                                            <strong>
+                                                {cardName(setup, c)}
+                                            </strong>
+                                        </span>
+                                    ))}
+                                </div>
+                                <div className="text-[12px] text-muted">
+                                    {explanation}
+                                </div>
+                            </li>
+                        );
+                    })}
                 </ol>
             )}
         </div>

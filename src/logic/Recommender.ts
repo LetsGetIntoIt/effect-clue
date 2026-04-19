@@ -227,3 +227,74 @@ export const recommendSuggestions = (
     };
 };
 
+/**
+ * Plain-English explanation of why a suggestion is recommended. Feeds the
+ * UI directly — no need to know the raw scoring formula to understand
+ * what the solver is suggesting.
+ *
+ * Strategy: pick the dominant factor and phrase it as the headline.
+ *  - Case-file openness tells you the suggestion probes unresolved
+ *    casefile categories.
+ *  - Cell-info count tells you it'll fill in blanks on other players'
+ *    rows.
+ *  - Refuter uncertainty tells you you'll learn which player had to
+ *    refute.
+ *
+ * Returns a short single-sentence phrase intended for a list item
+ * (fits on one line).
+ */
+export const describeRecommendation = (
+    setup: GameSetup,
+    knowledge: Knowledge,
+    r: {
+        readonly cards: ReadonlyArray<Card>;
+        readonly cellInfoScore: number;
+        readonly caseFileOpennessScore: number;
+        readonly refuterUncertaintyScore: number;
+    },
+): string => {
+    // Identify categories whose casefile answer is still open, and
+    // which of this triple's cards sit in those categories.
+    const openCategories = setup.categories.filter(
+        c => caseFileAnswerFor(setup, knowledge, c.id) === undefined,
+    );
+    const openCategoryNames = openCategories
+        .map(c => c.name)
+        .map(n => n.toLowerCase());
+
+    // Could a single category become fully pinned by the refuter? That
+    // happens when there are exactly two casefile candidates in a
+    // category and this suggestion probes the non-casefile one.
+    const oneGuessFromCasefile = openCategories.some(c => {
+        const candidates = caseFileCandidatesFor(setup, knowledge, c.id);
+        return (
+            candidates.length === 2 &&
+            r.cards.some(card => candidates.includes(card))
+        );
+    });
+
+    if (oneGuessFromCasefile && openCategoryNames.length === 1) {
+        return `Could pin down the casefile ${openCategoryNames[0] ?? "category"} in one guess.`;
+    }
+
+    if (r.cellInfoScore >= 4 && openCategoryNames.length >= 1) {
+        return (
+            `Probes ${r.cellInfoScore} unknown cells across other ` +
+            `players' ${openCategoryNames.join(" / ")} rows.`
+        );
+    }
+
+    if (r.refuterUncertaintyScore >= 3) {
+        return (
+            `Any of ${r.refuterUncertaintyScore} players could refute — ` +
+            `will reveal which one has a card.`
+        );
+    }
+
+    if (r.cellInfoScore >= 1) {
+        const cellWord = r.cellInfoScore === 1 ? "cell" : "cells";
+        return `Fills in ${r.cellInfoScore} unknown ${cellWord} on other players' rows.`;
+    }
+
+    return "Probes a useful combination.";
+};
