@@ -40,14 +40,38 @@ import { useClue } from "../state";
  * ✓ / · cell and a blank-with-footnote cell.
  */
 export function ChecklistGrid() {
-    const { state, derived } = useClue();
+    const { state, dispatch, derived } = useClue();
     const setup = state.setup;
+    const knownCards = state.knownCards;
     const result = derived.deductionResult;
     const footnotes = derived.footnotes;
     const provenance = derived.provenance;
     const suggestions = derived.suggestionsAsData;
 
     const owners: ReadonlyArray<Owner> = allOwners(setup);
+
+    /**
+     * Toggle a known-card entry for (player, card) when the user clicks a
+     * cell. Only player columns are interactive — the CaseFile column is
+     * computed by the deducer and never a direct user input.
+     *
+     * If the clicked (player, card) is already in knownCards, remove it;
+     * otherwise add it. If the cell currently shows N (deduced), clicking
+     * will add a Y known-card that contradicts — the global banner will
+     * show the user why.
+     */
+    const toggleKnownCard = (owner: Owner, card: Card) => {
+        if (owner._tag !== "Player") return;
+        const player = owner.player;
+        const index = knownCards.findIndex(
+            kc => kc.player === player && kc.card === card,
+        );
+        if (index >= 0) {
+            dispatch({ type: "removeKnownCard", index });
+        } else {
+            dispatch({ type: "addKnownCard", card: { player, card } });
+        }
+    };
 
     // While the deducer is in a contradictory state, fall back to the
     // empty-knowledge snapshot so the grid still renders (with the
@@ -103,10 +127,14 @@ export function ChecklistGrid() {
                                         footnotes,
                                         Cell(owner, entry.id),
                                     );
+                                    const isPlayerCell = owner._tag === "Player";
                                     return (
                                         <td
                                             key={`${ownerKey(owner)}-${String(entry.id)}`}
-                                            className={cellClass(value)}
+                                            className={cellClass(
+                                                value,
+                                                isPlayerCell,
+                                            )}
                                             title={buildCellTitle({
                                                 provenance,
                                                 suggestions,
@@ -115,6 +143,33 @@ export function ChecklistGrid() {
                                                 card: entry.id,
                                                 footnoteNumbers,
                                             })}
+                                            onClick={
+                                                isPlayerCell
+                                                    ? () =>
+                                                          toggleKnownCard(
+                                                              owner,
+                                                              entry.id,
+                                                          )
+                                                    : undefined
+                                            }
+                                            role={isPlayerCell ? "button" : undefined}
+                                            tabIndex={isPlayerCell ? 0 : undefined}
+                                            onKeyDown={
+                                                isPlayerCell
+                                                    ? e => {
+                                                          if (
+                                                              e.key === "Enter" ||
+                                                              e.key === " "
+                                                          ) {
+                                                              e.preventDefault();
+                                                              toggleKnownCard(
+                                                                  owner,
+                                                                  entry.id,
+                                                              );
+                                                          }
+                                                      }
+                                                    : undefined
+                                            }
                                         >
                                             {cellLabel(value)}
                                             {footnoteNumbers.length > 0 &&
@@ -254,8 +309,15 @@ const cellLabel = (value: CellValue | undefined): string => {
 const CELL_BASE =
     "w-9 min-w-9 border border-border px-2 py-1 text-center font-semibold relative";
 
-const cellClass = (value: CellValue | undefined): string => {
-    if (value === Y) return `${CELL_BASE} bg-yes-bg text-yes`;
-    if (value === N) return `${CELL_BASE} bg-no-bg text-no`;
-    return `${CELL_BASE} bg-white`;
+const CELL_INTERACTIVE =
+    " cursor-pointer hover:ring-2 hover:ring-accent/40 focus:outline-none focus:ring-2 focus:ring-accent";
+
+const cellClass = (
+    value: CellValue | undefined,
+    interactive: boolean,
+): string => {
+    const base = interactive ? `${CELL_BASE}${CELL_INTERACTIVE}` : CELL_BASE;
+    if (value === Y) return `${base} bg-yes-bg text-yes`;
+    if (value === N) return `${base} bg-no-bg text-no`;
+    return `${base} bg-white`;
 };
