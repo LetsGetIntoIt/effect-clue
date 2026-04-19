@@ -403,15 +403,23 @@ function Recommendations() {
                             >
                                 <div>
                                     {r.cards.map((c, ci) => {
-                                        const catName =
-                                            setup.categories[ci]?.name.toLowerCase() ??
-                                            "card";
+                                        const rawName =
+                                            setup.categories[ci]?.name ?? "card";
+                                        // Category names are typically plural
+                                        // ("Weapons", "Rooms"); strip a trailing
+                                        // "s" so the collapsed label reads as
+                                        // "any weapon / room" rather than
+                                        // "any weapons / rooms".
+                                        const singular = rawName.replace(
+                                            /s$/,
+                                            "",
+                                        ).toLowerCase();
                                         return (
                                             <span key={ci}>
                                                 {ci > 0 && " + "}
                                                 {c === "any" ? (
                                                     <em className="text-muted">
-                                                        any {catName}
+                                                        any {singular}
                                                     </em>
                                                 ) : (
                                                     <strong>
