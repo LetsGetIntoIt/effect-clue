@@ -1,3 +1,4 @@
+import { Data } from "effect";
 import { N, Y, getCellByOwnerCard, Knowledge } from "./Knowledge";
 import {
     CardCategory,
@@ -72,14 +73,23 @@ export const caseFileCandidatesFor = (
  * The three score factors are exposed separately so the UI can show
  * "why is this recommended" alongside the overall score.
  */
-interface Recommendation {
+class RecommendationImpl extends Data.Class<{
     readonly suggester: Player;
     readonly cards: ReadonlyArray<Card>;
     readonly score: number;
     readonly cellInfoScore: number;
     readonly caseFileOpennessScore: number;
     readonly refuterUncertaintyScore: number;
-}
+}> {}
+type Recommendation = RecommendationImpl;
+const Recommendation = (params: {
+    readonly suggester: Player;
+    readonly cards: ReadonlyArray<Card>;
+    readonly score: number;
+    readonly cellInfoScore: number;
+    readonly caseFileOpennessScore: number;
+    readonly refuterUncertaintyScore: number;
+}): Recommendation => new RecommendationImpl(params);
 
 /**
  * Output of the recommender. `topCount` is exposed for debug tooltips.
@@ -87,10 +97,15 @@ interface Recommendation {
  * start of a game every triple ties, but tie-breaks (see below) pick
  * a stable subset so the user gets something to work with.
  */
-interface RecommendationResult {
+class RecommendationResultImpl extends Data.Class<{
     readonly recommendations: ReadonlyArray<Recommendation>;
     readonly topCount: number;
-}
+}> {}
+type RecommendationResult = RecommendationResultImpl;
+const RecommendationResult = (params: {
+    readonly recommendations: ReadonlyArray<Recommendation>;
+    readonly topCount: number;
+}): RecommendationResult => new RecommendationResultImpl(params);
 
 /**
  * Enumerate every combination of one card per category, drawing only
@@ -198,14 +213,14 @@ export const recommendSuggestions = (
         const score =
             cellInfoScore * caseFileOpennessScore * refuterUncertaintyScore;
 
-        results.push({
+        results.push(Recommendation({
             suggester,
             cards,
             score,
             cellInfoScore,
             caseFileOpennessScore,
             refuterUncertaintyScore,
-        });
+        }));
     }
 
     // Primary: descending score. Tiebreak: lexicographic by joined names.
@@ -216,15 +231,15 @@ export const recommendSuggestions = (
 
     const first = results[0];
     if (first === undefined) {
-        return { recommendations: [], topCount: 0 };
+        return RecommendationResult({ recommendations: [], topCount: 0 });
     }
     const topScore = first.score;
     const topCount = results.filter(r => r.score === topScore).length;
 
-    return {
+    return RecommendationResult({
         recommendations: results.slice(0, maxResults),
         topCount,
-    };
+    });
 };
 
 /**
