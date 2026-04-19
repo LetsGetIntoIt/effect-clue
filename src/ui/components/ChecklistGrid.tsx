@@ -19,6 +19,7 @@ import {
     chainFor,
     describeReason,
     Provenance,
+    ReasonDescription,
 } from "../../logic/Provenance";
 import {
     caseFileAnswerFor,
@@ -46,6 +47,7 @@ import { Tooltip } from "./Tooltip";
  */
 export function ChecklistGrid() {
     const t = useTranslations("deduce");
+    const tReasons = useTranslations("reasons");
     const { state, dispatch, derived } = useClue();
     const { hoveredSuggestionIndex } = useHover();
     const setup = state.setup;
@@ -174,6 +176,8 @@ export function ChecklistGrid() {
                                         owner,
                                         card: entry.id,
                                         footnoteNumbers,
+                                        tDeduce: t,
+                                        tReasons,
                                     });
                                     const tooltipContent = tooltipText ? (
                                         <div className="whitespace-pre-line">
@@ -240,6 +244,91 @@ export function ChecklistGrid() {
 }
 
 /**
+ * Resolve a single `ReasonDescription` (from `describeReason`) into
+ * `{ headline, detail }` strings via the "reasons" i18n namespace.
+ * Centralising the lookup here keeps the cell-title builder compact
+ * and makes the shape of each reason variant visible in one place.
+ */
+const resolveReasonCopy = (
+    desc: ReasonDescription,
+    tReasons: ReturnType<typeof useTranslations<"reasons">>,
+): { readonly headline: string; readonly detail: string } => {
+    switch (desc.kind) {
+        case "initial-known-card":
+        case "initial-hand-size":
+            return {
+                headline: tReasons(`${desc.kind}.headline`),
+                detail: tReasons(`${desc.kind}.detail`),
+            };
+        case "card-ownership":
+        case "player-hand":
+        case "case-file-category":
+            return {
+                headline: tReasons(`${desc.kind}.headline`),
+                detail: tReasons(`${desc.kind}.detail`, desc.params),
+            };
+        case "non-refuters": {
+            const headline = tReasons("suggestionHeadline", {
+                number: desc.params.suggestionIndex + 1,
+            });
+            const detail =
+                desc.params.suggester !== undefined
+                    ? tReasons("non-refuters.detailKnown", {
+                          suggester: desc.params.suggester,
+                      })
+                    : tReasons("non-refuters.detailUnknown");
+            return { headline, detail };
+        }
+        case "refuter-showed": {
+            const headline = tReasons("suggestionHeadline", {
+                number: desc.params.suggestionIndex + 1,
+            });
+            if (desc.params.refuter === undefined) {
+                return {
+                    headline,
+                    detail: tReasons("refuter-showed.detailUnknown"),
+                };
+            }
+            return {
+                headline,
+                detail:
+                    desc.params.seen !== undefined
+                        ? tReasons("refuter-showed.detailKnown", {
+                              refuter: desc.params.refuter,
+                              seen: desc.params.seen,
+                          })
+                        : tReasons("refuter-showed.detailKnownNoCard", {
+                              refuter: desc.params.refuter,
+                          }),
+            };
+        }
+        case "refuter-owns-one-of": {
+            const headline = tReasons("suggestionHeadline", {
+                number: desc.params.suggestionIndex + 1,
+            });
+            if (
+                desc.params.refuter === undefined ||
+                desc.params.suggester === undefined ||
+                desc.params.cardLabels === undefined
+            ) {
+                return {
+                    headline,
+                    detail: tReasons("refuter-owns-one-of.detailUnknown"),
+                };
+            }
+            return {
+                headline,
+                detail: tReasons("refuter-owns-one-of.detailKnown", {
+                    refuter: desc.params.refuter,
+                    suggester: desc.params.suggester,
+                    cardLabels: desc.params.cardLabels,
+                }),
+            };
+        }
+    }
+};
+
+/**
  * Assemble the title= string shown on hover. For known Y/N cells we walk
  * the dependency chain backwards and render each step as a numbered line
  * so the user sees *why* the cell has that value, not just the last
@@ -253,32 +342,44 @@ const buildCellTitle = (args: {
     owner: Owner;
     card: Card;
     footnoteNumbers: ReadonlyArray<number>;
+    tDeduce: ReturnType<typeof useTranslations<"deduce">>;
+    tReasons: ReturnType<typeof useTranslations<"reasons">>;
 }): string | undefined => {
-    const { provenance, suggestions, setup, owner, card, footnoteNumbers } = args;
+    const {
+        provenance,
+        suggestions,
+        setup,
+        owner,
+        card,
+        footnoteNumbers,
+        tDeduce,
+        tReasons,
+    } = args;
 
     const footnoteLine =
         footnoteNumbers.length > 0
-            ? `Candidate for suggestion ${footnoteNumbers
-                  .map(n => `#${n}`)
-                  .join(", ")} — refuter's unseen card could be here.`
+            ? tDeduce("footnoteLine", {
+                  labels: footnoteNumbers.map(n => `#${n}`).join(", "),
+              })
             : undefined;
 
     const chain = provenance
         ? chainFor(provenance, Cell(owner, card))
         : [];
     const chainLines: string[] = chain.map((reason, i) => {
-        const { headline, detail } = describeReason(
-            reason,
-            setup,
-            suggestions,
-        );
-        const iter = reason.iteration > 0 ? ` (iter ${reason.iteration})` : "";
-        return `${i + 1}. ${headline}${iter}: ${detail}`;
+        const desc = describeReason(reason, setup, suggestions);
+        const { headline, detail } = resolveReasonCopy(desc, tReasons);
+        return tDeduce("whyLine", {
+            index: i + 1,
+            headline,
+            iter: reason.iteration > 0 ? reason.iteration : "none",
+            detail,
+        });
     });
 
     const parts: string[] = [];
     if (chainLines.length > 0) {
-        parts.push("Why this value:");
+        parts.push(tDeduce("whyHeader"));
         parts.push(...chainLines);
     }
     if (footnoteLine) parts.push(footnoteLine);

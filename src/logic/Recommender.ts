@@ -228,21 +228,44 @@ export const recommendSuggestions = (
 };
 
 /**
- * Plain-English explanation of why a suggestion is recommended. Feeds the
- * UI directly — no need to know the raw scoring formula to understand
- * what the solver is suggesting.
+ * Structured description of why a suggestion is recommended. The UI
+ * layer resolves the tagged shape into localized copy via
+ * `messages/en.json` under `recommendations.*`.
  *
- * Strategy: pick the dominant factor and phrase it as the headline.
- *  - Case-file openness tells you the suggestion probes unresolved
- *    casefile categories.
- *  - Cell-info count tells you it'll fill in blanks on other players'
- *    rows.
- *  - Refuter uncertainty tells you you'll learn which player had to
- *    refute.
- *
- * Returns a short single-sentence phrase intended for a list item
- * (fits on one line).
+ * Strategy: pick the dominant factor and emit the matching variant.
+ *  - Case-file openness → `oneGuessFromCasefile` (we can pin down
+ *    the answer).
+ *  - Cell-info count → `probesManyCells` or `fillsCells` (fills
+ *    blanks on other players' rows).
+ *  - Refuter uncertainty → `refuterUncertainty` (reveals which
+ *    player had to refute).
+ *  - Fallback → `usefulCombination`.
  */
+type RecommendationDescription =
+    | {
+          readonly kind: "oneGuessFromCasefile";
+          readonly params: { readonly category: string };
+      }
+    | {
+          readonly kind: "probesManyCells";
+          readonly params: {
+              readonly cellCount: number;
+              readonly categories: string;
+          };
+      }
+    | {
+          readonly kind: "refuterUncertainty";
+          readonly params: { readonly playerCount: number };
+      }
+    | {
+          readonly kind: "fillsCells";
+          readonly params: { readonly cellCount: number };
+      }
+    | {
+          readonly kind: "usefulCombination";
+          readonly params: Record<string, never>;
+      };
+
 export const describeRecommendation = (
     setup: GameSetup,
     knowledge: Knowledge,
@@ -252,7 +275,7 @@ export const describeRecommendation = (
         readonly caseFileOpennessScore: number;
         readonly refuterUncertaintyScore: number;
     },
-): string => {
+): RecommendationDescription => {
     // Identify categories whose casefile answer is still open, and
     // which of this triple's cards sit in those categories.
     const openCategories = setup.categories.filter(
@@ -274,29 +297,37 @@ export const describeRecommendation = (
     });
 
     if (oneGuessFromCasefile && openCategoryNames.length === 1) {
-        return `Could pin down the casefile ${openCategoryNames[0] ?? "category"} in one guess.`;
+        return {
+            kind: "oneGuessFromCasefile",
+            params: { category: openCategoryNames[0] ?? "category" },
+        };
     }
 
     if (r.cellInfoScore >= 4 && openCategoryNames.length >= 1) {
-        return (
-            `Probes ${r.cellInfoScore} unknown cells across other ` +
-            `players' ${openCategoryNames.join(" / ")} rows.`
-        );
+        return {
+            kind: "probesManyCells",
+            params: {
+                cellCount: r.cellInfoScore,
+                categories: openCategoryNames.join(" / "),
+            },
+        };
     }
 
     if (r.refuterUncertaintyScore >= 3) {
-        return (
-            `Any of ${r.refuterUncertaintyScore} players could refute — ` +
-            `will reveal which one has a card.`
-        );
+        return {
+            kind: "refuterUncertainty",
+            params: { playerCount: r.refuterUncertaintyScore },
+        };
     }
 
     if (r.cellInfoScore >= 1) {
-        const cellWord = r.cellInfoScore === 1 ? "cell" : "cells";
-        return `Fills in ${r.cellInfoScore} unknown ${cellWord} on other players' rows.`;
+        return {
+            kind: "fillsCells",
+            params: { cellCount: r.cellInfoScore },
+        };
     }
 
-    return "Probes a useful combination.";
+    return { kind: "usefulCombination", params: {} };
 };
 
 /**

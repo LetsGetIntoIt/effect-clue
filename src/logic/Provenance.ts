@@ -115,125 +115,139 @@ export const chainFor = (
 };
 
 /**
- * Turn a single Reason into a user-facing sentence. Uses the setup and
- * suggestions arrays to resolve ids into display names / suggestion
- * numbers, so the UI doesn't have to repeat that lookup per render.
+ * Structured description of a Reason, keyed by the reason's kind. The
+ * UI layer resolves the tagged shape into localized copy via
+ * `messages/en.json` under `reasons.*` — keeping this module pure so
+ * solver tests (and future non-React callers) don't depend on
+ * next-intl.
  *
- * Returns an object with a short `headline` (rule family) and a longer
- * `detail` (full explanation). The headline is suitable for bold
- * labels; detail is the prose.
+ * The shape stays isomorphic with `ReasonKind`: one variant per kind,
+ * carrying the name-resolved strings the UI needs to interpolate.
+ * Optional fields are populated when the relevant suggestion is
+ * present in the `suggestions` array — stale provenance entries
+ * (suggestion removed) fall back to the no-params branch of the
+ * matching message.
  */
-interface DescribedReason {
-    readonly headline: string;
-    readonly detail: string;
-}
-
-/**
- * Format a suggestion-indexed reason headline + resolved-suggestion
- * pair. Factored out because three ReasonKind variants all branch on
- * "do we have a suggestion at this index?" the same way.
- */
-const suggestionContext = (
-    suggestions: ReadonlyArray<Suggestion>,
-    suggestionIndex: number,
-): { readonly headline: string; readonly suggestion: Suggestion | undefined } => ({
-    headline: `Suggestion #${suggestionIndex + 1}`,
-    suggestion: suggestions[suggestionIndex],
-});
+export type ReasonDescription =
+    | {
+          readonly kind: "initial-known-card";
+          readonly params: Record<string, never>;
+      }
+    | {
+          readonly kind: "initial-hand-size";
+          readonly params: Record<string, never>;
+      }
+    | {
+          readonly kind: "card-ownership";
+          readonly params: { readonly card: string };
+      }
+    | {
+          readonly kind: "player-hand";
+          readonly params: { readonly player: string };
+      }
+    | {
+          readonly kind: "case-file-category";
+          readonly params: { readonly category: string };
+      }
+    | {
+          readonly kind: "non-refuters";
+          readonly params: {
+              readonly suggestionIndex: number;
+              readonly suggester: string | undefined;
+          };
+      }
+    | {
+          readonly kind: "refuter-showed";
+          readonly params: {
+              readonly suggestionIndex: number;
+              readonly refuter: string | undefined;
+              readonly seen: string | undefined;
+          };
+      }
+    | {
+          readonly kind: "refuter-owns-one-of";
+          readonly params: {
+              readonly suggestionIndex: number;
+              readonly suggester: string | undefined;
+              readonly refuter: string | undefined;
+              readonly cardLabels: string | undefined;
+          };
+      };
 
 export const describeReason = (
     reason: Reason,
     setup: GameSetup,
     suggestions: ReadonlyArray<Suggestion>,
-): DescribedReason =>
+): ReasonDescription =>
     Match.value(reason.kind).pipe(
         Match.discriminatorsExhaustive("kind")({
-            "initial-known-card": () => ({
-                headline: "Given",
-                detail: "You marked this cell in the known-cards grid.",
+            "initial-known-card": (): ReasonDescription => ({
+                kind: "initial-known-card",
+                params: {},
             }),
-            "initial-hand-size": () => ({
-                headline: "Given",
-                detail: "Known from the player's hand size.",
+            "initial-hand-size": (): ReasonDescription => ({
+                kind: "initial-hand-size",
+                params: {},
             }),
-            "card-ownership": ({ card }) => ({
-                headline: "Card ownership",
-                detail:
-                    `Each card has exactly one owner. Once ` +
-                    `${cardName(setup, card)} was ruled in ` +
-                    `or out for other owners, this cell was forced.`,
+            "card-ownership": ({ card }): ReasonDescription => ({
+                kind: "card-ownership",
+                params: { card: cardName(setup, card) },
             }),
-            "player-hand": ({ player }) => ({
-                headline: "Hand size",
-                detail:
-                    `${player}'s hand holds a fixed number of ` +
-                    `cards. Counting the Ys and Ns in their row forced ` +
-                    `this cell.`,
+            "player-hand": ({ player }): ReasonDescription => ({
+                kind: "player-hand",
+                params: { player: String(player) },
             }),
-            "case-file-category": ({ category }) => ({
-                headline: "Case file",
-                detail:
-                    `The case file contains exactly one ` +
-                    `${categoryName(setup, category)}. ` +
-                    `Narrowing the category forced this cell.`,
+            "case-file-category": ({ category }): ReasonDescription => ({
+                kind: "case-file-category",
+                params: { category: categoryName(setup, category) },
             }),
-            "non-refuters": ({ suggestionIndex }) => {
-                const { headline, suggestion } = suggestionContext(
-                    suggestions,
+            "non-refuters": ({ suggestionIndex }): ReasonDescription => ({
+                kind: "non-refuters",
+                params: {
                     suggestionIndex,
-                );
-                if (!suggestion)
-                    return {
-                        headline,
-                        detail: "A player who passed can't hold the named cards.",
-                    };
+                    suggester:
+                        suggestions[suggestionIndex]?.suggester !== undefined
+                            ? String(suggestions[suggestionIndex]!.suggester)
+                            : undefined,
+                },
+            }),
+            "refuter-showed": ({ suggestionIndex }): ReasonDescription => {
+                const s = suggestions[suggestionIndex];
                 return {
-                    headline,
-                    detail:
-                        `The passer couldn't refute ${suggestion.suggester}'s ` +
-                        `suggestion, so they don't own any of the named cards.`,
+                    kind: "refuter-showed",
+                    params: {
+                        suggestionIndex,
+                        refuter:
+                            s?.refuter !== undefined
+                                ? String(s.refuter)
+                                : undefined,
+                        seen:
+                            s?.seenCard !== undefined
+                                ? cardName(setup, s.seenCard)
+                                : undefined,
+                    },
                 };
             },
-            "refuter-showed": ({ suggestionIndex }) => {
-                const { headline, suggestion } = suggestionContext(
-                    suggestions,
-                    suggestionIndex,
-                );
-                if (!suggestion)
-                    return {
-                        headline,
-                        detail: "Refuter showed the card.",
-                    };
-                const seen =
-                    suggestion.seenCard !== undefined
-                        ? cardName(setup, suggestion.seenCard)
-                        : "the refuting card";
+            "refuter-owns-one-of": ({ suggestionIndex }): ReasonDescription => {
+                const s = suggestions[suggestionIndex];
                 return {
-                    headline,
-                    detail: `${suggestion.refuter} refuted and showed ${seen}.`,
-                };
-            },
-            "refuter-owns-one-of": ({ suggestionIndex }) => {
-                const { headline, suggestion } = suggestionContext(
-                    suggestions,
-                    suggestionIndex,
-                );
-                if (!suggestion)
-                    return {
-                        headline,
-                        detail:
-                            "Refuter had to own one of the three cards; the " +
-                            "other two were already ruled out.",
-                    };
-                const cardLabels = suggestionCards(suggestion)
-                    .map((id: Card) => cardName(setup, id))
-                    .join(", ");
-                return {
-                    headline,
-                    detail:
-                        `${suggestion.refuter} refuted ${suggestion.suggester}'s suggestion ` +
-                        `(${cardLabels}) but we didn't see the card. Once ` +
-                        `the other two were ruled out, this one was forced.`,
+                    kind: "refuter-owns-one-of",
+                    params: {
+                        suggestionIndex,
+                        suggester:
+                            s?.suggester !== undefined
+                                ? String(s.suggester)
+                                : undefined,
+                        refuter:
+                            s?.refuter !== undefined
+                                ? String(s.refuter)
+                                : undefined,
+                        cardLabels: s
+                            ? suggestionCards(s)
+                                  .map((id: Card) => cardName(setup, id))
+                                  .join(", ")
+                            : undefined,
+                    },
                 };
             },
         }),

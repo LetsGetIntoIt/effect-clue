@@ -74,7 +74,53 @@
         "title": "Deduction grid",
         "caseFile": "Case file",
         "caseFileProgress": "Case file · {percent}% solved",
-        "candidatesCount": "{count, plural, one {# candidate} other {# candidates}}"
+        "candidatesCount": "{count, plural, one {# candidate} other {# candidates}}",
+        "whyHeader": "Why this value:",
+        "whyLine": "{index}. {headline}{iter, select, none {} other { (iter {iter})}}: {detail}",
+        "footnoteLine": "Candidate for suggestion {labels} — refuter's unseen card could be here."
+    },
+    "reasons": {
+        "suggestionHeadline": "Suggestion #{number}",
+        "initial-known-card": {
+            "headline": "Given",
+            "detail": "You marked this cell in the known-cards grid."
+        },
+        "initial-hand-size": {
+            "headline": "Given",
+            "detail": "Known from the player's hand size."
+        },
+        "card-ownership": {
+            "headline": "Card ownership",
+            "detail": "Each card has exactly one owner. Once {card} was ruled in or out for other owners, this cell was forced."
+        },
+        "player-hand": {
+            "headline": "Hand size",
+            "detail": "{player}'s hand holds a fixed number of cards. Counting the Ys and Ns in their row forced this cell."
+        },
+        "case-file-category": {
+            "headline": "Case file",
+            "detail": "The case file contains exactly one {category}. Narrowing the category forced this cell."
+        },
+        "non-refuters": {
+            "detailKnown": "The passer couldn't refute {suggester}'s suggestion, so they don't own any of the named cards.",
+            "detailUnknown": "A player who passed can't hold the named cards."
+        },
+        "refuter-showed": {
+            "detailKnown": "{refuter} refuted and showed {seen}.",
+            "detailKnownNoCard": "{refuter} refuted and showed the refuting card.",
+            "detailUnknown": "Refuter showed the card."
+        },
+        "refuter-owns-one-of": {
+            "detailKnown": "{refuter} refuted {suggester}'s suggestion ({cardLabels}) but we didn't see the card. Once the other two were ruled out, this one was forced.",
+            "detailUnknown": "Refuter had to own one of the three cards; the other two were already ruled out."
+        }
+    },
+    "recommendations": {
+        "oneGuessFromCasefile": "Could pin down the casefile {category} in one guess.",
+        "probesManyCells": "Probes {cellCount} unknown cells across other players' {categories} rows.",
+        "refuterUncertainty": "Any of {playerCount} players could refute — will reveal which one has a card.",
+        "fillsCells": "Fills in {cellCount, plural, one {# unknown cell} other {# unknown cells}} on other players' rows.",
+        "usefulCombination": "Probes a useful combination."
     },
     "suggestions": {
         "title": "Suggestion log",

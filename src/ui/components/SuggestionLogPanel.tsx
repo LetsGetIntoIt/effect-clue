@@ -312,6 +312,7 @@ function AddSuggestion() {
 
 function Recommendations() {
     const t = useTranslations("suggestions");
+    const tRecs = useTranslations("recommendations");
     const { state, derived } = useClue();
     const setup = state.setup;
     const result = derived.deductionResult;
@@ -379,7 +380,7 @@ function Recommendations() {
             ) : (
                 <ol className="mt-2 list-decimal pl-6 text-[13px]">
                     {consolidated.map((r, i) => {
-                        const explanation = describeRecommendation(
+                        const desc = describeRecommendation(
                             setup,
                             knowledge,
                             {
@@ -391,6 +392,7 @@ function Recommendations() {
                                 refuterUncertaintyScore: r.refuterUncertaintyScore,
                             },
                         );
+                        const explanation = tRecs(desc.kind, desc.params);
                         const scoreBreakdown = (
                             <div>
                                 <div className="font-semibold">
