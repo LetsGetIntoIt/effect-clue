@@ -24,6 +24,7 @@ import {
     caseFileProgress,
 } from "../../logic/Recommender";
 import { Suggestion } from "../../logic/Suggestion";
+import { useHover } from "../HoverContext";
 import { useClue } from "../state";
 import { Tooltip } from "./Tooltip";
 
@@ -42,6 +43,7 @@ import { Tooltip } from "./Tooltip";
  */
 export function ChecklistGrid() {
     const { state, dispatch, derived } = useClue();
+    const { hoveredSuggestionIndex } = useHover();
     const setup = state.setup;
     const knownCards = state.knownCards;
     const result = derived.deductionResult;
@@ -50,6 +52,28 @@ export function ChecklistGrid() {
     const suggestions = derived.suggestionsAsData;
 
     const owners: ReadonlyArray<Owner> = allOwners(setup);
+
+    /**
+     * Cross-highlight: when the user hovers a suggestion row in
+     * PriorSuggestions, highlight every cell whose provenance chain
+     * referenced that suggestion's index. `chainFor` returns every
+     * Reason contributing to the cell's current value; any Reason
+     * whose `kind.suggestionIndex` matches the hovered index makes
+     * this cell participate.
+     */
+    const cellIsHighlighted = (owner: Owner, card: Card): boolean => {
+        if (hoveredSuggestionIndex === null) return false;
+        if (!provenance) return false;
+        const chain = chainFor(provenance, Cell(owner, card));
+        for (const reason of chain) {
+            const idx =
+                "suggestionIndex" in reason.kind
+                    ? reason.kind.suggestionIndex
+                    : undefined;
+            if (idx === hoveredSuggestionIndex) return true;
+        }
+        return false;
+    };
 
     /**
      * Toggle a known-card entry for (player, card) when the user clicks a
@@ -132,6 +156,10 @@ export function ChecklistGrid() {
                                         Cell(owner, entry.id),
                                     );
                                     const isPlayerCell = owner._tag === "Player";
+                                    const isHighlighted = cellIsHighlighted(
+                                        owner,
+                                        entry.id,
+                                    );
                                     const tooltipText = buildCellTitle({
                                         provenance,
                                         suggestions,
@@ -154,6 +182,7 @@ export function ChecklistGrid() {
                                                 className={cellClass(
                                                     value,
                                                     isPlayerCell,
+                                                    isHighlighted,
                                                 )}
                                                 onClick={
                                                     isPlayerCell
@@ -325,11 +354,19 @@ const CELL_BASE =
 const CELL_INTERACTIVE =
     " cursor-pointer hover:ring-2 hover:ring-accent/40 focus:outline-none focus:ring-2 focus:ring-accent";
 
+// Persistent cross-highlight (from hovering a suggestion in the log).
+// Stronger ring + subtle offset so it visually distinguishes from the
+// hover/focus ring on interactive cells and survives both.
+const CELL_HIGHLIGHTED =
+    " ring-2 ring-accent ring-offset-1 ring-offset-panel";
+
 const cellClass = (
     value: CellValue | undefined,
     interactive: boolean,
+    highlighted: boolean,
 ): string => {
-    const base = interactive ? `${CELL_BASE}${CELL_INTERACTIVE}` : CELL_BASE;
+    let base = interactive ? `${CELL_BASE}${CELL_INTERACTIVE}` : CELL_BASE;
+    if (highlighted) base += CELL_HIGHLIGHTED;
     if (value === Y) return `${base} bg-yes-bg text-yes`;
     if (value === N) return `${base} bg-no-bg text-no`;
     return `${base} bg-white`;

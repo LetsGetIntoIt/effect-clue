@@ -9,6 +9,7 @@ import {
     describeRecommendation,
     recommendSuggestions,
 } from "../../logic/Recommender";
+import { useHover } from "../HoverContext";
 import { Tooltip } from "./Tooltip";
 import { newSuggestionId } from "../../logic/Suggestion";
 import {
@@ -455,6 +456,7 @@ function Recommendations() {
 
 function PriorSuggestions() {
     const { state, dispatch } = useClue();
+    const { hoveredSuggestionIndex, setHoveredSuggestion } = useHover();
     const setup = state.setup;
     const suggestions = state.suggestions;
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -470,8 +472,12 @@ function PriorSuggestions() {
                 </div>
             ) : (
                 <ol className="m-0 max-h-[300px] list-decimal overflow-y-auto pl-6">
-                    {suggestions.map(s =>
-                        editingId === s.id ? (
+                    {suggestions.map((s, idx) => {
+                        const isHovered = hoveredSuggestionIndex === idx;
+                        const highlightClass = isHovered
+                            ? " -mx-2 rounded bg-yes-bg/40 px-2 ring-1 ring-accent/60"
+                            : "";
+                        return editingId === s.id ? (
                             <li
                                 key={s.id}
                                 className="border-b border-border py-2 text-[13px] last:border-b-0"
@@ -491,7 +497,12 @@ function PriorSuggestions() {
                         ) : (
                             <li
                                 key={s.id}
-                                className="border-b border-border py-2 text-[13px] last:border-b-0"
+                                className={
+                                    "border-b border-border py-2 text-[13px] last:border-b-0 transition-[background-color,box-shadow] duration-100" +
+                                    highlightClass
+                                }
+                                onMouseEnter={() => setHoveredSuggestion(idx)}
+                                onMouseLeave={() => setHoveredSuggestion(null)}
                             >
                                 <div>
                                     <strong>{s.suggester}</strong>{" "}
@@ -547,8 +558,8 @@ function PriorSuggestions() {
                                     </button>
                                 </div>
                             </li>
-                        ),
-                    )}
+                        );
+                    })}
                 </ol>
             )}
         </div>
