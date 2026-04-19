@@ -77,6 +77,17 @@ export interface DraftSuggestion {
  * Category / card operations come in id-based flavours (for inline grid
  * edits that know the stable id) and are resolved against the current
  * setup inside the reducer.
+ *
+ * **Invariant**: every mutation of `ClueState` must go through
+ * `dispatch` (a `ClueAction`) — never via direct assignment or a
+ * `setState` call escaping this module. This invariant is what lets
+ * the upcoming undo/redo meta-reducer observe every user-visible
+ * change, and what keeps the action log replayable. Components only
+ * ever *read* `state` / `derived`; they never touch them.
+ *
+ * Ephemeral per-component UI state (like a form's local "editing"
+ * buffer) is fine to keep in `useState`; the bar is specifically
+ * against mutating anything inside `ClueState`.
  */
 type ClueAction =
     | { type: "newGame" }
