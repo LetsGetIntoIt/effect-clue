@@ -67,17 +67,26 @@ export const newCategoryId = (): CardCategory =>
  * owner lets us reuse a single constraint-propagation combinator for both
  * "each card has exactly one owner" and "the case file owns exactly one of
  * each category" rules.
+ *
+ * Each variant is a `Data.TaggedClass` — structural `Equal` / `Hash`, a
+ * runtime `_tag` ("Player" / "CaseFile") that `Match.tag` / `Match.tags`
+ * narrow on, and extension-friendly if we later want to hang methods on
+ * the class. The `PlayerOwner(player)` / `CaseFileOwner()` factory
+ * helpers preserve the existing call-site ergonomics (136 callers) so
+ * this change is a pure internals swap.
  */
-export type Owner = Data.Data<
-    | { readonly _tag: "Player"; readonly player: Player }
-    | { readonly _tag: "CaseFile" }
->;
+class PlayerOwnerImpl extends Data.TaggedClass("Player")<{
+    readonly player: Player;
+}> {}
+
+class CaseFileOwnerImpl extends Data.TaggedClass("CaseFile")<{}> {}
+
+export type Owner = PlayerOwnerImpl | CaseFileOwnerImpl;
 
 export const PlayerOwner = (player: Player): Owner =>
-    Data.struct({ _tag: "Player" as const, player });
+    new PlayerOwnerImpl({ player });
 
-export const CaseFileOwner = (): Owner =>
-    Data.struct({ _tag: "CaseFile" as const });
+export const CaseFileOwner = (): Owner => new CaseFileOwnerImpl();
 
 export const ownerLabel = (owner: Owner): string =>
     Match.value(owner).pipe(
