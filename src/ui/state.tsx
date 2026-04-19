@@ -108,13 +108,26 @@ type ClueAction =
     | { type: "addPlayer" }
     | { type: "removePlayer"; player: Player }
     | { type: "renamePlayer"; oldName: Player; newName: Player }
+    | { type: "setUiMode"; mode: UiMode }
     | { type: "replaceSession"; session: GameSession };
+
+/**
+ * Coarse-grained UI mode. "setup" exposes the deck / player editing
+ * surfaces; "play" locks them down so accidental clicks don't drop
+ * hand sizes mid-game. The `newGame` action snaps back to "setup";
+ * "Start playing" transitions to "play".
+ *
+ * Lives in ClueState (not component-local useState) so the shared-URL
+ * encoder and localStorage persistence can round-trip it.
+ */
+type UiMode = "setup" | "play";
 
 interface ClueState {
     readonly setup: GameSetup;
     readonly handSizes: ReadonlyArray<readonly [Player, number]>;
     readonly knownCards: ReadonlyArray<KnownCard>;
     readonly suggestions: ReadonlyArray<DraftSuggestion>;
+    readonly uiMode: UiMode;
 }
 
 const initialState: ClueState = {
@@ -122,6 +135,7 @@ const initialState: ClueState = {
     handSizes: [],
     knownCards: [],
     suggestions: [],
+    uiMode: "setup",
 };
 
 const reducer = (state: ClueState, action: ClueAction): ClueState => {
@@ -131,6 +145,9 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 ...initialState,
                 setup: newGameSetup(4),
             };
+
+        case "setUiMode":
+            return { ...state, uiMode: action.mode };
 
         case "loadPreset":
             // Swap to a preset deck and discard anything tied to the

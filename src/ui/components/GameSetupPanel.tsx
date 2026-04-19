@@ -76,9 +76,11 @@ function InlineTextEdit({
 function PlayerNameInput({
     player,
     allPlayers,
+    editable,
 }: {
     player: Player;
     allPlayers: ReadonlyArray<Player>;
+    editable: boolean;
 }) {
     const { dispatch } = useClue();
     const [editing, setEditing] = useState(String(player));
@@ -114,6 +116,14 @@ function PlayerNameInput({
         });
         setError("");
     };
+
+    if (!editable) {
+        return (
+            <div className="px-1 py-1 text-center text-[12px] font-semibold">
+                {String(player)}
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col items-stretch gap-0.5">
@@ -218,65 +228,94 @@ export function GameSetupPanel() {
     // the deck and player roster.
     const cardSpan = setup.players.length + 2;
 
+    const inSetup = state.uiMode === "setup";
+
     return (
         <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="m-0 text-[16px] uppercase tracking-[0.05em] text-accent">
                     Game setup
                 </h2>
-            </div>
-
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span className="text-[12px] font-semibold uppercase tracking-[0.05em] text-muted">
-                    Preset:
-                </span>
-                {PRESETS.map(preset => (
+                {inSetup ? (
                     <button
-                        key={preset.id}
                         type="button"
-                        className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-hover"
-                        onClick={() => onPreset(preset)}
+                        className="cursor-pointer rounded border-none bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-white hover:bg-accent-hover"
+                        onClick={() =>
+                            dispatch({ type: "setUiMode", mode: "play" })
+                        }
+                        title="Lock the deck / player roster and start tracking suggestions"
                     >
-                        {preset.label}
+                        Start playing →
                     </button>
-                ))}
-                {customPresets.map(preset => (
-                    <span
-                        key={preset.id}
-                        className="inline-flex items-center overflow-hidden rounded border border-border bg-white text-[13px]"
+                ) : (
+                    <button
+                        type="button"
+                        className="cursor-pointer rounded border border-border bg-white px-3.5 py-1.5 text-[13px] hover:bg-hover"
+                        onClick={() =>
+                            dispatch({ type: "setUiMode", mode: "setup" })
+                        }
+                        title="Unlock the deck / player roster for editing"
                     >
-                        <button
-                            type="button"
-                            className="cursor-pointer px-3 py-1 hover:bg-hover"
-                            onClick={() => onCustomPreset(preset)}
-                            title={`Load custom preset "${preset.label}"`}
-                        >
-                            {preset.label}
-                        </button>
-                        <button
-                            type="button"
-                            className="cursor-pointer border-l border-border px-2 py-1 text-muted hover:bg-hover hover:text-danger"
-                            onClick={() => onDeleteCustomPreset(preset)}
-                            title={`Delete preset "${preset.label}"`}
-                            aria-label={`Delete preset ${preset.label}`}
-                        >
-                            ×
-                        </button>
-                    </span>
-                ))}
-                <button
-                    type="button"
-                    className="cursor-pointer rounded border border-dashed border-border bg-white px-3 py-1 text-[13px] text-muted hover:bg-hover hover:text-accent"
-                    onClick={onSaveAsPreset}
-                    title="Save the current category and card set as a reusable preset"
-                >
-                    + Save as preset
-                </button>
+                        Edit setup
+                    </button>
+                )}
             </div>
 
-            <div className="mb-3">
-                <CategoryEditor />
-            </div>
+            {inSetup && (
+                <>
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <span className="text-[12px] font-semibold uppercase tracking-[0.05em] text-muted">
+                            Preset:
+                        </span>
+                        {PRESETS.map(preset => (
+                            <button
+                                key={preset.id}
+                                type="button"
+                                className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-hover"
+                                onClick={() => onPreset(preset)}
+                            >
+                                {preset.label}
+                            </button>
+                        ))}
+                        {customPresets.map(preset => (
+                            <span
+                                key={preset.id}
+                                className="inline-flex items-center overflow-hidden rounded border border-border bg-white text-[13px]"
+                            >
+                                <button
+                                    type="button"
+                                    className="cursor-pointer px-3 py-1 hover:bg-hover"
+                                    onClick={() => onCustomPreset(preset)}
+                                    title={`Load custom preset "${preset.label}"`}
+                                >
+                                    {preset.label}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="cursor-pointer border-l border-border px-2 py-1 text-muted hover:bg-hover hover:text-danger"
+                                    onClick={() => onDeleteCustomPreset(preset)}
+                                    title={`Delete preset "${preset.label}"`}
+                                    aria-label={`Delete preset ${preset.label}`}
+                                >
+                                    ×
+                                </button>
+                            </span>
+                        ))}
+                        <button
+                            type="button"
+                            className="cursor-pointer rounded border border-dashed border-border bg-white px-3 py-1 text-[13px] text-muted hover:bg-hover hover:text-accent"
+                            onClick={onSaveAsPreset}
+                            title="Save the current category and card set as a reusable preset"
+                        >
+                            + Save as preset
+                        </button>
+                    </div>
+
+                    <div className="mb-3">
+                        <CategoryEditor />
+                    </div>
+                </>
+            )}
 
             {handSizeMismatch && (
                 <div className="mb-3 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning">
@@ -300,20 +339,23 @@ export function GameSetupPanel() {
                                     <PlayerNameInput
                                         player={p}
                                         allPlayers={setup.players}
+                                        editable={inSetup}
                                     />
                                 </th>
                             ))}
                             <th className="w-8 border border-border bg-row-header px-1.5 py-1 text-center">
-                                <button
-                                    type="button"
-                                    className="h-6 w-6 cursor-pointer rounded border-none bg-accent text-[16px] leading-none text-white hover:bg-accent-hover"
-                                    title="Add player"
-                                    onClick={() =>
-                                        dispatch({ type: "addPlayer" })
-                                    }
-                                >
-                                    +
-                                </button>
+                                {inSetup && (
+                                    <button
+                                        type="button"
+                                        className="h-6 w-6 cursor-pointer rounded border-none bg-accent text-[16px] leading-none text-white hover:bg-accent-hover"
+                                        title="Add player"
+                                        onClick={() =>
+                                            dispatch({ type: "addPlayer" })
+                                        }
+                                    >
+                                        +
+                                    </button>
+                                )}
                             </th>
                         </tr>
                         <tr>
@@ -356,6 +398,7 @@ export function GameSetupPanel() {
                             <td className="border border-border"></td>
                         </tr>
                     </thead>
+                    {inSetup && (
                     <tbody>
                         {setup.categories.flatMap((cat) => {
                             const canRemoveCategory =
@@ -480,6 +523,7 @@ export function GameSetupPanel() {
                             </th>
                         </tr>
                     </tbody>
+                    )}
                 </table>
             </div>
         </section>
