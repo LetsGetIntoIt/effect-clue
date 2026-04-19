@@ -16,6 +16,31 @@
         "newGame": "New game",
         "newGameConfirm": "Start a new game? This will clear all players, cards, known hands, and suggestions."
     },
+    "history": {
+        "undoTooltip": "Undo: {description}",
+        "redoTooltip": "Redo: {description}",
+        "unknownAction": "an unknown change",
+        "actions": {
+            "newGame": "starting a new game",
+            "loadPreset": "loading a preset",
+            "addPlayer": "adding a player",
+            "removePlayer": "removing player {player}",
+            "renamePlayer": "renaming player {oldName} to {newName}",
+            "addCategory": "adding a category",
+            "removeCategoryById": "removing category {name}",
+            "addCardToCategoryById": "adding a card to category {category}",
+            "removeCardById": "removing card {name}",
+            "renameCategory": "renaming a category to {name}",
+            "renameCard": "renaming a card to {name}",
+            "addKnownCard": "marking {player} owns {card}",
+            "removeKnownCard": "unmarking a known card",
+            "setHandSize": "setting {player}'s hand size to {size}",
+            "setHandSizeCleared": "clearing {player}'s hand size",
+            "addSuggestion": "adding a suggestion by {player}",
+            "updateSuggestion": "editing a suggestion",
+            "removeSuggestion": "removing a suggestion"
+        }
+    },
     "setup": {
         "title": "Game setup",
         "startPlaying": "Start playing →",

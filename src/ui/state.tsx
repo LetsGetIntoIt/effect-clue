@@ -89,7 +89,7 @@ export interface DraftSuggestion {
  * buffer) is fine to keep in `useState`; the bar is specifically
  * against mutating anything inside `ClueState`.
  */
-type ClueAction =
+export type ClueAction =
     | { type: "newGame" }
     | { type: "loadPreset"; setup: GameSetup }
     | { type: "setSetup"; setup: GameSetup }
@@ -122,7 +122,7 @@ type ClueAction =
  */
 type UiMode = "setup" | "play";
 
-interface ClueState {
+export interface ClueState {
     readonly setup: GameSetup;
     readonly handSizes: ReadonlyArray<readonly [Player, number]>;
     readonly knownCards: ReadonlyArray<KnownCard>;
@@ -502,19 +502,47 @@ interface ClueContextValue {
     readonly canRedo: boolean;
     readonly undo: () => void;
     readonly redo: () => void;
+    /**
+     * The action that the next `undo()` would reverse, plus the state
+     * snapshot *before* that action fired (so id-keyed actions can
+     * resolve names via the pre-action `setup`). `undefined` when the
+     * past stack is empty.
+     */
+    readonly nextUndo: {
+        readonly action: ClueAction;
+        readonly previousState: ClueState;
+    } | undefined;
+    /**
+     * Mirror of `nextUndo` for redo — the action `redo()` would replay.
+     * The snapshot is the current state (the action fires against it,
+     * same as any forward dispatch).
+     */
+    readonly nextRedo: {
+        readonly action: ClueAction;
+        readonly previousState: ClueState;
+    } | undefined;
 }
 
 /**
  * History wrapper for undo/redo. Each non-ephemeral user action pushes
- * the previous state to `past` and clears `future`; undo/redo walk the
- * two stacks. `replaceSession` (hydration from URL/localStorage) and
- * `setUiMode` (purely presentational) bypass the history so they can't
- * be undone into — they're not user-visible semantic changes.
+ * the previous state *and* the action itself to `past` / `pastActions`
+ * — the action snapshot is what lets the Toolbar's hover tooltip
+ * describe "what would be undone" in natural language.
+ *
+ * `replaceSession` (hydration from URL/localStorage) and `setUiMode`
+ * (purely presentational) bypass the history so they can't be undone
+ * into — they're not user-visible semantic changes.
+ *
+ * `pastActions[i]` is the action that transitioned `past[i]` into
+ * either `past[i+1]` or (when `i` is the last index) `current`.
+ * `futureActions` mirrors the same invariant on the redo side.
  */
 interface History {
     readonly past: ReadonlyArray<ClueState>;
+    readonly pastActions: ReadonlyArray<ClueAction>;
     readonly current: ClueState;
     readonly future: ReadonlyArray<ClueState>;
+    readonly futureActions: ReadonlyArray<ClueAction>;
 }
 
 type HistoryAction =
@@ -526,19 +554,25 @@ const historyReducer = (h: History, action: HistoryAction): History => {
     if (action.type === "__undo") {
         if (h.past.length === 0) return h;
         const prev = h.past[h.past.length - 1]!;
+        const reversedAction = h.pastActions[h.pastActions.length - 1]!;
         return {
             past: h.past.slice(0, -1),
+            pastActions: h.pastActions.slice(0, -1),
             current: prev,
             future: [h.current, ...h.future],
+            futureActions: [reversedAction, ...h.futureActions],
         };
     }
     if (action.type === "__redo") {
         if (h.future.length === 0) return h;
-        const [next, ...rest] = h.future;
+        const [next, ...restFuture] = h.future;
+        const [replayedAction, ...restFutureActions] = h.futureActions;
         return {
             past: [...h.past, h.current],
+            pastActions: [...h.pastActions, replayedAction!],
             current: next!,
-            future: rest,
+            future: restFuture,
+            futureActions: restFutureActions,
         };
     }
     const newCurrent = reducer(h.current, action);
@@ -549,8 +583,10 @@ const historyReducer = (h: History, action: HistoryAction): History => {
     }
     return {
         past: [...h.past, h.current],
+        pastActions: [...h.pastActions, action],
         current: newCurrent,
         future: [],
+        futureActions: [],
     };
 };
 
@@ -569,13 +605,27 @@ export const useClue = (): ClueContextValue => {
 export function ClueProvider({ children }: { children: ReactNode }) {
     const [history, dispatchRaw] = useReducer(historyReducer, {
         past: [],
+        pastActions: [],
         current: initialState,
         future: [],
+        futureActions: [],
     });
     const state = history.current;
     const dispatch = dispatchRaw as React.Dispatch<ClueAction>;
     const canUndo = history.past.length > 0;
     const canRedo = history.future.length > 0;
+    const nextUndo = canUndo
+        ? {
+              action: history.pastActions[history.pastActions.length - 1]!,
+              previousState: history.past[history.past.length - 1]!,
+          }
+        : undefined;
+    const nextRedo = canRedo
+        ? {
+              action: history.futureActions[0]!,
+              previousState: history.current,
+          }
+        : undefined;
     const undo = useCallback(() => dispatchRaw({ type: "__undo" }), []);
     const redo = useCallback(() => dispatchRaw({ type: "__redo" }), []);
 
@@ -736,6 +786,8 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             canRedo,
             undo,
             redo,
+            nextUndo,
+            nextRedo,
         }),
         [
             state,
@@ -747,6 +799,8 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             canRedo,
             undo,
             redo,
+            nextUndo,
+            nextRedo,
         ],
     );
 
