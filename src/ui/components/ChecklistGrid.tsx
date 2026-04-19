@@ -72,8 +72,11 @@ export function ChecklistGrid() {
         if (!provenance) return false;
         const chain = chainFor(provenance, Cell(owner, card));
         for (const reason of chain) {
+            const tag = reason.kind._tag;
             const idx =
-                "suggestionIndex" in reason.kind
+                tag === "NonRefuters"
+                || tag === "RefuterShowed"
+                || tag === "RefuterOwnsOneOf"
                     ? reason.kind.suggestionIndex
                     : undefined;
             if (idx === hoveredSuggestionIndex) return true;

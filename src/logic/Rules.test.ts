@@ -12,6 +12,7 @@ import {
     setHandSize,
     Y,
 } from "./Knowledge";
+import { CardOwnership } from "./Provenance";
 import type { SetCellRecord, Tracer } from "./Provenance";
 import {
     applyConsistencyRules,
@@ -62,7 +63,7 @@ describe("applySlice", () => {
         ],
         yCount: 1,
         label: `ownership: ${card}`,
-        kind: { kind: "card-ownership", card },
+        kind: CardOwnership({ card }),
     });
 
     test("no-op when nothing is known", () => {
@@ -230,7 +231,7 @@ describe("provenance tracer", () => {
             ],
             yCount: 1,
             label: `ownership: ${card}`,
-            kind: { kind: "card-ownership", card },
+            kind: CardOwnership({ card }),
         };
         let k = emptyKnowledge;
         k = setCell(k, Cell(PlayerOwner(A), card), Y);
@@ -242,7 +243,7 @@ describe("provenance tracer", () => {
         expect(records).toHaveLength(3);
         for (const r of records) {
             expect(r.value).toBe(N);
-            expect(r.kind.kind).toBe("card-ownership");
+            expect(r.kind._tag).toBe("CardOwnership");
             expect((r.kind as { card: Card }).card).toBe(card);
             expect(r.dependsOn).toHaveLength(1);
             expect(r.dependsOn[0]).toEqual(Cell(PlayerOwner(A), card));
@@ -260,7 +261,7 @@ describe("provenance tracer", () => {
             ],
             yCount: 1,
             label: `ownership: ${card}`,
-            kind: { kind: "card-ownership", card },
+            kind: CardOwnership({ card }),
         };
         let k = emptyKnowledge;
         k = setCell(k, Cell(PlayerOwner(A), card), N);
@@ -296,7 +297,7 @@ describe("provenance tracer", () => {
         const rec = expectAt(records, 0);
         expect(rec.cell).toEqual(Cell(PlayerOwner(C), KNIFE));
         expect(rec.value).toBe(N);
-        expect(rec.kind.kind).toBe("non-refuters");
+        expect(rec.kind._tag).toBe("NonRefuters");
         expect(
             (rec.kind as { suggestionIndex: number }).suggestionIndex,
         ).toBe(1);
@@ -316,7 +317,7 @@ describe("provenance tracer", () => {
         expect(records).toHaveLength(1);
         const rec = expectAt(records, 0);
         expect(rec.value).toBe(Y);
-        expect(rec.kind.kind).toBe("refuter-showed");
+        expect(rec.kind._tag).toBe("RefuterShowed");
         expect(
             (rec.kind as { suggestionIndex: number }).suggestionIndex,
         ).toBe(0);
@@ -339,7 +340,7 @@ describe("provenance tracer", () => {
         const rec = expectAt(records, 0);
         expect(rec.cell).toEqual(Cell(PlayerOwner(B), CONSERV));
         expect(rec.value).toBe(Y);
-        expect(rec.kind.kind).toBe("refuter-owns-one-of");
+        expect(rec.kind._tag).toBe("RefuterOwnsOneOf");
         expect(
             (rec.kind as { suggestionIndex: number }).suggestionIndex,
         ).toBe(0);
@@ -363,7 +364,7 @@ describe("structured Contradiction info", () => {
             ],
             yCount: 1,
             label: `ownership: ${KNIFE}`,
-            kind: { kind: "card-ownership", card: KNIFE },
+            kind: CardOwnership({ card: KNIFE }),
         };
         let k = emptyKnowledge;
         k = setCell(k, Cell(PlayerOwner(A), KNIFE), Y);
