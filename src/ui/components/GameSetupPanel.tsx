@@ -16,7 +16,6 @@ import {
     saveCustomPreset,
 } from "../../logic/CustomPresets";
 import { useClue } from "../state";
-import { CategoryEditor } from "./CategoryEditor";
 
 const PRESET_CONFIRM =
     "Loading a preset will discard your current hand sizes, known " +
@@ -309,10 +308,6 @@ export function GameSetupPanel() {
                         >
                             + Save as preset
                         </button>
-                    </div>
-
-                    <div className="mb-3">
-                        <CategoryEditor />
                     </div>
                 </>
             )}
