@@ -50,14 +50,16 @@ export const newSuggestionId = (): SuggestionId =>
  * - `seenCard`:    which card we saw (undefined if we didn't make the
  *                  suggestion ourselves or the refuter isn't showing us)
  */
-export type Suggestion = Data.Data<{
+class SuggestionImpl extends Data.Class<{
     readonly id: SuggestionId;
     readonly suggester: Player;
     readonly cards: HashSet.HashSet<Card>;
     readonly nonRefuters: HashSet.HashSet<Player>;
     readonly refuter: Player | undefined;
     readonly seenCard: Card | undefined;
-}>;
+}> {}
+
+export type Suggestion = SuggestionImpl;
 
 export const Suggestion = (params: {
     id?: SuggestionId;
@@ -66,14 +68,15 @@ export const Suggestion = (params: {
     nonRefuters: Iterable<Player>;
     refuter?: Player | undefined;
     seenCard?: Card | undefined;
-}): Suggestion => Data.struct({
-    id: params.id ?? SuggestionId(""),
-    suggester: params.suggester,
-    cards: HashSet.fromIterable(params.cards),
-    nonRefuters: HashSet.fromIterable(params.nonRefuters),
-    refuter: params.refuter,
-    seenCard: params.seenCard,
-});
+}): Suggestion =>
+    new SuggestionImpl({
+        id: params.id ?? SuggestionId(""),
+        suggester: params.suggester,
+        cards: HashSet.fromIterable(params.cards),
+        nonRefuters: HashSet.fromIterable(params.nonRefuters),
+        refuter: params.refuter,
+        seenCard: params.seenCard,
+    });
 
 export const suggestionCards = (s: Suggestion): ReadonlyArray<Card> =>
     ReadonlyArray.fromIterable(s.cards);

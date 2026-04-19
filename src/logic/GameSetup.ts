@@ -33,15 +33,17 @@ export interface Category {
  * completely category-agnostic — pass in 2 categories, 10 categories, or
  * the classic 3, and the inference rules work identically.
  */
-export type GameSetup = Data.Data<{
+class GameSetupImpl extends Data.Class<{
     readonly players: ReadonlyArray<Player>;
     readonly categories: ReadonlyArray<Category>;
-}>;
+}> {}
+
+export type GameSetup = GameSetupImpl;
 
 export const GameSetup = (params: {
-    players: ReadonlyArray<Player>;
-    categories: ReadonlyArray<Category>;
-}): GameSetup => Data.struct(params);
+    readonly players: ReadonlyArray<Player>;
+    readonly categories: ReadonlyArray<Category>;
+}): GameSetup => new GameSetupImpl(params);
 
 // ---- Id / name lookups --------------------------------------------------
 

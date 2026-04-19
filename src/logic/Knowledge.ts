@@ -38,15 +38,17 @@ export const Cell = (owner: Owner, card: Card): Cell =>
  * as just another kind of Owner. That lets a single combinator enforce
  * "each card has exactly one owner" without special-casing.
  */
-export type Knowledge = Data.Data<{
+class KnowledgeImpl extends Data.Class<{
     readonly checklist: HashMap.HashMap<Cell, CellValue>;
     readonly handSizes: HashMap.HashMap<Owner, number>;
-}>;
+}> {}
+
+export type Knowledge = KnowledgeImpl;
 
 export const Knowledge = (params: {
-    checklist: HashMap.HashMap<Cell, CellValue>;
-    handSizes: HashMap.HashMap<Owner, number>;
-}): Knowledge => Data.struct(params);
+    readonly checklist: HashMap.HashMap<Cell, CellValue>;
+    readonly handSizes: HashMap.HashMap<Owner, number>;
+}): Knowledge => new KnowledgeImpl(params);
 
 export const emptyKnowledge: Knowledge = Knowledge({
     checklist: HashMap.empty(),
