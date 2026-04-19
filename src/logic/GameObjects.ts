@@ -1,4 +1,4 @@
-import { Brand, Data } from "effect";
+import { Brand, Data, Match } from "effect";
 
 /**
  * A player in a Clue game, identified by name. We use a branded string so
@@ -80,4 +80,9 @@ export const CaseFileOwner = (): Owner =>
     Data.struct({ _tag: "CaseFile" as const });
 
 export const ownerLabel = (owner: Owner): string =>
-    owner._tag === "Player" ? owner.player : "Case file";
+    Match.value(owner).pipe(
+        Match.tagsExhaustive({
+            Player: ({ player }) => String(player),
+            CaseFile: () => "Case file",
+        }),
+    );
