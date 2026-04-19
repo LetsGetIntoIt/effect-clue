@@ -100,13 +100,6 @@ export const getHandSize = (
  *   of that suggestion in the suggestions array — so the UI can surface
  *   a "remove this suggestion" quick fix.
  */
-interface ContradictionInfo {
-    readonly reason: string;
-    readonly offendingCells: ReadonlyArray<Cell>;
-    readonly sliceLabel?: string | undefined;
-    readonly suggestionIndex?: number | undefined;
-}
-
 /**
  * Thrown when a rule tries to set a cell to a value that contradicts
  * what is already known, or when a slice becomes internally impossible
@@ -116,29 +109,17 @@ interface ContradictionInfo {
  * games get a proper error instead of silently producing a bogus
  * answer.
  *
- * Accepts either a plain string (legacy, for rules that haven't been
- * migrated) or a structured ContradictionInfo. Carrying the info inline
- * on the thrown Error lets rules deep in the call stack attach
- * provenance without plumbing extra return types up through `applySlice`.
+ * Modelled as a `Data.TaggedError` so the `_tag: "Contradiction"` is
+ * usable with `Effect.catchTag` once rules move under `Effect.gen`.
+ * It still extends `Error` under the hood — existing `throw` / `catch`
+ * / `instanceof` call sites keep working as-is.
  */
-export class Contradiction extends Error {
-    readonly _tag = "Contradiction" as const;
+export class Contradiction extends Data.TaggedError("Contradiction")<{
     readonly reason: string;
     readonly offendingCells: ReadonlyArray<Cell>;
     readonly sliceLabel?: string | undefined;
     readonly suggestionIndex?: number | undefined;
-    constructor(info: ContradictionInfo | string) {
-        const full: ContradictionInfo =
-            typeof info === "string"
-                ? { reason: info, offendingCells: [] }
-                : info;
-        super(`Contradiction: ${full.reason}`);
-        this.reason = full.reason;
-        this.offendingCells = full.offendingCells;
-        this.sliceLabel = full.sliceLabel;
-        this.suggestionIndex = full.suggestionIndex;
-    }
-}
+}> {}
 
 const cellConflictContradiction = (
     cell: Cell,

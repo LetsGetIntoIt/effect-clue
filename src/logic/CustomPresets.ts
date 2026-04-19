@@ -1,15 +1,15 @@
 /**
  * User-saved card pack presets. A preset is a snapshot of the
- * `GameSetup.categories` (category id+name and per-category card
- * id+name), minus the players. It lives in a separate localStorage
- * key from the active game session so users can accumulate personal
- * packs across games without polluting or risking collision with the
- * session blob.
+ * `CardSet` half of `GameSetup` — categories + card entries only,
+ * no players. It lives in a separate localStorage key from the
+ * active game session so users can accumulate personal packs across
+ * games without polluting or risking collision with the session blob.
  *
  * Schema is versioned from day one — every migration step bumps
  * `version` so we can add fields later without breaking existing
  * preset stores.
  */
+import { CardSet } from "./CardSet";
 import { Card, CardCategory } from "./GameObjects";
 import { CardEntry, Category, GameSetup } from "./GameSetup";
 
@@ -37,14 +37,15 @@ interface PersistedCustomPresetsV1 {
 }
 
 /**
- * Runtime-shape preset as consumed by the UI. The build() thunk
- * materializes a fresh GameSetup with the caller's preferred player
- * list — presets don't remember players.
+ * Runtime-shape preset as consumed by the UI. Stores a `CardSet` —
+ * the deck half of a game — so callers can compose a fresh
+ * `GameSetup` with whatever `PlayerSet` the current game already
+ * has. Presets deliberately don't remember players.
  */
 export interface CustomPreset {
     readonly id: string;
     readonly label: string;
-    readonly categories: ReadonlyArray<Category>;
+    readonly cardSet: CardSet;
 }
 
 const STORAGE_KEY = "effect-clue.custom-presets.v1";
@@ -86,7 +87,7 @@ export const loadCustomPresets = (): ReadonlyArray<CustomPreset> => {
         return parsed.presets.map(p => ({
             id: p.id,
             label: p.label,
-            categories: decodeCategories(p.categories),
+            cardSet: CardSet({ categories: decodeCategories(p.categories) }),
         }));
     } catch {
         return [];
@@ -99,7 +100,7 @@ const writeAll = (presets: ReadonlyArray<CustomPreset>): void => {
         presets: presets.map(p => ({
             id: p.id,
             label: p.label,
-            categories: encodeCategories(p.categories),
+            categories: encodeCategories(p.cardSet.categories),
         })),
     };
     try {
@@ -110,9 +111,9 @@ const writeAll = (presets: ReadonlyArray<CustomPreset>): void => {
 };
 
 /**
- * Snapshot the current `setup.categories` as a new preset. Generates
- * a random preset id so renames of the active setup's category/card
- * ids don't collide with preset ids across sessions.
+ * Snapshot the current `setup.cardSet` as a new preset. Generates a
+ * random preset id so renames of the active setup's category/card ids
+ * don't collide with preset ids across sessions.
  */
 export const saveCustomPreset = (
     label: string,
@@ -125,7 +126,7 @@ export const saveCustomPreset = (
     const newPreset: CustomPreset = {
         id,
         label,
-        categories: setup.categories,
+        cardSet: setup.cardSet,
     };
     writeAll([...presets, newPreset]);
     return newPreset;

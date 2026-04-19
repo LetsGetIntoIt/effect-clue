@@ -1,0 +1,169 @@
+{
+    "app": {
+        "title": "Clue solver",
+        "description": "Track a game of Clue and watch the solver narrow the case file down to one suspect, one weapon, and one room."
+    },
+    "toolbar": {
+        "undo": "↶ Undo",
+        "undoAria": "Undo",
+        "undoTitle": "Undo (⌘Z / Ctrl+Z)",
+        "redo": "↷ Redo",
+        "redoAria": "Redo",
+        "redoTitle": "Redo (⌘⇧Z / Ctrl+Shift+Z)",
+        "share": "Share link",
+        "shareCopied": "Copied!",
+        "copyFallback": "Copy this URL:",
+        "newGame": "New game",
+        "newGameConfirm": "Start a new game? This will clear all players, cards, known hands, and suggestions."
+    },
+    "history": {
+        "undoTooltip": "Undo: {description}",
+        "redoTooltip": "Redo: {description}",
+        "unknownAction": "an unknown change",
+        "actions": {
+            "newGame": "starting a new game",
+            "loadPreset": "loading a preset",
+            "addPlayer": "adding a player",
+            "removePlayer": "removing player {player}",
+            "renamePlayer": "renaming player {oldName} to {newName}",
+            "addCategory": "adding a category",
+            "removeCategoryById": "removing category {name}",
+            "addCardToCategoryById": "adding a card to category {category}",
+            "removeCardById": "removing card {name}",
+            "renameCategory": "renaming a category to {name}",
+            "renameCard": "renaming a card to {name}",
+            "addKnownCard": "marking {player} owns {card}",
+            "removeKnownCard": "unmarking a known card",
+            "setHandSize": "setting {player}'s hand size to {size}",
+            "setHandSizeCleared": "clearing {player}'s hand size",
+            "addSuggestion": "adding a suggestion by {player}",
+            "updateSuggestion": "editing a suggestion",
+            "removeSuggestion": "removing a suggestion"
+        }
+    },
+    "setup": {
+        "title": "Game setup",
+        "startPlaying": "Start playing →",
+        "startPlayingTitle": "Lock the deck / player roster and start tracking suggestions",
+        "editSetup": "Edit setup",
+        "editSetupTitle": "Unlock the deck / player roster for editing",
+        "preset": "Preset:",
+        "loadPresetConfirm": "Loading a preset will discard your current hand sizes, known cards, and suggestions. Continue?",
+        "loadCustomPresetTitle": "Load custom preset \"{label}\"",
+        "deleteCustomPresetTitle": "Delete preset \"{label}\"",
+        "deleteCustomPresetAria": "Delete preset {label}",
+        "saveAsPreset": "+ Save as preset",
+        "saveAsPresetTitle": "Save the current category and card set as a reusable preset",
+        "saveAsPresetPrompt": "Save this card pack as a preset. Name it:",
+        "deleteCustomPresetConfirm": "Delete preset \"{label}\"?",
+        "handSize": "Hand size",
+        "handSizeMismatch": "Hand sizes total {total} {total, plural, one {card} other {cards}}; should total {expected} after the {caseFileCount} case-file cards.",
+        "addPlayerTitle": "Add player",
+        "removePlayerTitle": "Remove {player}",
+        "duplicateName": "Duplicate name",
+        "renameCategoryTitle": "Rename category",
+        "removeCategoryTitle": "Remove {name}",
+        "removeCategoryMin": "At least one category is required",
+        "renameCardTitle": "Rename card",
+        "removeCardTitle": "Remove {name}",
+        "removeCardMin": "At least one card per category is required",
+        "addCard": "+ add card",
+        "addCategory": "+ add category"
+    },
+    "deduce": {
+        "title": "Deduction grid",
+        "caseFile": "Case file",
+        "caseFileProgress": "Case file · {percent}% solved",
+        "candidatesCount": "{count, plural, one {# candidate} other {# candidates}}",
+        "whyHeader": "Why this value:",
+        "whyLine": "{index}. {headline}{iter, select, none {} other { (iter {iter})}}: {detail}",
+        "footnoteLine": "Candidate for suggestion {labels} — refuter's unseen card could be here."
+    },
+    "reasons": {
+        "suggestionHeadline": "Suggestion #{number}",
+        "initial-known-card": {
+            "headline": "Given",
+            "detail": "You marked this cell in the known-cards grid."
+        },
+        "initial-hand-size": {
+            "headline": "Given",
+            "detail": "Known from the player's hand size."
+        },
+        "card-ownership": {
+            "headline": "Card ownership",
+            "detail": "Each card has exactly one owner. Once {card} was ruled in or out for other owners, this cell was forced."
+        },
+        "player-hand": {
+            "headline": "Hand size",
+            "detail": "{player}'s hand holds a fixed number of cards. Counting the Ys and Ns in their row forced this cell."
+        },
+        "case-file-category": {
+            "headline": "Case file",
+            "detail": "The case file contains exactly one {category}. Narrowing the category forced this cell."
+        },
+        "non-refuters": {
+            "detailKnown": "The passer couldn't refute {suggester}'s suggestion, so they don't own any of the named cards.",
+            "detailUnknown": "A player who passed can't hold the named cards."
+        },
+        "refuter-showed": {
+            "detailKnown": "{refuter} refuted and showed {seen}.",
+            "detailKnownNoCard": "{refuter} refuted and showed the refuting card.",
+            "detailUnknown": "Refuter showed the card."
+        },
+        "refuter-owns-one-of": {
+            "detailKnown": "{refuter} refuted {suggester}'s suggestion ({cardLabels}) but we didn't see the card. Once the other two were ruled out, this one was forced.",
+            "detailUnknown": "Refuter had to own one of the three cards; the other two were already ruled out."
+        }
+    },
+    "recommendations": {
+        "oneGuessFromCasefile": "Could pin down the casefile {category} in one guess.",
+        "probesManyCells": "Probes {cellCount} unknown cells across other players' {categories} rows.",
+        "refuterUncertainty": "Any of {playerCount} players could refute — will reveal which one has a card.",
+        "fillsCells": "Fills in {cellCount, plural, one {# unknown cell} other {# unknown cells}} on other players' rows.",
+        "usefulCombination": "Probes a useful combination."
+    },
+    "suggestions": {
+        "title": "Suggestion log",
+        "addTitle": "Add a suggestion",
+        "suggesterLabel": "Suggester:",
+        "categoryLabel": "{category}:",
+        "refutedByLabel": "Refuted by:",
+        "cardShownLabel": "Card shown (optional):",
+        "cardShownEditLabel": "Card shown:",
+        "noneOption": "— none —",
+        "unknownOption": "— unknown —",
+        "placeholderOption": "—",
+        "couldNotRefute": "Could not refute",
+        "addButton": "Add suggestion",
+        "recommendationsTitle": "Next-suggestion recommendations",
+        "suggestingAs": "Suggesting as: ",
+        "resolveContradictionFirst": "Resolve the contradiction to see recommendations.",
+        "addPlayersFirst": "Add players to see recommendations.",
+        "nothingUseful": "Nothing useful to ask — you've already narrowed everything down.",
+        "priorTitle": "{count, plural, =0 {Prior suggestions} other {Prior suggestions (#)}}",
+        "priorEmpty": "No suggestions yet. Add one above.",
+        "suggestedLine": "<strong>{suggester}</strong> suggested {cards}",
+        "refutationLine": "{status, select, refutedSeenPassed {refuted by <strong>{refuter}</strong> (showed {seen}) · passed: {passers}} refutedSeen {refuted by <strong>{refuter}</strong> (showed {seen})} refutedPassed {refuted by <strong>{refuter}</strong> · passed: {passers}} refuted {refuted by <strong>{refuter}</strong>} nobodyPassed {nobody could refute · passed: {passers}} other {nobody could refute}}",
+        "editAction": "edit",
+        "removeAction": "remove",
+        "saveAction": "Save",
+        "cancelAction": "Cancel",
+        "score": "(score {score})",
+        "anyCategory": "any {category}",
+        "scoreBreakdownHeader": "Raw score {score}",
+        "scoreBreakdownDetails": "{info, plural, one {# unknown cell} other {# unknown cells}} × {combos, plural, one {# case-file combination} other {# case-file combinations}} × {refuters, plural, one {# possible refuter} other {# possible refuters}}",
+        "scoreBreakdownCoverage": "Covers {count} tied triples.",
+        "defaultCategorySingular": "card"
+    },
+    "contradictions": {
+        "full": "<strong>Contradiction:</strong> {reason}",
+        "offendingInputsHeader": "Offending inputs",
+        "suggestionLabel": "Suggestion #{index} by {player}",
+        "suggestionLabelNoPlayer": "Suggestion #{index}",
+        "removeSuggestion": "Remove suggestion",
+        "knownCardFix": "Known card: <strong>{player}</strong> has <strong>{card}</strong>",
+        "knownCardUnset": "Unset",
+        "handSizeFix": "Hand size: <strong>{player}</strong> = {size}",
+        "handSizeReset": "Reset"
+    }
+}

@@ -1,4 +1,4 @@
-import { Either } from "effect";
+import { Result } from "effect";
 import { Card, Player, PlayerOwner } from "./GameObjects";
 import { CLASSIC_SETUP_3P } from "./GameSetup";
 import {
@@ -7,7 +7,7 @@ import {
     N,
     Y,
 } from "./Knowledge";
-import { buildInitialKnowledge } from "./InitialKnowledge";
+import { buildInitialKnowledge, KnownCard } from "./InitialKnowledge";
 import deduce from "./Deducer";
 import { cardByName } from "./test-utils/CardByName";
 
@@ -42,27 +42,27 @@ describe("buildInitialKnowledge", () => {
         // which matches — so every *other* card in Anisha's row must be
         // forced to N by the hand-size consistency rule.
         const known = [
-            { player: A, card: cardByName(setup, "Miss Scarlet") },
-            { player: A, card: cardByName(setup, "Col. Mustard") },
-            { player: A, card: cardByName(setup, "Candlestick") },
-            { player: A, card: cardByName(setup, "Knife") },
-            { player: A, card: cardByName(setup, "Kitchen") },
-            { player: A, card: cardByName(setup, "Ball room") },
+            KnownCard({ player: A, card: cardByName(setup, "Miss Scarlet") }),
+            KnownCard({ player: A, card: cardByName(setup, "Col. Mustard") }),
+            KnownCard({ player: A, card: cardByName(setup, "Candlestick") }),
+            KnownCard({ player: A, card: cardByName(setup, "Knife") }),
+            KnownCard({ player: A, card: cardByName(setup, "Kitchen") }),
+            KnownCard({ player: A, card: cardByName(setup, "Ball room") }),
         ];
         const initial = buildInitialKnowledge(setup, known, []);
         const result = deduce(setup, [])(initial);
-        expect(Either.isRight(result)).toBe(true);
-        if (!Either.isRight(result)) return;
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
 
         // Cards not in Anisha's known list must be N in her row.
         const PLUM = cardByName(setup, "Prof. Plum");
         const ROPE = cardByName(setup, "Rope");
         const STUDY = cardByName(setup, "Study");
-        expect(getCellByOwnerCard(result.right, PlayerOwner(A), PLUM))
+        expect(getCellByOwnerCard(result.success, PlayerOwner(A), PLUM))
             .toBe(N);
-        expect(getCellByOwnerCard(result.right, PlayerOwner(A), ROPE))
+        expect(getCellByOwnerCard(result.success, PlayerOwner(A), ROPE))
             .toBe(N);
-        expect(getCellByOwnerCard(result.right, PlayerOwner(A), STUDY))
+        expect(getCellByOwnerCard(result.success, PlayerOwner(A), STUDY))
             .toBe(N);
     });
 
@@ -84,8 +84,8 @@ describe("buildInitialKnowledge", () => {
         const k = buildInitialKnowledge(
             setup,
             [
-                { player: A, card: MUSTARD },
-                { player: A, card: JOKER },
+                KnownCard({ player: A, card: MUSTARD }),
+                KnownCard({ player: A, card: JOKER }),
             ],
             [],
         );

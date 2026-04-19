@@ -1,4 +1,4 @@
-import { Brand, Data, HashSet, ReadonlyArray } from "effect";
+import { Array as Arr, Brand, Data, HashSet } from "effect";
 import { Card, Player } from "./GameObjects";
 
 /**
@@ -79,7 +79,7 @@ export const Suggestion = (params: {
     });
 
 export const suggestionCards = (s: Suggestion): ReadonlyArray<Card> =>
-    ReadonlyArray.fromIterable(s.cards);
+    Arr.fromIterable<Card>(s.cards);
 
 export const suggestionNonRefuters = (s: Suggestion): ReadonlyArray<Player> =>
-    ReadonlyArray.fromIterable(s.nonRefuters);
+    Arr.fromIterable<Player>(s.nonRefuters);

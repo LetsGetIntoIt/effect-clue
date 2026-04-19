@@ -1,4 +1,4 @@
-import { Either, Equal } from "effect";
+import { Equal, Result } from "effect";
 import { Cell, Contradiction, Knowledge } from "./Knowledge";
 import { GameSetup } from "./GameSetup";
 import { applyAllRules } from "./Rules";
@@ -29,15 +29,15 @@ export interface ContradictionTrace {
 }
 
 /**
- * The result of running the deducer. `Either.right(knowledge)` means we
- * converged to a consistent fixed point; `Either.left(trace)` means we
- * hit a contradiction and the game state is internally inconsistent.
+ * The result of running the deducer. `Result.succeed(knowledge)` means
+ * we converged to a consistent fixed point; `Result.fail(trace)` means
+ * we hit a contradiction and the game state is internally inconsistent.
  *
  * We return `ContradictionTrace` (not the `Contradiction` Error itself)
- * on the Left so callers depend only on the structured data they need
- * for UI quick-fixes, not on the thrown Error's identity.
+ * on the failure channel so callers depend only on the structured data
+ * they need for UI quick-fixes, not on the thrown Error's identity.
  */
-export type DeductionResult = Either.Either<ContradictionTrace, Knowledge>;
+export type DeductionResult = Result.Result<Knowledge, ContradictionTrace>;
 
 const traceOf = (error: Contradiction): ContradictionTrace => ({
     reason: error.reason,
@@ -74,12 +74,12 @@ const deduce = (
         const maxIterations = 1000;
         for (let i = 0; i < maxIterations; i++) {
             const next = rule(current);
-            if (Equal.equals(next, current)) return Either.right(next);
+            if (Equal.equals(next, current)) return Result.succeed(next);
             current = next;
         }
-        return Either.right(current);
+        return Result.succeed(current);
     } catch (e) {
-        if (e instanceof Contradiction) return Either.left(traceOf(e));
+        if (e instanceof Contradiction) return Result.fail(traceOf(e));
         throw e;
     }
 };

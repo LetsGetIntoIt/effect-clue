@@ -1,7 +1,10 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { describeAction } from "../describeAction";
 import { useClue } from "../state";
+import { Tooltip } from "./Tooltip";
 
 const buttonClass =
     "rounded-[var(--radius)] border border-border bg-white px-3.5 py-1.5 " +
@@ -14,9 +17,38 @@ const buttonClass =
  * shareable URL encoding the current state.
  */
 export function Toolbar() {
-    const { dispatch, currentShareUrl, canUndo, canRedo, undo, redo } =
-        useClue();
+    const t = useTranslations("toolbar");
+    const tHistory = useTranslations("history");
+    const {
+        dispatch,
+        currentShareUrl,
+        canUndo,
+        canRedo,
+        undo,
+        redo,
+        nextUndo,
+        nextRedo,
+    } = useClue();
     const [copied, setCopied] = useState(false);
+
+    const undoTooltip = nextUndo
+        ? tHistory("undoTooltip", {
+              description: describeAction(
+                  nextUndo.action,
+                  nextUndo.previousState,
+                  tHistory,
+              ),
+          })
+        : undefined;
+    const redoTooltip = nextRedo
+        ? tHistory("redoTooltip", {
+              description: describeAction(
+                  nextRedo.action,
+                  nextRedo.previousState,
+                  tHistory,
+              ),
+          })
+        : undefined;
 
     const onShare = async () => {
         const url = currentShareUrl();
@@ -27,51 +59,50 @@ export function Toolbar() {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
             } else {
-                window.prompt("Copy this URL:", url);
+                window.prompt(t("copyFallback"), url);
             }
         } catch {
-            window.prompt("Copy this URL:", url);
+            window.prompt(t("copyFallback"), url);
         }
     };
 
     const onNewGame = () => {
-        if (
-            window.confirm(
-                "Start a new game? This will clear all players, cards, " +
-                "known hands, and suggestions.",
-            )
-        ) {
+        if (window.confirm(t("newGameConfirm"))) {
             dispatch({ type: "newGame" });
         }
     };
 
     return (
         <div className="flex flex-wrap items-center gap-3">
-            <button
-                type="button"
-                className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-40`}
-                onClick={undo}
-                disabled={!canUndo}
-                title="Undo (⌘Z / Ctrl+Z)"
-                aria-label="Undo"
-            >
-                ↶ Undo
-            </button>
-            <button
-                type="button"
-                className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-40`}
-                onClick={redo}
-                disabled={!canRedo}
-                title="Redo (⌘⇧Z / Ctrl+Shift+Z)"
-                aria-label="Redo"
-            >
-                ↷ Redo
-            </button>
+            <Tooltip content={undoTooltip}>
+                <button
+                    type="button"
+                    className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-40`}
+                    onClick={undo}
+                    disabled={!canUndo}
+                    title={t("undoTitle")}
+                    aria-label={t("undoAria")}
+                >
+                    {t("undo")}
+                </button>
+            </Tooltip>
+            <Tooltip content={redoTooltip}>
+                <button
+                    type="button"
+                    className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-40`}
+                    onClick={redo}
+                    disabled={!canRedo}
+                    title={t("redoTitle")}
+                    aria-label={t("redoAria")}
+                >
+                    {t("redo")}
+                </button>
+            </Tooltip>
             <button type="button" className={buttonClass} onClick={onShare}>
-                {copied ? "Copied!" : "Share link"}
+                {copied ? t("shareCopied") : t("share")}
             </button>
             <button type="button" className={buttonClass} onClick={onNewGame}>
-                New game
+                {t("newGame")}
             </button>
         </div>
     );

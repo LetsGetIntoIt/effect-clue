@@ -1,3 +1,4 @@
+import { Data } from "effect";
 import {
     Card,
     Player,
@@ -20,12 +21,21 @@ import {
 /**
  * A single known card held by a specific player — either the solver's
  * own hand or cards publicly revealed during play. These get folded
- * into the initial knowledge before every deduction.
+ * into the initial knowledge before every deduction. `Data.Class`
+ * gives it structural equality alongside the rest of the domain
+ * value objects (Cell, Knowledge, Suggestion, GameSetup).
  */
-export interface KnownCard {
+class KnownCardImpl extends Data.Class<{
     readonly player: Player;
     readonly card: Card;
-}
+}> {}
+
+export type KnownCard = KnownCardImpl;
+
+export const KnownCard = (params: {
+    readonly player: Player;
+    readonly card: Card;
+}): KnownCard => new KnownCardImpl(params);
 
 /**
  * Build the starting Knowledge from user-entered inputs:
