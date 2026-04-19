@@ -126,6 +126,103 @@ export const decodeV4Unknown = Schema.decodeUnknownResult(
 export const decodeV3Unknown = Schema.decodeUnknownResult(V3ToV4Schema);
 
 /**
+ * v2 on-disk schema. v2 pre-dates the id/name split: each card and
+ * category are identified by display name (a string, not an id+name
+ * object). Hands / handSizes / suggestions already reference cards by
+ * these name-strings, so migrating to v3 is mostly lifting the
+ * category shape — hands and suggestions pass through unchanged.
+ */
+const PersistedCategoryV2Schema = Schema.Struct({
+    name: Schema.String,
+    cards: Schema.Array(Schema.String),
+});
+
+const PersistedGameSetupV2Schema = Schema.Struct({
+    players: Schema.Array(Schema.String),
+    categories: Schema.Array(PersistedCategoryV2Schema),
+});
+
+const PersistedHandV2Schema = Schema.Struct({
+    player: Schema.String,
+    cards: Schema.Array(Schema.String),
+});
+
+const PersistedHandSizeV2Schema = Schema.Struct({
+    player: Schema.String,
+    size: Schema.Number,
+});
+
+const PersistedSuggestionV2Schema = Schema.Struct({
+    id: Schema.optional(Schema.String),
+    suggester: Schema.String,
+    cards: Schema.Array(Schema.String),
+    nonRefuters: Schema.Array(Schema.String),
+    refuter: Schema.NullOr(Schema.String),
+    seenCard: Schema.NullOr(Schema.String),
+});
+
+const PersistedSessionV2Schema = Schema.Struct({
+    version: Schema.Literal(2),
+    setup: PersistedGameSetupV2Schema,
+    hands: Schema.Array(PersistedHandV2Schema),
+    handSizes: Schema.Array(PersistedHandSizeV2Schema),
+    suggestions: Schema.Array(PersistedSuggestionV2Schema),
+});
+
+/**
+ * v2 → v3 migration as Schema. Synthesises card / category ids from
+ * their display names (same rule the hand-rolled migrateV2ToV3 used);
+ * hands / handSizes / suggestions pass through because they already
+ * reference those names as ids. Downstream, the v3 → v4 chain runs
+ * the version bump and applies brands.
+ *
+ * Writes always go to v4, so encode throws — callers never hit it.
+ */
+const V2ToV3Schema = PersistedSessionV2Schema.pipe(
+    Schema.decodeTo(PersistedSessionV3Schema, {
+        decode: SchemaGetter.transform(
+            (v2: Schema.Schema.Type<typeof PersistedSessionV2Schema>) => ({
+                version: 3 as const,
+                setup: {
+                    players: v2.setup.players,
+                    categories: v2.setup.categories.map(c => ({
+                        id: c.name,
+                        name: c.name,
+                        cards: c.cards.map(card => ({
+                            id: card,
+                            name: card,
+                        })),
+                    })),
+                },
+                hands: v2.hands,
+                handSizes: v2.handSizes,
+                suggestions: v2.suggestions.map(s => ({
+                    ...(s.id === undefined ? {} : { id: s.id }),
+                    suggester: s.suggester,
+                    cards: s.cards,
+                    nonRefuters: s.nonRefuters,
+                    refuter: s.refuter,
+                    seenCard: s.seenCard,
+                })),
+            }),
+        ),
+        encode: SchemaGetter.transform(
+            (_v3: (typeof PersistedSessionV3Schema)["Encoded"]):
+                (typeof PersistedSessionV2Schema)["Type"] => {
+                throw new Error("v2 encode not supported — writes go to v4");
+            },
+        ),
+    }),
+);
+
+/**
+ * Result-returning decoder for v2 payloads. Output is v3-shaped and
+ * fully branded. Callers bump the version byte before handing it to
+ * the v4-session builder.
+ */
+export const decodeV2Unknown = Schema.decodeUnknownResult(V2ToV3Schema);
+
+/**
  * Runtime type of a decoded v4 session — the branded, Schema-validated
  * payload both decodeV4Unknown and decodeV3Unknown hand back. Callers
  * construct the GameSession domain value from this.

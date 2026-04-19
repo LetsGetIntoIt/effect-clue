@@ -2,6 +2,7 @@ import { Result } from "effect";
 import { Card, CardCategory, Player } from "./GameObjects";
 import { CardEntry, Category, GameSetup } from "./GameSetup";
 import {
+    decodeV2Unknown,
     decodeV3Unknown,
     decodeV4Unknown,
     type PersistedSessionV4,
@@ -242,34 +243,30 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
         return buildSessionFromV4(decoded.success);
     }
 
-    let v3: PersistedGameV3;
-    if (obj.version === 1) {
-        const v1 = data as Partial<PersistedGameV1>;
-        if (!v1.setup || !v1.hands || !v1.handSizes || !v1.suggestions) {
-            return undefined;
-        }
-        const s = v1.setup;
-        if (!s.players || !s.suspects || !s.weapons || !s.rooms) {
-            return undefined;
-        }
-        v3 = migrateV2ToV3(migrateV1ToV2(v1 as PersistedGameV1));
-    } else if (obj.version === 2) {
-        const candidate = data as Partial<PersistedGameV2>;
-        if (
-            !candidate.setup ||
-            !candidate.suggestions ||
-            !candidate.hands ||
-            !candidate.handSizes
-        ) {
-            return undefined;
-        }
-        if (!candidate.setup.players || !candidate.setup.categories) {
-            return undefined;
-        }
-        v3 = migrateV2ToV3(candidate as PersistedGameV2);
-    } else {
+    if (obj.version === 2) {
+        // v2 flows through Schema too: the v2 -> v3 transform synthesises
+        // ids from display names (same behaviour as the old hand-rolled
+        // migrateV2ToV3). Result is v3-shaped; bump to v4 and build.
+        const decoded = decodeV2Unknown(data);
+        if (Result.isFailure(decoded)) return undefined;
+        return buildSessionFromV4({ ...decoded.success, version: 4 as const });
+    }
+
+    if (obj.version !== 1) {
         return undefined;
     }
+
+    // v1 still goes through the hand-rolled migration chain (commit 9
+    // replaces this rung with Schema.decodeTo too).
+    const v1 = data as Partial<PersistedGameV1>;
+    if (!v1.setup || !v1.hands || !v1.handSizes || !v1.suggestions) {
+        return undefined;
+    }
+    const vs = v1.setup;
+    if (!vs.players || !vs.suspects || !vs.weapons || !vs.rooms) {
+        return undefined;
+    }
+    const v3: PersistedGameV3 = migrateV2ToV3(migrateV1ToV2(v1 as PersistedGameV1));
 
     const setup: GameSetup = GameSetup({
         players: v3.setup.players.map(Player),
