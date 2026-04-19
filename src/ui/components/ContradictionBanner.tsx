@@ -101,7 +101,10 @@ export function ContradictionBanner({
     return (
         <div className="mb-3 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-3 text-[13px] text-danger">
             <div className="mb-2">
-                <strong>{t("header")}</strong> {prettyReason}
+                {t.rich("full", {
+                    reason: prettyReason,
+                    strong: chunks => <strong>{chunks}</strong>,
+                })}
             </div>
             {(trace.offendingSuggestionIndices.length > 0 || fixes.length > 0) && (
                 <div>

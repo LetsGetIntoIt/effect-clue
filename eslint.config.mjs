@@ -193,9 +193,16 @@ export default [
                             "✓",
                             "✕",
                             "·",
-                            // next-intl `select` sentinel used to
-                            // mean "no-value" in a template.
+                            // ICU `select` branch keys — internal
+                            // discriminator tags passed into the
+                            // `refutationLine` template. Not user copy.
                             "none",
+                            "refuted",
+                            "refutedSeen",
+                            "refutedPassed",
+                            "refutedSeenPassed",
+                            "nobody",
+                            "nobodyPassed",
                             // Effect / domain discriminators.
                             "Player",
                             "CaseFile",

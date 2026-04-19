@@ -60,6 +60,33 @@ export function SuggestionLogPanel() {
  * slot. Cards are indexed by id here, not name, so renames don't break
  * the form's pre-population.
  */
+/**
+ * Pick the ICU `select` branch for the refutation-summary template
+ * in `suggestions.refutationLine`. Combining the refuted/nobody axis
+ * with the seen-card and non-refuters axes via select keeps the copy
+ * as a single translatable sentence per case rather than a
+ * concatenation of fragments.
+ */
+const refutationStatus = (
+    s: DraftSuggestion,
+):
+    | "refutedSeenPassed"
+    | "refutedSeen"
+    | "refutedPassed"
+    | "refuted"
+    | "nobodyPassed"
+    | "nobody" => {
+    const hasRefuter = s.refuter !== undefined;
+    const hasSeen = s.seenCard !== undefined;
+    const hasPassers = s.nonRefuters.length > 0;
+    if (hasRefuter && hasSeen && hasPassers) return "refutedSeenPassed";
+    if (hasRefuter && hasSeen) return "refutedSeen";
+    if (hasRefuter && hasPassers) return "refutedPassed";
+    if (hasRefuter) return "refuted";
+    if (hasPassers) return "nobodyPassed";
+    return "nobody";
+};
+
 const pickCardsByCategory = (
     suggestion: DraftSuggestion,
     setup: ReturnType<typeof useClue>["state"]["setup"],
@@ -477,10 +504,7 @@ function PriorSuggestions() {
     return (
         <div className="mt-4 border-t border-border pt-4">
             <h3 className={SECTION_TITLE}>
-                {t("priorTitle")}
-                {suggestions.length > 0
-                    ? t("priorTitleCount", { count: suggestions.length })
-                    : ""}
+                {t("priorTitle", { count: suggestions.length })}
             </h3>
             {suggestions.length === 0 ? (
                 <div className="text-[13px] text-muted">
@@ -532,29 +556,19 @@ function PriorSuggestions() {
                                     })}
                                 </div>
                                 <div className="text-[13px] text-muted">
-                                    {s.refuter ? (
-                                        <>
-                                            {t.rich("refutedByLine", {
-                                                player: String(s.refuter),
-                                                strong: chunks => (
-                                                    <strong>{chunks}</strong>
-                                                ),
-                                            })}
-                                            {s.seenCard &&
-                                                t("showedLine", {
-                                                    card: cardName(
-                                                        setup,
-                                                        s.seenCard,
-                                                    ),
-                                                })}
-                                        </>
-                                    ) : (
-                                        t("nobodyCouldRefute")
-                                    )}
-                                    {s.nonRefuters.length > 0 &&
-                                        t("passedLine", {
-                                            players: s.nonRefuters.join(", "),
-                                        })}
+                                    {t.rich("refutationLine", {
+                                        status: refutationStatus(s),
+                                        refuter: s.refuter
+                                            ? String(s.refuter)
+                                            : "",
+                                        seen: s.seenCard
+                                            ? cardName(setup, s.seenCard)
+                                            : "",
+                                        passers: s.nonRefuters.join(", "),
+                                        strong: chunks => (
+                                            <strong>{chunks}</strong>
+                                        ),
+                                    })}
                                 </div>
                                 <div className="mt-1 flex gap-2">
                                     <button
