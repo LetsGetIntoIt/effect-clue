@@ -16,9 +16,20 @@ export const N: CellValue = "N";
  * We use Data.tuple so that structural equality and hashing Just Work
  * inside HashMap.
  */
-export type Cell = Data.Data<readonly [Owner, Card]>;
+/**
+ * A (owner, card) checklist coordinate. Backed by a `Data.Class` so
+ * it's usable as a `HashMap` / `Equal`-keyed value and so named-field
+ * destructuring (`const { owner, card } = cell`) is self-documenting
+ * at call sites.
+ */
+class CellImpl extends Data.Class<{
+    readonly owner: Owner;
+    readonly card: Card;
+}> {}
+
+export type Cell = CellImpl;
 export const Cell = (owner: Owner, card: Card): Cell =>
-    Data.tuple(owner, card);
+    new CellImpl({ owner, card });
 
 /**
  * Knowledge about a game in progress. The checklist is a single unified
@@ -132,7 +143,7 @@ const cellConflictContradiction = (
     attempted: CellValue,
     existing: CellValue,
 ): Contradiction => {
-    const [owner, card] = cell;
+    const { owner, card } = cell;
     return new Contradiction({
         reason:
             `tried to set ${ownerLabel(owner)}/${card} to ${attempted} ` +

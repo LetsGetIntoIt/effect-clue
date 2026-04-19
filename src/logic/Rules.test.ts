@@ -346,8 +346,7 @@ describe("provenance tracer", () => {
         expect(rec.dependsOn).toHaveLength(2);
         // HashSet iteration order isn't guaranteed; just check both
         // expected cells are present.
-        const depKeys = rec.dependsOn.map(c =>
-            `${(c as unknown as [unknown, string])[1]}`);
+        const depKeys = rec.dependsOn.map(c => String(c.card));
         expect(depKeys).toContain(String(PLUM));
         expect(depKeys).toContain(String(KNIFE));
     });

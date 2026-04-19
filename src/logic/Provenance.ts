@@ -75,7 +75,7 @@ export interface SetCellRecord {
 export type Tracer = (record: SetCellRecord) => void;
 
 export const keyOf = (cell: Cell): string => {
-    const [owner, card] = cell;
+    const { owner, card } = cell;
     return `${ownerLabel(owner)}|${card}`;
 };
 
