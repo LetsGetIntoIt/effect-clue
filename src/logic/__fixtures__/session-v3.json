@@ -1,0 +1,39 @@
+{
+    "version": 3,
+    "setup": {
+        "players": ["Anisha", "Bob", "Cho"],
+        "categories": [
+            {
+                "id": "Suspects",
+                "name": "Suspects",
+                "cards": [
+                    { "id": "Miss Scarlet", "name": "Miss Scarlet" },
+                    { "id": "Col. Mustard", "name": "Col. Mustard" }
+                ]
+            },
+            {
+                "id": "Weapons",
+                "name": "Weapons",
+                "cards": [{ "id": "Knife", "name": "Knife" }]
+            },
+            {
+                "id": "Rooms",
+                "name": "Rooms",
+                "cards": [{ "id": "Kitchen", "name": "Kitchen" }]
+            }
+        ]
+    },
+    "hands": [
+        { "player": "Anisha", "cards": ["Col. Mustard"] }
+    ],
+    "handSizes": [],
+    "suggestions": [
+        {
+            "suggester": "Anisha",
+            "cards": ["Miss Scarlet", "Knife", "Kitchen"],
+            "nonRefuters": [],
+            "refuter": "Bob",
+            "seenCard": "Knife"
+        }
+    ]
+}
