@@ -1,6 +1,15 @@
 import tseslint from "@typescript-eslint/eslint-plugin";
 import tsparser from "@typescript-eslint/parser";
 import i18next from "eslint-plugin-i18next";
+import { createRequire } from "node:module";
+
+// Pull in the HTML-entity regex the i18next plugin uses internally.
+// Declaring our own `words.exclude` list replaces the defaults rather
+// than extending them, so we have to re-add the built-ins ourselves.
+const require = createRequire(import.meta.url);
+const pluginHtmlEntitiesRegex = require(
+    "eslint-plugin-i18next/lib/options/htmlEntities.js",
+);
 
 /**
  * Flat ESLint config. Two things we care about:
@@ -9,13 +18,16 @@ import i18next from "eslint-plugin-i18next";
  *     catches these in `pnpm typecheck`) and explicit via the
  *     `@typescript-eslint/no-explicit-any` rule below.
  *
- *  2. Ban untranslated JSX literals — `eslint-plugin-i18next`'s
- *     `no-literal-string` rule flags bare string literals in JSX /
- *     JSX attributes so we can catch new UI copy that wasn't funneled
- *     through `messages/en.json` + `useTranslations`.
+ *  2. Ban untranslated user-facing strings. `eslint-plugin-i18next`'s
+ *     `no-literal-string` runs in "all" mode (not just JSX) so it also
+ *     catches bare strings inside `window.confirm(...)`, `setError(...)`,
+ *     `throw new Error(...)`, etc. The plugin's default `words.exclude`
+ *     regex already exempts discriminator values (`"Player"`),
+ *     all-caps action type tags, CSS class names, and the like — so
+ *     turning off `markupOnly` doesn't flood the output with noise.
  *
- * Both rules are scoped to app / src only — tests, generated output,
- * and build artifacts are ignored.
+ * Both rules are scoped to the source tree; tests / generated output /
+ * build artifacts are ignored.
  */
 export default [
     {
@@ -29,6 +41,17 @@ export default [
         ],
     },
     {
+        // Root-level TypeScript config files (next.config.ts,
+        // postcss.config.ts, jest.config.ts) need the TS parser too;
+        // they don't participate in any lint rules, just need to parse.
+        files: ["*.ts", "*.tsx"],
+        languageOptions: {
+            parser: tsparser,
+            parserOptions: { ecmaVersion: "latest", sourceType: "module" },
+        },
+        rules: {},
+    },
+    {
         files: ["src/**/*.ts", "src/**/*.tsx", "app/**/*.ts", "app/**/*.tsx"],
         languageOptions: {
             parser: tsparser,
@@ -40,26 +63,162 @@ export default [
         },
         rules: {
             "@typescript-eslint/no-explicit-any": "error",
-            // Only check JSX leaf text + string-valued attributes the user
-            // actually reads. `className`, `title`, `aria-*` etc. are on the
-            // `message` list; everything else is ignored.
             "i18next/no-literal-string": [
                 "error",
                 {
-                    markupOnly: true,
-                    onlyAttribute: [
-                        "title",
-                        "aria-label",
-                        "placeholder",
-                        "alt",
-                    ],
+                    // `mode: "all"` checks every string literal, not
+                    // just JSX text. The plugin's default
+                    // `words.exclude` already ignores discriminator-
+                    // style strings (all-caps, short identifiers,
+                    // punctuation-only, etc.) so false positives stay
+                    // low. (NB: the commonly-cited `markupOnly` option
+                    // is NOT in the plugin's schema — setting it has
+                    // no effect. `mode` is the real knob.)
+                    mode: "all",
+                    // Extra callees whose string args are never user
+                    // copy. Everything else gets checked.
+                    callees: {
+                        exclude: [
+                            // Plugin defaults we want to preserve.
+                            "i18n(ext)?",
+                            "t",
+                            "require",
+                            "addEventListener",
+                            "removeEventListener",
+                            "postMessage",
+                            "getElementById",
+                            "dispatch",
+                            "commit",
+                            "includes",
+                            "indexOf",
+                            "endsWith",
+                            "startsWith",
+                            // Translator namespaces / namespace hooks.
+                            // Matches `t`, `tReasons`, `tDeduce`, etc.
+                            // Any local variable that's a translator
+                            // alias follows the `t*` convention.
+                            "t\\w*",
+                            "t\\w*\\.rich",
+                            "useTranslations",
+                            // localStorage, DOM style, console.
+                            "getItem",
+                            "setItem",
+                            "removeItem",
+                            "setProperty",
+                            "getPropertyValue",
+                            "querySelector(All)?",
+                            "console\\.(log|warn|error|info|debug)",
+                            // Branded-id constructors are called with
+                            // internal ids (`Card("card-miss-scarlet")`),
+                            // never with user copy.
+                            "Player",
+                            "Card",
+                            "CardCategory",
+                            "SuggestionId",
+                            // Effect / Schema constructors.
+                            "Schema\\.\\w+",
+                            "Brand\\.\\w+",
+                            "Data\\.\\w+",
+                            // Effect services register themselves with a
+                            // string key; that's a type-system token.
+                            "Context\\.Service",
+                        ],
+                    },
+                    // Exempt attributes that carry non-copy values
+                    // (class names, CSS keys, refs, aria-hidden bool).
+                    "jsx-attributes": {
+                        exclude: [
+                            "className",
+                            "class",
+                            "style",
+                            "styleName",
+                            "type",
+                            "key",
+                            "id",
+                            "role",
+                            "width",
+                            "height",
+                            "aria-hidden",
+                            "aria-orientation",
+                            "data-.*",
+                        ],
+                    },
+                    // Ignore object-property values on common setup
+                    // keys (test metadata, config). The plugin also has
+                    // a default exemption for ALL-CAPS keys.
+                    "object-properties": {
+                        exclude: [
+                            "[A-Z_-]+",
+                            "subsets",
+                            "weight",
+                            "display",
+                            "variable",
+                            "type",
+                            "icon",
+                            "size",
+                            "side",
+                            "id",
+                            "slug",
+                            "kind",
+                            "_tag",
+                            "runtimeExecutable",
+                            "packageManager",
+                            "name",
+                        ],
+                    },
+                    // Additional common words that are discriminator
+                    // values rather than copy.
+                    words: {
+                        exclude: [
+                            // Plugin built-ins (declaring our own
+                            // `exclude` drops these).
+                            "[0-9!-/:-@[-`{-~]+",
+                            "[A-Z_-]+",
+                            pluginHtmlEntitiesRegex,
+                            /^\p{Emoji}+$/u,
+                            // Tailwind class-string shape: lowercase
+                            // letters / digits / spaces and Tailwind-
+                            // specific markers, with at least one
+                            // of those markers present so that plain
+                            // English words ("card", "player") still
+                            // get flagged. Required markers: any of
+                            // `-`, `:`, `[`, `/`, or a digit.
+                            /^(?=.*[-:[\/0-9])[-a-z0-9:[\]().%+#@&*_,\/\s]+$/,
+                            // Next.js "use client" / "use server"
+                            // directives — not user-facing copy.
+                            "use client",
+                            "use server",
+                            "use strict",
+                            // Cell-value glyphs rendered as-is.
+                            "✓",
+                            "✕",
+                            "·",
+                            // next-intl `select` sentinel used to
+                            // mean "no-value" in a template.
+                            "none",
+                            // Effect / domain discriminators.
+                            "Player",
+                            "CaseFile",
+                            "Success",
+                            "Failure",
+                            "Contradiction",
+                            // Internal identifiers that happen to
+                            // read as words (CSS-key-style).
+                            "case-file",
+                            // Config keys used as string values.
+                            "effect",
+                            "next-dev",
+                            "next-start",
+                        ],
+                    },
                 },
             ],
         },
     },
     {
-        // Tests and non-JSX modules (domain logic, state, persistence)
-        // are TypeScript but not user-facing UI — skip the literal check.
+        // Tests and non-UI logic modules can keep bare strings — the
+        // rule is aimed at user-facing copy, and these files don't
+        // render anything to the DOM.
         files: [
             "src/**/*.test.ts",
             "src/**/test-utils/**/*.ts",
@@ -67,6 +226,10 @@ export default [
             "src/i18n/**/*.ts",
             "src/ui/state.tsx",
             "src/ui/HoverContext.tsx",
+            "src/ui/describeAction.ts",
+            "next.config.ts",
+            "jest.config.ts",
+            "postcss.config.*",
         ],
         rules: {
             "i18next/no-literal-string": "off",

@@ -156,7 +156,8 @@
         "anyCategory": "any {category}",
         "scoreBreakdownHeader": "Raw score {score}",
         "scoreBreakdownDetails": "{info, plural, one {# unknown cell} other {# unknown cells}} × {combos, plural, one {# case-file combination} other {# case-file combinations}} × {refuters, plural, one {# possible refuter} other {# possible refuters}}",
-        "scoreBreakdownCoverage": "Covers {count} tied triples."
+        "scoreBreakdownCoverage": "Covers {count} tied triples.",
+        "defaultCategorySingular": "card"
     },
     "contradictions": {
         "header": "Contradiction:",

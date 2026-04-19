@@ -422,7 +422,8 @@ function Recommendations() {
                                 <div>
                                     {r.cards.map((c, ci) => {
                                         const rawName =
-                                            setup.categories[ci]?.name ?? "card";
+                                            setup.categories[ci]?.name ??
+                                            t("defaultCategorySingular");
                                         // Category names are typically plural
                                         // ("Weapons", "Rooms"); strip a trailing
                                         // "s" so the collapsed label reads as
