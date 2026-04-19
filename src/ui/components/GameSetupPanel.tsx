@@ -1,6 +1,5 @@
 "use client";
 
-import { Either } from "effect";
 import { useEffect, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
 import {
@@ -12,7 +11,6 @@ import {
 } from "../../logic/GameSetup";
 import { useClue } from "../state";
 import { CategoryEditor } from "./CategoryEditor";
-import { ContradictionBanner } from "./ContradictionBanner";
 
 const PRESET_CONFIRM =
     "Loading a preset will discard your current hand sizes, known " +
@@ -144,11 +142,10 @@ function PlayerNameInput({
 }
 
 export function GameSetupPanel() {
-    const { state, dispatch, derived, hasGameData } = useClue();
+    const { state, dispatch, hasGameData } = useClue();
     const setup: GameSetup = state.setup;
     const knownCards = state.knownCards;
     const handSizeMap = new Map(state.handSizes);
-    const result = derived.deductionResult;
     const defaults = new Map(defaultHandSizes(setup));
 
     const totalDealt = allCardIds(setup).length - caseFileSize(setup);
@@ -229,10 +226,6 @@ export function GameSetupPanel() {
                     {totalDealt} after the {caseFileSize(setup)} case-file
                     cards.
                 </div>
-            )}
-
-            {Either.isLeft(result) && (
-                <ContradictionBanner trace={result.left} />
             )}
 
             <div className="overflow-x-auto rounded-[var(--radius)] border border-border">
