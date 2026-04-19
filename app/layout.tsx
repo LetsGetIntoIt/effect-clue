@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Alfa_Slab_One, Crimson_Text } from "next/font/google";
+import { I18nProvider } from "../src/i18n/I18nProvider";
+import { messages } from "../src/i18n/messages";
 import "./globals.css";
 
 /**
@@ -32,10 +34,8 @@ const bodyFont = Crimson_Text({
 });
 
 export const metadata: Metadata = {
-    title: "Clue solver",
-    description:
-        "Track a game of Clue and watch the solver narrow the case file " +
-        "down to one suspect, one weapon, and one room.",
+    title: messages.app.title,
+    description: messages.app.description,
 };
 
 export default function RootLayout({
@@ -48,7 +48,9 @@ export default function RootLayout({
             lang="en"
             className={`${displayFont.variable} ${bodyFont.variable}`}
         >
-            <body>{children}</body>
+            <body>
+                <I18nProvider>{children}</I18nProvider>
+            </body>
         </html>
     );
 }

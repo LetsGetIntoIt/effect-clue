@@ -1,6 +1,7 @@
 "use client";
 
-import { Either } from "effect";
+import { Result } from "effect";
+import { useTranslations } from "next-intl";
 import { Card, Owner, ownerLabel } from "../../logic/GameObjects";
 import { allOwners, cardName } from "../../logic/GameSetup";
 import {
@@ -13,6 +14,7 @@ import {
     Y,
 } from "../../logic/Knowledge";
 import { footnotesForCell } from "../../logic/Footnotes";
+import { KnownCard } from "../../logic/InitialKnowledge";
 import {
     chainFor,
     describeReason,
@@ -43,6 +45,7 @@ import { Tooltip } from "./Tooltip";
  * ✓ / · cell and a blank-with-footnote cell.
  */
 export function ChecklistGrid() {
+    const t = useTranslations("deduce");
     const { state, dispatch, derived } = useClue();
     const { hoveredSuggestionIndex } = useHover();
     const setup = state.setup;
@@ -95,7 +98,10 @@ export function ChecklistGrid() {
         if (index >= 0) {
             dispatch({ type: "removeKnownCard", index });
         } else {
-            dispatch({ type: "addKnownCard", card: { player, card } });
+            dispatch({
+                type: "addKnownCard",
+                card: KnownCard({ player, card }),
+            });
         }
     };
 
@@ -105,16 +111,16 @@ export function ChecklistGrid() {
     // at the top of the page surfaces the quick-fix UI; we don't block
     // the grid anymore.
     //
-    // We use Either.getOrUndefined rather than narrowing on isRight so
-    // React Compiler / Next Turbopack don't hoist a `.right` read ahead
+    // We use Result.getOrUndefined rather than narrowing on isSuccess so
+    // React Compiler / Next Turbopack don't hoist a `.success` read ahead
     // of the narrow check in their IR.
     const knowledge: Knowledge =
-        Either.getOrUndefined(result) ?? emptyKnowledge;
+        Result.getOrUndefined(result) ?? emptyKnowledge;
 
     return (
         <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">
             <h2 className="mb-3 text-[16px] uppercase tracking-[0.05em] text-accent">
-                Deduction grid
+                {t("title")}
             </h2>
             <CaseFileHeader knowledge={knowledge} />
             <table className="w-full border-collapse text-[13px]">
@@ -281,6 +287,7 @@ const buildCellTitle = (args: {
 };
 
 function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
+    const t = useTranslations("deduce");
     const { state } = useClue();
     const setup = state.setup;
     const progress = caseFileProgress(setup, knowledge);
@@ -289,7 +296,9 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
             <div className="mb-2.5 flex items-center gap-3 text-[13px]">
                 <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-semibold text-accent">
                     <Envelope size={16} />
-                    Case file · {(progress * 100).toFixed(0)}% solved
+                    {t("caseFileProgress", {
+                        percent: (progress * 100).toFixed(0),
+                    })}
                 </span>
                 <div className="h-2 flex-1 overflow-hidden rounded bg-border">
                     <div
@@ -329,8 +338,9 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
                                 </div>
                             ) : (
                                 <div className="text-[13px] text-muted">
-                                    {candidates.length} candidate
-                                    {candidates.length === 1 ? "" : "s"}
+                                    {t("candidatesCount", {
+                                        count: candidates.length,
+                                    })}
                                 </div>
                             )}
                         </div>

@@ -30,9 +30,9 @@ import {
 import type { Knowledge } from "../logic/Knowledge";
 import {
     buildInitialKnowledge,
-    type KnownCard,
+    KnownCard,
 } from "../logic/InitialKnowledge";
-import { Either } from "effect";
+import { Result } from "effect";
 import deduce, { type DeductionResult } from "../logic/Deducer";
 import {
     newSuggestionId,
@@ -428,7 +428,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 ...state,
                 setup: session.setup,
                 knownCards: session.hands.flatMap(h =>
-                    h.cards.map(card => ({ player: h.player, card })),
+                    h.cards.map(card => KnownCard({ player: h.player, card })),
                 ),
                 handSizes: session.handSizes.map(
                     ({ player, size }) => [player, size] as const,
@@ -481,10 +481,10 @@ const deriveState = (
     } catch {
         provenance = undefined;
     }
-    const footnotes = Either.isRight(deductionResult)
+    const footnotes = Result.isSuccess(deductionResult)
         ? refuterCandidateFootnotes(
               suggestionsAsData,
-              deductionResult.right,
+              deductionResult.success,
           )
         : emptyFootnotes;
     return { provenance, footnotes };

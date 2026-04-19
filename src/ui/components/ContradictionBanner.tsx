@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Player } from "../../logic/GameObjects";
 import { cardName } from "../../logic/GameSetup";
 import { ContradictionTrace } from "../../logic/Deducer";
@@ -24,6 +25,7 @@ export function ContradictionBanner({
 }: {
     trace: ContradictionTrace;
 }) {
+    const t = useTranslations("contradictions");
     const { state, dispatch } = useClue();
     const setup = state.setup;
 
@@ -99,19 +101,24 @@ export function ContradictionBanner({
     return (
         <div className="mb-3 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-3 text-[13px] text-danger">
             <div className="mb-2">
-                <strong>Contradiction:</strong> {prettyReason}
+                <strong>{t("header")}</strong> {prettyReason}
             </div>
             {(trace.offendingSuggestionIndices.length > 0 || fixes.length > 0) && (
                 <div>
                     <div className="mb-1 text-[12px] font-semibold uppercase tracking-[0.05em] text-danger">
-                        Offending inputs
+                        {t("offendingInputsHeader")}
                     </div>
                     <ul className="m-0 flex list-none flex-col gap-1 pl-0">
                         {trace.offendingSuggestionIndices.map(idx => {
                             const s = state.suggestions[idx];
                             const label = s
-                                ? `Suggestion #${idx + 1} by ${s.suggester}`
-                                : `Suggestion #${idx + 1}`;
+                                ? t("suggestionLabel", {
+                                      index: idx + 1,
+                                      player: String(s.suggester),
+                                  })
+                                : t("suggestionLabelNoPlayer", {
+                                      index: idx + 1,
+                                  });
                             return (
                                 <li
                                     key={`sug-${idx}`}
@@ -129,7 +136,7 @@ export function ContradictionBanner({
                                                 })
                                             }
                                         >
-                                            Remove suggestion
+                                            {t("removeSuggestion")}
                                         </button>
                                     )}
                                 </li>
@@ -143,8 +150,13 @@ export function ContradictionBanner({
                                         className="flex items-center justify-between gap-2"
                                     >
                                         <span>
-                                            Known card: <strong>{fix.player}</strong> has{" "}
-                                            <strong>{fix.cardLabel}</strong>
+                                            {t.rich("knownCardFix", {
+                                                player: String(fix.player),
+                                                card: fix.cardLabel,
+                                                strong: chunks => (
+                                                    <strong>{chunks}</strong>
+                                                ),
+                                            })}
                                         </span>
                                         <button
                                             type="button"
@@ -156,7 +168,7 @@ export function ContradictionBanner({
                                                 })
                                             }
                                         >
-                                            Unset
+                                            {t("knownCardUnset")}
                                         </button>
                                     </li>
                                 );
@@ -167,8 +179,13 @@ export function ContradictionBanner({
                                     className="flex items-center justify-between gap-2"
                                 >
                                     <span>
-                                        Hand size: <strong>{fix.player}</strong> ={" "}
-                                        {fix.size}
+                                        {t.rich("handSizeFix", {
+                                            player: String(fix.player),
+                                            size: fix.size,
+                                            strong: chunks => (
+                                                <strong>{chunks}</strong>
+                                            ),
+                                        })}
                                     </span>
                                     <button
                                         type="button"
@@ -181,7 +198,7 @@ export function ContradictionBanner({
                                             })
                                         }
                                     >
-                                        Reset
+                                        {t("handSizeReset")}
                                     </button>
                                 </li>
                             );

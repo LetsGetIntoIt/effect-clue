@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Player } from "../../logic/GameObjects";
 import {
@@ -16,10 +17,6 @@ import {
     saveCustomPreset,
 } from "../../logic/CustomPresets";
 import { useClue } from "../state";
-
-const PRESET_CONFIRM =
-    "Loading a preset will discard your current hand sizes, known " +
-    "cards, and suggestions. Continue?";
 
 /**
  * Editable text cell. Commits the new value on blur or Enter; resets to
@@ -81,6 +78,7 @@ function PlayerNameInput({
     allPlayers: ReadonlyArray<Player>;
     editable: boolean;
 }) {
+    const t = useTranslations("setup");
     const { dispatch } = useClue();
     const [editing, setEditing] = useState(String(player));
     const [error, setError] = useState("");
@@ -105,7 +103,7 @@ function PlayerNameInput({
             return;
         }
         if (allPlayers.some(p => String(p) === trimmed)) {
-            setError("Duplicate name");
+            setError(t("duplicateName"));
             return;
         }
         dispatch({
@@ -147,7 +145,7 @@ function PlayerNameInput({
             <button
                 type="button"
                 className="self-center border-none bg-transparent px-1 text-[14px] leading-none text-muted hover:text-danger"
-                title={`Remove ${player}`}
+                title={t("removePlayerTitle", { player: String(player) })}
                 onClick={() => dispatch({ type: "removePlayer", player })}
             >
                 &times;
@@ -157,6 +155,7 @@ function PlayerNameInput({
 }
 
 export function GameSetupPanel() {
+    const t = useTranslations("setup");
     const { state, dispatch, hasGameData } = useClue();
     const setup: GameSetup = state.setup;
     const handSizeMap = new Map(state.handSizes);
@@ -179,33 +178,37 @@ export function GameSetupPanel() {
         allHandSizesSet && handSizesTotal !== totalDealt;
 
     const onPreset = (preset: (typeof PRESETS)[number]) => {
-        if (hasGameData() && !window.confirm(PRESET_CONFIRM)) return;
+        if (hasGameData() && !window.confirm(t("loadPresetConfirm"))) return;
         dispatch({ type: "loadPreset", setup: preset.build() });
     };
 
     const onCustomPreset = (preset: CustomPreset) => {
-        if (hasGameData() && !window.confirm(PRESET_CONFIRM)) return;
-        // Load the preset's categories on top of the current player list.
+        if (hasGameData() && !window.confirm(t("loadPresetConfirm"))) return;
+        // Load the preset's cardSet on top of the current player roster —
+        // presets deliberately don't remember players.
         dispatch({
             type: "loadPreset",
             setup: GameSetup({
-                players: setup.players,
-                categories: preset.categories,
+                cardSet: preset.cardSet,
+                playerSet: setup.playerSet,
             }),
         });
     };
 
     const onSaveAsPreset = () => {
-        const label = window.prompt(
-            "Save this card pack as a preset. Name it:",
-        );
+        const label = window.prompt(t("saveAsPresetPrompt"));
         if (!label || !label.trim()) return;
         saveCustomPreset(label.trim(), setup);
         setCustomPresets(loadCustomPresets());
     };
 
     const onDeleteCustomPreset = (preset: CustomPreset) => {
-        if (!window.confirm(`Delete preset "${preset.label}"?`)) return;
+        if (
+            !window.confirm(
+                t("deleteCustomPresetConfirm", { label: preset.label }),
+            )
+        )
+            return;
         deleteCustomPreset(preset.id);
         setCustomPresets(loadCustomPresets());
     };
@@ -233,7 +236,7 @@ export function GameSetupPanel() {
         <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="m-0 text-[16px] uppercase tracking-[0.05em] text-accent">
-                    Game setup
+                    {t("title")}
                 </h2>
                 {inSetup ? (
                     <button
@@ -242,9 +245,9 @@ export function GameSetupPanel() {
                         onClick={() =>
                             dispatch({ type: "setUiMode", mode: "play" })
                         }
-                        title="Lock the deck / player roster and start tracking suggestions"
+                        title={t("startPlayingTitle")}
                     >
-                        Start playing →
+                        {t("startPlaying")}
                     </button>
                 ) : (
                     <button
@@ -253,9 +256,9 @@ export function GameSetupPanel() {
                         onClick={() =>
                             dispatch({ type: "setUiMode", mode: "setup" })
                         }
-                        title="Unlock the deck / player roster for editing"
+                        title={t("editSetupTitle")}
                     >
-                        Edit setup
+                        {t("editSetup")}
                     </button>
                 )}
             </div>
@@ -264,7 +267,7 @@ export function GameSetupPanel() {
                 <>
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                         <span className="text-[12px] font-semibold uppercase tracking-[0.05em] text-muted">
-                            Preset:
+                            {t("preset")}
                         </span>
                         {PRESETS.map(preset => (
                             <button
@@ -285,7 +288,9 @@ export function GameSetupPanel() {
                                     type="button"
                                     className="cursor-pointer px-3 py-1 hover:bg-hover"
                                     onClick={() => onCustomPreset(preset)}
-                                    title={`Load custom preset "${preset.label}"`}
+                                    title={t("loadCustomPresetTitle", {
+                                        label: preset.label,
+                                    })}
                                 >
                                     {preset.label}
                                 </button>
@@ -293,8 +298,12 @@ export function GameSetupPanel() {
                                     type="button"
                                     className="cursor-pointer border-l border-border px-2 py-1 text-muted hover:bg-hover hover:text-danger"
                                     onClick={() => onDeleteCustomPreset(preset)}
-                                    title={`Delete preset "${preset.label}"`}
-                                    aria-label={`Delete preset ${preset.label}`}
+                                    title={t("deleteCustomPresetTitle", {
+                                        label: preset.label,
+                                    })}
+                                    aria-label={t("deleteCustomPresetAria", {
+                                        label: preset.label,
+                                    })}
                                 >
                                     ×
                                 </button>
@@ -304,9 +313,9 @@ export function GameSetupPanel() {
                             type="button"
                             className="cursor-pointer rounded border border-dashed border-border bg-white px-3 py-1 text-[13px] text-muted hover:bg-hover hover:text-accent"
                             onClick={onSaveAsPreset}
-                            title="Save the current category and card set as a reusable preset"
+                            title={t("saveAsPresetTitle")}
                         >
-                            + Save as preset
+                            {t("saveAsPreset")}
                         </button>
                     </div>
                 </>
@@ -314,10 +323,11 @@ export function GameSetupPanel() {
 
             {handSizeMismatch && (
                 <div className="mb-3 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning">
-                    Hand sizes total {handSizesTotal} card
-                    {handSizesTotal === 1 ? "" : "s"}; should total&nbsp;
-                    {totalDealt} after the {caseFileSize(setup)} case-file
-                    cards.
+                    {t("handSizeMismatch", {
+                        total: handSizesTotal,
+                        expected: totalDealt,
+                        caseFileCount: caseFileSize(setup),
+                    })}
                 </div>
             )}
 
@@ -343,7 +353,7 @@ export function GameSetupPanel() {
                                     <button
                                         type="button"
                                         className="h-6 w-6 cursor-pointer rounded border-none bg-accent text-[16px] leading-none text-white hover:bg-accent-hover"
-                                        title="Add player"
+                                        title={t("addPlayerTitle")}
                                         onClick={() =>
                                             dispatch({ type: "addPlayer" })
                                         }
@@ -355,7 +365,7 @@ export function GameSetupPanel() {
                         </tr>
                         <tr>
                             <th className="whitespace-nowrap border border-border bg-row-header px-1.5 py-1 text-left font-semibold">
-                                Hand size
+                                {t("handSize")}
                             </th>
                             {setup.players.map(p => {
                                 const current = handSizeMap.get(p);
@@ -409,7 +419,7 @@ export function GameSetupPanel() {
                                             <InlineTextEdit
                                                 value={cat.name}
                                                 className="min-w-0 flex-1 rounded border border-white/30 bg-transparent px-1 py-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-white focus:bg-white/10 focus:outline-none"
-                                                title="Rename category"
+                                                title={t("renameCategoryTitle")}
                                                 onCommit={next =>
                                                     dispatch({
                                                         type: "renameCategory",
@@ -422,8 +432,10 @@ export function GameSetupPanel() {
                                                 type="button"
                                                 title={
                                                     canRemoveCategory
-                                                        ? `Remove ${cat.name}`
-                                                        : "At least one category is required"
+                                                        ? t("removeCategoryTitle", {
+                                                              name: cat.name,
+                                                          })
+                                                        : t("removeCategoryMin")
                                                 }
                                                 disabled={!canRemoveCategory}
                                                 className="cursor-pointer border-none bg-transparent p-0 text-[14px] leading-none text-white/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
@@ -449,7 +461,7 @@ export function GameSetupPanel() {
                                                 <InlineTextEdit
                                                     value={entry.name}
                                                     className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-[12px] hover:border-border focus:border-accent focus:outline-none"
-                                                    title="Rename card"
+                                                    title={t("renameCardTitle")}
                                                     onCommit={next =>
                                                         dispatch({
                                                             type: "renameCard",
@@ -462,8 +474,10 @@ export function GameSetupPanel() {
                                                     type="button"
                                                     title={
                                                         canRemoveCard
-                                                            ? `Remove ${entry.name}`
-                                                            : "At least one card per category is required"
+                                                            ? t("removeCardTitle", {
+                                                                  name: entry.name,
+                                                              })
+                                                            : t("removeCardMin")
                                                     }
                                                     disabled={!canRemoveCard}
                                                     className="cursor-pointer border-none bg-transparent p-0 text-[14px] leading-none text-muted hover:text-danger disabled:cursor-not-allowed disabled:opacity-40"
@@ -495,7 +509,7 @@ export function GameSetupPanel() {
                                                 })
                                             }
                                         >
-                                            + add card
+                                            {t("addCard")}
                                         </button>
                                     </th>
                                 </tr>,
@@ -513,7 +527,7 @@ export function GameSetupPanel() {
                                         dispatch({ type: "addCategory" })
                                     }
                                 >
-                                    + add category
+                                    {t("addCategory")}
                                 </button>
                             </th>
                         </tr>

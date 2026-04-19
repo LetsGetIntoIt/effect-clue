@@ -1,5 +1,5 @@
 import { MutableHashMap, Option } from "effect";
-import { PlayerOwner } from "./GameObjects";
+import { Card, PlayerOwner } from "./GameObjects";
 import { Cell, getCell, Knowledge } from "./Knowledge";
 import { Suggestion, suggestionCards } from "./Suggestion";
 
@@ -44,7 +44,7 @@ export const refuterCandidateFootnotes = (
         if (suggestion.seenCard !== undefined) return;
 
         const refuterOwner = PlayerOwner(suggestion.refuter);
-        const cards = suggestionCards(suggestion);
+        const cards: ReadonlyArray<Card> = suggestionCards(suggestion);
 
         // If the refuter already has a Y on one of the cards, the
         // suggestion is "solved" — no footnote needed.

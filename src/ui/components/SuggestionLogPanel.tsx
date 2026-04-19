@@ -1,6 +1,7 @@
 "use client";
 
-import { Either } from "effect";
+import { Result } from "effect";
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
 import { cardName, categoryOfCard } from "../../logic/GameSetup";
@@ -32,10 +33,11 @@ const FORM_BTN_GHOST =
  * reviewing / editing the log of prior suggestions.
  */
 export function SuggestionLogPanel() {
+    const t = useTranslations("suggestions");
     return (
         <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">
             <h2 className="m-0 mb-3 text-[16px] uppercase tracking-[0.05em] text-accent">
-                Suggestion log
+                {t("title")}
             </h2>
             <div className="grid gap-5 [@media(min-width:800px)]:grid-cols-[minmax(280px,1fr)_minmax(280px,1fr)]">
                 <AddSuggestion />
@@ -71,6 +73,7 @@ const pickCardsByCategory = (
 };
 
 function AddSuggestion() {
+    const t = useTranslations("suggestions");
     const { state, dispatch } = useClue();
     const setup = state.setup;
     const [cardByCategory, setCardByCategory] = useState<
@@ -167,14 +170,14 @@ function AddSuggestion() {
 
     return (
         <div>
-            <h3 className={SECTION_TITLE}>Add a suggestion</h3>
+            <h3 className={SECTION_TITLE}>{t("addTitle")}</h3>
             <form
                 onSubmit={onSubmit}
                 className="flex flex-col gap-2"
             >
                 <div>
                     <label className={LABEL_ROW}>
-                        Suggester:
+                        {t("suggesterLabel")}
                         <select
                             value={suggester}
                             onChange={e =>
@@ -197,7 +200,7 @@ function AddSuggestion() {
                     return (
                         <div key={catKey}>
                             <label className={LABEL_ROW}>
-                                {category.name}:
+                                {t("categoryLabel", { category: category.name })}
                                 <select
                                     value={value}
                                     onChange={e =>
@@ -209,7 +212,9 @@ function AddSuggestion() {
                                     className={SELECT_CLASS}
                                     required
                                 >
-                                    <option value="">—</option>
+                                    <option value="">
+                                        {t("placeholderOption")}
+                                    </option>
                                     {category.cards.map(entry => (
                                         <option
                                             key={String(entry.id)}
@@ -225,7 +230,7 @@ function AddSuggestion() {
                 })}
                 <div>
                     <label className={LABEL_ROW}>
-                        Refuted by:
+                        {t("refutedByLabel")}
                         <select
                             value={refuter}
                             onChange={e =>
@@ -233,7 +238,7 @@ function AddSuggestion() {
                             }
                             className={SELECT_CLASS}
                         >
-                            <option value="">— none —</option>
+                            <option value="">{t("noneOption")}</option>
                             {setup.players
                                 .filter(p => String(p) !== suggester)
                                 .map(p => (
@@ -247,7 +252,7 @@ function AddSuggestion() {
                 {refuter && (
                     <div>
                         <label className={LABEL_ROW}>
-                            Card shown (optional):
+                            {t("cardShownLabel")}
                             <select
                                 value={seenCard}
                                 onChange={e =>
@@ -255,7 +260,9 @@ function AddSuggestion() {
                                 }
                                 className={SELECT_CLASS}
                             >
-                                <option value="">— unknown —</option>
+                                <option value="">
+                                    {t("unknownOption")}
+                                </option>
                                 {pickedCards.map(cardId => (
                                     <option key={cardId} value={cardId}>
                                         {cardName(setup, Card(cardId))}
@@ -268,7 +275,7 @@ function AddSuggestion() {
                 {eligibleForPassed.length > 0 && (
                     <fieldset className="my-1 rounded-[var(--radius)] border border-border px-3 py-2">
                         <legend className="px-1 text-[13px] font-semibold">
-                            Could not refute
+                            {t("couldNotRefute")}
                         </legend>
                         {eligibleForPassed.map(p => (
                             <label
@@ -296,7 +303,7 @@ function AddSuggestion() {
                     className={FORM_BTN_ACCENT}
                     disabled={!canSubmit}
                 >
-                    Add suggestion
+                    {t("addButton")}
                 </button>
             </form>
         </div>
@@ -304,6 +311,7 @@ function AddSuggestion() {
 }
 
 function Recommendations() {
+    const t = useTranslations("suggestions");
     const { state, derived } = useClue();
     const setup = state.setup;
     const result = derived.deductionResult;
@@ -317,17 +325,17 @@ function Recommendations() {
         setAsPlayer(setup.players[0] ?? "");
     }, [setup.players, asPlayer]);
 
-    const knowledge = Either.getOrUndefined(result);
+    const knowledge = Result.getOrUndefined(result);
     if (knowledge === undefined || !asPlayer) {
         return (
             <div>
                 <h3 className={SECTION_TITLE}>
-                    Next-suggestion recommendations
+                    {t("recommendationsTitle")}
                 </h3>
                 <div className="text-[13px] text-muted">
                     {knowledge === undefined
-                        ? "Resolve the contradiction to see recommendations."
-                        : "Add players to see recommendations."}
+                        ? t("resolveContradictionFirst")
+                        : t("addPlayersFirst")}
                 </div>
             </div>
         );
@@ -348,10 +356,10 @@ function Recommendations() {
     return (
         <div>
             <h3 className={SECTION_TITLE}>
-                Next-suggestion recommendations
+                {t("recommendationsTitle")}
             </h3>
             <label className={LABEL_ROW}>
-                Suggesting as:&nbsp;
+                {t("suggestingAs")}
                 <select
                     value={asPlayer}
                     onChange={e => setAsPlayer(e.currentTarget.value)}
@@ -366,8 +374,7 @@ function Recommendations() {
             </label>
             {consolidated.length === 0 ? (
                 <div className="mt-2 text-[13px] text-muted">
-                    Nothing useful to ask — you&apos;ve already narrowed
-                    everything down.
+                    {t("nothingUseful")}
                 </div>
             ) : (
                 <ol className="mt-2 list-decimal pl-6 text-[13px]">
@@ -387,21 +394,22 @@ function Recommendations() {
                         const scoreBreakdown = (
                             <div>
                                 <div className="font-semibold">
-                                    Raw score {r.score}
+                                    {t("scoreBreakdownHeader", {
+                                        score: r.score,
+                                    })}
                                 </div>
                                 <div className="mt-1 text-muted">
-                                    {r.cellInfoScore} unknown cell
-                                    {r.cellInfoScore === 1 ? "" : "s"}
-                                    {" × "}
-                                    {r.caseFileOpennessScore} case-file combination
-                                    {r.caseFileOpennessScore === 1 ? "" : "s"}
-                                    {" × "}
-                                    {r.refuterUncertaintyScore} possible refuter
-                                    {r.refuterUncertaintyScore === 1 ? "" : "s"}
+                                    {t("scoreBreakdownDetails", {
+                                        info: r.cellInfoScore,
+                                        combos: r.caseFileOpennessScore,
+                                        refuters: r.refuterUncertaintyScore,
+                                    })}
                                 </div>
                                 {r.groupSize > 1 && (
                                     <div className="mt-1 text-muted">
-                                        Covers {r.groupSize} tied triples.
+                                        {t("scoreBreakdownCoverage", {
+                                            count: r.groupSize,
+                                        })}
                                     </div>
                                 )}
                             </div>
@@ -427,7 +435,9 @@ function Recommendations() {
                                                 {ci > 0 && " + "}
                                                 {c === "any" ? (
                                                     <em className="text-muted">
-                                                        any {singular}
+                                                        {t("anyCategory", {
+                                                            category: singular,
+                                                        })}
                                                     </em>
                                                 ) : (
                                                     <strong>
@@ -438,7 +448,7 @@ function Recommendations() {
                                         );
                                     })}
                                     <span className="ml-1 text-muted">
-                                        (score {r.score})
+                                        {t("score", { score: r.score })}
                                     </span>
                                 </div>
                                 <div className="text-[12px] text-muted">
@@ -455,6 +465,7 @@ function Recommendations() {
 }
 
 function PriorSuggestions() {
+    const t = useTranslations("suggestions");
     const { state, dispatch } = useClue();
     const { hoveredSuggestionIndex, setHoveredSuggestion } = useHover();
     const setup = state.setup;
@@ -463,12 +474,14 @@ function PriorSuggestions() {
     return (
         <div className="mt-4 border-t border-border pt-4">
             <h3 className={SECTION_TITLE}>
-                Prior suggestions
-                {suggestions.length > 0 && ` (${suggestions.length})`}
+                {t("priorTitle")}
+                {suggestions.length > 0
+                    ? t("priorTitleCount", { count: suggestions.length })
+                    : ""}
             </h3>
             {suggestions.length === 0 ? (
                 <div className="text-[13px] text-muted">
-                    No suggestions yet. Add one above.
+                    {t("priorEmpty")}
                 </div>
             ) : (
                 <ol className="m-0 max-h-[300px] list-decimal overflow-y-auto pl-6">
@@ -505,34 +518,40 @@ function PriorSuggestions() {
                                 onMouseLeave={() => setHoveredSuggestion(null)}
                             >
                                 <div>
-                                    <strong>{s.suggester}</strong>{" "}
-                                    suggested&nbsp;
-                                    {s.cards
-                                        .map(id => cardName(setup, id))
-                                        .join(" + ")}
+                                    {t.rich("suggestedLine", {
+                                        suggester: String(s.suggester),
+                                        cards: s.cards
+                                            .map(id => cardName(setup, id))
+                                            .join(" + "),
+                                        strong: chunks => (
+                                            <strong>{chunks}</strong>
+                                        ),
+                                    })}
                                 </div>
                                 <div className="text-[13px] text-muted">
                                     {s.refuter ? (
                                         <>
-                                            refuted by{" "}
-                                            <strong>{s.refuter}</strong>
-                                            {s.seenCard && (
-                                                <>
-                                                    {" "}
-                                                    (showed{" "}
-                                                    {cardName(setup, s.seenCard)})
-                                                </>
-                                            )}
+                                            {t.rich("refutedByLine", {
+                                                player: String(s.refuter),
+                                                strong: chunks => (
+                                                    <strong>{chunks}</strong>
+                                                ),
+                                            })}
+                                            {s.seenCard &&
+                                                t("showedLine", {
+                                                    card: cardName(
+                                                        setup,
+                                                        s.seenCard,
+                                                    ),
+                                                })}
                                         </>
                                     ) : (
-                                        "nobody could refute"
+                                        t("nobodyCouldRefute")
                                     )}
-                                    {s.nonRefuters.length > 0 && (
-                                        <>
-                                            {" "}
-                                            · passed: {s.nonRefuters.join(", ")}
-                                        </>
-                                    )}
+                                    {s.nonRefuters.length > 0 &&
+                                        t("passedLine", {
+                                            players: s.nonRefuters.join(", "),
+                                        })}
                                 </div>
                                 <div className="mt-1 flex gap-2">
                                     <button
@@ -542,7 +561,7 @@ function PriorSuggestions() {
                                             setEditingId(s.id)
                                         }
                                     >
-                                        edit
+                                        {t("editAction")}
                                     </button>
                                     <button
                                         type="button"
@@ -554,7 +573,7 @@ function PriorSuggestions() {
                                             })
                                         }
                                     >
-                                        remove
+                                        {t("removeAction")}
                                     </button>
                                 </div>
                             </li>
@@ -575,6 +594,7 @@ function EditSuggestionRow({
     onSave: (updated: DraftSuggestion) => void;
     onCancel: () => void;
 }) {
+    const t = useTranslations("suggestions");
     const { state } = useClue();
     const setup = state.setup;
     const [suggester, setSuggester] = useState(String(suggestion.suggester));
@@ -650,7 +670,7 @@ function EditSuggestionRow({
         <div className="py-2">
             <div className="flex flex-col gap-1.5">
                 <label className={LABEL_ROW}>
-                    Suggester:
+                    {t("suggesterLabel")}
                     <select
                         value={suggester}
                         onChange={e =>
@@ -670,7 +690,7 @@ function EditSuggestionRow({
                     const value = cardByCategory.get(catKey) ?? "";
                     return (
                         <label key={catKey} className={LABEL_ROW}>
-                            {category.name}:
+                            {t("categoryLabel", { category: category.name })}
                             <select
                                 value={value}
                                 onChange={e =>
@@ -681,7 +701,9 @@ function EditSuggestionRow({
                                 }
                                 className={SELECT_CLASS}
                             >
-                                <option value="">—</option>
+                                <option value="">
+                                    {t("placeholderOption")}
+                                </option>
                                 {category.cards.map(entry => (
                                     <option
                                         key={String(entry.id)}
@@ -695,7 +717,7 @@ function EditSuggestionRow({
                     );
                 })}
                 <label className={LABEL_ROW}>
-                    Refuted by:
+                    {t("refutedByLabel")}
                     <select
                         value={refuter}
                         onChange={e =>
@@ -703,7 +725,7 @@ function EditSuggestionRow({
                         }
                         className={SELECT_CLASS}
                     >
-                        <option value="">— none —</option>
+                        <option value="">{t("noneOption")}</option>
                         {setup.players
                             .filter(p => String(p) !== suggester)
                             .map(p => (
@@ -715,7 +737,7 @@ function EditSuggestionRow({
                 </label>
                 {refuter && (
                     <label className={LABEL_ROW}>
-                        Card shown:
+                        {t("cardShownEditLabel")}
                         <select
                             value={seenCard}
                             onChange={e =>
@@ -723,7 +745,7 @@ function EditSuggestionRow({
                             }
                             className={SELECT_CLASS}
                         >
-                            <option value="">— unknown —</option>
+                            <option value="">{t("unknownOption")}</option>
                             {pickedCards.map(c => (
                                 <option key={c} value={c}>
                                     {c}
@@ -735,7 +757,7 @@ function EditSuggestionRow({
                 {eligibleForPassed.length > 0 && (
                     <fieldset className="my-1 rounded-[var(--radius)] border border-border px-3 py-2">
                         <legend className="px-1 text-[13px] font-semibold">
-                            Could not refute
+                            {t("couldNotRefute")}
                         </legend>
                         {eligibleForPassed.map(p => (
                             <label
@@ -766,14 +788,14 @@ function EditSuggestionRow({
                     disabled={!canSave}
                     onClick={handleSave}
                 >
-                    Save
+                    {t("saveAction")}
                 </button>
                 <button
                     type="button"
                     className={FORM_BTN_GHOST}
                     onClick={onCancel}
                 >
-                    Cancel
+                    {t("cancelAction")}
                 </button>
             </div>
         </div>

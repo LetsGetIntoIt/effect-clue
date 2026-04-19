@@ -92,7 +92,24 @@ export default {
   // notifyMode: "failure-change",
 
   // A preset that is used as a base for Jest's configuration
-  preset: "ts-jest",
+  preset: "ts-jest/presets/default-esm",
+
+  extensionsToTreatAsEsm: [".ts", ".tsx"],
+
+  // Effect v4 ships pure ESM. Jest in ESM mode resolves its subpath
+  // imports with a `.js` extension (e.g. `./Equal.js`), but after ts-jest
+  // rewrites our source imports the path points at a `.ts` file — strip
+  // the `.js` to keep Node's resolver happy in tests.
+  moduleNameMapper: {
+    "^(\\.{1,2}/.*)\\.js$": "$1",
+  },
+
+  transform: {
+    "^.+\\.tsx?$": [
+      "ts-jest",
+      { useESM: true, tsconfig: { module: "esnext" } },
+    ],
+  },
 
   // Run tests from one or more projects
   // projects: undefined,

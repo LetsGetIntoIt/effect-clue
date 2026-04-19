@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useClue } from "../state";
 
@@ -14,6 +15,7 @@ const buttonClass =
  * shareable URL encoding the current state.
  */
 export function Toolbar() {
+    const t = useTranslations("toolbar");
     const { dispatch, currentShareUrl, canUndo, canRedo, undo, redo } =
         useClue();
     const [copied, setCopied] = useState(false);
@@ -27,20 +29,15 @@ export function Toolbar() {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
             } else {
-                window.prompt("Copy this URL:", url);
+                window.prompt(t("copyFallback"), url);
             }
         } catch {
-            window.prompt("Copy this URL:", url);
+            window.prompt(t("copyFallback"), url);
         }
     };
 
     const onNewGame = () => {
-        if (
-            window.confirm(
-                "Start a new game? This will clear all players, cards, " +
-                "known hands, and suggestions.",
-            )
-        ) {
+        if (window.confirm(t("newGameConfirm"))) {
             dispatch({ type: "newGame" });
         }
     };
@@ -52,26 +49,26 @@ export function Toolbar() {
                 className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-40`}
                 onClick={undo}
                 disabled={!canUndo}
-                title="Undo (⌘Z / Ctrl+Z)"
-                aria-label="Undo"
+                title={t("undoTitle")}
+                aria-label={t("undoAria")}
             >
-                ↶ Undo
+                {t("undo")}
             </button>
             <button
                 type="button"
                 className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-40`}
                 onClick={redo}
                 disabled={!canRedo}
-                title="Redo (⌘⇧Z / Ctrl+Shift+Z)"
-                aria-label="Redo"
+                title={t("redoTitle")}
+                aria-label={t("redoAria")}
             >
-                ↷ Redo
+                {t("redo")}
             </button>
             <button type="button" className={buttonClass} onClick={onShare}>
-                {copied ? "Copied!" : "Share link"}
+                {copied ? t("shareCopied") : t("share")}
             </button>
             <button type="button" className={buttonClass} onClick={onNewGame}>
-                New game
+                {t("newGame")}
             </button>
         </div>
     );

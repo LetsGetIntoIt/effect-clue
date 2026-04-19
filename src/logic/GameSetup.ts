@@ -1,4 +1,5 @@
 import { Data } from "effect";
+import { CardSet } from "./CardSet";
 import {
     Card,
     CardCategory,
@@ -7,133 +8,110 @@ import {
     Player,
     PlayerOwner,
 } from "./GameObjects";
+import { PlayerSet } from "./PlayerSet";
+import type { CardEntry, Category } from "./CardSet";
+
+// Re-export the deck-side types + helpers so existing imports
+// (`from "./GameSetup"`) keep working after the split. CardSet.ts is
+// the canonical home for anything that operates on just the card half.
+export { type CardEntry, type Category } from "./CardSet";
+export {
+    findCategoryEntry,
+    findCardEntry,
+    cardName,
+    categoryName,
+    cardIdsInCategory,
+    allCardIds,
+    allCardEntries,
+    categoryOfCard,
+    caseFileSize,
+} from "./CardSet";
 
 /**
- * A card entry in a category. Keeps identity (`id`) separate from
- * display name — see GameObjects.ts for why.
- */
-export interface CardEntry {
-    readonly id: Card;
-    readonly name: string;
-}
-
-/**
- * One category of cards (Suspects / Weapons / Rooms, or any custom
- * deck). Carries its own opaque id so renames don't orphan references.
- */
-export interface Category {
-    readonly id: CardCategory;
-    readonly name: string;
-    readonly cards: ReadonlyArray<CardEntry>;
-}
-
-/**
- * Everything needed to fully describe a game of Clue: who's playing and
- * which cards (organised into categories) are in the deck. The solver is
- * completely category-agnostic — pass in 2 categories, 10 categories, or
- * the classic 3, and the inference rules work identically.
+ * A full game setup — the composition of a `CardSet` (which
+ * categories / cards are in play) and a `PlayerSet` (who's at the
+ * table). Most solver code wants just one half: `applyAllRules` +
+ * `recommendSuggestions` operate on cards, player-name UI touches
+ * only players. The composite is what the reducer and persistence
+ * code carry around.
+ *
+ * Computed `players` / `categories` getters preserve the pre-split
+ * call-site shape (`setup.players`, `setup.categories`) so the 50+
+ * existing reads don't need mechanical renaming.
  */
 class GameSetupImpl extends Data.Class<{
-    readonly players: ReadonlyArray<Player>;
-    readonly categories: ReadonlyArray<Category>;
-}> {}
+    readonly cardSet: CardSet;
+    readonly playerSet: PlayerSet;
+}> {
+    get players(): ReadonlyArray<Player> {
+        return this.playerSet.players;
+    }
+
+    get categories(): ReadonlyArray<Category> {
+        return this.cardSet.categories;
+    }
+}
 
 export type GameSetup = GameSetupImpl;
 
-export const GameSetup = (params: {
-    readonly players: ReadonlyArray<Player>;
-    readonly categories: ReadonlyArray<Category>;
-}): GameSetup => new GameSetupImpl(params);
-
-// ---- Id / name lookups --------------------------------------------------
-
 /**
- * Find a category by id. Returns `undefined` if the id isn't in this
- * setup — the caller decides whether that's a bug or just "stale".
+ * Construct a `GameSetup`. Accepts the split shape
+ * `{ cardSet, playerSet }` *or* the legacy flat shape
+ * `{ players, categories }` so pre-split call sites continue to work.
  */
-export const findCategoryEntry = (
-    setup: GameSetup,
-    id: CardCategory,
-): Category | undefined =>
-    setup.categories.find(c => c.id === id);
-
-export const findCardEntry = (
-    setup: GameSetup,
-    id: Card,
-): CardEntry | undefined => {
-    for (const cat of setup.categories) {
-        const hit = cat.cards.find(c => c.id === id);
-        if (hit) return hit;
+export const GameSetup = (
+    params:
+        | {
+              readonly cardSet: CardSet;
+              readonly playerSet: PlayerSet;
+          }
+        | {
+              readonly players: ReadonlyArray<Player>;
+              readonly categories: ReadonlyArray<Category>;
+          },
+): GameSetup => {
+    if ("cardSet" in params) {
+        return new GameSetupImpl({
+            cardSet: params.cardSet,
+            playerSet: params.playerSet,
+        });
     }
-    return undefined;
-};
-
-/** Pretty-print a card id. Falls back to the id itself if unknown. */
-export const cardName = (setup: GameSetup, id: Card): string =>
-    findCardEntry(setup, id)?.name ?? String(id);
-
-/** Pretty-print a category id. Falls back to the id itself if unknown. */
-export const categoryName = (setup: GameSetup, id: CardCategory): string =>
-    findCategoryEntry(setup, id)?.name ?? String(id);
-
-/**
- * Card ids in a category, in order. Used by the solver's slice
- * generators and deducer — everything the solver touches is ids.
- */
-export const cardIdsInCategory = (
-    setup: GameSetup,
-    categoryId: CardCategory,
-): ReadonlyArray<Card> =>
-    findCategoryEntry(setup, categoryId)?.cards.map(c => c.id) ?? [];
-
-export const allCardIds = (setup: GameSetup): ReadonlyArray<Card> =>
-    setup.categories.flatMap(c => c.cards.map(e => e.id));
-
-export const allCardEntries = (
-    setup: GameSetup,
-): ReadonlyArray<CardEntry> =>
-    setup.categories.flatMap(c => c.cards);
-
-/** Which category does this card id belong to? */
-export const categoryOfCard = (
-    setup: GameSetup,
-    cardId: Card,
-): CardCategory | undefined => {
-    for (const cat of setup.categories) {
-        if (cat.cards.some(e => e.id === cardId)) return cat.id;
-    }
-    return undefined;
+    return new GameSetupImpl({
+        cardSet: CardSet({ categories: params.categories }),
+        playerSet: PlayerSet({ players: params.players }),
+    });
 };
 
 /**
  * All owners (players + the single case file) for a game setup. Used
  * anywhere we need to iterate the "owner" axis of the checklist.
+ * Needs both halves of the setup, so it stays on `GameSetup` rather
+ * than moving to `CardSet` or `PlayerSet`.
  */
 export const allOwners = (setup: GameSetup): ReadonlyArray<Owner> => [
-    ...setup.players.map(PlayerOwner),
+    ...setup.playerSet.players.map(PlayerOwner),
     CaseFileOwner(),
 ];
 
 /**
- * How many cards are in the case file (one per category).
- */
-export const caseFileSize = (setup: GameSetup): number =>
-    setup.categories.length;
-
-/**
  * The default hand size each player gets when the deck is dealt out
  * evenly. Players who end up one short in an uneven deal are handled
- * by the caller — this is just the baseline.
+ * by the caller — this is just the baseline. Depends on card count
+ * (from CardSet) and player count (from PlayerSet).
  */
 export const defaultHandSizes = (
     setup: GameSetup,
 ): ReadonlyArray<readonly [Player, number]> => {
-    const dealt = allCardIds(setup).length - caseFileSize(setup);
-    const n = setup.players.length;
+    const cards = setup.cardSet.categories.flatMap(c =>
+        c.cards.map(e => e.id),
+    );
+    const dealt = cards.length - setup.cardSet.categories.length;
+    const players = setup.playerSet.players;
+    const n = players.length;
     if (n === 0) return [];
     const base = Math.floor(dealt / n);
     const extras = dealt - base * n;
-    return setup.players.map((player, i) =>
+    return players.map((player, i) =>
         [player, base + (i < extras ? 1 : 0)] as const);
 };
 
@@ -254,17 +232,54 @@ const CLASSIC_CATEGORIES: ReadonlyArray<Category> = [
     presetCategory("Rooms", "rooms", CLASSIC_ROOMS),
 ];
 
-/**
- * Build a fresh classic-Clue setup with N generically-named players. Used
- * as the "new game" default — users can rename the players and add or
- * remove rows from the UI grid.
- */
-export const newGameSetup = (playerCount: number = 4): GameSetup => GameSetup({
-    players: players(
-        Array.from({ length: playerCount }, (_, i) => `Player ${i + 1}`),
-    ),
+/** The classic Clue deck packaged as a reusable CardSet. */
+const CLASSIC_CARD_SET: CardSet = CardSet({
     categories: CLASSIC_CATEGORIES,
 });
+
+const MASTER_DETECTIVE_CATEGORIES: ReadonlyArray<Category> = [
+    presetCategory("Suspects", "md-suspects", [
+        ...CLASSIC_SUSPECTS,
+        presetCard("Miss Peach", "miss-peach"),
+        presetCard("Mon. Brunette", "mon-brunette"),
+        presetCard("Madame Rose", "madame-rose"),
+        presetCard("Sgt. Gray", "sgt-gray"),
+    ]),
+    presetCategory("Weapons", "md-weapons", [
+        ...CLASSIC_WEAPONS,
+        presetCard("Horseshoe", "horseshoe"),
+        presetCard("Poison", "poison"),
+    ]),
+    presetCategory("Rooms", "md-rooms", [
+        ...CLASSIC_ROOMS,
+        presetCard("Courtyard", "courtyard"),
+        presetCard("Gazebo", "gazebo"),
+        presetCard("Trophy room", "trophy-room"),
+    ]),
+];
+
+/** Master Detective expansion's deck as a reusable CardSet. */
+const MASTER_DETECTIVE_CARD_SET: CardSet = CardSet({
+    categories: MASTER_DETECTIVE_CATEGORIES,
+});
+
+/**
+ * Build a fresh classic-Clue setup with N generically-named players.
+ * Used as the "new game" default — users can rename the players and
+ * add or remove rows from the UI grid.
+ */
+export const newGameSetup = (playerCount: number = 4): GameSetup =>
+    GameSetup({
+        cardSet: CLASSIC_CARD_SET,
+        playerSet: PlayerSet({
+            players: players(
+                Array.from(
+                    { length: playerCount },
+                    (_, i) => `Player ${i + 1}`,
+                ),
+            ),
+        }),
+    });
 
 /**
  * The single default preset surfaced in the UI's "New game" button.
@@ -275,57 +290,33 @@ export const DEFAULT_SETUP: GameSetup = newGameSetup(4);
  * Classic three-player Clue. Kept for tests; not exposed in the UI.
  */
 export const CLASSIC_SETUP_3P: GameSetup = GameSetup({
-    players: players(["Anisha", "Bob", "Cho"]),
-    categories: CLASSIC_CATEGORIES,
+    cardSet: CLASSIC_CARD_SET,
+    playerSet: PlayerSet({ players: players(["Anisha", "Bob", "Cho"]) }),
 });
+
+const CLASSIC_PLAYERS_6P = players([
+    "Miss Scarlet",
+    "Col. Mustard",
+    "Mrs. White",
+    "Mr. Green",
+    "Mrs. Peacock",
+    "Prof. Plum",
+]);
 
 /**
  * Classic Clue with the six standard suspects as six players.
  */
 const CLASSIC_SETUP_6P: GameSetup = GameSetup({
-    players: players([
-        "Miss Scarlet",
-        "Col. Mustard",
-        "Mrs. White",
-        "Mr. Green",
-        "Mrs. Peacock",
-        "Prof. Plum",
-    ]),
-    categories: CLASSIC_CATEGORIES,
+    cardSet: CLASSIC_CARD_SET,
+    playerSet: PlayerSet({ players: CLASSIC_PLAYERS_6P }),
 });
 
 /**
  * Master Detective edition: more suspects, weapons, and rooms.
  */
 const MASTER_DETECTIVE_SETUP: GameSetup = GameSetup({
-    players: players([
-        "Miss Scarlet",
-        "Col. Mustard",
-        "Mrs. White",
-        "Mr. Green",
-        "Mrs. Peacock",
-        "Prof. Plum",
-    ]),
-    categories: [
-        presetCategory("Suspects", "md-suspects", [
-            ...CLASSIC_SUSPECTS,
-            presetCard("Miss Peach", "miss-peach"),
-            presetCard("Mon. Brunette", "mon-brunette"),
-            presetCard("Madame Rose", "madame-rose"),
-            presetCard("Sgt. Gray", "sgt-gray"),
-        ]),
-        presetCategory("Weapons", "md-weapons", [
-            ...CLASSIC_WEAPONS,
-            presetCard("Horseshoe", "horseshoe"),
-            presetCard("Poison", "poison"),
-        ]),
-        presetCategory("Rooms", "md-rooms", [
-            ...CLASSIC_ROOMS,
-            presetCard("Courtyard", "courtyard"),
-            presetCard("Gazebo", "gazebo"),
-            presetCard("Trophy room", "trophy-room"),
-        ]),
-    ],
+    cardSet: MASTER_DETECTIVE_CARD_SET,
+    playerSet: PlayerSet({ players: CLASSIC_PLAYERS_6P }),
 });
 
 interface SetupPreset {

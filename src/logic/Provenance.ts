@@ -226,7 +226,7 @@ export const describeReason = (
                             "other two were already ruled out.",
                     };
                 const cardLabels = suggestionCards(suggestion)
-                    .map(id => cardName(setup, id))
+                    .map((id: Card) => cardName(setup, id))
                     .join(", ");
                 return {
                     headline,

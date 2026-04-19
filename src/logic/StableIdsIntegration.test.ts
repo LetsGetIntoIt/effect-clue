@@ -9,7 +9,7 @@
  *      identified by name) decode cleanly; the migrated id matches the
  *      legacy name, and a card added later still has a fresh id.
  */
-import { Either } from "effect";
+import { Result } from "effect";
 import {
     Card,
     Player,
@@ -58,12 +58,12 @@ describe("rename preserves references", () => {
             }),
         ];
         const before = deduce(setup, suggestions)(emptyKnowledge);
-        expect(Either.isRight(before)).toBe(true);
-        if (!Either.isRight(before)) return;
+        expect(Result.isSuccess(before)).toBe(true);
+        if (!Result.isSuccess(before)) return;
 
         // Before rename: Bob owns Conservatory.
         expect(
-            getCellByOwnerCard(before.right, PlayerOwner(B), conserv),
+            getCellByOwnerCard(before.success, PlayerOwner(B), conserv),
         ).toBe(Y);
 
         // Rename Conservatory → "Greenhouse". Note we preserve the id
@@ -75,14 +75,14 @@ describe("rename preserves references", () => {
         // Solver still produces the same knowledge; suggestion.cards
         // still resolves (they're ids).
         const after = deduce(renamed, suggestions)(emptyKnowledge);
-        expect(Either.isRight(after)).toBe(true);
-        if (!Either.isRight(after)) return;
+        expect(Result.isSuccess(after)).toBe(true);
+        if (!Result.isSuccess(after)) return;
         expect(
-            getCellByOwnerCard(after.right, PlayerOwner(B), conserv),
+            getCellByOwnerCard(after.success, PlayerOwner(B), conserv),
         ).toBe(Y);
         expect(
             getCellByOwnerCard(
-                after.right,
+                after.success,
                 PlayerOwner(A),
                 conserv,
             ),
