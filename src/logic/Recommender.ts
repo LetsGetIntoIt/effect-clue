@@ -7,7 +7,6 @@ import {
     PlayerOwner,
 } from "./GameObjects";
 import {
-    allCardIds,
     cardIdsInCategory,
     GameSetup,
 } from "./GameSetup";
@@ -73,7 +72,7 @@ export const caseFileCandidatesFor = (
  * The three score factors are exposed separately so the UI can show
  * "why is this recommended" alongside the overall score.
  */
-export interface Recommendation {
+interface Recommendation {
     readonly suggester: Player;
     readonly cards: ReadonlyArray<Card>;
     readonly score: number;
@@ -88,7 +87,7 @@ export interface Recommendation {
  * start of a game every triple ties, but tie-breaks (see below) pick
  * a stable subset so the user gets something to work with.
  */
-export interface RecommendationResult {
+interface RecommendationResult {
     readonly recommendations: ReadonlyArray<Recommendation>;
     readonly topCount: number;
 }
@@ -158,7 +157,7 @@ export const recommendSuggestions = (
     setup: GameSetup,
     knowledge: Knowledge,
     suggester: Player,
-    maxResults: number = 5,
+    maxResults: number = 50,
 ): RecommendationResult => {
     const otherPlayers = setup.players.filter(p => p !== suggester);
 
@@ -228,72 +227,220 @@ export const recommendSuggestions = (
     };
 };
 
-// ---- Probabilistic mode ------------------------------------------------
-
 /**
- * For a given card, compute the fraction of currently-known cells that
- * definitely point to each possible owner. This is a crude approximation
- * of a true probability: we're not enumerating consistent worlds, just
- * reporting what the checklist already directly says. It's extremely
- * cheap (O(owners)) and useful as a UI signal: "70% confidence Bob has
- * the knife" really means "2 of the other 3 possible owners have been
- * ruled out".
+ * Plain-English explanation of why a suggestion is recommended. Feeds the
+ * UI directly — no need to know the raw scoring formula to understand
+ * what the solver is suggesting.
+ *
+ * Strategy: pick the dominant factor and phrase it as the headline.
+ *  - Case-file openness tells you the suggestion probes unresolved
+ *    casefile categories.
+ *  - Cell-info count tells you it'll fill in blanks on other players'
+ *    rows.
+ *  - Refuter uncertainty tells you you'll learn which player had to
+ *    refute.
+ *
+ * Returns a short single-sentence phrase intended for a list item
+ * (fits on one line).
  */
-export interface CardProbabilities {
-    readonly card: Card;
-    // probability[ownerKey] where ownerKey is "caseFile" or player name.
-    readonly probability: ReadonlyMap<string, number>;
-}
-
-export const probabilitiesForCard = (
+export const describeRecommendation = (
     setup: GameSetup,
     knowledge: Knowledge,
-    card: Card,
-): CardProbabilities => {
-    const result = new Map<string, number>();
-    const caseFile = CaseFileOwner();
+    r: {
+        readonly cards: ReadonlyArray<Card>;
+        readonly cellInfoScore: number;
+        readonly caseFileOpennessScore: number;
+        readonly refuterUncertaintyScore: number;
+    },
+): string => {
+    // Identify categories whose casefile answer is still open, and
+    // which of this triple's cards sit in those categories.
+    const openCategories = setup.categories.filter(
+        c => caseFileAnswerFor(setup, knowledge, c.id) === undefined,
+    );
+    const openCategoryNames = openCategories
+        .map(c => c.name)
+        .map(n => n.toLowerCase());
 
-    // First: does anyone already have a Y for this card? Then they have
-    // probability 1 and everyone else 0.
-    let knownOwner: string | undefined = undefined;
-    if (getCellByOwnerCard(knowledge, caseFile, card) === Y) {
-        knownOwner = "caseFile";
-    }
-    for (const p of setup.players) {
-        if (getCellByOwnerCard(knowledge, PlayerOwner(p), card) === Y) {
-            knownOwner = p;
-        }
-    }
+    // Could a single category become fully pinned by the refuter? That
+    // happens when there are exactly two casefile candidates in a
+    // category and this suggestion probes the non-casefile one.
+    const oneGuessFromCasefile = openCategories.some(c => {
+        const candidates = caseFileCandidatesFor(setup, knowledge, c.id);
+        return (
+            candidates.length === 2 &&
+            r.cards.some(card => candidates.includes(card))
+        );
+    });
 
-    if (knownOwner !== undefined) {
-        result.set("caseFile", knownOwner === "caseFile" ? 1 : 0);
-        for (const p of setup.players) {
-            result.set(p, knownOwner === p ? 1 : 0);
-        }
-        return { card, probability: result };
-    }
-
-    // Otherwise: distribute 1.0 uniformly across un-ruled-out owners.
-    const candidates: string[] = [];
-    if (getCellByOwnerCard(knowledge, caseFile, card) !== N) {
-        candidates.push("caseFile");
-    }
-    for (const p of setup.players) {
-        if (getCellByOwnerCard(knowledge, PlayerOwner(p), card) !== N) {
-            candidates.push(p);
-        }
+    if (oneGuessFromCasefile && openCategoryNames.length === 1) {
+        return `Could pin down the casefile ${openCategoryNames[0] ?? "category"} in one guess.`;
     }
 
-    const prob = candidates.length === 0 ? 0 : 1 / candidates.length;
-    result.set("caseFile", candidates.includes("caseFile") ? prob : 0);
-    for (const p of setup.players) {
-        result.set(p, candidates.includes(p) ? prob : 0);
+    if (r.cellInfoScore >= 4 && openCategoryNames.length >= 1) {
+        return (
+            `Probes ${r.cellInfoScore} unknown cells across other ` +
+            `players' ${openCategoryNames.join(" / ")} rows.`
+        );
     }
-    return { card, probability: result };
+
+    if (r.refuterUncertaintyScore >= 3) {
+        return (
+            `Any of ${r.refuterUncertaintyScore} players could refute — ` +
+            `will reveal which one has a card.`
+        );
+    }
+
+    if (r.cellInfoScore >= 1) {
+        const cellWord = r.cellInfoScore === 1 ? "cell" : "cells";
+        return `Fills in ${r.cellInfoScore} unknown ${cellWord} on other players' rows.`;
+    }
+
+    return "Probes a useful combination.";
 };
 
-export const probabilitiesForAllCards = (
+/**
+ * A consolidated recommendation row. Each category slot is either a
+ * specific `Card` or the sentinel `"any"`, meaning "any casefile-
+ * candidate card in this category produces the same score as part of
+ * this family of tied recommendations."
+ */
+interface ConsolidatedRecommendation {
+    readonly suggester: Player;
+    readonly cards: ReadonlyArray<Card | "any">;
+    readonly score: number;
+    readonly cellInfoScore: number;
+    readonly caseFileOpennessScore: number;
+    readonly refuterUncertaintyScore: number;
+    /** How many specific recommendations this consolidated row covers. */
+    readonly groupSize: number;
+}
+
+/**
+ * Collapse tied recommendations that differ only by which card was chosen
+ * in one or more categories into a single "any X" row.
+ *
+ * Algorithm:
+ *   1. Group by score.
+ *   2. Within each tier, iteratively look for a category position where
+ *      the distinct values across a fixed-non-position key equal the
+ *      full set of casefile candidates for that category — replace those
+ *      rows with one row whose position = "any". Repeat until stable
+ *      (so "Mustard + any weapon + any room" emerges via two passes).
+ *   3. Concatenate consolidated tiers in the original sorted order.
+ */
+export const consolidateRecommendations = (
     setup: GameSetup,
     knowledge: Knowledge,
-): ReadonlyArray<CardProbabilities> =>
-    allCardIds(setup).map(card => probabilitiesForCard(setup, knowledge, card));
+    recs: ReadonlyArray<Recommendation>,
+): ReadonlyArray<ConsolidatedRecommendation> => {
+    // Casefile candidate set per category (for equivalence checks).
+    const candidatesByCat: ReadonlyArray<ReadonlySet<Card>> =
+        setup.categories.map(
+            c => new Set(caseFileCandidatesFor(setup, knowledge, c.id)),
+        );
+
+    // Group by score, preserve input order between groups.
+    const scoreOrder: number[] = [];
+    const byScore = new Map<number, Recommendation[]>();
+    for (const r of recs) {
+        let list = byScore.get(r.score);
+        if (!list) {
+            list = [];
+            byScore.set(r.score, list);
+            scoreOrder.push(r.score);
+        }
+        list.push(r);
+    }
+
+    const out: ConsolidatedRecommendation[] = [];
+    for (const score of scoreOrder) {
+        const tier = byScore.get(score)!;
+        // Seed with fully-specific cards.
+        let rows: ConsolidatedRecommendation[] = tier.map(r => ({
+            suggester: r.suggester,
+            cards: r.cards,
+            score: r.score,
+            cellInfoScore: r.cellInfoScore,
+            caseFileOpennessScore: r.caseFileOpennessScore,
+            refuterUncertaintyScore: r.refuterUncertaintyScore,
+            groupSize: 1,
+        }));
+
+        // Iterate: at each pass, look for a position that can be
+        // collapsed. Stop when a pass produces no further collapse.
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (let i = 0; i < setup.categories.length; i++) {
+                const targetCandidates = candidatesByCat[i];
+                if (!targetCandidates || targetCandidates.size < 2) continue;
+
+                // Group by the tuple of other-position values
+                // (serialized as a string key).
+                const groups = new Map<string, ConsolidatedRecommendation[]>();
+                for (const row of rows) {
+                    const key = row.cards
+                        .map((c, j) => (j === i ? "*" : String(c)))
+                        .join("|");
+                    let list = groups.get(key);
+                    if (!list) {
+                        list = [];
+                        groups.set(key, list);
+                    }
+                    list.push(row);
+                }
+
+                // For each group, if the distinct values at position i
+                // cover every candidate and nothing is already "any" at
+                // position i, collapse.
+                const nextRows: ConsolidatedRecommendation[] = [];
+                let didCollapse = false;
+                for (const group of groups.values()) {
+                    const atI = group.map(g => g.cards[i]);
+                    const alreadyAny = atI.some(v => v === "any");
+                    if (alreadyAny) {
+                        nextRows.push(...group);
+                        continue;
+                    }
+                    const specific = new Set<Card>();
+                    for (const v of atI) {
+                        if (v !== "any") specific.add(v as Card);
+                    }
+                    const covers =
+                        specific.size === targetCandidates.size &&
+                        Array.from(targetCandidates).every(c =>
+                            specific.has(c),
+                        );
+                    if (covers && group.length > 1) {
+                        const first = group[0]!;
+                        const mergedCards = first.cards.map((c, j) =>
+                            j === i ? ("any" as const) : c,
+                        );
+                        const groupSize = group.reduce(
+                            (sum, g) => sum + g.groupSize,
+                            0,
+                        );
+                        nextRows.push({
+                            ...first,
+                            cards: mergedCards,
+                            groupSize,
+                        });
+                        didCollapse = true;
+                    } else {
+                        nextRows.push(...group);
+                    }
+                }
+
+                if (didCollapse) {
+                    rows = nextRows;
+                    changed = true;
+                    break; // restart the pass from category 0
+                }
+            }
+        }
+
+        out.push(...rows);
+    }
+    return out;
+};

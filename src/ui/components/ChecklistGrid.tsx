@@ -1,10 +1,12 @@
 "use client";
 
+import { Either } from "effect";
 import { Card, Owner, ownerLabel } from "../../logic/GameObjects";
 import { allOwners, cardName } from "../../logic/GameSetup";
 import {
     Cell,
     CellValue,
+    emptyKnowledge,
     getCellByOwnerCard,
     Knowledge,
     N,
@@ -22,8 +24,10 @@ import {
     caseFileProgress,
 } from "../../logic/Recommender";
 import { Suggestion } from "../../logic/Suggestion";
+import { useHover } from "../HoverContext";
 import { useClue } from "../state";
-import { ContradictionBanner } from "./ContradictionBanner";
+import { Envelope } from "./Icons";
+import { Tooltip } from "./Tooltip";
 
 /**
  * The main visual: a case-file header strip on top; a grid with one row
@@ -39,8 +43,10 @@ import { ContradictionBanner } from "./ContradictionBanner";
  * ✓ / · cell and a blank-with-footnote cell.
  */
 export function ChecklistGrid() {
-    const { state, derived } = useClue();
+    const { state, dispatch, derived } = useClue();
+    const { hoveredSuggestionIndex } = useHover();
     const setup = state.setup;
+    const knownCards = state.knownCards;
     const result = derived.deductionResult;
     const footnotes = derived.footnotes;
     const provenance = derived.provenance;
@@ -48,22 +54,62 @@ export function ChecklistGrid() {
 
     const owners: ReadonlyArray<Owner> = allOwners(setup);
 
-    if (result._tag === "Contradiction") {
-        return (
-            <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">
-                <h2 className="mb-3 text-[16px] uppercase tracking-[0.05em] text-accent">
-                    Deduction grid
-                </h2>
-                <ContradictionBanner trace={result.trace} />
-                <p className="text-[13px] text-muted">
-                    Use a quick-fix above to resolve the contradiction, or
-                    adjust your inputs directly.
-                </p>
-            </section>
-        );
-    }
+    /**
+     * Cross-highlight: when the user hovers a suggestion row in
+     * PriorSuggestions, highlight every cell whose provenance chain
+     * referenced that suggestion's index. `chainFor` returns every
+     * Reason contributing to the cell's current value; any Reason
+     * whose `kind.suggestionIndex` matches the hovered index makes
+     * this cell participate.
+     */
+    const cellIsHighlighted = (owner: Owner, card: Card): boolean => {
+        if (hoveredSuggestionIndex === null) return false;
+        if (!provenance) return false;
+        const chain = chainFor(provenance, Cell(owner, card));
+        for (const reason of chain) {
+            const idx =
+                "suggestionIndex" in reason.kind
+                    ? reason.kind.suggestionIndex
+                    : undefined;
+            if (idx === hoveredSuggestionIndex) return true;
+        }
+        return false;
+    };
 
-    const knowledge: Knowledge = result.knowledge;
+    /**
+     * Toggle a known-card entry for (player, card) when the user clicks a
+     * cell. Only player columns are interactive — the CaseFile column is
+     * computed by the deducer and never a direct user input.
+     *
+     * If the clicked (player, card) is already in knownCards, remove it;
+     * otherwise add it. If the cell currently shows N (deduced), clicking
+     * will add a Y known-card that contradicts — the global banner will
+     * show the user why.
+     */
+    const toggleKnownCard = (owner: Owner, card: Card) => {
+        if (owner._tag !== "Player") return;
+        const player = owner.player;
+        const index = knownCards.findIndex(
+            kc => kc.player === player && kc.card === card,
+        );
+        if (index >= 0) {
+            dispatch({ type: "removeKnownCard", index });
+        } else {
+            dispatch({ type: "addKnownCard", card: { player, card } });
+        }
+    };
+
+    // While the deducer is in a contradictory state, fall back to the
+    // empty-knowledge snapshot so the grid still renders (with the
+    // user's known-card inputs visible). The global contradiction banner
+    // at the top of the page surfaces the quick-fix UI; we don't block
+    // the grid anymore.
+    //
+    // We use Either.getOrUndefined rather than narrowing on isRight so
+    // React Compiler / Next Turbopack don't hoist a `.right` read ahead
+    // of the narrow check in their IR.
+    const knowledge: Knowledge =
+        Either.getOrUndefined(result) ?? emptyKnowledge;
 
     return (
         <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">
@@ -110,27 +156,72 @@ export function ChecklistGrid() {
                                         footnotes,
                                         Cell(owner, entry.id),
                                     );
+                                    const isPlayerCell = owner._tag === "Player";
+                                    const isHighlighted = cellIsHighlighted(
+                                        owner,
+                                        entry.id,
+                                    );
+                                    const tooltipText = buildCellTitle({
+                                        provenance,
+                                        suggestions,
+                                        setup,
+                                        owner,
+                                        card: entry.id,
+                                        footnoteNumbers,
+                                    });
+                                    const tooltipContent = tooltipText ? (
+                                        <div className="whitespace-pre-line">
+                                            {tooltipText}
+                                        </div>
+                                    ) : undefined;
                                     return (
-                                        <td
+                                        <Tooltip
                                             key={`${ownerKey(owner)}-${String(entry.id)}`}
-                                            className={cellClass(value)}
-                                            title={buildCellTitle({
-                                                provenance,
-                                                suggestions,
-                                                setup,
-                                                owner,
-                                                card: entry.id,
-                                                footnoteNumbers,
-                                            })}
+                                            content={tooltipContent}
                                         >
-                                            {cellLabel(value)}
-                                            {footnoteNumbers.length > 0 &&
-                                                value === undefined && (
-                                                    <sup className="ml-0.5 text-[9px] font-normal text-accent">
-                                                        {footnoteNumbers.join(",")}
-                                                    </sup>
+                                            <td
+                                                className={cellClass(
+                                                    value,
+                                                    isPlayerCell,
+                                                    isHighlighted,
                                                 )}
-                                        </td>
+                                                onClick={
+                                                    isPlayerCell
+                                                        ? () =>
+                                                              toggleKnownCard(
+                                                                  owner,
+                                                                  entry.id,
+                                                              )
+                                                        : undefined
+                                                }
+                                                role={isPlayerCell ? "button" : undefined}
+                                                tabIndex={isPlayerCell ? 0 : undefined}
+                                                onKeyDown={
+                                                    isPlayerCell
+                                                        ? e => {
+                                                              if (
+                                                                  e.key === "Enter" ||
+                                                                  e.key === " "
+                                                              ) {
+                                                                  e.preventDefault();
+                                                                  toggleKnownCard(
+                                                                      owner,
+                                                                      entry.id,
+                                                                  );
+                                                              }
+                                                          }
+                                                        : undefined
+                                                }
+                                            >
+                                                {cellLabel(value)}
+                                                {footnoteNumbers.length > 0 &&
+                                                    value === undefined && (
+                                                        <sup className="ml-0.5 text-[9px] font-normal text-accent">
+                                                            {footnoteNumbers.join(",")}
+                                                        </sup>
+                                                    )}
+                                            </td>
+                                        </Tooltip>
                                     );
                                 })}
                             </tr>
@@ -196,7 +287,8 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
     return (
         <div className="mb-4 rounded-[var(--radius)] border border-border bg-case-file-bg p-3">
             <div className="mb-2.5 flex items-center gap-3 text-[13px]">
-                <span className="whitespace-nowrap font-semibold text-accent">
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-semibold text-accent">
+                    <Envelope size={16} />
                     Case file · {(progress * 100).toFixed(0)}% solved
                 </span>
                 <div className="h-2 flex-1 overflow-hidden rounded bg-border">
@@ -261,8 +353,23 @@ const cellLabel = (value: CellValue | undefined): string => {
 const CELL_BASE =
     "w-9 min-w-9 border border-border px-2 py-1 text-center font-semibold relative";
 
-const cellClass = (value: CellValue | undefined): string => {
-    if (value === Y) return `${CELL_BASE} bg-yes-bg text-yes`;
-    if (value === N) return `${CELL_BASE} bg-no-bg text-no`;
-    return `${CELL_BASE} bg-white`;
+const CELL_INTERACTIVE =
+    " cursor-pointer hover:ring-2 hover:ring-accent/40 focus:outline-none focus:ring-2 focus:ring-accent";
+
+// Persistent cross-highlight (from hovering a suggestion in the log).
+// Stronger ring + subtle offset so it visually distinguishes from the
+// hover/focus ring on interactive cells and survives both.
+const CELL_HIGHLIGHTED =
+    " ring-2 ring-accent ring-offset-1 ring-offset-panel";
+
+const cellClass = (
+    value: CellValue | undefined,
+    interactive: boolean,
+    highlighted: boolean,
+): string => {
+    let base = interactive ? `${CELL_BASE}${CELL_INTERACTIVE}` : CELL_BASE;
+    if (highlighted) base += CELL_HIGHLIGHTED;
+    if (value === Y) return `${base} bg-yes-bg text-yes`;
+    if (value === N) return `${base} bg-no-bg text-no`;
+    return `${base} bg-white`;
 };

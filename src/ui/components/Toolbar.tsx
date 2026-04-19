@@ -5,14 +5,17 @@ import { useClue } from "../state";
 
 const buttonClass =
     "rounded-[var(--radius)] border border-border bg-white px-3.5 py-1.5 " +
-    "text-[13px] cursor-pointer hover:bg-[#f0f0f5]";
+    "text-[13px] cursor-pointer hover:bg-hover " +
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent " +
+    "focus-visible:ring-offset-1 focus-visible:ring-offset-bg";
 
 /**
- * Top-of-page controls: toggle inference explanations, reset the game,
- * and copy a shareable URL encoding the current state.
+ * Top-of-page controls: undo/redo, start a fresh game, and copy a
+ * shareable URL encoding the current state.
  */
 export function Toolbar() {
-    const { state, dispatch, currentShareUrl } = useClue();
+    const { dispatch, currentShareUrl, canUndo, canRedo, undo, redo } =
+        useClue();
     const [copied, setCopied] = useState(false);
 
     const onShare = async () => {
@@ -31,33 +34,44 @@ export function Toolbar() {
         }
     };
 
-    const onReset = () => {
+    const onNewGame = () => {
         if (
             window.confirm(
-                "Clear all known cards, hand sizes, and suggestions?",
+                "Start a new game? This will clear all players, cards, " +
+                "known hands, and suggestions.",
             )
         ) {
-            dispatch({ type: "resetAll" });
+            dispatch({ type: "newGame" });
         }
     };
 
     return (
         <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-1.5 text-[13px]">
-                <input
-                    type="checkbox"
-                    checked={state.explanationsEnabled}
-                    onChange={() =>
-                        dispatch({ type: "toggleExplanations" })
-                    }
-                />
-                &nbsp;Show &quot;why?&quot; explanations
-            </label>
+            <button
+                type="button"
+                className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-40`}
+                onClick={undo}
+                disabled={!canUndo}
+                title="Undo (⌘Z / Ctrl+Z)"
+                aria-label="Undo"
+            >
+                ↶ Undo
+            </button>
+            <button
+                type="button"
+                className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-40`}
+                onClick={redo}
+                disabled={!canRedo}
+                title="Redo (⌘⇧Z / Ctrl+Shift+Z)"
+                aria-label="Redo"
+            >
+                ↷ Redo
+            </button>
             <button type="button" className={buttonClass} onClick={onShare}>
                 {copied ? "Copied!" : "Share link"}
             </button>
-            <button type="button" className={buttonClass} onClick={onReset}>
-                Reset
+            <button type="button" className={buttonClass} onClick={onNewGame}>
+                New game
             </button>
         </div>
     );

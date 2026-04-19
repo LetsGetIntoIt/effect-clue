@@ -33,15 +33,17 @@ export interface Category {
  * completely category-agnostic — pass in 2 categories, 10 categories, or
  * the classic 3, and the inference rules work identically.
  */
-export type GameSetup = Data.Data<{
+class GameSetupImpl extends Data.Class<{
     readonly players: ReadonlyArray<Player>;
     readonly categories: ReadonlyArray<Category>;
-}>;
+}> {}
+
+export type GameSetup = GameSetupImpl;
 
 export const GameSetup = (params: {
-    players: ReadonlyArray<Player>;
-    categories: ReadonlyArray<Category>;
-}): GameSetup => Data.struct(params);
+    readonly players: ReadonlyArray<Player>;
+    readonly categories: ReadonlyArray<Category>;
+}): GameSetup => new GameSetupImpl(params);
 
 // ---- Id / name lookups --------------------------------------------------
 
@@ -83,17 +85,6 @@ export const cardIdsInCategory = (
     categoryId: CardCategory,
 ): ReadonlyArray<Card> =>
     findCategoryEntry(setup, categoryId)?.cards.map(c => c.id) ?? [];
-
-/** Card entries in a category, in order. Used by UI rendering. */
-export const cardEntriesInCategory = (
-    setup: GameSetup,
-    categoryId: CardCategory,
-): ReadonlyArray<CardEntry> =>
-    findCategoryEntry(setup, categoryId)?.cards ?? [];
-
-export const allCategoryIds = (
-    setup: GameSetup,
-): ReadonlyArray<CardCategory> => setup.categories.map(c => c.id);
 
 export const allCardIds = (setup: GameSetup): ReadonlyArray<Card> =>
     setup.categories.flatMap(c => c.cards.map(e => e.id));
@@ -144,115 +135,6 @@ export const defaultHandSizes = (
     const extras = dealt - base * n;
     return setup.players.map((player, i) =>
         [player, base + (i < extras ? 1 : 0)] as const);
-};
-
-// ---- Validation --------------------------------------------------------
-
-export interface SetupValidationError {
-    readonly kind:
-        | "empty-category-name"
-        | "duplicate-category-name"
-        | "category-has-no-cards"
-        | "empty-card-name"
-        | "duplicate-card-name"
-        | "duplicate-player-name"
-        | "empty-player-name"
-        | "no-players"
-        | "no-categories";
-    readonly message: string;
-}
-
-/**
- * Validate a setup. Returns all errors found, so the UI can display them
- * all at once rather than dribble them in one-by-one. Empty array means
- * the setup is well-formed and safe to solve against.
- *
- * Name uniqueness is validated even though identity is now by id — this
- * keeps the UX comprehensible ("why do I see two Knifes?"). Auto-suffix
- * should have already handled collisions before we get here, but
- * validation is a safety net for paths that don't go through the
- * reducer (e.g. direct `replaceSession` with a crafted URL).
- */
-export const validateSetup = (
-    setup: GameSetup,
-): ReadonlyArray<SetupValidationError> => {
-    const errors: SetupValidationError[] = [];
-
-    if (setup.players.length === 0) {
-        errors.push({
-            kind: "no-players",
-            message: "At least one player is required.",
-        });
-    }
-
-    const seenPlayers = new Set<string>();
-    for (const p of setup.players) {
-        const s = String(p).trim();
-        if (s.length === 0) {
-            errors.push({
-                kind: "empty-player-name",
-                message: "Player names cannot be blank.",
-            });
-        } else if (seenPlayers.has(s)) {
-            errors.push({
-                kind: "duplicate-player-name",
-                message: `Duplicate player name: "${s}".`,
-            });
-        } else {
-            seenPlayers.add(s);
-        }
-    }
-
-    if (setup.categories.length === 0) {
-        errors.push({
-            kind: "no-categories",
-            message: "At least one category is required.",
-        });
-    }
-
-    const seenCategories = new Set<string>();
-    const seenCards = new Set<string>();
-    for (const cat of setup.categories) {
-        const name = cat.name.trim();
-        if (name.length === 0) {
-            errors.push({
-                kind: "empty-category-name",
-                message: "Category names cannot be blank.",
-            });
-        } else if (seenCategories.has(name)) {
-            errors.push({
-                kind: "duplicate-category-name",
-                message: `Duplicate category name: "${name}".`,
-            });
-        } else {
-            seenCategories.add(name);
-        }
-
-        if (cat.cards.length === 0) {
-            errors.push({
-                kind: "category-has-no-cards",
-                message: `Category "${name}" must have at least one card.`,
-            });
-        }
-        for (const entry of cat.cards) {
-            const cn = entry.name.trim();
-            if (cn.length === 0) {
-                errors.push({
-                    kind: "empty-card-name",
-                    message: "Card names cannot be blank.",
-                });
-            } else if (seenCards.has(cn)) {
-                errors.push({
-                    kind: "duplicate-card-name",
-                    message: `Duplicate card name: "${cn}".`,
-                });
-            } else {
-                seenCards.add(cn);
-            }
-        }
-    }
-
-    return errors;
 };
 
 // ---- Name disambiguation ----------------------------------------------
@@ -400,7 +282,7 @@ export const CLASSIC_SETUP_3P: GameSetup = GameSetup({
 /**
  * Classic Clue with the six standard suspects as six players.
  */
-export const CLASSIC_SETUP_6P: GameSetup = GameSetup({
+const CLASSIC_SETUP_6P: GameSetup = GameSetup({
     players: players([
         "Miss Scarlet",
         "Col. Mustard",
@@ -415,7 +297,7 @@ export const CLASSIC_SETUP_6P: GameSetup = GameSetup({
 /**
  * Master Detective edition: more suspects, weapons, and rooms.
  */
-export const MASTER_DETECTIVE_SETUP: GameSetup = GameSetup({
+const MASTER_DETECTIVE_SETUP: GameSetup = GameSetup({
     players: players([
         "Miss Scarlet",
         "Col. Mustard",
@@ -446,7 +328,7 @@ export const MASTER_DETECTIVE_SETUP: GameSetup = GameSetup({
     ],
 });
 
-export interface SetupPreset {
+interface SetupPreset {
     readonly id: string;
     readonly label: string;
     readonly build: () => GameSetup;
@@ -462,29 +344,3 @@ export const PRESETS: ReadonlyArray<SetupPreset> = [
     { id: "classic-6p",        label: "Classic (6 players)",         build: () => CLASSIC_SETUP_6P },
     { id: "master-detective",  label: "Master Detective (6 players)", build: () => MASTER_DETECTIVE_SETUP },
 ];
-
-// ---- Back-compat shims (named to match old API surface) -----------------
-
-/**
- * @deprecated Use `cardIdsInCategory` for solver work or
- * `cardEntriesInCategory` for UI iteration.
- *
- * Kept temporarily for callers that haven't been migrated to the new
- * shape yet. Returns ids — which is what the solver always wanted.
- */
-export const cardsInCategory = cardIdsInCategory;
-
-/**
- * @deprecated Use `allCardIds` for solver work.
- */
-export const allCards = allCardIds;
-
-/**
- * @deprecated Use `categoryOfCard`.
- */
-export const categoryOf = categoryOfCard;
-
-/**
- * @deprecated Use `allCategoryIds`.
- */
-export const allCategories = allCategoryIds;

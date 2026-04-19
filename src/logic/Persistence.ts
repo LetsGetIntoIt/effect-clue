@@ -1,6 +1,12 @@
 import { Card, CardCategory, Player } from "./GameObjects";
 import { CardEntry, Category, GameSetup } from "./GameSetup";
-import { Suggestion, suggestionCards, suggestionNonRefuters } from "./Suggestion";
+import {
+    newSuggestionId,
+    Suggestion,
+    SuggestionId,
+    suggestionCards,
+    suggestionNonRefuters,
+} from "./Suggestion";
 
 /**
  * JSON representation of the mutable parts of a game session. We
@@ -20,7 +26,7 @@ import { Suggestion, suggestionCards, suggestionNonRefuters } from "./Suggestion
  *        its own stable `id` alongside `name`. Suggestions, hands,
  *        etc. reference cards by id so renames don't break them.
  */
-export interface PersistedGameV3 {
+interface PersistedGameV3 {
     readonly version: 3;
     readonly setup: {
         readonly players: ReadonlyArray<string>;
@@ -87,7 +93,7 @@ interface PersistedGameV1 {
     readonly suggestions: PersistedGameV3["suggestions"];
 }
 
-export type PersistedGame = PersistedGameV3;
+type PersistedGame = PersistedGameV3;
 
 export interface GameSession {
     setup: GameSetup;
@@ -118,7 +124,7 @@ export const encodeSession = (session: GameSession): PersistedGame => ({
         size: h.size,
     })),
     suggestions: session.suggestions.map(s => ({
-        id: s.id,
+        id: String(s.id),
         suggester: String(s.suggester),
         cards: suggestionCards(s).map(c => String(c)),
         nonRefuters: suggestionNonRefuters(s).map(p => String(p)),
@@ -224,8 +230,13 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
         })),
     });
 
-    const suggestions = v3.suggestions.map((s, i) => Suggestion({
-        id: s.id ?? `restored-${i}`,
+    const suggestions = v3.suggestions.map(s => Suggestion({
+        // Pre-migration suggestions from v1/v2 (before ids existed) may
+        // be missing an id; synthesize a fresh one so downstream refs
+        // (provenance, footnotes) stay consistent.
+        id: s.id === undefined || s.id === ""
+            ? newSuggestionId()
+            : SuggestionId(s.id),
         suggester: Player(s.suggester),
         cards: s.cards.map(Card),
         nonRefuters: s.nonRefuters.map(Player),
@@ -273,16 +284,6 @@ export const loadFromLocalStorage = (): GameSession | undefined => {
         return undefined;
     } catch {
         return undefined;
-    }
-};
-
-export const clearLocalStorage = (): void => {
-    try {
-        window.localStorage.removeItem(STORAGE_KEY_V3);
-        window.localStorage.removeItem(STORAGE_KEY_V2);
-        window.localStorage.removeItem(STORAGE_KEY_V1);
-    } catch {
-        // Ignore.
     }
 };
 

@@ -1,5 +1,5 @@
-import { Data, Equal, HashMap, Option } from "effect";
-import { Card, Owner, ownerLabel, Player, PlayerOwner } from "./GameObjects";
+import { Data, HashMap, Option } from "effect";
+import { Card, Owner, ownerLabel } from "./GameObjects";
 
 /**
  * Each cell in the checklist has one of two values: "Y" for "this owner
@@ -16,9 +16,20 @@ export const N: CellValue = "N";
  * We use Data.tuple so that structural equality and hashing Just Work
  * inside HashMap.
  */
-export type Cell = Data.Data<readonly [Owner, Card]>;
+/**
+ * A (owner, card) checklist coordinate. Backed by a `Data.Class` so
+ * it's usable as a `HashMap` / `Equal`-keyed value and so named-field
+ * destructuring (`const { owner, card } = cell`) is self-documenting
+ * at call sites.
+ */
+class CellImpl extends Data.Class<{
+    readonly owner: Owner;
+    readonly card: Card;
+}> {}
+
+export type Cell = CellImpl;
 export const Cell = (owner: Owner, card: Card): Cell =>
-    Data.tuple(owner, card);
+    new CellImpl({ owner, card });
 
 /**
  * Knowledge about a game in progress. The checklist is a single unified
@@ -27,15 +38,17 @@ export const Cell = (owner: Owner, card: Card): Cell =>
  * as just another kind of Owner. That lets a single combinator enforce
  * "each card has exactly one owner" without special-casing.
  */
-export type Knowledge = Data.Data<{
+class KnowledgeImpl extends Data.Class<{
     readonly checklist: HashMap.HashMap<Cell, CellValue>;
     readonly handSizes: HashMap.HashMap<Owner, number>;
-}>;
+}> {}
+
+export type Knowledge = KnowledgeImpl;
 
 export const Knowledge = (params: {
-    checklist: HashMap.HashMap<Cell, CellValue>;
-    handSizes: HashMap.HashMap<Owner, number>;
-}): Knowledge => Data.struct(params);
+    readonly checklist: HashMap.HashMap<Cell, CellValue>;
+    readonly handSizes: HashMap.HashMap<Owner, number>;
+}): Knowledge => new KnowledgeImpl(params);
 
 export const emptyKnowledge: Knowledge = Knowledge({
     checklist: HashMap.empty(),
@@ -87,7 +100,7 @@ export const getHandSize = (
  *   of that suggestion in the suggestions array — so the UI can surface
  *   a "remove this suggestion" quick fix.
  */
-export interface ContradictionInfo {
+interface ContradictionInfo {
     readonly reason: string;
     readonly offendingCells: ReadonlyArray<Cell>;
     readonly sliceLabel?: string | undefined;
@@ -127,12 +140,12 @@ export class Contradiction extends Error {
     }
 }
 
-export const cellConflictContradiction = (
+const cellConflictContradiction = (
     cell: Cell,
     attempted: CellValue,
     existing: CellValue,
 ): Contradiction => {
-    const [owner, card] = cell;
+    const { owner, card } = cell;
     return new Contradiction({
         reason:
             `tried to set ${ownerLabel(owner)}/${card} to ${attempted} ` +
@@ -171,23 +184,3 @@ export const setHandSize = (
     handSizes: HashMap.set(knowledge.handSizes, owner, size),
 });
 
-/**
- * Given an iterable of (player, cards) pairs, mark each player as owning
- * each card with "Y". Used to seed the knowledge with cards you know about
- * (your own hand, or cards other players have publicly revealed).
- */
-export const seedPlayerHands = (
-    knowledge: Knowledge,
-    hands: Iterable<readonly [Player, Iterable<Card>]>,
-): Knowledge => {
-    let k = knowledge;
-    for (const [player, cards] of hands) {
-        for (const card of cards) {
-            k = setCell(k, Cell(PlayerOwner(player), card), Y);
-        }
-    }
-    return k;
-};
-
-export const knowledgeEquals = (a: Knowledge, b: Knowledge): boolean =>
-    Equal.equals(a, b);

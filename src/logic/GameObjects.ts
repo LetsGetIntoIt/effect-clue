@@ -1,4 +1,4 @@
-import { Brand, Data } from "effect";
+import { Brand, Data, Match } from "effect";
 
 /**
  * A player in a Clue game, identified by name. We use a branded string so
@@ -67,23 +67,31 @@ export const newCategoryId = (): CardCategory =>
  * owner lets us reuse a single constraint-propagation combinator for both
  * "each card has exactly one owner" and "the case file owns exactly one of
  * each category" rules.
+ *
+ * Each variant is a `Data.TaggedClass` — structural `Equal` / `Hash`, a
+ * runtime `_tag` ("Player" / "CaseFile") that `Match.tag` / `Match.tags`
+ * narrow on, and extension-friendly if we later want to hang methods on
+ * the class. The `PlayerOwner(player)` / `CaseFileOwner()` factory
+ * helpers preserve the existing call-site ergonomics (136 callers) so
+ * this change is a pure internals swap.
  */
-export type Owner = Data.Data<
-    | { readonly _tag: "Player"; readonly player: Player }
-    | { readonly _tag: "CaseFile" }
->;
+class PlayerOwnerImpl extends Data.TaggedClass("Player")<{
+    readonly player: Player;
+}> {}
+
+class CaseFileOwnerImpl extends Data.TaggedClass("CaseFile")<{}> {}
+
+export type Owner = PlayerOwnerImpl | CaseFileOwnerImpl;
 
 export const PlayerOwner = (player: Player): Owner =>
-    Data.struct({ _tag: "Player" as const, player });
+    new PlayerOwnerImpl({ player });
 
-export const CaseFileOwner = (): Owner =>
-    Data.struct({ _tag: "CaseFile" as const });
+export const CaseFileOwner = (): Owner => new CaseFileOwnerImpl();
 
 export const ownerLabel = (owner: Owner): string =>
-    owner._tag === "Player" ? owner.player : "Case file";
-
-export const isCaseFile = (owner: Owner): boolean =>
-    owner._tag === "CaseFile";
-
-export const isPlayer = (owner: Owner): boolean =>
-    owner._tag === "Player";
+    Match.value(owner).pipe(
+        Match.tagsExhaustive({
+            Player: ({ player }) => String(player),
+            CaseFile: () => "Case file",
+        }),
+    );

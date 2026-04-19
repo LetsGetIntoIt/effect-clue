@@ -32,8 +32,13 @@ import {
     buildInitialKnowledge,
     type KnownCard,
 } from "../logic/InitialKnowledge";
+import { Either } from "effect";
 import deduce, { type DeductionResult } from "../logic/Deducer";
-import { Suggestion } from "../logic/Suggestion";
+import {
+    newSuggestionId,
+    Suggestion,
+    SuggestionId,
+} from "../logic/Suggestion";
 import {
     decodeSessionFromUrl,
     encodeSessionToUrl,
@@ -52,17 +57,12 @@ import {
 } from "../logic/Footnotes";
 
 /**
- * Re-exported from the logic layer so UI code keeps importing from state.
- */
-export type { KnownCard };
-
-/**
  * UI-level shape of a suggestion that hasn't been converted to a Data
  * record yet — matches the form inputs directly. Forms render these and
  * the state layer converts them on submit.
  */
 export interface DraftSuggestion {
-    readonly id: string;
+    readonly id: SuggestionId;
     readonly suggester: Player;
     readonly cards: ReadonlyArray<Card>;
     readonly nonRefuters: ReadonlyArray<Player>;
@@ -77,8 +77,19 @@ export interface DraftSuggestion {
  * Category / card operations come in id-based flavours (for inline grid
  * edits that know the stable id) and are resolved against the current
  * setup inside the reducer.
+ *
+ * **Invariant**: every mutation of `ClueState` must go through
+ * `dispatch` (a `ClueAction`) — never via direct assignment or a
+ * `setState` call escaping this module. This invariant is what lets
+ * the upcoming undo/redo meta-reducer observe every user-visible
+ * change, and what keeps the action log replayable. Components only
+ * ever *read* `state` / `derived`; they never touch them.
+ *
+ * Ephemeral per-component UI state (like a form's local "editing"
+ * buffer) is fine to keep in `useState`; the bar is specifically
+ * against mutating anything inside `ClueState`.
  */
-export type ClueAction =
+type ClueAction =
     | { type: "newGame" }
     | { type: "loadPreset"; setup: GameSetup }
     | { type: "setSetup"; setup: GameSetup }
@@ -93,20 +104,30 @@ export type ClueAction =
     | { type: "setHandSize"; player: Player; size: number | undefined }
     | { type: "addSuggestion"; suggestion: DraftSuggestion }
     | { type: "updateSuggestion"; suggestion: DraftSuggestion }
-    | { type: "removeSuggestion"; id: string }
-    | { type: "resetAll" }
+    | { type: "removeSuggestion"; id: SuggestionId }
     | { type: "addPlayer" }
     | { type: "removePlayer"; player: Player }
     | { type: "renamePlayer"; oldName: Player; newName: Player }
-    | { type: "toggleExplanations" }
+    | { type: "setUiMode"; mode: UiMode }
     | { type: "replaceSession"; session: GameSession };
 
-export interface ClueState {
+/**
+ * Coarse-grained UI mode. "setup" exposes the deck / player editing
+ * surfaces; "play" locks them down so accidental clicks don't drop
+ * hand sizes mid-game. The `newGame` action snaps back to "setup";
+ * "Start playing" transitions to "play".
+ *
+ * Lives in ClueState (not component-local useState) so the shared-URL
+ * encoder and localStorage persistence can round-trip it.
+ */
+type UiMode = "setup" | "play";
+
+interface ClueState {
     readonly setup: GameSetup;
     readonly handSizes: ReadonlyArray<readonly [Player, number]>;
     readonly knownCards: ReadonlyArray<KnownCard>;
     readonly suggestions: ReadonlyArray<DraftSuggestion>;
-    readonly explanationsEnabled: boolean;
+    readonly uiMode: UiMode;
 }
 
 const initialState: ClueState = {
@@ -114,7 +135,7 @@ const initialState: ClueState = {
     handSizes: [],
     knownCards: [],
     suggestions: [],
-    explanationsEnabled: true,
+    uiMode: "setup",
 };
 
 const reducer = (state: ClueState, action: ClueAction): ClueState => {
@@ -123,8 +144,10 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
             return {
                 ...initialState,
                 setup: newGameSetup(4),
-                explanationsEnabled: state.explanationsEnabled,
             };
+
+        case "setUiMode":
+            return { ...state, uiMode: action.mode };
 
         case "loadPreset":
             // Swap to a preset deck and discard anything tied to the
@@ -322,14 +345,6 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 ),
             };
 
-        case "resetAll":
-            return {
-                ...state,
-                knownCards: [],
-                handSizes: [],
-                suggestions: [],
-            };
-
         case "addPlayer": {
             const existing = new Set(
                 state.setup.players.map(p => String(p)),
@@ -407,12 +422,6 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
             };
         }
 
-        case "toggleExplanations":
-            return {
-                ...state,
-                explanationsEnabled: !state.explanationsEnabled,
-            };
-
         case "replaceSession": {
             const { session } = action;
             return {
@@ -424,8 +433,10 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 handSizes: session.handSizes.map(
                     ({ player, size }) => [player, size] as const,
                 ),
-                suggestions: session.suggestions.map((s, i) => ({
-                    id: s.id || `restored-${i}`,
+                suggestions: session.suggestions.map(s => ({
+                    id: s.id === SuggestionId("")
+                        ? newSuggestionId()
+                        : s.id,
                     suggester: s.suggester,
                     cards: Array.from(s.cards),
                     nonRefuters: Array.from(s.nonRefuters),
@@ -445,7 +456,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
  * the downstream component render memoization, so we don't need useMemo in
  * every consumer.
  */
-export interface ClueDerived {
+interface ClueDerived {
     readonly suggestionsAsData: ReadonlyArray<Suggestion>;
     readonly initialKnowledge: Knowledge;
     readonly deductionResult: DeductionResult;
@@ -460,37 +471,88 @@ const deriveState = (
     deductionResult: DeductionResult,
 ): { provenance: Provenance | undefined; footnotes: FootnoteMap } => {
     let provenance: Provenance | undefined;
-    if (state.explanationsEnabled) {
-        try {
-            const { provenance: p } = deduceWithExplanations(
-                state.setup,
-                suggestionsAsData,
-                initialKnowledge,
-            );
-            provenance = p;
-        } catch {
-            provenance = undefined;
-        }
+    try {
+        const { provenance: p } = deduceWithExplanations(
+            state.setup,
+            suggestionsAsData,
+            initialKnowledge,
+        );
+        provenance = p;
+    } catch {
+        provenance = undefined;
     }
-    const footnotes =
-        deductionResult._tag === "Ok"
-            ? refuterCandidateFootnotes(
-                  suggestionsAsData,
-                  deductionResult.knowledge,
-              )
-            : emptyFootnotes;
+    const footnotes = Either.isRight(deductionResult)
+        ? refuterCandidateFootnotes(
+              suggestionsAsData,
+              deductionResult.right,
+          )
+        : emptyFootnotes;
     return { provenance, footnotes };
 };
 
 // ---- Context + hook -----------------------------------------------------
 
-export interface ClueContextValue {
+interface ClueContextValue {
     readonly state: ClueState;
     readonly dispatch: React.Dispatch<ClueAction>;
     readonly derived: ClueDerived;
     readonly hasGameData: () => boolean;
     readonly currentShareUrl: () => string;
+    readonly canUndo: boolean;
+    readonly canRedo: boolean;
+    readonly undo: () => void;
+    readonly redo: () => void;
 }
+
+/**
+ * History wrapper for undo/redo. Each non-ephemeral user action pushes
+ * the previous state to `past` and clears `future`; undo/redo walk the
+ * two stacks. `replaceSession` (hydration from URL/localStorage) and
+ * `setUiMode` (purely presentational) bypass the history so they can't
+ * be undone into — they're not user-visible semantic changes.
+ */
+interface History {
+    readonly past: ReadonlyArray<ClueState>;
+    readonly current: ClueState;
+    readonly future: ReadonlyArray<ClueState>;
+}
+
+type HistoryAction =
+    | ClueAction
+    | { type: "__undo" }
+    | { type: "__redo" };
+
+const historyReducer = (h: History, action: HistoryAction): History => {
+    if (action.type === "__undo") {
+        if (h.past.length === 0) return h;
+        const prev = h.past[h.past.length - 1]!;
+        return {
+            past: h.past.slice(0, -1),
+            current: prev,
+            future: [h.current, ...h.future],
+        };
+    }
+    if (action.type === "__redo") {
+        if (h.future.length === 0) return h;
+        const [next, ...rest] = h.future;
+        return {
+            past: [...h.past, h.current],
+            current: next!,
+            future: rest,
+        };
+    }
+    const newCurrent = reducer(h.current, action);
+    if (newCurrent === h.current) return h;
+    // Ephemeral / restore actions don't participate in history.
+    if (action.type === "replaceSession" || action.type === "setUiMode") {
+        return { ...h, current: newCurrent };
+    }
+    return {
+        past: [...h.past, h.current],
+        current: newCurrent,
+        future: [],
+    };
+};
 
 const ClueContext = createContext<ClueContextValue | undefined>(undefined);
 
@@ -505,7 +567,35 @@ export const useClue = (): ClueContextValue => {
 // ---- Provider -----------------------------------------------------------
 
 export function ClueProvider({ children }: { children: ReactNode }) {
-    const [state, dispatch] = useReducer(reducer, initialState);
+    const [history, dispatchRaw] = useReducer(historyReducer, {
+        past: [],
+        current: initialState,
+        future: [],
+    });
+    const state = history.current;
+    const dispatch = dispatchRaw as React.Dispatch<ClueAction>;
+    const canUndo = history.past.length > 0;
+    const canRedo = history.future.length > 0;
+    const undo = useCallback(() => dispatchRaw({ type: "__undo" }), []);
+    const redo = useCallback(() => dispatchRaw({ type: "__redo" }), []);
+
+    // Keyboard bindings: Cmd/Ctrl+Z for undo, Cmd/Ctrl+Shift+Z for redo.
+    // Swallow the event only when we're going to act on it, so typing
+    // Cmd+Z in an input field still triggers undo (the user intends it).
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            const mod = e.metaKey || e.ctrlKey;
+            if (!mod) return;
+            // Key comparison is case-insensitive: `e.key` is "Z" when
+            // Shift is held, "z" otherwise.
+            if (e.key !== "z" && e.key !== "Z") return;
+            e.preventDefault();
+            if (e.shiftKey) redo();
+            else undo();
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [undo, redo]);
 
     // Derive expensive values. The inner useMemos chain so each only
     // recomputes when its actual inputs change; React Compiler will
@@ -642,8 +732,22 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             derived,
             hasGameData,
             currentShareUrl,
+            canUndo,
+            canRedo,
+            undo,
+            redo,
         }),
-        [state, derived, hasGameData, currentShareUrl],
+        [
+            state,
+            dispatch,
+            derived,
+            hasGameData,
+            currentShareUrl,
+            canUndo,
+            canRedo,
+            undo,
+            redo,
+        ],
     );
 
     return (

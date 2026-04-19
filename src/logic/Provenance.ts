@@ -1,5 +1,5 @@
-import { Equal, HashMap } from "effect";
-import { Card, CardCategory, Owner, ownerLabel, Player } from "./GameObjects";
+import { Equal, HashMap, Match, MutableHashMap, MutableHashSet, Option } from "effect";
+import { Card, CardCategory, Player } from "./GameObjects";
 import { Cell, CellValue, Knowledge } from "./Knowledge";
 import { applyConsistencyRules, applyDeductionRules } from "./Rules";
 import {
@@ -49,7 +49,14 @@ export interface Reason {
     readonly dependsOn: ReadonlyArray<Cell>;
 }
 
-export type Provenance = Map<string, Reason>;
+/**
+ * Provenance map: Cell → Reason. Backed by Effect's `MutableHashMap` so
+ * lookups use structural `Equal` on the Cell key (rather than the
+ * `keyOf` string-hash surrogate we used before). Mutable because we
+ * build it imperatively during the deducer's single traced pass and
+ * then hand off a read-only view to the UI.
+ */
+export type Provenance = MutableHashMap.MutableHashMap<Cell, Reason>;
 
 /**
  * A single cell-setting event emitted by a rule while the tracer is
@@ -74,36 +81,29 @@ export interface SetCellRecord {
  */
 export type Tracer = (record: SetCellRecord) => void;
 
-export const keyOf = (cell: Cell): string => {
-    const [owner, card] = cell;
-    return `${ownerLabel(owner)}|${card}`;
-};
-
-export const explainCell = (
-    provenance: Provenance,
-    owner: Owner,
-    card: Card,
-): Reason | undefined => provenance.get(keyOf(Cell(owner, card)));
-
 /**
  * Walk the provenance chain for a cell, producing the full list of
  * reasons in dependency order (root causes first). Used by
  * ChecklistGrid's title-tooltip builder to render the derivation
  * chain.
+ *
+ * Dedup uses a HashSet keyed on Cell directly (structural Equal), so
+ * no hash-surrogate string is needed.
  */
 export const chainFor = (
     provenance: Provenance,
     cell: Cell,
 ): ReadonlyArray<Reason> => {
-    const seen = new Set<string>();
+    const seen = MutableHashSet.empty<Cell>();
     const out: Reason[] = [];
     const stack: Cell[] = [cell];
     let next = stack.pop();
     while (next !== undefined) {
-        const key = keyOf(next);
-        if (!seen.has(key)) {
-            seen.add(key);
-            const reason = provenance.get(key);
+        if (!MutableHashSet.has(seen, next)) {
+            MutableHashSet.add(seen, next);
+            const reason = Option.getOrUndefined(
+                MutableHashMap.get(provenance, next),
+            );
             if (reason !== undefined) {
                 out.push(reason);
                 for (const dep of reason.dependsOn) stack.push(dep);
@@ -123,116 +123,121 @@ export const chainFor = (
  * `detail` (full explanation). The headline is suitable for bold
  * labels; detail is the prose.
  */
-export interface DescribedReason {
+interface DescribedReason {
     readonly headline: string;
     readonly detail: string;
 }
+
+/**
+ * Format a suggestion-indexed reason headline + resolved-suggestion
+ * pair. Factored out because three ReasonKind variants all branch on
+ * "do we have a suggestion at this index?" the same way.
+ */
+const suggestionContext = (
+    suggestions: ReadonlyArray<Suggestion>,
+    suggestionIndex: number,
+): { readonly headline: string; readonly suggestion: Suggestion | undefined } => ({
+    headline: `Suggestion #${suggestionIndex + 1}`,
+    suggestion: suggestions[suggestionIndex],
+});
 
 export const describeReason = (
     reason: Reason,
     setup: GameSetup,
     suggestions: ReadonlyArray<Suggestion>,
-): DescribedReason => {
-    switch (reason.kind.kind) {
-        case "initial-known-card":
-            return {
+): DescribedReason =>
+    Match.value(reason.kind).pipe(
+        Match.discriminatorsExhaustive("kind")({
+            "initial-known-card": () => ({
                 headline: "Given",
                 detail: "You marked this cell in the known-cards grid.",
-            };
-        case "initial-hand-size":
-            return {
+            }),
+            "initial-hand-size": () => ({
                 headline: "Given",
                 detail: "Known from the player's hand size.",
-            };
-        case "card-ownership":
-            return {
+            }),
+            "card-ownership": ({ card }) => ({
                 headline: "Card ownership",
                 detail:
                     `Each card has exactly one owner. Once ` +
-                    `${cardName(setup, reason.kind.card)} was ruled in ` +
+                    `${cardName(setup, card)} was ruled in ` +
                     `or out for other owners, this cell was forced.`,
-            };
-        case "player-hand":
-            return {
+            }),
+            "player-hand": ({ player }) => ({
                 headline: "Hand size",
                 detail:
-                    `${reason.kind.player}'s hand holds a fixed number of ` +
+                    `${player}'s hand holds a fixed number of ` +
                     `cards. Counting the Ys and Ns in their row forced ` +
                     `this cell.`,
-            };
-        case "case-file-category":
-            return {
+            }),
+            "case-file-category": ({ category }) => ({
                 headline: "Case file",
                 detail:
                     `The case file contains exactly one ` +
-                    `${categoryName(setup, reason.kind.category)}. ` +
+                    `${categoryName(setup, category)}. ` +
                     `Narrowing the category forced this cell.`,
-            };
-        case "non-refuters": {
-            const s = suggestions[reason.kind.suggestionIndex];
-            const n = reason.kind.suggestionIndex + 1;
-            if (!s)
+            }),
+            "non-refuters": ({ suggestionIndex }) => {
+                const { headline, suggestion } = suggestionContext(
+                    suggestions,
+                    suggestionIndex,
+                );
+                if (!suggestion)
+                    return {
+                        headline,
+                        detail: "A player who passed can't hold the named cards.",
+                    };
                 return {
-                    headline: `Suggestion #${n}`,
-                    detail: "A player who passed can't hold the named cards.",
-                };
-            return {
-                headline: `Suggestion #${n}`,
-                detail:
-                    `The passer couldn't refute ${s.suggester}'s ` +
-                    `suggestion, so they don't own any of the named cards.`,
-            };
-        }
-        case "refuter-showed": {
-            const s = suggestions[reason.kind.suggestionIndex];
-            const n = reason.kind.suggestionIndex + 1;
-            if (!s)
-                return {
-                    headline: `Suggestion #${n}`,
-                    detail: "Refuter showed the card.",
-                };
-            const seen =
-                s.seenCard !== undefined
-                    ? cardName(setup, s.seenCard)
-                    : "the refuting card";
-            return {
-                headline: `Suggestion #${n}`,
-                detail: `${s.refuter} refuted and showed ${seen}.`,
-            };
-        }
-        case "refuter-owns-one-of": {
-            const s = suggestions[reason.kind.suggestionIndex];
-            const n = reason.kind.suggestionIndex + 1;
-            if (!s)
-                return {
-                    headline: `Suggestion #${n}`,
+                    headline,
                     detail:
-                        "Refuter had to own one of the three cards; the " +
-                        "other two were already ruled out.",
+                        `The passer couldn't refute ${suggestion.suggester}'s ` +
+                        `suggestion, so they don't own any of the named cards.`,
                 };
-            const cardLabels = suggestionCards(s)
-                .map(id => cardName(setup, id))
-                .join(", ");
-            return {
-                headline: `Suggestion #${n}`,
-                detail:
-                    `${s.refuter} refuted ${s.suggester}'s suggestion ` +
-                    `(${cardLabels}) but we didn't see the card. Once ` +
-                    `the other two were ruled out, this one was forced.`,
-            };
-        }
-    }
-};
-
-/** Same as describeReason but formats as a flat string. */
-export const describeReasonString = (
-    reason: Reason,
-    setup: GameSetup,
-    suggestions: ReadonlyArray<Suggestion>,
-): string => {
-    const d = describeReason(reason, setup, suggestions);
-    return `${d.headline}: ${d.detail}`;
-};
+            },
+            "refuter-showed": ({ suggestionIndex }) => {
+                const { headline, suggestion } = suggestionContext(
+                    suggestions,
+                    suggestionIndex,
+                );
+                if (!suggestion)
+                    return {
+                        headline,
+                        detail: "Refuter showed the card.",
+                    };
+                const seen =
+                    suggestion.seenCard !== undefined
+                        ? cardName(setup, suggestion.seenCard)
+                        : "the refuting card";
+                return {
+                    headline,
+                    detail: `${suggestion.refuter} refuted and showed ${seen}.`,
+                };
+            },
+            "refuter-owns-one-of": ({ suggestionIndex }) => {
+                const { headline, suggestion } = suggestionContext(
+                    suggestions,
+                    suggestionIndex,
+                );
+                if (!suggestion)
+                    return {
+                        headline,
+                        detail:
+                            "Refuter had to own one of the three cards; the " +
+                            "other two were already ruled out.",
+                    };
+                const cardLabels = suggestionCards(suggestion)
+                    .map(id => cardName(setup, id))
+                    .join(", ");
+                return {
+                    headline,
+                    detail:
+                        `${suggestion.refuter} refuted ${suggestion.suggester}'s suggestion ` +
+                        `(${cardLabels}) but we didn't see the card. Once ` +
+                        `the other two were ruled out, this one was forced.`,
+                };
+            },
+        }),
+    );
 
 /**
  * Run the deducer once and record, for every cell that was newly
@@ -246,14 +251,14 @@ export const deduceWithExplanations = (
     suggestions: ReadonlyArray<Suggestion>,
     initial: Knowledge,
 ): { knowledge: Knowledge; provenance: Provenance } => {
-    const provenance: Provenance = new Map();
+    const provenance: Provenance = MutableHashMap.empty<Cell, Reason>();
     let current = initial;
     let currentIteration = 0;
 
     // Seed provenance with the initial inputs so the UI can explain
     // them as "you told us this".
     HashMap.forEach(initial.checklist, (_value, cell) => {
-        provenance.set(keyOf(cell), {
+        MutableHashMap.set(provenance, cell, {
             iteration: 0,
             kind: { kind: "initial-known-card" },
             detail: "given from starting knowledge",
@@ -262,9 +267,8 @@ export const deduceWithExplanations = (
     });
 
     const tracer: Tracer = (record) => {
-        const key = keyOf(record.cell);
-        if (provenance.has(key)) return; // first-write-wins
-        provenance.set(key, {
+        if (MutableHashMap.has(provenance, record.cell)) return; // first-write-wins
+        MutableHashMap.set(provenance, record.cell, {
             iteration: currentIteration,
             kind: record.kind,
             detail: record.detail,

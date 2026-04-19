@@ -1,9 +1,17 @@
 "use client";
 
+import { Either } from "effect";
 import { useEffect, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
 import { cardName, categoryOfCard } from "../../logic/GameSetup";
-import { recommendSuggestions } from "../../logic/Recommender";
+import {
+    consolidateRecommendations,
+    describeRecommendation,
+    recommendSuggestions,
+} from "../../logic/Recommender";
+import { useHover } from "../HoverContext";
+import { Tooltip } from "./Tooltip";
+import { newSuggestionId } from "../../logic/Suggestion";
 import {
     DraftSuggestion,
     useClue,
@@ -135,9 +143,7 @@ function AddSuggestion() {
         dispatch({
             type: "addSuggestion",
             suggestion: {
-                id: `s-${Date.now()}-${Math.random()
-                    .toString(36)
-                    .slice(2, 7)}`,
+                id: newSuggestionId(),
                 suggester: Player(suggester),
                 cards,
                 nonRefuters,
@@ -311,14 +317,15 @@ function Recommendations() {
         setAsPlayer(setup.players[0] ?? "");
     }, [setup.players, asPlayer]);
 
-    if (result._tag === "Contradiction" || !asPlayer) {
+    const knowledge = Either.getOrUndefined(result);
+    if (knowledge === undefined || !asPlayer) {
         return (
             <div>
                 <h3 className={SECTION_TITLE}>
                     Next-suggestion recommendations
                 </h3>
                 <div className="text-[13px] text-muted">
-                    {result._tag === "Contradiction"
+                    {knowledge === undefined
                         ? "Resolve the contradiction to see recommendations."
                         : "Add players to see recommendations."}
                 </div>
@@ -328,10 +335,15 @@ function Recommendations() {
 
     const rec = recommendSuggestions(
         setup,
-        result.knowledge,
+        knowledge,
         Player(asPlayer),
-        5,
+        50,
     );
+    const consolidated = consolidateRecommendations(
+        setup,
+        knowledge,
+        rec.recommendations,
+    ).slice(0, 5);
 
     return (
         <div>
@@ -352,40 +364,90 @@ function Recommendations() {
                     ))}
                 </select>
             </label>
-            {rec.recommendations.length === 0 ? (
+            {consolidated.length === 0 ? (
                 <div className="mt-2 text-[13px] text-muted">
                     Nothing useful to ask — you&apos;ve already narrowed
                     everything down.
                 </div>
             ) : (
                 <ol className="mt-2 list-decimal pl-6 text-[13px]">
-                    {rec.recommendations.map((r, i) => (
-                        <li
-                            key={i}
-                            className="py-1"
-                            title={
-                                `${r.cellInfoScore} unknown cell` +
-                                `${r.cellInfoScore === 1 ? "" : "s"}` +
-                                ` × ${r.caseFileOpennessScore} case-file ` +
-                                `combination` +
-                                `${r.caseFileOpennessScore === 1 ? "" : "s"}` +
-                                ` × ${r.refuterUncertaintyScore} possible ` +
-                                `refuter` +
-                                `${r.refuterUncertaintyScore === 1 ? "" : "s"}`
-                            }
-                        >
-                            {r.cards.map((c, ci) => (
-                                <span key={ci}>
-                                    {ci > 0 && " + "}
-                                    <strong>{cardName(setup, c)}</strong>
-                                </span>
-                            ))}
-                            <span className="text-muted">
-                                {" "}
-                                · score {r.score}
-                            </span>
-                        </li>
-                    ))}
+                    {consolidated.map((r, i) => {
+                        const explanation = describeRecommendation(
+                            setup,
+                            knowledge,
+                            {
+                                cards: r.cards.flatMap(c =>
+                                    c === "any" ? [] : [c],
+                                ),
+                                cellInfoScore: r.cellInfoScore,
+                                caseFileOpennessScore: r.caseFileOpennessScore,
+                                refuterUncertaintyScore: r.refuterUncertaintyScore,
+                            },
+                        );
+                        const scoreBreakdown = (
+                            <div>
+                                <div className="font-semibold">
+                                    Raw score {r.score}
+                                </div>
+                                <div className="mt-1 text-muted">
+                                    {r.cellInfoScore} unknown cell
+                                    {r.cellInfoScore === 1 ? "" : "s"}
+                                    {" × "}
+                                    {r.caseFileOpennessScore} case-file combination
+                                    {r.caseFileOpennessScore === 1 ? "" : "s"}
+                                    {" × "}
+                                    {r.refuterUncertaintyScore} possible refuter
+                                    {r.refuterUncertaintyScore === 1 ? "" : "s"}
+                                </div>
+                                {r.groupSize > 1 && (
+                                    <div className="mt-1 text-muted">
+                                        Covers {r.groupSize} tied triples.
+                                    </div>
+                                )}
+                            </div>
+                        );
+                        return (
+                            <Tooltip key={i} content={scoreBreakdown}>
+                            <li className="py-1.5">
+                                <div>
+                                    {r.cards.map((c, ci) => {
+                                        const rawName =
+                                            setup.categories[ci]?.name ?? "card";
+                                        // Category names are typically plural
+                                        // ("Weapons", "Rooms"); strip a trailing
+                                        // "s" so the collapsed label reads as
+                                        // "any weapon / room" rather than
+                                        // "any weapons / rooms".
+                                        const singular = rawName.replace(
+                                            /s$/,
+                                            "",
+                                        ).toLowerCase();
+                                        return (
+                                            <span key={ci}>
+                                                {ci > 0 && " + "}
+                                                {c === "any" ? (
+                                                    <em className="text-muted">
+                                                        any {singular}
+                                                    </em>
+                                                ) : (
+                                                    <strong>
+                                                        {cardName(setup, c)}
+                                                    </strong>
+                                                )}
+                                            </span>
+                                        );
+                                    })}
+                                    <span className="ml-1 text-muted">
+                                        (score {r.score})
+                                    </span>
+                                </div>
+                                <div className="text-[12px] text-muted">
+                                    {explanation}
+                                </div>
+                            </li>
+                            </Tooltip>
+                        );
+                    })}
                 </ol>
             )}
         </div>
@@ -394,6 +456,7 @@ function Recommendations() {
 
 function PriorSuggestions() {
     const { state, dispatch } = useClue();
+    const { hoveredSuggestionIndex, setHoveredSuggestion } = useHover();
     const setup = state.setup;
     const suggestions = state.suggestions;
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -409,8 +472,12 @@ function PriorSuggestions() {
                 </div>
             ) : (
                 <ol className="m-0 max-h-[300px] list-decimal overflow-y-auto pl-6">
-                    {suggestions.map(s =>
-                        editingId === s.id ? (
+                    {suggestions.map((s, idx) => {
+                        const isHovered = hoveredSuggestionIndex === idx;
+                        const highlightClass = isHovered
+                            ? " -mx-2 rounded bg-yes-bg/40 px-2 ring-1 ring-accent/60"
+                            : "";
+                        return editingId === s.id ? (
                             <li
                                 key={s.id}
                                 className="border-b border-border py-2 text-[13px] last:border-b-0"
@@ -430,7 +497,12 @@ function PriorSuggestions() {
                         ) : (
                             <li
                                 key={s.id}
-                                className="border-b border-border py-2 text-[13px] last:border-b-0"
+                                className={
+                                    "border-b border-border py-2 text-[13px] last:border-b-0 transition-[background-color,box-shadow] duration-100" +
+                                    highlightClass
+                                }
+                                onMouseEnter={() => setHoveredSuggestion(idx)}
+                                onMouseLeave={() => setHoveredSuggestion(null)}
                             >
                                 <div>
                                     <strong>{s.suggester}</strong>{" "}
@@ -486,8 +558,8 @@ function PriorSuggestions() {
                                     </button>
                                 </div>
                             </li>
-                        ),
-                    )}
+                        );
+                    })}
                 </ol>
             )}
         </div>

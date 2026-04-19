@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, Player } from "../../logic/GameObjects";
+import { Player } from "../../logic/GameObjects";
 import {
     allCardIds,
     caseFileSize,
@@ -9,14 +9,13 @@ import {
     GameSetup,
     PRESETS,
 } from "../../logic/GameSetup";
+import {
+    CustomPreset,
+    deleteCustomPreset,
+    loadCustomPresets,
+    saveCustomPreset,
+} from "../../logic/CustomPresets";
 import { useClue } from "../state";
-import { CategoryEditor } from "./CategoryEditor";
-import { ContradictionBanner } from "./ContradictionBanner";
-
-const NEW_GAME_CONFIRM =
-    "You've already started logging this game. Selecting a new game " +
-    "setup preset will lose all unsaved deductions. Would you like to " +
-    "continue?";
 
 const PRESET_CONFIRM =
     "Loading a preset will discard your current hand sizes, known " +
@@ -76,9 +75,11 @@ function InlineTextEdit({
 function PlayerNameInput({
     player,
     allPlayers,
+    editable,
 }: {
     player: Player;
     allPlayers: ReadonlyArray<Player>;
+    editable: boolean;
 }) {
     const { dispatch } = useClue();
     const [editing, setEditing] = useState(String(player));
@@ -115,6 +116,14 @@ function PlayerNameInput({
         setError("");
     };
 
+    if (!editable) {
+        return (
+            <div className="px-1 py-1 text-center text-[12px] font-semibold">
+                {String(player)}
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col items-stretch gap-0.5">
             <input
@@ -148,12 +157,15 @@ function PlayerNameInput({
 }
 
 export function GameSetupPanel() {
-    const { state, dispatch, derived, hasGameData } = useClue();
+    const { state, dispatch, hasGameData } = useClue();
     const setup: GameSetup = state.setup;
-    const knownCards = state.knownCards;
     const handSizeMap = new Map(state.handSizes);
-    const result = derived.deductionResult;
     const defaults = new Map(defaultHandSizes(setup));
+
+    // User-saved card packs, kept in React state so save/delete
+    // re-renders the preset row without a page reload.
+    const [customPresets, setCustomPresets] =
+        useState<ReadonlyArray<CustomPreset>>(() => loadCustomPresets());
 
     const totalDealt = allCardIds(setup).length - caseFileSize(setup);
     const setHandSizesArr = setup.players
@@ -166,14 +178,36 @@ export function GameSetupPanel() {
     const handSizeMismatch =
         allHandSizesSet && handSizesTotal !== totalDealt;
 
-    const onNewGame = () => {
-        if (hasGameData() && !window.confirm(NEW_GAME_CONFIRM)) return;
-        dispatch({ type: "newGame" });
-    };
-
     const onPreset = (preset: (typeof PRESETS)[number]) => {
         if (hasGameData() && !window.confirm(PRESET_CONFIRM)) return;
         dispatch({ type: "loadPreset", setup: preset.build() });
+    };
+
+    const onCustomPreset = (preset: CustomPreset) => {
+        if (hasGameData() && !window.confirm(PRESET_CONFIRM)) return;
+        // Load the preset's categories on top of the current player list.
+        dispatch({
+            type: "loadPreset",
+            setup: GameSetup({
+                players: setup.players,
+                categories: preset.categories,
+            }),
+        });
+    };
+
+    const onSaveAsPreset = () => {
+        const label = window.prompt(
+            "Save this card pack as a preset. Name it:",
+        );
+        if (!label || !label.trim()) return;
+        saveCustomPreset(label.trim(), setup);
+        setCustomPresets(loadCustomPresets());
+    };
+
+    const onDeleteCustomPreset = (preset: CustomPreset) => {
+        if (!window.confirm(`Delete preset "${preset.label}"?`)) return;
+        deleteCustomPreset(preset.id);
+        setCustomPresets(loadCustomPresets());
     };
 
     const onHandSizeChange = (player: Player, raw: string) => {
@@ -187,56 +221,96 @@ export function GameSetupPanel() {
         }
     };
 
-    const isKnown = (player: Player, card: Card): boolean =>
-        knownCards.some(kc => kc.player === player && kc.card === card);
+    // Card rows span the full table width (label + player columns + the
+    // add-player column) because known-card entry now happens by clicking
+    // cells in the ChecklistGrid — this table is purely about editing
+    // the deck and player roster.
+    const cardSpan = setup.players.length + 2;
 
-    const toggleKnownCard = (player: Player, card: Card) => {
-        const index = knownCards.findIndex(
-            kc => kc.player === player && kc.card === card,
-        );
-        if (index >= 0) {
-            dispatch({ type: "removeKnownCard", index });
-        } else {
-            dispatch({ type: "addKnownCard", card: { player, card } });
-        }
-    };
-
-    const cardSpan = setup.players.length + 2; // label + players + add column
+    const inSetup = state.uiMode === "setup";
 
     return (
         <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="m-0 text-[16px] uppercase tracking-[0.05em] text-accent">
                     Game setup
                 </h2>
-                <button
-                    type="button"
-                    className="cursor-pointer rounded border-none bg-accent px-3.5 py-1.5 text-[13px] text-white hover:bg-accent-hover"
-                    onClick={onNewGame}
-                >
-                    New game
-                </button>
-            </div>
-
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span className="text-[12px] font-semibold uppercase tracking-[0.05em] text-muted">
-                    Preset:
-                </span>
-                {PRESETS.map(preset => (
+                {inSetup ? (
                     <button
-                        key={preset.id}
                         type="button"
-                        className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-[#f0f0f5]"
-                        onClick={() => onPreset(preset)}
+                        className="cursor-pointer rounded border-none bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-white hover:bg-accent-hover"
+                        onClick={() =>
+                            dispatch({ type: "setUiMode", mode: "play" })
+                        }
+                        title="Lock the deck / player roster and start tracking suggestions"
                     >
-                        {preset.label}
+                        Start playing →
                     </button>
-                ))}
+                ) : (
+                    <button
+                        type="button"
+                        className="cursor-pointer rounded border border-border bg-white px-3.5 py-1.5 text-[13px] hover:bg-hover"
+                        onClick={() =>
+                            dispatch({ type: "setUiMode", mode: "setup" })
+                        }
+                        title="Unlock the deck / player roster for editing"
+                    >
+                        Edit setup
+                    </button>
+                )}
             </div>
 
-            <div className="mb-3">
-                <CategoryEditor />
-            </div>
+            {inSetup && (
+                <>
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <span className="text-[12px] font-semibold uppercase tracking-[0.05em] text-muted">
+                            Preset:
+                        </span>
+                        {PRESETS.map(preset => (
+                            <button
+                                key={preset.id}
+                                type="button"
+                                className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-hover"
+                                onClick={() => onPreset(preset)}
+                            >
+                                {preset.label}
+                            </button>
+                        ))}
+                        {customPresets.map(preset => (
+                            <span
+                                key={preset.id}
+                                className="inline-flex items-center overflow-hidden rounded border border-border bg-white text-[13px]"
+                            >
+                                <button
+                                    type="button"
+                                    className="cursor-pointer px-3 py-1 hover:bg-hover"
+                                    onClick={() => onCustomPreset(preset)}
+                                    title={`Load custom preset "${preset.label}"`}
+                                >
+                                    {preset.label}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="cursor-pointer border-l border-border px-2 py-1 text-muted hover:bg-hover hover:text-danger"
+                                    onClick={() => onDeleteCustomPreset(preset)}
+                                    title={`Delete preset "${preset.label}"`}
+                                    aria-label={`Delete preset ${preset.label}`}
+                                >
+                                    ×
+                                </button>
+                            </span>
+                        ))}
+                        <button
+                            type="button"
+                            className="cursor-pointer rounded border border-dashed border-border bg-white px-3 py-1 text-[13px] text-muted hover:bg-hover hover:text-accent"
+                            onClick={onSaveAsPreset}
+                            title="Save the current category and card set as a reusable preset"
+                        >
+                            + Save as preset
+                        </button>
+                    </div>
+                </>
+            )}
 
             {handSizeMismatch && (
                 <div className="mb-3 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning">
@@ -245,10 +319,6 @@ export function GameSetupPanel() {
                     {totalDealt} after the {caseFileSize(setup)} case-file
                     cards.
                 </div>
-            )}
-
-            {result._tag === "Contradiction" && (
-                <ContradictionBanner trace={result.trace} />
             )}
 
             <div className="overflow-x-auto rounded-[var(--radius)] border border-border">
@@ -264,20 +334,23 @@ export function GameSetupPanel() {
                                     <PlayerNameInput
                                         player={p}
                                         allPlayers={setup.players}
+                                        editable={inSetup}
                                     />
                                 </th>
                             ))}
                             <th className="w-8 border border-border bg-row-header px-1.5 py-1 text-center">
-                                <button
-                                    type="button"
-                                    className="h-6 w-6 cursor-pointer rounded border-none bg-accent text-[16px] leading-none text-white hover:bg-accent-hover"
-                                    title="Add player"
-                                    onClick={() =>
-                                        dispatch({ type: "addPlayer" })
-                                    }
-                                >
-                                    +
-                                </button>
+                                {inSetup && (
+                                    <button
+                                        type="button"
+                                        className="h-6 w-6 cursor-pointer rounded border-none bg-accent text-[16px] leading-none text-white hover:bg-accent-hover"
+                                        title="Add player"
+                                        onClick={() =>
+                                            dispatch({ type: "addPlayer" })
+                                        }
+                                    >
+                                        +
+                                    </button>
+                                )}
                             </th>
                         </tr>
                         <tr>
@@ -320,6 +393,7 @@ export function GameSetupPanel() {
                             <td className="border border-border"></td>
                         </tr>
                     </thead>
+                    {inSetup && (
                     <tbody>
                         {setup.categories.flatMap((cat) => {
                             const canRemoveCategory =
@@ -367,7 +441,10 @@ export function GameSetupPanel() {
                                 </tr>,
                                 ...cat.cards.map(entry => (
                                     <tr key={String(entry.id)}>
-                                        <th className="whitespace-nowrap border border-border bg-white px-1.5 py-1 text-left font-normal">
+                                        <th
+                                            colSpan={cardSpan}
+                                            className="whitespace-nowrap border border-border bg-white px-1.5 py-1 text-left font-normal"
+                                        >
                                             <div className="flex items-center justify-between gap-2">
                                                 <InlineTextEdit
                                                     value={entry.name}
@@ -401,28 +478,12 @@ export function GameSetupPanel() {
                                                 </button>
                                             </div>
                                         </th>
-                                        {setup.players.map(p => (
-                                            <td
-                                                key={p}
-                                                className="w-8 min-w-8 border border-border px-1.5 py-1 text-center"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    className="m-0 cursor-pointer"
-                                                    checked={isKnown(p, entry.id)}
-                                                    onChange={() =>
-                                                        toggleKnownCard(p, entry.id)
-                                                    }
-                                                />
-                                            </td>
-                                        ))}
-                                        <td className="border border-border"></td>
                                     </tr>
                                 )),
                                 <tr key={`add-card-${String(cat.id)}`}>
                                     <th
                                         colSpan={cardSpan}
-                                        className="border border-border bg-[#fafafc] px-1.5 py-1 text-left"
+                                        className="border border-border bg-row-alt px-1.5 py-1 text-left"
                                     >
                                         <button
                                             type="button"
@@ -443,11 +504,11 @@ export function GameSetupPanel() {
                         <tr>
                             <th
                                 colSpan={cardSpan}
-                                className="border border-border bg-[#fafafc] px-1.5 py-2 text-center"
+                                className="border border-border bg-row-alt px-1.5 py-2 text-center"
                             >
                                 <button
                                     type="button"
-                                    className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-[#f0f0f5]"
+                                    className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-hover"
                                     onClick={() =>
                                         dispatch({ type: "addCategory" })
                                     }
@@ -457,6 +518,7 @@ export function GameSetupPanel() {
                             </th>
                         </tr>
                     </tbody>
+                    )}
                 </table>
             </div>
         </section>

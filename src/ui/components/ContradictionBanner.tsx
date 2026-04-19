@@ -52,8 +52,7 @@ export function ContradictionBanner({
     const seenHandSizePlayers = new Set<string>();
 
     for (const cell of trace.offendingCells) {
-        // Cell is Data.tuple<[Owner, Card]> — index-access works.
-        const [owner, cardId] = cell;
+        const { owner, card: cardId } = cell;
         if (owner._tag !== "Player") continue;
         const player = owner.player;
 
