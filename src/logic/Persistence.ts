@@ -1,5 +1,7 @@
+import { Result } from "effect";
 import { Card, CardCategory, Player } from "./GameObjects";
 import { CardEntry, Category, GameSetup } from "./GameSetup";
+import { decodeV4Unknown } from "./PersistenceSchema";
 import {
     newSuggestionId,
     Suggestion,
@@ -13,11 +15,6 @@ import {
  * serialize just enough to reconstruct the inputs — the derived
  * knowledge is cheap to recompute so there's no need to persist it.
  *
- * We roll simple manual encoders rather than pulling in @effect/schema
- * because (a) the on-disk shape is tiny, (b) we want stable keys we
- * control for future migrations, and (c) the main codebase's `effect`
- * version doesn't include Schema.
- *
  * Schema history:
  *   v1 — hardcoded suspects/weapons/rooms arrays.
  *   v2 — generalized to `categories` array with name + cards[]; still
@@ -25,7 +22,21 @@ import {
  *   v3 — split identity from display: each category and card carries
  *        its own stable `id` alongside `name`. Suggestions, hands,
  *        etc. reference cards by id so renames don't break them.
+ *   v4 — identical payload to v3, but validated via Effect v4 Schema
+ *        (`PersistenceSchema.ts`). Malformed payloads now produce a
+ *        structured `SchemaError` instead of silent `undefined`. Writes
+ *        go to v4; legacy payloads (v1/v2/v3) keep decoding through
+ *        the hand-rolled migration chain below and are re-stamped as
+ *        v4 the next time they're persisted.
  */
+interface PersistedGameV4 {
+    readonly version: 4;
+    readonly setup: PersistedGameV3["setup"];
+    readonly hands: PersistedGameV3["hands"];
+    readonly handSizes: PersistedGameV3["handSizes"];
+    readonly suggestions: PersistedGameV3["suggestions"];
+}
+
 interface PersistedGameV3 {
     readonly version: 3;
     readonly setup: {
@@ -48,7 +59,7 @@ interface PersistedGameV3 {
         readonly size: number;
     }>;
     readonly suggestions: ReadonlyArray<{
-        readonly id?: string;
+        readonly id?: string | undefined;
         readonly suggester: string;
         readonly cards: ReadonlyArray<string>; // card ids
         readonly nonRefuters: ReadonlyArray<string>;
@@ -93,7 +104,7 @@ interface PersistedGameV1 {
     readonly suggestions: PersistedGameV3["suggestions"];
 }
 
-type PersistedGame = PersistedGameV3;
+type PersistedGame = PersistedGameV4;
 
 export interface GameSession {
     setup: GameSetup;
@@ -103,7 +114,7 @@ export interface GameSession {
 }
 
 export const encodeSession = (session: GameSession): PersistedGame => ({
-    version: 3,
+    version: 4,
     setup: {
         players: session.setup.players.map(p => String(p)),
         categories: session.setup.categories.map(c => ({
@@ -176,7 +187,17 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
     const obj = data as { version?: number };
 
     let v3: PersistedGameV3;
-    if (obj.version === 1) {
+    if (obj.version === 4) {
+        // v4 and v3 share a payload shape — v4's only distinction is
+        // that we run it through Schema for structured validation.
+        // Decode via the Schema codec; failure collapses to undefined
+        // so the caller can fall back to a fresh session.
+        const decoded = decodeV4Unknown(data);
+        if (Result.isFailure(decoded)) return undefined;
+        // Drop the v4 marker so the downstream code can treat the
+        // payload as v3-shaped (same fields).
+        v3 = { ...decoded.success, version: 3 };
+    } else if (obj.version === 1) {
         const v1 = data as Partial<PersistedGameV1>;
         if (!v1.setup || !v1.hands || !v1.handSizes || !v1.suggestions) {
             return undefined;
@@ -259,7 +280,8 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
 };
 
 // Keep the older keys readable too, so the one-time migration picks
-// up existing sessions. New writes go to v3.
+// up existing sessions. New writes go to v4.
+const STORAGE_KEY_V4 = "effect-clue.session.v4";
 const STORAGE_KEY_V3 = "effect-clue.session.v3";
 const STORAGE_KEY_V2 = "effect-clue.session.v2";
 const STORAGE_KEY_V1 = "effect-clue.session.v1";
@@ -267,7 +289,7 @@ const STORAGE_KEY_V1 = "effect-clue.session.v1";
 export const saveToLocalStorage = (session: GameSession): void => {
     try {
         const encoded = encodeSession(session);
-        window.localStorage.setItem(STORAGE_KEY_V3, JSON.stringify(encoded));
+        window.localStorage.setItem(STORAGE_KEY_V4, JSON.stringify(encoded));
     } catch {
         // Quota exceeded, private mode, etc. — non-fatal.
     }
@@ -275,6 +297,8 @@ export const saveToLocalStorage = (session: GameSession): void => {
 
 export const loadFromLocalStorage = (): GameSession | undefined => {
     try {
+        const rawV4 = window.localStorage.getItem(STORAGE_KEY_V4);
+        if (rawV4) return decodeSession(JSON.parse(rawV4));
         const rawV3 = window.localStorage.getItem(STORAGE_KEY_V3);
         if (rawV3) return decodeSession(JSON.parse(rawV3));
         const rawV2 = window.localStorage.getItem(STORAGE_KEY_V2);

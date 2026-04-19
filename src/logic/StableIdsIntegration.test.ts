@@ -151,7 +151,7 @@ describe("Persistence v2 → v3 migration", () => {
         // Re-encode: comes back as v3 with id+name fields on every
         // card and category. Round-trip decodes to the same ids.
         const reEncoded = encodeSession(decoded);
-        expect(reEncoded.version).toBe(3);
+        expect(reEncoded.version).toBe(4);
         const firstCat = expectAt(
             reEncoded.setup.categories,
             0,
