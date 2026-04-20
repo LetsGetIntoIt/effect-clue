@@ -14,9 +14,9 @@ import { Card, CardCategory } from "./GameObjects";
 import { CardEntry, Category, GameSetup } from "./GameSetup";
 
 /**
- * The on-disk shape of a single custom preset. Mirrors the
- * PersistedGameV3 setup subtree but without players (presets are
- * reusable across games; player rosters aren't).
+ * The on-disk shape of a single custom preset. Mirrors the session
+ * setup subtree but without players (presets are reusable across
+ * games; player rosters aren't).
  */
 interface PersistedCustomPresetV1 {
     readonly id: string;

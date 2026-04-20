@@ -1,13 +1,8 @@
 /**
- * Integration tests for stage 8's id/name split. These live apart from
- * the unit tests because they cut across multiple modules:
- *
- *   1. Rename-preserves-references: renaming a card mid-game doesn't
- *      orphan knownCard references, suggestion references, or any
- *      already-deduced cell values.
- *   2. Persistence v2 -> v3: older sessions (saved when cards were
- *      identified by name) decode cleanly; the migrated id matches the
- *      legacy name, and a card added later still has a fresh id.
+ * Integration test for stage 8's id/name split: renaming a card
+ * mid-game doesn't orphan knownCard references, suggestion references,
+ * or any already-deduced cell values. Lives apart from the unit tests
+ * because it cuts across multiple modules.
  */
 import { Result } from "effect";
 import {
@@ -29,10 +24,8 @@ import {
     Y,
 } from "./Knowledge";
 import deduce from "./Deducer";
-import { decodeSession, encodeSession } from "./Persistence";
 import { Suggestion, SuggestionId } from "./Suggestion";
 import { cardByName } from "./test-utils/CardByName";
-import { expectAt } from "./test-utils/Expect";
 
 import "./test-utils/EffectExpectEquals";
 
@@ -88,127 +81,6 @@ describe("rename preserves references", () => {
                 conserv,
             ),
         ).toBe(N);
-    });
-});
-
-describe("Persistence v2 → v3 migration", () => {
-    test("v2 payload decodes with id = name; round-trip preserves ids", () => {
-        // Hand-craft a v2 payload like one saved before the id/name
-        // split landed. Cards are identified by their display name.
-        // (Deck math: 4 cards total − 3 case-file = 1 dealt across
-        // 3 players; leave hand sizes off so the solver doesn't
-        // over-constrain.)
-        const v2 = {
-            version: 2,
-            setup: {
-                players: ["Anisha", "Bob", "Cho"],
-                categories: [
-                    {
-                        name: "Suspects",
-                        cards: ["Miss Scarlet", "Col. Mustard"],
-                    },
-                    { name: "Weapons", cards: ["Knife"] },
-                    { name: "Rooms", cards: ["Kitchen"] },
-                ],
-            },
-            hands: [
-                { player: "Anisha", cards: ["Col. Mustard"] },
-            ],
-            handSizes: [],
-            suggestions: [
-                {
-                    suggester: "Anisha",
-                    cards: ["Miss Scarlet", "Knife", "Kitchen"],
-                    nonRefuters: [],
-                    refuter: "Bob",
-                    seenCard: "Knife",
-                },
-            ],
-        };
-
-        const decoded = decodeSession(v2);
-        expect(decoded).toBeDefined();
-        if (!decoded) return;
-
-        // Migrated setup: each card/category has id === legacy name.
-        const mustard = findCardEntry(decoded.setup, Card("Col. Mustard"));
-        expect(mustard).toBeDefined();
-        expect(mustard?.name).toBe("Col. Mustard");
-
-        // Anisha's known card comes through with id = "Col. Mustard".
-        expect(decoded.hands).toHaveLength(1);
-        const firstHand = expectAt(decoded.hands, 0, "decoded.hands[0]");
-        expect(String(expectAt(firstHand.cards, 0, "first hand cards[0]")))
-            .toBe("Col. Mustard");
-
-        // Suggestion references use ids = names too. Suggester/refuter
-        // are unchanged (they're still just strings).
-        expect(decoded.suggestions).toHaveLength(1);
-        const s = expectAt(decoded.suggestions, 0, "decoded.suggestions[0]");
-        expect(String(s.suggester)).toBe("Anisha");
-        expect(String(s.refuter)).toBe("Bob");
-        expect(String(s.seenCard)).toBe("Knife");
-
-        // Re-encode: comes back as v3 with id+name fields on every
-        // card and category. Round-trip decodes to the same ids.
-        const reEncoded = encodeSession(decoded);
-        expect(reEncoded.version).toBe(4);
-        const firstCat = expectAt(
-            reEncoded.setup.categories,
-            0,
-            "reEncoded.setup.categories[0]",
-        );
-        expect(firstCat.id).toBe("Suspects");
-        const firstCatFirstCard = expectAt(
-            firstCat.cards,
-            0,
-            "first category cards[0]",
-        );
-        expect(firstCatFirstCard.id).toBe("Miss Scarlet");
-        expect(firstCatFirstCard.name).toBe("Miss Scarlet");
-
-        const reDecoded = decodeSession(reEncoded);
-        expect(reDecoded).toBeDefined();
-        if (!reDecoded) return;
-        const reMustard = findCardEntry(
-            reDecoded.setup,
-            Card("Col. Mustard"),
-        );
-        expect(reMustard?.name).toBe("Col. Mustard");
-    });
-
-    test("v1 payload chains through the v2 → v3 migration", () => {
-        // Oldest saved shape: hardcoded suspects/weapons/rooms. Migrates
-        // to v2 (categories derived from the fixed names) and then to
-        // v3 (id = name).
-        const v1 = {
-            version: 1,
-            setup: {
-                players: ["Anisha"],
-                suspects: ["Miss Scarlet"],
-                weapons: ["Knife"],
-                rooms: ["Kitchen"],
-            },
-            hands: [],
-            handSizes: [],
-            suggestions: [],
-        };
-        const decoded = decodeSession(v1);
-        expect(decoded).toBeDefined();
-        if (!decoded) return;
-        // Custom effect-equals matcher intercepts array deep-equality,
-        // so compare element-wise.
-        const catNames = decoded.setup.categories.map(c => c.name);
-        expect(catNames.length).toBe(3);
-        expect(catNames[0]).toBe("Suspects");
-        expect(catNames[1]).toBe("Weapons");
-        expect(catNames[2]).toBe("Rooms");
-        // Ids = names, per migration.
-        const scarlet = findCardEntry(
-            decoded.setup,
-            Card("Miss Scarlet"),
-        );
-        expect(scarlet?.name).toBe("Miss Scarlet");
     });
 });
 

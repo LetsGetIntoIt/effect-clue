@@ -2,9 +2,6 @@ import { Result } from "effect";
 import { Card, Player } from "./GameObjects";
 import { CardEntry, Category, GameSetup } from "./GameSetup";
 import {
-    decodeV1Unknown,
-    decodeV2Unknown,
-    decodeV3Unknown,
     decodeV4Unknown,
     type PersistedSessionV4,
 } from "./PersistenceSchema";
@@ -17,24 +14,13 @@ import {
 } from "./Suggestion";
 
 /**
- * JSON representation of the mutable parts of a game session. We
- * serialize just enough to reconstruct the inputs — the derived
- * knowledge is cheap to recompute so there's no need to persist it.
+ * JSON representation of the mutable parts of a game session. Only
+ * the mutable inputs are serialized; derived knowledge is cheap to
+ * recompute, so there's no need to persist it.
  *
- * Schema history:
- *   v1 — hardcoded suspects/weapons/rooms arrays.
- *   v2 — generalized to `categories` array with name + cards[]; still
- *        identified cards by their display name string.
- *   v3 — split identity from display: each category and card carries
- *        its own stable `id` alongside `name`. Suggestions, hands,
- *        etc. reference cards by id so renames don't break them.
- *   v4 — identical payload to v3, but validated via Effect v4 Schema
- *        (`PersistenceSchema.ts`). Malformed payloads produce a
- *        structured `SchemaError` instead of silent `undefined`.
- *
- * Writes always go to v4. Legacy payloads (v1/v2/v3) flow through
- * the v1 -> v2 -> v3 -> v4 Schema chain in PersistenceSchema.ts and
- * are re-stamped as v4 the next time they're persisted.
+ * The app is pre-production, so there's one on-disk format. If an
+ * older / malformed blob ever shows up, decode returns undefined
+ * and the caller falls back to a fresh session.
  */
 interface PersistedGameV4 {
     readonly version: 4;
@@ -145,61 +131,17 @@ const buildSessionFromV4 = (v4: PersistedSessionV4): GameSession => ({
 });
 
 export const decodeSession = (data: unknown): GameSession | undefined => {
-    if (!data || typeof data !== "object") return undefined;
-    const obj = data as { version?: number };
-
-    if (obj.version === 4) {
-        const decoded = decodeV4Unknown(data);
-        if (Result.isFailure(decoded)) return undefined;
-        return buildSessionFromV4(decoded.success);
-    }
-
-    if (obj.version === 3) {
-        // v3 blobs flow through the Schema.transform v3 -> v4 — same
-        // shape on disk, different version byte. Any validation failure
-        // collapses to undefined so callers fall back to a fresh session.
-        const decoded = decodeV3Unknown(data);
-        if (Result.isFailure(decoded)) return undefined;
-        return buildSessionFromV4(decoded.success);
-    }
-
-    if (obj.version === 2) {
-        // v2 flows through Schema too: the v2 -> v3 transform synthesises
-        // ids from display names (same behaviour as the old hand-rolled
-        // migrateV2ToV3). Result is v3-shaped; bump to v4 and build.
-        const decoded = decodeV2Unknown(data);
-        if (Result.isFailure(decoded)) return undefined;
-        return buildSessionFromV4({ ...decoded.success, version: 4 as const });
-    }
-
-    if (obj.version === 1) {
-        // v1 chains through v1 -> v2 -> v3 -> v4 via Schema: the v1
-        // decoder bumps to v2 shape, then we feed that to the v2
-        // decoder to reach v3, then stamp v4 for buildSessionFromV4.
-        const decodedV1 = decodeV1Unknown(data);
-        if (Result.isFailure(decodedV1)) return undefined;
-        const decodedV2 = decodeV2Unknown(decodedV1.success);
-        if (Result.isFailure(decodedV2)) return undefined;
-        return buildSessionFromV4({
-            ...decodedV2.success,
-            version: 4 as const,
-        });
-    }
-
-    return undefined;
+    const decoded = decodeV4Unknown(data);
+    if (Result.isFailure(decoded)) return undefined;
+    return buildSessionFromV4(decoded.success);
 };
 
-// Keep the older keys readable too, so the one-time migration picks
-// up existing sessions. New writes go to v4.
-const STORAGE_KEY_V4 = "effect-clue.session.v4";
-const STORAGE_KEY_V3 = "effect-clue.session.v3";
-const STORAGE_KEY_V2 = "effect-clue.session.v2";
-const STORAGE_KEY_V1 = "effect-clue.session.v1";
+const STORAGE_KEY = "effect-clue.session.v4";
 
 export const saveToLocalStorage = (session: GameSession): void => {
     try {
         const encoded = encodeSession(session);
-        window.localStorage.setItem(STORAGE_KEY_V4, JSON.stringify(encoded));
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(encoded));
     } catch {
         // Quota exceeded, private mode, etc. — non-fatal.
     }
@@ -207,15 +149,9 @@ export const saveToLocalStorage = (session: GameSession): void => {
 
 export const loadFromLocalStorage = (): GameSession | undefined => {
     try {
-        const rawV4 = window.localStorage.getItem(STORAGE_KEY_V4);
-        if (rawV4) return decodeSession(JSON.parse(rawV4));
-        const rawV3 = window.localStorage.getItem(STORAGE_KEY_V3);
-        if (rawV3) return decodeSession(JSON.parse(rawV3));
-        const rawV2 = window.localStorage.getItem(STORAGE_KEY_V2);
-        if (rawV2) return decodeSession(JSON.parse(rawV2));
-        const rawV1 = window.localStorage.getItem(STORAGE_KEY_V1);
-        if (rawV1) return decodeSession(JSON.parse(rawV1));
-        return undefined;
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (!raw) return undefined;
+        return decodeSession(JSON.parse(raw));
     } catch {
         return undefined;
     }
