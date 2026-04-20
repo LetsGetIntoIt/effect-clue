@@ -33,7 +33,7 @@ import {
     buildInitialKnowledge,
     KnownCard,
 } from "../logic/InitialKnowledge";
-import { Result } from "effect";
+import { Effect, Result } from "effect";
 import deduce, { type DeductionResult } from "../logic/Deducer";
 import {
     newSuggestionId,
@@ -56,6 +56,18 @@ import {
     type FootnoteMap,
     refuterCandidateFootnotes,
 } from "../logic/Footnotes";
+import {
+    CardSetService,
+    PlayerSetService,
+    SuggestionsService,
+    makeSetupLayer,
+    makeSuggestionsLayer,
+} from "../logic/services";
+import { Layer } from "effect";
+
+type DeduceLayer = Layer.Layer<
+    CardSetService | PlayerSetService | SuggestionsService
+>;
 
 /**
  * UI-level shape of a suggestion that hasn't been converted to a Data
@@ -469,17 +481,17 @@ interface ClueDerived {
 }
 
 const deriveState = (
-    state: ClueState,
     suggestionsAsData: ReadonlyArray<Suggestion>,
     initialKnowledge: Knowledge,
     deductionResult: DeductionResult,
+    deduceLayer: DeduceLayer,
 ): { provenance: Provenance | undefined; footnotes: FootnoteMap } => {
     let provenance: Provenance | undefined;
     try {
-        const { provenance: p } = deduceWithExplanations(
-            state.setup,
-            suggestionsAsData,
-            initialKnowledge,
+        const { provenance: p } = Effect.runSync(
+            deduceWithExplanations(initialKnowledge).pipe(
+                Effect.provide(deduceLayer),
+            ),
         );
         provenance = p;
     } catch {
@@ -679,20 +691,35 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         [state.setup, state.knownCards, state.handSizes],
     );
 
+    // Shared service layer for the deducer + traced-deducer Effect.gen
+    // paths. Both memoised pipelines below run against the same ambient
+    // context, so we compose once and provide it twice.
+    const deduceLayer = useMemo(
+        () =>
+            Layer.mergeAll(
+                makeSetupLayer(state.setup),
+                makeSuggestionsLayer(suggestionsAsData),
+            ),
+        [state.setup, suggestionsAsData],
+    );
+
     const deductionResult = useMemo(
-        () => deduce(state.setup, suggestionsAsData)(initialKnowledge),
-        [state.setup, suggestionsAsData, initialKnowledge],
+        () =>
+            Effect.runSync(
+                deduce(initialKnowledge).pipe(Effect.provide(deduceLayer)),
+            ),
+        [deduceLayer, initialKnowledge],
     );
 
     const { provenance, footnotes } = useMemo(
         () =>
             deriveState(
-                state,
                 suggestionsAsData,
                 initialKnowledge,
                 deductionResult,
+                deduceLayer,
             ),
-        [state, suggestionsAsData, initialKnowledge, deductionResult],
+        [suggestionsAsData, initialKnowledge, deductionResult, deduceLayer],
     );
 
     const derived: ClueDerived = useMemo(

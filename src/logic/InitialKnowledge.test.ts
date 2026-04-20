@@ -8,8 +8,8 @@ import {
     Y,
 } from "./Knowledge";
 import { buildInitialKnowledge, KnownCard } from "./InitialKnowledge";
-import deduce from "./Deducer";
 import { cardByName } from "./test-utils/CardByName";
+import { runDeduce } from "./test-utils/RunDeduce";
 
 import "./test-utils/EffectExpectEquals";
 
@@ -50,7 +50,7 @@ describe("buildInitialKnowledge", () => {
             KnownCard({ player: A, card: cardByName(setup, "Ball room") }),
         ];
         const initial = buildInitialKnowledge(setup, known, []);
-        const result = deduce(setup, [])(initial);
+        const result = runDeduce(setup, [], initial);
         expect(Result.isSuccess(result)).toBe(true);
         if (!Result.isSuccess(result)) return;
 

@@ -13,7 +13,7 @@ import {
     Y,
 } from "./Knowledge";
 import { Suggestion } from "./Suggestion";
-import deduce from "./Deducer";
+import { runDeduce } from "./test-utils/RunDeduce";
 
 import "./test-utils/EffectExpectEquals";
 
@@ -43,7 +43,7 @@ const CONSERV  = cardByName(setup, "Conservatory");
 
 describe("deduce", () => {
     test("empty inputs produce empty knowledge", () => {
-        const result = deduce(setup, [])(emptyKnowledge);
+        const result = runDeduce(setup, [], emptyKnowledge);
         expect(Result.isSuccess(result)).toBe(true);
         if (!Result.isSuccess(result)) return;
         expect(HashMap.size(result.success.checklist)).toBe(0);
@@ -53,7 +53,7 @@ describe("deduce", () => {
         let knowledge = emptyKnowledge;
         knowledge = setCell(knowledge, Cell(PlayerOwner(A), MUSTARD), Y);
 
-        const result = deduce(setup, [])(knowledge);
+        const result = runDeduce(setup, [], knowledge);
         expect(Result.isSuccess(result)).toBe(true);
         if (!Result.isSuccess(result)) return;
 
@@ -72,7 +72,7 @@ describe("deduce", () => {
         // Anisha has 5 cards; tell the solver the size so it can fill Ns.
         knowledge = setHandSize(knowledge, PlayerOwner(A), 5);
 
-        const result = deduce(setup, [])(knowledge);
+        const result = runDeduce(setup, [], knowledge);
         expect(Result.isSuccess(result)).toBe(true);
         if (!Result.isSuccess(result)) return;
 
@@ -88,7 +88,7 @@ describe("deduce", () => {
             nonRefuters: [B, C],
         })];
 
-        const result = deduce(setup, suggestions)(emptyKnowledge);
+        const result = runDeduce(setup, suggestions, emptyKnowledge);
         expect(Result.isSuccess(result)).toBe(true);
         if (!Result.isSuccess(result)) return;
 
@@ -107,7 +107,7 @@ describe("deduce", () => {
             seenCard: CONSERV,
         })];
 
-        const result = deduce(setup, suggestions)(emptyKnowledge);
+        const result = runDeduce(setup, suggestions, emptyKnowledge);
         expect(Result.isSuccess(result)).toBe(true);
         if (!Result.isSuccess(result)) return;
 
@@ -127,7 +127,7 @@ describe("deduce", () => {
             refuter: B,
         })];
 
-        const result = deduce(setup, suggestions)(knowledge);
+        const result = runDeduce(setup, suggestions, knowledge);
         expect(Result.isSuccess(result)).toBe(true);
         if (!Result.isSuccess(result)) return;
 
@@ -164,7 +164,7 @@ describe("deduce", () => {
             }),
         ];
 
-        const result = deduce(setup, suggestions)(knowledge);
+        const result = runDeduce(setup, suggestions, knowledge);
         expect(Result.isSuccess(result)).toBe(true);
         if (!Result.isSuccess(result)) return;
 
@@ -190,7 +190,7 @@ describe("deduce", () => {
         knowledge = setCell(knowledge, Cell(PlayerOwner(A), KNIFE), Y);
         knowledge = setCell(knowledge, Cell(PlayerOwner(B), KNIFE), Y);
 
-        const result = deduce(setup, [])(knowledge);
+        const result = runDeduce(setup, [], knowledge);
         expect(Result.isFailure(result)).toBe(true);
     });
 
@@ -199,7 +199,7 @@ describe("deduce", () => {
         knowledge = setCell(knowledge, Cell(PlayerOwner(A), KNIFE), Y);
         knowledge = setCell(knowledge, Cell(PlayerOwner(B), KNIFE), Y);
 
-        const result = deduce(setup, [])(knowledge);
+        const result = runDeduce(setup, [], knowledge);
         expect(Result.isFailure(result)).toBe(true);
         if (!Result.isFailure(result)) return;
 
@@ -221,7 +221,7 @@ describe("deduce", () => {
             seenCard: PLUM, // claims Bob showed Plum — contradicts prior N
         })];
 
-        const result = deduce(setup, suggestions)(knowledge);
+        const result = runDeduce(setup, suggestions, knowledge);
         expect(Result.isFailure(result)).toBe(true);
         if (!Result.isFailure(result)) return;
 

@@ -23,9 +23,9 @@ import {
     N,
     Y,
 } from "./Knowledge";
-import deduce from "./Deducer";
 import { Suggestion, SuggestionId } from "./Suggestion";
 import { cardByName } from "./test-utils/CardByName";
+import { runDeduce } from "./test-utils/RunDeduce";
 
 import "./test-utils/EffectExpectEquals";
 
@@ -51,7 +51,7 @@ describe("rename preserves references", () => {
                 seenCard: conserv,
             }),
         ];
-        const before = deduce(setup, suggestions)(emptyKnowledge);
+        const before = runDeduce(setup, suggestions, emptyKnowledge);
         expect(Result.isSuccess(before)).toBe(true);
         if (!Result.isSuccess(before)) return;
 
@@ -68,7 +68,7 @@ describe("rename preserves references", () => {
 
         // Solver still produces the same knowledge; suggestion.cards
         // still resolves (they're ids).
-        const after = deduce(renamed, suggestions)(emptyKnowledge);
+        const after = runDeduce(renamed, suggestions, emptyKnowledge);
         expect(Result.isSuccess(after)).toBe(true);
         if (!Result.isSuccess(after)) return;
         expect(

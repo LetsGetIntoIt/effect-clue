@@ -1,4 +1,4 @@
-import { Data, Equal, HashMap, Match, MutableHashMap, MutableHashSet, Option } from "effect";
+import { Data, Effect, Equal, HashMap, Match, MutableHashMap, MutableHashSet, Option } from "effect";
 import { Card, CardCategory, Player } from "./GameObjects";
 import { Cell, CellValue, Knowledge } from "./Knowledge";
 import { applyConsistencyRules, applyDeductionRules } from "./Rules";
@@ -8,6 +8,14 @@ import {
     GameSetup,
 } from "./GameSetup";
 import { Suggestion, suggestionCards } from "./Suggestion";
+import {
+    CardSetService,
+    PlayerSetService,
+    SuggestionsService,
+    getCardSet,
+    getPlayerSet,
+    getSuggestions,
+} from "./services";
 
 /**
  * Structured identity of the rule family that produced a deduction.
@@ -303,45 +311,56 @@ export const describeReason = (
  * separate traced deduction path — the regular `deduce` stays fast and
  * pure — so the UI can opt in to explanations without paying the cost
  * for every recompute.
+ *
+ * Game setup and suggestion log are ambient context, read from the
+ * service layer. Use `runDeduceWithExplanations` from test-utils for
+ * synchronous test call sites.
  */
 export const deduceWithExplanations = (
-    setup: GameSetup,
-    suggestions: ReadonlyArray<Suggestion>,
     initial: Knowledge,
-): { knowledge: Knowledge; provenance: Provenance } => {
-    const provenance: Provenance = MutableHashMap.empty<Cell, Reason>();
-    let current = initial;
-    let currentIteration = 0;
+): Effect.Effect<
+    { knowledge: Knowledge; provenance: Provenance },
+    never,
+    CardSetService | PlayerSetService | SuggestionsService
+> =>
+    Effect.gen(function* () {
+        const cardSet = yield* getCardSet;
+        const playerSet = yield* getPlayerSet;
+        const suggestions = yield* getSuggestions;
+        const setup = GameSetup({ cardSet, playerSet });
+        const provenance: Provenance = MutableHashMap.empty<Cell, Reason>();
+        let current = initial;
+        let currentIteration = 0;
 
-    // Seed provenance with the initial inputs so the UI can explain
-    // them as "you told us this".
-    HashMap.forEach(initial.checklist, (_value, cell) => {
-        MutableHashMap.set(provenance, cell, {
-            iteration: 0,
-            kind: InitialKnownCard(),
-            detail: "given from starting knowledge",
-            dependsOn: [],
+        // Seed provenance with the initial inputs so the UI can explain
+        // them as "you told us this".
+        HashMap.forEach(initial.checklist, (_value, cell) => {
+            MutableHashMap.set(provenance, cell, {
+                iteration: 0,
+                kind: InitialKnownCard(),
+                detail: "given from starting knowledge",
+                dependsOn: [],
+            });
         });
+
+        const tracer: Tracer = (record) => {
+            if (MutableHashMap.has(provenance, record.cell)) return; // first-write-wins
+            MutableHashMap.set(provenance, record.cell, {
+                iteration: currentIteration,
+                kind: record.kind,
+                detail: record.detail,
+                dependsOn: record.dependsOn,
+            });
+        };
+
+        const maxIterations = 1000;
+        for (let i = 0; i < maxIterations; i++) {
+            currentIteration = i + 1;
+            const before = current;
+            current = applyConsistencyRules(setup, tracer)(current);
+            current = applyDeductionRules(suggestions, tracer)(current);
+            if (Equal.equals(current, before)) break;
+        }
+
+        return { knowledge: current, provenance };
     });
-
-    const tracer: Tracer = (record) => {
-        if (MutableHashMap.has(provenance, record.cell)) return; // first-write-wins
-        MutableHashMap.set(provenance, record.cell, {
-            iteration: currentIteration,
-            kind: record.kind,
-            detail: record.detail,
-            dependsOn: record.dependsOn,
-        });
-    };
-
-    const maxIterations = 1000;
-    for (let i = 0; i < maxIterations; i++) {
-        currentIteration = i + 1;
-        const before = current;
-        current = applyConsistencyRules(setup, tracer)(current);
-        current = applyDeductionRules(suggestions, tracer)(current);
-        if (Equal.equals(current, before)) break;
-    }
-
-    return { knowledge: current, provenance };
-};
