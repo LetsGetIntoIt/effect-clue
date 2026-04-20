@@ -31,8 +31,8 @@ export const describeAction = (
     switch (action.type) {
         case "newGame":
             return t("actions.newGame");
-        case "loadPreset":
-            return t("actions.loadPreset");
+        case "loadCardSet":
+            return t("actions.loadCardSet", { name: action.label });
         case "addPlayer":
             return t("actions.addPlayer");
         case "removePlayer":

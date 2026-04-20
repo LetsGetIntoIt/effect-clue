@@ -1,3 +1,4 @@
+import type { CardSet } from "./CardSet";
 import type { Card, CardCategory, Player } from "./GameObjects";
 import type { GameSetup } from "./GameSetup";
 import type { KnownCard } from "./InitialKnowledge";
@@ -52,7 +53,7 @@ export type UiMode = "setup" | "play";
  */
 export type ClueAction =
     | { type: "newGame" }
-    | { type: "loadPreset"; setup: GameSetup }
+    | { type: "loadCardSet"; cardSet: CardSet; label: string }
     | { type: "setSetup"; setup: GameSetup }
     | { type: "addCategory" }
     | { type: "removeCategoryById"; categoryId: CardCategory }

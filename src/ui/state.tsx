@@ -89,19 +89,22 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
         case "newGame":
             return {
                 ...initialState,
-                setup: newGameSetup(4),
+                setup: newGameSetup(),
             };
 
         case "setUiMode":
             return { ...state, uiMode: action.mode };
 
-        case "loadPreset":
-            // Swap to a preset deck and discard anything tied to the
-            // previous one. (Hands, suggestions, etc. reference card
-            // ids from the old setup.)
+        case "loadCardSet":
+            // Swap the deck; keep the current player roster. Hand
+            // sizes, known cards, and suggestions reference card ids
+            // from the old deck and are discarded.
             return {
                 ...state,
-                setup: action.setup,
+                setup: GameSetup({
+                    cardSet: action.cardSet,
+                    playerSet: state.setup.playerSet,
+                }),
                 knownCards: [],
                 handSizes: [],
                 suggestions: [],

@@ -5,17 +5,17 @@ import { useEffect, useState } from "react";
 import { Player } from "../../logic/GameObjects";
 import {
     allCardIds,
+    CARD_SETS,
     caseFileSize,
     defaultHandSizes,
     GameSetup,
-    PRESETS,
 } from "../../logic/GameSetup";
 import {
-    CustomPreset,
-    deleteCustomPreset,
-    loadCustomPresets,
-    saveCustomPreset,
-} from "../../logic/CustomPresets";
+    CustomCardSet,
+    deleteCustomCardSet,
+    loadCustomCardSets,
+    saveCustomCardSet,
+} from "../../logic/CustomCardSets";
 import { useClue } from "../state";
 
 /**
@@ -162,9 +162,9 @@ export function GameSetupPanel() {
     const defaults = new Map(defaultHandSizes(setup));
 
     // User-saved card packs, kept in React state so save/delete
-    // re-renders the preset row without a page reload.
-    const [customPresets, setCustomPresets] =
-        useState<ReadonlyArray<CustomPreset>>(() => loadCustomPresets());
+    // re-renders the card-pack row without a page reload.
+    const [customPacks, setCustomPacks] =
+        useState<ReadonlyArray<CustomCardSet>>(() => loadCustomCardSets());
 
     const totalDealt = allCardIds(setup).length - caseFileSize(setup);
     const setHandSizesArr = setup.players
@@ -177,40 +177,40 @@ export function GameSetupPanel() {
     const handSizeMismatch =
         allHandSizesSet && handSizesTotal !== totalDealt;
 
-    const onPreset = (preset: (typeof PRESETS)[number]) => {
-        if (hasGameData() && !window.confirm(t("loadPresetConfirm"))) return;
-        dispatch({ type: "loadPreset", setup: preset.build() });
-    };
-
-    const onCustomPreset = (preset: CustomPreset) => {
-        if (hasGameData() && !window.confirm(t("loadPresetConfirm"))) return;
-        // Load the preset's cardSet on top of the current player roster —
-        // presets deliberately don't remember players.
+    const onCardSet = (choice: (typeof CARD_SETS)[number]) => {
+        if (hasGameData() && !window.confirm(t("loadCardSetConfirm"))) return;
         dispatch({
-            type: "loadPreset",
-            setup: GameSetup({
-                cardSet: preset.cardSet,
-                playerSet: setup.playerSet,
-            }),
+            type: "loadCardSet",
+            cardSet: choice.cardSet,
+            label: choice.label,
         });
     };
 
-    const onSaveAsPreset = () => {
-        const label = window.prompt(t("saveAsPresetPrompt"));
-        if (!label || !label.trim()) return;
-        saveCustomPreset(label.trim(), setup);
-        setCustomPresets(loadCustomPresets());
+    const onCustomPack = (pack: CustomCardSet) => {
+        if (hasGameData() && !window.confirm(t("loadCardSetConfirm"))) return;
+        dispatch({
+            type: "loadCardSet",
+            cardSet: pack.cardSet,
+            label: pack.label,
+        });
     };
 
-    const onDeleteCustomPreset = (preset: CustomPreset) => {
+    const onSaveCardSet = () => {
+        const label = window.prompt(t("saveAsCardPackPrompt"));
+        if (!label || !label.trim()) return;
+        saveCustomCardSet(label.trim(), setup.cardSet);
+        setCustomPacks(loadCustomCardSets());
+    };
+
+    const onDeleteCustomPack = (pack: CustomCardSet) => {
         if (
             !window.confirm(
-                t("deleteCustomPresetConfirm", { label: preset.label }),
+                t("deleteCustomCardSetConfirm", { label: pack.label }),
             )
         )
             return;
-        deleteCustomPreset(preset.id);
-        setCustomPresets(loadCustomPresets());
+        deleteCustomCardSet(pack.id);
+        setCustomPacks(loadCustomCardSets());
     };
 
     const onHandSizeChange = (player: Player, raw: string) => {
@@ -267,42 +267,42 @@ export function GameSetupPanel() {
                 <>
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                         <span className="text-[12px] font-semibold uppercase tracking-[0.05em] text-muted">
-                            {t("preset")}
+                            {t("cardPack")}
                         </span>
-                        {PRESETS.map(preset => (
+                        {CARD_SETS.map(choice => (
                             <button
-                                key={preset.id}
+                                key={choice.id}
                                 type="button"
                                 className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-hover"
-                                onClick={() => onPreset(preset)}
+                                onClick={() => onCardSet(choice)}
                             >
-                                {preset.label}
+                                {choice.label}
                             </button>
                         ))}
-                        {customPresets.map(preset => (
+                        {customPacks.map(pack => (
                             <span
-                                key={preset.id}
+                                key={pack.id}
                                 className="inline-flex items-center overflow-hidden rounded border border-border bg-white text-[13px]"
                             >
                                 <button
                                     type="button"
                                     className="cursor-pointer px-3 py-1 hover:bg-hover"
-                                    onClick={() => onCustomPreset(preset)}
-                                    title={t("loadCustomPresetTitle", {
-                                        label: preset.label,
+                                    onClick={() => onCustomPack(pack)}
+                                    title={t("loadCustomCardSetTitle", {
+                                        label: pack.label,
                                     })}
                                 >
-                                    {preset.label}
+                                    {pack.label}
                                 </button>
                                 <button
                                     type="button"
                                     className="cursor-pointer border-l border-border px-2 py-1 text-muted hover:bg-hover hover:text-danger"
-                                    onClick={() => onDeleteCustomPreset(preset)}
-                                    title={t("deleteCustomPresetTitle", {
-                                        label: preset.label,
+                                    onClick={() => onDeleteCustomPack(pack)}
+                                    title={t("deleteCustomCardSetTitle", {
+                                        label: pack.label,
                                     })}
-                                    aria-label={t("deleteCustomPresetAria", {
-                                        label: preset.label,
+                                    aria-label={t("deleteCustomCardSetAria", {
+                                        label: pack.label,
                                     })}
                                 >
                                     ×
@@ -312,10 +312,10 @@ export function GameSetupPanel() {
                         <button
                             type="button"
                             className="cursor-pointer rounded border border-dashed border-border bg-white px-3 py-1 text-[13px] text-muted hover:bg-hover hover:text-accent"
-                            onClick={onSaveAsPreset}
-                            title={t("saveAsPresetTitle")}
+                            onClick={onSaveCardSet}
+                            title={t("saveAsCardPackTitle")}
                         >
-                            {t("saveAsPreset")}
+                            {t("saveAsCardPack")}
                         </button>
                     </div>
                 </>
