@@ -3,6 +3,10 @@
         "title": "Clue solver",
         "description": "Track a game of Clue and watch the solver narrow the case file down to one suspect, one weapon, and one room."
     },
+    "tabs": {
+        "setup": "Setup",
+        "play": "Deduce"
+    },
     "toolbar": {
         "undo": "↶ Undo",
         "undoAria": "Undo",

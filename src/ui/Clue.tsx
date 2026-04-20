@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { Checklist } from "./components/Checklist";
 import { ChecklistGrid } from "./components/ChecklistGrid";
 import { GameSetupPanel } from "./components/GameSetupPanel";
 import { GlobalContradictionBanner } from "./components/GlobalContradictionBanner";
@@ -9,7 +10,7 @@ import { SuggestionLogPanel } from "./components/SuggestionLogPanel";
 import { Toolbar } from "./components/Toolbar";
 import { TooltipProvider } from "./components/Tooltip";
 import { HoverProvider } from "./HoverContext";
-import { ClueProvider } from "./state";
+import { ClueProvider, useClue } from "./state";
 
 /**
  * Top-level Clue solver app. The suggestion log sits at the top because
@@ -20,6 +21,13 @@ import { ClueProvider } from "./state";
  * whenever the deducer is stuck; it measures its own height and publishes
  * `--contradiction-banner-offset`, which `<main>` adds to its top padding
  * so the header isn't hidden underneath.
+ *
+ * The unified tabbed Checklist (below the suggestion log) is the
+ * eventual single surface for both Setup and Play modes. Commit 17
+ * introduces it as a copy of ChecklistGrid alongside the old
+ * GameSetupPanel + ChecklistGrid pair (safety net); commit 18 folds
+ * the Setup controls into the Checklist rows; commit 19 deletes the
+ * old pair.
  */
 export function Clue() {
     const t = useTranslations("app");
@@ -40,6 +48,9 @@ export function Clue() {
 
                 <SuggestionLogPanel />
 
+                <TabBar />
+                <Checklist />
+
                 <div className="grid grid-cols-1 items-start gap-5 [@media(min-width:1100px)]:grid-cols-[minmax(380px,1fr)_minmax(400px,1fr)]">
                     <GameSetupPanel />
                     <ChecklistGrid />
@@ -48,5 +59,44 @@ export function Clue() {
            </HoverProvider>
           </ClueProvider>
         </TooltipProvider>
+    );
+}
+
+/**
+ * Setup / Deduce tab switcher. Drives the `uiMode` reducer slice;
+ * consumers (currently just GameSetupPanel's inline-edit gate and
+ * the new Checklist's future affordances) read `state.uiMode` and
+ * render accordingly.
+ */
+function TabBar() {
+    const { state, dispatch } = useClue();
+    const tTabs = useTranslations("tabs");
+    const tabClass = (active: boolean) =>
+        `cursor-pointer border-0 border-b-2 px-3 py-1.5 text-[13px] font-semibold ${
+            active
+                ? "border-accent bg-transparent text-accent"
+                : "border-transparent bg-transparent text-muted hover:text-accent"
+        }`;
+    return (
+        <div role="tablist" className="-mb-3 flex gap-2 border-b border-border">
+            <button
+                type="button"
+                role="tab"
+                aria-selected={state.uiMode === "setup"}
+                className={tabClass(state.uiMode === "setup")}
+                onClick={() => dispatch({ type: "setUiMode", mode: "setup" })}
+            >
+                {tTabs("setup")}
+            </button>
+            <button
+                type="button"
+                role="tab"
+                aria-selected={state.uiMode === "play"}
+                className={tabClass(state.uiMode === "play")}
+                onClick={() => dispatch({ type: "setUiMode", mode: "play" })}
+            >
+                {tTabs("play")}
+            </button>
+        </div>
     );
 }
