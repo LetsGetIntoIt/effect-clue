@@ -1,5 +1,5 @@
-import { cardName, categoryName, findCardEntry } from "../logic/GameSetup";
-import type { ClueAction, ClueState } from "./state";
+import { cardName, categoryName, findCardEntry } from "./GameSetup";
+import type { ClueAction, ClueState } from "./ClueState";
 
 /**
  * Translator function the describer asks for copy. Matches the return

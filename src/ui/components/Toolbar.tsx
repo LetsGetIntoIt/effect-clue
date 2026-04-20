@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { describeAction } from "../describeAction";
+import { describeAction } from "../../logic/describeAction";
 import { useClue } from "../state";
 import { Tooltip } from "./Tooltip";
 
