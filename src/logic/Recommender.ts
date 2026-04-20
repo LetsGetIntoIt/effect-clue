@@ -1,4 +1,4 @@
-import { Data } from "effect";
+import { Data, Effect } from "effect";
 import { N, Y, getCellByOwnerCard, Knowledge } from "./Knowledge";
 import {
     CardCategory,
@@ -11,6 +11,14 @@ import {
     cardIdsInCategory,
     GameSetup,
 } from "./GameSetup";
+import {
+    CardSetService,
+    KnowledgeService,
+    PlayerSetService,
+    getCardSet,
+    getKnowledge,
+    getPlayerSet,
+} from "./services";
 
 /**
  * How "known" the case file currently is, between 0 and 1.
@@ -169,78 +177,85 @@ const cartesianCandidates = function* (
  * independent of category count.
  */
 export const recommendSuggestions = (
-    setup: GameSetup,
-    knowledge: Knowledge,
     suggester: Player,
     maxResults: number = 50,
-): RecommendationResult => {
-    const otherPlayers = setup.players.filter(p => p !== suggester);
+): Effect.Effect<
+    RecommendationResult,
+    never,
+    CardSetService | PlayerSetService | KnowledgeService
+> =>
+    Effect.gen(function* () {
+        const cardSet = yield* getCardSet;
+        const playerSet = yield* getPlayerSet;
+        const knowledge = yield* getKnowledge;
+        const setup = GameSetup({ cardSet, playerSet });
+        const otherPlayers = setup.players.filter(p => p !== suggester);
 
-    const results: Recommendation[] = [];
-    for (const cards of cartesianCandidates(setup, knowledge)) {
-        // Factor 1: unknown cells touched in others' rows.
-        let cellInfoScore = 0;
-        for (const p of otherPlayers) {
-            for (const card of cards) {
-                const v = getCellByOwnerCard(knowledge, PlayerOwner(p), card);
-                if (v === undefined) cellInfoScore += 1;
+        const results: Recommendation[] = [];
+        for (const cards of cartesianCandidates(setup, knowledge)) {
+            // Factor 1: unknown cells touched in others' rows.
+            let cellInfoScore = 0;
+            for (const p of otherPlayers) {
+                for (const card of cards) {
+                    const v = getCellByOwnerCard(knowledge, PlayerOwner(p), card);
+                    if (v === undefined) cellInfoScore += 1;
+                }
             }
+            if (cellInfoScore === 0) continue;
+
+            // Factor 2: case-file openness. Product over categories of
+            // candidate counts; at least 1 per category (we're iterating
+            // only live candidates), so this is always ≥1.
+            let caseFileOpennessScore = 1;
+            for (const category of setup.categories) {
+                const candidates = caseFileCandidatesFor(
+                    setup, knowledge, category.id);
+                caseFileOpennessScore *= candidates.length;
+            }
+
+            // Factor 3: how many distinct other players could refute this
+            // suggestion? A player who's known to lack all three suggested
+            // cards cannot refute. If we're down to just one possible
+            // refuter, the answer is predictable — we learn less.
+            let refuterUncertaintyScore = 0;
+            for (const p of otherPlayers) {
+                const allN = cards.every(card =>
+                    getCellByOwnerCard(knowledge, PlayerOwner(p), card) === N);
+                if (!allN) refuterUncertaintyScore += 1;
+            }
+            if (refuterUncertaintyScore === 0) continue;
+
+            const score =
+                cellInfoScore * caseFileOpennessScore * refuterUncertaintyScore;
+
+            results.push(Recommendation({
+                suggester,
+                cards,
+                score,
+                cellInfoScore,
+                caseFileOpennessScore,
+                refuterUncertaintyScore,
+            }));
         }
-        if (cellInfoScore === 0) continue;
 
-        // Factor 2: case-file openness. Product over categories of
-        // candidate counts; at least 1 per category (we're iterating
-        // only live candidates), so this is always ≥1.
-        let caseFileOpennessScore = 1;
-        for (const category of setup.categories) {
-            const candidates = caseFileCandidatesFor(
-                setup, knowledge, category.id);
-            caseFileOpennessScore *= candidates.length;
+        // Primary: descending score. Tiebreak: lexicographic by joined names.
+        results.sort((a, b) => {
+            if (a.score !== b.score) return b.score - a.score;
+            return a.cards.join("|").localeCompare(b.cards.join("|"));
+        });
+
+        const first = results[0];
+        if (first === undefined) {
+            return RecommendationResult({ recommendations: [], topCount: 0 });
         }
+        const topScore = first.score;
+        const topCount = results.filter(r => r.score === topScore).length;
 
-        // Factor 3: how many distinct other players could refute this
-        // suggestion? A player who's known to lack all three suggested
-        // cards cannot refute. If we're down to just one possible
-        // refuter, the answer is predictable — we learn less.
-        let refuterUncertaintyScore = 0;
-        for (const p of otherPlayers) {
-            const allN = cards.every(card =>
-                getCellByOwnerCard(knowledge, PlayerOwner(p), card) === N);
-            if (!allN) refuterUncertaintyScore += 1;
-        }
-        if (refuterUncertaintyScore === 0) continue;
-
-        const score =
-            cellInfoScore * caseFileOpennessScore * refuterUncertaintyScore;
-
-        results.push(Recommendation({
-            suggester,
-            cards,
-            score,
-            cellInfoScore,
-            caseFileOpennessScore,
-            refuterUncertaintyScore,
-        }));
-    }
-
-    // Primary: descending score. Tiebreak: lexicographic by joined names.
-    results.sort((a, b) => {
-        if (a.score !== b.score) return b.score - a.score;
-        return a.cards.join("|").localeCompare(b.cards.join("|"));
+        return RecommendationResult({
+            recommendations: results.slice(0, maxResults),
+            topCount,
+        });
     });
-
-    const first = results[0];
-    if (first === undefined) {
-        return RecommendationResult({ recommendations: [], topCount: 0 });
-    }
-    const topScore = first.score;
-    const topCount = results.filter(r => r.score === topScore).length;
-
-    return RecommendationResult({
-        recommendations: results.slice(0, maxResults),
-        topCount,
-    });
-};
 
 /**
  * Structured description of why a suggestion is recommended. The UI
@@ -282,68 +297,76 @@ type RecommendationDescription =
       };
 
 export const describeRecommendation = (
-    setup: GameSetup,
-    knowledge: Knowledge,
     r: {
         readonly cards: ReadonlyArray<Card>;
         readonly cellInfoScore: number;
         readonly caseFileOpennessScore: number;
         readonly refuterUncertaintyScore: number;
     },
-): RecommendationDescription => {
-    // Identify categories whose casefile answer is still open, and
-    // which of this triple's cards sit in those categories.
-    const openCategories = setup.categories.filter(
-        c => caseFileAnswerFor(setup, knowledge, c.id) === undefined,
-    );
-    const openCategoryNames = openCategories
-        .map(c => c.name)
-        .map(n => n.toLowerCase());
+): Effect.Effect<
+    RecommendationDescription,
+    never,
+    CardSetService | PlayerSetService | KnowledgeService
+> =>
+    Effect.gen(function* () {
+        const cardSet = yield* getCardSet;
+        const playerSet = yield* getPlayerSet;
+        const knowledge = yield* getKnowledge;
+        const setup = GameSetup({ cardSet, playerSet });
 
-    // Could a single category become fully pinned by the refuter? That
-    // happens when there are exactly two casefile candidates in a
-    // category and this suggestion probes the non-casefile one.
-    const oneGuessFromCasefile = openCategories.some(c => {
-        const candidates = caseFileCandidatesFor(setup, knowledge, c.id);
-        return (
-            candidates.length === 2 &&
-            r.cards.some(card => candidates.includes(card))
+        // Identify categories whose casefile answer is still open, and
+        // which of this triple's cards sit in those categories.
+        const openCategories = setup.categories.filter(
+            c => caseFileAnswerFor(setup, knowledge, c.id) === undefined,
         );
+        const openCategoryNames = openCategories
+            .map(c => c.name)
+            .map(n => n.toLowerCase());
+
+        // Could a single category become fully pinned by the refuter? That
+        // happens when there are exactly two casefile candidates in a
+        // category and this suggestion probes the non-casefile one.
+        const oneGuessFromCasefile = openCategories.some(c => {
+            const candidates = caseFileCandidatesFor(setup, knowledge, c.id);
+            return (
+                candidates.length === 2 &&
+                r.cards.some(card => candidates.includes(card))
+            );
+        });
+
+        if (oneGuessFromCasefile && openCategoryNames.length === 1) {
+            return {
+                kind: "oneGuessFromCasefile",
+                params: { category: openCategoryNames[0] ?? "category" },
+            };
+        }
+
+        if (r.cellInfoScore >= 4 && openCategoryNames.length >= 1) {
+            return {
+                kind: "probesManyCells",
+                params: {
+                    cellCount: r.cellInfoScore,
+                    categories: openCategoryNames.join(" / "),
+                },
+            };
+        }
+
+        if (r.refuterUncertaintyScore >= 3) {
+            return {
+                kind: "refuterUncertainty",
+                params: { playerCount: r.refuterUncertaintyScore },
+            };
+        }
+
+        if (r.cellInfoScore >= 1) {
+            return {
+                kind: "fillsCells",
+                params: { cellCount: r.cellInfoScore },
+            };
+        }
+
+        return { kind: "usefulCombination", params: {} };
     });
-
-    if (oneGuessFromCasefile && openCategoryNames.length === 1) {
-        return {
-            kind: "oneGuessFromCasefile",
-            params: { category: openCategoryNames[0] ?? "category" },
-        };
-    }
-
-    if (r.cellInfoScore >= 4 && openCategoryNames.length >= 1) {
-        return {
-            kind: "probesManyCells",
-            params: {
-                cellCount: r.cellInfoScore,
-                categories: openCategoryNames.join(" / "),
-            },
-        };
-    }
-
-    if (r.refuterUncertaintyScore >= 3) {
-        return {
-            kind: "refuterUncertainty",
-            params: { playerCount: r.refuterUncertaintyScore },
-        };
-    }
-
-    if (r.cellInfoScore >= 1) {
-        return {
-            kind: "fillsCells",
-            params: { cellCount: r.cellInfoScore },
-        };
-    }
-
-    return { kind: "usefulCombination", params: {} };
-};
 
 /**
  * A consolidated recommendation row. Each category slot is either a
@@ -376,15 +399,22 @@ interface ConsolidatedRecommendation {
  *   3. Concatenate consolidated tiers in the original sorted order.
  */
 export const consolidateRecommendations = (
-    setup: GameSetup,
-    knowledge: Knowledge,
     recs: ReadonlyArray<Recommendation>,
-): ReadonlyArray<ConsolidatedRecommendation> => {
-    // Casefile candidate set per category (for equivalence checks).
-    const candidatesByCat: ReadonlyArray<ReadonlySet<Card>> =
-        setup.categories.map(
-            c => new Set(caseFileCandidatesFor(setup, knowledge, c.id)),
-        );
+): Effect.Effect<
+    ReadonlyArray<ConsolidatedRecommendation>,
+    never,
+    CardSetService | PlayerSetService | KnowledgeService
+> =>
+    Effect.gen(function* () {
+        const cardSet = yield* getCardSet;
+        const playerSet = yield* getPlayerSet;
+        const knowledge = yield* getKnowledge;
+        const setup = GameSetup({ cardSet, playerSet });
+        // Casefile candidate set per category (for equivalence checks).
+        const candidatesByCat: ReadonlyArray<ReadonlySet<Card>> =
+            setup.categories.map(
+                c => new Set(caseFileCandidatesFor(setup, knowledge, c.id)),
+            );
 
     // Group by score, preserve input order between groups.
     const scoreOrder: number[] = [];
@@ -489,4 +519,4 @@ export const consolidateRecommendations = (
         out.push(...rows);
     }
     return out;
-};
+    });

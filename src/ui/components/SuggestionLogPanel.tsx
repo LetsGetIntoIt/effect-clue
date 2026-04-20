@@ -1,8 +1,8 @@
 "use client";
 
-import { Result } from "effect";
+import { Effect, Layer, Result } from "effect";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
 import { cardName, categoryOfCard } from "../../logic/GameSetup";
 import {
@@ -10,6 +10,10 @@ import {
     describeRecommendation,
     recommendSuggestions,
 } from "../../logic/Recommender";
+import {
+    makeKnowledgeLayer,
+    makeSetupLayer,
+} from "../../logic/services";
 import { useHover } from "../HoverContext";
 import { Tooltip } from "./Tooltip";
 import { newSuggestionId } from "../../logic/Suggestion";
@@ -369,16 +373,26 @@ function Recommendations() {
         );
     }
 
-    const rec = recommendSuggestions(
-        setup,
-        knowledge,
-        Player(asPlayer),
-        50,
+    // Shared service layer for the three recommender Effect.gen
+    // paths below — built once per render, reused across all calls.
+    const recommendLayer = useMemo(
+        () =>
+            Layer.mergeAll(
+                makeSetupLayer(setup),
+                makeKnowledgeLayer(knowledge),
+            ),
+        [setup, knowledge],
     );
-    const consolidated = consolidateRecommendations(
-        setup,
-        knowledge,
-        rec.recommendations,
+
+    const rec = Effect.runSync(
+        recommendSuggestions(Player(asPlayer), 50).pipe(
+            Effect.provide(recommendLayer),
+        ),
+    );
+    const consolidated = Effect.runSync(
+        consolidateRecommendations(rec.recommendations).pipe(
+            Effect.provide(recommendLayer),
+        ),
     ).slice(0, 5);
 
     return (
@@ -407,17 +421,15 @@ function Recommendations() {
             ) : (
                 <ol className="mt-2 list-decimal pl-6 text-[13px]">
                     {consolidated.map((r, i) => {
-                        const desc = describeRecommendation(
-                            setup,
-                            knowledge,
-                            {
+                        const desc = Effect.runSync(
+                            describeRecommendation({
                                 cards: r.cards.flatMap(c =>
                                     c === "any" ? [] : [c],
                                 ),
                                 cellInfoScore: r.cellInfoScore,
                                 caseFileOpennessScore: r.caseFileOpennessScore,
                                 refuterUncertaintyScore: r.refuterUncertaintyScore,
-                            },
+                            }).pipe(Effect.provide(recommendLayer)),
                         );
                         const explanation = tRecs(desc.kind, desc.params);
                         const scoreBreakdown = (
