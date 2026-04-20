@@ -5,36 +5,52 @@
  * active game session so users can accumulate personal packs across
  * games without polluting or risking collision with the session blob.
  *
- * Schema is versioned from day one — every migration step bumps
- * `version` so we can add fields later without breaking existing
- * preset stores.
+ * The on-disk payload goes through `Schema`: malformed blobs are
+ * rejected with a structured error rather than silently ignored, and
+ * branded ids (Card, CardCategory) flow through the decoder directly.
  */
+import { Result, Schema } from "effect";
 import { CardSet } from "./CardSet";
 import { Card, CardCategory } from "./GameObjects";
 import { CardEntry, Category, GameSetup } from "./GameSetup";
 
-/**
- * The on-disk shape of a single custom preset. Mirrors the session
- * setup subtree but without players (presets are reusable across
- * games; player rosters aren't).
- */
-interface PersistedCustomPresetV1 {
-    readonly id: string;
-    readonly label: string;
-    readonly categories: ReadonlyArray<{
-        readonly id: string;
-        readonly name: string;
-        readonly cards: ReadonlyArray<{
-            readonly id: string;
-            readonly name: string;
-        }>;
-    }>;
-}
+const CardSchema = Schema.String.pipe(Schema.fromBrand("Card", Card));
+const CardCategorySchema = Schema.String.pipe(
+    Schema.fromBrand("CardCategory", CardCategory),
+);
 
-interface PersistedCustomPresetsV1 {
-    readonly version: 1;
-    readonly presets: ReadonlyArray<PersistedCustomPresetV1>;
-}
+const PersistedCardEntrySchema = Schema.Struct({
+    id: CardSchema,
+    name: Schema.String,
+});
+
+const PersistedCategorySchema = Schema.Struct({
+    id: CardCategorySchema,
+    name: Schema.String,
+    cards: Schema.Array(PersistedCardEntrySchema),
+});
+
+const PersistedCustomPresetSchema = Schema.Struct({
+    id: Schema.String,
+    label: Schema.String,
+    categories: Schema.Array(PersistedCategorySchema),
+});
+
+/**
+ * Canonical on-disk shape for the preset store. `version: 1` is a
+ * forward-compat sentinel: if we ever need to break the shape, we
+ * bump it and add a decoder for the new version — same pattern as
+ * the session schema.
+ */
+const PersistedCustomPresetsSchema = Schema.Struct({
+    version: Schema.Literal(1),
+    presets: Schema.Array(PersistedCustomPresetSchema),
+});
+
+const decodePresetsUnknown = Schema.decodeUnknownResult(
+    PersistedCustomPresetsSchema,
+);
+const encodePresets = Schema.encodeSync(PersistedCustomPresetsSchema);
 
 /**
  * Runtime-shape preset as consumed by the UI. Stores a `CardSet` —
@@ -50,44 +66,29 @@ export interface CustomPreset {
 
 const STORAGE_KEY = "effect-clue.custom-presets.v1";
 
-const decodeCategories = (
-    raw: ReadonlyArray<PersistedCustomPresetV1["categories"][number]>,
-): ReadonlyArray<Category> =>
-    raw.map(c => Category({
-        id: CardCategory(c.id),
-        name: c.name,
-        cards: c.cards.map(card => CardEntry({
-            id: Card(card.id),
-            name: card.name,
-        })),
-    }));
-
-const encodeCategories = (
-    cats: ReadonlyArray<Category>,
-): PersistedCustomPresetV1["categories"] =>
-    cats.map(c => ({
-        id: String(c.id),
-        name: c.name,
-        cards: c.cards.map(card => ({
-            id: String(card.id),
-            name: card.name,
-        })),
-    }));
-
 /**
  * Read all user-saved presets from localStorage. Returns an empty
- * array if the key is missing or the payload doesn't parse.
+ * array if the key is missing or the payload doesn't decode.
  */
 export const loadCustomPresets = (): ReadonlyArray<CustomPreset> => {
     try {
         const raw = window.localStorage.getItem(STORAGE_KEY);
         if (!raw) return [];
-        const parsed = JSON.parse(raw) as Partial<PersistedCustomPresetsV1>;
-        if (parsed.version !== 1 || !Array.isArray(parsed.presets)) return [];
-        return parsed.presets.map(p => ({
+        const decoded = decodePresetsUnknown(JSON.parse(raw));
+        if (Result.isFailure(decoded)) return [];
+        return decoded.success.presets.map(p => ({
             id: p.id,
             label: p.label,
-            cardSet: CardSet({ categories: decodeCategories(p.categories) }),
+            cardSet: CardSet({
+                categories: p.categories.map(c => Category({
+                    id: c.id,
+                    name: c.name,
+                    cards: c.cards.map(card => CardEntry({
+                        id: card.id,
+                        name: card.name,
+                    })),
+                })),
+            }),
         }));
     } catch {
         return [];
@@ -95,16 +96,23 @@ export const loadCustomPresets = (): ReadonlyArray<CustomPreset> => {
 };
 
 const writeAll = (presets: ReadonlyArray<CustomPreset>): void => {
-    const payload: PersistedCustomPresetsV1 = {
-        version: 1,
-        presets: presets.map(p => ({
-            id: p.id,
-            label: p.label,
-            categories: encodeCategories(p.cardSet.categories),
-        })),
-    };
     try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        const encoded = encodePresets({
+            version: 1,
+            presets: presets.map(p => ({
+                id: p.id,
+                label: p.label,
+                categories: p.cardSet.categories.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    cards: c.cards.map(card => ({
+                        id: card.id,
+                        name: card.name,
+                    })),
+                })),
+            })),
+        });
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(encoded));
     } catch {
         // Quota exceeded, private mode, etc. — non-fatal.
     }
