@@ -11,6 +11,7 @@
 		"typecheck": "tsc --noEmit",
 		"lint": "eslint .",
 		"knip": "knip",
+		"i18n:check": "node scripts/check-i18n-keys.mjs",
 		"dev": "next dev",
 		"build": "next build",
 		"start": "next start"
