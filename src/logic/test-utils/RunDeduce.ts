@@ -1,9 +1,12 @@
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Result } from "effect";
 import type { GameSetup } from "../GameSetup";
 import type { Knowledge } from "../Knowledge";
 import type { Provenance } from "../Provenance";
 import type { Suggestion } from "../Suggestion";
-import deduce, { type DeductionResult } from "../Deducer";
+import deduce, {
+    type ContradictionTrace,
+    type DeductionResult,
+} from "../Deducer";
 import { deduceWithExplanations } from "../Provenance";
 import {
     makeSetupLayer,
@@ -26,22 +29,33 @@ const deduceLayer = (
         makeSuggestionsLayer(suggestions),
     );
 
+/**
+ * Test helper: runs `deduce` through an ephemeral layer and
+ * materialises the Effect failure channel back to a `Result`. Tests
+ * keep their existing `Result.isSuccess` / `Result.isFailure`
+ * assertion style; the channel switch happens at the boundary.
+ */
 export const runDeduce = (
     setup: GameSetup,
     suggestions: ReadonlyArray<Suggestion>,
     initial: Knowledge,
 ): DeductionResult =>
     Effect.runSync(
-        deduce(initial).pipe(Effect.provide(deduceLayer(setup, suggestions))),
+        Effect.result(deduce(initial)).pipe(
+            Effect.provide(deduceLayer(setup, suggestions)),
+        ),
     );
 
 export const runDeduceWithExplanations = (
     setup: GameSetup,
     suggestions: ReadonlyArray<Suggestion>,
     initial: Knowledge,
-): { knowledge: Knowledge; provenance: Provenance } =>
+): Result.Result<
+    { knowledge: Knowledge; provenance: Provenance },
+    ContradictionTrace
+> =>
     Effect.runSync(
-        deduceWithExplanations(initial).pipe(
+        Effect.result(deduceWithExplanations(initial)).pipe(
             Effect.provide(deduceLayer(setup, suggestions)),
         ),
     );

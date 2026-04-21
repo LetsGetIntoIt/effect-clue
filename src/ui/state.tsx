@@ -417,17 +417,17 @@ const deriveState = (
     deductionResult: DeductionResult,
     deduceLayer: DeduceLayer,
 ): { provenance: Provenance | undefined; footnotes: FootnoteMap } => {
-    let provenance: Provenance | undefined;
-    try {
-        const { provenance: p } = Effect.runSync(
-            deduceWithExplanations(initialKnowledge).pipe(
-                Effect.provide(deduceLayer),
-            ),
-        );
-        provenance = p;
-    } catch {
-        provenance = undefined;
-    }
+    // deduceWithExplanations now fails via the Effect failure channel
+    // on contradiction; Effect.result materialises it back to a Result
+    // so we can branch here without a try/catch.
+    const traced = Effect.runSync(
+        Effect.result(deduceWithExplanations(initialKnowledge)).pipe(
+            Effect.provide(deduceLayer),
+        ),
+    );
+    const provenance = Result.isSuccess(traced)
+        ? traced.success.provenance
+        : undefined;
     const footnotes = Result.isSuccess(deductionResult)
         ? refuterCandidateFootnotes(
               suggestionsAsData,
@@ -636,8 +636,14 @@ export function ClueProvider({ children }: { children: ReactNode }) {
 
     const deductionResult = useMemo(
         () =>
+            // `deduce` fails on the Effect failure channel when a
+            // contradiction is detected; Effect.result materialises it
+            // back to Result<Knowledge, ContradictionTrace> so downstream
+            // UI code keeps its isSuccess / isFailure branching intact.
             Effect.runSync(
-                deduce(initialKnowledge).pipe(Effect.provide(deduceLayer)),
+                Effect.result(deduce(initialKnowledge)).pipe(
+                    Effect.provide(deduceLayer),
+                ),
             ),
         [deduceLayer, initialKnowledge],
     );

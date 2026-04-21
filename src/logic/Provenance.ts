@@ -1,6 +1,7 @@
 import { Data, Effect, Equal, HashMap, Match, MutableHashMap, MutableHashSet, Option } from "effect";
+import type { ContradictionTrace } from "./Deducer";
 import { Card, CardCategory, Player } from "./GameObjects";
-import { Cell, CellValue, Knowledge } from "./Knowledge";
+import { Cell, CellValue, Contradiction, Knowledge } from "./Knowledge";
 import { applyConsistencyRules, applyDeductionRules } from "./Rules";
 import {
     cardName,
@@ -321,7 +322,7 @@ export const deduceWithExplanations = (
     initial: Knowledge,
 ): Effect.Effect<
     { knowledge: Knowledge; provenance: Provenance },
-    never,
+    ContradictionTrace,
     CardSetService | PlayerSetService | SuggestionsService
 > =>
     Effect.gen(function* () {
@@ -354,13 +355,28 @@ export const deduceWithExplanations = (
             });
         };
 
-        const maxIterations = 1000;
-        for (let i = 0; i < maxIterations; i++) {
-            currentIteration = i + 1;
-            const before = current;
-            current = applyConsistencyRules(setup, tracer)(current);
-            current = applyDeductionRules(suggestions, tracer)(current);
-            if (Equal.equals(current, before)) break;
+        try {
+            const maxIterations = 1000;
+            for (let i = 0; i < maxIterations; i++) {
+                currentIteration = i + 1;
+                const before = current;
+                current = applyConsistencyRules(setup, tracer)(current);
+                current = applyDeductionRules(suggestions, tracer)(current);
+                if (Equal.equals(current, before)) break;
+            }
+        } catch (e) {
+            if (e instanceof Contradiction) {
+                return yield* Effect.fail({
+                    reason: e.reason,
+                    offendingCells: e.offendingCells,
+                    offendingSuggestionIndices:
+                        e.suggestionIndex !== undefined
+                            ? [e.suggestionIndex]
+                            : [],
+                    sliceLabel: e.sliceLabel,
+                });
+            }
+            throw e;
         }
 
         return { knowledge: current, provenance };
