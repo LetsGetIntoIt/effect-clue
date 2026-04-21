@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { CardPackRow } from "./components/CardPackRow";
 import { Checklist } from "./components/Checklist";
 import { ChecklistGrid } from "./components/ChecklistGrid";
 import { GameSetupPanel } from "./components/GameSetupPanel";
@@ -49,8 +50,12 @@ export function Clue() {
                 <SuggestionLogPanel />
 
                 <TabBar />
+                <CardPackRow />
                 <Checklist />
 
+                {/* Dormant safety net: GameSetupPanel returns null in
+                    commit 18; ChecklistGrid still mounts the old
+                    deduction view. Both files deleted in commit 19. */}
                 <div className="grid grid-cols-1 items-start gap-5 [@media(min-width:1100px)]:grid-cols-[minmax(380px,1fr)_minmax(400px,1fr)]">
                     <GameSetupPanel />
                     <ChecklistGrid />
