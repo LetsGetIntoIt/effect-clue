@@ -36,6 +36,7 @@ import {
 import { Suggestion } from "../../logic/Suggestion";
 import { useHover } from "../HoverContext";
 import { useClue } from "../state";
+import { CardPackRow } from "./CardPackRow";
 import { Envelope } from "./Icons";
 import { Tooltip } from "./Tooltip";
 
@@ -146,7 +147,7 @@ export function Checklist() {
             <h2 className="mb-3 text-[16px] uppercase tracking-[0.05em] text-accent">
                 {t("title")}
             </h2>
-            {!inSetup && <CaseFileHeader knowledge={knowledge} />}
+            {inSetup ? <CardPackRow /> : <CaseFileHeader knowledge={knowledge} />}
             {inSetup && handSizeMismatch && (
                 <div className="mb-3 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning">
                     {tSetup("handSizeMismatch", {

@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { CardPackRow } from "./components/CardPackRow";
 import { Checklist } from "./components/Checklist";
 import { ChecklistGrid } from "./components/ChecklistGrid";
 import { GameSetupPanel } from "./components/GameSetupPanel";
@@ -50,7 +49,6 @@ export function Clue() {
                 <SuggestionLogPanel />
 
                 <TabBar />
-                <CardPackRow />
                 <Checklist />
 
                 {/* Dormant safety net: GameSetupPanel returns null in

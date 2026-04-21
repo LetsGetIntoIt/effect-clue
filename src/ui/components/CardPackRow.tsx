@@ -26,8 +26,6 @@ export function CardPackRow() {
         () => loadCustomCardSets(),
     );
 
-    if (state.uiMode !== "setup") return null;
-
     const onCardSet = (choice: (typeof CARD_SETS)[number]) => {
         if (hasGameData() && !window.confirm(t("loadCardSetConfirm"))) return;
         dispatch({
@@ -65,52 +63,54 @@ export function CardPackRow() {
     };
 
     return (
-        <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[12px] font-semibold uppercase tracking-[0.05em] text-muted">
+        <div className="mb-4 rounded-[var(--radius)] border border-border bg-case-file-bg p-3">
+            <div className="mb-2.5 text-[12px] font-semibold uppercase tracking-[0.05em] text-accent">
                 {t("cardPack")}
-            </span>
-            {CARD_SETS.map(choice => (
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+                {CARD_SETS.map(choice => (
+                    <button
+                        key={choice.id}
+                        type="button"
+                        className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-hover"
+                        onClick={() => onCardSet(choice)}
+                    >
+                        {choice.label}
+                    </button>
+                ))}
+                {customPacks.map(pack => (
+                    <span
+                        key={pack.id}
+                        className="inline-flex items-center overflow-hidden rounded border border-border bg-white text-[13px]"
+                    >
+                        <button
+                            type="button"
+                            className="cursor-pointer px-3 py-1 hover:bg-hover"
+                            onClick={() => onCustomPack(pack)}
+                            title={t("loadCustomCardSetTitle", { label: pack.label })}
+                        >
+                            {pack.label}
+                        </button>
+                        <button
+                            type="button"
+                            className="cursor-pointer border-l border-border px-2 py-1 text-muted hover:bg-hover hover:text-danger"
+                            onClick={() => onDeleteCustomPack(pack)}
+                            title={t("deleteCustomCardSetTitle", { label: pack.label })}
+                            aria-label={t("deleteCustomCardSetAria", { label: pack.label })}
+                        >
+                            ×
+                        </button>
+                    </span>
+                ))}
                 <button
-                    key={choice.id}
                     type="button"
-                    className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-hover"
-                    onClick={() => onCardSet(choice)}
+                    className="cursor-pointer rounded border border-dashed border-border bg-white px-3 py-1 text-[13px] text-muted hover:bg-hover hover:text-accent"
+                    onClick={onSaveCardSet}
+                    title={t("saveAsCardPackTitle")}
                 >
-                    {choice.label}
+                    {t("saveAsCardPack")}
                 </button>
-            ))}
-            {customPacks.map(pack => (
-                <span
-                    key={pack.id}
-                    className="inline-flex items-center overflow-hidden rounded border border-border bg-white text-[13px]"
-                >
-                    <button
-                        type="button"
-                        className="cursor-pointer px-3 py-1 hover:bg-hover"
-                        onClick={() => onCustomPack(pack)}
-                        title={t("loadCustomCardSetTitle", { label: pack.label })}
-                    >
-                        {pack.label}
-                    </button>
-                    <button
-                        type="button"
-                        className="cursor-pointer border-l border-border px-2 py-1 text-muted hover:bg-hover hover:text-danger"
-                        onClick={() => onDeleteCustomPack(pack)}
-                        title={t("deleteCustomCardSetTitle", { label: pack.label })}
-                        aria-label={t("deleteCustomCardSetAria", { label: pack.label })}
-                    >
-                        ×
-                    </button>
-                </span>
-            ))}
-            <button
-                type="button"
-                className="cursor-pointer rounded border border-dashed border-border bg-white px-3 py-1 text-[13px] text-muted hover:bg-hover hover:text-accent"
-                onClick={onSaveCardSet}
-                title={t("saveAsCardPackTitle")}
-            >
-                {t("saveAsCardPack")}
-            </button>
+            </div>
         </div>
     );
 }
