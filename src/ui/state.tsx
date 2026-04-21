@@ -680,23 +680,49 @@ export function ClueProvider({ children }: { children: ReactNode }) {
 
     const didHydrate = useRef(false);
 
-    // One-shot hydration on mount: URL first, then localStorage.
+    // One-shot hydration on mount: URL first, then localStorage. The
+    // `?tab=setup|play` param overrides the smart default; with no
+    // explicit tab we land on Play if the hydrated session has any
+    // suggestions, else Setup (the reducer's default).
     useEffect(() => {
         if (didHydrate.current) return;
         didHydrate.current = true;
         if (typeof window === "undefined") return;
         const params = new URLSearchParams(window.location.search);
-        const state = params.get("state");
-        if (state) {
-            const session = decodeSessionFromUrl(state);
-            if (session) {
-                dispatch({ type: "replaceSession", session });
-                return;
-            }
+        const stateParam = params.get("state");
+        const tabParam = params.get("tab");
+        let hydrated: GameSession | undefined;
+        if (stateParam) hydrated = decodeSessionFromUrl(stateParam);
+        if (!hydrated) hydrated = loadFromLocalStorage();
+        if (hydrated) dispatch({ type: "replaceSession", session: hydrated });
+
+        // Tab precedence: explicit `?tab=` wins; otherwise pick based on
+        // hydrated suggestions. The default state.uiMode is "setup", so
+        // only dispatch when we actually need to change it.
+        if (tabParam === "play") {
+            dispatch({ type: "setUiMode", mode: "play" });
+        } else if (tabParam === "setup") {
+            // No-op: default is already "setup".
+        } else if (hydrated && hydrated.suggestions.length > 0) {
+            dispatch({ type: "setUiMode", mode: "play" });
         }
-        const session = loadFromLocalStorage();
-        if (session) dispatch({ type: "replaceSession", session });
     }, []);
+
+    // Mirror `uiMode` to the URL as `?tab=setup|play`. Uses
+    // replaceState (not pushState) because tab flips shouldn't clutter
+    // the back stack — same spirit as `setUiMode` bypassing undo/redo
+    // history. Gated on `didHydrate` so the initial reducer default
+    // doesn't stomp an unset URL before hydration has chosen the tab.
+    useEffect(() => {
+        if (!didHydrate.current) return;
+        if (typeof window === "undefined") return;
+        const params = new URLSearchParams(window.location.search);
+        const urlTab = state.uiMode;
+        if (params.get("tab") === urlTab) return;
+        params.set("tab", urlTab);
+        const newUrl = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
+        window.history.replaceState(null, "", newUrl);
+    }, [state.uiMode]);
 
     // Save to localStorage whenever inputs change. Skip the first render
     // (before hydration) to avoid trampling a saved session with the

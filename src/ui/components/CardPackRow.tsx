@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CARD_SETS } from "../../logic/GameSetup";
 import {
     CustomCardSet,
@@ -22,9 +22,16 @@ export function CardPackRow() {
     const t = useTranslations("setup");
     const { state, dispatch, hasGameData } = useClue();
     const setup = state.setup;
+    // Initialise empty so server HTML and client's first render agree; the
+    // real list loads in a mount effect. Reading localStorage in the
+    // useState initialiser would produce 0 packs on SSR and N packs on
+    // the client's first render — a hydration mismatch.
     const [customPacks, setCustomPacks] = useState<ReadonlyArray<CustomCardSet>>(
-        () => loadCustomCardSets(),
+        [],
     );
+    useEffect(() => {
+        setCustomPacks(loadCustomCardSets());
+    }, []);
 
     const onCardSet = (choice: (typeof CARD_SETS)[number]) => {
         if (hasGameData() && !window.confirm(t("loadCardSetConfirm"))) return;
