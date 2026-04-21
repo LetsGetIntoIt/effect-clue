@@ -2,8 +2,6 @@
 
 import { useTranslations } from "next-intl";
 import { Checklist } from "./components/Checklist";
-import { ChecklistGrid } from "./components/ChecklistGrid";
-import { GameSetupPanel } from "./components/GameSetupPanel";
 import { GlobalContradictionBanner } from "./components/GlobalContradictionBanner";
 import { MagnifyingGlass } from "./components/Icons";
 import { SuggestionLogPanel } from "./components/SuggestionLogPanel";
@@ -22,12 +20,11 @@ import { ClueProvider, useClue } from "./state";
  * `--contradiction-banner-offset`, which `<main>` adds to its top padding
  * so the header isn't hidden underneath.
  *
- * The unified tabbed Checklist (below the suggestion log) is the
- * eventual single surface for both Setup and Play modes. Commit 17
- * introduces it as a copy of ChecklistGrid alongside the old
- * GameSetupPanel + ChecklistGrid pair (safety net); commit 18 folds
- * the Setup controls into the Checklist rows; commit 19 deletes the
- * old pair.
+ * The unified Checklist below the suggestion log is the single
+ * surface for both Setup and Play modes — a tab bar drives the
+ * `uiMode` slice and the component gates its Setup-mode affordances
+ * (inline renames, add/remove, hand-size row, "+ add card" /
+ * "+ add category") on that flag.
  */
 export function Clue() {
     const t = useTranslations("app");
@@ -50,14 +47,6 @@ export function Clue() {
 
                 <TabBar />
                 <Checklist />
-
-                {/* Dormant safety net: GameSetupPanel returns null in
-                    commit 18; ChecklistGrid still mounts the old
-                    deduction view. Both files deleted in commit 19. */}
-                <div className="grid grid-cols-1 items-start gap-5 [@media(min-width:1100px)]:grid-cols-[minmax(380px,1fr)_minmax(400px,1fr)]">
-                    <GameSetupPanel />
-                    <ChecklistGrid />
-                </div>
             </main>
            </HoverProvider>
           </ClueProvider>

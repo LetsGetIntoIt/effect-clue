@@ -68,12 +68,7 @@ type DeduceLayer = Layer.Layer<
     CardSetService | PlayerSetService | SuggestionsService
 >;
 
-export type {
-    ClueAction,
-    ClueState,
-    DraftSuggestion,
-    UiMode,
-} from "../logic/ClueState";
+export type { DraftSuggestion } from "../logic/ClueState";
 import type { ClueAction, ClueState } from "../logic/ClueState";
 
 const initialState: ClueState = {

@@ -59,8 +59,9 @@ export type ReasonKind =
     | RefuterShowedImpl
     | RefuterOwnsOneOfImpl;
 
-export const InitialKnownCard = (): ReasonKind => new InitialKnownCardImpl();
-export const InitialHandSize = (): ReasonKind => new InitialHandSizeImpl();
+const InitialKnownCard = (): ReasonKind => new InitialKnownCardImpl();
+// InitialHandSize is declared in the ReasonKind union but not yet
+// emitted by any rule — kept for future hand-size-driven deductions.
 export const CardOwnership = (params: { readonly card: Card }): ReasonKind =>
     new CardOwnershipImpl(params);
 export const PlayerHand = (params: { readonly player: Player }): ReasonKind =>

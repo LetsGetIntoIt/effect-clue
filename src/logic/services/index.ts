@@ -23,8 +23,8 @@ import {
     makeSuggestionsLayer,
 } from "./SuggestionsService";
 
-export { CardSetService, getCardSet, makeCardSetLayer };
-export { PlayerSetService, getPlayerSet, makePlayerSetLayer };
+export { CardSetService, getCardSet };
+export { PlayerSetService, getPlayerSet };
 export { SuggestionsService, getSuggestions, makeSuggestionsLayer };
 export { KnowledgeService, getKnowledge, makeKnowledgeLayer };
 

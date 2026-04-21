@@ -47,10 +47,6 @@
     },
     "setup": {
         "title": "Game setup",
-        "startPlaying": "Start playing →",
-        "startPlayingTitle": "Lock the deck / player roster and start tracking suggestions",
-        "editSetup": "Edit setup",
-        "editSetupTitle": "Unlock the deck / player roster for editing",
         "cardPack": "Use card pack:",
         "loadCardSetConfirm": "Loading a card pack will discard your current hand sizes, known cards, and suggestions. Continue?",
         "loadCustomCardSetTitle": "Load card pack \"{label}\"",
@@ -77,7 +73,6 @@
     },
     "deduce": {
         "title": "Deduction grid",
-        "caseFile": "Case file",
         "caseFileProgress": "Case file · {percent}% solved",
         "candidatesCount": "{count, plural, one {# candidate} other {# candidates}}",
         "whyHeader": "Why this value:",
