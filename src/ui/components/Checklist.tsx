@@ -146,7 +146,7 @@ export function Checklist() {
             <h2 className="mb-3 text-[16px] uppercase tracking-[0.05em] text-accent">
                 {t("title")}
             </h2>
-            <CaseFileHeader knowledge={knowledge} />
+            {!inSetup && <CaseFileHeader knowledge={knowledge} />}
             {inSetup && handSizeMismatch && (
                 <div className="mb-3 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning">
                     {tSetup("handSizeMismatch", {
