@@ -158,7 +158,29 @@
         "scoreBreakdownDetails": "{info, plural, one {# unknown cell} other {# unknown cells}} × {combos, plural, one {# case-file combination} other {# case-file combinations}} × {refuters, plural, one {# possible refuter} other {# possible refuters}}",
         "scoreBreakdownCoverage": "Covers {count} tied triples.",
         "defaultCategorySingular": "card",
-        "streamlinedToggle": "Streamlined input"
+        "streamlinedToggle": "Streamlined input",
+        "streamlined": {
+            "placeholder": "e.g. Mustard suggests Knife, Plum, Ballroom. Passed by Green. Refuted by Scarlet with Plum",
+            "submit": "Add (Enter)",
+            "keyboardHint": "Tab accepts · Enter submits",
+            "chipSuggester": "Suggester",
+            "chipCard": "{category}",
+            "chipCardFallback": "Card",
+            "chipPasser": "Passed",
+            "chipRefuter": "Refuted by",
+            "chipSeenCard": "Shown",
+            "chipTyping": "(typing…)",
+            "chipUnknown": "(unknown)",
+            "checklist": {
+                "suggester": "Suggester",
+                "cards": "{filled} of {total} cards",
+                "passers": "{count, plural, =0 {Passed by: none (optional)} one {Passed by: # player} other {Passed by: # players}}",
+                "refuterOptional": "Refuted by: none (optional)",
+                "refuterWithCard": "Refuted by + card shown",
+                "refuterNeedsCard": "Refuted by (add 'with <card>' for what was shown)",
+                "refuterPartial": "Refuted by (incomplete)"
+            }
+        }
     },
     "contradictions": {
         "full": "<strong>Contradiction:</strong> {reason}",

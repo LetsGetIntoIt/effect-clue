@@ -17,6 +17,7 @@ import {
 import { useHover } from "../HoverContext";
 import { useListFormatter } from "../hooks/useListFormatter";
 import { useStreamlinedToggle } from "../hooks/useStreamlinedToggle";
+import { SuggestionCombobox } from "./SuggestionCombobox";
 import { Tooltip } from "./Tooltip";
 import { newSuggestionId } from "../../logic/Suggestion";
 import {
@@ -62,15 +63,20 @@ export function SuggestionLogPanel() {
  */
 function AddSuggestion() {
     const t = useTranslations("suggestions");
+    const { state, dispatch } = useClue();
     const [streamlined, setStreamlined] = useStreamlinedToggle();
     return (
         <div>
-            {/*
-              * Commit 2 is plumbing: both branches render the same
-              * manual form today. Commit 4 swaps the `true` branch for
-              * the SuggestionCombobox.
-              */}
-            {streamlined ? <AddSuggestionManual /> : <AddSuggestionManual />}
+            {streamlined ? (
+                <SuggestionCombobox
+                    setup={state.setup}
+                    onSubmit={draft =>
+                        dispatch({ type: "addSuggestion", suggestion: draft })
+                    }
+                />
+            ) : (
+                <AddSuggestionManual />
+            )}
             <label
                 className="mt-2 flex cursor-pointer items-center gap-1.5 text-[12px] text-muted"
             >
