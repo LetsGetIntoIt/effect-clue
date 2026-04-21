@@ -243,6 +243,7 @@ export function SuggestionCombobox({
                     </ul>
                 )}
             </div>
+            <SlotHint parsed={parsed} setup={setup} />
             <ChipPreview parsed={parsed} setup={setup} />
             <SuggestionChecklist parsed={parsed} />
             <div className="mt-2 flex items-center gap-2">
@@ -254,6 +255,24 @@ export function SuggestionCombobox({
                 >
                     {t("streamlined.submit")}
                 </button>
+                <button
+                    type="button"
+                    className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[12px] text-muted hover:text-accent"
+                    onClick={() => {
+                        const example = buildExampleSentence(setup);
+                        setText(example);
+                        setCaret(example.length);
+                        setDropdownOpen(true);
+                        queueMicrotask(() => {
+                            const el = inputRef.current;
+                            if (!el) return;
+                            el.focus();
+                            el.setSelectionRange(example.length, example.length);
+                        });
+                    }}
+                >
+                    {t("streamlined.useExample")}
+                </button>
                 <span className="text-[12px] text-muted">
                     {t("streamlined.keyboardHint")}
                 </span>
@@ -261,6 +280,144 @@ export function SuggestionCombobox({
         </div>
     );
 }
+
+/**
+ * Build a fully-formed example sentence keyed to the current setup.
+ * Picks the first available player, first card from each category,
+ * and the second + third players as refuter / passer respectively.
+ * Falls back gracefully if the setup is too small to populate every
+ * optional slot.
+ */
+const buildExampleSentence = (setup: GameSetup): string => {
+    const players = setup.players.map(String);
+    const categoryFirstCards = setup.categories.map(c => c.cards[0]?.name);
+    if (players.length === 0) return "";
+    if (categoryFirstCards.some(n => n === undefined)) return "";
+    const suggester = players[0]!;
+    const cards = categoryFirstCards.join(", ");
+    const passer = players[1];
+    const refuter = players[2];
+    const seenCard = categoryFirstCards[0]!;
+    let out = `${suggester} suggests ${cards}`;
+    if (passer !== undefined) out += `. Passed by ${passer}`;
+    if (refuter !== undefined) out += `. Refuted by ${refuter} with ${seenCard}`;
+    return out;
+};
+
+/**
+ * A one-line helper under the input that tells the user what the
+ * parser is currently waiting for, or surfaces a friendly error when
+ * the active slot can't resolve. Tightens the feedback loop: the user
+ * doesn't have to scan the chip preview to know why Enter is disabled.
+ */
+function SlotHint({
+    parsed,
+    setup,
+}: {
+    readonly parsed: ParsedSuggestion;
+    readonly setup: GameSetup;
+}): React.ReactElement | null {
+    const t = useTranslations("suggestions");
+
+    // Priority 1: an active slot is Unknown or Ambiguous — show the
+    // error with nearest candidates / alternative candidates.
+    const activeSlotState = getActiveSlotState(parsed);
+    if (activeSlotState?._tag === "Unknown") {
+        const candidates = activeSlotState.nearestCandidates
+            .map(c => c.label)
+            .slice(0, 3);
+        const joined = candidates.join(", ");
+        return (
+            <div className="mt-1 text-[12px] text-danger">
+                {candidates.length > 0
+                    ? t("streamlined.hintUnknownWith", {
+                          raw: activeSlotState.raw,
+                          suggestions: joined,
+                      })
+                    : t("streamlined.hintUnknown", {
+                          raw: activeSlotState.raw,
+                      })}
+            </div>
+        );
+    }
+    if (activeSlotState?._tag === "Ambiguous") {
+        const candidates = activeSlotState.candidates
+            .map(c => c.label)
+            .slice(0, 3);
+        return (
+            <div className="mt-1 text-[12px] text-muted">
+                {t("streamlined.hintAmbiguous", {
+                    raw: activeSlotState.raw,
+                    options: candidates.join(", "),
+                })}
+            </div>
+        );
+    }
+
+    // Priority 2: the draft is ready — tell the user to hit Enter.
+    if (parsed.draft !== null) {
+        return (
+            <div className="mt-1 text-[12px] text-accent">
+                {t("streamlined.hintReady")}
+            </div>
+        );
+    }
+
+    // Priority 3: show what's expected next based on the active slot.
+    const nextHint = nextHintMessage(parsed, setup, t);
+    if (nextHint === null) return null;
+    return (
+        <div className="mt-1 text-[12px] text-muted">{nextHint}</div>
+    );
+}
+
+const getActiveSlotState = (
+    parsed: ParsedSuggestion,
+): SlotState<unknown> | null => {
+    const { activeSlot } = parsed;
+    switch (activeSlot.kind) {
+        case "suggester":
+            return parsed.suggester;
+        case "card":
+            return parsed.cards[activeSlot.index] ?? null;
+        case "passer":
+            return parsed.nonRefuters[activeSlot.index] ?? null;
+        case "refuter":
+            return parsed.refuter;
+        case "seenCard":
+            return parsed.seenCard;
+        case "done":
+            return null;
+    }
+};
+
+type TFn = (key: string, values?: Record<string, string>) => string;
+
+const nextHintMessage = (
+    parsed: ParsedSuggestion,
+    setup: GameSetup,
+    t: TFn,
+): string | null => {
+    const { activeSlot } = parsed;
+    switch (activeSlot.kind) {
+        case "suggester":
+            return t("streamlined.hintNextSuggester");
+        case "card": {
+            const category =
+                setup.categories[activeSlot.index]?.name ??
+                t("streamlined.chipCardFallback");
+            return t("streamlined.hintNextCard", { category });
+        }
+        case "passer":
+            return t("streamlined.hintNextPasser");
+        case "refuter":
+            return t("streamlined.hintNextRefuter");
+        case "seenCard":
+            return t("streamlined.hintNextSeenCard");
+        case "done":
+            return null;
+    }
+};
 
 /**
  * Separator inserted after a successful autocomplete-accept, based on

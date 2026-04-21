@@ -179,7 +179,17 @@
                 "refuterWithCard": "Refuted by + card shown",
                 "refuterNeedsCard": "Refuted by (add 'with <card>' for what was shown)",
                 "refuterPartial": "Refuted by (incomplete)"
-            }
+            },
+            "useExample": "Use example",
+            "hintUnknown": "{raw} doesn't match any name here.",
+            "hintUnknownWith": "{raw} doesn't match. Did you mean {suggestions}?",
+            "hintAmbiguous": "{raw} matches {options} — type more to narrow it down.",
+            "hintReady": "Ready. Press Enter to add the suggestion.",
+            "hintNextSuggester": "Type the player who made this suggestion.",
+            "hintNextCard": "Type a {category} card.",
+            "hintNextPasser": "Type a player who passed, or start 'Refuted by' to skip ahead.",
+            "hintNextRefuter": "Type the player who refuted the suggestion.",
+            "hintNextSeenCard": "Type which of the three cards the refuter showed."
         }
     },
     "contradictions": {
