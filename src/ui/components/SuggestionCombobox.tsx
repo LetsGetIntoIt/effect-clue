@@ -18,6 +18,7 @@ import {
     type Range,
     type SlotState,
 } from "../../logic/SuggestionParser";
+import { Tooltip } from "./Tooltip";
 
 /**
  * Keyboard-first streamlined input for adding a suggestion.
@@ -1162,6 +1163,16 @@ function SlotPills({
     const refuterStatus = statusOfSlot(parsed.refuter, true);
     const seenStatus = statusOfSlot(parsed.seenCard, true);
 
+    // Error tooltips — hovering an exclamation pill should explain
+    // what's wrong with that slot's raw text (unresolved name /
+    // ambiguous prefix / etc.). Reuse the same hint copy the
+    // `SlotHint` line uses so the two never disagree.
+    const suggesterError = errorHintFor(parsed.suggester, t);
+    const cardsErrors = parsed.cards.map(c => errorHintFor(c, t));
+    const refuterError = errorHintFor(parsed.refuter, t);
+    const seenError = errorHintFor(parsed.seenCard, t);
+    const passersError = errorHintForList(parsed.nonRefuters, t);
+
     const requiredDone =
         suggesterStatus === STATUS_DONE &&
         cardsStatuses.every(s => s === STATUS_DONE);
@@ -1216,6 +1227,7 @@ function SlotPills({
                 {...(parsed.suggester._tag === "Resolved" && {
                     value: parsed.suggester.label,
                 })}
+                {...(suggesterError !== null && { errorHint: suggesterError })}
                 onClick={() => onPillClick(parsed.suggester, undefined)}
             />
             {parsed.cards.map((slot, i) => (
@@ -1227,6 +1239,9 @@ function SlotPills({
                         t("streamlined.pillCardFallback")
                     }
                     {...(slot._tag === "Resolved" && { value: slot.label })}
+                    {...(cardsErrors[i] !== null && {
+                        errorHint: cardsErrors[i]!,
+                    })}
                     onClick={() => onPillClick(slot, undefined)}
                 />
             ))}
@@ -1234,6 +1249,7 @@ function SlotPills({
                 status={passersStatus}
                 label={t("streamlined.pillPassers")}
                 {...(passersValue !== undefined && { value: passersValue })}
+                {...(passersError !== null && { errorHint: passersError })}
                 disabled={!canAddPassers}
                 {...(canAddPassers && {
                     onClick: () =>
@@ -1251,6 +1267,7 @@ function SlotPills({
                 {...(parsed.refuter._tag === "Resolved" && {
                     value: parsed.refuter.label,
                 })}
+                {...(refuterError !== null && { errorHint: refuterError })}
                 disabled={!canAddRefuter}
                 {...(canAddRefuter && {
                     onClick: () =>
@@ -1263,6 +1280,7 @@ function SlotPills({
                 {...(parsed.seenCard._tag === "Resolved" && {
                     value: parsed.seenCard.label,
                 })}
+                {...(seenError !== null && { errorHint: seenError })}
                 disabled={!canAddSeen && seenStatus !== STATUS_DONE}
                 {...(canAddSeen && {
                     onClick: () => onPillClick(parsed.seenCard, WITH_FRAGMENT),
@@ -1274,6 +1292,54 @@ function SlotPills({
         </div>
     );
 }
+
+/**
+ * Build a user-facing error message explaining why a slot couldn't
+ * resolve — surfaced as a `title=` tooltip on error pills so hovering
+ * an exclamation pill tells the user exactly what's wrong. Reuses the
+ * same i18n copy as `SlotHint` so the two can't drift.
+ */
+const errorHintFor = (
+    slot: SlotState<unknown>,
+    t: TFn,
+): string | null => {
+    if (slot._tag === "Unknown") {
+        const nearest = slot.nearestCandidates
+            .map(c => c.label)
+            .slice(0, 3)
+            .join(", ");
+        return nearest.length > 0
+            ? t("streamlined.hintUnknownWith", {
+                  raw: slot.raw,
+                  suggestions: nearest,
+              })
+            : t("streamlined.hintUnknown", { raw: slot.raw });
+    }
+    if (slot._tag === "Ambiguous") {
+        const options = slot.candidates.map(c => c.label).slice(0, 3).join(", ");
+        return t("streamlined.hintAmbiguous", {
+            raw: slot.raw,
+            options,
+        });
+    }
+    return null;
+};
+
+/**
+ * List-variant: find the first errored token in a list-valued slot
+ * (passers). The pill is a rollup of the whole list, so surfacing the
+ * first offending token is enough to tell the user what to fix.
+ */
+const errorHintForList = (
+    slots: ReadonlyArray<SlotState<unknown>>,
+    t: TFn,
+): string | null => {
+    for (const s of slots) {
+        const hint = errorHintFor(s, t);
+        if (hint !== null) return hint;
+    }
+    return null;
+};
 
 // Sentinel used when the passers pill is clicked but no tokens exist
 // yet — `onPillClick` only needs the `_tag` to decide the
@@ -1296,6 +1362,7 @@ function SlotPill({
     onClick,
     disabled,
     disabledHint,
+    errorHint,
 }: {
     readonly status: PillStatus;
     readonly label: string;
@@ -1303,6 +1370,7 @@ function SlotPill({
     readonly onClick?: () => void;
     readonly disabled?: boolean;
     readonly disabledHint?: string;
+    readonly errorHint?: string;
 }): React.ReactElement {
     const tone =
         status === STATUS_DONE
@@ -1325,6 +1393,25 @@ function SlotPill({
                     ? "–"
                     : "+"
                 : "";
+    // Tooltip priority:
+    //   1. `errorHint` — when the pill is in ERROR state, explains
+    //      *what* is wrong with the parsed value (unknown / ambiguous
+    //      name, etc.). Reused from the SlotHint copy so the pill
+    //      tooltip and the inline hint never disagree.
+    //   2. `disabledHint` — when the pill is disabled, explains why
+    //      (e.g. "Add a refuter first" on Shown card).
+    //   3. undefined — render children unchanged (Tooltip passes
+    //      through for null content).
+    //
+    // Uses the project's styled Tooltip wrapper (Radix-backed) rather
+    // than the browser-default `title=` attribute so the tooltip
+    // styling matches the rest of the app's parchment aesthetic.
+    const tooltipContent =
+        status === STATUS_ERROR && errorHint !== undefined
+            ? errorHint
+            : disabled
+              ? disabledHint
+              : undefined;
     const pillBody = (
         <span
             className={
@@ -1345,8 +1432,8 @@ function SlotPill({
         </span>
     );
 
-    if (onClick !== undefined && !disabled) {
-        return (
+    const trigger =
+        onClick !== undefined && !disabled ? (
             <button
                 type="button"
                 onClick={onClick}
@@ -1354,16 +1441,11 @@ function SlotPill({
             >
                 {pillBody}
             </button>
+        ) : (
+            // Disabled / inert pill: a plain span. Tooltip still works
+            // — Radix wires hover + focus on the trigger regardless of
+            // it being a button.
+            <span className="cursor-not-allowed">{pillBody}</span>
         );
-    }
-    // Disabled or inert: render as a plain span with an optional
-    // tooltip explaining why it can't be clicked yet.
-    return (
-        <span
-            className="cursor-not-allowed"
-            title={disabled ? disabledHint : undefined}
-        >
-            {pillBody}
-        </span>
-    );
+    return <Tooltip content={tooltipContent}>{trigger}</Tooltip>;
 }

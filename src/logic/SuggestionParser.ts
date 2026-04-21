@@ -829,16 +829,41 @@ export const autocompleteFor = (
         cs: ReadonlyArray<Candidate<T>>,
     ): ReadonlyArray<Candidate<unknown>> => cs;
 
+    // Clue roles are disjoint: the suggester can't pass (they're
+    // asking), can't refute their own suggestion, and the refuter
+    // isn't among the passers. Excluding cross-role candidates from
+    // each player-slot dropdown keeps the user on a valid path and
+    // stops the dropdown from offering semantically-invalid picks.
+    const suggesterValue =
+        parsed.suggester._tag === "Resolved"
+            ? parsed.suggester.value
+            : undefined;
+    const refuterValue =
+        parsed.refuter._tag === "Resolved"
+            ? parsed.refuter.value
+            : undefined;
+    const passerValues = new Set(
+        parsed.nonRefuters.flatMap(p => (p._tag === "Resolved" ? [p.value] : [])),
+    );
+    const playersExcluding = (
+        exclude: ReadonlyArray<unknown>,
+    ): ReadonlyArray<Candidate<unknown>> =>
+        asUnknown(playerCandidates).filter(
+            c => !exclude.includes(c.value),
+        );
+
     switch (activeSlot.kind) {
         case "suggester": {
             const slot = parsed.suggester;
+            // Suggester slot: exclude anyone already playing another
+            // role in this suggestion (refuter + passers).
+            const excluded: Array<unknown> = [];
+            if (refuterValue !== undefined) excluded.push(refuterValue);
+            excluded.push(...passerValues);
             return {
                 slot: activeSlot,
                 ...extractRaw(slot),
-                candidates: filterCandidates(
-                    slot,
-                    asUnknown(playerCandidates),
-                ),
+                candidates: filterCandidates(slot, playersExcluding(excluded)),
             };
         }
         case "card": {
@@ -856,24 +881,29 @@ export const autocompleteFor = (
             const slot =
                 parsed.nonRefuters[activeSlot.index] ??
                 ({ _tag: "Empty" } as const);
+            // Passer slot: exclude the suggester (they asked, they
+            // can't pass) and the refuter (they refuted, not passed).
+            const excluded: Array<unknown> = [];
+            if (suggesterValue !== undefined) excluded.push(suggesterValue);
+            if (refuterValue !== undefined) excluded.push(refuterValue);
             return {
                 slot: activeSlot,
                 ...extractRaw(slot),
-                candidates: filterCandidates(
-                    slot,
-                    asUnknown(playerCandidates),
-                ),
+                candidates: filterCandidates(slot, playersExcluding(excluded)),
             };
         }
         case "refuter": {
             const slot = parsed.refuter;
+            // Refuter slot: exclude the suggester and anyone already
+            // in the passers list — refuting and passing are
+            // mutually exclusive in the same suggestion.
+            const excluded: Array<unknown> = [];
+            if (suggesterValue !== undefined) excluded.push(suggesterValue);
+            excluded.push(...passerValues);
             return {
                 slot: activeSlot,
                 ...extractRaw(slot),
-                candidates: filterCandidates(
-                    slot,
-                    asUnknown(playerCandidates),
-                ),
+                candidates: filterCandidates(slot, playersExcluding(excluded)),
             };
         }
         case "seenCard": {
