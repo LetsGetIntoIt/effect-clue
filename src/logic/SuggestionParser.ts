@@ -767,13 +767,19 @@ const buildDraft = (params: {
         if (c._tag !== "Resolved") return null;
         resolvedCards.push(c.value);
     }
-    const resolvedPassers: Array<Player> = [];
+    // Dedupe the passers by branded-string value: autocomplete-tab
+    // cycles can easily produce "Passed by Player 1, Player 1, Player 1"
+    // in the raw text, but the domain semantic is a set — a player
+    // either passed or didn't. Insertion-order Set preserves the first
+    // occurrence, which keeps chip rendering stable.
+    const resolvedPassersSet = new Set<Player>();
     for (const p of nonRefuters) {
         // Optional section — empty is fine. But if the user typed a
         // token, it must resolve.
         if (p._tag !== "Resolved") return null;
-        resolvedPassers.push(p.value);
+        resolvedPassersSet.add(p.value);
     }
+    const resolvedPassers = Array.from(resolvedPassersSet);
     let refuterValue: Player | undefined;
     let seenCardValue: Card | undefined;
     if (refuter._tag === "Resolved") {

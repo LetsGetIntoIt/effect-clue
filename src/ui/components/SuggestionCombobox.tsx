@@ -690,6 +690,15 @@ function SlotPills({
     // Passers is a list — represent it as a single "Passed by" pill
     // summarising its state. Individual non-refuter tokens show up in
     // the input text itself; the pill is a rollup.
+    //
+    // Status priorities (first match wins):
+    //   1. No tokens typed yet          -> PENDING_OPT (empty optional)
+    //   2. Any token is Unknown/Ambig.  -> ERROR
+    //   3. All tokens Resolved          -> DONE
+    //   4. Mid-typing (some Typing)     -> PENDING_OPT
+    //
+    // Case 4 is what stops the pill from flashing to `!` while the
+    // user tab-tab-tabs through a long passer list.
     const passersStatus: PillStatus =
         parsed.nonRefuters.length === 0
             ? STATUS_PENDING_OPT
@@ -699,13 +708,21 @@ function SlotPills({
               ? STATUS_ERROR
               : parsed.nonRefuters.every(p => p._tag === "Resolved")
                 ? STATUS_DONE
-                : STATUS_ERROR;
+                : STATUS_PENDING_OPT;
+    // Dedupe the displayed passer labels — see the matching `Set`-based
+    // dedupe in `buildDraft` (SuggestionParser). A user tab-tab-tabbing
+    // through the passers can land the same player multiple times in
+    // the raw text; the semantic is a set, so showing duplicates would
+    // be confusing.
     const passersValue =
         passersStatus === STATUS_DONE
-            ? parsed.nonRefuters
-                  .map(p => (p._tag === "Resolved" ? p.label : ""))
-                  .filter(s => s.length > 0)
-                  .join(", ")
+            ? Array.from(
+                  new Set(
+                      parsed.nonRefuters
+                          .map(p => (p._tag === "Resolved" ? p.label : ""))
+                          .filter(s => s.length > 0),
+                  ),
+              ).join(", ")
             : undefined;
 
     return (

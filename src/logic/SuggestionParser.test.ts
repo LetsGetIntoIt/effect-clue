@@ -202,6 +202,18 @@ describe("parseSuggestionInput", () => {
             expect(parsed.seenCard._tag).toBe("Unknown");
             expect(parsed.draft).toBeNull();
         });
+
+        test("duplicate non-refuters collapse to a set in the draft", () => {
+            // Tab-tab-tab on the same passer input easily produces
+            // ". Passed by Bob, Bob, Bob, Cho, Bob" — the domain is a
+            // set, so the draft dedupes by Player value while
+            // preserving first-occurrence order.
+            const parsed = parse(
+                "Anisha suggests Mustard, Knife, Kitchen. Passed by Bob, Bob, Cho, Bob",
+            );
+            expect(parsed.draft).not.toBeNull();
+            expect(parsed.draft!.nonRefuters).toEqual([BOB, CHO]);
+        });
     });
 
     describe("active slot / caret", () => {
