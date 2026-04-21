@@ -16,6 +16,7 @@ import {
 } from "../../logic/services";
 import { useHover } from "../HoverContext";
 import { useListFormatter } from "../hooks/useListFormatter";
+import { useStreamlinedToggle } from "../hooks/useStreamlinedToggle";
 import { Tooltip } from "./Tooltip";
 import { newSuggestionId } from "../../logic/Suggestion";
 import {
@@ -50,6 +51,38 @@ export function SuggestionLogPanel() {
             <AddSuggestion />
             <PriorSuggestions />
         </section>
+    );
+}
+
+/**
+ * Hosts either the streamlined natural-language input or the classic
+ * per-category dropdown form, gated on a user-flippable preference. A
+ * small "streamlined input" checkbox below the form flips between the
+ * two views; the choice persists across sessions.
+ */
+function AddSuggestion() {
+    const t = useTranslations("suggestions");
+    const [streamlined, setStreamlined] = useStreamlinedToggle();
+    return (
+        <div>
+            {/*
+              * Commit 2 is plumbing: both branches render the same
+              * manual form today. Commit 4 swaps the `true` branch for
+              * the SuggestionCombobox.
+              */}
+            {streamlined ? <AddSuggestionManual /> : <AddSuggestionManual />}
+            <label
+                className="mt-2 flex cursor-pointer items-center gap-1.5 text-[12px] text-muted"
+            >
+                <input
+                    type="checkbox"
+                    className="m-0"
+                    checked={streamlined}
+                    onChange={e => setStreamlined(e.currentTarget.checked)}
+                />
+                {t("streamlinedToggle")}
+            </label>
+        </div>
     );
 }
 
@@ -104,7 +137,7 @@ const pickCardsByCategory = (
     return out;
 };
 
-function AddSuggestion() {
+function AddSuggestionManual() {
     const t = useTranslations("suggestions");
     const { state, dispatch } = useClue();
     const setup = state.setup;
