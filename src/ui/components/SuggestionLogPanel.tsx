@@ -381,6 +381,7 @@ function Recommendations() {
                     aria-hidden
                     className="inline-block text-[16px] leading-none text-muted"
                 >
+                    {/* eslint-disable-next-line i18next/no-literal-string */}
                     {expanded ? "▾" : "▸"}
                 </span>
             </button>
