@@ -2,7 +2,7 @@
 
 import { Result } from "effect";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Card, Owner, Player, ownerLabel } from "../../logic/GameObjects";
 import {
     allCardIds,
@@ -67,6 +67,31 @@ export function Checklist() {
     const suggestions = derived.suggestionsAsData;
 
     const owners: ReadonlyArray<Owner> = allOwners(setup);
+
+    // In Setup mode the add-player column sits between the players and
+    // the case file — clicking + spawns the new player where its column
+    // would naturally appear. Each of the three owner-axis rows below
+    // injects the matching header/cell right before the case-file
+    // column; Play mode skips the cell entirely (unchanged column
+    // count).
+    const addPlayerHeaderCell = (
+        <th
+            key="add-player-col"
+            className="sticky top-0 z-10 w-px whitespace-nowrap border border-border bg-row-header px-1.5 py-1 text-center"
+        >
+            <button
+                type="button"
+                className="cursor-pointer whitespace-nowrap rounded border-none bg-accent px-2 py-1 text-[12px] font-semibold leading-none text-white hover:bg-accent-hover"
+                title={tSetup("addPlayerTitle")}
+                onClick={() => dispatch({ type: "addPlayer" })}
+            >
+                {tSetup("addPlayerLabel")}
+            </button>
+        </th>
+    );
+    const addPlayerEmptyCell = (
+        <td key="add-player-col" className="border border-border" />
+    );
 
     const handSizeMap = new Map(state.handSizes);
     const defaults = new Map(defaultHandSizes(setup));
@@ -144,9 +169,21 @@ export function Checklist() {
 
     return (
         <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">
-            <h2 className="mb-3 text-[16px] uppercase tracking-[0.05em] text-accent">
-                {t("title")}
-            </h2>
+            {inSetup && (
+                <div className="mb-3 flex justify-end">
+                    <button
+                        type="button"
+                        className="cursor-pointer rounded-[var(--radius)] border-none bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover"
+                        onClick={() =>
+                            dispatch({ type: "setUiMode", mode: "play" })
+                        }
+                    >
+                        {suggestions.length > 0
+                            ? tSetup("continuePlaying")
+                            : tSetup("startPlaying")}
+                    </button>
+                </div>
+            )}
             {inSetup ? <CardPackRow /> : <CaseFileHeader knowledge={knowledge} />}
             {inSetup && handSizeMismatch && (
                 <div className="mb-3 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning">
@@ -161,83 +198,78 @@ export function Checklist() {
                 <thead>
                     <tr>
                         <th className="sticky top-0 z-10 border border-border bg-row-header px-2 py-1 text-center font-semibold"></th>
-                        {owners.map(owner => (
-                            <th
-                                key={ownerKey(owner)}
-                                className="sticky top-0 z-10 border border-border bg-row-header px-2 py-1 text-center align-top font-semibold"
-                            >
-                                {inSetup && owner._tag === "Player" ? (
-                                    <PlayerNameInput
-                                        player={owner.player}
-                                        allPlayers={setup.players}
-                                    />
-                                ) : (
-                                    ownerLabel(owner)
-                                )}
-                            </th>
-                        ))}
-                        {inSetup && (
-                            <th className="w-8 border border-border bg-row-header px-1.5 py-1 text-center">
-                                <button
-                                    type="button"
-                                    className="h-6 w-6 cursor-pointer rounded border-none bg-accent text-[16px] leading-none text-white hover:bg-accent-hover"
-                                    title={tSetup("addPlayerTitle")}
-                                    onClick={() =>
-                                        dispatch({ type: "addPlayer" })
-                                    }
+                        {owners.flatMap(owner => {
+                            const cell = (
+                                <th
+                                    key={ownerKey(owner)}
+                                    className="sticky top-0 z-10 border border-border bg-row-header px-2 py-1 text-center align-top font-semibold"
                                 >
-                                    +
-                                </button>
-                            </th>
-                        )}
+                                    {inSetup && owner._tag === "Player" ? (
+                                        <PlayerNameInput
+                                            player={owner.player}
+                                            allPlayers={setup.players}
+                                        />
+                                    ) : (
+                                        ownerLabel(owner)
+                                    )}
+                                </th>
+                            );
+                            return inSetup && owner._tag === "CaseFile"
+                                ? [addPlayerHeaderCell, cell]
+                                : [cell];
+                        })}
                     </tr>
                     {inSetup && (
                         <tr>
                             <th className="whitespace-nowrap border border-border bg-row-header px-1.5 py-1 text-left font-semibold">
                                 {tSetup("handSize")}
                             </th>
-                            {owners.map(owner => {
+                            {owners.flatMap(owner => {
+                                let cell: ReactNode;
                                 if (owner._tag !== "Player") {
-                                    return (
+                                    cell = (
                                         <td
                                             key={ownerKey(owner)}
                                             className="border border-border"
                                         />
                                     );
+                                } else {
+                                    const current = handSizeMap.get(owner.player);
+                                    const def = defaults.get(owner.player);
+                                    cell = (
+                                        <td
+                                            key={ownerKey(owner)}
+                                            className="border border-border px-1.5 py-1 text-center"
+                                        >
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                max={allCardIds(setup).length}
+                                                className="w-14 rounded border border-border p-0.5 text-center text-[12px]"
+                                                value={
+                                                    current === undefined
+                                                        ? ""
+                                                        : String(current)
+                                                }
+                                                placeholder={
+                                                    def === undefined
+                                                        ? ""
+                                                        : String(def)
+                                                }
+                                                onChange={e =>
+                                                    onHandSizeChange(
+                                                        owner.player,
+                                                        e.currentTarget.value,
+                                                    )
+                                                }
+                                            />
+                                        </td>
+                                    );
                                 }
-                                const current = handSizeMap.get(owner.player);
-                                const def = defaults.get(owner.player);
-                                return (
-                                    <td
-                                        key={ownerKey(owner)}
-                                        className="border border-border px-1.5 py-1 text-center"
-                                    >
-                                        <input
-                                            type="number"
-                                            min={0}
-                                            max={allCardIds(setup).length}
-                                            className="w-14 rounded border border-border p-0.5 text-center text-[12px]"
-                                            value={
-                                                current === undefined
-                                                    ? ""
-                                                    : String(current)
-                                            }
-                                            placeholder={
-                                                def === undefined
-                                                    ? ""
-                                                    : String(def)
-                                            }
-                                            onChange={e =>
-                                                onHandSizeChange(
-                                                    owner.player,
-                                                    e.currentTarget.value,
-                                                )
-                                            }
-                                        />
-                                    </td>
-                                );
+                                return inSetup && owner._tag === "CaseFile"
+                                    ? [addPlayerEmptyCell, cell]
+                                    : [cell];
                             })}
-                            <td className="border border-border" />
                         </tr>
                     )}
                 </thead>
@@ -293,7 +325,7 @@ export function Checklist() {
                             </tr>,
                             ...category.cards.map(entry => (
                                 <tr key={String(entry.id)}>
-                                    <th className="border border-border px-2 py-1 text-left font-normal">
+                                    <th className="w-px whitespace-nowrap border border-border px-2 py-1 text-left font-normal">
                                         {inSetup ? (
                                             <div className="flex items-center justify-between gap-2">
                                                 <InlineTextEdit
@@ -333,7 +365,7 @@ export function Checklist() {
                                             entry.name
                                         )}
                                     </th>
-                                    {owners.map(owner => {
+                                    {owners.flatMap(owner => {
                                         const value = getCellByOwnerCard(
                                             knowledge,
                                             owner,
@@ -382,7 +414,7 @@ export function Checklist() {
                                                 {tooltipText}
                                             </div>
                                         ) : undefined;
-                                        return (
+                                        const cell = (
                                             <Tooltip
                                                 key={`${ownerKey(owner)}-${String(entry.id)}`}
                                                 content={tooltipContent}
@@ -473,10 +505,16 @@ export function Checklist() {
                                                 </td>
                                             </Tooltip>
                                         );
+                                        const emptyCell = (
+                                            <td
+                                                key={`add-player-col-${String(entry.id)}`}
+                                                className="border border-border"
+                                            />
+                                        );
+                                        return inSetup && owner._tag === "CaseFile"
+                                            ? [emptyCell, cell]
+                                            : [cell];
                                     })}
-                                    {inSetup && (
-                                        <td className="border border-border" />
-                                    )}
                                 </tr>
                             )),
                             ...(inSetup
@@ -589,7 +627,7 @@ function PlayerNameInput({
     allPlayers: ReadonlyArray<Player>;
 }) {
     const t = useTranslations("setup");
-    const { dispatch } = useClue();
+    const { state, dispatch } = useClue();
     const [editing, setEditing] = useState(String(player));
     const [error, setError] = useState("");
 
@@ -621,34 +659,53 @@ function PlayerNameInput({
         setError("");
     };
 
+    // Removing a player also drops their known cards (see the reducer's
+    // `removePlayer` branch). Prompt first when that's destructive — we
+    // skip the confirm otherwise so a freshly-added empty slot doesn't
+    // feel chatty.
+    const onRemove = () => {
+        const hasKnownCards = state.knownCards.some(
+            kc => kc.player === player,
+        );
+        if (hasKnownCards) {
+            const ok = window.confirm(
+                t("removePlayerConfirm", { player: String(player) }),
+            );
+            if (!ok) return;
+        }
+        dispatch({ type: "removePlayer", player });
+    };
+
     return (
         <div className="flex flex-col items-stretch gap-0.5">
-            <input
-                type="text"
-                className="box-border w-full rounded border border-border px-1.5 py-1 text-[12px]"
-                value={editing}
-                onChange={e => {
-                    setEditing(e.currentTarget.value);
-                    setError("");
-                }}
-                onBlur={commit}
-                onKeyDown={e => {
-                    if (e.key === "Enter") commit();
-                }}
-            />
+            <div className="flex items-center gap-1">
+                <input
+                    type="text"
+                    className="box-border min-w-0 flex-1 rounded border border-border px-1.5 py-1 text-[12px]"
+                    value={editing}
+                    onChange={e => {
+                        setEditing(e.currentTarget.value);
+                        setError("");
+                    }}
+                    onBlur={commit}
+                    onKeyDown={e => {
+                        if (e.key === "Enter") commit();
+                    }}
+                />
+                <button
+                    type="button"
+                    className="cursor-pointer rounded border-none bg-accent px-2 py-1 text-[12px] font-semibold leading-none text-white hover:bg-accent-hover"
+                    title={t("removePlayerTitle", { player: String(player) })}
+                    onClick={onRemove}
+                >
+                    &times;
+                </button>
+            </div>
             {error && (
                 <span className="whitespace-nowrap text-[11px] text-danger">
                     {error}
                 </span>
             )}
-            <button
-                type="button"
-                className="self-center border-none bg-transparent px-1 text-[14px] leading-none text-muted hover:text-danger"
-                title={t("removePlayerTitle", { player: String(player) })}
-                onClick={() => dispatch({ type: "removePlayer", player })}
-            >
-                &times;
-            </button>
         </div>
     );
 }

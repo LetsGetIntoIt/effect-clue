@@ -44,10 +44,10 @@ export function SuggestionLogPanel() {
             <h2 className="m-0 mb-3 text-[16px] uppercase tracking-[0.05em] text-accent">
                 {t("title")}
             </h2>
-            <div className="grid gap-5 [@media(min-width:800px)]:grid-cols-[minmax(280px,1fr)_minmax(280px,1fr)]">
-                <AddSuggestion />
+            <div className="mb-5">
                 <Recommendations />
             </div>
+            <AddSuggestion />
             <PriorSuggestions />
         </section>
     );
@@ -351,6 +351,10 @@ function Recommendations() {
     const [asPlayer, setAsPlayer] = useState<string>(
         setup.players[0] ?? "",
     );
+    // Collapsed by default — the recommendation body runs a non-trivial
+    // Effect.runSync per render, so skipping it while closed keeps the
+    // suggestion-log panel snappy for users who don't need the hint.
+    const [expanded, setExpanded] = useState(false);
 
     useEffect(() => {
         if (asPlayer && setup.players.some(p => String(p) === asPlayer))
@@ -358,14 +362,41 @@ function Recommendations() {
         setAsPlayer(setup.players[0] ?? "");
     }, [setup.players, asPlayer]);
 
+    // Wrapping the button in an <h3> matches the sibling "Add a
+    // suggestion" header: globals.css applies the display font to all
+    // h1–h3 (and SECTION_TITLE sets shared size/weight), so the two
+    // headings render identically. The button owns aria-expanded and
+    // the click behaviour; the caret is trailing so every header in
+    // this pane starts at the same x.
+    const header = (
+        <h3 className={SECTION_TITLE}>
+            <button
+                type="button"
+                aria-expanded={expanded}
+                onClick={() => setExpanded(v => !v)}
+                className="flex w-full cursor-pointer items-center gap-1.5 border-none bg-transparent p-0 text-left font-[inherit] text-[inherit] hover:text-accent"
+            >
+                <span>{t("recommendationsTitle")}</span>
+                <span
+                    aria-hidden
+                    className="inline-block text-[16px] leading-none text-muted"
+                >
+                    {expanded ? "▾" : "▸"}
+                </span>
+            </button>
+        </h3>
+    );
+
+    if (!expanded) {
+        return <div>{header}</div>;
+    }
+
     const knowledge = Result.getOrUndefined(result);
     if (knowledge === undefined || !asPlayer) {
         return (
             <div>
-                <h3 className={SECTION_TITLE}>
-                    {t("recommendationsTitle")}
-                </h3>
-                <div className="text-[13px] text-muted">
+                {header}
+                <div className="mt-2 text-[13px] text-muted">
                     {knowledge === undefined
                         ? t("resolveContradictionFirst")
                         : t("addPlayersFirst")}
@@ -398,10 +429,8 @@ function Recommendations() {
 
     return (
         <div>
-            <h3 className={SECTION_TITLE}>
-                {t("recommendationsTitle")}
-            </h3>
-            <label className={LABEL_ROW}>
+            {header}
+            <label className={`${LABEL_ROW} mt-2`}>
                 {t("suggestingAs")}
                 <select
                     value={asPlayer}

@@ -5,7 +5,7 @@
     },
     "tabs": {
         "setup": "Setup",
-        "play": "Deduce"
+        "play": "Play"
     },
     "toolbar": {
         "undo": "↶ Undo",
@@ -59,7 +59,9 @@
         "handSize": "Hand size",
         "handSizeMismatch": "Hand sizes total {total} {total, plural, one {card} other {cards}}; should total {expected} after the {caseFileCount} case-file cards.",
         "addPlayerTitle": "Add player",
+        "addPlayerLabel": "+ Player",
         "removePlayerTitle": "Remove {player}",
+        "removePlayerConfirm": "Remove {player}? They currently own known cards — those will also be cleared.",
         "duplicateName": "Duplicate name",
         "renameCategoryTitle": "Rename category",
         "removeCategoryTitle": "Remove {name}",
@@ -69,7 +71,9 @@
         "removeCardMin": "At least one card per category is required",
         "addCard": "+ add card",
         "addCategory": "+ add category",
-        "knownCardCheckboxAria": "{player} owns {card}"
+        "knownCardCheckboxAria": "{player} owns {card}",
+        "startPlaying": "Start playing →",
+        "continuePlaying": "Continue playing →"
     },
     "deduce": {
         "title": "Deduction grid",
