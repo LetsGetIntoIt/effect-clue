@@ -15,23 +15,46 @@ import {
     parseSuggestionInput,
     type ActiveSlot,
     type ParsedSuggestion,
+    type Range,
     type SlotState,
 } from "../../logic/SuggestionParser";
 
 /**
- * Keyboard-first input for adding a suggestion. One `<input>` where
- * the user types a sentence-shaped suggestion; a combobox dropdown
- * proposes autocompletions for the slot at the caret; a row of chips
- * shows what's already been parsed; and Enter submits when the
- * required slots (suggester + one card per category) are all resolved.
+ * Keyboard-first streamlined input for adding a suggestion.
  *
- * Accept keys (Tab / Enter) replace the current raw fragment with the
- * canonical candidate label and add a trailing separator that advances
- * the user to the next slot — so a flow like
+ * Layout regions (top to bottom):
+ *   1. `<SlotPills>` — one pill per sentence slot (suggester, one card
+ *      per category, and the three optional sections: Passed by,
+ *      Refuted by, Shown card). Pills are clickable; clicking a pill
+ *      jumps the caret to that slot so the input-anchored dropdown
+ *      surfaces the right candidates. Pills double as the live
+ *      checklist — status icon + label + resolved value all in one.
+ *   2. `<SlotHint>` — one-line helper that tells the user what the
+ *      parser is currently waiting for, or surfaces Unknown /
+ *      Ambiguous errors with nearest candidates.
+ *   3. `<input>` + dropdown `<ul>` — the single text field where the
+ *      user types a sentence-shaped suggestion. Tab / Enter within
+ *      the dropdown accept the highlighted candidate.
+ *   4. Action row — "Add (⌘↵)" submit button, "Use example" helper,
+ *      and the keyboard-shortcut hint. Submit label + hint are
+ *      platform-aware (Cmd on Mac, Ctrl elsewhere).
  *
- *   "an <Tab> mus <Tab> kn <Tab> kit <Tab> pas bo <Tab> ref ch <Tab> kn <Enter>"
+ * Submit contract:
+ *   - Plain `Enter` NEVER submits. It either accepts the highlighted
+ *     candidate (if the dropdown is open) or closes the dropdown.
+ *     This is a deliberate divergence from an earlier iteration where
+ *     Enter committed the draft as soon as the required slots
+ *     resolved — that surprised users who wanted to continue typing
+ *     the optional sections (passers / refuter / shown card).
+ *   - `Cmd+Enter` (Mac) or `Ctrl+Enter` (Windows / Linux) submits.
+ *     The "Add" button mirrors this with a platform-aware label.
  *
- * lands a full suggestion without leaving the keyboard.
+ * Pill-click contract:
+ *   - Clicking any pill re-contextualises the main input-anchored
+ *     dropdown rather than rendering its own popover. The pill moves
+ *     the caret (or inserts a grammar fragment), focuses the input,
+ *     and opens the dropdown. Reusing one dropdown instance keeps the
+ *     pill row visually simple and the component count flat.
  */
 export function SuggestionCombobox({
     setup,
@@ -46,6 +69,25 @@ export function SuggestionCombobox({
     const [caret, setCaret] = useState(0);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(0);
+
+    /**
+     * Platform detection for the submit modifier key. Mac uses ⌘
+     * (metaKey); Windows / Linux use Ctrl (ctrlKey). The key handler
+     * accepts either modifier regardless of detected platform, so
+     * users on misconfigured machines aren't locked out — detection
+     * only drives display copy.
+     *
+     * SSR-safe: `navigator` is undefined on the server, so we default
+     * to `false` (non-Mac label) on first render and correct on the
+     * client in a layout effect. This gives a deterministic initial
+     * HTML so Next's hydration check doesn't warn.
+     */
+    const [isMac, setIsMac] = useState(false);
+    useEffect(() => {
+        if (typeof navigator === "undefined") return;
+        setIsMac(/Mac|iPhone|iPad/.test(navigator.platform));
+    }, []);
+    const platformKey = isMac ? PLATFORM_MAC : PLATFORM_OTHER;
 
     const parsed = useMemo(
         () => parseSuggestionInput(text, caret, setup),
@@ -119,10 +161,30 @@ export function SuggestionCombobox({
         queueMicrotask(() => inputRef.current?.focus());
     }, [onSubmit, parsed.draft]);
 
+    /**
+     * Keyboard behaviour:
+     *
+     *   Key            | Dropdown open         | Dropdown closed
+     *   ---------------+-----------------------+-----------------------
+     *   Enter          | Accept highlighted    | Close dropdown (no-op)
+     *   Tab            | Accept highlighted    | Let browser handle
+     *   Cmd/Ctrl+Enter | Submit (if valid)     | Submit (if valid)
+     *   Escape         | Close dropdown        | No-op
+     *   ArrowDown / Up | Move highlight        | Open + move highlight
+     *
+     * Enter NEVER submits. This is a deliberate divergence from an
+     * earlier iteration where Enter would commit the draft as soon as
+     * the required slots resolved — which surprised users who wanted
+     * to continue typing the optional sections. In the current model
+     * Enter is a typing-affordance key (accept autocomplete or
+     * dismiss the dropdown) and Cmd/Ctrl+Enter is the explicit commit
+     * gesture. The "Add (⌘↵)" button mirrors this.
+     */
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent<HTMLInputElement>) => {
             const candidates = autocomplete.candidates;
             const hasCandidates = dropdownOpen && candidates.length > 0;
+
             if (e.key === "ArrowDown") {
                 e.preventDefault();
                 if (candidates.length === 0) return;
@@ -154,18 +216,22 @@ export function SuggestionCombobox({
                 }
                 return;
             }
+            // Cmd+Enter (Mac) or Ctrl+Enter (Windows / Linux) is the
+            // explicit submit gesture. We accept either modifier
+            // regardless of platform detection so misconfigured
+            // machines aren't locked out.
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                if (parsed.draft) doSubmit();
+                return;
+            }
             if (e.key === "Enter") {
                 e.preventDefault();
-                // Prefer submit when the draft is complete AND there's
-                // no typing-in-progress ambiguity — so "An<Enter>" would
-                // resolve the unique prefix and submit in one stroke.
-                if (parsed.draft) {
-                    doSubmit();
-                    return;
-                }
                 if (hasCandidates) {
                     const cand = candidates[highlightedIndex]!;
                     acceptCandidate(cand.label);
+                } else {
+                    setDropdownOpen(false);
                 }
                 return;
             }
@@ -186,12 +252,17 @@ export function SuggestionCombobox({
             ? `suggestion-combobox-option-${highlightedIndex}`
             : undefined;
 
+    /**
+     * Insert a grammar fragment (". Passed by " / ". Refuted by " /
+     * " with ") at the end of the input and move the caret there.
+     * Used by pill clicks for empty optional slots.
+     *
+     * The tail is normalised before appending so clicking "Passed by"
+     * twice doesn't produce ".. Passed by .. Passed by .." — any
+     * existing trailing whitespace or period is trimmed first.
+     */
     const insertFragment = useCallback(
         (fragment: string) => {
-            // Normalise the tail so clicking "Passed by" twice doesn't
-            // produce ".. Passed by .. Passed by ..". Trim trailing
-            // whitespace and a trailing period from the current input
-            // before appending the fragment.
             const base = text.replace(/[\s.]+$/, "");
             const next = base + fragment;
             setText(next);
@@ -207,17 +278,64 @@ export function SuggestionCombobox({
         [text],
     );
 
+    /**
+     * Select an existing slot's character range in the input.
+     *
+     * Why select-range instead of caret-only? A user clicking on a
+     * resolved pill almost always wants to REPLACE the value, not
+     * insert in the middle of "Player 3". A full selection turns
+     * Backspace or any typed character into an immediate replacement.
+     */
+    const selectSlotRange = useCallback((range: Range) => {
+        queueMicrotask(() => {
+            const el = inputRef.current;
+            if (!el) return;
+            el.focus();
+            el.setSelectionRange(range[0], range[1]);
+            setCaret(range[1]);
+            setDropdownOpen(true);
+        });
+    }, []);
+
+    /**
+     * Pill click dispatch. Branches on the slot's current state:
+     *   - Empty optional (Passed by / Refuted by / Shown card):
+     *     insert the grammar fragment at end of input, focus input,
+     *     open dropdown. `fallbackFragment` is the hook.
+     *   - Empty required (e.g. next card): focus the input at end
+     *     (caret will follow typing naturally).
+     *   - Non-empty (Resolved / Error / Typing / Ambiguous): select
+     *     the slot's range in the input so typing replaces it.
+     */
+    const onPillClick = useCallback(
+        (slot: SlotState<unknown>, fallbackFragment: string | undefined) => {
+            if (slot._tag === "Empty") {
+                if (fallbackFragment !== undefined) {
+                    insertFragment(fallbackFragment);
+                    return;
+                }
+                // Empty required slot — just focus the input. The user
+                // is expected to type naturally into it.
+                queueMicrotask(() => inputRef.current?.focus());
+                setDropdownOpen(true);
+                return;
+            }
+            selectSlotRange(slot.range);
+        },
+        [insertFragment, selectSlotRange],
+    );
+
     return (
         <div>
             <h3 className="mt-0 mb-2 text-[14px] font-semibold">
                 {t("addTitle")}
             </h3>
-            <SuggestionChecklist
+            <SlotPills
                 parsed={parsed}
-                onInsertFragment={insertFragment}
+                setup={setup}
+                onPillClick={onPillClick}
             />
-            <ChipPreview parsed={parsed} setup={setup} />
-            <SlotHint parsed={parsed} setup={setup} />
+            <SlotHint parsed={parsed} setup={setup} platform={platformKey} />
             <div className="relative">
                 <input
                     ref={inputRef}
@@ -270,14 +388,14 @@ export function SuggestionCombobox({
                     </ul>
                 )}
             </div>
-            <div className="mt-2 flex items-center gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
                     type="button"
                     className="cursor-pointer rounded border-none bg-accent p-2 text-white disabled:cursor-not-allowed disabled:bg-unknown"
                     disabled={parsed.draft === null}
                     onClick={doSubmit}
                 >
-                    {t("streamlined.submit")}
+                    {t("streamlined.submit", { platform: platformKey })}
                 </button>
                 <button
                     type="button"
@@ -298,12 +416,21 @@ export function SuggestionCombobox({
                     {t("streamlined.useExample")}
                 </button>
                 <span className="text-[12px] text-muted">
-                    {t("streamlined.keyboardHint")}
+                    {t("streamlined.keyboardHint", { platform: platformKey })}
                 </span>
             </div>
         </div>
     );
 }
+
+ 
+// Platform discriminator values passed to next-intl ICU `select`
+// messages. The strings have to match the `{platform, select, ...}`
+// cases in messages/en.json exactly — keeping them as named constants
+// gives us a single source of truth and silences no-literal-string.
+const PLATFORM_MAC = "mac";
+const PLATFORM_OTHER = "other";
+ 
 
 /**
  * Build a fully-formed example sentence keyed to the current setup.
@@ -329,17 +456,20 @@ const buildExampleSentence = (setup: GameSetup): string => {
 };
 
 /**
- * A one-line helper under the input that tells the user what the
+ * One-line helper under the input that tells the user what the
  * parser is currently waiting for, or surfaces a friendly error when
  * the active slot can't resolve. Tightens the feedback loop: the user
- * doesn't have to scan the chip preview to know why Enter is disabled.
+ * doesn't have to re-scan the pill row to know why submit is
+ * disabled.
  */
 function SlotHint({
     parsed,
     setup,
+    platform,
 }: {
     readonly parsed: ParsedSuggestion;
     readonly setup: GameSetup;
+    readonly platform: string;
 }): React.ReactElement | null {
     const t = useTranslations("suggestions");
 
@@ -378,11 +508,12 @@ function SlotHint({
         );
     }
 
-    // Priority 2: the draft is ready — tell the user to hit Enter.
+    // Priority 2: the draft is ready — tell the user the submit
+    // shortcut for their platform.
     if (parsed.draft !== null) {
         return (
             <div className="mt-1 text-[12px] text-accent">
-                {t("streamlined.hintReady")}
+                {t("streamlined.hintReady", { platform })}
             </div>
         );
     }
@@ -429,7 +560,7 @@ const nextHintMessage = (
         case "card": {
             const category =
                 setup.categories[activeSlot.index]?.name ??
-                t("streamlined.chipCardFallback");
+                t("streamlined.pillCardFallback");
             return t("streamlined.hintNextCard", { category });
         }
         case "passer":
@@ -448,7 +579,7 @@ const nextHintMessage = (
  * which slot the user just filled. Chosen to advance the caret into
  * the natural next slot. These are sentence-grammar fragments, not
  * translatable copy — locale routing is explicitly out of scope for
- * this feature (see plan "Out of scope"), so the strings stay raw.
+ * this feature, so the strings stay raw.
  */
 /* eslint-disable i18next/no-literal-string */
 const trailingSeparatorFor = (slot: ActiveSlot): string => {
@@ -467,312 +598,272 @@ const trailingSeparatorFor = (slot: ActiveSlot): string => {
             return "";
     }
 };
+
+// Grammar fragments inserted by pill clicks on empty optional slots.
+// Raw English; see the `trailingSeparatorFor` comment above.
+const PASSED_BY_FRAGMENT = ". Passed by ";
+const REFUTED_BY_FRAGMENT = ". Refuted by ";
+const WITH_FRAGMENT = " with ";
 /* eslint-enable i18next/no-literal-string */
 
-function ChipPreview({
-    parsed,
-    setup,
-}: {
-    readonly parsed: ParsedSuggestion;
-    readonly setup: GameSetup;
-}): React.ReactElement | null {
-    const t = useTranslations("suggestions");
-    const slots: Array<{ label: string; slot: SlotState<unknown> }> = [];
-
-    slots.push({
-        label: t("streamlined.chipSuggester"),
-        slot: parsed.suggester,
-    });
-    parsed.cards.forEach((c, i) => {
-        slots.push({
-            label: t("streamlined.chipCard", {
-                category:
-                    setup.categories[i]?.name ??
-                    t("streamlined.chipCardFallback"),
-            }),
-            slot: c,
-        });
-    });
-    parsed.nonRefuters.forEach(p => {
-        slots.push({
-            label: t("streamlined.chipPasser"),
-            slot: p,
-        });
-    });
-    if (parsed.refuter._tag !== "Empty") {
-        slots.push({
-            label: t("streamlined.chipRefuter"),
-            slot: parsed.refuter,
-        });
-    }
-    if (parsed.seenCard._tag !== "Empty") {
-        slots.push({
-            label: t("streamlined.chipSeenCard"),
-            slot: parsed.seenCard,
-        });
-    }
-
-    const hasContent = slots.some(s => s.slot._tag !== "Empty");
-    if (!hasContent) return null;
-
-    return (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-            {slots.map(({ label, slot }, i) => (
-                <Chip key={i} label={label} slot={slot} />
-            ))}
-        </div>
-    );
-}
-
-function Chip({
-    label,
-    slot,
-}: {
-    readonly label: string;
-    readonly slot: SlotState<unknown>;
-}): React.ReactElement | null {
-    const t = useTranslations("suggestions");
-    if (slot._tag === "Empty") {
-        return (
-            <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-border bg-transparent px-2 py-0.5 text-[12px] text-muted">
-                {label}
-            </span>
-        );
-    }
-    const tone =
-        slot._tag === "Resolved"
-            ? "bg-accent text-white border-accent"
-            : slot._tag === "Unknown"
-              ? "bg-danger/10 text-danger border-danger"
-              : "bg-panel text-foreground border-border";
-    const display =
-        slot._tag === "Resolved"
-            ? slot.label
-            : slot._tag === "Typing"
-              ? slot.raw
-              : slot._tag === "Ambiguous"
-                ? slot.raw
-                : slot.raw;
-    const extra =
-        slot._tag === "Typing" || slot._tag === "Ambiguous"
-            ? ` ${t("streamlined.chipTyping")}`
-            : slot._tag === "Unknown"
-              ? ` ${t("streamlined.chipUnknown")}`
-              : "";
-    return (
-        <span
-            className={
-                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] " +
-                tone
-            }
-        >
-            <span className="font-semibold">{label}:</span>
-            <span>{display}</span>
-            {extra && <span className="opacity-75">{extra}</span>}
-        </span>
-    );
-}
-
 /**
- * Status of one checklist row. Distinguishes "required but not done"
- * from "optional and not set" so the two don't look the same — that
- * was the core of the earlier confusion where optional items rendered
- * as "always checked."
+ * Four discrete status values for a slot pill. Distinguishing
+ * "required but not done" from "optional and not set" is what stops
+ * optional pills from looking like they're "already done" when
+ * empty.
  */
  
-type ChecklistStatus = "done" | "pendingRequired" | "pendingOptional" | "error";
- 
+type PillStatus = "done" | "pendingRequired" | "pendingOptional" | "error";
 
- 
-const STATUS_DONE: ChecklistStatus = "done";
-const STATUS_PENDING_REQ: ChecklistStatus = "pendingRequired";
-const STATUS_PENDING_OPT: ChecklistStatus = "pendingOptional";
-const STATUS_ERROR: ChecklistStatus = "error";
+const STATUS_DONE: PillStatus = "done";
+const STATUS_PENDING_REQ: PillStatus = "pendingRequired";
+const STATUS_PENDING_OPT: PillStatus = "pendingOptional";
+const STATUS_ERROR: PillStatus = "error";
  
 
 const statusOfSlot = (
     slot: SlotState<unknown>,
     optional: boolean,
-): ChecklistStatus => {
+): PillStatus => {
     if (slot._tag === "Resolved") return STATUS_DONE;
     if (slot._tag === "Unknown" || slot._tag === "Ambiguous")
         return STATUS_ERROR;
     return optional ? STATUS_PENDING_OPT : STATUS_PENDING_REQ;
 };
 
-const statusOfList = (
-    slots: ReadonlyArray<SlotState<unknown>>,
-    optional: boolean,
-): ChecklistStatus => {
-    if (slots.length === 0)
-        return optional ? STATUS_PENDING_OPT : STATUS_PENDING_REQ;
-    if (slots.some(c => c._tag === "Unknown" || c._tag === "Ambiguous"))
-        return STATUS_ERROR;
-    if (slots.every(c => c._tag === "Resolved")) return STATUS_DONE;
-    return STATUS_PENDING_REQ;
-};
-
-function SuggestionChecklist({
+/**
+ * Unified pill row. Replaces the older "separate checklist + chip
+ * preview" layout; the pill now carries both the status icon and the
+ * resolved value. Pills render in sentence order (suggester → cards
+ * → optional sections) and wrap onto multiple rows on narrow
+ * viewports.
+ *
+ * Visual / state matrix for one pill:
+ *
+ *   State                        | Icon | Border        | Background   | Text
+ *   -----------------------------+------+---------------+--------------+-----
+ *   Resolved (required or opt.)  | ✓    | accent solid  | accent solid | white
+ *   Required empty               | (∅)  | border solid  | transparent  | muted
+ *   Optional empty (enabled)     | +    | border dashed | transparent  | muted
+ *   Optional empty (disabled)    | –    | lighter dash  | transparent  | lightest
+ *   Error (Unknown / Ambiguous)  | !    | danger        | danger/10    | danger
+ *   Typing / partial             | …    | accent dashed | transparent  | muted
+ *
+ * Optional pills are always rendered (even when empty) so the user
+ * can see at a glance what *could* still be added to the suggestion.
+ * That discoverability is the core reason the earlier separate
+ * checklist existed — now folded into the pill row itself.
+ *
+ * Optional pills are gated: Passed by / Refuted by become clickable
+ * once the required slots (suggester + all cards) resolve, and Shown
+ * card additionally waits for the refuter. Gating prevents inserting
+ * ". Refuted by " at the top of an empty input (where the parser
+ * would treat it as the suggester).
+ */
+function SlotPills({
     parsed,
-    onInsertFragment,
+    setup,
+    onPillClick,
 }: {
     readonly parsed: ParsedSuggestion;
-    readonly onInsertFragment: (fragment: string) => void;
+    readonly setup: GameSetup;
+    readonly onPillClick: (
+        slot: SlotState<unknown>,
+        fallbackFragment: string | undefined,
+    ) => void;
 }): React.ReactElement {
     const t = useTranslations("suggestions");
-    const total = parsed.cards.length;
-    const resolvedCards = parsed.cards.filter(
-        c => c._tag === "Resolved",
-    ).length;
 
     const suggesterStatus = statusOfSlot(parsed.suggester, false);
-    const cardsStatus = statusOfList(parsed.cards, false);
-    const passersStatus = statusOfList(parsed.nonRefuters, true);
-    const passersResolved = passersStatus === STATUS_DONE;
+    const cardsStatuses = parsed.cards.map(c => statusOfSlot(c, false));
     const refuterStatus = statusOfSlot(parsed.refuter, true);
     const seenStatus = statusOfSlot(parsed.seenCard, true);
 
-    // Optional sections can only be attached once the required sections
-    // (suggester + all cards) are resolved — otherwise inserting
-    // ". Refuted by " ends up treated as the suggester by the parser.
     const requiredDone =
-        suggesterStatus === STATUS_DONE && cardsStatus === STATUS_DONE;
-    const canAddPassers =
-        requiredDone && passersStatus === STATUS_PENDING_OPT;
-    const canAddRefuter =
-        requiredDone && refuterStatus === STATUS_PENDING_OPT;
+        suggesterStatus === STATUS_DONE &&
+        cardsStatuses.every(s => s === STATUS_DONE);
+    const canAddPassers = requiredDone;
+    const canAddRefuter = requiredDone;
     const canAddSeen =
-        requiredDone &&
-        seenStatus === STATUS_PENDING_OPT &&
-        parsed.refuter._tag === "Resolved";
+        requiredDone && parsed.refuter._tag === "Resolved";
+
+    // Passers is a list — represent it as a single "Passed by" pill
+    // summarising its state. Individual non-refuter tokens show up in
+    // the input text itself; the pill is a rollup.
+    const passersStatus: PillStatus =
+        parsed.nonRefuters.length === 0
+            ? STATUS_PENDING_OPT
+            : parsed.nonRefuters.some(
+                    p => p._tag === "Unknown" || p._tag === "Ambiguous",
+                )
+              ? STATUS_ERROR
+              : parsed.nonRefuters.every(p => p._tag === "Resolved")
+                ? STATUS_DONE
+                : STATUS_ERROR;
+    const passersValue =
+        passersStatus === STATUS_DONE
+            ? parsed.nonRefuters
+                  .map(p => (p._tag === "Resolved" ? p.label : ""))
+                  .filter(s => s.length > 0)
+                  .join(", ")
+            : undefined;
 
     return (
-        <ul className="mt-2 m-0 list-none p-0 text-[12px]">
-            <ChecklistItem
+        <div className="mt-2 flex flex-wrap gap-1.5">
+            <SlotPill
                 status={suggesterStatus}
-                label={t("streamlined.checklist.suggester")}
-            />
-            <ChecklistItem
-                status={cardsStatus}
-                label={t("streamlined.checklist.cards", {
-                    filled: resolvedCards,
-                    total,
+                label={t("streamlined.pillSuggester")}
+                {...(parsed.suggester._tag === "Resolved" && {
+                    value: parsed.suggester.label,
                 })}
+                onClick={() => onPillClick(parsed.suggester, undefined)}
             />
-            <ChecklistItem
+            {parsed.cards.map((slot, i) => (
+                <SlotPill
+                    key={i}
+                    status={cardsStatuses[i]!}
+                    label={
+                        setup.categories[i]?.name ??
+                        t("streamlined.pillCardFallback")
+                    }
+                    {...(slot._tag === "Resolved" && { value: slot.label })}
+                    onClick={() => onPillClick(slot, undefined)}
+                />
+            ))}
+            <SlotPill
                 status={passersStatus}
-                label={
-                    passersResolved
-                        ? t("streamlined.checklist.passersDone", {
-                              count: parsed.nonRefuters.length,
-                          })
-                        : t("streamlined.checklist.passersPending")
-                }
+                label={t("streamlined.pillPassers")}
+                {...(passersValue !== undefined && { value: passersValue })}
+                disabled={!canAddPassers}
                 {...(canAddPassers && {
-                    onInsert: () => onInsertFragment(PASSED_BY_FRAGMENT),
+                    onClick: () =>
+                        parsed.nonRefuters.length === 0
+                            ? onPillClick(EMPTY_SLOT, PASSED_BY_FRAGMENT)
+                            : onPillClick(
+                                  parsed.nonRefuters[0]!,
+                                  PASSED_BY_FRAGMENT,
+                              ),
                 })}
-                disabled={!requiredDone}
             />
-            <ChecklistItem
+            <SlotPill
                 status={refuterStatus}
-                label={
-                    refuterStatus === STATUS_DONE
-                        ? t("streamlined.checklist.refuterDone")
-                        : t("streamlined.checklist.refuterPending")
-                }
-                {...(canAddRefuter && {
-                    onInsert: () => onInsertFragment(REFUTED_BY_FRAGMENT),
+                label={t("streamlined.pillRefuter")}
+                {...(parsed.refuter._tag === "Resolved" && {
+                    value: parsed.refuter.label,
                 })}
-                disabled={!requiredDone}
+                disabled={!canAddRefuter}
+                {...(canAddRefuter && {
+                    onClick: () =>
+                        onPillClick(parsed.refuter, REFUTED_BY_FRAGMENT),
+                })}
             />
-            <ChecklistItem
+            <SlotPill
                 status={seenStatus}
-                label={
-                    seenStatus === STATUS_DONE
-                        ? t("streamlined.checklist.seenDone")
-                        : t("streamlined.checklist.seenPending")
-                }
-                {...(canAddSeen && {
-                    onInsert: () => onInsertFragment(WITH_FRAGMENT),
+                label={t("streamlined.pillSeen")}
+                {...(parsed.seenCard._tag === "Resolved" && {
+                    value: parsed.seenCard.label,
                 })}
                 disabled={!canAddSeen && seenStatus !== STATUS_DONE}
+                {...(canAddSeen && {
+                    onClick: () => onPillClick(parsed.seenCard, WITH_FRAGMENT),
+                })}
+                {...(parsed.refuter._tag !== "Resolved" && {
+                    disabledHint: t("streamlined.pillSeenDisabledHint"),
+                })}
             />
-        </ul>
+        </div>
     );
 }
 
- 
-const PASSED_BY_FRAGMENT = ". Passed by ";
-const REFUTED_BY_FRAGMENT = ". Refuted by ";
-const WITH_FRAGMENT = " with ";
- 
+// Sentinel used when the passers pill is clicked but no tokens exist
+// yet — `onPillClick` only needs the `_tag` to decide the
+// insert-vs-select branch, not a real range.
+const EMPTY_SLOT: SlotState<unknown> = { _tag: "Empty" } as const;
 
-function ChecklistItem({
+/**
+ * Individual pill renderer. See `SlotPills` JSDoc for the full
+ * visual / state matrix.
+ *
+ * Click-target is the whole pill: wrapped in a `<button>` when
+ * clickable, or a `<span>` when disabled / inert. `disabledHint`
+ * surfaces as a `title=` tooltip when the pill is disabled — e.g.
+ * "Add a refuter first" for Shown card.
+ */
+function SlotPill({
     status,
     label,
-    onInsert,
+    value,
+    onClick,
     disabled,
+    disabledHint,
 }: {
-    readonly status: ChecklistStatus;
+    readonly status: PillStatus;
     readonly label: string;
-    readonly onInsert?: () => void;
+    readonly value?: string;
+    readonly onClick?: () => void;
     readonly disabled?: boolean;
+    readonly disabledHint?: string;
 }): React.ReactElement {
-    const t = useTranslations("suggestions");
-    const iconClass =
+    const tone =
         status === STATUS_DONE
-            ? "border-accent bg-accent text-white"
+            ? "bg-accent text-white border-accent"
             : status === STATUS_ERROR
-              ? "border-danger bg-danger/10 text-danger"
+              ? "bg-danger/10 text-danger border-danger"
               : status === STATUS_PENDING_REQ
-                ? "border-border bg-transparent text-transparent"
-                : "border-dashed border-border bg-transparent text-muted";
+                ? "bg-transparent text-muted border-border"
+                : disabled
+                  ? "bg-transparent text-muted/60 border-dashed border-border/50"
+                  : "bg-transparent text-muted border-dashed border-border";
+    // Icon glyph mirrors the status matrix in the SlotPills JSDoc.
     const iconGlyph =
         status === STATUS_DONE
             ? "✓"
             : status === STATUS_ERROR
               ? "!"
               : status === STATUS_PENDING_OPT
-                ? "–"
+                ? disabled
+                    ? "–"
+                    : "+"
                 : "";
-    const textClass =
-        status === STATUS_DONE
-            ? "text-foreground"
-            : status === STATUS_ERROR
-              ? "text-danger"
-              : "text-muted";
-    const row = (
-        <span className="flex items-center gap-1.5 py-0.5">
+    const pillBody = (
+        <span
+            className={
+                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] " +
+                tone
+            }
+        >
             <span
                 aria-hidden
-                className={
-                    "inline-block h-3.5 w-3.5 rounded-sm border text-center text-[10px] leading-3 " +
-                    iconClass
-                }
+                className="inline-block w-3 text-center text-[10px] leading-3"
             >
                 {iconGlyph}
             </span>
-            <span className={textClass}>{label}</span>
-            {onInsert !== undefined && (
-                <span className="text-[11px] text-accent underline">
-                    {t("streamlined.checklist.addAction")}
-                </span>
+            <span className="font-semibold">{label}</span>
+            {value !== undefined && (
+                <span className="font-normal">: {value}</span>
             )}
         </span>
     );
-    if (onInsert !== undefined && !disabled) {
+
+    if (onClick !== undefined && !disabled) {
         return (
-            <li>
-                <button
-                    type="button"
-                    onClick={onInsert}
-                    className="w-full cursor-pointer border-none bg-transparent p-0 text-left hover:bg-accent/5"
-                >
-                    {row}
-                </button>
-            </li>
+            <button
+                type="button"
+                onClick={onClick}
+                className="cursor-pointer border-none bg-transparent p-0 hover:opacity-80"
+            >
+                {pillBody}
+            </button>
         );
     }
-    return <li>{row}</li>;
+    // Disabled or inert: render as a plain span with an optional
+    // tooltip explaining why it can't be clicked yet.
+    return (
+        <span
+            className="cursor-not-allowed"
+            title={disabled ? disabledHint : undefined}
+        >
+            {pillBody}
+        </span>
+    );
 }
-
