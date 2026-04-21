@@ -98,14 +98,47 @@ export function SuggestionCombobox({
         [parsed, setup],
     );
 
-    // Clamp highlight when the candidate list shrinks underneath us.
+    /**
+     * Unified dropdown item list. Two kinds:
+     *
+     *   - `candidate` rows come from the parser's `autocompleteFor`,
+     *     decorated here with a `display` string that adds sentence
+     *     context ("Player 1 suggests...", "Knife (Weapons)") and an
+     *     optional role annotation ("Player 1 (refuted) suggests...").
+     *
+     *   - `action` rows are flow-control items that let the user
+     *     progress without leaving the keyboard. Available whenever
+     *     the required slots (suggester + all cards) are resolved:
+     *       · "Passed by..." — inserts the grammar fragment at end
+     *       · "Refuted by..." — ditto
+     *       · "with card..." — ditto, once a refuter is set
+     *       · "Finish editing (Esc)" — closes the dropdown
+     *       · "Add suggestion (⌘↵)" — submits, enabled iff draft valid
+     *
+     *   Action rows appear in every dropdown where they're a valid
+     *   next step (per-action gating), so the user can complete a
+     *   suggestion from whichever slot they happen to be in.
+     */
+    const dropdownItems = useMemo(
+        () =>
+            buildDropdownItems({
+                autocomplete,
+                parsed,
+                setup,
+                platform: platformKey,
+                t,
+            }),
+        [autocomplete, parsed, setup, platformKey, t],
+    );
+
+    // Clamp highlight when the item list shrinks underneath us.
     useEffect(() => {
-        if (autocomplete.candidates.length === 0) {
+        if (dropdownItems.length === 0) {
             setHighlightedIndex(0);
-        } else if (highlightedIndex >= autocomplete.candidates.length) {
-            setHighlightedIndex(autocomplete.candidates.length - 1);
+        } else if (highlightedIndex >= dropdownItems.length) {
+            setHighlightedIndex(dropdownItems.length - 1);
         }
-    }, [autocomplete.candidates.length, highlightedIndex]);
+    }, [dropdownItems.length, highlightedIndex]);
 
     // Autofocus on mount.
     useEffect(() => {
@@ -162,100 +195,9 @@ export function SuggestionCombobox({
     }, [onSubmit, parsed.draft]);
 
     /**
-     * Keyboard behaviour:
-     *
-     *   Key            | Dropdown open         | Dropdown closed
-     *   ---------------+-----------------------+-----------------------
-     *   Enter          | Accept highlighted    | Close dropdown (no-op)
-     *   Tab            | Accept highlighted    | Let browser handle
-     *   Cmd/Ctrl+Enter | Submit (if valid)     | Submit (if valid)
-     *   Escape         | Close dropdown        | No-op
-     *   ArrowDown / Up | Move highlight        | Open + move highlight
-     *
-     * Enter NEVER submits. This is a deliberate divergence from an
-     * earlier iteration where Enter would commit the draft as soon as
-     * the required slots resolved — which surprised users who wanted
-     * to continue typing the optional sections. In the current model
-     * Enter is a typing-affordance key (accept autocomplete or
-     * dismiss the dropdown) and Cmd/Ctrl+Enter is the explicit commit
-     * gesture. The "Add (⌘↵)" button mirrors this.
-     */
-    const handleKeyDown = useCallback(
-        (e: React.KeyboardEvent<HTMLInputElement>) => {
-            const candidates = autocomplete.candidates;
-            const hasCandidates = dropdownOpen && candidates.length > 0;
-
-            if (e.key === "ArrowDown") {
-                e.preventDefault();
-                if (candidates.length === 0) return;
-                setDropdownOpen(true);
-                setHighlightedIndex(i => (i + 1) % candidates.length);
-                return;
-            }
-            if (e.key === "ArrowUp") {
-                e.preventDefault();
-                if (candidates.length === 0) return;
-                setDropdownOpen(true);
-                setHighlightedIndex(
-                    i => (i - 1 + candidates.length) % candidates.length,
-                );
-                return;
-            }
-            if (e.key === "Escape") {
-                if (dropdownOpen) {
-                    e.preventDefault();
-                    setDropdownOpen(false);
-                }
-                return;
-            }
-            if (e.key === "Tab") {
-                if (hasCandidates) {
-                    e.preventDefault();
-                    const cand = candidates[highlightedIndex]!;
-                    acceptCandidate(cand.label);
-                }
-                return;
-            }
-            // Cmd+Enter (Mac) or Ctrl+Enter (Windows / Linux) is the
-            // explicit submit gesture. We accept either modifier
-            // regardless of platform detection so misconfigured
-            // machines aren't locked out.
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                if (parsed.draft) doSubmit();
-                return;
-            }
-            if (e.key === "Enter") {
-                e.preventDefault();
-                if (hasCandidates) {
-                    const cand = candidates[highlightedIndex]!;
-                    acceptCandidate(cand.label);
-                } else {
-                    setDropdownOpen(false);
-                }
-                return;
-            }
-        },
-        [
-            acceptCandidate,
-            autocomplete.candidates,
-            doSubmit,
-            dropdownOpen,
-            highlightedIndex,
-            parsed.draft,
-        ],
-    );
-
-    const placeholder = t("streamlined.placeholder");
-    const activeDescId =
-        dropdownOpen && autocomplete.candidates.length > 0
-            ? `suggestion-combobox-option-${highlightedIndex}`
-            : undefined;
-
-    /**
      * Insert a grammar fragment (". Passed by " / ". Refuted by " /
      * " with ") at the end of the input and move the caret there.
-     * Used by pill clicks for empty optional slots.
+     * Used by pill clicks AND by the dropdown's flow-action rows.
      *
      * The tail is normalised before appending so clicking "Passed by"
      * twice doesn't produce ".. Passed by .. Passed by .." — any
@@ -277,6 +219,137 @@ export function SuggestionCombobox({
         },
         [text],
     );
+
+    /**
+     * Dispatch one dropdown item — candidate-kind rows do an
+     * autocomplete-replace; action-kind rows run their side effect.
+     * Called from the keyboard handler (Enter / Tab) and from the
+     * dropdown's `onMouseDown` handler.
+     */
+    const dispatchItem = useCallback(
+        (item: DropdownItem) => {
+            if (item.kind === "candidate") {
+                acceptCandidate(item.rawLabel);
+                return;
+            }
+            if (item.disabled) return;
+            switch (item.actionId) {
+                case ACTION_INSERT_PASSERS:
+                    insertFragment(PASSED_BY_FRAGMENT);
+                    return;
+                case ACTION_INSERT_REFUTER:
+                    insertFragment(REFUTED_BY_FRAGMENT);
+                    return;
+                case ACTION_INSERT_SEEN:
+                    insertFragment(WITH_FRAGMENT);
+                    return;
+                case ACTION_FINISH:
+                    setDropdownOpen(false);
+                    return;
+                case ACTION_SUBMIT:
+                    doSubmit();
+                    return;
+            }
+        },
+        [acceptCandidate, doSubmit, insertFragment],
+    );
+
+    /**
+     * Keyboard behaviour:
+     *
+     *   Key            | Dropdown open         | Dropdown closed
+     *   ---------------+-----------------------+-----------------------
+     *   Enter          | Dispatch highlighted  | Close dropdown (no-op)
+     *   Tab            | Dispatch highlighted  | Let browser handle
+     *   Cmd/Ctrl+Enter | Submit (if valid)     | Submit (if valid)
+     *   Escape         | Close dropdown        | No-op
+     *   ArrowDown / Up | Move highlight        | Open + move highlight
+     *
+     * "Dispatch highlighted" now covers both kinds of dropdown item:
+     * candidate rows autocomplete-replace the current token, and
+     * action rows run their side effect (insert fragment / close /
+     * submit). Submit is also reachable via Cmd/Ctrl+Enter regardless
+     * of which item is currently highlighted.
+     *
+     * Enter NEVER submits directly (without the Cmd/Ctrl modifier).
+     * This is a deliberate divergence from an earlier iteration where
+     * Enter would commit the draft as soon as the required slots
+     * resolved — which surprised users who wanted to continue typing
+     * the optional sections. In the current model Enter is a
+     * typing-affordance key and Cmd/Ctrl+Enter is the explicit commit
+     * gesture. (Hitting Enter on the highlighted "Add suggestion"
+     * action row still works — that's the user explicitly picking
+     * the submit row, not a blanket Enter-submits.)
+     */
+    const handleKeyDown = useCallback(
+        (e: React.KeyboardEvent<HTMLInputElement>) => {
+            const items = dropdownItems;
+            const hasItems = dropdownOpen && items.length > 0;
+
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                if (items.length === 0) return;
+                setDropdownOpen(true);
+                setHighlightedIndex(i => (i + 1) % items.length);
+                return;
+            }
+            if (e.key === "ArrowUp") {
+                e.preventDefault();
+                if (items.length === 0) return;
+                setDropdownOpen(true);
+                setHighlightedIndex(
+                    i => (i - 1 + items.length) % items.length,
+                );
+                return;
+            }
+            if (e.key === "Escape") {
+                if (dropdownOpen) {
+                    e.preventDefault();
+                    setDropdownOpen(false);
+                }
+                return;
+            }
+            if (e.key === "Tab") {
+                if (hasItems) {
+                    e.preventDefault();
+                    dispatchItem(items[highlightedIndex]!);
+                }
+                return;
+            }
+            // Cmd+Enter (Mac) or Ctrl+Enter (Windows / Linux) is the
+            // explicit submit gesture. We accept either modifier
+            // regardless of platform detection so misconfigured
+            // machines aren't locked out.
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                if (parsed.draft) doSubmit();
+                return;
+            }
+            if (e.key === "Enter") {
+                e.preventDefault();
+                if (hasItems) {
+                    dispatchItem(items[highlightedIndex]!);
+                } else {
+                    setDropdownOpen(false);
+                }
+                return;
+            }
+        },
+        [
+            dispatchItem,
+            doSubmit,
+            dropdownItems,
+            dropdownOpen,
+            highlightedIndex,
+            parsed.draft,
+        ],
+    );
+
+    const placeholder = t("streamlined.placeholder");
+    const activeDescId =
+        dropdownOpen && dropdownItems.length > 0
+            ? `suggestion-combobox-option-${highlightedIndex}`
+            : undefined;
 
     /**
      * Select an existing slot's character range in the input.
@@ -349,42 +422,88 @@ export function SuggestionCombobox({
                     onFocus={() => setDropdownOpen(true)}
                     onBlur={() => setDropdownOpen(false)}
                     placeholder={placeholder}
-                    className="w-full rounded border border-border bg-white p-2 font-mono text-[13px] outline-none focus:border-accent"
+                    className="w-full rounded border border-border bg-white p-2 pr-8 font-mono text-[13px] outline-none focus:border-accent"
                     role="combobox"
                     aria-expanded={
-                        dropdownOpen && autocomplete.candidates.length > 0
+                        dropdownOpen && dropdownItems.length > 0
                     }
                     aria-controls="suggestion-combobox-listbox"
                     aria-autocomplete="list"
                     aria-activedescendant={activeDescId}
                 />
-                {dropdownOpen && autocomplete.candidates.length > 0 && (
+                {/* Floating clear button — inline on the right edge of
+                  * the input, shown only when there's text to clear.
+                  * onMouseDown (not onClick) lets the click beat the
+                  * input's onBlur so focus returns to the input. */}
+                {text.length > 0 && (
+                    <button
+                        type="button"
+                        aria-label={t("streamlined.clearAria")}
+                        title={t("streamlined.clearAria")}
+                        onMouseDown={e => {
+                            e.preventDefault();
+                            setText("");
+                            setCaret(0);
+                            setHighlightedIndex(0);
+                            setDropdownOpen(true);
+                            queueMicrotask(() => inputRef.current?.focus());
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer rounded-full border-none bg-transparent p-1 text-[14px] leading-none text-muted hover:text-foreground"
+                    >
+                        ×
+                    </button>
+                )}
+                {dropdownOpen && dropdownItems.length > 0 && (
                     <ul
                         id="suggestion-combobox-listbox"
                         role="listbox"
-                        className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded border border-border bg-white p-0 shadow-lg"
+                        className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded border border-border bg-white p-0 shadow-lg"
                     >
-                        {autocomplete.candidates.map((c, i) => (
-                            <li
-                                key={c.label}
-                                id={`suggestion-combobox-option-${i}`}
-                                role="option"
-                                aria-selected={i === highlightedIndex}
-                                className={
-                                    "cursor-pointer list-none px-2 py-1 text-[13px]" +
-                                    (i === highlightedIndex
-                                        ? " bg-accent/15"
-                                        : "")
-                                }
-                                onMouseDown={e => {
-                                    e.preventDefault();
-                                    acceptCandidate(c.label);
-                                }}
-                                onMouseEnter={() => setHighlightedIndex(i)}
-                            >
-                                {c.label}
-                            </li>
-                        ))}
+                        {dropdownItems.map((item, i) => {
+                            const highlighted = i === highlightedIndex;
+                            const isAction = item.kind === "action";
+                            const disabled = isAction && item.disabled;
+                            // Visually separate the action group from
+                            // the candidates above it with a thin
+                            // divider on the FIRST action row.
+                            const firstAction =
+                                isAction &&
+                                i > 0 &&
+                                dropdownItems[i - 1]?.kind !== "action";
+                            return (
+                                <li
+                                    key={i}
+                                    id={`suggestion-combobox-option-${i}`}
+                                    role="option"
+                                    aria-selected={highlighted}
+                                    aria-disabled={disabled}
+                                    className={
+                                        "list-none px-2 py-1 text-[13px]" +
+                                        (firstAction
+                                            ? " border-t border-border"
+                                            : "") +
+                                        (disabled
+                                            ? " cursor-not-allowed text-muted/50"
+                                            : " cursor-pointer") +
+                                        (highlighted && !disabled
+                                            ? " bg-accent/15"
+                                            : "") +
+                                        (isAction && !disabled
+                                            ? " text-accent"
+                                            : "")
+                                    }
+                                    onMouseDown={e => {
+                                        e.preventDefault();
+                                        dispatchItem(item);
+                                    }}
+                                    onMouseEnter={() =>
+                                        setHighlightedIndex(i)
+                                    }
+                                >
+                                    {item.display}
+                                </li>
+                            );
+                        })}
                     </ul>
                 )}
             </div>
@@ -431,6 +550,370 @@ export function SuggestionCombobox({
 const PLATFORM_MAC = "mac";
 const PLATFORM_OTHER = "other";
  
+
+ 
+// Action identifiers for flow-control rows in the dropdown. Raw
+// strings are compared by identity in code, never shown to the user,
+// so they're exempt from i18n.
+type ActionId =
+    | "insertPassers"
+    | "insertRefuter"
+    | "insertSeen"
+    | "finish"
+    | "submit";
+
+const ACTION_INSERT_PASSERS: ActionId = "insertPassers";
+const ACTION_INSERT_REFUTER: ActionId = "insertRefuter";
+const ACTION_INSERT_SEEN: ActionId = "insertSeen";
+const ACTION_FINISH: ActionId = "finish";
+const ACTION_SUBMIT: ActionId = "submit";
+
+// Player role keys used to drive the annotation i18n lookup. (The
+// card-role equivalents are inlined in `cardAnnotation` since there
+// are only two of them.)
+type PlayerRole = "suggester" | "passed" | "refuted";
+ 
+
+type DropdownItem =
+    | {
+          readonly kind: "candidate";
+          readonly rawLabel: string;
+          readonly display: string;
+          readonly value: unknown;
+      }
+    | {
+          readonly kind: "action";
+          readonly actionId: ActionId;
+          readonly display: string;
+          readonly disabled: boolean;
+      };
+
+/**
+ * Compose the dropdown-item list for the current parse state.
+ * Keeps `autocompleteFor` pure (parser-side) and concentrates all the
+ * UI-level contextualisation + flow-action logic here.
+ */
+const buildDropdownItems = ({
+    autocomplete,
+    parsed,
+    setup,
+    platform,
+    t,
+}: {
+    autocomplete: ReturnType<typeof autocompleteFor>;
+    parsed: ParsedSuggestion;
+    setup: GameSetup;
+    platform: string;
+    t: TFn;
+}): ReadonlyArray<DropdownItem> => {
+    const items: Array<DropdownItem> = [];
+
+    // --- Candidate rows: contextualised version of the raw labels
+    //     from the parser's autocompleteFor output. Each candidate
+    //     gets a sentence-context display string and, when the
+    //     candidate is already used elsewhere in the suggestion, an
+    //     inline role annotation.
+    for (const c of autocomplete.candidates) {
+        items.push({
+            kind: "candidate",
+            rawLabel: c.label,
+            display: candidateDisplay(
+                autocomplete.slot,
+                c.label,
+                c.value,
+                parsed,
+                setup,
+                t,
+            ),
+            value: c.value,
+        });
+    }
+
+    // --- Flow-action rows: shown whenever the required slots (the
+    //     suggester + one card per category) are all Resolved. They
+    //     let the user progress through the optional sections and
+    //     submit, without leaving the keyboard. Each individual
+    //     action is gated on its own applicability:
+    //       insertPassers — only when passers list is empty
+    //       insertRefuter — only when no refuter yet
+    //       insertSeen    — only when refuter resolved + seen empty
+    //       finish        — always (closes the dropdown)
+    //       submit        — always visible, disabled unless draft valid
+    const suggesterResolved = parsed.suggester._tag === "Resolved";
+    const cardsAllResolved =
+        parsed.cards.length > 0 &&
+        parsed.cards.every(c => c._tag === "Resolved");
+    const requiredDone = suggesterResolved && cardsAllResolved;
+    if (requiredDone) {
+        // Section-open checks: a section is "already open" once its
+        // keyword is in the input, even if no token follows yet. We
+        // use the active slot as the proxy — when the caret sits in
+        // the passer slot, "Passed by " is already typed and
+        // offering to insert it again would double-up. Same for
+        // refuter / seenCard.
+        const activeKind = parsed.activeSlot.kind;
+        const passersSectionOpen =
+            activeKind === "passer" || parsed.nonRefuters.length > 0;
+        const refuterSectionOpen =
+            activeKind === "refuter" || parsed.refuter._tag !== "Empty";
+        const seenSectionOpen =
+            activeKind === "seenCard" || parsed.seenCard._tag !== "Empty";
+
+        if (!passersSectionOpen) {
+            items.push({
+                kind: "action",
+                actionId: ACTION_INSERT_PASSERS,
+                display: t("streamlined.actionInsertPassers"),
+                disabled: false,
+            });
+        }
+        if (!refuterSectionOpen) {
+            items.push({
+                kind: "action",
+                actionId: ACTION_INSERT_REFUTER,
+                display: t("streamlined.actionInsertRefuter"),
+                disabled: false,
+            });
+        }
+        // `with card…` requires a refuter to be in place (grammar).
+        // Hide it while the user is mid-typing the refuter name OR
+        // the seenCard section is already open.
+        if (
+            parsed.refuter._tag === "Resolved" &&
+            !seenSectionOpen
+        ) {
+            items.push({
+                kind: "action",
+                actionId: ACTION_INSERT_SEEN,
+                display: t("streamlined.actionInsertSeen"),
+                disabled: false,
+            });
+        }
+        items.push({
+            kind: "action",
+            actionId: ACTION_FINISH,
+            display: t("streamlined.actionFinish"),
+            disabled: false,
+        });
+        items.push({
+            kind: "action",
+            actionId: ACTION_SUBMIT,
+            display: t("streamlined.actionSubmit", { platform }),
+            disabled: parsed.draft === null,
+        });
+    }
+    return items;
+};
+
+/**
+ * Contextualise one candidate's display label for the current slot.
+ * Shape per slot (see i18n keys for the templates):
+ *
+ *   suggester   → "{name}{annotation?} suggests..."
+ *   card i      → "{name} ({category}[, {annotation}])"
+ *   passer      → "{name}{annotation?} passed"
+ *   refuter     → "{name}{annotation?} refuted"
+ *   seenCard    → "...refuted with {name}{annotation?}"
+ *
+ * `annotation` only appears when the candidate is already used in
+ * another role of the current suggestion — e.g. in the passer
+ * dropdown, if a player is already the refuter, the row reads
+ * "Player X (refuted) passed". Same-role annotations are skipped
+ * (a player who's already a passer doesn't need "(passed)" in the
+ * passer dropdown — the verb form already communicates it).
+ */
+ 
+// Role discriminator strings below ("suggester" / "passed" / etc.)
+// match the `PlayerRole` union and are never shown to the user.
+const ROLE_SUGGESTER: PlayerRole = "suggester";
+const ROLE_PASSED: PlayerRole = "passed";
+const ROLE_REFUTED: PlayerRole = "refuted";
+ 
+
+const candidateDisplay = (
+    slot: ReturnType<typeof autocompleteFor>["slot"],
+    rawLabel: string,
+    value: unknown,
+    parsed: ParsedSuggestion,
+    setup: GameSetup,
+    t: TFn,
+): string => {
+    switch (slot.kind) {
+        case "suggester": {
+            const annotation = playerAnnotation(
+                value,
+                parsed,
+                ROLE_SUGGESTER,
+                t,
+            );
+            return annotation
+                ? t("streamlined.candidateSuggesterWithAnnotation", {
+                      name: rawLabel,
+                      annotation,
+                  })
+                : t("streamlined.candidateSuggesterBase", { name: rawLabel });
+        }
+        case "passer": {
+            const annotation = playerAnnotation(
+                value,
+                parsed,
+                ROLE_PASSED,
+                t,
+            );
+            return annotation
+                ? t("streamlined.candidatePasserWithAnnotation", {
+                      name: rawLabel,
+                      annotation,
+                  })
+                : t("streamlined.candidatePasserBase", { name: rawLabel });
+        }
+        case "refuter": {
+            const annotation = playerAnnotation(
+                value,
+                parsed,
+                ROLE_REFUTED,
+                t,
+            );
+            return annotation
+                ? t("streamlined.candidateRefuterWithAnnotation", {
+                      name: rawLabel,
+                      annotation,
+                  })
+                : t("streamlined.candidateRefuterBase", { name: rawLabel });
+        }
+        case "card": {
+            const category =
+                setup.categories[slot.index]?.name ??
+                t("streamlined.pillCardFallback");
+            const annotation = cardAnnotation(
+                value,
+                parsed,
+                /* skipSuggested */ false,
+                t,
+            );
+            return annotation
+                ? t("streamlined.candidateCardWithAnnotation", {
+                      name: rawLabel,
+                      category,
+                      annotation,
+                  })
+                : t("streamlined.candidateCardBase", {
+                      name: rawLabel,
+                      category,
+                  });
+        }
+        case "seenCard": {
+            // For the seenCard slot the candidates are already
+            // filtered to the three suggested cards, so "(suggested)"
+            // would be redundant on every row — suppress it via
+            // `skipSuggested`. "(shown)" still applies if the card is
+            // the current seenCard.
+            const annotation = cardAnnotation(
+                value,
+                parsed,
+                /* skipSuggested */ true,
+                t,
+            );
+            return annotation
+                ? t("streamlined.candidateSeenCardWithAnnotation", {
+                      name: rawLabel,
+                      annotation,
+                  })
+                : t("streamlined.candidateSeenCardBase", { name: rawLabel });
+        }
+        case "done":
+            return rawLabel;
+    }
+};
+
+/**
+ * Role of a player in the current suggestion, or null if they're not
+ * used yet. `suggester` / `passed` / `refuted` are mutually exclusive
+ * by construction (the parser doesn't let a single player fill two
+ * player-roles).
+ *
+ * `currentRole` is the role of the dropdown we're building — we skip
+ * annotating a candidate whose role matches the current slot (no need
+ * to say "(passed) passed" in the passer dropdown).
+ */
+const playerAnnotation = (
+    value: unknown,
+    parsed: ParsedSuggestion,
+    currentRole: PlayerRole,
+    t: TFn,
+): string | null => {
+    const role = playerRoleOf(value, parsed);
+    if (role === null || role === currentRole) return null;
+    return t(roleI18nKey(role));
+};
+
+/* eslint-disable i18next/no-literal-string */
+// Role discriminators + their i18n key lookup. The strings here are
+// parser / code tokens, not user copy.
+const playerRoleOf = (
+    value: unknown,
+    parsed: ParsedSuggestion,
+): PlayerRole | null => {
+    if (
+        parsed.suggester._tag === "Resolved" &&
+        parsed.suggester.value === value
+    ) {
+        return "suggester";
+    }
+    if (parsed.refuter._tag === "Resolved" && parsed.refuter.value === value) {
+        return "refuted";
+    }
+    if (
+        parsed.nonRefuters.some(
+            p => p._tag === "Resolved" && p.value === value,
+        )
+    ) {
+        return "passed";
+    }
+    return null;
+};
+
+const roleI18nKey = (role: PlayerRole): string => {
+    switch (role) {
+        case "suggester":
+            return "streamlined.annotationSuggester";
+        case "passed":
+            return "streamlined.annotationPassed";
+        case "refuted":
+            return "streamlined.annotationRefuted";
+    }
+};
+/* eslint-enable i18next/no-literal-string */
+
+/**
+ * Annotation for a card candidate. "shown" takes precedence over
+ * "suggested" — a card that's both is the current seenCard and
+ * annotating both would be noisy.
+ *
+ * `skipSuggested` is set by the seenCard dropdown, which pre-filters
+ * its candidates to already-suggested cards; annotating every row
+ * with "(suggested)" there adds no information.
+ */
+const cardAnnotation = (
+    value: unknown,
+    parsed: ParsedSuggestion,
+    skipSuggested: boolean,
+    t: TFn,
+): string | null => {
+    if (
+        parsed.seenCard._tag === "Resolved" &&
+        parsed.seenCard.value === value
+    ) {
+        return t("streamlined.annotationShown");
+    }
+    if (
+        !skipSuggested &&
+        parsed.cards.some(c => c._tag === "Resolved" && c.value === value)
+    ) {
+        return t("streamlined.annotationSuggested");
+    }
+    return null;
+};
 
 /**
  * Build a fully-formed example sentence keyed to the current setup.
