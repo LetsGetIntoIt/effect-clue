@@ -174,11 +174,13 @@
             "checklist": {
                 "suggester": "Suggester",
                 "cards": "{filled} of {total} cards",
-                "passers": "{count, plural, =0 {Passed by: none (optional)} one {Passed by: # player} other {Passed by: # players}}",
-                "refuterOptional": "Refuted by: none (optional)",
-                "refuterWithCard": "Refuted by + card shown",
-                "refuterNeedsCard": "Refuted by (add 'with <card>' for what was shown)",
-                "refuterPartial": "Refuted by (incomplete)"
+                "passersPending": "Passed by (optional)",
+                "passersDone": "{count, plural, one {Passed by: # player} other {Passed by: # players}}",
+                "refuterPending": "Refuted by (optional)",
+                "refuterDone": "Refuted by — set",
+                "seenPending": "Shown card (optional)",
+                "seenDone": "Shown card — set",
+                "addAction": "+ add"
             },
             "useExample": "Use example",
             "hintUnknown": "{raw} doesn't match any name here.",

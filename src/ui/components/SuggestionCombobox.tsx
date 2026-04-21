@@ -186,11 +186,38 @@ export function SuggestionCombobox({
             ? `suggestion-combobox-option-${highlightedIndex}`
             : undefined;
 
+    const insertFragment = useCallback(
+        (fragment: string) => {
+            // Normalise the tail so clicking "Passed by" twice doesn't
+            // produce ".. Passed by .. Passed by ..". Trim trailing
+            // whitespace and a trailing period from the current input
+            // before appending the fragment.
+            const base = text.replace(/[\s.]+$/, "");
+            const next = base + fragment;
+            setText(next);
+            setCaret(next.length);
+            setDropdownOpen(true);
+            queueMicrotask(() => {
+                const el = inputRef.current;
+                if (!el) return;
+                el.focus();
+                el.setSelectionRange(next.length, next.length);
+            });
+        },
+        [text],
+    );
+
     return (
         <div>
             <h3 className="mt-0 mb-2 text-[14px] font-semibold">
                 {t("addTitle")}
             </h3>
+            <SuggestionChecklist
+                parsed={parsed}
+                onInsertFragment={insertFragment}
+            />
+            <ChipPreview parsed={parsed} setup={setup} />
+            <SlotHint parsed={parsed} setup={setup} />
             <div className="relative">
                 <input
                     ref={inputRef}
@@ -217,7 +244,7 @@ export function SuggestionCombobox({
                     <ul
                         id="suggestion-combobox-listbox"
                         role="listbox"
-                        className="absolute left-0 right-0 top-full z-10 mt-1 max-h-56 overflow-y-auto rounded border border-border bg-white p-0 shadow-lg"
+                        className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded border border-border bg-white p-0 shadow-lg"
                     >
                         {autocomplete.candidates.map((c, i) => (
                             <li
@@ -243,9 +270,6 @@ export function SuggestionCombobox({
                     </ul>
                 )}
             </div>
-            <SlotHint parsed={parsed} setup={setup} />
-            <ChipPreview parsed={parsed} setup={setup} />
-            <SuggestionChecklist parsed={parsed} />
             <div className="mt-2 flex items-center gap-2">
                 <button
                     type="button"
@@ -549,10 +573,51 @@ function Chip({
     );
 }
 
+/**
+ * Status of one checklist row. Distinguishes "required but not done"
+ * from "optional and not set" so the two don't look the same — that
+ * was the core of the earlier confusion where optional items rendered
+ * as "always checked."
+ */
+ 
+type ChecklistStatus = "done" | "pendingRequired" | "pendingOptional" | "error";
+ 
+
+ 
+const STATUS_DONE: ChecklistStatus = "done";
+const STATUS_PENDING_REQ: ChecklistStatus = "pendingRequired";
+const STATUS_PENDING_OPT: ChecklistStatus = "pendingOptional";
+const STATUS_ERROR: ChecklistStatus = "error";
+ 
+
+const statusOfSlot = (
+    slot: SlotState<unknown>,
+    optional: boolean,
+): ChecklistStatus => {
+    if (slot._tag === "Resolved") return STATUS_DONE;
+    if (slot._tag === "Unknown" || slot._tag === "Ambiguous")
+        return STATUS_ERROR;
+    return optional ? STATUS_PENDING_OPT : STATUS_PENDING_REQ;
+};
+
+const statusOfList = (
+    slots: ReadonlyArray<SlotState<unknown>>,
+    optional: boolean,
+): ChecklistStatus => {
+    if (slots.length === 0)
+        return optional ? STATUS_PENDING_OPT : STATUS_PENDING_REQ;
+    if (slots.some(c => c._tag === "Unknown" || c._tag === "Ambiguous"))
+        return STATUS_ERROR;
+    if (slots.every(c => c._tag === "Resolved")) return STATUS_DONE;
+    return STATUS_PENDING_REQ;
+};
+
 function SuggestionChecklist({
     parsed,
+    onInsertFragment,
 }: {
     readonly parsed: ParsedSuggestion;
+    readonly onInsertFragment: (fragment: string) => void;
 }): React.ReactElement {
     const t = useTranslations("suggestions");
     const total = parsed.cards.length;
@@ -560,77 +625,154 @@ function SuggestionChecklist({
         c => c._tag === "Resolved",
     ).length;
 
-    const suggesterDone = parsed.suggester._tag === "Resolved";
-    const cardsDone = resolvedCards === total && total > 0;
-    const passersDone =
-        parsed.nonRefuters.length === 0 ||
-        parsed.nonRefuters.every(p => p._tag === "Resolved");
-    const refuterResolved = parsed.refuter._tag === "Resolved";
-    const seenResolved = parsed.seenCard._tag === "Resolved";
-    const refuterDone =
-        parsed.refuter._tag === "Empty" ||
-        (refuterResolved &&
-            (parsed.seenCard._tag === "Empty" || seenResolved));
+    const suggesterStatus = statusOfSlot(parsed.suggester, false);
+    const cardsStatus = statusOfList(parsed.cards, false);
+    const passersStatus = statusOfList(parsed.nonRefuters, true);
+    const passersResolved = passersStatus === STATUS_DONE;
+    const refuterStatus = statusOfSlot(parsed.refuter, true);
+    const seenStatus = statusOfSlot(parsed.seenCard, true);
+
+    // Optional sections can only be attached once the required sections
+    // (suggester + all cards) are resolved — otherwise inserting
+    // ". Refuted by " ends up treated as the suggester by the parser.
+    const requiredDone =
+        suggesterStatus === STATUS_DONE && cardsStatus === STATUS_DONE;
+    const canAddPassers =
+        requiredDone && passersStatus === STATUS_PENDING_OPT;
+    const canAddRefuter =
+        requiredDone && refuterStatus === STATUS_PENDING_OPT;
+    const canAddSeen =
+        requiredDone &&
+        seenStatus === STATUS_PENDING_OPT &&
+        parsed.refuter._tag === "Resolved";
 
     return (
         <ul className="mt-2 m-0 list-none p-0 text-[12px]">
             <ChecklistItem
-                done={suggesterDone}
+                status={suggesterStatus}
                 label={t("streamlined.checklist.suggester")}
             />
             <ChecklistItem
-                done={cardsDone}
+                status={cardsStatus}
                 label={t("streamlined.checklist.cards", {
                     filled: resolvedCards,
                     total,
                 })}
             />
             <ChecklistItem
-                done={passersDone}
-                label={t("streamlined.checklist.passers", {
-                    count: parsed.nonRefuters.length,
+                status={passersStatus}
+                label={
+                    passersResolved
+                        ? t("streamlined.checklist.passersDone", {
+                              count: parsed.nonRefuters.length,
+                          })
+                        : t("streamlined.checklist.passersPending")
+                }
+                {...(canAddPassers && {
+                    onInsert: () => onInsertFragment(PASSED_BY_FRAGMENT),
                 })}
+                disabled={!requiredDone}
             />
             <ChecklistItem
-                done={refuterDone}
+                status={refuterStatus}
                 label={
-                    parsed.refuter._tag === "Empty"
-                        ? t("streamlined.checklist.refuterOptional")
-                        : seenResolved
-                          ? t("streamlined.checklist.refuterWithCard")
-                          : refuterResolved
-                            ? t("streamlined.checklist.refuterNeedsCard")
-                            : t("streamlined.checklist.refuterPartial")
+                    refuterStatus === STATUS_DONE
+                        ? t("streamlined.checklist.refuterDone")
+                        : t("streamlined.checklist.refuterPending")
                 }
+                {...(canAddRefuter && {
+                    onInsert: () => onInsertFragment(REFUTED_BY_FRAGMENT),
+                })}
+                disabled={!requiredDone}
+            />
+            <ChecklistItem
+                status={seenStatus}
+                label={
+                    seenStatus === STATUS_DONE
+                        ? t("streamlined.checklist.seenDone")
+                        : t("streamlined.checklist.seenPending")
+                }
+                {...(canAddSeen && {
+                    onInsert: () => onInsertFragment(WITH_FRAGMENT),
+                })}
+                disabled={!canAddSeen && seenStatus !== STATUS_DONE}
             />
         </ul>
     );
 }
 
+ 
+const PASSED_BY_FRAGMENT = ". Passed by ";
+const REFUTED_BY_FRAGMENT = ". Refuted by ";
+const WITH_FRAGMENT = " with ";
+ 
+
 function ChecklistItem({
-    done,
+    status,
     label,
+    onInsert,
+    disabled,
 }: {
-    readonly done: boolean;
+    readonly status: ChecklistStatus;
     readonly label: string;
+    readonly onInsert?: () => void;
+    readonly disabled?: boolean;
 }): React.ReactElement {
-    return (
-        <li className="flex items-center gap-1.5 py-0.5">
+    const t = useTranslations("suggestions");
+    const iconClass =
+        status === STATUS_DONE
+            ? "border-accent bg-accent text-white"
+            : status === STATUS_ERROR
+              ? "border-danger bg-danger/10 text-danger"
+              : status === STATUS_PENDING_REQ
+                ? "border-border bg-transparent text-transparent"
+                : "border-dashed border-border bg-transparent text-muted";
+    const iconGlyph =
+        status === STATUS_DONE
+            ? "✓"
+            : status === STATUS_ERROR
+              ? "!"
+              : status === STATUS_PENDING_OPT
+                ? "–"
+                : "";
+    const textClass =
+        status === STATUS_DONE
+            ? "text-foreground"
+            : status === STATUS_ERROR
+              ? "text-danger"
+              : "text-muted";
+    const row = (
+        <span className="flex items-center gap-1.5 py-0.5">
             <span
                 aria-hidden
                 className={
-                    "inline-block h-3.5 w-3.5 rounded-sm border text-center leading-3 " +
-                    (done
-                        ? "border-accent bg-accent text-white"
-                        : "border-border bg-transparent text-transparent")
+                    "inline-block h-3.5 w-3.5 rounded-sm border text-center text-[10px] leading-3 " +
+                    iconClass
                 }
             >
-                {done ? "✓" : ""}
+                {iconGlyph}
             </span>
-            <span className={done ? "text-foreground" : "text-muted"}>
-                {label}
-            </span>
-        </li>
+            <span className={textClass}>{label}</span>
+            {onInsert !== undefined && (
+                <span className="text-[11px] text-accent underline">
+                    {t("streamlined.checklist.addAction")}
+                </span>
+            )}
+        </span>
     );
+    if (onInsert !== undefined && !disabled) {
+        return (
+            <li>
+                <button
+                    type="button"
+                    onClick={onInsert}
+                    className="w-full cursor-pointer border-none bg-transparent p-0 text-left hover:bg-accent/5"
+                >
+                    {row}
+                </button>
+            </li>
+        );
+    }
+    return <li>{row}</li>;
 }
 
