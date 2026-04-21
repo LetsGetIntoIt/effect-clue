@@ -72,7 +72,8 @@
         "removeCardTitle": "Remove {name}",
         "removeCardMin": "At least one card per category is required",
         "addCard": "+ add card",
-        "addCategory": "+ add category"
+        "addCategory": "+ add category",
+        "knownCardCheckboxAria": "{player} owns {card}"
     },
     "deduce": {
         "title": "Deduction grid",

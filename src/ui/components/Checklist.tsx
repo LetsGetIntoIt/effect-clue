@@ -347,6 +347,25 @@ export function Checklist() {
                                             owner,
                                             entry.id,
                                         );
+                                        // In Setup mode, player cells show a native
+                                        // checkbox bound to the *manual* knownCards
+                                        // slice — not the deduced value. The cell
+                                        // background still reflects the deduced Y/N,
+                                        // so a green-background cell with an
+                                        // unchecked box means "solver derived this,
+                                        // you didn't enter it."
+                                        const isKnownY =
+                                            isPlayerCell &&
+                                            knownCards.some(
+                                                kc =>
+                                                    kc.player ===
+                                                        (owner._tag === "Player"
+                                                            ? owner.player
+                                                            : undefined) &&
+                                                    kc.card === entry.id,
+                                            );
+                                        const setupCheckbox =
+                                            inSetup && isPlayerCell;
                                         const tooltipText = buildCellTitle({
                                             provenance,
                                             suggestions,
@@ -370,11 +389,14 @@ export function Checklist() {
                                                 <td
                                                     className={cellClass(
                                                         value,
-                                                        isPlayerCell,
+                                                        // In Setup mode the checkbox
+                                                        // is the click target — no
+                                                        // cell-wide button chrome.
+                                                        isPlayerCell && !setupCheckbox,
                                                         isHighlighted,
                                                     )}
                                                     onClick={
-                                                        isPlayerCell
+                                                        isPlayerCell && !setupCheckbox
                                                             ? () =>
                                                                   toggleKnownCard(
                                                                       owner,
@@ -382,10 +404,18 @@ export function Checklist() {
                                                                   )
                                                             : undefined
                                                     }
-                                                    role={isPlayerCell ? "button" : undefined}
-                                                    tabIndex={isPlayerCell ? 0 : undefined}
+                                                    role={
+                                                        isPlayerCell && !setupCheckbox
+                                                            ? "button"
+                                                            : undefined
+                                                    }
+                                                    tabIndex={
+                                                        isPlayerCell && !setupCheckbox
+                                                            ? 0
+                                                            : undefined
+                                                    }
                                                     onKeyDown={
-                                                        isPlayerCell
+                                                        isPlayerCell && !setupCheckbox
                                                             ? e => {
                                                                   if (
                                                                       e.key === "Enter" ||
@@ -401,13 +431,44 @@ export function Checklist() {
                                                             : undefined
                                                     }
                                                 >
-                                                    {cellLabel(value)}
-                                                    {footnoteNumbers.length > 0 &&
-                                                        value === undefined && (
-                                                            <sup className="ml-0.5 text-[9px] font-normal text-accent">
-                                                                {footnoteNumbers.join(",")}
-                                                            </sup>
-                                                        )}
+                                                    {setupCheckbox ? (
+                                                        <input
+                                                            type="checkbox"
+                                                            className="h-4 w-4 cursor-pointer accent-accent"
+                                                            checked={isKnownY}
+                                                            onChange={() =>
+                                                                toggleKnownCard(
+                                                                    owner,
+                                                                    entry.id,
+                                                                )
+                                                            }
+                                                            aria-label={tSetup(
+                                                                "knownCardCheckboxAria",
+                                                                {
+                                                                    player: String(
+                                                                        owner._tag ===
+                                                                            "Player"
+                                                                            ? owner.player
+                                                                            : "",
+                                                                    ),
+                                                                    card: entry.name,
+                                                                },
+                                                            )}
+                                                        />
+                                                    ) : (
+                                                        <>
+                                                            {cellLabel(value)}
+                                                            {footnoteNumbers.length >
+                                                                0 &&
+                                                                value === undefined && (
+                                                                    <sup className="ml-0.5 text-[9px] font-normal text-accent">
+                                                                        {footnoteNumbers.join(
+                                                                            ",",
+                                                                        )}
+                                                                    </sup>
+                                                                )}
+                                                        </>
+                                                    )}
                                                 </td>
                                             </Tooltip>
                                         );
