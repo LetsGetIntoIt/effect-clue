@@ -1,6 +1,7 @@
-import { Equal, HashMap, Match, MutableHashMap, MutableHashSet, Option } from "effect";
+import { Data, Effect, Equal, HashMap, Match, MutableHashMap, MutableHashSet, Option } from "effect";
+import type { ContradictionTrace } from "./Deducer";
 import { Card, CardCategory, Player } from "./GameObjects";
-import { Cell, CellValue, Knowledge } from "./Knowledge";
+import { Cell, CellValue, Contradiction, Knowledge } from "./Knowledge";
 import { applyConsistencyRules, applyDeductionRules } from "./Rules";
 import {
     cardName,
@@ -8,23 +9,76 @@ import {
     GameSetup,
 } from "./GameSetup";
 import { Suggestion, suggestionCards } from "./Suggestion";
+import {
+    CardSetService,
+    PlayerSetService,
+    SuggestionsService,
+    getCardSet,
+    getPlayerSet,
+    getSuggestions,
+} from "./services";
 
 /**
  * Structured identity of the rule family that produced a deduction.
  * This is richer than just a string tag — the UI renders different
- * explanations depending on `kind`, and "offer a quick fix" for
+ * explanations depending on the `_tag`, and "offer a quick fix" for
  * contradictions needs to identify the originating suggestion or
  * input.
+ *
+ * Each variant is its own `Data.TaggedClass` so pattern-matches can
+ * use `Match.tagsExhaustive` (tighter v4 idiom) and HashMap keys that
+ * contain reason values get structural `Equal` for free.
  */
+class InitialKnownCardImpl extends Data.TaggedClass("InitialKnownCard")<{}> {}
+class InitialHandSizeImpl extends Data.TaggedClass("InitialHandSize")<{}> {}
+class CardOwnershipImpl extends Data.TaggedClass("CardOwnership")<{
+    readonly card: Card;
+}> {}
+class PlayerHandImpl extends Data.TaggedClass("PlayerHand")<{
+    readonly player: Player;
+}> {}
+class CaseFileCategoryImpl extends Data.TaggedClass("CaseFileCategory")<{
+    readonly category: CardCategory;
+}> {}
+class NonRefutersImpl extends Data.TaggedClass("NonRefuters")<{
+    readonly suggestionIndex: number;
+}> {}
+class RefuterShowedImpl extends Data.TaggedClass("RefuterShowed")<{
+    readonly suggestionIndex: number;
+}> {}
+class RefuterOwnsOneOfImpl extends Data.TaggedClass("RefuterOwnsOneOf")<{
+    readonly suggestionIndex: number;
+}> {}
+
 export type ReasonKind =
-    | { readonly kind: "initial-known-card" }
-    | { readonly kind: "initial-hand-size" }
-    | { readonly kind: "card-ownership"; readonly card: Card }
-    | { readonly kind: "player-hand"; readonly player: Player }
-    | { readonly kind: "case-file-category"; readonly category: CardCategory }
-    | { readonly kind: "non-refuters"; readonly suggestionIndex: number }
-    | { readonly kind: "refuter-showed"; readonly suggestionIndex: number }
-    | { readonly kind: "refuter-owns-one-of"; readonly suggestionIndex: number };
+    | InitialKnownCardImpl
+    | InitialHandSizeImpl
+    | CardOwnershipImpl
+    | PlayerHandImpl
+    | CaseFileCategoryImpl
+    | NonRefutersImpl
+    | RefuterShowedImpl
+    | RefuterOwnsOneOfImpl;
+
+const InitialKnownCard = (): ReasonKind => new InitialKnownCardImpl();
+// InitialHandSize is declared in the ReasonKind union but not yet
+// emitted by any rule — kept for future hand-size-driven deductions.
+export const CardOwnership = (params: { readonly card: Card }): ReasonKind =>
+    new CardOwnershipImpl(params);
+export const PlayerHand = (params: { readonly player: Player }): ReasonKind =>
+    new PlayerHandImpl(params);
+export const CaseFileCategory = (params: {
+    readonly category: CardCategory;
+}): ReasonKind => new CaseFileCategoryImpl(params);
+export const NonRefuters = (params: {
+    readonly suggestionIndex: number;
+}): ReasonKind => new NonRefutersImpl(params);
+export const RefuterShowed = (params: {
+    readonly suggestionIndex: number;
+}): ReasonKind => new RefuterShowedImpl(params);
+export const RefuterOwnsOneOf = (params: {
+    readonly suggestionIndex: number;
+}): ReasonKind => new RefuterOwnsOneOfImpl(params);
 
 /**
  * A short, human-readable reason for why a particular cell has the value
@@ -180,28 +234,28 @@ export const describeReason = (
     suggestions: ReadonlyArray<Suggestion>,
 ): ReasonDescription =>
     Match.value(reason.kind).pipe(
-        Match.discriminatorsExhaustive("kind")({
-            "initial-known-card": (): ReasonDescription => ({
+        Match.tagsExhaustive({
+            InitialKnownCard: (): ReasonDescription => ({
                 kind: "initial-known-card",
                 params: {},
             }),
-            "initial-hand-size": (): ReasonDescription => ({
+            InitialHandSize: (): ReasonDescription => ({
                 kind: "initial-hand-size",
                 params: {},
             }),
-            "card-ownership": ({ card }): ReasonDescription => ({
+            CardOwnership: ({ card }): ReasonDescription => ({
                 kind: "card-ownership",
                 params: { card: cardName(setup, card) },
             }),
-            "player-hand": ({ player }): ReasonDescription => ({
+            PlayerHand: ({ player }): ReasonDescription => ({
                 kind: "player-hand",
                 params: { player: String(player) },
             }),
-            "case-file-category": ({ category }): ReasonDescription => ({
+            CaseFileCategory: ({ category }): ReasonDescription => ({
                 kind: "case-file-category",
                 params: { category: categoryName(setup, category) },
             }),
-            "non-refuters": ({ suggestionIndex }): ReasonDescription => ({
+            NonRefuters: ({ suggestionIndex }): ReasonDescription => ({
                 kind: "non-refuters",
                 params: {
                     suggestionIndex,
@@ -211,7 +265,7 @@ export const describeReason = (
                             : undefined,
                 },
             }),
-            "refuter-showed": ({ suggestionIndex }): ReasonDescription => {
+            RefuterShowed: ({ suggestionIndex }): ReasonDescription => {
                 const s = suggestions[suggestionIndex];
                 return {
                     kind: "refuter-showed",
@@ -228,7 +282,7 @@ export const describeReason = (
                     },
                 };
             },
-            "refuter-owns-one-of": ({ suggestionIndex }): ReasonDescription => {
+            RefuterOwnsOneOf: ({ suggestionIndex }): ReasonDescription => {
                 const s = suggestions[suggestionIndex];
                 return {
                     kind: "refuter-owns-one-of",
@@ -259,45 +313,71 @@ export const describeReason = (
  * separate traced deduction path — the regular `deduce` stays fast and
  * pure — so the UI can opt in to explanations without paying the cost
  * for every recompute.
+ *
+ * Game setup and suggestion log are ambient context, read from the
+ * service layer. Use `runDeduceWithExplanations` from test-utils for
+ * synchronous test call sites.
  */
 export const deduceWithExplanations = (
-    setup: GameSetup,
-    suggestions: ReadonlyArray<Suggestion>,
     initial: Knowledge,
-): { knowledge: Knowledge; provenance: Provenance } => {
-    const provenance: Provenance = MutableHashMap.empty<Cell, Reason>();
-    let current = initial;
-    let currentIteration = 0;
+): Effect.Effect<
+    { knowledge: Knowledge; provenance: Provenance },
+    ContradictionTrace,
+    CardSetService | PlayerSetService | SuggestionsService
+> =>
+    Effect.gen(function* () {
+        const cardSet = yield* getCardSet;
+        const playerSet = yield* getPlayerSet;
+        const suggestions = yield* getSuggestions;
+        const setup = GameSetup({ cardSet, playerSet });
+        const provenance: Provenance = MutableHashMap.empty<Cell, Reason>();
+        let current = initial;
+        let currentIteration = 0;
 
-    // Seed provenance with the initial inputs so the UI can explain
-    // them as "you told us this".
-    HashMap.forEach(initial.checklist, (_value, cell) => {
-        MutableHashMap.set(provenance, cell, {
-            iteration: 0,
-            kind: { kind: "initial-known-card" },
-            detail: "given from starting knowledge",
-            dependsOn: [],
+        // Seed provenance with the initial inputs so the UI can explain
+        // them as "you told us this".
+        HashMap.forEach(initial.checklist, (_value, cell) => {
+            MutableHashMap.set(provenance, cell, {
+                iteration: 0,
+                kind: InitialKnownCard(),
+                detail: "given from starting knowledge",
+                dependsOn: [],
+            });
         });
+
+        const tracer: Tracer = (record) => {
+            if (MutableHashMap.has(provenance, record.cell)) return; // first-write-wins
+            MutableHashMap.set(provenance, record.cell, {
+                iteration: currentIteration,
+                kind: record.kind,
+                detail: record.detail,
+                dependsOn: record.dependsOn,
+            });
+        };
+
+        try {
+            const maxIterations = 1000;
+            for (let i = 0; i < maxIterations; i++) {
+                currentIteration = i + 1;
+                const before = current;
+                current = applyConsistencyRules(setup, tracer)(current);
+                current = applyDeductionRules(suggestions, tracer)(current);
+                if (Equal.equals(current, before)) break;
+            }
+        } catch (e) {
+            if (e instanceof Contradiction) {
+                return yield* Effect.fail({
+                    reason: e.reason,
+                    offendingCells: e.offendingCells,
+                    offendingSuggestionIndices:
+                        e.suggestionIndex !== undefined
+                            ? [e.suggestionIndex]
+                            : [],
+                    sliceLabel: e.sliceLabel,
+                });
+            }
+            throw e;
+        }
+
+        return { knowledge: current, provenance };
     });
-
-    const tracer: Tracer = (record) => {
-        if (MutableHashMap.has(provenance, record.cell)) return; // first-write-wins
-        MutableHashMap.set(provenance, record.cell, {
-            iteration: currentIteration,
-            kind: record.kind,
-            detail: record.detail,
-            dependsOn: record.dependsOn,
-        });
-    };
-
-    const maxIterations = 1000;
-    for (let i = 0; i < maxIterations; i++) {
-        currentIteration = i + 1;
-        const before = current;
-        current = applyConsistencyRules(setup, tracer)(current);
-        current = applyDeductionRules(suggestions, tracer)(current);
-        if (Equal.equals(current, before)) break;
-    }
-
-    return { knowledge: current, provenance };
-};

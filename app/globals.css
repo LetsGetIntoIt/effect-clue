@@ -56,6 +56,15 @@
     --color-danger-bg: #f0cfc6;
     --color-danger-border: #c99184;
 
+    /* --- Banner entrance animation.
+     *
+     * The global contradiction banner uses this when it appears, to
+     * soften the pop-in. Only one step — slide down + fade — and
+     * applied via `motion-safe:animate-banner-in` so the effect is
+     * suppressed when prefers-reduced-motion is on.
+     */
+    --animate-banner-in: banner-in 200ms ease-out;
+
     /* --- Geometry & typography.
      *
      * Fonts are loaded by Next.js (`app/layout.tsx`) and exposed here
@@ -101,4 +110,15 @@ h2,
 h3 {
     font-family: var(--font-display);
     letter-spacing: 0.01em;
+}
+
+@keyframes banner-in {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }

@@ -9,12 +9,12 @@ import {
     PlayerOwner,
 } from "./GameObjects";
 import { PlayerSet } from "./PlayerSet";
-import type { CardEntry, Category } from "./CardSet";
+import { CardEntry, Category } from "./CardSet";
 
 // Re-export the deck-side types + helpers so existing imports
 // (`from "./GameSetup"`) keep working after the split. CardSet.ts is
 // the canonical home for anything that operates on just the card half.
-export { type CardEntry, type Category } from "./CardSet";
+export { CardEntry, Category } from "./CardSet";
 export {
     findCategoryEntry,
     findCardEntry,
@@ -178,20 +178,15 @@ export const disambiguateName = (
  * stable across users (two people loading Classic 4p get the same ids)
  * and makes IDs legible in dev tools.
  */
-const presetCard = (name: string, slug: string): CardEntry => ({
-    id: Card(`card-${slug}`),
-    name,
-});
+const presetCard = (name: string, slug: string): CardEntry =>
+    CardEntry({ id: Card(`card-${slug}`), name });
 
 const presetCategory = (
     name: string,
     slug: string,
     cards: ReadonlyArray<CardEntry>,
-): Category => ({
-    id: CardCategory(`category-${slug}`),
-    name,
-    cards,
-});
+): Category =>
+    Category({ id: CardCategory(`category-${slug}`), name, cards });
 
 const players = (names: ReadonlyArray<string>): ReadonlyArray<Player> =>
     names.map(Player);
@@ -264,27 +259,24 @@ const MASTER_DETECTIVE_CARD_SET: CardSet = CardSet({
 });
 
 /**
- * Build a fresh classic-Clue setup with N generically-named players.
+ * Build a fresh Classic-deck setup with 4 generically-named players.
  * Used as the "new game" default — users can rename the players and
- * add or remove rows from the UI grid.
+ * add or remove rows from the UI grid. The deck is independent of
+ * the roster (see `CARD_SETS` below) so callers can swap either
+ * half without disturbing the other.
  */
-export const newGameSetup = (playerCount: number = 4): GameSetup =>
+export const newGameSetup = (): GameSetup =>
     GameSetup({
         cardSet: CLASSIC_CARD_SET,
         playerSet: PlayerSet({
-            players: players(
-                Array.from(
-                    { length: playerCount },
-                    (_, i) => `Player ${i + 1}`,
-                ),
-            ),
+            players: players(["Player 1", "Player 2", "Player 3", "Player 4"]),
         }),
     });
 
 /**
- * The single default preset surfaced in the UI's "New game" button.
+ * The default setup surfaced by the UI's "New game" button.
  */
-export const DEFAULT_SETUP: GameSetup = newGameSetup(4);
+export const DEFAULT_SETUP: GameSetup = newGameSetup();
 
 /**
  * Classic three-player Clue. Kept for tests; not exposed in the UI.
@@ -294,44 +286,19 @@ export const CLASSIC_SETUP_3P: GameSetup = GameSetup({
     playerSet: PlayerSet({ players: players(["Anisha", "Bob", "Cho"]) }),
 });
 
-const CLASSIC_PLAYERS_6P = players([
-    "Miss Scarlet",
-    "Col. Mustard",
-    "Mrs. White",
-    "Mr. Green",
-    "Mrs. Peacock",
-    "Prof. Plum",
-]);
-
-/**
- * Classic Clue with the six standard suspects as six players.
- */
-const CLASSIC_SETUP_6P: GameSetup = GameSetup({
-    cardSet: CLASSIC_CARD_SET,
-    playerSet: PlayerSet({ players: CLASSIC_PLAYERS_6P }),
-});
-
-/**
- * Master Detective edition: more suspects, weapons, and rooms.
- */
-const MASTER_DETECTIVE_SETUP: GameSetup = GameSetup({
-    cardSet: MASTER_DETECTIVE_CARD_SET,
-    playerSet: PlayerSet({ players: CLASSIC_PLAYERS_6P }),
-});
-
-interface SetupPreset {
+interface CardSetChoice {
     readonly id: string;
     readonly label: string;
-    readonly build: () => GameSetup;
+    readonly cardSet: CardSet;
 }
 
 /**
- * Preset definitions surfaced as buttons in the GameSetupPanel. `build`
- * is a thunk rather than a direct GameSetup so callers can't accidentally
- * mutate shared data.
+ * Card packs the UI offers as swap-in decks. Each entry is just the
+ * deck — player rosters stay with whatever the current game already
+ * has, so clicking "Master Detective" swaps the cards without
+ * touching the players.
  */
-export const PRESETS: ReadonlyArray<SetupPreset> = [
-    { id: "classic-4p",        label: "Classic (4 players)",         build: () => newGameSetup(4) },
-    { id: "classic-6p",        label: "Classic (6 players)",         build: () => CLASSIC_SETUP_6P },
-    { id: "master-detective",  label: "Master Detective (6 players)", build: () => MASTER_DETECTIVE_SETUP },
+export const CARD_SETS: ReadonlyArray<CardSetChoice> = [
+    { id: "classic", label: "Classic", cardSet: CLASSIC_CARD_SET },
+    { id: "master-detective", label: "Master Detective", cardSet: MASTER_DETECTIVE_CARD_SET },
 ];

@@ -5,20 +5,31 @@ import { Card, CardCategory } from "./GameObjects";
  * A card entry in a category. Keeps identity (`id`) separate from
  * display name — see GameObjects.ts for why.
  */
-export interface CardEntry {
+class CardEntryImpl extends Data.Class<{
     readonly id: Card;
     readonly name: string;
-}
+}> {}
+export type CardEntry = CardEntryImpl;
+export const CardEntry = (params: {
+    readonly id: Card;
+    readonly name: string;
+}): CardEntry => new CardEntryImpl(params);
 
 /**
  * One category of cards (Suspects / Weapons / Rooms, or any custom
  * deck). Carries its own opaque id so renames don't orphan references.
  */
-export interface Category {
+class CategoryImpl extends Data.Class<{
     readonly id: CardCategory;
     readonly name: string;
     readonly cards: ReadonlyArray<CardEntry>;
-}
+}> {}
+export type Category = CategoryImpl;
+export const Category = (params: {
+    readonly id: CardCategory;
+    readonly name: string;
+    readonly cards: ReadonlyArray<CardEntry>;
+}): Category => new CategoryImpl(params);
 
 /**
  * The "deck" half of a game setup: which categories are in play and

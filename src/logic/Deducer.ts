@@ -1,8 +1,15 @@
-import { Equal, Result } from "effect";
+import { Effect, Equal, Result } from "effect";
 import { Cell, Contradiction, Knowledge } from "./Knowledge";
 import { GameSetup } from "./GameSetup";
 import { applyAllRules } from "./Rules";
-import { Suggestion } from "./Suggestion";
+import {
+    CardSetService,
+    PlayerSetService,
+    SuggestionsService,
+    getCardSet,
+    getPlayerSet,
+    getSuggestions,
+} from "./services";
 
 /**
  * Structured contradiction information the UI can act on without
@@ -29,13 +36,12 @@ export interface ContradictionTrace {
 }
 
 /**
- * The result of running the deducer. `Result.succeed(knowledge)` means
- * we converged to a consistent fixed point; `Result.fail(trace)` means
- * we hit a contradiction and the game state is internally inconsistent.
- *
- * We return `ContradictionTrace` (not the `Contradiction` Error itself)
- * on the failure channel so callers depend only on the structured data
- * they need for UI quick-fixes, not on the thrown Error's identity.
+ * Materialised deduction outcome handed to UI consumers that need to
+ * branch on both success and failure in a single value. The Effect
+ * failure channel is the source of truth at call sites inside
+ * `Effect.gen`; boundary wrappers (state.tsx useMemo, test-utils
+ * RunDeduce) use `Effect.result` to convert back to this shape so
+ * React render code stays branching on `Result.isSuccess`.
  */
 export type DeductionResult = Result.Result<Knowledge, ContradictionTrace>;
 
@@ -50,38 +56,52 @@ const traceOf = (error: Contradiction): ContradictionTrace => ({
 });
 
 /**
- * Main entry point: given a game setup, a set of suggestions, and some
- * initial knowledge (typically the solver's own hand), run rules to a
- * fixed point and return the derived knowledge — or a Contradiction if
- * the inputs are inconsistent.
+ * Main entry point: given an initial knowledge (typically the solver's
+ * own hand), run rules to a fixed point and return the derived
+ * knowledge — or fail with a ContradictionTrace if the inputs are
+ * internally inconsistent.
+ *
+ * Game setup and suggestion log are ambient context, read from
+ * CardSetService / PlayerSetService / SuggestionsService. The
+ * failure value lives on the Effect failure channel (not inside a
+ * success-channel Result), so callers can compose with catchAll /
+ * yield*-short-circuit. UI consumers that need both paths materialise
+ * back to `Result` at the runSync boundary via Effect.result.
  *
  * Fixed-point loop: each rule is monotone (only adds cells, never
  * removes), so this is guaranteed to terminate in at most
  * |owners| × |cards| iterations.
  */
 const deduce = (
-    setup: GameSetup,
-    suggestions: Iterable<Suggestion>,
-) => (
     initial: Knowledge,
-): DeductionResult => {
-    const suggestionArray = Array.from(suggestions);
-    const rule = applyAllRules(setup, suggestionArray);
-    let current = initial;
-    try {
-        // Bound the loop defensively — one iteration per cell would be
-        // the worst case, so an order of magnitude above that is plenty.
-        const maxIterations = 1000;
-        for (let i = 0; i < maxIterations; i++) {
-            const next = rule(current);
-            if (Equal.equals(next, current)) return Result.succeed(next);
-            current = next;
+): Effect.Effect<
+    Knowledge,
+    ContradictionTrace,
+    CardSetService | PlayerSetService | SuggestionsService
+> =>
+    Effect.gen(function* () {
+        const cardSet = yield* getCardSet;
+        const playerSet = yield* getPlayerSet;
+        const suggestions = yield* getSuggestions;
+        const setup = GameSetup({ cardSet, playerSet });
+        const rule = applyAllRules(setup, suggestions);
+        let current = initial;
+        try {
+            // Bound the loop defensively — one iteration per cell would be
+            // the worst case, so an order of magnitude above that is plenty.
+            const maxIterations = 1000;
+            for (let i = 0; i < maxIterations; i++) {
+                const next = rule(current);
+                if (Equal.equals(next, current)) return next;
+                current = next;
+            }
+            return current;
+        } catch (e) {
+            if (e instanceof Contradiction) {
+                return yield* Effect.fail(traceOf(e));
+            }
+            throw e;
         }
-        return Result.succeed(current);
-    } catch (e) {
-        if (e instanceof Contradiction) return Result.fail(traceOf(e));
-        throw e;
-    }
-};
+    });
 
 export default deduce;

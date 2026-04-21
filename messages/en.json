@@ -3,6 +3,10 @@
         "title": "Clue solver",
         "description": "Track a game of Clue and watch the solver narrow the case file down to one suspect, one weapon, and one room."
     },
+    "tabs": {
+        "setup": "Setup",
+        "play": "Deduce"
+    },
     "toolbar": {
         "undo": "↶ Undo",
         "undoAria": "Undo",
@@ -22,7 +26,7 @@
         "unknownAction": "an unknown change",
         "actions": {
             "newGame": "starting a new game",
-            "loadPreset": "loading a preset",
+            "loadCardSet": "loading card pack \"{name}\"",
             "addPlayer": "adding a player",
             "removePlayer": "removing player {player}",
             "renamePlayer": "renaming player {oldName} to {newName}",
@@ -43,19 +47,15 @@
     },
     "setup": {
         "title": "Game setup",
-        "startPlaying": "Start playing →",
-        "startPlayingTitle": "Lock the deck / player roster and start tracking suggestions",
-        "editSetup": "Edit setup",
-        "editSetupTitle": "Unlock the deck / player roster for editing",
-        "preset": "Preset:",
-        "loadPresetConfirm": "Loading a preset will discard your current hand sizes, known cards, and suggestions. Continue?",
-        "loadCustomPresetTitle": "Load custom preset \"{label}\"",
-        "deleteCustomPresetTitle": "Delete preset \"{label}\"",
-        "deleteCustomPresetAria": "Delete preset {label}",
-        "saveAsPreset": "+ Save as preset",
-        "saveAsPresetTitle": "Save the current category and card set as a reusable preset",
-        "saveAsPresetPrompt": "Save this card pack as a preset. Name it:",
-        "deleteCustomPresetConfirm": "Delete preset \"{label}\"?",
+        "cardPack": "Use card pack:",
+        "loadCardSetConfirm": "Loading a card pack will discard your current hand sizes, known cards, and suggestions. Continue?",
+        "loadCustomCardSetTitle": "Load card pack \"{label}\"",
+        "deleteCustomCardSetTitle": "Delete card pack \"{label}\"",
+        "deleteCustomCardSetAria": "Delete card pack {label}",
+        "saveAsCardPack": "+ Save as card pack",
+        "saveAsCardPackTitle": "Save the current cards as a reusable card pack",
+        "saveAsCardPackPrompt": "Save this card pack. Name it:",
+        "deleteCustomCardSetConfirm": "Delete card pack \"{label}\"?",
         "handSize": "Hand size",
         "handSizeMismatch": "Hand sizes total {total} {total, plural, one {card} other {cards}}; should total {expected} after the {caseFileCount} case-file cards.",
         "addPlayerTitle": "Add player",
@@ -68,11 +68,11 @@
         "removeCardTitle": "Remove {name}",
         "removeCardMin": "At least one card per category is required",
         "addCard": "+ add card",
-        "addCategory": "+ add category"
+        "addCategory": "+ add category",
+        "knownCardCheckboxAria": "{player} owns {card}"
     },
     "deduce": {
         "title": "Deduction grid",
-        "caseFile": "Case file",
         "caseFileProgress": "Case file · {percent}% solved",
         "candidatesCount": "{count, plural, one {# candidate} other {# candidates}}",
         "whyHeader": "Why this value:",

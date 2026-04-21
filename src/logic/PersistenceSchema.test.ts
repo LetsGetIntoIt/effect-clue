@@ -5,15 +5,9 @@ import { decodeV4Unknown } from "./PersistenceSchema";
 import { Player } from "./GameObjects";
 
 /**
- * Smoke tests for the v4 Schema-backed persistence path introduced in
- * Phase 3.5. The existing v1/v2/v3 migration coverage lives in
- * StableIdsIntegration.test.ts; here we prove that
- *
- *  (a) fresh writes go to v4 and round-trip losslessly,
- *  (b) Schema rejects malformed v4 payloads (instead of silently
- *      returning undefined the way the hand-rolled decoder did), and
- *  (c) the decodeSession entry point still decodes legacy v3 payloads
- *      unchanged — we haven't regressed the migration chain.
+ * The app is pre-production — v4 is the only on-disk format, so
+ * there's only one round-trip to cover. Anything that doesn't parse
+ * as v4 returns undefined and the caller starts a fresh session.
  */
 describe("Schema-backed v4 persistence", () => {
     test("encode produces version: 4 and round-trips through decode", () => {
@@ -46,25 +40,19 @@ describe("Schema-backed v4 persistence", () => {
         expect(Result.isFailure(result)).toBe(true);
     });
 
-    test("legacy v3 payloads still decode unchanged", () => {
-        const legacy = {
+    test("non-v4 payloads return undefined", () => {
+        // A v3-shaped blob no longer has a migration path. It's rejected
+        // like any other unrecognized input and the caller falls back to
+        // a fresh session.
+        const legacyV3 = {
             version: 3,
-            setup: {
-                players: ["Anisha"],
-                categories: [
-                    {
-                        id: "cat-a",
-                        name: "Suspects",
-                        cards: [{ id: "c1", name: "Miss Scarlet" }],
-                    },
-                ],
-            },
+            setup: { players: ["A"], categories: [] },
             hands: [],
             handSizes: [],
             suggestions: [],
         };
-        const decoded = decodeSession(legacy);
-        expect(decoded).toBeDefined();
-        expect(decoded?.setup.players.map(String)).toEqual(["Anisha"]);
+        expect(decodeSession(legacyV3)).toBeUndefined();
+        expect(decodeSession({ unrelated: true })).toBeUndefined();
+        expect(decodeSession(null)).toBeUndefined();
     });
 });

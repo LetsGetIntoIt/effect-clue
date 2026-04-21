@@ -1,5 +1,5 @@
-import { cardName, categoryName, findCardEntry } from "../logic/GameSetup";
-import type { ClueAction, ClueState } from "./state";
+import { cardName, categoryName, findCardEntry } from "./GameSetup";
+import type { ClueAction, ClueState } from "./ClueState";
 
 /**
  * Translator function the describer asks for copy. Matches the return
@@ -31,8 +31,8 @@ export const describeAction = (
     switch (action.type) {
         case "newGame":
             return t("actions.newGame");
-        case "loadPreset":
-            return t("actions.loadPreset");
+        case "loadCardSet":
+            return t("actions.loadCardSet", { name: action.label });
         case "addPlayer":
             return t("actions.addPlayer");
         case "removePlayer":

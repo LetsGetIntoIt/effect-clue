@@ -12,13 +12,13 @@ import {
 } from "react";
 import {
     Card,
-    CardCategory,
     newCardId,
     newCategoryId,
     Player,
 } from "../logic/GameObjects";
 import {
     allCardEntries,
+    CardEntry,
     Category,
     DEFAULT_SETUP,
     disambiguateName,
@@ -32,7 +32,7 @@ import {
     buildInitialKnowledge,
     KnownCard,
 } from "../logic/InitialKnowledge";
-import { Result } from "effect";
+import { Effect, Result } from "effect";
 import deduce, { type DeductionResult } from "../logic/Deducer";
 import {
     newSuggestionId,
@@ -55,80 +55,21 @@ import {
     type FootnoteMap,
     refuterCandidateFootnotes,
 } from "../logic/Footnotes";
+import {
+    CardSetService,
+    PlayerSetService,
+    SuggestionsService,
+    makeSetupLayer,
+    makeSuggestionsLayer,
+} from "../logic/services";
+import { Layer } from "effect";
 
-/**
- * UI-level shape of a suggestion that hasn't been converted to a Data
- * record yet — matches the form inputs directly. Forms render these and
- * the state layer converts them on submit.
- */
-export interface DraftSuggestion {
-    readonly id: SuggestionId;
-    readonly suggester: Player;
-    readonly cards: ReadonlyArray<Card>;
-    readonly nonRefuters: ReadonlyArray<Player>;
-    readonly refuter?: Player | undefined;
-    readonly seenCard?: Card | undefined;
-}
+type DeduceLayer = Layer.Layer<
+    CardSetService | PlayerSetService | SuggestionsService
+>;
 
-/**
- * Everything dispatch-able from the UI. One concrete action per
- * thing-the-user-might-do; the reducer below enumerates them exactly.
- *
- * Category / card operations come in id-based flavours (for inline grid
- * edits that know the stable id) and are resolved against the current
- * setup inside the reducer.
- *
- * **Invariant**: every mutation of `ClueState` must go through
- * `dispatch` (a `ClueAction`) — never via direct assignment or a
- * `setState` call escaping this module. This invariant is what lets
- * the upcoming undo/redo meta-reducer observe every user-visible
- * change, and what keeps the action log replayable. Components only
- * ever *read* `state` / `derived`; they never touch them.
- *
- * Ephemeral per-component UI state (like a form's local "editing"
- * buffer) is fine to keep in `useState`; the bar is specifically
- * against mutating anything inside `ClueState`.
- */
-export type ClueAction =
-    | { type: "newGame" }
-    | { type: "loadPreset"; setup: GameSetup }
-    | { type: "setSetup"; setup: GameSetup }
-    | { type: "addCategory" }
-    | { type: "removeCategoryById"; categoryId: CardCategory }
-    | { type: "addCardToCategoryById"; categoryId: CardCategory }
-    | { type: "removeCardById"; cardId: Card }
-    | { type: "renameCategory"; categoryId: CardCategory; name: string }
-    | { type: "renameCard"; cardId: Card; name: string }
-    | { type: "addKnownCard"; card: KnownCard }
-    | { type: "removeKnownCard"; index: number }
-    | { type: "setHandSize"; player: Player; size: number | undefined }
-    | { type: "addSuggestion"; suggestion: DraftSuggestion }
-    | { type: "updateSuggestion"; suggestion: DraftSuggestion }
-    | { type: "removeSuggestion"; id: SuggestionId }
-    | { type: "addPlayer" }
-    | { type: "removePlayer"; player: Player }
-    | { type: "renamePlayer"; oldName: Player; newName: Player }
-    | { type: "setUiMode"; mode: UiMode }
-    | { type: "replaceSession"; session: GameSession };
-
-/**
- * Coarse-grained UI mode. "setup" exposes the deck / player editing
- * surfaces; "play" locks them down so accidental clicks don't drop
- * hand sizes mid-game. The `newGame` action snaps back to "setup";
- * "Start playing" transitions to "play".
- *
- * Lives in ClueState (not component-local useState) so the shared-URL
- * encoder and localStorage persistence can round-trip it.
- */
-type UiMode = "setup" | "play";
-
-export interface ClueState {
-    readonly setup: GameSetup;
-    readonly handSizes: ReadonlyArray<readonly [Player, number]>;
-    readonly knownCards: ReadonlyArray<KnownCard>;
-    readonly suggestions: ReadonlyArray<DraftSuggestion>;
-    readonly uiMode: UiMode;
-}
+export type { DraftSuggestion } from "../logic/ClueState";
+import type { ClueAction, ClueState } from "../logic/ClueState";
 
 const initialState: ClueState = {
     setup: DEFAULT_SETUP,
@@ -143,19 +84,22 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
         case "newGame":
             return {
                 ...initialState,
-                setup: newGameSetup(4),
+                setup: newGameSetup(),
             };
 
         case "setUiMode":
             return { ...state, uiMode: action.mode };
 
-        case "loadPreset":
-            // Swap to a preset deck and discard anything tied to the
-            // previous one. (Hands, suggestions, etc. reference card
-            // ids from the old setup.)
+        case "loadCardSet":
+            // Swap the deck; keep the current player roster. Hand
+            // sizes, known cards, and suggestions reference card ids
+            // from the old deck and are discarded.
             return {
                 ...state,
-                setup: action.setup,
+                setup: GameSetup({
+                    cardSet: action.cardSet,
+                    playerSet: state.setup.playerSet,
+                }),
                 knownCards: [],
                 handSizes: [],
                 suggestions: [],
@@ -175,11 +119,11 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 nextNumberedCardName(existingCardNames),
                 existingCardNames,
             );
-            const newCat: Category = {
+            const newCat: Category = Category({
                 id: newCategoryId(),
                 name: catName,
-                cards: [{ id: newCardId(), name: cardName }],
-            };
+                cards: [CardEntry({ id: newCardId(), name: cardName })],
+            });
             return {
                 ...state,
                 setup: GameSetup({
@@ -212,13 +156,14 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     players: state.setup.players,
                     categories: state.setup.categories.map(c =>
                         c.id === action.categoryId
-                            ? {
-                                  ...c,
+                            ? Category({
+                                  id: c.id,
+                                  name: c.name,
                                   cards: [
                                       ...c.cards,
-                                      { id: newCardId(), name: cardName },
+                                      CardEntry({ id: newCardId(), name: cardName }),
                                   ],
-                              }
+                              })
                             : c,
                     ),
                 }),
@@ -235,12 +180,13 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 players: state.setup.players,
                 categories: state.setup.categories.map(c =>
                     c.id === target.id
-                        ? {
-                              ...c,
+                        ? Category({
+                              id: c.id,
+                              name: c.name,
                               cards: c.cards.filter(
                                   e => e.id !== action.cardId,
                               ),
-                          }
+                          })
                         : c,
                 ),
             });
@@ -263,7 +209,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     players: state.setup.players,
                     categories: state.setup.categories.map(c =>
                         c.id === action.categoryId
-                            ? { ...c, name: finalName }
+                            ? Category({ id: c.id, name: finalName, cards: c.cards })
                             : c,
                     ),
                 }),
@@ -284,11 +230,12 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 ...state,
                 setup: GameSetup({
                     players: state.setup.players,
-                    categories: state.setup.categories.map(c => ({
-                        ...c,
+                    categories: state.setup.categories.map(c => Category({
+                        id: c.id,
+                        name: c.name,
                         cards: c.cards.map(e =>
                             e.id === action.cardId
-                                ? { ...e, name: finalName }
+                                ? CardEntry({ id: e.id, name: finalName })
                                 : e,
                         ),
                     })),
@@ -465,22 +412,22 @@ interface ClueDerived {
 }
 
 const deriveState = (
-    state: ClueState,
     suggestionsAsData: ReadonlyArray<Suggestion>,
     initialKnowledge: Knowledge,
     deductionResult: DeductionResult,
+    deduceLayer: DeduceLayer,
 ): { provenance: Provenance | undefined; footnotes: FootnoteMap } => {
-    let provenance: Provenance | undefined;
-    try {
-        const { provenance: p } = deduceWithExplanations(
-            state.setup,
-            suggestionsAsData,
-            initialKnowledge,
-        );
-        provenance = p;
-    } catch {
-        provenance = undefined;
-    }
+    // deduceWithExplanations now fails via the Effect failure channel
+    // on contradiction; Effect.result materialises it back to a Result
+    // so we can branch here without a try/catch.
+    const traced = Effect.runSync(
+        Effect.result(deduceWithExplanations(initialKnowledge)).pipe(
+            Effect.provide(deduceLayer),
+        ),
+    );
+    const provenance = Result.isSuccess(traced)
+        ? traced.success.provenance
+        : undefined;
     const footnotes = Result.isSuccess(deductionResult)
         ? refuterCandidateFootnotes(
               suggestionsAsData,
@@ -675,20 +622,41 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         [state.setup, state.knownCards, state.handSizes],
     );
 
+    // Shared service layer for the deducer + traced-deducer Effect.gen
+    // paths. Both memoised pipelines below run against the same ambient
+    // context, so we compose once and provide it twice.
+    const deduceLayer = useMemo(
+        () =>
+            Layer.mergeAll(
+                makeSetupLayer(state.setup),
+                makeSuggestionsLayer(suggestionsAsData),
+            ),
+        [state.setup, suggestionsAsData],
+    );
+
     const deductionResult = useMemo(
-        () => deduce(state.setup, suggestionsAsData)(initialKnowledge),
-        [state.setup, suggestionsAsData, initialKnowledge],
+        () =>
+            // `deduce` fails on the Effect failure channel when a
+            // contradiction is detected; Effect.result materialises it
+            // back to Result<Knowledge, ContradictionTrace> so downstream
+            // UI code keeps its isSuccess / isFailure branching intact.
+            Effect.runSync(
+                Effect.result(deduce(initialKnowledge)).pipe(
+                    Effect.provide(deduceLayer),
+                ),
+            ),
+        [deduceLayer, initialKnowledge],
     );
 
     const { provenance, footnotes } = useMemo(
         () =>
             deriveState(
-                state,
                 suggestionsAsData,
                 initialKnowledge,
                 deductionResult,
+                deduceLayer,
             ),
-        [state, suggestionsAsData, initialKnowledge, deductionResult],
+        [suggestionsAsData, initialKnowledge, deductionResult, deduceLayer],
     );
 
     const derived: ClueDerived = useMemo(

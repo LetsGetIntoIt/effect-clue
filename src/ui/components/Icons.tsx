@@ -2,9 +2,8 @@
  * Thin Clue-themed icon set, rendered as inline SVGs so there are no
  * build-time assets and `currentColor` inherits from parent text.
  *
- * Kept intentionally minimal — just the two decorative motifs we use
- * in the header and the case-file strip, plus the envelope glyph for
- * the share button (future). Prefer `aria-hidden` wrappers for purely
+ * Kept intentionally minimal — just the envelope glyph used next to
+ * the Case-file progress strip. Prefer `aria-hidden` for purely
  * decorative uses; any icon that's the sole click target should pair
  * with an accessible label on its button parent.
  */
@@ -15,34 +14,8 @@ type IconProps = {
 };
 
 /**
- * Magnifying glass. Evokes the detective motif — used next to the
- * "Clue solver" title.
- */
-export function MagnifyingGlass({ className, size = 24 }: IconProps) {
-    return (
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width={size}
-            height={size}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.25"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            focusable="false"
-            className={className}
-        >
-            <circle cx="10" cy="10" r="6" />
-            <line x1="14.5" y1="14.5" x2="20" y2="20" />
-        </svg>
-    );
-}
-
-/**
  * Envelope / dossier. Used next to the "Case file" bar in the
- * ChecklistGrid header.
+ * Checklist's CaseFileHeader.
  */
 export function Envelope({ className, size = 18 }: IconProps) {
     return (

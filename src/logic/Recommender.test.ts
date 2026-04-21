@@ -6,12 +6,10 @@ import {
     N,
     setCell,
 } from "./Knowledge";
-import {
-    caseFileCandidatesFor,
-    recommendSuggestions,
-} from "./Recommender";
+import { caseFileCandidatesFor } from "./Recommender";
 import { cardByName } from "./test-utils/CardByName";
 import { expectDefined } from "./test-utils/Expect";
+import { runRecommend } from "./test-utils/RunRecommend";
 
 import "./test-utils/EffectExpectEquals";
 
@@ -27,7 +25,7 @@ const suspectsCategory = expectDefined(
 
 describe("recommendSuggestions", () => {
     test("fresh game returns 5 non-empty recommendations", () => {
-        const result = recommendSuggestions(setup, emptyKnowledge, A, 5);
+        const result = runRecommend(setup, emptyKnowledge, A, 5);
         expect(result.recommendations.length).toBe(5);
         for (const rec of result.recommendations) {
             expect(rec.score).toBeGreaterThan(0);
@@ -48,7 +46,7 @@ describe("recommendSuggestions", () => {
             }
         }
 
-        const result = recommendSuggestions(setup, k, A, 5);
+        const result = runRecommend(setup, k, A, 5);
         expect(result.recommendations.length).toBe(0);
     });
 
@@ -61,7 +59,7 @@ describe("recommendSuggestions", () => {
         for (const entry of suspectsCategory.cards.slice(0, 4)) {
             k = setCell(k, Cell(CaseFileOwner(), entry.id), N);
         }
-        const result = recommendSuggestions(setup, k, A, 50);
+        const result = runRecommend(setup, k, A, 50);
         const allowed = new Set(
             suspectsCategory.cards.slice(4).map(e => String(e.id)),
         );
@@ -83,7 +81,7 @@ describe("recommendSuggestions", () => {
         k = setCell(k, Cell(PlayerOwner(C), badWeapon), N);
         k = setCell(k, Cell(PlayerOwner(C), badRoom), N);
 
-        const result = recommendSuggestions(setup, k, A, 50);
+        const result = runRecommend(setup, k, A, 50);
         const badIdx = result.recommendations.findIndex(
             r =>
                 String(r.cards[0]) === String(badSuspect) &&
@@ -101,12 +99,12 @@ describe("recommendSuggestions", () => {
                 k = setCell(k, Cell(PlayerOwner(C), entry.id), N);
             }
         }
-        const result = recommendSuggestions(setup, k, A, 5);
+        const result = runRecommend(setup, k, A, 5);
         expect(result.recommendations.length).toBe(0);
     });
 
     test("tie-break is stable and deterministic by joined card ids", () => {
-        const result = recommendSuggestions(setup, emptyKnowledge, A, 5);
+        const result = runRecommend(setup, emptyKnowledge, A, 5);
         // Fresh board: every triple ties at the top. The lexicographic
         // tie-break by joined ids means result[0] is the
         // alphabetically-earliest joined string.

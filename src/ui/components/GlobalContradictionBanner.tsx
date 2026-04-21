@@ -46,7 +46,7 @@ export function GlobalContradictionBanner() {
         <div
             ref={ref}
             role="alert"
-            className="fixed inset-x-0 top-0 z-50 border-b border-danger-border bg-panel/95 shadow-lg backdrop-blur-sm"
+            className="fixed inset-x-0 top-0 z-50 border-b border-danger-border bg-panel/95 shadow-lg backdrop-blur-sm motion-safe:animate-banner-in"
         >
             <div className="mx-auto max-w-[1400px] px-5 pt-3">
                 <ContradictionBanner trace={trace} />

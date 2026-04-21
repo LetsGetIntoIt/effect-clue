@@ -20,6 +20,14 @@ import {
 } from "./GameSetup";
 import { Suggestion, suggestionCards, suggestionNonRefuters } from "./Suggestion";
 import type { ReasonKind, Tracer } from "./Provenance";
+import {
+    CardOwnership,
+    CaseFileCategory,
+    NonRefuters,
+    PlayerHand,
+    RefuterOwnsOneOf,
+    RefuterShowed,
+} from "./Provenance";
 
 /**
  * A "slice" is a set of cells that has a known exact number of Ys among
@@ -157,7 +165,7 @@ export const cardOwnershipSlices = (
             cells: owners.map(owner => Cell(owner, entry.id)),
             yCount: 1,
             label: `card ownership: ${entry.name}`,
-            kind: { kind: "card-ownership" as const, card: entry.id },
+            kind: CardOwnership({ card: entry.id }),
         })),
     );
 };
@@ -178,7 +186,7 @@ export const playerHandSlices = (
             cells: allCardIds(setup).map(card => Cell(owner, card)),
             yCount: handSize,
             label: `hand size: ${player}`,
-            kind: { kind: "player-hand" as const, player },
+            kind: PlayerHand({ player }),
         }];
     });
 
@@ -195,10 +203,7 @@ export const caseFileCategorySlices = (
         cells: category.cards.map(entry => Cell(caseFile, entry.id)),
         yCount: 1,
         label: `case file: ${category.name}`,
-        kind: {
-            kind: "case-file-category" as const,
-            category: category.id,
-        },
+        kind: CaseFileCategory({ category: category.id }),
     }));
 };
 
@@ -255,7 +260,7 @@ export const nonRefutersDontHaveSuggestedCards = (
                     tracer({
                         cell,
                         value: N,
-                        kind: { kind: "non-refuters", suggestionIndex },
+                        kind: NonRefuters({ suggestionIndex }),
                         detail:
                             `${player} passed on suggestion #${suggestionIndex + 1}, ` +
                             `so doesn't own ${card}`,
@@ -300,7 +305,7 @@ export const refuterShowedCard = (
             tracer({
                 cell,
                 value: Y,
-                kind: { kind: "refuter-showed", suggestionIndex },
+                kind: RefuterShowed({ suggestionIndex }),
                 detail:
                     `${suggestion.refuter} showed ${suggestion.seenCard} when ` +
                     `refuting suggestion #${suggestionIndex + 1}`,
@@ -363,7 +368,7 @@ export const refuterOwnsOneOf = (
                 tracer({
                     cell,
                     value: Y,
-                    kind: { kind: "refuter-owns-one-of", suggestionIndex },
+                    kind: RefuterOwnsOneOf({ suggestionIndex }),
                     detail:
                         `${suggestion.refuter} refuted suggestion ` +
                         `#${suggestionIndex + 1} and we've ruled out the ` +
