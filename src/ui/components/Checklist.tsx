@@ -126,7 +126,7 @@ export function Checklist() {
         if (hoveredSuggestionIndex === null) return false;
         if (!provenance) return false;
         const chain = chainFor(provenance, Cell(owner, card));
-        for (const reason of chain) {
+        for (const { reason } of chain) {
             const tag = reason.kind._tag;
             const idx =
                 tag === "NonRefuters"
@@ -788,14 +788,14 @@ const resolveReasonCopy = (
         case "initial-hand-size":
             return {
                 headline: tReasons(`${desc.kind}.headline`),
-                detail: tReasons(`${desc.kind}.detail`),
+                detail: tReasons(`${desc.kind}.detail`, { ...desc.params }),
             };
         case "card-ownership":
         case "player-hand":
         case "case-file-category":
             return {
                 headline: tReasons(`${desc.kind}.headline`),
-                detail: tReasons(`${desc.kind}.detail`, desc.params),
+                detail: tReasons(`${desc.kind}.detail`, { ...desc.params }),
             };
         case "non-refuters": {
             const headline = tReasons("suggestionHeadline", {
@@ -804,9 +804,16 @@ const resolveReasonCopy = (
             const detail =
                 desc.params.suggester !== undefined
                     ? tReasons("non-refuters.detailKnown", {
+                          cellPlayer: desc.params.cellPlayer,
+                          cellCard: desc.params.cellCard,
                           suggester: desc.params.suggester,
+                          number: desc.params.suggestionIndex + 1,
                       })
-                    : tReasons("non-refuters.detailUnknown");
+                    : tReasons("non-refuters.detailUnknown", {
+                          cellPlayer: desc.params.cellPlayer,
+                          cellCard: desc.params.cellCard,
+                          number: desc.params.suggestionIndex + 1,
+                      });
             return { headline, detail };
         }
         case "refuter-showed": {
@@ -816,7 +823,11 @@ const resolveReasonCopy = (
             if (desc.params.refuter === undefined) {
                 return {
                     headline,
-                    detail: tReasons("refuter-showed.detailUnknown"),
+                    detail: tReasons("refuter-showed.detailUnknown", {
+                        cellPlayer: desc.params.cellPlayer,
+                        cellCard: desc.params.cellCard,
+                        number: desc.params.suggestionIndex + 1,
+                    }),
                 };
             }
             return {
@@ -824,11 +835,17 @@ const resolveReasonCopy = (
                 detail:
                     desc.params.seen !== undefined
                         ? tReasons("refuter-showed.detailKnown", {
+                              cellPlayer: desc.params.cellPlayer,
+                              cellCard: desc.params.cellCard,
                               refuter: desc.params.refuter,
                               seen: desc.params.seen,
+                              number: desc.params.suggestionIndex + 1,
                           })
                         : tReasons("refuter-showed.detailKnownNoCard", {
+                              cellPlayer: desc.params.cellPlayer,
+                              cellCard: desc.params.cellCard,
                               refuter: desc.params.refuter,
+                              number: desc.params.suggestionIndex + 1,
                           }),
             };
         }
@@ -843,15 +860,22 @@ const resolveReasonCopy = (
             ) {
                 return {
                     headline,
-                    detail: tReasons("refuter-owns-one-of.detailUnknown"),
+                    detail: tReasons("refuter-owns-one-of.detailUnknown", {
+                        cellPlayer: desc.params.cellPlayer,
+                        cellCard: desc.params.cellCard,
+                        number: desc.params.suggestionIndex + 1,
+                    }),
                 };
             }
             return {
                 headline,
                 detail: tReasons("refuter-owns-one-of.detailKnown", {
+                    cellPlayer: desc.params.cellPlayer,
+                    cellCard: desc.params.cellCard,
                     refuter: desc.params.refuter,
                     suggester: desc.params.suggester,
                     cardLabels: desc.params.cardLabels,
+                    number: desc.params.suggestionIndex + 1,
                 }),
             };
         }
@@ -889,8 +913,8 @@ const buildCellTitle = (args: {
     const chain = provenance
         ? chainFor(provenance, Cell(owner, card))
         : [];
-    const chainLines: string[] = chain.map((reason, i) => {
-        const desc = describeReason(reason, setup, suggestions);
+    const chainLines: string[] = chain.map(({ cell: entryCell, reason }, i) => {
+        const desc = describeReason(reason, entryCell, setup, suggestions);
         const { headline, detail } = resolveReasonCopy(desc, tReasons);
         return tDeduce("whyLine", {
             index: i + 1,
