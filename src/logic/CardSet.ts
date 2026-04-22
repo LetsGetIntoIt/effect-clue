@@ -16,7 +16,7 @@ export const CardEntry = (params: {
 }): CardEntry => new CardEntryImpl(params);
 
 /**
- * One category of cards (Suspects / Weapons / Rooms, or any custom
+ * One category of cards (Suspect / Weapon / Room, or any custom
  * deck). Carries its own opaque id so renames don't orphan references.
  */
 class CategoryImpl extends Data.Class<{

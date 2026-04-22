@@ -18,11 +18,11 @@ import { runDeduce } from "./test-utils/RunDeduce";
 import "./test-utils/EffectExpectEquals";
 
 const setup = CLASSIC_SETUP_3P;
-// Suspects category id is the branded string "category-suspects" in the
+// Suspect category id is the branded string "category-suspects" in the
 // preset. Look up by the category's own id.
 const suspectsCategory = expectDefined(
-    setup.categories.find(c => c.name === "Suspects"),
-    "Suspects category",
+    setup.categories.find(c => c.name === "Suspect"),
+    "Suspect category",
 );
 const suspects = cardIdsInCategory(setup, suspectsCategory.id);
 const A = Player("Anisha");

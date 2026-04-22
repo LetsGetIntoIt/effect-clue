@@ -31,16 +31,16 @@ import "./test-utils/EffectExpectEquals";
 
 const setup = CLASSIC_SETUP_3P;
 const suspectsCategory = expectDefined(
-    setup.categories.find(c => c.name === "Suspects"),
-    "Suspects category",
+    setup.categories.find(c => c.name === "Suspect"),
+    "Suspect category",
 );
 const weaponsCategory = expectDefined(
-    setup.categories.find(c => c.name === "Weapons"),
-    "Weapons category",
+    setup.categories.find(c => c.name === "Weapon"),
+    "Weapon category",
 );
 const roomsCategory = expectDefined(
-    setup.categories.find(c => c.name === "Rooms"),
-    "Rooms category",
+    setup.categories.find(c => c.name === "Room"),
+    "Room category",
 );
 const suspects = cardIdsInCategory(setup, suspectsCategory.id);
 const weapons = cardIdsInCategory(setup, weaponsCategory.id);

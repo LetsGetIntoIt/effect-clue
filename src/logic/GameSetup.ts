@@ -222,9 +222,9 @@ const CLASSIC_ROOMS: ReadonlyArray<CardEntry> = [
 ];
 
 const CLASSIC_CATEGORIES: ReadonlyArray<Category> = [
-    presetCategory("Suspects", "suspects", CLASSIC_SUSPECTS),
-    presetCategory("Weapons", "weapons", CLASSIC_WEAPONS),
-    presetCategory("Rooms", "rooms", CLASSIC_ROOMS),
+    presetCategory("Suspect", "suspects", CLASSIC_SUSPECTS),
+    presetCategory("Weapon", "weapons", CLASSIC_WEAPONS),
+    presetCategory("Room", "rooms", CLASSIC_ROOMS),
 ];
 
 /** The classic Clue deck packaged as a reusable CardSet. */
@@ -233,19 +233,19 @@ const CLASSIC_CARD_SET: CardSet = CardSet({
 });
 
 const MASTER_DETECTIVE_CATEGORIES: ReadonlyArray<Category> = [
-    presetCategory("Suspects", "md-suspects", [
+    presetCategory("Suspect", "md-suspects", [
         ...CLASSIC_SUSPECTS,
         presetCard("Miss Peach", "miss-peach"),
         presetCard("Mon. Brunette", "mon-brunette"),
         presetCard("Madame Rose", "madame-rose"),
         presetCard("Sgt. Gray", "sgt-gray"),
     ]),
-    presetCategory("Weapons", "md-weapons", [
+    presetCategory("Weapon", "md-weapons", [
         ...CLASSIC_WEAPONS,
         presetCard("Horseshoe", "horseshoe"),
         presetCard("Poison", "poison"),
     ]),
-    presetCategory("Rooms", "md-rooms", [
+    presetCategory("Room", "md-rooms", [
         ...CLASSIC_ROOMS,
         presetCard("Courtyard", "courtyard"),
         presetCard("Gazebo", "gazebo"),
