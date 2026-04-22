@@ -405,6 +405,7 @@ function PriorSuggestionItem({
     }, [hoveredCell, derived.provenance, derived.footnotes, idx]);
 
     const isHighlighted = isInPillMode || isHighlightedByCell;
+    // eslint-disable-next-line i18next/no-literal-string
     const pillVariant = isHighlighted ? "onAccent" : "default";
 
     const commit = (patch: Partial<DraftSuggestion>) =>
