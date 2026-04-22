@@ -231,7 +231,7 @@ export function PillPopover({
     const pillBody = (
         <span
             className={
-                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] " +
+                "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[13px] " +
                 tone
             }
         >
@@ -461,7 +461,7 @@ export function SingleSelectList<T>({
                         role="option"
                         aria-selected={isSelected}
                         className={
-                            "flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 text-[13px]" +
+                            "flex cursor-pointer items-center gap-1.5 rounded px-3 py-2 text-[13px]" +
                             (highlighted ? " bg-accent/15" : "") +
                             (row.kind === "nobody"
                                 ? " border-t border-border/60 text-muted"
@@ -619,7 +619,7 @@ export function MultiSelectList({
                             role="option"
                             aria-selected={checked}
                             className={
-                                "flex cursor-pointer items-center gap-1.5 rounded px-2 py-1 text-[13px]" +
+                                "flex cursor-pointer items-center gap-1.5 rounded px-3 py-2 text-[13px]" +
                                 (highlighted ? " bg-accent/15" : "")
                             }
                             onMouseEnter={() => setFocusedIdx(i)}
@@ -647,7 +647,7 @@ export function MultiSelectList({
                     role="option"
                     aria-selected={nobodyChosen}
                     className={
-                        "flex cursor-pointer items-center gap-1.5 rounded border-t border-border/60 px-2 py-1 text-[13px] text-muted" +
+                        "flex cursor-pointer items-center gap-1.5 rounded border-t border-border/60 px-3 py-2 text-[13px] text-muted" +
                         (focusedIdx === options.length
                             ? " bg-accent/15"
                             : "")
