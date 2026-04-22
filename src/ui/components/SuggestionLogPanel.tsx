@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
 import { footnotesForCell } from "../../logic/Footnotes";
-import { GameSetup, cardName } from "../../logic/GameSetup";
+import { cardName } from "../../logic/GameSetup";
 import { chainFor } from "../../logic/Provenance";
 import {
     consolidateRecommendations,
@@ -397,6 +397,7 @@ function PriorSuggestionItem({
     }, [hoveredCell, derived.provenance, derived.footnotes, idx]);
 
     const isHighlighted = isInPillMode || isHighlightedByCell;
+    // eslint-disable-next-line i18next/no-literal-string
     const pillVariant = isHighlighted ? "onAccent" : "default";
 
     const commit = (patch: Partial<DraftSuggestion>) =>
@@ -604,11 +605,9 @@ function PriorSuggestionItem({
                             variant={pillVariant}
                             open={openPillId === `passers-${s.id}`}
                             onOpenChange={onOpenChangeFor(`passers-${s.id}`)}
-                            onClear={
-                                s.nonRefuters.length > 0
-                                    ? clearPassers
-                                    : undefined
-                            }
+                            {...(s.nonRefuters.length > 0
+                                ? { onClear: clearPassers }
+                                : {})}
                         >
                             <MultiSelectList
                                 options={passersOpts}
@@ -634,9 +633,9 @@ function PriorSuggestionItem({
                             variant={pillVariant}
                             open={openPillId === `refuter-${s.id}`}
                             onOpenChange={onOpenChangeFor(`refuter-${s.id}`)}
-                            onClear={
-                                s.refuter !== undefined ? clearRefuter : undefined
-                            }
+                            {...(s.refuter !== undefined
+                                ? { onClear: clearRefuter }
+                                : {})}
                         >
                             <SingleSelectList<Player>
                                 options={refuterOpts}
@@ -669,11 +668,9 @@ function PriorSuggestionItem({
                             onOpenChange={onOpenChangeFor(
                                 `seenCard-${s.id}`,
                             )}
-                            onClear={
-                                s.seenCard !== undefined
-                                    ? clearSeenCard
-                                    : undefined
-                            }
+                            {...(s.seenCard !== undefined
+                                ? { onClear: clearSeenCard }
+                                : {})}
                         >
                             <SingleSelectList<Card>
                                 options={seenCardOpts}

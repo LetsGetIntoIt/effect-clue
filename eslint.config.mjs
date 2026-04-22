@@ -141,6 +141,12 @@ export default [
                             "aria-hidden",
                             "aria-orientation",
                             "data-.*",
+                            // Positioning / variant tokens on
+                            // component props (Radix Popover's
+                            // `side` / `align`, our own `variant`).
+                            "side",
+                            "align",
+                            "variant",
                         ],
                     },
                     // Ignore object-property values on common setup
@@ -193,6 +199,11 @@ export default [
                             "✓",
                             "✕",
                             "·",
+                            // Undo / redo / overflow glyphs in the
+                            // mobile BottomNav.
+                            "↶",
+                            "↷",
+                            "⋯",
                             // ICU `select` branch keys — internal
                             // discriminator tags passed into the
                             // `refutationLine` template. Not user copy.

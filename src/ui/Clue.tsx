@@ -100,9 +100,9 @@ function TabContent() {
     // `hidden` / `block` classes keep both children mounted on desktop
     // and hide the off-tab one on mobile.
     const hideOnMobileIfSuggest =
-        mode === "suggest" ? "hidden [@media(min-width:800px)]:block" : "block";
+        mode === "suggest" ? "hidden [@media(min-width:800px)]:block" : "";
     const hideOnMobileIfChecklist =
-        mode === "checklist" ? "hidden [@media(min-width:800px)]:block" : "block";
+        mode === "checklist" ? "hidden [@media(min-width:800px)]:block" : "";
     return (
         <div className="grid h-full min-h-0 gap-5 [@media(min-width:800px)]:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
             <div className={`min-h-0 min-w-0 ${hideOnMobileIfSuggest}`}>

@@ -3,7 +3,6 @@
 import * as RadixPopover from "@radix-ui/react-popover";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import type { UiMode } from "../../logic/ClueState";
 import { useClue } from "../state";
 import { useToolbarActions } from "./Toolbar";
 
@@ -25,9 +24,6 @@ export function BottomNav() {
     const tToolbar = useTranslations("toolbar");
     const mode = state.uiMode;
 
-    const setMode = (next: UiMode) =>
-        dispatch({ type: "setUiMode", mode: next });
-
     return (
         <nav
             aria-label={t("ariaLabel")}
@@ -41,12 +37,16 @@ export function BottomNav() {
                 <NavTabItem
                     label={t("checklist")}
                     active={mode === "checklist"}
-                    onClick={() => setMode("checklist")}
+                    onClick={() =>
+                        dispatch({ type: "setUiMode", mode: "checklist" })
+                    }
                 />
                 <NavTabItem
                     label={t("suggest")}
                     active={mode === "suggest"}
-                    onClick={() => setMode("suggest")}
+                    onClick={() =>
+                        dispatch({ type: "setUiMode", mode: "suggest" })
+                    }
                 />
                 <NavIconItem
                     label={tToolbar("undoAria")}
@@ -60,7 +60,12 @@ export function BottomNav() {
                     onClick={redo}
                     disabled={!canRedo}
                 />
-                <OverflowMenu setupActive={mode === "setup"} onSetup={() => setMode("setup")} />
+                <OverflowMenu
+                    setupActive={mode === "setup"}
+                    onSetup={() =>
+                        dispatch({ type: "setUiMode", mode: "setup" })
+                    }
+                />
             </ul>
         </nav>
     );
