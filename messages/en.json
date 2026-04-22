@@ -128,7 +128,7 @@
     },
     "suggestions": {
         "title": "Suggestion log",
-        "addTitle": "Add a suggestion",
+        "addTitle": "{platform, select, mac {Add a suggestion <shortcut>(⌘K)</shortcut>} other {Add a suggestion <shortcut>(Ctrl+K)</shortcut>}}",
         "recommendationsTitle": "Next-suggestion recommendations",
         "suggestingAs": "Suggesting as: ",
         "resolveContradictionFirst": "Resolve the contradiction to see recommendations.",
@@ -158,7 +158,6 @@
         "popoverNoShownCard": "Unknown / unseen",
         "popoverCommitHint": "Space toggles · Enter confirms",
         "submit": "{platform, select, mac {Add (⌘↵)} other {Add (Ctrl+Enter)}}",
-        "keyboardHint": "{platform, select, mac {Hover a pill · ⌘↵ adds} other {Hover a pill · Ctrl+Enter adds}}",
         "clearInputs": "Clear inputs",
         "pillValueNobody": "nobody",
         "pillValueUnknown": "unknown"

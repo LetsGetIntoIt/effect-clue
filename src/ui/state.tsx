@@ -63,6 +63,7 @@ import {
     makeSuggestionsLayer,
 } from "../logic/services";
 import { Layer } from "effect";
+import { requestFocusSuggestionForm } from "./suggestionFormFocus";
 
 type DeduceLayer = Layer.Layer<
     CardSetService | PlayerSetService | SuggestionsService
@@ -593,6 +594,27 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [undo, redo]);
+
+    // Cmd/Ctrl+K: switch to Play tab and focus the suggestion form.
+    // Two presses within DOUBLE_TAP_MS also clear the form. The tab
+    // switch goes through `dispatchRaw` so it stays out of the undo
+    // history — matching how hydration flips the tab.
+    useEffect(() => {
+        let lastPressAt = 0;
+        const DOUBLE_TAP_MS = 400;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (!(e.metaKey || e.ctrlKey)) return;
+            if (e.key !== "k" && e.key !== "K") return;
+            e.preventDefault();
+            const now = Date.now();
+            const clear = now - lastPressAt < DOUBLE_TAP_MS;
+            lastPressAt = clear ? 0 : now;
+            dispatchRaw({ type: "setUiMode", mode: "play" });
+            requestFocusSuggestionForm({ clear });
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, []);
 
     // Derive expensive values. The inner useMemos chain so each only
     // recomputes when its actual inputs change; React Compiler will

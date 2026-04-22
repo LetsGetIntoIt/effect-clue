@@ -14,6 +14,7 @@ import type { GameSetup } from "../../logic/GameSetup";
 import { categoryOfCard } from "../../logic/GameSetup";
 import type { Card, Player } from "../../logic/GameObjects";
 import { newSuggestionId } from "../../logic/Suggestion";
+import { registerSuggestionFormFocusHandler } from "../suggestionFormFocus";
 import { Tooltip } from "./Tooltip";
 
 /**
@@ -301,6 +302,16 @@ export function SuggestionForm({
         setOpenPillId(null);
     }, [setup]);
 
+    // Cmd/Ctrl+K shortcut: the global listener in ClueProvider calls
+    // `requestFocusSuggestionForm`; we register the actual focus/clear
+    // action here so it runs against our local state.
+    useEffect(() => {
+        return registerSuggestionFormFocusHandler(({ clear }) => {
+            if (clear) setForm(emptyFormState(setup));
+            setOpenPillId(PILL_SUGGESTER);
+        });
+    }, [setup]);
+
     // --- Render --------------------------------------------------------
     return (
         <div ref={formRootRef}>
@@ -308,7 +319,14 @@ export function SuggestionForm({
                 <h3 className="mt-0 mb-0 text-[14px] font-semibold">
                     {suggestion !== undefined
                         ? t("editTitle")
-                        : t("addTitle")}
+                        : t.rich("addTitle", {
+                              platform: platformKey,
+                              shortcut: chunks => (
+                                  <span className="font-normal text-muted">
+                                      {chunks}
+                                  </span>
+                              ),
+                          })}
                 </h3>
                 {hasAnyInput && (
                     <button
@@ -440,30 +458,22 @@ export function SuggestionForm({
                 </PillPopover>
 
                 {/*
-                  * Add button + keyboard hint live inline with the
-                  * pills so the whole form reads as a single row.
-                  * Wrapped in a flex-nowrap span so the button and
-                  * its hint never split across lines — they're a
-                  * single semantic unit. The button matches the pill
-                  * height (same px-2 py-0.5 text-[12px]) but keeps
-                  * the default `rounded` radius instead of
-                  * `rounded-full`, so it reads as a squared-off
-                  * primary action distinct from the round pills.
+                  * Add button lives inline with the pills so the whole
+                  * form reads as a single row. Matches the pill height
+                  * (px-2 py-0.5 text-[12px]) but keeps the default
+                  * `rounded` radius instead of `rounded-full`, so it
+                  * reads as a squared-off primary action distinct from
+                  * the round pills.
                   */}
-                <span className="inline-flex flex-nowrap items-center gap-1.5 whitespace-nowrap">
-                    <button
-                        type="button"
-                        ref={submitBtnRef}
-                        className="cursor-pointer rounded border-none bg-accent px-2 py-0.5 text-[12px] text-white disabled:cursor-not-allowed disabled:bg-unknown"
-                        disabled={!canSubmit}
-                        onClick={doSubmit}
-                    >
-                        {t("submit", { platform: platformKey })}
-                    </button>
-                    <span className="text-[11px] text-muted">
-                        {t("keyboardHint", { platform: platformKey })}
-                    </span>
-                </span>
+                <button
+                    type="button"
+                    ref={submitBtnRef}
+                    className="cursor-pointer rounded border-none bg-accent px-2 py-0.5 text-[12px] text-white disabled:cursor-not-allowed disabled:bg-unknown"
+                    disabled={!canSubmit}
+                    onClick={doSubmit}
+                >
+                    {t("submit", { platform: platformKey })}
+                </button>
                 {onCancel !== undefined && (
                     <button
                         type="button"
@@ -481,7 +491,7 @@ export function SuggestionForm({
 // ---- Platform discriminators (not user copy) ---------------------------
 
  
-// ICU `select` keys for the submit / keyboardHint templates in
+// ICU `select` keys for the submit / addTitle templates in
 // messages/en.json. Must match the string literals in those messages
 // exactly.
 const PLATFORM_MAC = "mac";
