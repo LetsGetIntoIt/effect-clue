@@ -311,12 +311,38 @@ export function Checklist() {
                                                 }
                                                 disabled={!canRemoveCategory}
                                                 className="cursor-pointer border-none bg-transparent p-0 text-[14px] leading-none text-white/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                                                onClick={() =>
+                                                onClick={() => {
+                                                    const categoryCardIds = new Set(
+                                                        category.cards.map(c => c.id),
+                                                    );
+                                                    const hasKnownCards = knownCards.some(
+                                                        kc => categoryCardIds.has(kc.card),
+                                                    );
+                                                    const hasSuggestions = state.suggestions.some(
+                                                        s =>
+                                                            s.cards.some(c =>
+                                                                categoryCardIds.has(c),
+                                                            ) ||
+                                                            (s.seenCard !== undefined &&
+                                                                categoryCardIds.has(
+                                                                    s.seenCard,
+                                                                )),
+                                                    );
+                                                    if (
+                                                        (hasKnownCards || hasSuggestions) &&
+                                                        !window.confirm(
+                                                            tSetup("removeCategoryConfirm", {
+                                                                name: category.name,
+                                                            }),
+                                                        )
+                                                    ) {
+                                                        return;
+                                                    }
                                                     dispatch({
                                                         type: "removeCategoryById",
                                                         categoryId: category.id,
-                                                    })
-                                                }
+                                                    });
+                                                }}
                                             >
                                                 &times;
                                             </button>
@@ -354,12 +380,32 @@ export function Checklist() {
                                                     }
                                                     disabled={!canRemoveCard}
                                                     className="cursor-pointer border-none bg-transparent p-0 text-[14px] leading-none text-muted hover:text-danger disabled:cursor-not-allowed disabled:opacity-40"
-                                                    onClick={() =>
+                                                    onClick={() => {
+                                                        const hasKnownCards = knownCards.some(
+                                                            kc => kc.card === entry.id,
+                                                        );
+                                                        const hasSuggestions = state.suggestions.some(
+                                                            s =>
+                                                                s.cards.some(
+                                                                    c => c === entry.id,
+                                                                ) ||
+                                                                s.seenCard === entry.id,
+                                                        );
+                                                        if (
+                                                            (hasKnownCards || hasSuggestions) &&
+                                                            !window.confirm(
+                                                                tSetup("removeCardConfirm", {
+                                                                    card: entry.name,
+                                                                }),
+                                                            )
+                                                        ) {
+                                                            return;
+                                                        }
                                                         dispatch({
                                                             type: "removeCardById",
                                                             cardId: entry.id,
-                                                        })
-                                                    }
+                                                        });
+                                                    }}
                                                 >
                                                     &times;
                                                 </button>
@@ -672,15 +718,21 @@ function PlayerNameInput({
         setError("");
     };
 
-    // Removing a player also drops their known cards (see the reducer's
-    // `removePlayer` branch). Prompt first when that's destructive — we
-    // skip the confirm otherwise so a freshly-added empty slot doesn't
-    // feel chatty.
+    // Removing a player also drops their known cards and any suggestions
+    // that reference them (see the reducer's `removePlayer` branch).
+    // Prompt first when that's destructive — we skip the confirm otherwise
+    // so a freshly-added empty slot doesn't feel chatty.
     const onRemove = () => {
         const hasKnownCards = state.knownCards.some(
             kc => kc.player === player,
         );
-        if (hasKnownCards) {
+        const hasSuggestions = state.suggestions.some(
+            s =>
+                s.suggester === player ||
+                s.refuter === player ||
+                s.nonRefuters.some(p => p === player),
+        );
+        if (hasKnownCards || hasSuggestions) {
             const ok = window.confirm(
                 t("removePlayerConfirm", { player: String(player) }),
             );

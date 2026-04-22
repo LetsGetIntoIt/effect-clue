@@ -20,8 +20,10 @@ import { useClue } from "../state";
  */
 export function CardPackRow() {
     const t = useTranslations("setup");
-    const { state, dispatch, hasGameData } = useClue();
+    const { state, dispatch } = useClue();
     const setup = state.setup;
+    const hasDestructiveData =
+        state.knownCards.length > 0 || state.suggestions.length > 0;
     // Initialise empty so server HTML and client's first render agree; the
     // real list loads in a mount effect. Reading localStorage in the
     // useState initialiser would produce 0 packs on SSR and N packs on
@@ -34,7 +36,7 @@ export function CardPackRow() {
     }, []);
 
     const onCardSet = (choice: (typeof CARD_SETS)[number]) => {
-        if (hasGameData() && !window.confirm(t("loadCardSetConfirm"))) return;
+        if (hasDestructiveData && !window.confirm(t("loadCardSetConfirm"))) return;
         dispatch({
             type: "loadCardSet",
             cardSet: choice.cardSet,
@@ -43,7 +45,7 @@ export function CardPackRow() {
     };
 
     const onCustomPack = (pack: CustomCardSet) => {
-        if (hasGameData() && !window.confirm(t("loadCardSetConfirm"))) return;
+        if (hasDestructiveData && !window.confirm(t("loadCardSetConfirm"))) return;
         dispatch({
             type: "loadCardSet",
             cardSet: pack.cardSet,
