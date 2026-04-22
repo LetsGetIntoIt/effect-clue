@@ -13,42 +13,15 @@ const buttonClass =
     "focus-visible:ring-offset-1 focus-visible:ring-offset-bg";
 
 /**
- * Top-of-page controls: undo/redo, start a fresh game, and copy a
- * shareable URL encoding the current state.
+ * Shared handlers for the Share-link and New-game actions. Keeps the
+ * clipboard fallback + transient "Copied!" state + confirm-and-dispatch
+ * flow in one place so both the desktop Toolbar and the mobile
+ * BottomNav overflow menu behave identically.
  */
-export function Toolbar() {
+export function useToolbarActions() {
     const t = useTranslations("toolbar");
-    const tHistory = useTranslations("history");
-    const {
-        dispatch,
-        currentShareUrl,
-        canUndo,
-        canRedo,
-        undo,
-        redo,
-        nextUndo,
-        nextRedo,
-    } = useClue();
+    const { dispatch, currentShareUrl } = useClue();
     const [copied, setCopied] = useState(false);
-
-    const undoTooltip = nextUndo
-        ? tHistory("undoTooltip", {
-              description: describeAction(
-                  nextUndo.action,
-                  nextUndo.previousState,
-                  tHistory,
-              ),
-          })
-        : undefined;
-    const redoTooltip = nextRedo
-        ? tHistory("redoTooltip", {
-              description: describeAction(
-                  nextRedo.action,
-                  nextRedo.previousState,
-                  tHistory,
-              ),
-          })
-        : undefined;
 
     const onShare = async () => {
         const url = currentShareUrl();
@@ -71,6 +44,39 @@ export function Toolbar() {
             dispatch({ type: "newGame" });
         }
     };
+
+    return { onShare, onNewGame, copied };
+}
+
+/**
+ * Top-of-page controls (desktop only): undo/redo, start a fresh game,
+ * and copy a shareable URL encoding the current state. Mobile uses
+ * `BottomNav` instead.
+ */
+export function Toolbar() {
+    const t = useTranslations("toolbar");
+    const tHistory = useTranslations("history");
+    const { canUndo, canRedo, undo, redo, nextUndo, nextRedo } = useClue();
+    const { onShare, onNewGame, copied } = useToolbarActions();
+
+    const undoTooltip = nextUndo
+        ? tHistory("undoTooltip", {
+              description: describeAction(
+                  nextUndo.action,
+                  nextUndo.previousState,
+                  tHistory,
+              ),
+          })
+        : undefined;
+    const redoTooltip = nextRedo
+        ? tHistory("redoTooltip", {
+              description: describeAction(
+                  nextRedo.action,
+                  nextRedo.previousState,
+                  tHistory,
+              ),
+          })
+        : undefined;
 
     return (
         <div className="flex flex-wrap items-center gap-3">

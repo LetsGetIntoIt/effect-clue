@@ -609,7 +609,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             const now = Date.now();
             const clear = now - lastPressAt < DOUBLE_TAP_MS;
             lastPressAt = clear ? 0 : now;
-            dispatchRaw({ type: "setUiMode", mode: "play" });
+            dispatchRaw({ type: "setUiMode", mode: "suggest" });
             requestFocusSuggestionForm({ clear });
         };
         window.addEventListener("keydown", onKeyDown);
@@ -703,9 +703,11 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     const didHydrate = useRef(false);
 
     // One-shot hydration on mount: URL first, then localStorage. The
-    // `?tab=setup|play` param overrides the smart default; with no
-    // explicit tab we land on Play if the hydrated session has any
-    // suggestions, else Setup (the reducer's default).
+    // `?tab=setup|checklist|suggest` param overrides the smart default;
+    // with no explicit tab we land on the Checklist (play mode) if the
+    // hydrated session has any suggestions, else Setup (the reducer's
+    // default). On desktop `checklist` and `suggest` both render the
+    // same Play grid; on mobile they route to their own pane.
     useEffect(() => {
         if (didHydrate.current) return;
         didHydrate.current = true;
@@ -721,12 +723,14 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         // Tab precedence: explicit `?tab=` wins; otherwise pick based on
         // hydrated suggestions. The default state.uiMode is "setup", so
         // only dispatch when we actually need to change it.
-        if (tabParam === "play") {
-            dispatch({ type: "setUiMode", mode: "play" });
+        if (tabParam === "checklist") {
+            dispatch({ type: "setUiMode", mode: "checklist" });
+        } else if (tabParam === "suggest") {
+            dispatch({ type: "setUiMode", mode: "suggest" });
         } else if (tabParam === "setup") {
             // No-op: default is already "setup".
         } else if (hydrated && hydrated.suggestions.length > 0) {
-            dispatch({ type: "setUiMode", mode: "play" });
+            dispatch({ type: "setUiMode", mode: "checklist" });
         }
     }, []);
 

@@ -476,7 +476,7 @@ export function SuggestionForm({
                 {/*
                   * Add button lives inline with the pills so the whole
                   * form reads as a single row. Matches the pill height
-                  * (px-2 py-0.5 text-[12px]) but keeps the default
+                  * (px-3 py-2 text-[13px]) but keeps the default
                   * `rounded` radius instead of `rounded-full`, so it
                   * reads as a squared-off primary action distinct from
                   * the round pills.
@@ -484,7 +484,7 @@ export function SuggestionForm({
                 <button
                     type="button"
                     ref={submitBtnRef}
-                    className="cursor-pointer rounded border-none bg-accent px-2 py-0.5 text-[12px] text-white disabled:cursor-not-allowed disabled:bg-unknown"
+                    className="cursor-pointer rounded border-none bg-accent px-3 py-2 text-[13px] text-white disabled:cursor-not-allowed disabled:bg-unknown"
                     disabled={!canSubmit}
                     onClick={doSubmit}
                 >
@@ -493,7 +493,7 @@ export function SuggestionForm({
                 {onCancel !== undefined && (
                     <button
                         type="button"
-                        className="cursor-pointer rounded border border-border bg-white px-2 py-0.5 text-[12px]"
+                        className="cursor-pointer rounded border border-border bg-white px-3 py-2 text-[13px]"
                         onClick={onCancel}
                     >
                         {t("cancelAction")}

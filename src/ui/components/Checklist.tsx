@@ -77,7 +77,7 @@ export function Checklist() {
     const addPlayerHeaderCell = (
         <th
             key="add-player-col"
-            className="sticky top-0 z-10 w-px whitespace-nowrap border border-border bg-row-header px-1.5 py-1 text-center"
+            className="w-px whitespace-nowrap border border-border bg-row-header px-1.5 py-1 text-center"
         >
             <button
                 type="button"
@@ -168,14 +168,14 @@ export function Checklist() {
     const cardSpan = 1 + owners.length + (inSetup ? 1 : 0);
 
     return (
-        <section className="min-w-0 rounded-[var(--radius)] border border-border bg-panel p-4">
+        <section className="flex h-full min-w-0 flex-col rounded-[var(--radius)] border border-border bg-panel p-4">
             {inSetup && (
-                <div className="mb-3 flex justify-end">
+                <div className="mb-3 flex shrink-0 justify-end">
                     <button
                         type="button"
                         className="cursor-pointer rounded-[var(--radius)] border-none bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover"
                         onClick={() =>
-                            dispatch({ type: "setUiMode", mode: "play" })
+                            dispatch({ type: "setUiMode", mode: "checklist" })
                         }
                     >
                         {suggestions.length > 0
@@ -184,9 +184,11 @@ export function Checklist() {
                     </button>
                 </div>
             )}
-            {inSetup ? <CardPackRow /> : <CaseFileHeader knowledge={knowledge} />}
+            <div className="shrink-0">
+                {inSetup ? <CardPackRow /> : <CaseFileHeader knowledge={knowledge} />}
+            </div>
             {inSetup && handSizeMismatch && (
-                <div className="mb-3 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning">
+                <div className="mb-3 shrink-0 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning">
                     {tSetup("handSizeMismatch", {
                         total: handSizesTotal,
                         expected: totalDealt,
@@ -194,15 +196,16 @@ export function Checklist() {
                     })}
                 </div>
             )}
+            <div className="-mx-4 min-h-0 flex-1 overflow-auto px-4">
             <table className="w-full border-collapse text-[13px]">
-                <thead>
+                <thead className="sticky top-0 z-20 bg-row-header">
                     <tr>
-                        <th className="sticky top-0 z-10 border border-border bg-row-header px-2 py-1 text-center font-semibold"></th>
+                        <th className="border border-border bg-row-header px-2 py-1 text-center font-semibold"></th>
                         {owners.flatMap(owner => {
                             const cell = (
                                 <th
                                     key={ownerKey(owner)}
-                                    className="sticky top-0 z-10 border border-border bg-row-header px-2 py-1 text-center align-top font-semibold"
+                                    className="border border-border bg-row-header px-2 py-1 text-center align-top font-semibold"
                                 >
                                     {inSetup && owner._tag === "Player" ? (
                                         <PlayerNameInput
@@ -571,6 +574,7 @@ export function Checklist() {
                     )}
                 </tbody>
             </table>
+            </div>
         </section>
     );
 }
