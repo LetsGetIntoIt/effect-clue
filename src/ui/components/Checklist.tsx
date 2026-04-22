@@ -895,13 +895,23 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
                     return (
                         <div
                             key={String(category.id)}
-                            className="rounded-[var(--radius)] border border-border bg-white p-2 text-center"
+                            className={
+                                "rounded-[var(--radius)] border p-2 text-center " +
+                                (solved
+                                    ? "border-accent bg-accent text-white"
+                                    : "border-border bg-white")
+                            }
                         >
-                            <div className="mb-1 text-[11px] uppercase tracking-[0.05em] text-muted">
+                            <div
+                                className={
+                                    "mb-1 text-[11px] uppercase tracking-[0.05em] " +
+                                    (solved ? "text-white/80" : "text-muted")
+                                }
+                            >
                                 {category.name}
                             </div>
                             {solved ? (
-                                <div className="text-[14px] font-semibold text-yes">
+                                <div className="text-[14px] font-semibold">
                                     {cardName(setup, solved)}
                                 </div>
                             ) : (
