@@ -38,15 +38,15 @@ export const isNobody = (v: unknown): v is Nobody => v === NOBODY;
 
 // ---- Pill status ------------------------------------------------------
 
-export type PillStatus =
+type PillStatus =
     | "done"
     | "pendingRequired"
     | "pendingOptional"
     | "error";
 
-export const STATUS_DONE: PillStatus = "done";
-export const STATUS_PENDING_REQ: PillStatus = "pendingRequired";
-export const STATUS_PENDING_OPT: PillStatus = "pendingOptional";
+const STATUS_DONE: PillStatus = "done";
+const STATUS_PENDING_REQ: PillStatus = "pendingRequired";
+const STATUS_PENDING_OPT: PillStatus = "pendingOptional";
 
 export const pillStatusForPlayer = (
     value: Player | Nobody | null,
