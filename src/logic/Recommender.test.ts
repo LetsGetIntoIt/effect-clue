@@ -6,10 +6,11 @@ import {
     N,
     setCell,
 } from "./Knowledge";
-import { caseFileCandidatesFor } from "./Recommender";
+import { caseFileCandidatesFor, isAnySlot } from "./Recommender";
+import type { AnySlot } from "./Recommender";
 import { cardByName } from "./test-utils/CardByName";
 import { expectDefined } from "./test-utils/Expect";
-import { runRecommend } from "./test-utils/RunRecommend";
+import { runConsolidate, runRecommend } from "./test-utils/RunRecommend";
 
 import "./test-utils/EffectExpectEquals";
 
@@ -114,6 +115,154 @@ describe("recommendSuggestions", () => {
         for (let i = 0; i < joined.length; i++) {
             expect(joined[i]).toBe(sorted[i]);
         }
+    });
+});
+
+describe("consolidateRecommendations", () => {
+    const slotAt = (
+        row: { readonly cards: ReadonlyArray<unknown> },
+        i: number,
+    ): AnySlot | undefined => {
+        const c = row.cards[i];
+        return c !== undefined && typeof c === "object" && c !== null
+            && isAnySlot(c as Parameters<typeof isAnySlot>[0])
+            ? (c as AnySlot)
+            : undefined;
+    };
+
+    test("fresh game collapses every category to {kind: 'any'}", () => {
+        // 6 × 6 × 9 = 324 tied triples. Iterative collapse produces
+        // a single row with all three slots as `any`.
+        const result = runRecommend(setup, emptyKnowledge, A, 500);
+        const consolidated = runConsolidate(
+            setup,
+            emptyKnowledge,
+            result.recommendations,
+        );
+        expect(consolidated.length).toBe(1);
+        const row = consolidated[0]!;
+        expect(slotAt(row, 0)).toEqual({ kind: "any" });
+        expect(slotAt(row, 1)).toEqual({ kind: "any" });
+        expect(slotAt(row, 2)).toEqual({ kind: "any" });
+        expect(row.groupSize).toBe(324);
+    });
+
+    test("fresh game prefers `any` over `anyYouDontOwn` when both targets equal the full candidate set (broadest wins)", () => {
+        // Within case-file candidates, suggester-owned cells are
+        // unknown (fresh game), so `anyYouDontOwn` has an empty target
+        // and doesn't apply. The picker must still emit `{kind:"any"}`
+        // and never `{kind:"anyYouDontOwn"}` even when its target
+        // eventually equals the full candidate set.
+        const result = runRecommend(setup, emptyKnowledge, A, 500);
+        const consolidated = runConsolidate(
+            setup,
+            emptyKnowledge,
+            result.recommendations,
+        );
+        for (const row of consolidated) {
+            for (let i = 0; i < row.cards.length; i++) {
+                const s = slotAt(row, i);
+                if (s !== undefined) {
+                    expect(s.kind).not.toBe("anyYouDontOwn");
+                    expect(s.kind).not.toBe("anyYouDontKnow");
+                }
+            }
+        }
+    });
+
+    test("collapses to {kind: 'anyYouDontKnow'} when one candidate is known in the case file and the rest are undef", () => {
+        // Pin Miss Scarlet as the case-file answer (Y), mark Mustard &
+        // Mrs. White as N (removed from candidates). The remaining 3
+        // suspects (Green, Peacock, Plum) stay undef. Case-file
+        // candidates = {Scarlet, Green, Peacock, Plum} (size 4).
+        //
+        // Also mark (B, Scarlet) = N and (C, Scarlet) = N so Scarlet
+        // contributes 0 to cellInfoScore while Green/Peacock/Plum each
+        // contribute 2. This splits Scarlet-containing triples into a
+        // lower-score tier, leaving triples in the higher-score tier
+        // with distinct suspect values {Green, Peacock, Plum} = the
+        // `anyYouDontKnow` target set.
+        let k = emptyKnowledge;
+        const scarlet = cardByName(setup, "Miss Scarlet");
+        const mustard = cardByName(setup, "Col. Mustard");
+        const white = cardByName(setup, "Mrs. White");
+        k = setCell(k, Cell(CaseFileOwner(), mustard), N);
+        k = setCell(k, Cell(CaseFileOwner(), white), N);
+        k = setCell(k, Cell(CaseFileOwner(), scarlet), "Y");
+        k = setCell(k, Cell(PlayerOwner(B), scarlet), N);
+        k = setCell(k, Cell(PlayerOwner(C), scarlet), N);
+
+        const result = runRecommend(setup, k, A, 500);
+        const consolidated = runConsolidate(
+            setup,
+            k,
+            result.recommendations,
+        );
+
+        const withDontKnow = consolidated.filter(
+            r => slotAt(r, 0)?.kind === "anyYouDontKnow",
+        );
+        expect(withDontKnow.length).toBe(1);
+    });
+
+    test("collapses to {kind: 'anyNotOwnedBy', player} when tie-group matches known-N cards for that player", () => {
+        // Mark Bob = N on 3 of 6 suspects. Those triples have lower
+        // cellInfoScore (1 less unknown cell in Bob's row per trip) so
+        // they form their own score tier. Within that tier, the
+        // distinct suspect values are exactly {Scarlet, Mustard, White}
+        // — the `anyNotOwnedBy(Bob)` target, a strict subset of the 6
+        // case-file candidates. `any` doesn't match (6 ≠ 3);
+        // `anyNotOwnedBy(Bob)` does.
+        let k = emptyKnowledge;
+        const scarlet = cardByName(setup, "Miss Scarlet");
+        const mustard = cardByName(setup, "Col. Mustard");
+        const white = cardByName(setup, "Mrs. White");
+        k = setCell(k, Cell(PlayerOwner(B), scarlet), N);
+        k = setCell(k, Cell(PlayerOwner(B), mustard), N);
+        k = setCell(k, Cell(PlayerOwner(B), white), N);
+
+        const result = runRecommend(setup, k, A, 500);
+        const consolidated = runConsolidate(
+            setup,
+            k,
+            result.recommendations,
+        );
+        const notOwnedRow = consolidated.find(r => {
+            const s = slotAt(r, 0);
+            return s?.kind === "anyNotOwnedBy" && s.player === B;
+        });
+        expect(notOwnedRow).toBeDefined();
+    });
+
+    test("singleton tie-groups never collapse", () => {
+        // From the known-case-file test, Miss Scarlet ends up in its
+        // own score tier (lower cellInfoScore — 0 for the suspect
+        // cell). That tier has only one suspect (Scarlet), so the
+        // suspect slot stays a specific card; weapons and rooms still
+        // collapse to `any`.
+        let k = emptyKnowledge;
+        const scarlet = cardByName(setup, "Miss Scarlet");
+        const mustard = cardByName(setup, "Col. Mustard");
+        const white = cardByName(setup, "Mrs. White");
+        k = setCell(k, Cell(CaseFileOwner(), mustard), N);
+        k = setCell(k, Cell(CaseFileOwner(), white), N);
+        k = setCell(k, Cell(CaseFileOwner(), scarlet), "Y");
+        k = setCell(k, Cell(PlayerOwner(B), scarlet), N);
+        k = setCell(k, Cell(PlayerOwner(C), scarlet), N);
+
+        const result = runRecommend(setup, k, A, 500);
+        const consolidated = runConsolidate(
+            setup,
+            k,
+            result.recommendations,
+        );
+        const scarletRow = consolidated.find(r => r.cards[0] === scarlet);
+        expect(scarletRow).toBeDefined();
+        // The other two slots for this row should still collapse —
+        // their distinct values cover all candidates in those
+        // categories, so `any` matches.
+        expect(slotAt(scarletRow!, 1)).toEqual({ kind: "any" });
+        expect(slotAt(scarletRow!, 2)).toEqual({ kind: "any" });
     });
 });
 

@@ -369,14 +369,38 @@ export const describeRecommendation = (
     });
 
 /**
- * A consolidated recommendation row. Each category slot is either a
- * specific `Card` or the sentinel `"any"`, meaning "any casefile-
- * candidate card in this category produces the same score as part of
- * this family of tied recommendations."
+ * Tagged descriptor that replaces the old bare `"any"` sentinel in a
+ * collapsed slot. Each kind corresponds to a subset of case-file
+ * candidates; a collapsed slot records *which* subset the tie-group
+ * actually covered, so the UI can render a more descriptive phrase
+ * ("any weapon Green doesn't own" rather than just "any weapon").
+ *
+ * `anyYouOwn` / `anyOwnedBy` refer to cards where we have a definitive
+ * Y for the suggester / named player. `anyYouDontOwn` / `anyNotOwnedBy`
+ * require a definitive N. `anyYouDontKnow` requires the case-file cell
+ * to still be undefined (i.e. nobody has a Y recorded anywhere yet).
+ * `anyNotInCaseFile` requires the case-file cell to be N.
  */
-interface ConsolidatedRecommendation {
+export type AnySlot =
+    | { readonly kind: "any" }
+    | { readonly kind: "anyYouOwn" }
+    | { readonly kind: "anyYouDontOwn" }
+    | { readonly kind: "anyYouDontKnow" }
+    | { readonly kind: "anyNotInCaseFile" }
+    | { readonly kind: "anyOwnedBy"; readonly player: Player }
+    | { readonly kind: "anyNotOwnedBy"; readonly player: Player };
+
+export const isAnySlot = (v: Card | AnySlot): v is AnySlot =>
+    typeof v === "object" && v !== null && "kind" in v;
+
+/**
+ * A consolidated recommendation row. Each category slot is either a
+ * specific `Card` or an `AnySlot` describing the subset of case-file
+ * candidates this slot consolidates over.
+ */
+export interface ConsolidatedRecommendation {
     readonly suggester: Player;
-    readonly cards: ReadonlyArray<Card | "any">;
+    readonly cards: ReadonlyArray<Card | AnySlot>;
     readonly score: number;
     readonly cellInfoScore: number;
     readonly caseFileOpennessScore: number;
@@ -410,113 +434,234 @@ export const consolidateRecommendations = (
         const playerSet = yield* getPlayerSet;
         const knowledge = yield* getKnowledge;
         const setup = GameSetup({ cardSet, playerSet });
-        // Casefile candidate set per category (for equivalence checks).
-        const candidatesByCat: ReadonlyArray<ReadonlySet<Card>> =
-            setup.categories.map(
-                c => new Set(caseFileCandidatesFor(setup, knowledge, c.id)),
+
+        // Per-category case-file candidate set. The seed for every
+        // descriptor's target set — all descriptors intersect with this.
+        const candidatesByCat: ReadonlyArray<ReadonlyArray<Card>> =
+            setup.categories.map(c =>
+                caseFileCandidatesFor(setup, knowledge, c.id),
             );
 
-    // Group by score, preserve input order between groups.
-    const scoreOrder: number[] = [];
-    const byScore = new Map<number, Recommendation[]>();
-    for (const r of recs) {
-        let list = byScore.get(r.score);
-        if (!list) {
-            list = [];
-            byScore.set(r.score, list);
-            scoreOrder.push(r.score);
+        // For each tier, the suggester is constant (all tied triples in
+        // a tier come from the same recommendSuggestions call). We still
+        // look it up per tier so the descriptor target sets carry the
+        // right `suggester` reference.
+        const setEq = (a: ReadonlySet<Card>, b: ReadonlySet<Card>): boolean => {
+            if (a.size !== b.size) return false;
+            for (const v of a) if (!b.has(v)) return false;
+            return true;
+        };
+
+        // Build the ordered list of candidate descriptors for category
+        // `i` and a given `suggester`. Each entry pairs an AnySlot with
+        // the exact set of cards (within case-file candidates) that the
+        // slot describes. Ordering here IS the tie-break priority used
+        // by pickDescriptor — broadest/simplest label first.
+        const descriptorsFor = (
+            i: number,
+            suggester: Player,
+        ): ReadonlyArray<{
+            readonly slot: AnySlot;
+            readonly target: ReadonlySet<Card>;
+        }> => {
+            const cands = candidatesByCat[i] ?? [];
+            const all = new Set(cands);
+            const youOwn = new Set<Card>();
+            const youDontOwn = new Set<Card>();
+            const youDontKnow = new Set<Card>();
+            const notInCaseFile = new Set<Card>();
+            for (const c of cands) {
+                const selfCell = getCellByOwnerCard(
+                    knowledge,
+                    PlayerOwner(suggester),
+                    c,
+                );
+                if (selfCell === Y) youOwn.add(c);
+                if (selfCell === N) youDontOwn.add(c);
+                const cfCell = getCellByOwnerCard(
+                    knowledge,
+                    CaseFileOwner(),
+                    c,
+                );
+                if (cfCell === undefined) youDontKnow.add(c);
+                if (cfCell === N) notInCaseFile.add(c);
+            }
+
+            const perPlayer: Array<{
+                readonly slot: AnySlot;
+                readonly target: ReadonlySet<Card>;
+            }> = [];
+            for (const p of setup.players) {
+                if (p === suggester) continue;
+                const ownedBy = new Set<Card>();
+                const notOwnedBy = new Set<Card>();
+                for (const c of cands) {
+                    const v = getCellByOwnerCard(
+                        knowledge,
+                        PlayerOwner(p),
+                        c,
+                    );
+                    if (v === Y) ownedBy.add(c);
+                    if (v === N) notOwnedBy.add(c);
+                }
+                perPlayer.push({
+                    slot: { kind: "anyOwnedBy", player: p },
+                    target: ownedBy,
+                });
+                perPlayer.push({
+                    slot: { kind: "anyNotOwnedBy", player: p },
+                    target: notOwnedBy,
+                });
+            }
+
+            // Broadest first: plain "any" wins whenever it matches, and
+            // "you don't know about" is the most commonly-useful refine-
+            // ment for a pool that's still case-file-candidate-only.
+            // Suggester-ownership labels come last because within the
+            // current recommender pool their targets are empty (you own)
+            // or equal to `all` (you don't own) — so they'd never be
+            // picked over `any` even if tried earlier, and in the future
+            // (expanded pool) they're less specific than a player-
+            // named label.
+            return [
+                { slot: { kind: "any" }, target: all },
+                { slot: { kind: "anyYouDontKnow" }, target: youDontKnow },
+                { slot: { kind: "anyNotInCaseFile" }, target: notInCaseFile },
+                ...perPlayer,
+                { slot: { kind: "anyYouOwn" }, target: youOwn },
+                { slot: { kind: "anyYouDontOwn" }, target: youDontOwn },
+            ];
+        };
+
+        // Group by score, preserve input order between groups.
+        const scoreOrder: number[] = [];
+        const byScore = new Map<number, Recommendation[]>();
+        for (const r of recs) {
+            let list = byScore.get(r.score);
+            if (!list) {
+                list = [];
+                byScore.set(r.score, list);
+                scoreOrder.push(r.score);
+            }
+            list.push(r);
         }
-        list.push(r);
-    }
 
-    const out: ConsolidatedRecommendation[] = [];
-    for (const score of scoreOrder) {
-        const tier = byScore.get(score)!;
-        // Seed with fully-specific cards.
-        let rows: ConsolidatedRecommendation[] = tier.map(r => ({
-            suggester: r.suggester,
-            cards: r.cards,
-            score: r.score,
-            cellInfoScore: r.cellInfoScore,
-            caseFileOpennessScore: r.caseFileOpennessScore,
-            refuterUncertaintyScore: r.refuterUncertaintyScore,
-            groupSize: 1,
-        }));
+        const out: ConsolidatedRecommendation[] = [];
+        for (const score of scoreOrder) {
+            const tier = byScore.get(score)!;
+            // Seed with fully-specific cards.
+            let rows: ConsolidatedRecommendation[] = tier.map(r => ({
+                suggester: r.suggester,
+                cards: r.cards,
+                score: r.score,
+                cellInfoScore: r.cellInfoScore,
+                caseFileOpennessScore: r.caseFileOpennessScore,
+                refuterUncertaintyScore: r.refuterUncertaintyScore,
+                groupSize: 1,
+            }));
+            const suggester = tier[0]?.suggester;
+            if (suggester === undefined) continue;
 
-        // Iterate: at each pass, look for a position that can be
-        // collapsed. Stop when a pass produces no further collapse.
-        let changed = true;
-        while (changed) {
-            changed = false;
-            for (let i = 0; i < setup.categories.length; i++) {
-                const targetCandidates = candidatesByCat[i];
-                if (!targetCandidates || targetCandidates.size < 2) continue;
+            // Precompute descriptor lists per category for this tier's
+            // suggester. Reused across iterative passes.
+            const descsByCat = setup.categories.map((_, i) =>
+                descriptorsFor(i, suggester),
+            );
 
-                // Group by the tuple of other-position values
-                // (serialized as a string key).
-                const groups = new Map<string, ConsolidatedRecommendation[]>();
-                for (const row of rows) {
-                    const key = row.cards
-                        .map((c, j) => (j === i ? "*" : String(c)))
-                        .join("|");
-                    let list = groups.get(key);
-                    if (!list) {
-                        list = [];
-                        groups.set(key, list);
+            // Iterate: at each pass, look for a position that can be
+            // collapsed. Stop when a pass produces no further collapse.
+            let changed = true;
+            while (changed) {
+                changed = false;
+                for (let i = 0; i < setup.categories.length; i++) {
+                    const descs = descsByCat[i] ?? [];
+                    if (descs.length === 0) continue;
+
+                    // Group by the tuple of other-position values
+                    // (serialized as a string key). Any `AnySlot` at
+                    // another position is already collapsed and has a
+                    // stable JSON shape, so JSON.stringify is fine as a
+                    // key.
+                    const groups = new Map<
+                        string,
+                        ConsolidatedRecommendation[]
+                    >();
+                    for (const row of rows) {
+                        const key = row.cards
+                            .map((c, j) =>
+                                j === i ? "*" : JSON.stringify(c),
+                            )
+                            .join("|");
+                        let list = groups.get(key);
+                        if (!list) {
+                            list = [];
+                            groups.set(key, list);
+                        }
+                        list.push(row);
                     }
-                    list.push(row);
-                }
 
-                // For each group, if the distinct values at position i
-                // cover every candidate and nothing is already "any" at
-                // position i, collapse.
-                const nextRows: ConsolidatedRecommendation[] = [];
-                let didCollapse = false;
-                for (const group of groups.values()) {
-                    const atI = group.map(g => g.cards[i]);
-                    const alreadyAny = atI.some(v => v === "any");
-                    if (alreadyAny) {
-                        nextRows.push(...group);
-                        continue;
-                    }
-                    const specific = new Set<Card>();
-                    for (const v of atI) {
-                        if (v !== "any") specific.add(v as Card);
-                    }
-                    const covers =
-                        specific.size === targetCandidates.size &&
-                        Array.from(targetCandidates).every(c =>
-                            specific.has(c),
+                    // For each group, look for a descriptor whose target
+                    // set matches the distinct card values at position
+                    // i. Skip groups that already have an AnySlot at i
+                    // (already collapsed there).
+                    const nextRows: ConsolidatedRecommendation[] = [];
+                    let didCollapse = false;
+                    for (const group of groups.values()) {
+                        const atI = group.map(g => g.cards[i]);
+                        const alreadyAny = atI.some(v =>
+                            v !== undefined && isAnySlot(v),
                         );
-                    if (covers && group.length > 1) {
-                        const first = group[0]!;
-                        const mergedCards = first.cards.map((c, j) =>
-                            j === i ? ("any" as const) : c,
-                        );
-                        const groupSize = group.reduce(
-                            (sum, g) => sum + g.groupSize,
-                            0,
-                        );
-                        nextRows.push({
-                            ...first,
-                            cards: mergedCards,
-                            groupSize,
-                        });
-                        didCollapse = true;
-                    } else {
-                        nextRows.push(...group);
+                        if (alreadyAny) {
+                            nextRows.push(...group);
+                            continue;
+                        }
+                        const specific = new Set<Card>();
+                        for (const v of atI) {
+                            if (v !== undefined && !isAnySlot(v)) {
+                                specific.add(v);
+                            }
+                        }
+                        let chosen: AnySlot | undefined;
+                        // Require at least 2 distinct card values; a
+                        // singleton group doesn't need a collapse label.
+                        if (specific.size >= 2) {
+                            for (const d of descs) {
+                                if (setEq(specific, d.target)) {
+                                    chosen = d.slot;
+                                    break;
+                                }
+                            }
+                        }
+                        if (chosen !== undefined && group.length > 1) {
+                            const first = group[0]!;
+                            const slot = chosen;
+                            const mergedCards = first.cards.map((c, j) =>
+                                j === i ? slot : c,
+                            );
+                            const groupSize = group.reduce(
+                                (sum, g) => sum + g.groupSize,
+                                0,
+                            );
+                            nextRows.push({
+                                ...first,
+                                cards: mergedCards,
+                                groupSize,
+                            });
+                            didCollapse = true;
+                        } else {
+                            nextRows.push(...group);
+                        }
                     }
-                }
 
-                if (didCollapse) {
-                    rows = nextRows;
-                    changed = true;
-                    break; // restart the pass from category 0
+                    if (didCollapse) {
+                        rows = nextRows;
+                        changed = true;
+                        break; // restart the pass from category 0
+                    }
                 }
             }
-        }
 
-        out.push(...rows);
-    }
-    return out;
+            out.push(...rows);
+        }
+        return out;
     });
