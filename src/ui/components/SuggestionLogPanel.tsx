@@ -3,8 +3,10 @@
 import { Effect, Layer, Result } from "effect";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
-import { Player } from "../../logic/GameObjects";
-import { cardName } from "../../logic/GameSetup";
+import { Card, Player } from "../../logic/GameObjects";
+import { footnotesForCell } from "../../logic/Footnotes";
+import { GameSetup, cardName } from "../../logic/GameSetup";
+import { chainFor } from "../../logic/Provenance";
 import {
     consolidateRecommendations,
     describeRecommendation,
@@ -17,6 +19,23 @@ import {
 import { useHover } from "../HoverContext";
 import { useListFormatter } from "../hooks/useListFormatter";
 import { SuggestionForm } from "./SuggestionForm";
+import {
+    displayCard,
+    displayCardOpt,
+    displayPassers,
+    displayPlayer,
+    displayPlayerOpt,
+    isNobody,
+    MultiSelectList,
+    NOBODY,
+    type Nobody,
+    type Option,
+    PillPopover,
+    pillStatusForCard,
+    pillStatusForPassers,
+    pillStatusForPlayer,
+    SingleSelectList,
+} from "./SuggestionPills";
 import { Tooltip } from "./Tooltip";
 import {
     DraftSuggestion,
@@ -292,18 +311,8 @@ function Recommendations() {
 
 function PriorSuggestions() {
     const t = useTranslations("suggestions");
-    const { state, dispatch } = useClue();
-    const { hoveredSuggestionIndex, setHoveredSuggestion } = useHover();
-    const setup = state.setup;
+    const { state } = useClue();
     const suggestions = state.suggestions;
-    const [editingId, setEditingId] = useState<string | null>(null);
-    // "and"-aware list join for the passers line ("Player 2, Player 3
-    // and Player 4 could not refute"). Defaults (long / conjunction)
-    // are what we want — no args needed. Cards stay joined with " + "
-    // in the suggested line because that separator is load-bearing
-    // visual branding for the suggestion triple, not a natural-
-    // language list.
-    const listFormatter = useListFormatter();
     return (
         <div className="mt-4 border-t border-border pt-4">
             <h3 className={SECTION_TITLE}>
@@ -314,96 +323,428 @@ function PriorSuggestions() {
                     {t("priorEmpty")}
                 </div>
             ) : (
-                <ol className="m-0 max-h-[300px] list-decimal overflow-y-auto pl-6">
-                    {suggestions.map((s, idx) => {
-                        const isHovered = hoveredSuggestionIndex === idx;
-                        const highlightClass = isHovered
-                            ? " -mx-2 rounded bg-yes-bg/40 px-2 ring-1 ring-accent/60"
-                            : "";
-                        return editingId === s.id ? (
-                            <li
-                                key={s.id}
-                                className="border-b border-border py-2 text-[13px] last:border-b-0"
-                            >
-                                <SuggestionForm
-                                    setup={setup}
-                                    suggestion={s}
-                                    onSubmit={updated => {
-                                        dispatch({
-                                            type: "updateSuggestion",
-                                            suggestion: updated,
-                                        });
-                                        setEditingId(null);
-                                    }}
-                                    onCancel={() => setEditingId(null)}
-                                />
-                            </li>
-                        ) : (
-                            <li
-                                key={s.id}
-                                className={
-                                    "border-b border-border py-2 text-[13px] last:border-b-0 transition-[background-color,box-shadow] duration-100" +
-                                    highlightClass
-                                }
-                                onMouseEnter={() => setHoveredSuggestion(idx)}
-                                onMouseLeave={() => setHoveredSuggestion(null)}
-                            >
-                                <div>
-                                    {t.rich("suggestedLine", {
-                                        suggester: String(s.suggester),
-                                        cards: s.cards
-                                            .map(id => cardName(setup, id))
-                                            .join(" + "),
-                                        strong: chunks => (
-                                            <strong>{chunks}</strong>
-                                        ),
-                                    })}
-                                </div>
-                                <div className="text-[13px] text-muted">
-                                    {t.rich("refutationLine", {
-                                        status: refutationStatus(s),
-                                        refuter: s.refuter
-                                            ? String(s.refuter)
-                                            : "",
-                                        seen: s.seenCard
-                                            ? cardName(setup, s.seenCard)
-                                            : "",
-                                        passers: listFormatter.format(
-                                            s.nonRefuters.map(String),
-                                        ),
-                                        strong: chunks => (
-                                            <strong>{chunks}</strong>
-                                        ),
-                                    })}
-                                </div>
-                                <div className="mt-1 flex gap-2">
-                                    <button
-                                        type="button"
-                                        className="cursor-pointer border-none bg-transparent p-0 text-[12px] text-accent underline"
-                                        onClick={() =>
-                                            setEditingId(s.id)
-                                        }
-                                    >
-                                        {t("editAction")}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="cursor-pointer border-none bg-transparent p-0 text-[12px] text-danger underline"
-                                        onClick={() =>
-                                            dispatch({
-                                                type: "removeSuggestion",
-                                                id: s.id,
-                                            })
-                                        }
-                                    >
-                                        {t("removeAction")}
-                                    </button>
-                                </div>
-                            </li>
-                        );
-                    })}
+                <ol className="m-0 flex max-h-[300px] list-none flex-col gap-2 overflow-y-auto p-0">
+                    {suggestions.map((s, idx) => (
+                        <PriorSuggestionItem
+                            key={s.id}
+                            suggestion={s}
+                            idx={idx}
+                        />
+                    ))}
                 </ol>
             )}
         </div>
+    );
+}
+
+/**
+ * One row in the prior-suggestions list. Two display modes:
+ *  - idle: renders the existing sentence pair ("Player 3 suggested …"
+ *    + refutation summary).
+ *  - pill-mode (hover or any pill-popover open): swaps in the pill row
+ *    from the Add form, with live-commit semantics — every change
+ *    dispatches `updateSuggestion`. No Add button, no auto-advance.
+ *
+ * The card outline surrounds the number, unlike the old native
+ * `list-decimal` layout. When highlighted (self-hover, a popover is
+ * open, or a checklist cell whose chain references this row is
+ * hovered), the card flips to the red accent and pills render in the
+ * `onAccent` inverse variant.
+ */
+function PriorSuggestionItem({
+    suggestion: s,
+    idx,
+}: {
+    readonly suggestion: DraftSuggestion;
+    readonly idx: number;
+}) {
+    const t = useTranslations("suggestions");
+    const { state, dispatch, derived } = useClue();
+    const { setHoveredSuggestion, hoveredCell } = useHover();
+    const setup = state.setup;
+    const listFormatter = useListFormatter();
+
+    const [isSelfHovered, setIsSelfHovered] = useState(false);
+    const [openPillId, setOpenPillId] = useState<string | null>(null);
+
+    // Pill-mode stays engaged while any popover is open, even if the
+    // pointer has left the card (popovers render in a portal outside
+    // our DOM subtree).
+    const isInPillMode = isSelfHovered || openPillId !== null;
+
+    // Cell → suggestion hover (reverse of the Checklist's
+    // `cellIsHighlighted`). Two ways a cell can reference a suggestion:
+    //   1. Provenance chain: the cell was SET by a rule that consulted
+    //      this suggestion. `chainFor` walks back through dependsOn.
+    //   2. Footnote candidacy: the cell is still in the running as the
+    //      refuter's shown card for this suggestion (the superscript
+    //      numbers in the grid). `footnotesForCell` indexes those,
+    //      1-based, against the cell.
+    const isHighlightedByCell = useMemo(() => {
+        if (!hoveredCell) return false;
+        if (derived.provenance) {
+            for (const reason of chainFor(derived.provenance, hoveredCell)) {
+                const tag = reason.kind._tag;
+                if (
+                    tag === "NonRefuters" ||
+                    tag === "RefuterShowed" ||
+                    tag === "RefuterOwnsOneOf"
+                ) {
+                    if (reason.kind.suggestionIndex === idx) return true;
+                }
+            }
+        }
+        if (derived.footnotes) {
+            const fnNumbers = footnotesForCell(
+                derived.footnotes,
+                hoveredCell,
+            );
+            if (fnNumbers.includes(idx + 1)) return true;
+        }
+        return false;
+    }, [hoveredCell, derived.provenance, derived.footnotes, idx]);
+
+    const isHighlighted = isInPillMode || isHighlightedByCell;
+    const pillVariant = isHighlighted ? "onAccent" : "default";
+
+    const commit = (patch: Partial<DraftSuggestion>) =>
+        dispatch({
+            type: "updateSuggestion",
+            suggestion: { ...s, ...patch },
+        });
+
+    const commitRefuter = (value: Player | Nobody) =>
+        dispatch({
+            type: "updateSuggestion",
+            // Use destructure-without-field trick: exactOptionalPropertyTypes
+            // requires absent key (not `undefined`) for the optional slot.
+            suggestion: isNobody(value)
+                ? ((): DraftSuggestion => {
+                      const { refuter: _r, seenCard: _sc, ...rest } = s;
+                      return rest;
+                  })()
+                : { ...s, refuter: value },
+        });
+
+    const commitSeenCard = (value: Card | Nobody) =>
+        dispatch({
+            type: "updateSuggestion",
+            suggestion: isNobody(value)
+                ? ((): DraftSuggestion => {
+                      const { seenCard: _sc, ...rest } = s;
+                      return rest;
+                  })()
+                : { ...s, seenCard: value },
+        });
+
+    const commitPassers = (value: ReadonlyArray<Player> | Nobody) =>
+        dispatch({
+            type: "updateSuggestion",
+            suggestion: {
+                ...s,
+                nonRefuters: isNobody(value) ? [] : Array.from(new Set(value)),
+            },
+        });
+
+    const clearRefuter = () => {
+        const { refuter: _r, seenCard: _sc, ...rest } = s;
+        dispatch({ type: "updateSuggestion", suggestion: rest });
+    };
+    const clearSeenCard = () => {
+        const { seenCard: _sc, ...rest } = s;
+        dispatch({ type: "updateSuggestion", suggestion: rest });
+    };
+    const clearPassers = () =>
+        dispatch({
+            type: "updateSuggestion",
+            suggestion: { ...s, nonRefuters: [] },
+        });
+
+    const onRemove = () => {
+        if (window.confirm(t("removeConfirm"))) {
+            dispatch({ type: "removeSuggestion", id: s.id });
+        }
+    };
+
+    // Option builders mirror the exclusion logic in SuggestionForm:
+    // suggester ↔ refuter ↔ passers are pairwise disjoint in Clue.
+    const playerChoices = (
+        exclude: ReadonlyArray<Player | undefined>,
+    ): ReadonlyArray<Option<Player>> => {
+        const excl = new Set<Player>();
+        for (const p of exclude) if (p !== undefined) excl.add(p);
+        return setup.players
+            .filter(p => !excl.has(p))
+            .map(p => ({ value: p, label: String(p) }));
+    };
+    const suggesterOpts = useMemo(
+        () => playerChoices([s.refuter, ...s.nonRefuters]),
+        [s, setup.players],
+    );
+    const refuterOpts = useMemo(
+        () => playerChoices([s.suggester, ...s.nonRefuters]),
+        [s, setup.players],
+    );
+    const passersOpts = useMemo(
+        () => playerChoices([s.suggester, s.refuter]),
+        [s, setup.players],
+    );
+    const seenCardOpts = useMemo(
+        () =>
+            s.cards.flatMap((id): Array<Option<Card>> => {
+                for (const cat of setup.categories) {
+                    const entry = cat.cards.find(e => e.id === id);
+                    if (entry !== undefined)
+                        return [{ value: id, label: entry.name }];
+                }
+                return [];
+            }),
+        [s.cards, setup.categories],
+    );
+
+    const onMouseEnter = () => {
+        setIsSelfHovered(true);
+        setHoveredSuggestion(idx);
+    };
+    const onMouseLeave = () => {
+        setIsSelfHovered(false);
+        // Only clear the cross-panel hover if no popover is still open;
+        // otherwise the Checklist halo disappears mid-edit.
+        if (openPillId === null) setHoveredSuggestion(null);
+    };
+
+    // Pill open-state toggle shared by every pill on the row.
+    const onOpenChangeFor = (pillId: string) => (open: boolean) => {
+        setOpenPillId(prev =>
+            open ? pillId : prev === pillId ? null : prev,
+        );
+        if (!open && !isSelfHovered) setHoveredSuggestion(null);
+    };
+
+    // Refuter pill disables the Shown card pill when absent (same rule
+    // the Add form uses: can't pick a shown card if nobody refuted).
+    const seenDisabled = s.refuter === undefined;
+
+    // Passed-by value: map from DraftSuggestion's always-array shape
+    // to the pill-status-friendly null-when-empty shape. The underlying
+    // data can't distinguish "explicit nobody" from "not decided" —
+    // empty array collapses both.
+    const passersValue =
+        s.nonRefuters.length === 0 ? null : s.nonRefuters;
+
+    return (
+        <li
+            className={
+                "relative flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2 text-[13px] transition-colors " +
+                (isHighlighted
+                    ? "border-accent bg-accent text-white"
+                    : "border-border")
+            }
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
+        >
+            <span className="font-semibold">{idx + 1}.</span>
+            <div className="min-w-0 flex-1 pr-5">
+                {isInPillMode ? (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <PillPopover
+                            pillId={`suggester-${s.id}`}
+                            label={t("pillSuggester")}
+                            status={pillStatusForPlayer(s.suggester, false)}
+                            valueDisplay={displayPlayer(s.suggester)}
+                            variant={pillVariant}
+                            open={openPillId === `suggester-${s.id}`}
+                            onOpenChange={onOpenChangeFor(`suggester-${s.id}`)}
+                        >
+                            <SingleSelectList<Player>
+                                options={suggesterOpts}
+                                selected={s.suggester}
+                                onCommit={value => {
+                                    if (!isNobody(value))
+                                        commit({ suggester: value });
+                                    setOpenPillId(null);
+                                }}
+                                nobodyLabel={null}
+                                nobodyValue={null}
+                            />
+                        </PillPopover>
+
+                        {setup.categories.map((cat, i) => {
+                            const cardId = s.cards[i] ?? null;
+                            const pid = `card-${s.id}-${i}`;
+                            return (
+                                <PillPopover
+                                    key={cat.id}
+                                    pillId={pid}
+                                    label={cat.name}
+                                    status={pillStatusForCard(cardId, false)}
+                                    valueDisplay={displayCard(cardId, setup)}
+                                    variant={pillVariant}
+                                    open={openPillId === pid}
+                                    onOpenChange={onOpenChangeFor(pid)}
+                                >
+                                    <SingleSelectList<Card>
+                                        options={cat.cards.map(c => ({
+                                            value: c.id,
+                                            label: c.name,
+                                        }))}
+                                        selected={cardId}
+                                        onCommit={value => {
+                                            if (!isNobody(value)) {
+                                                const next = [...s.cards];
+                                                next[i] = value;
+                                                commit({ cards: next });
+                                            }
+                                            setOpenPillId(null);
+                                        }}
+                                        nobodyLabel={null}
+                                        nobodyValue={null}
+                                    />
+                                </PillPopover>
+                            );
+                        })}
+
+                        <PillPopover
+                            pillId={`passers-${s.id}`}
+                            label={t("pillPassers")}
+                            status={pillStatusForPassers(passersValue)}
+                            valueDisplay={displayPassers(passersValue, t)}
+                            variant={pillVariant}
+                            open={openPillId === `passers-${s.id}`}
+                            onOpenChange={onOpenChangeFor(`passers-${s.id}`)}
+                            onClear={
+                                s.nonRefuters.length > 0
+                                    ? clearPassers
+                                    : undefined
+                            }
+                        >
+                            <MultiSelectList
+                                options={passersOpts}
+                                selected={s.nonRefuters}
+                                nobodyChosen={false}
+                                nobodyLabel={t("popoverNobodyPassed")}
+                                commitHint={t("popoverCommitHint")}
+                                onCommit={commitPassers}
+                            />
+                        </PillPopover>
+
+                        <PillPopover
+                            pillId={`refuter-${s.id}`}
+                            label={t("pillRefuter")}
+                            status={pillStatusForPlayer(
+                                s.refuter ?? null,
+                                true,
+                            )}
+                            valueDisplay={displayPlayerOpt(
+                                s.refuter ?? null,
+                                t,
+                            )}
+                            variant={pillVariant}
+                            open={openPillId === `refuter-${s.id}`}
+                            onOpenChange={onOpenChangeFor(`refuter-${s.id}`)}
+                            onClear={
+                                s.refuter !== undefined ? clearRefuter : undefined
+                            }
+                        >
+                            <SingleSelectList<Player>
+                                options={refuterOpts}
+                                selected={s.refuter ?? null}
+                                onCommit={value => {
+                                    commitRefuter(value);
+                                    setOpenPillId(null);
+                                }}
+                                nobodyLabel={t("popoverNobodyRefuted")}
+                                nobodyValue={NOBODY}
+                            />
+                        </PillPopover>
+
+                        <PillPopover
+                            pillId={`seenCard-${s.id}`}
+                            label={t("pillSeen")}
+                            status={pillStatusForCard(
+                                s.seenCard ?? null,
+                                true,
+                            )}
+                            valueDisplay={displayCardOpt(
+                                s.seenCard ?? null,
+                                setup,
+                                t,
+                            )}
+                            disabled={seenDisabled}
+                            disabledHint={t("pillSeenDisabledHint")}
+                            variant={pillVariant}
+                            open={openPillId === `seenCard-${s.id}`}
+                            onOpenChange={onOpenChangeFor(
+                                `seenCard-${s.id}`,
+                            )}
+                            onClear={
+                                s.seenCard !== undefined
+                                    ? clearSeenCard
+                                    : undefined
+                            }
+                        >
+                            <SingleSelectList<Card>
+                                options={seenCardOpts}
+                                selected={s.seenCard ?? null}
+                                onCommit={value => {
+                                    commitSeenCard(value);
+                                    setOpenPillId(null);
+                                }}
+                                nobodyLabel={t("popoverNoShownCard")}
+                                nobodyValue={NOBODY}
+                            />
+                        </PillPopover>
+                    </div>
+                ) : (
+                    <>
+                        <div>
+                            {t.rich("suggestedLine", {
+                                suggester: String(s.suggester),
+                                cards: s.cards
+                                    .map(id => cardName(setup, id))
+                                    .join(" + "),
+                                strong: chunks => (
+                                    <strong>{chunks}</strong>
+                                ),
+                            })}
+                        </div>
+                        <div
+                            className={
+                                isHighlighted
+                                    ? "text-[13px] text-white/80"
+                                    : "text-[13px] text-muted"
+                            }
+                        >
+                            {t.rich("refutationLine", {
+                                status: refutationStatus(s),
+                                refuter: s.refuter ? String(s.refuter) : "",
+                                seen: s.seenCard
+                                    ? cardName(setup, s.seenCard)
+                                    : "",
+                                passers: listFormatter.format(
+                                    s.nonRefuters.map(String),
+                                ),
+                                strong: chunks => (
+                                    <strong>{chunks}</strong>
+                                ),
+                            })}
+                        </div>
+                    </>
+                )}
+            </div>
+            <button
+                type="button"
+                aria-label={t("removeAction")}
+                className={
+                    "absolute right-1.5 top-1 cursor-pointer rounded border-none bg-transparent px-1 text-[16px] leading-none " +
+                    (isHighlighted
+                        ? "text-white/70 hover:text-white"
+                        : "text-muted hover:text-accent")
+                }
+                onClick={onRemove}
+            >
+                ×
+            </button>
+        </li>
     );
 }

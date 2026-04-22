@@ -57,7 +57,7 @@ export function Checklist() {
     const tSetup = useTranslations("setup");
     const tReasons = useTranslations("reasons");
     const { state, dispatch, derived } = useClue();
-    const { hoveredSuggestionIndex } = useHover();
+    const { hoveredSuggestionIndex, setHoveredCell } = useHover();
     const inSetup = state.uiMode === "setup";
     const setup = state.setup;
     const knownCards = state.knownCards;
@@ -418,6 +418,7 @@ export function Checklist() {
                                             <Tooltip
                                                 key={`${ownerKey(owner)}-${String(entry.id)}`}
                                                 content={tooltipContent}
+                                                variant="accent"
                                             >
                                                 <td
                                                     className={cellClass(
@@ -428,6 +429,14 @@ export function Checklist() {
                                                         isPlayerCell && !setupCheckbox,
                                                         isHighlighted,
                                                     )}
+                                                    onMouseEnter={() =>
+                                                        setHoveredCell(
+                                                            Cell(owner, entry.id),
+                                                        )
+                                                    }
+                                                    onMouseLeave={() =>
+                                                        setHoveredCell(null)
+                                                    }
                                                     onClick={
                                                         isPlayerCell && !setupCheckbox
                                                             ? () =>
