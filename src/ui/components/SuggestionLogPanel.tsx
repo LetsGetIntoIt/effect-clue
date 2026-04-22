@@ -375,7 +375,7 @@ function PriorSuggestionItem({
     const isHighlightedByCell = useMemo(() => {
         if (!hoveredCell) return false;
         if (derived.provenance) {
-            for (const reason of chainFor(derived.provenance, hoveredCell)) {
+            for (const { reason } of chainFor(derived.provenance, hoveredCell)) {
                 const tag = reason.kind._tag;
                 if (
                     tag === "NonRefuters" ||

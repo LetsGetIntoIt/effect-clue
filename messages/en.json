@@ -99,36 +99,36 @@
         "suggestionHeadline": "Suggestion #{number}",
         "initial-known-card": {
             "headline": "Given",
-            "detail": "You marked this cell in the known-cards grid."
+            "detail": "You marked that {cellPlayer} {value, select, Y {owns} other {doesn't own}} {cellCard}."
         },
         "initial-hand-size": {
             "headline": "Given",
-            "detail": "Known from the player's hand size."
+            "detail": "Known from {cellPlayer}'s hand size."
         },
         "card-ownership": {
             "headline": "Card ownership",
-            "detail": "Each card has exactly one owner. Once {card} was ruled in or out for other owners, this cell was forced."
+            "detail": "{value, select, Y {Each {card} has exactly one owner — every other owner was ruled out, so {cellPlayer} must own it.} other {{card} is already owned by someone else, so {cellPlayer} doesn't own it.}}"
         },
         "player-hand": {
             "headline": "Hand size",
-            "detail": "{player}'s hand holds a fixed number of cards. Counting the Ys and Ns in their row forced this cell."
+            "detail": "{value, select, Y {{player}'s hand is a fixed size and their other cards are all ruled out, so {player} must own {cellCard}.} other {{player}'s hand is a fixed size and already full, so {player} can't also hold {cellCard}.}}"
         },
         "case-file-category": {
             "headline": "Case file",
-            "detail": "The case file contains exactly one {category}. Narrowing the category forced this cell."
+            "detail": "{value, select, Y {The case file holds exactly one {category} — the others are ruled out, so the answer is {cellCard}.} other {The case file holds exactly one {category}; another card in that category is the answer, so it isn't {cellCard}.}}"
         },
         "non-refuters": {
-            "detailKnown": "The passer couldn't refute {suggester}'s suggestion, so they don't own any of the named cards.",
-            "detailUnknown": "A player who passed can't hold the named cards."
+            "detailKnown": "{cellPlayer} passed on {suggester}'s suggestion #{number}, so {cellPlayer} can't hold {cellCard}.",
+            "detailUnknown": "{cellPlayer} passed on suggestion #{number}, so {cellPlayer} can't hold {cellCard}."
         },
         "refuter-showed": {
-            "detailKnown": "{refuter} refuted and showed {seen}.",
-            "detailKnownNoCard": "{refuter} refuted and showed the refuting card.",
-            "detailUnknown": "Refuter showed the card."
+            "detailKnown": "{refuter} refuted suggestion #{number} by showing {seen}, so {cellPlayer} owns {cellCard}.",
+            "detailKnownNoCard": "{refuter} refuted suggestion #{number} by showing {cellCard}.",
+            "detailUnknown": "The refuter showed {cellCard} when refuting suggestion #{number}."
         },
         "refuter-owns-one-of": {
-            "detailKnown": "{refuter} refuted {suggester}'s suggestion ({cardLabels}) but we didn't see the card. Once the other two were ruled out, this one was forced.",
-            "detailUnknown": "Refuter had to own one of the three cards; the other two were already ruled out."
+            "detailKnown": "{refuter} refuted {suggester}'s suggestion #{number} ({cardLabels}); the other two were ruled out, so {refuter} must own {cellCard}.",
+            "detailUnknown": "The refuter of suggestion #{number} owned one of the three cards; the other two were ruled out, so it must be {cellCard}."
         }
     },
     "recommendations": {

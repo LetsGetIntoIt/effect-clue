@@ -1,6 +1,6 @@
 import { Data, Effect, Equal, HashMap, Match, MutableHashMap, MutableHashSet, Option } from "effect";
 import type { ContradictionTrace } from "./Deducer";
-import { Card, CardCategory, Player } from "./GameObjects";
+import { Card, CardCategory, Player, ownerLabel } from "./GameObjects";
 import { Cell, CellValue, Contradiction, Knowledge } from "./Knowledge";
 import { applyConsistencyRules, applyDeductionRules } from "./Rules";
 import {
@@ -88,7 +88,7 @@ export const RefuterOwnsOneOf = (params: {
  *
  * - `iteration`: 0 for initial inputs, 1+ for rule passes.
  * - `kind`:      structured identity of the rule that set this cell.
- * - `detail`:    free-form human-readable detail.
+ * - `value`:     the Y / N value this reason forced into the output cell.
  * - `dependsOn`: cells whose values were consulted to derive this one.
  *                For initial inputs this is empty. For slice-based
  *                deductions it's the already-set cells in the slice.
@@ -99,7 +99,7 @@ export const RefuterOwnsOneOf = (params: {
 export interface Reason {
     readonly iteration: number;
     readonly kind: ReasonKind;
-    readonly detail: string;
+    readonly value: CellValue;
     readonly dependsOn: ReadonlyArray<Cell>;
 }
 
@@ -123,7 +123,6 @@ export interface SetCellRecord {
     readonly cell: Cell;
     readonly value: CellValue;
     readonly kind: ReasonKind;
-    readonly detail: string;
     readonly dependsOn: ReadonlyArray<Cell>;
 }
 
@@ -144,12 +143,17 @@ export type Tracer = (record: SetCellRecord) => void;
  * Dedup uses a HashSet keyed on Cell directly (structural Equal), so
  * no hash-surrogate string is needed.
  */
+export interface ChainEntry {
+    readonly cell: Cell;
+    readonly reason: Reason;
+}
+
 export const chainFor = (
     provenance: Provenance,
     cell: Cell,
-): ReadonlyArray<Reason> => {
+): ReadonlyArray<ChainEntry> => {
     const seen = MutableHashSet.empty<Cell>();
-    const out: Reason[] = [];
+    const out: ChainEntry[] = [];
     const stack: Cell[] = [cell];
     let next = stack.pop();
     while (next !== undefined) {
@@ -159,7 +163,7 @@ export const chainFor = (
                 MutableHashMap.get(provenance, next),
             );
             if (reason !== undefined) {
-                out.push(reason);
+                out.push({ cell: next, reason });
                 for (const dep of reason.dependsOn) stack.push(dep);
             }
         }
@@ -182,37 +186,48 @@ export const chainFor = (
  * (suggestion removed) fall back to the no-params branch of the
  * matching message.
  */
+/**
+ * Params every variant carries about the cell this reason set. The i18n
+ * templates interpolate these so lines read as concrete facts about a
+ * specific (player, card) rather than a generic "this cell".
+ */
+export interface CellParams {
+    readonly cellPlayer: string;
+    readonly cellCard: string;
+    readonly value: CellValue;
+}
+
 export type ReasonDescription =
     | {
           readonly kind: "initial-known-card";
-          readonly params: Record<string, never>;
+          readonly params: CellParams;
       }
     | {
           readonly kind: "initial-hand-size";
-          readonly params: Record<string, never>;
+          readonly params: CellParams;
       }
     | {
           readonly kind: "card-ownership";
-          readonly params: { readonly card: string };
+          readonly params: CellParams & { readonly card: string };
       }
     | {
           readonly kind: "player-hand";
-          readonly params: { readonly player: string };
+          readonly params: CellParams & { readonly player: string };
       }
     | {
           readonly kind: "case-file-category";
-          readonly params: { readonly category: string };
+          readonly params: CellParams & { readonly category: string };
       }
     | {
           readonly kind: "non-refuters";
-          readonly params: {
+          readonly params: CellParams & {
               readonly suggestionIndex: number;
               readonly suggester: string | undefined;
           };
       }
     | {
           readonly kind: "refuter-showed";
-          readonly params: {
+          readonly params: CellParams & {
               readonly suggestionIndex: number;
               readonly refuter: string | undefined;
               readonly seen: string | undefined;
@@ -220,7 +235,7 @@ export type ReasonDescription =
       }
     | {
           readonly kind: "refuter-owns-one-of";
-          readonly params: {
+          readonly params: CellParams & {
               readonly suggestionIndex: number;
               readonly suggester: string | undefined;
               readonly refuter: string | undefined;
@@ -230,34 +245,41 @@ export type ReasonDescription =
 
 export const describeReason = (
     reason: Reason,
+    cell: Cell,
     setup: GameSetup,
     suggestions: ReadonlyArray<Suggestion>,
-): ReasonDescription =>
-    Match.value(reason.kind).pipe(
+): ReasonDescription => {
+    const base: CellParams = {
+        cellPlayer: ownerLabel(cell.owner),
+        cellCard: cardName(setup, cell.card),
+        value: reason.value,
+    };
+    return Match.value(reason.kind).pipe(
         Match.tagsExhaustive({
             InitialKnownCard: (): ReasonDescription => ({
                 kind: "initial-known-card",
-                params: {},
+                params: base,
             }),
             InitialHandSize: (): ReasonDescription => ({
                 kind: "initial-hand-size",
-                params: {},
+                params: base,
             }),
             CardOwnership: ({ card }): ReasonDescription => ({
                 kind: "card-ownership",
-                params: { card: cardName(setup, card) },
+                params: { ...base, card: cardName(setup, card) },
             }),
             PlayerHand: ({ player }): ReasonDescription => ({
                 kind: "player-hand",
-                params: { player: String(player) },
+                params: { ...base, player: String(player) },
             }),
             CaseFileCategory: ({ category }): ReasonDescription => ({
                 kind: "case-file-category",
-                params: { category: categoryName(setup, category) },
+                params: { ...base, category: categoryName(setup, category) },
             }),
             NonRefuters: ({ suggestionIndex }): ReasonDescription => ({
                 kind: "non-refuters",
                 params: {
+                    ...base,
                     suggestionIndex,
                     suggester:
                         suggestions[suggestionIndex]?.suggester !== undefined
@@ -270,6 +292,7 @@ export const describeReason = (
                 return {
                     kind: "refuter-showed",
                     params: {
+                        ...base,
                         suggestionIndex,
                         refuter:
                             s?.refuter !== undefined
@@ -287,6 +310,7 @@ export const describeReason = (
                 return {
                     kind: "refuter-owns-one-of",
                     params: {
+                        ...base,
                         suggestionIndex,
                         suggester:
                             s?.suggester !== undefined
@@ -306,6 +330,7 @@ export const describeReason = (
             },
         }),
     );
+};
 
 /**
  * Run the deducer once and record, for every cell that was newly
@@ -336,11 +361,11 @@ export const deduceWithExplanations = (
 
         // Seed provenance with the initial inputs so the UI can explain
         // them as "you told us this".
-        HashMap.forEach(initial.checklist, (_value, cell) => {
+        HashMap.forEach(initial.checklist, (value, cell) => {
             MutableHashMap.set(provenance, cell, {
                 iteration: 0,
                 kind: InitialKnownCard(),
-                detail: "given from starting knowledge",
+                value,
                 dependsOn: [],
             });
         });
@@ -350,7 +375,7 @@ export const deduceWithExplanations = (
             MutableHashMap.set(provenance, record.cell, {
                 iteration: currentIteration,
                 kind: record.kind,
-                detail: record.detail,
+                value: record.value,
                 dependsOn: record.dependsOn,
             });
         };

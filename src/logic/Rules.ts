@@ -117,10 +117,6 @@ export const applySlice = (
                     cell,
                     value: N,
                     kind: slice.kind,
-                    detail:
-                        `${slice.label}: all ${slice.yCount} Y` +
-                        `${slice.yCount === 1 ? "" : "s"} accounted for, ` +
-                        `so this cell is N`,
                     dependsOn: yCells,
                 });
             }
@@ -137,10 +133,6 @@ export const applySlice = (
                     cell,
                     value: Y,
                     kind: slice.kind,
-                    detail:
-                        `${slice.label}: all ${nCount} N` +
-                        `${nCount === 1 ? "" : "s"} accounted for, ` +
-                        `so this cell is Y`,
                     dependsOn: nCells,
                 });
             }
@@ -261,9 +253,6 @@ export const nonRefutersDontHaveSuggestedCards = (
                         cell,
                         value: N,
                         kind: NonRefuters({ suggestionIndex }),
-                        detail:
-                            `${player} passed on suggestion #${suggestionIndex + 1}, ` +
-                            `so doesn't own ${card}`,
                         dependsOn: [],
                     });
                 }
@@ -306,9 +295,6 @@ export const refuterShowedCard = (
                 cell,
                 value: Y,
                 kind: RefuterShowed({ suggestionIndex }),
-                detail:
-                    `${suggestion.refuter} showed ${suggestion.seenCard} when ` +
-                    `refuting suggestion #${suggestionIndex + 1}`,
                 dependsOn: [],
             });
         }
@@ -369,10 +355,6 @@ export const refuterOwnsOneOf = (
                     cell,
                     value: Y,
                     kind: RefuterOwnsOneOf({ suggestionIndex }),
-                    detail:
-                        `${suggestion.refuter} refuted suggestion ` +
-                        `#${suggestionIndex + 1} and we've ruled out the ` +
-                        `other cards, so they must own this one`,
                     dependsOn: nCells,
                 });
             }
