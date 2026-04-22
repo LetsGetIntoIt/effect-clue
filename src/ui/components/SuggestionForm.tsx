@@ -300,6 +300,91 @@ export function SuggestionForm({
         return () => document.removeEventListener("keydown", onKeyDown);
     }, [doSubmit]);
 
+    /**
+     * Pill-to-pill navigation keys. ArrowLeft/Right and Tab/Shift+Tab
+     * step backward/forward through the enabled-pill sequence,
+     * opening each pill's popover (mirrors auto-advance-on-commit).
+     *
+     * Boundary rule: Shift+Tab at the head escapes the form (don't
+     * preventDefault) so keyboard users aren't trapped. ArrowLeft at
+     * the head is a no-op — arrow keys aren't expected to leave the
+     * widget.
+     */
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.metaKey || e.ctrlKey || e.altKey) return;
+            const isLeft = e.key === "ArrowLeft";
+            const isRight = e.key === "ArrowRight";
+            const isShiftTab = e.key === "Tab" && e.shiftKey;
+            const isTab = e.key === "Tab" && !e.shiftKey;
+            if (!isLeft && !isRight && !isShiftTab && !isTab) return;
+
+            const root = formRootRef.current;
+            const active = document.activeElement as Element | null;
+            if (!root || !active) return;
+
+            const onSubmitBtn = active === submitBtnRef.current;
+            const onPillTrigger =
+                root.contains(active) &&
+                active.closest("[data-pill-id]") !== null;
+            const inPopover = isInsideSuggestionPopover(active);
+            if (!onPillTrigger && !inPopover && !onSubmitBtn) return;
+
+            // Resolve the "current" pill we're navigating from.
+            let current: PillId | null = null;
+            let onSubmitTarget = false;
+            if (
+                openPillId !== null &&
+                openPillId !== TARGET_SUBMIT
+            ) {
+                current = openPillId;
+            } else if (openPillId === TARGET_SUBMIT || onSubmitBtn) {
+                onSubmitTarget = true;
+            } else if (onPillTrigger) {
+                const id = active
+                    .closest("[data-pill-id]")
+                    ?.getAttribute("data-pill-id");
+                if (id !== null && id !== undefined) {
+                    current = id as PillId;
+                }
+            }
+
+            const goingBack = isLeft || isShiftTab;
+
+            if (goingBack) {
+                const from =
+                    current ?? lastEnabledPill(pillSequence, isPillDisabled);
+                if (from === null) return; // no enabled pills at all
+                // When focus is on the Add button, stepping "back" means
+                // the last enabled pill itself, not its predecessor.
+                const target = onSubmitTarget
+                    ? from
+                    : prevEnabledPill(pillSequence, from, isPillDisabled);
+                if (target === null) {
+                    // At the head. Arrows stay put; Shift+Tab escapes.
+                    if (isLeft) e.preventDefault();
+                    return;
+                }
+                e.preventDefault();
+                setOpenPillId(target);
+                return;
+            }
+
+            // Forward (ArrowRight or Tab)
+            if (onSubmitTarget) return; // already at terminal; let native run
+            if (current === null) return;
+            const target = nextEnabledPill(
+                pillSequence,
+                current,
+                isPillDisabled,
+            );
+            e.preventDefault();
+            setOpenPillId(target);
+        };
+        document.addEventListener("keydown", onKeyDown);
+        return () => document.removeEventListener("keydown", onKeyDown);
+    }, [pillSequence, isPillDisabled, openPillId]);
+
     // --- Clear-inputs affordance ---------------------------------------
     //
     // "Any value set" check drives the Clear link's visibility. We
@@ -658,6 +743,40 @@ const nextEnabledPill = (
         if (!isDisabled(id)) return id;
     }
     return TARGET_SUBMIT;
+};
+
+/**
+ * Mirror of `nextEnabledPill` for backward navigation. Returns `null`
+ * at the head of the sequence so callers can choose to no-op
+ * (ArrowLeft) or let native Tab escape the form (Shift+Tab).
+ */
+const prevEnabledPill = (
+    sequence: ReadonlyArray<PillId>,
+    current: PillId,
+    isDisabled: (id: PillId) => boolean,
+): PillId | null => {
+    const idx = sequence.indexOf(current);
+    for (let i = idx - 1; i >= 0; i--) {
+        const id = sequence[i]!;
+        if (!isDisabled(id)) return id;
+    }
+    return null;
+};
+
+/**
+ * Last enabled pill in the sequence, or `null` if none. Used when
+ * Shift+Tab / ArrowLeft fires from the Add button — we treat the
+ * "current" position as one past the end and step back to here.
+ */
+const lastEnabledPill = (
+    sequence: ReadonlyArray<PillId>,
+    isDisabled: (id: PillId) => boolean,
+): PillId | null => {
+    for (let i = sequence.length - 1; i >= 0; i--) {
+        const id = sequence[i]!;
+        if (!isDisabled(id)) return id;
+    }
+    return null;
 };
  
 
