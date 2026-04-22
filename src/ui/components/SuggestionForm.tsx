@@ -22,9 +22,9 @@ import { Tooltip } from "./Tooltip";
  * Each `DraftSuggestion` slot — suggester, one card per category, the
  * three optional passers / refuter / shown-card slots — is rendered
  * as a pill. The pill is both the status display and the value
- * picker: hovering, focusing, or clicking it opens a popover with
- * the candidate list. Selecting a value advances focus to the next
- * pill; the sequence terminates on the Add button.
+ * picker: clicking it opens a popover with the candidate list.
+ * Selecting a value advances focus to the next pill; the sequence
+ * terminates on the Add button.
  *
  * Props:
  *   - `suggestion` — if present, pre-populates from that draft and
@@ -199,9 +199,12 @@ export function SuggestionForm({
         [openNextPillAfter],
     );
     const commitPassers = useCallback(
-        (value: ReadonlyArray<Player> | Nobody) => {
+        (
+            value: ReadonlyArray<Player> | Nobody,
+            opts: { advance: boolean } = { advance: true },
+        ) => {
             setForm(s => ({ ...s, nonRefuters: value }));
-            openNextPillAfter(PILL_PASSERS);
+            if (opts.advance) openNextPillAfter(PILL_PASSERS);
         },
         [openNextPillAfter],
     );
@@ -280,14 +283,46 @@ export function SuggestionForm({
         return () => document.removeEventListener("keydown", onKeyDown);
     }, [doSubmit]);
 
+    // --- Clear-inputs affordance ---------------------------------------
+    //
+    // "Any value set" check drives the Clear link's visibility. We
+    // want it to appear as soon as the user picks anything (including
+    // an explicit "Nobody" on an optional pill) so they have a quick
+    // escape hatch back to a blank form without losing the in-place
+    // edit prop.
+    const hasAnyInput =
+        form.suggester !== null ||
+        form.cards.some(c => c !== null) ||
+        form.nonRefuters !== null ||
+        form.refuter !== null ||
+        form.seenCard !== null;
+    const onClearInputs = useCallback(() => {
+        setForm(emptyFormState(setup));
+        setOpenPillId(null);
+    }, [setup]);
+
     // --- Render --------------------------------------------------------
     return (
         <div ref={formRootRef}>
-            <h3 className="mt-0 mb-2 text-[14px] font-semibold">
-                {suggestion !== undefined
-                    ? t("editTitle")
-                    : t("addTitle")}
-            </h3>
+            <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="mt-0 mb-0 text-[14px] font-semibold">
+                    {suggestion !== undefined
+                        ? t("editTitle")
+                        : t("addTitle")}
+                </h3>
+                {hasAnyInput && (
+                    <button
+                        type="button"
+                        onClick={onClearInputs}
+                        className="inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-[12px] text-muted hover:text-accent"
+                    >
+                        <span aria-hidden className="text-[14px] leading-none">
+                            ×
+                        </span>
+                        {t("clearInputs")}
+                    </button>
+                )}
+            </div>
             <div className="flex flex-wrap items-center gap-1.5">
                 {/* Suggester pill */}
                 <PillPopover
@@ -775,12 +810,17 @@ const displayCard = (
 
 type TFn = (key: string, values?: Record<string, string>) => string;
 
+// Pill value-chip text ("...: nobody" / "...: unknown") is
+// intentionally shorter than the popover row label ("Nobody
+// refuted", "Unknown / unseen"). The pill's own label already
+// supplies the context ("Refuted by:", "Shown card:") so the chip
+// only needs the noun.
 const displayPlayerOpt = (
     value: Player | Nobody | null,
     t: TFn,
 ): string | undefined => {
     if (value === null) return undefined;
-    if (isNobody(value)) return t("popoverNobodyRefuted");
+    if (isNobody(value)) return t("pillValueNobody");
     return String(value);
 };
 
@@ -790,7 +830,7 @@ const displayCardOpt = (
     t: TFn,
 ): string | undefined => {
     if (value === null) return undefined;
-    if (isNobody(value)) return t("popoverNoShownCard");
+    if (isNobody(value)) return t("pillValueUnknown");
     return displayCard(value, setup);
 };
 
@@ -799,7 +839,7 @@ const displayPassers = (
     t: TFn,
 ): string | undefined => {
     if (value === null) return undefined;
-    if (isNobody(value)) return t("popoverNobodyPassed");
+    if (isNobody(value)) return t("pillValueNobody");
     if (value.length === 0) return undefined;
     return Array.from(new Set(value.map(String))).join(", ");
 };
@@ -841,22 +881,6 @@ function PillPopover({
     readonly onOpenChange: (open: boolean) => void;
     readonly children: React.ReactNode;
 }): React.ReactElement {
-    const closeTimer = useRef<number | undefined>(undefined);
-    const cancelClose = useCallback(() => {
-        if (closeTimer.current !== undefined) {
-            window.clearTimeout(closeTimer.current);
-            closeTimer.current = undefined;
-        }
-    }, []);
-    const scheduleClose = useCallback(() => {
-        cancelClose();
-        closeTimer.current = window.setTimeout(
-            () => onOpenChange(false),
-            150,
-        );
-    }, [cancelClose, onOpenChange]);
-    useEffect(() => () => cancelClose(), [cancelClose]);
-
     // Pill visual classes by status. Required vs. optional is
     // distinguished by the OUTLINE style (solid vs. dashed) — NOT by
     // the icon. Both empty-required and empty-optional pills show a
@@ -917,20 +941,9 @@ function PillPopover({
     }
 
     return (
-        <RadixPopover.Root
-            open={open}
-            onOpenChange={nextOpen => {
-                cancelClose();
-                onOpenChange(nextOpen);
-            }}
-        >
+        <RadixPopover.Root open={open} onOpenChange={onOpenChange}>
             <RadixPopover.Trigger
                 data-pill-id={pillId}
-                onPointerEnter={() => {
-                    cancelClose();
-                    onOpenChange(true);
-                }}
-                onPointerLeave={scheduleClose}
                 className="cursor-pointer rounded-full border-none bg-transparent p-0 hover:opacity-80"
             >
                 {pillBody}
@@ -940,24 +953,39 @@ function PillPopover({
                     data-suggestion-form-popover="true"
                     sideOffset={6}
                     collisionPadding={8}
-                    onPointerEnter={cancelClose}
-                    onPointerLeave={scheduleClose}
                     onOpenAutoFocus={e => {
                         // Let our own list focus its first option —
                         // Radix's default is "focus the content
                         // container" which traps arrow keys.
                         e.preventDefault();
                     }}
-                    onPointerDownOutside={e => e.preventDefault()}
-                    onFocusOutside={e => e.preventDefault()}
-                    onInteractOutside={e => e.preventDefault()}
-                    // We fully own close-on-outside via our hover
-                    // grace timer. Radix's own outside-interaction
-                    // detection would otherwise fire close events
-                    // mid-auto-advance (as the previous popover
-                    // unmounts, the next one interprets a stray
-                    // pointerdown/focus-move as "outside") and
-                    // cancel the sequence.
+                    onCloseAutoFocus={e => {
+                        // Prevent Radix from returning focus to the
+                        // trigger on close. That default steals
+                        // focus from the *next* popover's list
+                        // during auto-advance (the list's mount
+                        // effect focused it; Radix's focus-return
+                        // fires later and undoes that).
+                        e.preventDefault();
+                    }}
+                    onInteractOutside={e => {
+                        // Auto-advance triggers a stray "outside
+                        // interaction" on the newly-opened popover
+                        // (as the prior one unmounts). Swallow the
+                        // close only when the interaction's target
+                        // is another pill trigger or another of our
+                        // popovers — anything genuinely outside the
+                        // form still closes naturally via Radix.
+                        const target = e.target as Element | null;
+                        if (
+                            target !== null &&
+                            target.closest(
+                                "[data-pill-id],[data-suggestion-form-popover='true']",
+                            ) !== null
+                        ) {
+                            e.preventDefault();
+                        }
+                    }}
                     className="z-50 min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[13px] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
                 >
                     {children}
@@ -1121,11 +1149,18 @@ function SingleSelectList<T>({
  *
  *   Up / Down — move focus
  *   Space — toggle focused option
- *   Enter — commit current set and close (caller auto-advances)
- *   Esc — close without advancing (Radix handles via outside-click)
+ *   Enter — commit current set and advance to the next pill
+ *   Esc / click-outside — commit current set WITHOUT advancing
+ *
+ * Commit-on-close semantics: the popover accumulates toggles locally
+ * (unlike single-select which commits on the first click). Any way
+ * of closing the popover — Enter, Esc, outside click, clicking
+ * another pill — persists what was toggled so far. The difference
+ * between Enter and the other close paths is whether we advance to
+ * the next pill: Enter advances, the other paths just commit.
  *
  * A terminal "Nobody passed" radio-style row clears all toggles and
- * records the explicit NOBODY sentinel.
+ * records the explicit NOBODY sentinel immediately.
  */
 function MultiSelectList({
     options,
@@ -1140,7 +1175,10 @@ function MultiSelectList({
     readonly nobodyChosen: boolean;
     readonly nobodyLabel: string;
     readonly commitHint: string;
-    readonly onCommit: (value: ReadonlyArray<Player> | Nobody) => void;
+    readonly onCommit: (
+        value: ReadonlyArray<Player> | Nobody,
+        opts?: { advance: boolean },
+    ) => void;
 }): React.ReactElement {
     const [toggled, setToggled] = useState<ReadonlyArray<Player>>(selected);
     const [focusedIdx, setFocusedIdx] = useState(0);
@@ -1148,6 +1186,30 @@ function MultiSelectList({
     useEffect(() => {
         listRef.current?.focus();
     }, []);
+
+    // On unmount, persist the toggled set without advancing. Covers
+    // Esc, outside-click, and clicking another pill. `committedRef`
+    // is set by the Enter / Nobody commit paths to skip this cleanup
+    // so those don't double-commit.
+    const toggledRef = useRef<ReadonlyArray<Player>>(toggled);
+    toggledRef.current = toggled;
+    const committedRef = useRef(false);
+    // On unmount only — we deliberately capture the latest toggled
+    // set via `toggledRef`, so this effect doesn't need `onCommit`
+    // in its deps.
+    useEffect(
+        () => () => {
+            if (committedRef.current) return;
+            onCommit(toggledRef.current, { advance: false });
+        },
+        [onCommit],
+    );
+    const commitAdvance = (
+        value: ReadonlyArray<Player> | Nobody,
+    ): void => {
+        committedRef.current = true;
+        onCommit(value);
+    };
 
     const rowCount = options.length + 1; // + "nobody" row
     const isNobodyRow = (i: number) => i === options.length;
@@ -1184,9 +1246,9 @@ function MultiSelectList({
         if (e.key === " ") {
             e.preventDefault();
             if (isNobodyRow(focusedIdx)) {
-                // Commit NOBODY immediately — it's a mutually
-                // exclusive choice with any toggled players.
-                onCommit(NOBODY);
+                // Commit NOBODY immediately + advance — it's a
+                // mutually exclusive choice with any toggled players.
+                commitAdvance(NOBODY);
                 return;
             }
             const opt = options[focusedIdx];
@@ -1196,9 +1258,9 @@ function MultiSelectList({
         if (e.key === "Enter") {
             e.preventDefault();
             if (isNobodyRow(focusedIdx)) {
-                onCommit(NOBODY);
+                commitAdvance(NOBODY);
             } else {
-                onCommit(toggled);
+                commitAdvance(toggled);
             }
             return;
         }
@@ -1259,7 +1321,7 @@ function MultiSelectList({
                     onMouseEnter={() => setFocusedIdx(options.length)}
                     onMouseDown={e => {
                         e.preventDefault();
-                        onCommit(NOBODY);
+                        commitAdvance(NOBODY);
                     }}
                 >
                     {nobodyLabel}
@@ -1272,7 +1334,7 @@ function MultiSelectList({
                     className="cursor-pointer rounded border border-border bg-white px-2 py-0.5 text-[11px]"
                     onMouseDown={e => {
                         e.preventDefault();
-                        onCommit(toggled);
+                        commitAdvance(toggled);
                     }}
                 >
                     OK

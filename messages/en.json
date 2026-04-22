@@ -155,10 +155,13 @@
         "pillSeenDisabledHint": "Add a refuter first",
         "popoverNobodyPassed": "Nobody passed",
         "popoverNobodyRefuted": "Nobody refuted",
-        "popoverNoShownCard": "No card shown",
+        "popoverNoShownCard": "Unknown / unseen",
         "popoverCommitHint": "Space toggles · Enter confirms",
         "submit": "{platform, select, mac {Add (⌘↵)} other {Add (Ctrl+Enter)}}",
-        "keyboardHint": "{platform, select, mac {Hover a pill · ⌘↵ adds} other {Hover a pill · Ctrl+Enter adds}}"
+        "keyboardHint": "{platform, select, mac {Hover a pill · ⌘↵ adds} other {Hover a pill · Ctrl+Enter adds}}",
+        "clearInputs": "Clear inputs",
+        "pillValueNobody": "nobody",
+        "pillValueUnknown": "unknown"
     },
     "contradictions": {
         "full": "<strong>Contradiction:</strong> {reason}",
