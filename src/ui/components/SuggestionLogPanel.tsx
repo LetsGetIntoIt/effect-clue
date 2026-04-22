@@ -10,8 +10,10 @@ import { chainFor } from "../../logic/Provenance";
 import {
     consolidateRecommendations,
     describeRecommendation,
+    isAnySlot,
     recommendSuggestions,
 } from "../../logic/Recommender";
+import type { AnySlot } from "../../logic/Recommender";
 import {
     makeKnowledgeLayer,
     makeSetupLayer,
@@ -112,6 +114,40 @@ const refutationStatus = (
     if (hasRefuter) return "refuted";
     if (hasPassers) return "nobodyPassed";
     return "nobody";
+};
+
+/**
+ * Render a collapsed `AnySlot` (e.g. "any weapon owned by Green") into
+ * a localized phrase. Keyed off `AnySlot.kind` so adding a new variant
+ * is a compile error here — forcing us to supply a translation.
+ */
+const renderAnySlot = (
+    t: ReturnType<typeof useTranslations<"suggestions">>,
+    slot: AnySlot,
+    singular: string,
+): string => {
+    switch (slot.kind) {
+        case "any":
+            return t("anyCategory", { category: singular });
+        case "anyYouOwn":
+            return t("anyCategoryYouOwn", { category: singular });
+        case "anyYouDontOwn":
+            return t("anyCategoryYouDontOwn", { category: singular });
+        case "anyYouDontKnow":
+            return t("anyCategoryYouDontKnow", { category: singular });
+        case "anyNotInCaseFile":
+            return t("anyCategoryNotInCaseFile", { category: singular });
+        case "anyOwnedBy":
+            return t("anyCategoryOwnedBy", {
+                category: singular,
+                player: String(slot.player),
+            });
+        case "anyNotOwnedBy":
+            return t("anyCategoryNotOwnedBy", {
+                category: singular,
+                player: String(slot.player),
+            });
+    }
 };
 
 function Recommendations() {
@@ -227,7 +263,7 @@ function Recommendations() {
                         const desc = Effect.runSync(
                             describeRecommendation({
                                 cards: r.cards.flatMap(c =>
-                                    c === "any" ? [] : [c],
+                                    isAnySlot(c) ? [] : [c],
                                 ),
                                 cellInfoScore: r.cellInfoScore,
                                 caseFileOpennessScore: r.caseFileOpennessScore,
@@ -270,11 +306,13 @@ function Recommendations() {
                                         return (
                                             <span key={ci}>
                                                 {ci > 0 && " + "}
-                                                {c === "any" ? (
+                                                {isAnySlot(c) ? (
                                                     <em className="text-muted">
-                                                        {t("anyCategory", {
-                                                            category: categoryLabel,
-                                                        })}
+                                                        {renderAnySlot(
+                                                            t,
+                                                            c,
+                                                            categoryLabel,
+                                                        )}
                                                     </em>
                                                 ) : (
                                                     <strong>
