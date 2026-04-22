@@ -1,4 +1,12 @@
-import { cardName, categoryName, findCardEntry } from "./GameSetup";
+import {
+    allCardEntries,
+    cardName,
+    categoryName,
+    categoryOfCard,
+    findCardEntry,
+} from "./GameSetup";
+import type { Card } from "./GameObjects";
+import type { GameSetup } from "./GameSetup";
 import type { ClueAction, ClueState } from "./ClueState";
 
 /**
@@ -12,6 +20,24 @@ type HistoryTranslator = (
     key: string,
     values?: Record<string, string | number>,
 ) => string;
+
+const joinCardNames = (
+    setup: GameSetup,
+    cards: ReadonlyArray<Card>,
+): string => cards.map(id => cardName(setup, id)).join(" + ");
+
+// Mirror the reducer's "Player N" / "Category N" / "Card N" naming
+// scheme (see state.tsx) so the Undo tooltip can name the entity that
+// *will be* generated, before the action fires.
+const nextNumbered = (
+    prefix: string,
+    existing: ReadonlyArray<string>,
+): string => {
+    const taken = new Set(existing);
+    let n = 1;
+    while (taken.has(`${prefix} ${n}`)) n++;
+    return `${prefix} ${n}`;
+};
 
 /**
  * Convert a dispatched `ClueAction` into a single-sentence natural-
@@ -34,7 +60,12 @@ export const describeAction = (
         case "loadCardSet":
             return t("actions.loadCardSet", { name: action.label });
         case "addPlayer":
-            return t("actions.addPlayer");
+            return t("actions.addPlayer", {
+                player: nextNumbered(
+                    "Player",
+                    setup.players.map(p => String(p)),
+                ),
+            });
         case "removePlayer":
             return t("actions.removePlayer", { player: String(action.player) });
         case "renamePlayer":
@@ -43,23 +74,41 @@ export const describeAction = (
                 newName: String(action.newName),
             });
         case "addCategory":
-            return t("actions.addCategory");
+            return t("actions.addCategory", {
+                name: nextNumbered(
+                    "Category",
+                    setup.categories.map(c => c.name),
+                ),
+            });
         case "removeCategoryById":
             return t("actions.removeCategoryById", {
                 name: categoryName(setup, action.categoryId),
             });
         case "addCardToCategoryById":
             return t("actions.addCardToCategoryById", {
+                card: nextNumbered(
+                    "Card",
+                    allCardEntries(setup).map(c => c.name),
+                ),
                 category: categoryName(setup, action.categoryId),
             });
-        case "removeCardById":
+        case "removeCardById": {
+            const parent = categoryOfCard(setup, action.cardId);
             return t("actions.removeCardById", {
                 name: cardName(setup, action.cardId),
+                category: parent ? categoryName(setup, parent) : "",
             });
+        }
         case "renameCategory":
-            return t("actions.renameCategory", { name: action.name });
+            return t("actions.renameCategory", {
+                oldName: categoryName(setup, action.categoryId),
+                newName: action.name,
+            });
         case "renameCard":
-            return t("actions.renameCard", { name: action.name });
+            return t("actions.renameCard", {
+                oldName: cardName(setup, action.cardId),
+                newName: action.name,
+            });
         case "addKnownCard":
             return t("actions.addKnownCard", {
                 player: String(action.card.player),
@@ -67,8 +116,15 @@ export const describeAction = (
                     findCardEntry(setup, action.card.card)?.name ??
                     String(action.card.card),
             });
-        case "removeKnownCard":
-            return t("actions.removeKnownCard");
+        case "removeKnownCard": {
+            const entry = previousState.knownCards[action.index];
+            if (!entry) return t("actions.removeKnownCardUnknown");
+            return t("actions.removeKnownCard", {
+                player: String(entry.player),
+                card:
+                    findCardEntry(setup, entry.card)?.name ?? String(entry.card),
+            });
+        }
         case "setHandSize":
             return action.size === undefined
                 ? t("actions.setHandSizeCleared", {
@@ -81,11 +137,32 @@ export const describeAction = (
         case "addSuggestion":
             return t("actions.addSuggestion", {
                 player: String(action.suggestion.suggester),
+                cards: joinCardNames(setup, action.suggestion.cards),
             });
-        case "updateSuggestion":
-            return t("actions.updateSuggestion");
-        case "removeSuggestion":
-            return t("actions.removeSuggestion");
+        case "updateSuggestion": {
+            const idx = previousState.suggestions.findIndex(
+                s => s.id === action.suggestion.id,
+            );
+            if (idx < 0) return t("actions.updateSuggestionUnknown");
+            const prior = previousState.suggestions[idx]!;
+            return t("actions.updateSuggestion", {
+                number: idx + 1,
+                player: String(prior.suggester),
+                cards: joinCardNames(setup, prior.cards),
+            });
+        }
+        case "removeSuggestion": {
+            const idx = previousState.suggestions.findIndex(
+                s => s.id === action.id,
+            );
+            if (idx < 0) return t("actions.removeSuggestionUnknown");
+            const prior = previousState.suggestions[idx]!;
+            return t("actions.removeSuggestion", {
+                number: idx + 1,
+                player: String(prior.suggester),
+                cards: joinCardNames(setup, prior.cards),
+            });
+        }
         // Non-undoable actions — should never reach the describer
         // because the history reducer bypasses them.
         case "setSetup":
