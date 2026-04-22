@@ -7,6 +7,13 @@
         "setup": "Setup",
         "play": "Play"
     },
+    "bottomNav": {
+        "ariaLabel": "Primary navigation",
+        "checklist": "Checklist",
+        "suggest": "Suggest",
+        "more": "More",
+        "gameSetup": "Game setup"
+    },
     "toolbar": {
         "undo": "↶ Undo",
         "undoAria": "Undo",

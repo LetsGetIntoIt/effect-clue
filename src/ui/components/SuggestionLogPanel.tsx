@@ -323,7 +323,7 @@ function PriorSuggestions() {
                     {t("priorEmpty")}
                 </div>
             ) : (
-                <ol className="m-0 flex max-h-[300px] list-none flex-col gap-2 overflow-y-auto p-0">
+                <ol className="m-0 flex list-none flex-col gap-2 p-0">
                     {suggestions.map((s, idx) => (
                         <PriorSuggestionItem
                             key={s.id}

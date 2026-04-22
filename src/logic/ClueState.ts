@@ -30,7 +30,7 @@ export interface DraftSuggestion {
  * Lives in ClueState (not component-local useState) so the shared-URL
  * encoder and localStorage persistence can round-trip it.
  */
-export type UiMode = "setup" | "play";
+export type UiMode = "setup" | "checklist" | "suggest";
 
 /**
  * Everything dispatch-able from the UI. One concrete action per
