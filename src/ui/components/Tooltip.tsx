@@ -25,15 +25,25 @@ export function Tooltip({
     children,
     side = "top",
     delayMs = 150,
+    variant = "default",
 }: {
     content: ReactNode;
     children: ReactNode;
     side?: "top" | "right" | "bottom" | "left";
     delayMs?: number;
+    variant?: "default" | "accent";
 }) {
     if (content === undefined || content === null || content === "") {
         return <>{children}</>;
     }
+    const toneClasses =
+        variant === "accent"
+            ? "border-accent bg-accent text-white"
+            : "border-border bg-panel text-[#2a1f12]";
+    const arrowClasses =
+        variant === "accent"
+            ? "fill-accent stroke-accent"
+            : "fill-panel stroke-border";
     return (
         <RadixTooltip.Root delayDuration={delayMs}>
             <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
@@ -42,11 +52,14 @@ export function Tooltip({
                     side={side}
                     sideOffset={6}
                     collisionPadding={8}
-                    className="z-50 max-w-[320px] rounded-[var(--radius)] border border-border bg-panel px-3 py-2 text-[12px] leading-snug text-[#2a1f12] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
+                    className={
+                        "z-50 max-w-[320px] rounded-[var(--radius)] border px-3 py-2 text-[12px] leading-snug shadow-[0_6px_16px_rgba(0,0,0,0.18)] " +
+                        toneClasses
+                    }
                 >
                     {content}
                     <RadixTooltip.Arrow
-                        className="fill-panel stroke-border"
+                        className={arrowClasses}
                         strokeWidth={0.5}
                     />
                 </RadixTooltip.Content>
