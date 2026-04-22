@@ -19,8 +19,8 @@ const B = Player("Bob");
 const C = Player("Cho");
 
 const suspectsCategory = expectDefined(
-    setup.categories.find(c => c.name === "Suspects"),
-    "Suspects category",
+    setup.categories.find(c => c.name === "Suspect"),
+    "Suspect category",
 );
 
 describe("recommendSuggestions", () => {

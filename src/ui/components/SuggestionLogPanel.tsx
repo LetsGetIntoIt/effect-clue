@@ -266,22 +266,14 @@ function Recommendations() {
                                         const rawName =
                                             setup.categories[ci]?.name ??
                                             t("defaultCategorySingular");
-                                        // Category names are typically plural
-                                        // ("Weapons", "Rooms"); strip a trailing
-                                        // "s" so the collapsed label reads as
-                                        // "any weapon / room" rather than
-                                        // "any weapons / rooms".
-                                        const singular = rawName.replace(
-                                            /s$/,
-                                            "",
-                                        ).toLowerCase();
+                                        const categoryLabel = rawName.toLowerCase();
                                         return (
                                             <span key={ci}>
                                                 {ci > 0 && " + "}
                                                 {c === "any" ? (
                                                     <em className="text-muted">
                                                         {t("anyCategory", {
-                                                            category: singular,
+                                                            category: categoryLabel,
                                                         })}
                                                     </em>
                                                 ) : (
