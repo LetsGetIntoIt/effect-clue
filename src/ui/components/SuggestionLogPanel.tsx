@@ -1,6 +1,7 @@
 "use client";
 
 import { Effect, Layer, Result } from "effect";
+import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
@@ -44,9 +45,19 @@ import {
     DraftSuggestion,
     useClue,
 } from "../state";
+import {
+    T_FAST,
+    T_SPRING_SOFT,
+    T_STANDARD,
+    useReducedTransition,
+} from "../motion";
 import { label, matches } from "../keyMap";
 
 const SECTION_TITLE = "mt-0 mb-2 text-[14px] font-semibold";
+// Non user-facing glyph rendered as the rotating caret on
+// the Recommendations expand/collapse header.
+const CARET_GLYPH = "\u25B8";
+const HEIGHT_AUTO = "auto";
 // Kept for the recommendations chooser below — the suggestion form
 // no longer uses these classes (it renders pills, not <select>s).
 const SELECT_CLASS =
@@ -163,7 +174,6 @@ function RecommendationInfoIcon({ content }: { readonly content: React.ReactNode
 
 function Recommendations() {
     const t = useTranslations("suggestions");
-    const tRecs = useTranslations("recommendations");
     const { state, derived } = useClue();
     const setup = state.setup;
     const result = derived.deductionResult;
@@ -187,6 +197,8 @@ function Recommendations() {
     // headings render identically. The button owns aria-expanded and
     // the click behaviour; the caret is trailing so every header in
     // this pane starts at the same x.
+    const caretTransition = useReducedTransition(T_STANDARD);
+    const bodyTransition = useReducedTransition(T_STANDARD);
     const header = (
         <h3 className={SECTION_TITLE}>
             <button
@@ -196,45 +208,82 @@ function Recommendations() {
                 className="flex w-full cursor-pointer items-center gap-1.5 border-none bg-transparent p-0 text-left font-[inherit] text-[inherit] hover:text-accent"
             >
                 <span>{t("recommendationsTitle")}</span>
-                <span
+                <motion.span
                     aria-hidden
+                    animate={{ rotate: expanded ? 90 : 0 }}
+                    transition={caretTransition}
                     className="inline-block text-[16px] leading-none text-muted"
                 >
-                    {/* eslint-disable-next-line i18next/no-literal-string */}
-                    {expanded ? "▾" : "▸"}
-                </span>
+                    {CARET_GLYPH}
+                </motion.span>
             </button>
         </h3>
     );
 
-    if (!expanded) {
-        return <div>{header}</div>;
-    }
+    return (
+        <div>
+            {header}
+            <AnimatePresence initial={false}>
+                {expanded && (
+                    <motion.div
+                        key="recommendations-body"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: HEIGHT_AUTO, opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={bodyTransition}
+                        style={{ overflow: "hidden" }}
+                    >
+                        <RecommendationsBody
+                            setup={setup}
+                            result={result}
+                            asPlayer={asPlayer}
+                            setAsPlayer={setAsPlayer}
+                        />
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}
+
+function RecommendationsBody({
+    setup,
+    result,
+    asPlayer,
+    setAsPlayer,
+}: {
+    readonly setup: ReturnType<typeof useClue>["state"]["setup"];
+    readonly result: ReturnType<typeof useClue>["derived"]["deductionResult"];
+    readonly asPlayer: string;
+    readonly setAsPlayer: (v: string) => void;
+}) {
+    const t = useTranslations("suggestions");
+    const tRecs = useTranslations("recommendations");
 
     const knowledge = Result.getOrUndefined(result);
-    if (knowledge === undefined || !asPlayer) {
-        return (
-            <div>
-                {header}
-                <div className="mt-2 text-[13px] text-muted">
-                    {knowledge === undefined
-                        ? t("resolveContradictionFirst")
-                        : t("addPlayersFirst")}
-                </div>
-            </div>
-        );
-    }
 
     // Shared service layer for the three recommender Effect.gen
     // paths below — built once per render, reused across all calls.
     const recommendLayer = useMemo(
         () =>
-            Layer.mergeAll(
-                makeSetupLayer(setup),
-                makeKnowledgeLayer(knowledge),
-            ),
+            knowledge === undefined
+                ? null
+                : Layer.mergeAll(
+                      makeSetupLayer(setup),
+                      makeKnowledgeLayer(knowledge),
+                  ),
         [setup, knowledge],
     );
+
+    if (knowledge === undefined || !asPlayer || recommendLayer === null) {
+        return (
+            <div className="mt-2 text-[13px] text-muted">
+                {knowledge === undefined
+                    ? t("resolveContradictionFirst")
+                    : t("addPlayersFirst")}
+            </div>
+        );
+    }
 
     const rec = Effect.runSync(
         recommendSuggestions(Player(asPlayer), 50).pipe(
@@ -248,8 +297,7 @@ function Recommendations() {
     ).slice(0, 5);
 
     return (
-        <div>
-            {header}
+        <>
             <label className={`${LABEL_ROW} mt-2`}>
                 {t("suggestingAs")}
                 <select
@@ -357,7 +405,7 @@ function Recommendations() {
                     })}
                 </ol>
             )}
-        </div>
+        </>
     );
 }
 
@@ -387,13 +435,19 @@ function PriorSuggestions() {
                         {t("priorKeyboardHint")}
                     </div>
                     <ol className="m-0 flex list-none flex-col gap-2 p-0">
-                        {suggestions.map((s, idx) => (
-                            <PriorSuggestionItem
-                                key={s.id}
-                                suggestion={s}
-                                idx={idx}
-                            />
-                        ))}
+                        <AnimatePresence initial={false}>
+                            {suggestions
+                                .map((s, idx) => ({ s, idx }))
+                                .slice()
+                                .reverse()
+                                .map(({ s, idx }) => (
+                                    <PriorSuggestionItem
+                                        key={s.id}
+                                        suggestion={s}
+                                        idx={idx}
+                                    />
+                                ))}
+                        </AnimatePresence>
                     </ol>
                 </>
             )}
@@ -618,14 +672,29 @@ function PriorSuggestionItem({
     const passersValue =
         s.nonRefuters.length === 0 ? null : s.nonRefuters;
 
+    const rowTransition = useReducedTransition(T_SPRING_SOFT);
+    const pillStaggerTransition = useReducedTransition(T_FAST);
+
     return (
-        <li
+        <motion.li
+            layout
+            // Larger initial y offset so a newly-added suggestion
+            // visually "drops in" from the Add-a-suggestion form
+            // area above. Existing siblings have `layout` too, so
+            // they slide down to make room. The scale+opacity
+            // softens the drop so it reads as a card settling into
+            // place, not a hard teleport.
+            initial={{ y: -80, opacity: 0, scale: 0.95 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, height: 0, paddingTop: 0, paddingBottom: 0, marginTop: 0, marginBottom: 0 }}
+            transition={rowTransition}
             tabIndex={0}
             role="button"
             aria-pressed={isSelected}
+            data-animated-focus
             data-suggestion-row={idx}
             className={
-                "relative flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2 text-[13px] transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 " +
+                "relative flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2 text-[13px] transition-colors cursor-pointer focus:outline-none overflow-hidden " +
                 (isHighlighted
                     ? "border-accent bg-accent text-white"
                     : "border-border")
@@ -712,7 +781,13 @@ function PriorSuggestionItem({
                 }}
             >
                 {isInPillMode ? (
-                    <div className="flex flex-wrap items-center gap-1.5">
+                    <motion.div
+                        key="pill-mode"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={pillStaggerTransition}
+                        className="flex flex-wrap items-center gap-1.5"
+                    >
                         <PillPopover
                             pillId={`suggester-${s.id}`}
                             label={t("pillSuggester")}
@@ -856,7 +931,7 @@ function PriorSuggestionItem({
                                 nobodyValue={NOBODY}
                             />
                         </PillPopover>
-                    </div>
+                    </motion.div>
                 ) : (
                     <>
                         <div>
@@ -910,6 +985,6 @@ function PriorSuggestionItem({
             >
                 ×
             </button>
-        </li>
+        </motion.li>
     );
 }

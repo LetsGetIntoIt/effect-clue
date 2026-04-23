@@ -1,7 +1,9 @@
 "use client";
 
 import * as RadixPopover from "@radix-ui/react-popover";
+import { motion } from "motion/react";
 import { useState } from "react";
+import { T_FAST, useReducedTransition } from "../motion";
 
 interface OverflowMenuItem {
     readonly label: string;
@@ -29,6 +31,7 @@ export function OverflowMenu({
     readonly items: ReadonlyArray<OverflowMenuItem>;
 }) {
     const [open, setOpen] = useState(false);
+    const itemTransition = useReducedTransition(T_FAST);
     const closeThen = (fn: () => void | Promise<void>) => () => {
         setOpen(false);
         void fn();
@@ -52,19 +55,27 @@ export function OverflowMenu({
                 >
                     {items.map((item, i) => {
                         const handleClick = closeThen(item.onClick);
-                        return item.active === undefined ? (
+                        const content = item.active === undefined ? (
                             <MenuItem
-                                key={i}
                                 label={item.label}
                                 onClick={handleClick}
                             />
                         ) : (
                             <MenuItem
-                                key={i}
                                 label={item.label}
                                 active={item.active}
                                 onClick={handleClick}
                             />
+                        );
+                        return (
+                            <motion.div
+                                key={i}
+                                initial={{ opacity: 0, y: -4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ ...itemTransition, delay: i * 0.03 }}
+                            >
+                                {content}
+                            </motion.div>
                         );
                     })}
                 </RadixPopover.Content>
