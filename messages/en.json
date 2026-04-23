@@ -10,10 +10,6 @@
         "info": "More info",
         "infoGlyph": "ⓘ"
     },
-    "tabs": {
-        "setup": "Setup ({shortcut})",
-        "play": "Play ({shortcut})"
-    },
     "bottomNav": {
         "ariaLabel": "Primary navigation",
         "checklist": "Checklist ({shortcut})",

@@ -6,6 +6,7 @@ import { describeAction } from "../../logic/describeAction";
 import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 import { label } from "../keyMap";
+import { OverflowMenu } from "./OverflowMenu";
 import { Tooltip } from "./Tooltip";
 
 const buttonClass =
@@ -52,14 +53,25 @@ export function useToolbarActions() {
 }
 
 /**
- * Top-of-page controls (desktop only): undo/redo, start a fresh game,
- * and copy a shareable URL encoding the current state. Mobile uses
- * `BottomNav` instead.
+ * Top-of-page controls (desktop only): undo/redo as top-level buttons,
+ * plus a ⋯ overflow menu that hosts Game setup, Share link, and New
+ * game. Mirrors the mobile `BottomNav` overflow so both breakpoints
+ * share the same menu structure.
  */
 export function Toolbar() {
     const t = useTranslations("toolbar");
+    const tNav = useTranslations("bottomNav");
     const tHistory = useTranslations("history");
-    const { canUndo, canRedo, undo, redo, nextUndo, nextRedo } = useClue();
+    const {
+        state,
+        dispatch,
+        canUndo,
+        canRedo,
+        undo,
+        redo,
+        nextUndo,
+        nextRedo,
+    } = useClue();
     const { onShare, onNewGame, copied } = useToolbarActions();
 
     const undoTooltip = nextUndo
@@ -107,12 +119,32 @@ export function Toolbar() {
                     {t("redo", { shortcut: label("global.redo") })}
                 </button>
             </Tooltip>
-            <button type="button" className={buttonClass} onClick={onShare}>
-                {copied ? t("shareCopied") : t("share")}
-            </button>
-            <button type="button" className={buttonClass} onClick={onNewGame}>
-                {t("newGame", { shortcut: label("global.newGame") })}
-            </button>
+            <OverflowMenu
+                triggerClassName={buttonClass}
+                triggerLabel={tNav("more")}
+                side="bottom"
+                align="end"
+                items={[
+                    {
+                        label: tNav("gameSetup", {
+                            shortcut: label("global.gotoSetup"),
+                        }),
+                        active: state.uiMode === "setup",
+                        onClick: () =>
+                            dispatch({ type: "setUiMode", mode: "setup" }),
+                    },
+                    {
+                        label: copied ? t("shareCopied") : t("share"),
+                        onClick: onShare,
+                    },
+                    {
+                        label: t("newGame", {
+                            shortcut: label("global.newGame"),
+                        }),
+                        onClick: onNewGame,
+                    },
+                ]}
+            />
         </div>
     );
 }
