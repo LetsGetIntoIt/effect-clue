@@ -23,7 +23,17 @@ import { useConfirm } from "../hooks/useConfirm";
 import { useListFormatter } from "../hooks/useListFormatter";
 import { useSelection } from "../SelectionContext";
 import { InfoPopover } from "./InfoPopover";
-import { SuggestionForm } from "./SuggestionForm";
+import {
+    SuggestionForm,
+    type FormState,
+    type PillErrorCode,
+    type PillId,
+    PILL_PASSERS,
+    PILL_REFUTER,
+    PILL_SEEN,
+    PILL_SUGGESTER,
+    validateFormConsistency,
+} from "./SuggestionForm";
 import {
     displayCard,
     displayCardOpt,
@@ -665,6 +675,48 @@ function PriorSuggestionItem({
     // the Add form uses: can't pick a shown card if nobody refuted).
     const seenDisabled = s.refuter === undefined;
 
+    // Internal-consistency validation: unlike the Add form (where
+    // option-builders prevent most paradoxes at input time and pill
+    // ordering gates PILL_SEEN behind the refuter), the inline edit
+    // lets the user change fields in any order. A later edit can
+    // strand an earlier choice — most commonly a `seenCard` whose
+    // category card was subsequently swapped. Surface that as a
+    // pill-level error instead of silently keeping the stale value.
+    const formLike: FormState = useMemo(
+        () => ({
+            id: String(s.id),
+            suggester: s.suggester,
+            cards: s.cards,
+            nonRefuters:
+                s.nonRefuters.length > 0 ? s.nonRefuters : null,
+            refuter: s.refuter ?? null,
+            seenCard: s.seenCard ?? null,
+        }),
+        [s],
+    );
+    const errors = useMemo(
+        () => validateFormConsistency(formLike),
+        [formLike],
+    );
+    const errorMessageFor = (code: PillErrorCode): string => {
+        switch (code) {
+            case "seenCardNotSuggested":
+                return t("pillErrorSeenCardNotSuggested");
+            case "seenCardWithoutRefuter":
+                return t("pillErrorSeenCardWithoutRefuter");
+            case "suggesterIsRefuter":
+                return t("pillErrorSuggesterIsRefuter");
+            case "suggesterInPassers":
+                return t("pillErrorSuggesterInPassers");
+            case "refuterInPassers":
+                return t("pillErrorRefuterInPassers");
+        }
+    };
+    const errorReasonFor = (id: PillId): string | undefined => {
+        const code = errors.get(id);
+        return code === undefined ? undefined : errorMessageFor(code);
+    };
+
     // Passed-by value: map from DraftSuggestion's always-array shape
     // to the pill-status-friendly null-when-empty shape. The underlying
     // data can't distinguish "explicit nobody" from "not decided" —
@@ -793,6 +845,7 @@ function PriorSuggestionItem({
                             label={t("pillSuggester")}
                             status={pillStatusForPlayer(s.suggester, false)}
                             valueDisplay={displayPlayer(s.suggester)}
+                            errorReason={errorReasonFor(PILL_SUGGESTER)}
                             variant={pillVariant}
                             open={openPillId === `suggester-${s.id}`}
                             onOpenChange={onOpenChangeFor(`suggester-${s.id}`)}
@@ -820,6 +873,9 @@ function PriorSuggestionItem({
                                     label={cat.name}
                                     status={pillStatusForCard(cardId, false)}
                                     valueDisplay={displayCard(cardId, setup)}
+                                    errorReason={errorReasonFor(
+                                        `card-${i}` as PillId,
+                                    )}
                                     variant={pillVariant}
                                     open={openPillId === pid}
                                     onOpenChange={onOpenChangeFor(pid)}
@@ -850,6 +906,7 @@ function PriorSuggestionItem({
                             label={t("pillPassers")}
                             status={pillStatusForPassers(passersValue)}
                             valueDisplay={displayPassers(passersValue, t)}
+                            errorReason={errorReasonFor(PILL_PASSERS)}
                             variant={pillVariant}
                             open={openPillId === `passers-${s.id}`}
                             onOpenChange={onOpenChangeFor(`passers-${s.id}`)}
@@ -878,6 +935,7 @@ function PriorSuggestionItem({
                                 s.refuter ?? null,
                                 t,
                             )}
+                            errorReason={errorReasonFor(PILL_REFUTER)}
                             variant={pillVariant}
                             open={openPillId === `refuter-${s.id}`}
                             onOpenChange={onOpenChangeFor(`refuter-${s.id}`)}
@@ -911,6 +969,7 @@ function PriorSuggestionItem({
                             )}
                             disabled={seenDisabled}
                             disabledHint={t("pillSeenDisabledHint")}
+                            errorReason={errorReasonFor(PILL_SEEN)}
                             variant={pillVariant}
                             open={openPillId === `seenCard-${s.id}`}
                             onOpenChange={onOpenChangeFor(

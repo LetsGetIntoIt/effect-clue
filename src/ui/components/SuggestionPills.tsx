@@ -14,7 +14,6 @@ import type { GameSetup } from "../../logic/GameSetup";
 import { T_FAST, T_SPRING_SOFT, useReducedTransition } from "../motion";
 
 const MOTION_POP_LAYOUT: "popLayout" = "popLayout";
-import { Tooltip } from "./Tooltip";
 import { matches } from "../keyMap";
 
 /**
@@ -178,6 +177,7 @@ export function PillPopover({
     valueDisplay,
     disabled,
     disabledHint,
+    errorReason,
     open,
     onOpenChange,
     variant = "default",
@@ -188,8 +188,9 @@ export function PillPopover({
     readonly label: string;
     readonly status: PillStatus;
     readonly valueDisplay: string | undefined;
-    readonly disabled?: boolean;
-    readonly disabledHint?: string;
+    readonly disabled?: boolean | undefined;
+    readonly disabledHint?: string | undefined;
+    readonly errorReason?: string | undefined;
     readonly open: boolean;
     readonly onOpenChange: (open: boolean) => void;
     readonly variant?: "default" | "onAccent";
@@ -201,33 +202,40 @@ export function PillPopover({
     // the icon. Both empty-required and empty-optional pills show a
     // `+` glyph to invite the user to fill them in. A disabled
     // optional pill (e.g. Shown card without a refuter) fades and
-    // swaps to `–` to signal it's currently unavailable.
+    // swaps to `–` to signal it's currently unavailable. An error
+    // pill (internal inconsistency) shows a `!` in a danger tone —
+    // the user can still open the popover to correct the value.
     //
     // Matrix (default variant):
-    //   status            | outline       | icon
-    //   ------------------+---------------+-----
-    //   done              | solid accent  | ✓
-    //   pendingRequired   | solid border  | +
-    //   pendingOptional   | dashed border | +      (disabled → "–")
-    //   error (reserved)  | danger        | !
-    const tone =
-        variant === "onAccent"
+    //   state              | outline       | icon
+    //   -------------------+---------------+-----
+    //   error              | danger        | !
+    //   done               | solid accent  | ✓
+    //   pendingRequired    | solid border  | +
+    //   pendingOptional    | dashed border | +      (disabled → "–")
+    const hasError = errorReason !== undefined && !disabled;
+    const tone = hasError
+        ? variant === "onAccent"
+            ? "bg-danger-bg text-danger border-danger"
+            : "bg-danger-bg text-danger border-danger-border"
+        : variant === "onAccent"
             ? status === STATUS_DONE
                 ? "bg-panel text-accent border-panel"
                 : status === STATUS_PENDING_REQ
                   ? "bg-transparent text-white/80 border-white/60"
                   : disabled
-                    ? "bg-transparent text-white/40 border-dashed border-white/40 cursor-not-allowed"
+                    ? "bg-transparent text-white/40 border-dashed border-white/40"
                     : "bg-transparent text-white/80 border-dashed border-white/70"
             : status === STATUS_DONE
               ? "bg-accent text-white border-accent"
               : status === STATUS_PENDING_REQ
                 ? "bg-transparent text-muted border-border"
                 : disabled
-                  ? "bg-transparent text-muted/60 border-dashed border-border/50 cursor-not-allowed"
+                  ? "bg-transparent text-muted/60 border-dashed border-border/50"
                   : "bg-transparent text-muted border-dashed border-border";
-    const iconGlyph =
-        status === STATUS_DONE
+    const iconGlyph = hasError
+        ? "!"
+        : status === STATUS_DONE
             ? "✓"
             : status === STATUS_PENDING_OPT && disabled
               ? "–"
@@ -289,24 +297,24 @@ export function PillPopover({
         </motion.span>
     );
 
-    if (disabled) {
-        // Disabled: don't mount the popover at all. Render the pill
-        // as a span so hover can still surface the disabledHint
-        // tooltip via the project Tooltip wrapper.
-        return (
-            <Tooltip content={disabledHint}>
-                <span className="cursor-not-allowed">{pillBody}</span>
-            </Tooltip>
-        );
-    }
+    // Describe the pill to assistive tech via a stable id we can
+    // point aria-describedby at (the popover body mounts into a
+    // portal so a relative id would break).
+    const messageId = `pill-msg-${pillId}`;
 
     return (
         <RadixPopover.Root open={open} onOpenChange={onOpenChange}>
             <RadixPopover.Trigger
                 data-pill-id={pillId}
                 data-animated-focus
+                aria-disabled={disabled ? true : undefined}
+                aria-invalid={hasError ? true : undefined}
+                aria-describedby={
+                    open && (disabled || hasError) ? messageId : undefined
+                }
                 className={
-                    "cursor-pointer rounded-full border-none bg-transparent p-0 " +
+                    (disabled ? "cursor-not-allowed " : "cursor-pointer ") +
+                    "rounded-full border-none bg-transparent p-0 " +
                     "hover:opacity-80 " +
                     "focus:outline-none " +
                     // While the dropdown is open, real focus is inside
@@ -325,10 +333,13 @@ export function PillPopover({
                     sideOffset={6}
                     collisionPadding={8}
                     onOpenAutoFocus={e => {
-                        // Let our own list focus its first option —
-                        // Radix's default is "focus the content
-                        // container" which traps arrow keys.
-                        e.preventDefault();
+                        // When a list is mounted, let our own list focus
+                        // its first option — Radix's default is "focus
+                        // the content container" which traps arrow
+                        // keys. For disabled pills there is no list,
+                        // so let Radix focus the content so screen
+                        // readers announce the hint.
+                        if (!disabled) e.preventDefault();
                     }}
                     onCloseAutoFocus={e => {
                         // During auto-advance, the next popover's
@@ -372,7 +383,28 @@ export function PillPopover({
                     }}
                     className="z-50 min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[13px] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
                 >
-                    {children}
+                    {disabled ? (
+                        <div
+                            id={messageId}
+                            role="note"
+                            className="max-w-[240px] px-3 py-2 text-[12px] text-muted"
+                        >
+                            {disabledHint}
+                        </div>
+                    ) : (
+                        <>
+                            {hasError && (
+                                <div
+                                    id={messageId}
+                                    role="alert"
+                                    className="mx-1 mt-1 mb-1 rounded-[var(--radius)] border border-danger-border bg-danger-bg px-2 py-1 text-[12px] text-danger"
+                                >
+                                    {errorReason}
+                                </div>
+                            )}
+                            {children}
+                        </>
+                    )}
                 </RadixPopover.Content>
             </RadixPopover.Portal>
         </RadixPopover.Root>

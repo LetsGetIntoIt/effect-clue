@@ -2,7 +2,16 @@ import { Player } from "../../logic/GameObjects";
 import { cardByName } from "../../logic/test-utils/CardByName";
 import { CLASSIC_SETUP_3P } from "../../logic/GameSetup";
 import { SuggestionId } from "../../logic/Suggestion";
-import { buildDraftFromForm, type FormState } from "./SuggestionForm";
+import {
+    buildDraftFromForm,
+    isPillDisabledFor,
+    PILL_REFUTER,
+    PILL_SEEN,
+    PILL_SUGGESTER,
+    validateFormConsistency,
+    type FormState,
+    type PillId,
+} from "./SuggestionForm";
 
 // Shadow of NOBODY for tests — the sentinel isn't exported so tests
 // can't import it, but the form-state shape uses it. We re-derive a
@@ -95,5 +104,112 @@ describe("buildDraftFromForm", () => {
         };
         const draft = buildDraftFromForm(form);
         expect(String(draft!.id)).toBe("stable-id");
+    });
+});
+
+describe("isPillDisabledFor", () => {
+    const nonSeenPills: ReadonlyArray<PillId> = [
+        PILL_SUGGESTER,
+        PILL_REFUTER,
+    ];
+
+    test("PILL_SEEN disabled when refuter is null", () => {
+        const form = { ...baseFormState(), refuter: null };
+        expect(isPillDisabledFor(form, PILL_SEEN)).toBe(true);
+    });
+
+    test("PILL_SEEN enabled when refuter is a resolved player", () => {
+        const form = { ...baseFormState(), refuter: B };
+        expect(isPillDisabledFor(form, PILL_SEEN)).toBe(false);
+    });
+
+    test("non-seen pills are never disabled by this helper", () => {
+        const form = baseFormState();
+        for (const id of nonSeenPills) {
+            expect(isPillDisabledFor(form, id)).toBe(false);
+        }
+    });
+});
+
+describe("validateFormConsistency", () => {
+    test("clean form has no errors", () => {
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: B,
+            seenCard: KNIFE,
+        };
+        expect(validateFormConsistency(form).size).toBe(0);
+    });
+
+    test("seenCard not in suggested cards -> error on PILL_SEEN", () => {
+        // Stale seenCard: user swapped the weapon after picking a
+        // shown card.
+        const ROPE = cardByName(CLASSIC_SETUP_3P, "Rope");
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, ROPE, KITCHEN],
+            refuter: B,
+            seenCard: KNIFE,
+        };
+        const errors = validateFormConsistency(form);
+        expect(errors.get(PILL_SEEN)).toBe("seenCardNotSuggested");
+    });
+
+    test("seenCard set without a refuter -> error on PILL_SEEN", () => {
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: null,
+            seenCard: KNIFE,
+        };
+        const errors = validateFormConsistency(form);
+        expect(errors.get(PILL_SEEN)).toBe("seenCardWithoutRefuter");
+    });
+
+    test("suggester === refuter -> error on PILL_REFUTER", () => {
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: A,
+        };
+        const errors = validateFormConsistency(form);
+        expect(errors.get(PILL_REFUTER)).toBe("suggesterIsRefuter");
+    });
+
+    test("suggester ∈ passers -> error on PILL_SUGGESTER", () => {
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [A, C],
+        };
+        const errors = validateFormConsistency(form);
+        expect(errors.get(PILL_SUGGESTER)).toBe("suggesterInPassers");
+    });
+
+    test("refuter ∈ passers -> error on PILL_REFUTER", () => {
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [B],
+            refuter: B,
+        };
+        const errors = validateFormConsistency(form);
+        expect(errors.get(PILL_REFUTER)).toBe("refuterInPassers");
+    });
+
+    test("seenCard omitted -> no error even with a broken cards list", () => {
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, null, KITCHEN],
+        };
+        expect(validateFormConsistency(form).size).toBe(0);
     });
 });

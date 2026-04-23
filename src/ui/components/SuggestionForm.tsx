@@ -15,6 +15,7 @@ import type { Card, Player } from "../../logic/GameObjects";
 import { newSuggestionId } from "../../logic/Suggestion";
 import { registerSuggestionFormFocusHandler } from "../suggestionFormFocus";
 import { label, matches } from "../keyMap";
+import { Tooltip } from "./Tooltip";
 import {
     displayCard,
     displayCardOpt,
@@ -114,15 +115,8 @@ export function SuggestionForm({
     );
 
     const isPillDisabled = useCallback(
-        (id: PillId): boolean => {
-            if (id === PILL_SEEN) {
-                // Shown-card requires a resolved refuter. "Nobody
-                // refuted" or unresolved refuter both disable it.
-                return form.refuter === null || isNobody(form.refuter);
-            }
-            return false;
-        },
-        [form.refuter],
+        (id: PillId): boolean => isPillDisabledFor(form, id),
+        [form],
     );
 
     // --- Popover open-state --------------------------------------------
@@ -142,13 +136,23 @@ export function SuggestionForm({
         }
     }, [openPillId]);
 
-    const openNextPillAfter = useCallback(
-        (current: PillId) => {
+    /**
+     * Commit a new form AND move focus to the next enabled pill.
+     * Both state updates are computed synchronously off the same
+     * `next` snapshot so advance sees the post-commit `refuter`
+     * (key for re-enabling PILL_SEEN) without waiting for a
+     * re-render.
+     */
+    const commitAndAdvance = useCallback(
+        (next: FormState, from: PillId) => {
+            setForm(next);
             setOpenPillId(
-                nextEnabledPill(pillSequence, current, isPillDisabled),
+                nextEnabledPill(pillSequence, from, id =>
+                    isPillDisabledFor(next, id),
+                ),
             );
         },
-        [pillSequence, isPillDisabled],
+        [pillSequence],
     );
 
     /**
@@ -174,9 +178,9 @@ export function SuggestionForm({
     // --- Commit helpers ------------------------------------------------
     //
     // Each pill's popover commits a value through one of these. The
-    // shape is uniform: update state, then advance. Passers commit
-    // differently (Enter confirms the multi-select) — see
-    // MultiSelectList below.
+    // shape is uniform: compute `next`, then hand off to
+    // `commitAndAdvance`. Passers commit differently (Enter confirms
+    // the multi-select) — see MultiSelectList below.
     // Required pill callbacks widen to accept `Nobody` because the
     // SingleSelectList generic can't statically know that required
     // pills omit the Nobody row. At runtime we never call them with
@@ -186,67 +190,133 @@ export function SuggestionForm({
     const commitSuggester = useCallback(
         (value: Player | Nobody) => {
             if (isNobody(value)) return;
-            setForm(s => ({ ...s, suggester: value }));
-            openNextPillAfter(PILL_SUGGESTER);
+            commitAndAdvance(
+                { ...form, suggester: value },
+                PILL_SUGGESTER,
+            );
         },
-        [openNextPillAfter],
+        [form, commitAndAdvance],
     );
     const commitCard = useCallback(
         (index: number, value: Card | Nobody) => {
             if (isNobody(value)) return;
-            setForm(s => {
-                const next = s.cards.slice();
-                next[index] = value;
-                return { ...s, cards: next };
-            });
-            openNextPillAfter(`card-${index}` as PillId);
+            const nextCards = form.cards.slice();
+            nextCards[index] = value;
+            commitAndAdvance(
+                { ...form, cards: nextCards },
+                `card-${index}` as PillId,
+            );
         },
-        [openNextPillAfter],
+        [form, commitAndAdvance],
     );
     const commitPassers = useCallback(
         (
             value: ReadonlyArray<Player> | Nobody,
             opts: { advance: boolean } = { advance: true },
         ) => {
-            setForm(s => ({ ...s, nonRefuters: value }));
-            if (opts.advance) openNextPillAfter(PILL_PASSERS);
+            const next = { ...form, nonRefuters: value };
+            if (opts.advance) {
+                commitAndAdvance(next, PILL_PASSERS);
+            } else {
+                setForm(next);
+            }
         },
-        [openNextPillAfter],
+        [form, commitAndAdvance],
     );
     const commitRefuter = useCallback(
         (value: Player | Nobody) => {
-            setForm(s => ({
-                ...s,
-                refuter: value,
-                // If the refuter changed to "nobody" (or away from a
-                // previously-resolved player to a different resolved
-                // player), the old seen-card is no longer valid.
-                seenCard: isNobody(value)
-                    ? null
-                    : s.seenCard !== null &&
-                        !isNobody(s.seenCard) &&
-                        !suggestedCards(s).some(c => c === s.seenCard)
-                      ? null
-                      : s.seenCard,
-            }));
-            openNextPillAfter(PILL_REFUTER);
+            // If refuter becomes NOBODY, the shown-card pill turns
+            // unreachable (disabled) — clear any old seenCard so the
+            // user can't leave a stale value stranded. When refuter
+            // switches to a different resolved player, keep seenCard
+            // as-is: if it's no longer in the suggested cards, the
+            // error-state will surface the mismatch in PILL_SEEN.
+            const nextSeenCard = isNobody(value) ? null : form.seenCard;
+            commitAndAdvance(
+                { ...form, refuter: value, seenCard: nextSeenCard },
+                PILL_REFUTER,
+            );
         },
-        [openNextPillAfter],
+        [form, commitAndAdvance],
     );
     const commitSeenCard = useCallback(
         (value: Card | Nobody) => {
-            setForm(s => ({ ...s, seenCard: value }));
-            openNextPillAfter(PILL_SEEN);
+            commitAndAdvance({ ...form, seenCard: value }, PILL_SEEN);
         },
-        [openNextPillAfter],
+        [form, commitAndAdvance],
     );
 
     // --- Submit --------------------------------------------------------
     const draft = useMemo(() => buildDraftFromForm(form), [form]);
-    const canSubmit = draft !== null;
+    const errors = useMemo(() => validateFormConsistency(form), [form]);
+    const canSubmit = draft !== null && errors.size === 0;
+
+    const pillLabelFor = useCallback(
+        (id: PillId): string => {
+            if (id === PILL_SUGGESTER) return t("pillSuggester");
+            if (id === PILL_PASSERS) return t("pillPassers");
+            if (id === PILL_REFUTER) return t("pillRefuter");
+            if (id === PILL_SEEN) return t("pillSeen");
+            // card-N
+            const match = /^card-(\d+)$/.exec(id);
+            if (match !== null) {
+                const idx = Number(match[1]);
+                return setup.categories[idx]?.name ?? id;
+            }
+            return id;
+        },
+        [t, setup.categories],
+    );
+
+    const errorMessageFor = useCallback(
+        (code: PillErrorCode): string => {
+            switch (code) {
+                case "seenCardNotSuggested":
+                    return t("pillErrorSeenCardNotSuggested");
+                case "seenCardWithoutRefuter":
+                    return t("pillErrorSeenCardWithoutRefuter");
+                case "suggesterIsRefuter":
+                    return t("pillErrorSuggesterIsRefuter");
+                case "suggesterInPassers":
+                    return t("pillErrorSuggesterInPassers");
+                case "refuterInPassers":
+                    return t("pillErrorRefuterInPassers");
+            }
+        },
+        [t],
+    );
+
+    const errorReasonFor = useCallback(
+        (id: PillId): string | undefined => {
+            const code = errors.get(id);
+            return code === undefined ? undefined : errorMessageFor(code);
+        },
+        [errors, errorMessageFor],
+    );
+
+    const submitBlockReason = useMemo<string | undefined>(() => {
+        if (canSubmit) return undefined;
+        if (errors.size > 0) {
+            const fields = Array.from(errors.keys()).map(pillLabelFor);
+            return t("submitDisabledFixError", {
+                fields: formatFieldList(fields),
+            });
+        }
+        const missing: Array<string> = [];
+        if (form.suggester === null) missing.push(t("pillSuggester"));
+        form.cards.forEach((c, i) => {
+            if (c === null) {
+                missing.push(setup.categories[i]?.name ?? `card-${i}`);
+            }
+        });
+        if (missing.length === 0) return undefined;
+        return t("submitDisabledFillIn", {
+            fields: formatFieldList(missing),
+        });
+    }, [canSubmit, errors, form, setup.categories, pillLabelFor, t]);
 
     const doSubmit = useCallback(() => {
-        if (draft === null) return;
+        if (!canSubmit || draft === null) return;
         onSubmit(draft);
         // Add-flow: reset and return to the first pill.
         // Edit-flow: the parent unmounts us via onCancel-equivalent
@@ -255,7 +325,7 @@ export function SuggestionForm({
             setForm(emptyFormState(setup));
             setOpenPillId(PILL_SUGGESTER);
         }
-    }, [draft, onSubmit, suggestion, setup]);
+    }, [canSubmit, draft, onSubmit, suggestion, setup]);
 
     /**
      * Cmd/Ctrl+Enter submits from anywhere inside the form —
@@ -339,14 +409,15 @@ export function SuggestionForm({
             const goingBack = isLeft || isShiftTab;
 
             if (goingBack) {
+                // Explicit keyboard nav INCLUDES disabled pills — a
+                // disabled pill is now focusable and its popover shows
+                // the reason it's unavailable.
                 const from =
-                    current ?? lastEnabledPill(pillSequence, isPillDisabled);
-                if (from === null) return; // no enabled pills at all
-                // When focus is on the Add button, stepping "back" means
-                // the last enabled pill itself, not its predecessor.
+                    current ?? pillSequence[pillSequence.length - 1] ?? null;
+                if (from === null) return;
                 const target = onSubmitTarget
                     ? from
-                    : prevEnabledPill(pillSequence, from, isPillDisabled);
+                    : prevPill(pillSequence, from);
                 if (target === null) {
                     // At the head. Arrows stay put; Shift+Tab escapes.
                     if (isLeft) e.preventDefault();
@@ -360,17 +431,13 @@ export function SuggestionForm({
             // Forward (ArrowRight or Tab)
             if (onSubmitTarget) return; // already at terminal; let native run
             if (current === null) return;
-            const target = nextEnabledPill(
-                pillSequence,
-                current,
-                isPillDisabled,
-            );
+            const target = nextPill(pillSequence, current);
             e.preventDefault();
             setOpenPillId(target);
         };
         document.addEventListener("keydown", onKeyDown);
         return () => document.removeEventListener("keydown", onKeyDown);
-    }, [pillSequence, isPillDisabled, openPillId]);
+    }, [pillSequence, openPillId]);
 
     // --- Clear-inputs affordance ---------------------------------------
     //
@@ -436,6 +503,7 @@ export function SuggestionForm({
                     label={t("pillSuggester")}
                     status={pillStatusForPlayer(form.suggester, false)}
                     valueDisplay={displayPlayer(form.suggester)}
+                    errorReason={errorReasonFor(PILL_SUGGESTER)}
                     open={openPillId === PILL_SUGGESTER}
                     onOpenChange={onOpenChangeFor(PILL_SUGGESTER)}
                 >
@@ -459,6 +527,7 @@ export function SuggestionForm({
                             form.cards[i] ?? null,
                             setup,
                         )}
+                        errorReason={errorReasonFor(`card-${i}` as PillId)}
                         open={openPillId === (`card-${i}` as PillId)}
                         onOpenChange={onOpenChangeFor(
                             `card-${i}` as PillId,
@@ -483,6 +552,7 @@ export function SuggestionForm({
                     label={t("pillPassers")}
                     status={pillStatusForPassers(form.nonRefuters)}
                     valueDisplay={displayPassers(form.nonRefuters, t)}
+                    errorReason={errorReasonFor(PILL_PASSERS)}
                     open={openPillId === PILL_PASSERS}
                     onOpenChange={onOpenChangeFor(PILL_PASSERS)}
                 >
@@ -509,6 +579,7 @@ export function SuggestionForm({
                     label={t("pillRefuter")}
                     status={pillStatusForPlayer(form.refuter, true)}
                     valueDisplay={displayPlayerOpt(form.refuter, t)}
+                    errorReason={errorReasonFor(PILL_REFUTER)}
                     open={openPillId === PILL_REFUTER}
                     onOpenChange={onOpenChangeFor(PILL_REFUTER)}
                 >
@@ -531,6 +602,7 @@ export function SuggestionForm({
                     valueDisplay={displayCardOpt(form.seenCard, setup, t)}
                     disabled={isPillDisabled(PILL_SEEN)}
                     disabledHint={t("pillSeenDisabledHint")}
+                    errorReason={errorReasonFor(PILL_SEEN)}
                     open={openPillId === PILL_SEEN}
                     onOpenChange={onOpenChangeFor(PILL_SEEN)}
                 >
@@ -553,15 +625,22 @@ export function SuggestionForm({
                   * reads as a squared-off primary action distinct from
                   * the round pills.
                   */}
-                <button
-                    type="button"
-                    ref={submitBtnRef}
-                    className="cursor-pointer rounded border-none bg-accent px-3 py-2 text-[13px] text-white disabled:cursor-not-allowed disabled:bg-unknown"
-                    disabled={!canSubmit}
-                    onClick={doSubmit}
-                >
-                    {t("submit", { shortcut: label("action.submit") })}
-                </button>
+                <Tooltip content={submitBlockReason}>
+                    <button
+                        type="button"
+                        ref={submitBtnRef}
+                        className={
+                            "rounded border-none px-3 py-2 text-[13px] " +
+                            (canSubmit
+                                ? "cursor-pointer bg-accent text-white"
+                                : "cursor-not-allowed bg-unknown-bg text-muted/70")
+                        }
+                        aria-disabled={!canSubmit}
+                        onClick={doSubmit}
+                    >
+                        {t("submit", { shortcut: label("action.submit") })}
+                    </button>
+                </Tooltip>
                 {onCancel !== undefined && (
                     <button
                         type="button"
@@ -676,7 +755,7 @@ export const buildDraftFromForm = (
 
 // ---- Pill sequence / auto-advance ------------------------------------
 
-type PillId =
+export type PillId =
     | "suggester"
     | `card-${number}`
     | "passers"
@@ -689,10 +768,10 @@ type PillId =
 // machine; keeping them as raw strings makes the code readable.
 type OpenTarget = PillId | "submit" | null;
 
-const PILL_SUGGESTER: PillId = "suggester";
-const PILL_PASSERS: PillId = "passers";
-const PILL_REFUTER: PillId = "refuter";
-const PILL_SEEN: PillId = "seenCard";
+export const PILL_SUGGESTER: PillId = "suggester";
+export const PILL_PASSERS: PillId = "passers";
+export const PILL_REFUTER: PillId = "refuter";
+export const PILL_SEEN: PillId = "seenCard";
 const TARGET_SUBMIT = "submit" as const;
 
 const buildPillSequence = (setup: GameSetup): ReadonlyArray<PillId> => {
@@ -723,39 +802,149 @@ const nextEnabledPill = (
 };
 
 /**
- * Mirror of `nextEnabledPill` for backward navigation. Returns `null`
- * at the head of the sequence so callers can choose to no-op
- * (ArrowLeft) or let native Tab escape the form (Shift+Tab).
+ * Next pill in the sequence regardless of disabled state — for
+ * explicit keyboard navigation (Tab / ArrowRight). Disabled pills
+ * ARE focusable now; their popover explains the reason. Auto-advance
+ * after commit still uses `nextEnabledPill` so focus doesn't stop on
+ * a pill the user can't act on.
  */
-const prevEnabledPill = (
+const nextPill = (
     sequence: ReadonlyArray<PillId>,
     current: PillId,
-    isDisabled: (id: PillId) => boolean,
+): OpenTarget => {
+    const idx = sequence.indexOf(current);
+    if (idx < 0 || idx >= sequence.length - 1) return TARGET_SUBMIT;
+    return sequence[idx + 1]!;
+};
+
+const prevPill = (
+    sequence: ReadonlyArray<PillId>,
+    current: PillId,
 ): PillId | null => {
     const idx = sequence.indexOf(current);
-    for (let i = idx - 1; i >= 0; i--) {
-        const id = sequence[i]!;
-        if (!isDisabled(id)) return id;
+    if (idx <= 0) return null;
+    return sequence[idx - 1]!;
+};
+
+// ---- Disabled-pill + internal-consistency helpers --------------------
+
+/**
+ * Pure: is this pill disabled given a form snapshot? Extracted so
+ * commit handlers can ask about the POST-commit state without going
+ * through a `useCallback` that still closes over the pre-commit form.
+ */
+export const isPillDisabledFor = (
+    form: FormState,
+    id: PillId,
+): boolean =>
+    id === PILL_SEEN &&
+    (form.refuter === null || isNobody(form.refuter));
+
+/**
+ * Internal-consistency error codes. These describe paradoxes WITHIN
+ * a single suggestion — not external contradictions caught by the
+ * solver. `GlobalContradictionBanner` covers the latter.
+ */
+export type PillErrorCode =
+    | "seenCardNotSuggested"
+    | "seenCardWithoutRefuter"
+    | "suggesterIsRefuter"
+    | "suggesterInPassers"
+    | "refuterInPassers";
+
+/**
+ * Check a form snapshot for internal paradoxes. Returns a map from
+ * the first-offending pill to an error code. One error per pill; if
+ * a pill has multiple problems the first-listed rule wins.
+ *
+ * Most cross-role paradoxes are prevented at input time by the
+ * option-builder filters (e.g. `suggesterOptions` excludes the
+ * current refuter). This validator is the RETROACTIVE safety net
+ * for values that were valid at entry but became stale after a
+ * later edit — most commonly, a `seenCard` whose corresponding
+ * category card was subsequently changed.
+ */
+export const validateFormConsistency = (
+    form: FormState,
+): ReadonlyMap<PillId, PillErrorCode> => {
+    const errors = new Map<PillId, PillErrorCode>();
+
+    // PILL_SEEN: must be one of the suggested cards, and requires a
+    // resolved refuter. (Only reachable as an error in the inline
+    // edit — the Add form's pill ordering prevents setting seenCard
+    // without a refuter.)
+    if (form.seenCard !== null && !isNobody(form.seenCard)) {
+        if (form.refuter === null || isNobody(form.refuter)) {
+            // eslint-disable-next-line i18next/no-literal-string -- internal error code
+            errors.set(PILL_SEEN, "seenCardWithoutRefuter");
+        } else {
+            const cards = suggestedCards(form);
+            if (!cards.some(c => c === form.seenCard)) {
+                // eslint-disable-next-line i18next/no-literal-string -- internal error code
+                errors.set(PILL_SEEN, "seenCardNotSuggested");
+            }
+        }
     }
-    return null;
+
+    // Defensive cross-role checks — the option-builders normally
+    // prevent these, but validate anyway so mistakes from any
+    // future change surface clearly.
+    const passers: ReadonlyArray<Player> = Array.isArray(form.nonRefuters)
+        ? form.nonRefuters
+        : [];
+
+    if (
+        form.suggester !== null &&
+        form.refuter !== null &&
+        !isNobody(form.refuter) &&
+        form.suggester === form.refuter
+    ) {
+        // eslint-disable-next-line i18next/no-literal-string -- internal error code
+        errors.set(PILL_REFUTER, "suggesterIsRefuter");
+    }
+    if (
+        form.suggester !== null &&
+        passers.some(p => p === form.suggester)
+    ) {
+        // eslint-disable-next-line i18next/no-literal-string -- internal error code
+        errors.set(PILL_SUGGESTER, "suggesterInPassers");
+    }
+    if (
+        form.refuter !== null &&
+        !isNobody(form.refuter) &&
+        passers.some(p => p === form.refuter)
+    ) {
+        if (!errors.has(PILL_REFUTER)) {
+            // eslint-disable-next-line i18next/no-literal-string -- internal error code
+            errors.set(PILL_REFUTER, "refuterInPassers");
+        }
+    }
+
+    return errors;
 };
 
 /**
- * Last enabled pill in the sequence, or `null` if none. Used when
- * Shift+Tab / ArrowLeft fires from the Add button — we treat the
- * "current" position as one past the end and step back to here.
+ * Format a list of field labels for a blocking-reason tooltip.
+ * Uses the browser's Intl.ListFormat so "A, B, and C" reads
+ * naturally in non-English locales too. Falls back to a simple
+ * join when ListFormat isn't available.
  */
-const lastEnabledPill = (
-    sequence: ReadonlyArray<PillId>,
-    isDisabled: (id: PillId) => boolean,
-): PillId | null => {
-    for (let i = sequence.length - 1; i >= 0; i--) {
-        const id = sequence[i]!;
-        if (!isDisabled(id)) return id;
+const formatFieldList = (fields: ReadonlyArray<string>): string => {
+    if (fields.length === 0) return "";
+    if (typeof Intl !== "undefined" && "ListFormat" in Intl) {
+        try {
+            return new Intl.ListFormat(undefined, {
+                // eslint-disable-next-line i18next/no-literal-string -- Intl ListFormat option value
+                style: "long",
+                type: "conjunction",
+            }).format(fields);
+        } catch {
+            // fall through
+        }
     }
-    return null;
+    return fields.join(", ");
 };
- 
+
 
 // ---- Candidate list helpers ------------------------------------------
 
