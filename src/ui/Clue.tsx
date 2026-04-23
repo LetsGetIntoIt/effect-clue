@@ -44,7 +44,7 @@ import { ClueProvider, useClue } from "./state";
  * `checklist`, `suggest`. On desktop `checklist` and `suggest` both
  * render the Play grid; on mobile each routes to its own pane. This
  * means resizing across the breakpoint never jumps tabs — the URL
- * (`?tab=…`) stays coherent on both sides.
+ * (`?view=…`) stays coherent on both sides.
  */
 export function Clue() {
     const t = useTranslations("app");
