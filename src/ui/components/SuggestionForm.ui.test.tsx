@@ -136,12 +136,12 @@ const getCurrentPopover = (): HTMLElement => {
 // -----------------------------------------------------------------------
 
 describe("SuggestionForm — rendering", () => {
-    test("renders triggers for every enabled pill", () => {
+    test("renders triggers for every pill, including the disabled Shown-card", () => {
         const { SuggestionForm, setup } = deferred;
         renderForm(<SuggestionForm setup={setup} onSubmit={jest.fn()} />);
-        // Initial state: suggester + 3 categories + passers + refuter = 6
-        // triggers. The shown-card pill is disabled until a refuter is
-        // picked (see separate test) and so renders as a non-button.
+        // Disabled pills are now focusable buttons (keyboard users can
+        // Tab to them and the popover explains the reason). All seven
+        // pills surface as data-pill-id triggers.
         const pillIds = Array.from(
             document.querySelectorAll("[data-pill-id]"),
         ).map(el => el.getAttribute("data-pill-id"));
@@ -152,26 +152,28 @@ describe("SuggestionForm — rendering", () => {
             "card-2",
             "passers",
             "refuter",
+            "seenCard",
         ]);
     });
 
-    test("Add button is disabled until all required slots are filled", () => {
+    test("Add button is aria-disabled until all required slots are filled", () => {
         const { SuggestionForm, setup } = deferred;
         renderForm(<SuggestionForm setup={setup} onSubmit={jest.fn()} />);
         const submit = screen.getByRole("button", { name: /submit/ });
-        expect(submit).toBeDisabled();
+        // Uses aria-disabled (not the `disabled` attribute) so the
+        // button stays in the tab order and can surface its
+        // tooltip-driven explanation to keyboard users.
+        expect(submit).toHaveAttribute("aria-disabled", "true");
     });
 
-    test("Shown-card pill is disabled until a refuter is picked", () => {
+    test("Shown-card trigger is rendered but aria-disabled until a refuter is picked", () => {
         const { SuggestionForm, setup } = deferred;
         renderForm(<SuggestionForm setup={setup} onSubmit={jest.fn()} />);
-        // The Shown-card pill renders as a span wrapper when disabled
-        // (not a button trigger) — assert no `data-pill-id="seenCard"`
-        // trigger exists in the initial render.
         const seenTrigger = document.querySelector(
             "[data-pill-id='seenCard']",
         );
-        expect(seenTrigger).toBeNull();
+        expect(seenTrigger).not.toBeNull();
+        expect(seenTrigger).toHaveAttribute("aria-disabled", "true");
     });
 });
 
@@ -351,5 +353,191 @@ describe("SuggestionForm — edit mode", () => {
         expect(
             screen.getByRole("button", { name: /pillPassers.*Bob/ }),
         ).toBeInTheDocument();
+    });
+});
+
+// -----------------------------------------------------------------------
+// Auto-advance: focus must land on the now-enabled Shown-card pill after
+// picking a refuter. Regression for a stale-closure bug where the advance
+// read the pre-commit `isPillDisabled` and skipped straight to the Add
+// button.
+// -----------------------------------------------------------------------
+
+describe("SuggestionForm — auto-advance after picking a refuter", () => {
+    test("focus lands on Shown-card (not Add) once a refuter is chosen", async () => {
+        const { SuggestionForm, setup } = deferred;
+        const user = userEvent.setup();
+        renderForm(<SuggestionForm setup={setup} onSubmit={jest.fn()} />);
+
+        // Drive a full suggestion: suggester + 3 cards.
+        const pSug = await openPopover(user, /pillSuggester/);
+        await user.click(
+            within(pSug).getByRole("option", { name: /Anisha/ }),
+        );
+        const pC0 = getCurrentPopover();
+        await user.click(
+            within(pC0).getByRole("option", { name: /Col\. Mustard/ }),
+        );
+        const pC1 = getCurrentPopover();
+        await user.click(within(pC1).getByRole("option", { name: /Knife/ }));
+        const pC2 = getCurrentPopover();
+        await user.click(
+            within(pC2).getByRole("option", { name: /^Kitchen$/ }),
+        );
+
+        // Passers is auto-opened; close it so we can move deliberately
+        // to the refuter.
+        await user.keyboard("{Escape}");
+
+        // Open refuter and pick Bob. Auto-advance MUST see the
+        // post-commit form (refuter resolved) and open the Shown-card
+        // popover — not skip to the Add button.
+        const refuter = screen.getByRole("button", { name: /pillRefuter/ });
+        await user.click(refuter);
+        const pRef = getCurrentPopover();
+        await user.click(within(pRef).getByRole("option", { name: /Bob/ }));
+
+        // After the commit, the open popover should be the Shown-card
+        // one — proven by the presence of the Shown-card trigger's
+        // aria-expanded=true (Radix pins it while its popover is open).
+        const seenTrigger = document.querySelector(
+            "[data-pill-id='seenCard']",
+        );
+        expect(seenTrigger).not.toBeNull();
+        expect(seenTrigger).toHaveAttribute("aria-expanded", "true");
+        // And the submit button is NOT the currently-open target.
+        const submit = screen.getByRole("button", { name: /submit/ });
+        expect(submit).not.toHaveFocus();
+    });
+});
+
+// -----------------------------------------------------------------------
+// Internal-consistency error state on the Shown-card pill.
+// -----------------------------------------------------------------------
+
+describe("SuggestionForm — stale Shown card error state", () => {
+    test("swapping the weapon after setting a shown card flags Shown card as invalid", async () => {
+        const { SuggestionForm, setup, Player, cardByName, SuggestionId } =
+            deferred;
+        const A = Player("Anisha");
+        const B = Player("Bob");
+        const MUSTARD = cardByName(setup, "Col. Mustard");
+        const KNIFE = cardByName(setup, "Knife");
+        const KITCHEN = cardByName(setup, "Kitchen");
+        const user = userEvent.setup();
+        // Seed an already-valid suggestion with seenCard=Knife so the
+        // test can focus on the stale-after-edit behavior.
+        renderForm(
+            <SuggestionForm
+                setup={setup}
+                suggestion={{
+                    id: SuggestionId("stale-seen"),
+                    suggester: A,
+                    cards: [MUSTARD, KNIFE, KITCHEN],
+                    nonRefuters: [],
+                    refuter: B,
+                    seenCard: KNIFE,
+                }}
+                onSubmit={jest.fn()}
+            />,
+        );
+
+        // Before swap: the Shown-card trigger is NOT aria-invalid.
+        const seenBefore = document.querySelector(
+            "[data-pill-id='seenCard']",
+        );
+        expect(seenBefore).not.toHaveAttribute("aria-invalid");
+
+        // Change the weapon from Knife to Rope. seenCard stays Knife,
+        // which is no longer one of the suggested cards.
+        // (Two pills display "Knife": the Weapon pill and the Shown-card
+        // pill. Disambiguate by data-pill-id.)
+        const weaponPill = document.querySelector(
+            "[data-pill-id='card-1']",
+        ) as HTMLElement;
+        await user.click(weaponPill);
+        const popWeapon = getCurrentPopover();
+        await user.click(
+            within(popWeapon).getByRole("option", { name: /Rope/ }),
+        );
+        // Auto-advance moved focus to Room; close the open popover so
+        // the DOM settles.
+        await user.keyboard("{Escape}");
+
+        // After: Shown-card pill carries aria-invalid and, when opened,
+        // the popover includes an error banner.
+        const seenAfter = document.querySelector(
+            "[data-pill-id='seenCard']",
+        );
+        expect(seenAfter).toHaveAttribute("aria-invalid", "true");
+        await user.click(seenAfter as HTMLElement);
+        const seenPop = getCurrentPopover();
+        const banner = within(seenPop).getByRole("alert");
+        expect(banner).toHaveTextContent(/pillErrorSeenCardNotSuggested/);
+    });
+});
+
+// -----------------------------------------------------------------------
+// Disabled-pill popover: focusable + shows the disabled reason.
+// -----------------------------------------------------------------------
+
+describe("SuggestionForm — disabled pill popover", () => {
+    test("opening the disabled Shown-card pill shows its disabledHint", async () => {
+        const { SuggestionForm, setup } = deferred;
+        const user = userEvent.setup();
+        renderForm(<SuggestionForm setup={setup} onSubmit={jest.fn()} />);
+
+        const seen = document.querySelector(
+            "[data-pill-id='seenCard']",
+        ) as HTMLElement;
+        expect(seen).toHaveAttribute("aria-disabled", "true");
+        await user.click(seen);
+        const pop = getCurrentPopover();
+        // The popover body shows the hint instead of a candidate list.
+        expect(pop).toHaveTextContent(/pillSeenDisabledHint/);
+        // No option rows.
+        expect(within(pop).queryByRole("option")).toBeNull();
+    });
+});
+
+// -----------------------------------------------------------------------
+// Add-button disabled reason: switches to aria-disabled and the Tooltip
+// surfaces a reason string.
+// -----------------------------------------------------------------------
+
+describe("SuggestionForm — disabled Add button", () => {
+    test("empty form: Add button is aria-disabled and clicking is a no-op", async () => {
+        const { SuggestionForm, setup } = deferred;
+        const user = userEvent.setup();
+        const onSubmit = jest.fn();
+        renderForm(<SuggestionForm setup={setup} onSubmit={onSubmit} />);
+        const submit = screen.getByRole("button", { name: /submit/ });
+        expect(submit).toHaveAttribute("aria-disabled", "true");
+        await user.click(submit);
+        expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    test("filling required pills clears aria-disabled", async () => {
+        const { SuggestionForm, setup } = deferred;
+        const user = userEvent.setup();
+        renderForm(<SuggestionForm setup={setup} onSubmit={jest.fn()} />);
+        const pSug = await openPopover(user, /pillSuggester/);
+        await user.click(
+            within(pSug).getByRole("option", { name: /Anisha/ }),
+        );
+        const pC0 = getCurrentPopover();
+        await user.click(
+            within(pC0).getByRole("option", { name: /Col\. Mustard/ }),
+        );
+        const pC1 = getCurrentPopover();
+        await user.click(within(pC1).getByRole("option", { name: /Knife/ }));
+        const pC2 = getCurrentPopover();
+        await user.click(
+            within(pC2).getByRole("option", { name: /^Kitchen$/ }),
+        );
+        await user.keyboard("{Escape}");
+
+        const submit = screen.getByRole("button", { name: /submit/ });
+        expect(submit).toHaveAttribute("aria-disabled", "false");
     });
 });
