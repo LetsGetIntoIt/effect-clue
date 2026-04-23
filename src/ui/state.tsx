@@ -638,12 +638,13 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     );
 
     // Cmd/Ctrl+J: jump to the Checklist. On desktop Play already
-    // shows the checklist; on mobile Play-suggest hides it, so
-    // flip to the "checklist" sub-mode first.
+    // shows the checklist; on mobile Play-suggest hides it, and Setup
+    // renders its own Checklist variant — in both cases flip to the
+    // "checklist" sub-mode so the user lands in the Play view.
     useGlobalShortcut(
         "global.gotoChecklist",
         useCallback(() => {
-            if (uiModeRef.current === "suggest") {
+            if (uiModeRef.current !== "checklist") {
                 dispatchRaw({ type: "setUiMode", mode: "checklist" });
             }
             requestFocusChecklistCell();
