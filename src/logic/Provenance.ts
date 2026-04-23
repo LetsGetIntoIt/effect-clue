@@ -143,7 +143,7 @@ export type Tracer = (record: SetCellRecord) => void;
  * Dedup uses a HashSet keyed on Cell directly (structural Equal), so
  * no hash-surrogate string is needed.
  */
-export interface ChainEntry {
+interface ChainEntry {
     readonly cell: Cell;
     readonly reason: Reason;
 }

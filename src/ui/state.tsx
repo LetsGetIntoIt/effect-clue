@@ -637,22 +637,6 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         }, []),
     );
 
-    // Cmd/Ctrl+; : jump to the Start / Continue playing CTA on the
-    // Setup tab (the primary exit action from setup).
-    useGlobalShortcut(
-        "global.gotoSetupCta",
-        useCallback(() => {
-            if (uiModeRef.current !== "setup") {
-                dispatchRaw({ type: "setUiMode", mode: "setup" });
-            }
-            queueMicrotask(() => {
-                const btn =
-                    document.querySelector<HTMLElement>("[data-setup-cta]");
-                btn?.focus();
-            });
-        }, []),
-    );
-
     // Cmd/Ctrl+J: jump to the Checklist. On desktop Play already
     // shows the checklist; on mobile Play-suggest hides it, so
     // flip to the "checklist" sub-mode first.

@@ -19,12 +19,12 @@
 
 import { useEffect } from "react";
 
-export type KeyCombo = {
+type KeyCombo = {
     readonly label: string;
     readonly match: (e: KeyboardEvent) => boolean;
 };
 
-export type KeyBinding = {
+type KeyBinding = {
     readonly id: string;
     readonly description: string;
     readonly combos: ReadonlyArray<KeyCombo>;
@@ -95,11 +95,11 @@ function modEnter(label: string): KeyCombo {
     };
 }
 
-export const combo = { mod, modShift, bare, bareCI, modEnter };
+const combo = { mod, modShift, bare, bareCI, modEnter };
 
 // ---- Binding IDs -------------------------------------------------------
 
-export type BindingId =
+type BindingId =
     // Global (window-level)
     | "global.undo"
     | "global.redo"
@@ -108,7 +108,6 @@ export type BindingId =
     | "global.gotoPlay"
     | "global.gotoChecklist"
     | "global.gotoPriorLog"
-    | "global.gotoSetupCta"
     // Navigation primitives (scoped)
     | "nav.up"
     | "nav.down"
@@ -125,7 +124,7 @@ export type BindingId =
 
 // ---- Default keymap ----------------------------------------------------
 
-export const DEFAULT_KEY_MAP: Record<BindingId, KeyBinding> = {
+const DEFAULT_KEY_MAP: Record<BindingId, KeyBinding> = {
     "global.undo": {
         id: "global.undo",
         description: "Undo the last change",
@@ -139,7 +138,7 @@ export const DEFAULT_KEY_MAP: Record<BindingId, KeyBinding> = {
     "global.newGame": {
         id: "global.newGame",
         description: "Start a new game",
-        combos: [combo.mod("n", "⌘N")],
+        combos: [combo.modShift("Backspace", "⌘⇧⌫")],
     },
     "global.gotoSetup": {
         id: "global.gotoSetup",
@@ -161,12 +160,6 @@ export const DEFAULT_KEY_MAP: Record<BindingId, KeyBinding> = {
         description: "Jump to the prior suggestions log",
         combos: [combo.mod("l", "⌘L")],
     },
-    "global.gotoSetupCta": {
-        id: "global.gotoSetupCta",
-        description: "Focus the Start/Continue playing button",
-        combos: [combo.mod(";", "⌘;")],
-    },
-
     "nav.up": {
         id: "nav.up",
         description: "Move up",
@@ -245,15 +238,6 @@ export const DEFAULT_KEY_MAP: Record<BindingId, KeyBinding> = {
 
 let activeKeyMap: Record<BindingId, KeyBinding> = DEFAULT_KEY_MAP;
 
-/** Replace the active map. Reserved for a future customization UI. */
-export function setKeyMap(next: Record<BindingId, KeyBinding>): void {
-    activeKeyMap = next;
-}
-
-export function getBinding(id: BindingId): KeyBinding {
-    return activeKeyMap[id];
-}
-
 /** True if the event matches any combo on the binding. */
 export function matches(id: BindingId, e: KeyboardEvent): boolean {
     return activeKeyMap[id].combos.some(c => c.match(e));
@@ -262,11 +246,6 @@ export function matches(id: BindingId, e: KeyboardEvent): boolean {
 /** Canonical display label (first combo). Safe on empty combos. */
 export function label(id: BindingId, index = 0): string {
     return activeKeyMap[id].combos[index]?.label ?? "";
-}
-
-/** Every combo's label, in declaration order. */
-export function allLabels(id: BindingId): ReadonlyArray<string> {
-    return activeKeyMap[id].combos.map(c => c.label);
 }
 
 // ---- React hook --------------------------------------------------------

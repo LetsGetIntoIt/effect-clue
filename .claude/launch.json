@@ -3,8 +3,8 @@
     "configurations": [
         {
             "name": "next-dev",
-            "runtimeExecutable": "pnpm",
-            "runtimeArgs": ["dev"],
+            "runtimeExecutable": "sh",
+            "runtimeArgs": ["-c", "pnpm install && pnpm dev"],
             "port": 3000,
             "autoPort": true
         }
