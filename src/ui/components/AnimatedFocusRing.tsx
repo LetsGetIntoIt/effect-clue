@@ -112,26 +112,42 @@ function FocusRingOverlay({ target }: { readonly target: HTMLElement | null }) {
             setRect(null);
             return;
         }
-        const measure = () => {
+        // `getBoundingClientRect` reflects CSS transforms — motion's
+        // `layout` prop animates size via transforms, and
+        // ResizeObserver only fires when the underlying DOM box size
+        // changes, not on transform. So when a focused row expands
+        // (e.g. prior suggestion entering edit mode), ResizeObserver
+        // would fire once at frame 0 with an inverse-transformed
+        // rect, then never again — leaving the ring stuck at the
+        // old size. A per-frame rAF loop keeps the ring locked to
+        // the current visual rect through layout animations, scroll,
+        // and any other transform/size changes. setRect short-
+        // circuits when values are unchanged, so steady-state does
+        // not trigger renders.
+        let rafId = 0;
+        const tick = () => {
             const r = target.getBoundingClientRect();
-            setRect({
-                top: r.top,
-                left: r.left,
-                width: r.width,
-                height: r.height,
+            setRect(prev => {
+                if (
+                    prev !== null &&
+                    prev.top === r.top &&
+                    prev.left === r.left &&
+                    prev.width === r.width &&
+                    prev.height === r.height
+                ) {
+                    return prev;
+                }
+                return {
+                    top: r.top,
+                    left: r.left,
+                    width: r.width,
+                    height: r.height,
+                };
             });
+            rafId = requestAnimationFrame(tick);
         };
-        measure();
-
-        window.addEventListener("scroll", measure, true);
-        window.addEventListener("resize", measure);
-        const ro = new ResizeObserver(measure);
-        ro.observe(target);
-        return () => {
-            window.removeEventListener("scroll", measure, true);
-            window.removeEventListener("resize", measure);
-            ro.disconnect();
-        };
+        rafId = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(rafId);
     }, [target]);
 
     return (
