@@ -80,12 +80,8 @@ export function Clue() {
 }
 
 /**
- * Cmd/Ctrl+N handler for starting a new game. Mounts once inside
- * `ClueProvider` so `useClue` + i18n are available. Some browsers
- * (Safari, Chrome on macOS) reserve Cmd+N for "new window" and do
- * not let web pages preempt it — the binding still works in browsers
- * that allow it (Firefox, packaged web views) and as Ctrl+N on
- * Windows/Linux.
+ * Cmd/Ctrl+Shift+Backspace handler for starting a new game. Mounts
+ * once inside `ClueProvider` so `useClue` + i18n are available.
  */
 function NewGameShortcut() {
     const t = useTranslations("toolbar");

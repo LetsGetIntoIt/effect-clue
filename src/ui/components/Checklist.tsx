@@ -251,10 +251,10 @@ export function Checklist() {
                     >
                         {suggestions.length > 0
                             ? tSetup("continuePlaying", {
-                                  shortcut: label("global.gotoSetupCta"),
+                                  shortcut: label("global.gotoPlay"),
                               })
                             : tSetup("startPlaying", {
-                                  shortcut: label("global.gotoSetupCta"),
+                                  shortcut: label("global.gotoPlay"),
                               })}
                     </button>
                 </div>

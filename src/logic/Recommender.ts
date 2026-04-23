@@ -398,7 +398,7 @@ export const isAnySlot = (v: Card | AnySlot): v is AnySlot =>
  * specific `Card` or an `AnySlot` describing the subset of case-file
  * candidates this slot consolidates over.
  */
-export interface ConsolidatedRecommendation {
+interface ConsolidatedRecommendation {
     readonly suggester: Player;
     readonly cards: ReadonlyArray<Card | AnySlot>;
     readonly score: number;
