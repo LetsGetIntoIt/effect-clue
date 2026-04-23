@@ -436,13 +436,17 @@ function PriorSuggestions() {
                     </div>
                     <ol className="m-0 flex list-none flex-col gap-2 p-0">
                         <AnimatePresence initial={false}>
-                            {suggestions.map((s, idx) => (
-                                <PriorSuggestionItem
-                                    key={s.id}
-                                    suggestion={s}
-                                    idx={idx}
-                                />
-                            ))}
+                            {suggestions
+                                .map((s, idx) => ({ s, idx }))
+                                .slice()
+                                .reverse()
+                                .map(({ s, idx }) => (
+                                    <PriorSuggestionItem
+                                        key={s.id}
+                                        suggestion={s}
+                                        idx={idx}
+                                    />
+                                ))}
                         </AnimatePresence>
                     </ol>
                 </>
