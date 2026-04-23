@@ -7,12 +7,13 @@ import { describeAction } from "../../logic/describeAction";
 import { useLongPress } from "../hooks/useLongPress";
 import { useClue } from "../state";
 import { label } from "../keyMap";
+import { OverflowMenu } from "./OverflowMenu";
 import { useToolbarActions } from "./Toolbar";
 
 /**
  * Mobile-only fixed-bottom navigation. Shown only under 800px — the
- * desktop header's `Toolbar` + `TabBar` cover the same affordances
- * above that breakpoint. Five slots, left to right:
+ * desktop header `Toolbar` covers the same affordances above that
+ * breakpoint. Five slots, left to right:
  *
  *   [Checklist] [Suggest] [Undo] [Redo] [⋯]
  *
@@ -90,7 +91,7 @@ export function BottomNav() {
                     disabled={!canRedo}
                     preview={redoPreview}
                 />
-                <OverflowMenu
+                <BottomOverflowMenu
                     setupActive={mode === "setup"}
                     onSetup={() =>
                         dispatch({ type: "setUiMode", mode: "setup" })
@@ -197,13 +198,14 @@ function NavIconItem({
 }
 
 /**
- * Trailing overflow slot. A small Radix popover that opens *upward*
- * (`side="top"`) above the fixed nav and hosts the three less-common
- * actions: Game setup (switches to the Setup tab), Share link, and
- * New game. Share + New game reuse `useToolbarActions` so the mobile
- * flow is identical to the desktop Toolbar.
+ * Trailing overflow slot — thin wrapper around the shared `OverflowMenu`
+ * with mobile-specific trigger styling (icon slot, ~12 tall/wide) and
+ * `side="top"` so the popover opens upward above the fixed nav. The
+ * menu items mirror the desktop Toolbar: Game setup (switches to Setup
+ * mode), Share link, and New game. Share + New game reuse
+ * `useToolbarActions` so the mobile flow is identical to the desktop.
  */
-function OverflowMenu({
+function BottomOverflowMenu({
     setupActive,
     onSetup,
 }: {
@@ -212,75 +214,36 @@ function OverflowMenu({
 }) {
     const t = useTranslations("bottomNav");
     const tToolbar = useTranslations("toolbar");
-    const [open, setOpen] = useState(false);
     const { onShare, onNewGame, copied } = useToolbarActions();
-
-    const closeThen = (fn: () => void | Promise<void>) => () => {
-        setOpen(false);
-        void fn();
-    };
-
     return (
         <li>
-            <RadixPopover.Root open={open} onOpenChange={setOpen}>
-                <RadixPopover.Trigger
-                    aria-label={t("more")}
-                    title={t("more")}
-                    className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-[var(--radius)] border-none bg-transparent text-[20px] text-muted hover:text-accent"
-                >
-                    ⋯
-                </RadixPopover.Trigger>
-                <RadixPopover.Portal>
-                    <RadixPopover.Content
-                        side="top"
-                        align="end"
-                        sideOffset={6}
-                        collisionPadding={8}
-                        className="z-50 min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[13px] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
-                    >
-                        <MenuItem
-                            label={t("gameSetup", {
-                                shortcut: label("global.gotoSetup"),
-                            })}
-                            active={setupActive}
-                            onClick={closeThen(onSetup)}
-                        />
-                        <MenuItem
-                            label={copied ? tToolbar("shareCopied") : tToolbar("share")}
-                            onClick={closeThen(onShare)}
-                        />
-                        <MenuItem
-                            label={tToolbar("newGame", {
-                                shortcut: label("global.newGame"),
-                            })}
-                            onClick={closeThen(onNewGame)}
-                        />
-                    </RadixPopover.Content>
-                </RadixPopover.Portal>
-            </RadixPopover.Root>
+            <OverflowMenu
+                triggerClassName="flex h-12 w-12 cursor-pointer items-center justify-center rounded-[var(--radius)] border-none bg-transparent text-[20px] text-muted hover:text-accent"
+                triggerLabel={t("more")}
+                side="top"
+                align="end"
+                items={[
+                    {
+                        label: t("gameSetup", {
+                            shortcut: label("global.gotoSetup"),
+                        }),
+                        active: setupActive,
+                        onClick: onSetup,
+                    },
+                    {
+                        label: copied
+                            ? tToolbar("shareCopied")
+                            : tToolbar("share"),
+                        onClick: onShare,
+                    },
+                    {
+                        label: tToolbar("newGame", {
+                            shortcut: label("global.newGame"),
+                        }),
+                        onClick: onNewGame,
+                    },
+                ]}
+            />
         </li>
-    );
-}
-
-function MenuItem({
-    label,
-    active,
-    onClick,
-}: {
-    readonly label: string;
-    readonly active?: boolean;
-    readonly onClick: () => void;
-}) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            className={
-                "block w-full cursor-pointer rounded-[var(--radius)] border-none bg-transparent px-3 py-2 text-left text-[13px] hover:bg-hover " +
-                (active ? "text-accent font-semibold" : "text-inherit")
-            }
-        >
-            {label}
-        </button>
     );
 }

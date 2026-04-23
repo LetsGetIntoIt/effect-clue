@@ -10,23 +10,25 @@ import { Toolbar } from "./components/Toolbar";
 import { TooltipProvider } from "./components/Tooltip";
 import { ConfirmProvider, useConfirm } from "./hooks/useConfirm";
 import { SelectionProvider } from "./SelectionContext";
-import { label, useGlobalShortcut } from "./keyMap";
+import { useGlobalShortcut } from "./keyMap";
 import { ClueProvider, useClue } from "./state";
 
 /**
  * Top-level Clue solver app.
  *
- * **Desktop (≥ 800px)** shows a top `TabBar` (Setup / Play) and a
- * top-right `Toolbar` (undo / redo / share / new game). The Play
- * tab lays the `Checklist` next to a sticky `SuggestionLogPanel`
- * in a 2-column grid.
+ * **Desktop (≥ 800px)** shows the `Checklist` and `SuggestionLogPanel`
+ * side-by-side in a 2-column grid. A top-right `Toolbar` holds Undo
+ * and Redo as top-level buttons plus a `⋯` overflow menu for Game
+ * setup, Share link, and New game. Setup mode (entered via ⌘H or the
+ * overflow menu) swaps the grid for a full-width Checklist that
+ * unlocks inline-edit affordances.
  *
- * **Mobile (< 800px)** hides the top tab bar and toolbar entirely.
- * A fixed `BottomNav` takes their place, with Checklist / Suggest
- * tabs that split what desktop packs into a single Play grid, plus
- * inline Undo/Redo and an overflow menu for Game setup, Share link,
- * and New game. `<main>`'s bottom padding is bumped up to keep page
- * content clear of the fixed nav.
+ * **Mobile (< 800px)** hides the desktop Toolbar entirely. A fixed
+ * `BottomNav` takes its place, with Checklist / Suggest tabs that
+ * split what desktop packs into a single Play grid, plus inline
+ * Undo/Redo and a `⋯` overflow menu that mirrors the desktop one.
+ * `<main>`'s bottom padding is bumped up to keep page content clear
+ * of the fixed nav.
  *
  * A single global contradiction banner is pinned to the top of the
  * viewport (`position: fixed` inside `GlobalContradictionBanner`)
@@ -35,14 +37,14 @@ import { ClueProvider, useClue } from "./state";
  * its top padding so the header isn't hidden underneath.
  *
  * The unified Checklist is the single surface for both Setup and
- * Play modes — the tab bar drives the `uiMode` slice and the
- * component gates its Setup-mode affordances (inline renames, add/
- * remove, hand-size row, "+ add card" / "+ add category") on that
- * flag. `uiMode` has three values: `setup`, `checklist`, `suggest`.
- * On desktop `checklist` and `suggest` both render the Play grid
- * (the tab doesn't visually distinguish them); on mobile each routes
- * to its own pane. This means resizing across the breakpoint never
- * jumps tabs — the URL (`?tab=…`) stays coherent on both sides.
+ * Play modes — the overflow menu's Game setup item drives the
+ * `uiMode` slice and the component gates its Setup-mode affordances
+ * (inline renames, add/remove, hand-size row, "+ add card" / "+ add
+ * category") on that flag. `uiMode` has three values: `setup`,
+ * `checklist`, `suggest`. On desktop `checklist` and `suggest` both
+ * render the Play grid; on mobile each routes to its own pane. This
+ * means resizing across the breakpoint never jumps tabs — the URL
+ * (`?view=…`) stays coherent on both sides.
  */
 export function Clue() {
     const t = useTranslations("app");
@@ -63,9 +65,6 @@ export function Clue() {
 
                 <GlobalContradictionBanner />
 
-                <div className="hidden shrink-0 [@media(min-width:800px)]:block">
-                    <TabBar />
-                </div>
                 <div className="flex min-h-0 flex-1 flex-col">
                     <TabContent />
                 </div>
@@ -144,44 +143,3 @@ function TabContent() {
     );
 }
 
-/**
- * Setup / Play tab switcher (desktop only). Drives the `uiMode`
- * reducer slice; consumers (Checklist's inline-edit gate and setup
- * affordances) read `state.uiMode === "setup"` to decide what to
- * render. The Play tab lights up for both `checklist` and `suggest`
- * since desktop doesn't distinguish them. Clicking Play resolves to
- * `checklist` — the more common landing.
- */
-function TabBar() {
-    const { state, dispatch } = useClue();
-    const tTabs = useTranslations("tabs");
-    const tabClass = (active: boolean) =>
-        `cursor-pointer border-0 border-b-2 px-3 py-1.5 text-[13px] font-semibold ${
-            active
-                ? "border-accent bg-transparent text-accent"
-                : "border-transparent bg-transparent text-muted hover:text-accent"
-        }`;
-    const playActive = state.uiMode !== "setup";
-    return (
-        <div role="tablist" className="-mb-3 flex gap-2 border-b border-border">
-            <button
-                type="button"
-                role="tab"
-                aria-selected={state.uiMode === "setup"}
-                className={tabClass(state.uiMode === "setup")}
-                onClick={() => dispatch({ type: "setUiMode", mode: "setup" })}
-            >
-                {tTabs("setup", { shortcut: label("global.gotoSetup") })}
-            </button>
-            <button
-                type="button"
-                role="tab"
-                aria-selected={playActive}
-                className={tabClass(playActive)}
-                onClick={() => dispatch({ type: "setUiMode", mode: "checklist" })}
-            >
-                {tTabs("play", { shortcut: label("global.gotoPlay") })}
-            </button>
-        </div>
-    );
-}

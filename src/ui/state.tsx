@@ -764,8 +764,8 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     const didHydrate = useRef(false);
 
     // One-shot hydration on mount: URL first, then localStorage. The
-    // `?tab=setup|checklist|suggest` param overrides the smart default;
-    // with no explicit tab we land on the Checklist (play mode) if the
+    // `?view=setup|checklist|suggest` param overrides the smart default;
+    // with no explicit view we land on the Checklist (play mode) if the
     // hydrated session has any suggestions, else Setup (the reducer's
     // default). On desktop `checklist` and `suggest` both render the
     // same Play grid; on mobile they route to their own pane.
@@ -775,38 +775,39 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         if (typeof window === "undefined") return;
         const params = new URLSearchParams(window.location.search);
         const stateParam = params.get("state");
-        const tabParam = params.get("tab");
+        const viewParam = params.get("view");
         let hydrated: GameSession | undefined;
         if (stateParam) hydrated = decodeSessionFromUrl(stateParam);
         if (!hydrated) hydrated = loadFromLocalStorage();
         if (hydrated) dispatch({ type: "replaceSession", session: hydrated });
 
-        // Tab precedence: explicit `?tab=` wins; otherwise pick based on
-        // hydrated suggestions. The default state.uiMode is "setup", so
-        // only dispatch when we actually need to change it.
-        if (tabParam === "checklist") {
+        // View precedence: explicit `?view=` wins; otherwise pick based
+        // on hydrated suggestions. The default state.uiMode is "setup",
+        // so only dispatch when we actually need to change it.
+        if (viewParam === "checklist") {
             dispatch({ type: "setUiMode", mode: "checklist" });
-        } else if (tabParam === "suggest") {
+        } else if (viewParam === "suggest") {
             dispatch({ type: "setUiMode", mode: "suggest" });
-        } else if (tabParam === "setup") {
+        } else if (viewParam === "setup") {
             // No-op: default is already "setup".
         } else if (hydrated && hydrated.suggestions.length > 0) {
             dispatch({ type: "setUiMode", mode: "checklist" });
         }
     }, []);
 
-    // Mirror `uiMode` to the URL as `?tab=setup|play`. Uses
-    // replaceState (not pushState) because tab flips shouldn't clutter
-    // the back stack — same spirit as `setUiMode` bypassing undo/redo
-    // history. Gated on `didHydrate` so the initial reducer default
-    // doesn't stomp an unset URL before hydration has chosen the tab.
+    // Mirror `uiMode` to the URL as `?view=setup|checklist|suggest`.
+    // Uses replaceState (not pushState) because view flips shouldn't
+    // clutter the back stack — same spirit as `setUiMode` bypassing
+    // undo/redo history. Gated on `didHydrate` so the initial reducer
+    // default doesn't stomp an unset URL before hydration has chosen
+    // the view.
     useEffect(() => {
         if (!didHydrate.current) return;
         if (typeof window === "undefined") return;
         const params = new URLSearchParams(window.location.search);
-        const urlTab = state.uiMode;
-        if (params.get("tab") === urlTab) return;
-        params.set("tab", urlTab);
+        const urlView = state.uiMode;
+        if (params.get("view") === urlView) return;
+        params.set("view", urlView);
         const newUrl = `${window.location.pathname}?${params.toString()}${window.location.hash}`;
         window.history.replaceState(null, "", newUrl);
     }, [state.uiMode]);
