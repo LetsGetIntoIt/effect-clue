@@ -1248,10 +1248,10 @@ const CELL_BASE =
     "w-9 min-w-9 border border-border px-2 py-1 text-center font-semibold relative";
 
 const CELL_INTERACTIVE =
-    " cursor-pointer hover:ring-2 hover:ring-accent/40 focus:outline-none focus:ring-2 focus:ring-accent";
+    " cursor-pointer hover:z-10 hover:ring-2 hover:ring-accent/40 focus:z-10 focus:outline-none focus:ring-2 focus:ring-accent";
 
 const CELL_HIGHLIGHTED =
-    " ring-2 ring-accent ring-offset-1 ring-offset-panel";
+    " z-10 ring-2 ring-accent ring-offset-1 ring-offset-panel";
 
 const cellClass = (
     value: CellValue | undefined,
