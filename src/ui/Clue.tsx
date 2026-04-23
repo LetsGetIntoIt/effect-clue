@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { BottomNav } from "./components/BottomNav";
 import { Checklist } from "./components/Checklist";
@@ -10,6 +10,7 @@ import { Toolbar } from "./components/Toolbar";
 import { TooltipProvider } from "./components/Tooltip";
 import { ConfirmProvider, useConfirm } from "./hooks/useConfirm";
 import { SelectionProvider } from "./SelectionContext";
+import { label, useGlobalShortcut } from "./keyMap";
 import { ClueProvider, useClue } from "./state";
 
 /**
@@ -90,21 +91,14 @@ function NewGameShortcut() {
     const t = useTranslations("toolbar");
     const { dispatch } = useClue();
     const confirm = useConfirm();
-    useEffect(() => {
-        const onKeyDown = async (e: KeyboardEvent) => {
-            if (!(e.metaKey || e.ctrlKey)) return;
-            if (e.key !== "n" && e.key !== "N") return;
-            e.preventDefault();
-            if (await confirm({ message: t("newGameConfirm") })) {
-                dispatch({ type: "newGame" });
-            }
-        };
-        const listener = (e: KeyboardEvent) => {
-            void onKeyDown(e);
-        };
-        window.addEventListener("keydown", listener);
-        return () => window.removeEventListener("keydown", listener);
-    }, [confirm, dispatch, t]);
+    useGlobalShortcut(
+        "global.newGame",
+        useCallback(() => {
+            void confirm({ message: t("newGameConfirm") }).then(ok => {
+                if (ok) dispatch({ type: "newGame" });
+            });
+        }, [confirm, dispatch, t]),
+    );
     return null;
 }
 
@@ -181,7 +175,7 @@ function TabBar() {
                 className={tabClass(state.uiMode === "setup")}
                 onClick={() => dispatch({ type: "setUiMode", mode: "setup" })}
             >
-                {tTabs("setupWithShortcut")}
+                {tTabs("setup", { shortcut: label("global.gotoSetup") })}
             </button>
             <button
                 type="button"
@@ -190,7 +184,7 @@ function TabBar() {
                 className={tabClass(playActive)}
                 onClick={() => dispatch({ type: "setUiMode", mode: "checklist" })}
             >
-                {tTabs("playWithShortcut")}
+                {tTabs("play", { shortcut: label("global.gotoPlay") })}
             </button>
         </div>
     );

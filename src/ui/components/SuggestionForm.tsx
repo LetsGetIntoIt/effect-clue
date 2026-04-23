@@ -14,6 +14,7 @@ import { categoryOfCard } from "../../logic/GameSetup";
 import type { Card, Player } from "../../logic/GameObjects";
 import { newSuggestionId } from "../../logic/Suggestion";
 import { registerSuggestionFormFocusHandler } from "../suggestionFormFocus";
+import { label, matches } from "../keyMap";
 import {
     displayCard,
     displayCardOpt,
@@ -79,19 +80,6 @@ export function SuggestionForm({
     readonly onCancel?: () => void;
 }): React.ReactElement {
     const t = useTranslations("suggestions");
-
-    // --- Platform detection for submit modifier (SSR-safe) ---
-    //
-    // Mac uses ⌘ (metaKey), Windows / Linux use Ctrl (ctrlKey). The
-    // key handler accepts either modifier regardless of detected
-    // platform, so misconfigured machines aren't locked out —
-    // detection only drives display copy.
-    const [isMac, setIsMac] = useState(false);
-    useEffect(() => {
-        if (typeof navigator === "undefined") return;
-        setIsMac(/Mac|iPhone|iPad/.test(navigator.platform));
-    }, []);
-    const platformKey = isMac ? PLATFORM_MAC : PLATFORM_OTHER;
 
     // --- Form state ----------------------------------------------------
     const [form, setForm] = useState<FormState>(() =>
@@ -279,8 +267,7 @@ export function SuggestionForm({
     const formRootRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
-            if (e.key !== "Enter") return;
-            if (!(e.metaKey || e.ctrlKey)) return;
+            if (!matches("action.submit", e)) return;
             // Only handle if focus is inside our form root or in any
             // Radix portal popover owned by our form (we check by
             // walking up from the focused element).
@@ -313,8 +300,8 @@ export function SuggestionForm({
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.metaKey || e.ctrlKey || e.altKey) return;
-            const isLeft = e.key === "ArrowLeft";
-            const isRight = e.key === "ArrowRight";
+            const isLeft = matches("nav.left", e);
+            const isRight = matches("nav.right", e);
             const isShiftTab = e.key === "Tab" && e.shiftKey;
             const isTab = e.key === "Tab" && !e.shiftKey;
             if (!isLeft && !isRight && !isShiftTab && !isTab) return;
@@ -421,7 +408,7 @@ export function SuggestionForm({
                     {suggestion !== undefined
                         ? t("editTitle")
                         : t.rich("addTitle", {
-                              platform: platformKey,
+                              shortcutKey: label("global.gotoPlay"),
                               shortcut: chunks => (
                                   <span className="font-normal text-muted">
                                       {chunks}
@@ -573,7 +560,7 @@ export function SuggestionForm({
                     disabled={!canSubmit}
                     onClick={doSubmit}
                 >
-                    {t("submit", { platform: platformKey })}
+                    {t("submit", { shortcut: label("action.submit") })}
                 </button>
                 {onCancel !== undefined && (
                     <button
@@ -588,16 +575,6 @@ export function SuggestionForm({
         </div>
     );
 }
-
-// ---- Platform discriminators (not user copy) ---------------------------
-
- 
-// ICU `select` keys for the submit / addTitle templates in
-// messages/en.json. Must match the string literals in those messages
-// exactly.
-const PLATFORM_MAC = "mac";
-const PLATFORM_OTHER = "other";
- 
 
 // ---- Form state -------------------------------------------------------
 

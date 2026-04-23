@@ -65,6 +65,7 @@ import {
 import { Layer } from "effect";
 import { requestFocusSuggestionForm } from "./suggestionFormFocus";
 import { requestFocusChecklistCell } from "./checklistFocus";
+import { useGlobalShortcut } from "./keyMap";
 
 type DeduceLayer = Layer.Layer<
     CardSetService | PlayerSetService | SuggestionsService
@@ -578,47 +579,8 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     const undo = useCallback(() => dispatchRaw({ type: "__undo" }), []);
     const redo = useCallback(() => dispatchRaw({ type: "__redo" }), []);
 
-    // Keyboard bindings: Cmd/Ctrl+Z for undo, Cmd/Ctrl+Shift+Z for redo.
-    // Swallow the event only when we're going to act on it, so typing
-    // Cmd+Z in an input field still triggers undo (the user intends it).
-    useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            const mod = e.metaKey || e.ctrlKey;
-            if (!mod) return;
-            // Key comparison is case-insensitive: `e.key` is "Z" when
-            // Shift is held, "z" otherwise.
-            if (e.key !== "z" && e.key !== "Z") return;
-            e.preventDefault();
-            if (e.shiftKey) redo();
-            else undo();
-        };
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
-    }, [undo, redo]);
-
-    // Cmd/Ctrl+K: switch to Play tab and focus the suggestion form.
-    // Two presses within DOUBLE_TAP_MS also clear the form. The tab
-    // switch goes through `dispatchRaw` so it stays out of the undo
-    // history — matching how hydration flips the tab.
-    useEffect(() => {
-        let lastPressAt = 0;
-        const DOUBLE_TAP_MS = 400;
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (!(e.metaKey || e.ctrlKey)) return;
-            if (e.key !== "k" && e.key !== "K") return;
-            e.preventDefault();
-            const now = Date.now();
-            const clear = now - lastPressAt < DOUBLE_TAP_MS;
-            lastPressAt = clear ? 0 : now;
-            dispatchRaw({ type: "setUiMode", mode: "suggest" });
-            requestFocusSuggestionForm({ clear });
-        };
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
-    }, []);
-
-    // Refs shared by several shortcut handlers so their useEffect
-    // deps stay empty (no listener churn when state changes).
+    // Refs shared by several shortcut handlers so their handler
+    // references stay stable (no listener churn when state changes).
     const uiModeRef = useRef(state.uiMode);
     useEffect(() => {
         uiModeRef.current = state.uiMode;
@@ -629,40 +591,57 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             state.knownCards.length > 0 || state.suggestions.length > 0;
     }, [state.knownCards, state.suggestions]);
 
+    // Keyboard bindings wired via the central keyMap module. Each
+    // useGlobalShortcut installs one window keydown listener that only
+    // fires on a match; labels shown in the UI come from the same
+    // module so they stay in lockstep with the matcher.
+    useGlobalShortcut("global.undo", useCallback(() => undo(), [undo]));
+    useGlobalShortcut("global.redo", useCallback(() => redo(), [redo]));
+
+    // Cmd/Ctrl+K: switch to Play tab and focus the suggestion form.
+    // Two presses within DOUBLE_TAP_MS also clear the form. The tab
+    // switch goes through `dispatchRaw` so it stays out of the undo
+    // history — matching how hydration flips the tab.
+    const lastGotoPlayAtRef = useRef(0);
+    useGlobalShortcut(
+        "global.gotoPlay",
+        useCallback(() => {
+            const DOUBLE_TAP_MS = 400;
+            const now = Date.now();
+            const clear = now - lastGotoPlayAtRef.current < DOUBLE_TAP_MS;
+            lastGotoPlayAtRef.current = clear ? 0 : now;
+            dispatchRaw({ type: "setUiMode", mode: "suggest" });
+            requestFocusSuggestionForm({ clear });
+        }, []),
+    );
+
     // Cmd/Ctrl+H: switch to the Setup tab. (Overrides the Mac
-    // "hide app" default — explicit user choice.) Smart-landing:
-    //   - game started (any knownCards OR any suggestions) → focus
-    //     the last-focused checklist cell, or the first setup cell
+    // "hide app" default.) Smart-landing:
+    //   - game started → focus the last-focused checklist cell, else
+    //     the first setup cell
     //   - fresh game → focus the first card-pack preset button
-    useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (!(e.metaKey || e.ctrlKey)) return;
-            if (e.key !== "h" && e.key !== "H") return;
-            e.preventDefault();
+    useGlobalShortcut(
+        "global.gotoSetup",
+        useCallback(() => {
             dispatchRaw({ type: "setUiMode", mode: "setup" });
             queueMicrotask(() => {
                 if (gameStartedRef.current) {
                     requestFocusChecklistCell();
                 } else {
-                    const btn =
-                        document.querySelector<HTMLElement>(
-                            "[data-setup-first-target='card-pack']",
-                        );
+                    const btn = document.querySelector<HTMLElement>(
+                        "[data-setup-first-target='card-pack']",
+                    );
                     btn?.focus();
                 }
             });
-        };
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
-    }, []);
+        }, []),
+    );
 
     // Cmd/Ctrl+; : jump to the Start / Continue playing CTA on the
     // Setup tab (the primary exit action from setup).
-    useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (!(e.metaKey || e.ctrlKey)) return;
-            if (e.key !== ";") return;
-            e.preventDefault();
+    useGlobalShortcut(
+        "global.gotoSetupCta",
+        useCallback(() => {
             if (uiModeRef.current !== "setup") {
                 dispatchRaw({ type: "setUiMode", mode: "setup" });
             }
@@ -671,39 +650,28 @@ export function ClueProvider({ children }: { children: ReactNode }) {
                     document.querySelector<HTMLElement>("[data-setup-cta]");
                 btn?.focus();
             });
-        };
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
-    }, []);
+        }, []),
+    );
 
     // Cmd/Ctrl+J: jump to the Checklist. On desktop Play already
     // shows the checklist; on mobile Play-suggest hides it, so
-    // flip to the "checklist" sub-mode first. The focus request
-    // returns the user to whichever cell they were last on.
-    useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (!(e.metaKey || e.ctrlKey)) return;
-            if (e.key !== "j" && e.key !== "J") return;
-            e.preventDefault();
+    // flip to the "checklist" sub-mode first.
+    useGlobalShortcut(
+        "global.gotoChecklist",
+        useCallback(() => {
             if (uiModeRef.current === "suggest") {
                 dispatchRaw({ type: "setUiMode", mode: "checklist" });
             }
             requestFocusChecklistCell();
-        };
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
-    }, []);
+        }, []),
+    );
 
-    // Cmd/Ctrl+L: jump to the Prior suggestions log. If currently
-    // on Setup, flip to "suggest" first so the log is mounted.
-    // Focuses the first suggestion row if any exist so the user can
-    // immediately use ↑↓ — otherwise falls back to the section header
-    // (which has the empty-state message).
-    useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (!(e.metaKey || e.ctrlKey)) return;
-            if (e.key !== "l" && e.key !== "L") return;
-            e.preventDefault();
+    // Cmd/Ctrl+L: jump to the Prior suggestions log. Focuses the
+    // first suggestion row if any exist so the user can immediately
+    // use ↑↓ — otherwise falls back to the section header (empty state).
+    useGlobalShortcut(
+        "global.gotoPriorLog",
+        useCallback(() => {
             if (uiModeRef.current === "setup") {
                 dispatchRaw({ type: "setUiMode", mode: "suggest" });
             }
@@ -713,20 +681,17 @@ export function ClueProvider({ children }: { children: ReactNode }) {
                     behavior: "smooth",
                     block: "start",
                 });
-                const firstRow =
-                    document.querySelector<HTMLElement>(
-                        "[data-suggestion-row='0']",
-                    );
+                const firstRow = document.querySelector<HTMLElement>(
+                    "[data-suggestion-row='0']",
+                );
                 if (firstRow) {
                     firstRow.focus({ preventScroll: true });
                 } else if (header instanceof HTMLElement) {
                     header.focus({ preventScroll: true });
                 }
             });
-        };
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
-    }, []);
+        }, []),
+    );
 
     // Derive expensive values. The inner useMemos chain so each only
     // recomputes when its actual inputs change; React Compiler will

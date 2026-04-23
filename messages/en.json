@@ -12,32 +12,27 @@
         "infoGlyph": "ⓘ"
     },
     "tabs": {
-        "setup": "Setup",
-        "play": "Play",
-        "setupWithShortcut": "Setup (⌘H)",
-        "playWithShortcut": "Play (⌘K)"
+        "setup": "Setup ({shortcut})",
+        "play": "Play ({shortcut})"
     },
     "bottomNav": {
         "ariaLabel": "Primary navigation",
-        "checklist": "Checklist",
-        "checklistWithShortcut": "Checklist (⌘J)",
-        "suggest": "Suggest",
-        "suggestWithShortcut": "Suggest (⌘K)",
+        "checklist": "Checklist ({shortcut})",
+        "suggest": "Suggest ({shortcut})",
         "more": "More",
-        "gameSetup": "Game setup",
-        "gameSetupWithShortcut": "Game setup (⌘H)"
+        "gameSetup": "Game setup ({shortcut})"
     },
     "toolbar": {
-        "undo": "↶ Undo (⌘Z)",
+        "undo": "↶ Undo ({shortcut})",
         "undoAria": "Undo",
         "undoTitle": "Undo (⌘Z / Ctrl+Z)",
-        "redo": "↷ Redo (⌘⇧Z)",
+        "redo": "↷ Redo ({shortcut})",
         "redoAria": "Redo",
         "redoTitle": "Redo (⌘⇧Z / Ctrl+Shift+Z)",
         "share": "Share link",
         "shareCopied": "Copied!",
         "copyFallback": "Copy this URL:",
-        "newGame": "New game (⌘N)",
+        "newGame": "New game ({shortcut})",
         "newGameConfirm": "Start a new game? This will clear all players, cards, known hands, and suggestions."
     },
     "history": {
@@ -97,10 +92,8 @@
         "addCard": "+ add card",
         "addCategory": "+ add category",
         "knownCardCheckboxAria": "{player} owns {card}",
-        "startPlaying": "Start playing →",
-        "startPlayingWithShortcut": "Start playing → (⌘;)",
-        "continuePlaying": "Continue playing →",
-        "continuePlayingWithShortcut": "Continue playing → (⌘;)"
+        "startPlaying": "Start playing → ({shortcut})",
+        "continuePlaying": "Continue playing → ({shortcut})"
     },
     "deduce": {
         "title": "Deduction grid",
@@ -155,14 +148,13 @@
     },
     "suggestions": {
         "title": "Suggestion log",
-        "addTitle": "{platform, select, mac {Add a suggestion <shortcut>(⌘K)</shortcut>} other {Add a suggestion <shortcut>(Ctrl+K)</shortcut>}}",
+        "addTitle": "Add a suggestion <shortcut>({shortcutKey})</shortcut>",
         "recommendationsTitle": "Next-suggestion recommendations",
         "suggestingAs": "Suggesting as: ",
         "resolveContradictionFirst": "Resolve the contradiction to see recommendations.",
         "addPlayersFirst": "Add players to see recommendations.",
         "nothingUseful": "Nothing useful to ask — you've already narrowed everything down.",
-        "priorTitle": "{count, plural, =0 {Prior suggestions} other {Prior suggestions (#)}}",
-        "priorTitleWithShortcut": "{count, plural, =0 {Prior suggestions (⌘L)} other {Prior suggestions (⌘L) (#)}}",
+        "priorTitle": "{count, plural, =0 {Prior suggestions ({shortcut})} other {Prior suggestions ({shortcut}) (#)}}",
         "priorKeyboardHint": "↑↓ navigate · Enter edit · ⌫ remove · Esc exit",
         "priorEmpty": "No suggestions yet. Add one above.",
         "suggestedLine": "<strong>{suggester}</strong> suggested {cards}",
@@ -192,7 +184,7 @@
         "popoverNobodyRefuted": "Nobody refuted",
         "popoverNoShownCard": "Unknown / unseen",
         "popoverCommitHint": "Space toggles · Enter confirms",
-        "submit": "{platform, select, mac {Add (⌘↵)} other {Add (Ctrl+Enter)}}",
+        "submit": "Add ({shortcut})",
         "clearInputs": "Clear inputs",
         "pillValueNobody": "nobody",
         "pillValueUnknown": "unknown"

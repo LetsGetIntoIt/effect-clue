@@ -6,6 +6,7 @@ import { useState } from "react";
 import { describeAction } from "../../logic/describeAction";
 import { useLongPress } from "../hooks/useLongPress";
 import { useClue } from "../state";
+import { label } from "../keyMap";
 import { useToolbarActions } from "./Toolbar";
 
 /**
@@ -58,14 +59,18 @@ export function BottomNav() {
         >
             <ul className="m-0 flex list-none items-stretch justify-between gap-1 p-1">
                 <NavTabItem
-                    label={t("checklistWithShortcut")}
+                    label={t("checklist", {
+                        shortcut: label("global.gotoChecklist"),
+                    })}
                     active={mode === "checklist"}
                     onClick={() =>
                         dispatch({ type: "setUiMode", mode: "checklist" })
                     }
                 />
                 <NavTabItem
-                    label={t("suggestWithShortcut")}
+                    label={t("suggest", {
+                        shortcut: label("global.gotoPlay"),
+                    })}
                     active={mode === "suggest"}
                     onClick={() =>
                         dispatch({ type: "setUiMode", mode: "suggest" })
@@ -234,7 +239,9 @@ function OverflowMenu({
                         className="z-50 min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[13px] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
                     >
                         <MenuItem
-                            label={t("gameSetupWithShortcut")}
+                            label={t("gameSetup", {
+                                shortcut: label("global.gotoSetup"),
+                            })}
                             active={setupActive}
                             onClick={closeThen(onSetup)}
                         />
@@ -243,7 +250,9 @@ function OverflowMenu({
                             onClick={closeThen(onShare)}
                         />
                         <MenuItem
-                            label={tToolbar("newGame")}
+                            label={tToolbar("newGame", {
+                                shortcut: label("global.newGame"),
+                            })}
                             onClick={closeThen(onNewGame)}
                         />
                     </RadixPopover.Content>

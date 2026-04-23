@@ -11,6 +11,7 @@ import {
 import type { Card, Player } from "../../logic/GameObjects";
 import type { GameSetup } from "../../logic/GameSetup";
 import { Tooltip } from "./Tooltip";
+import { matches } from "../keyMap";
 
 /**
  * Shared pill primitives for both the Add-a-suggestion form and the
@@ -435,29 +436,30 @@ export function SingleSelectList<T>({
     );
 
     const onKeyDown = (e: React.KeyboardEvent<HTMLUListElement>) => {
-        if (e.key === "ArrowDown") {
+        const native = e.nativeEvent;
+        if (matches("nav.down", native)) {
             e.preventDefault();
             setFocusedIdx(i => (i + 1) % Math.max(rows.length, 1));
             return;
         }
-        if (e.key === "ArrowUp") {
+        if (matches("nav.up", native)) {
             e.preventDefault();
             setFocusedIdx(i =>
                 (i - 1 + rows.length) % Math.max(rows.length, 1),
             );
             return;
         }
-        if (e.key === "Home") {
+        if (matches("nav.home", native)) {
             e.preventDefault();
             setFocusedIdx(0);
             return;
         }
-        if (e.key === "End") {
+        if (matches("nav.end", native)) {
             e.preventDefault();
             setFocusedIdx(Math.max(rows.length - 1, 0));
             return;
         }
-        if (e.key === "Enter" || e.key === " ") {
+        if (matches("action.toggle", native)) {
             e.preventDefault();
             commitAt(focusedIdx);
             return;
@@ -582,27 +584,33 @@ export function MultiSelectList({
     };
 
     const onKeyDown = (e: React.KeyboardEvent<HTMLUListElement>) => {
-        if (e.key === "ArrowDown") {
+        const native = e.nativeEvent;
+        if (matches("nav.down", native)) {
             e.preventDefault();
             setFocusedIdx(i => (i + 1) % rowCount);
             return;
         }
-        if (e.key === "ArrowUp") {
+        if (matches("nav.up", native)) {
             e.preventDefault();
             setFocusedIdx(i => (i - 1 + rowCount) % rowCount);
             return;
         }
-        if (e.key === "Home") {
+        if (matches("nav.home", native)) {
             e.preventDefault();
             setFocusedIdx(0);
             return;
         }
-        if (e.key === "End") {
+        if (matches("nav.end", native)) {
             e.preventDefault();
             setFocusedIdx(rowCount - 1);
             return;
         }
-        if (e.key === " ") {
+        // Space toggles the focused row without advancing; Enter
+        // commits the whole set and advances to the next pill. We
+        // want those semantics to stay distinct, so check the raw
+        // keys directly rather than using the combined action.toggle
+        // binding.
+        if (e.key === " " && !e.metaKey && !e.ctrlKey && !e.altKey) {
             e.preventDefault();
             if (isNobodyRow(focusedIdx)) {
                 commitAdvance(NOBODY);
@@ -612,7 +620,7 @@ export function MultiSelectList({
             if (opt !== undefined) toggle(opt.value);
             return;
         }
-        if (e.key === "Enter") {
+        if (matches("action.commit", native)) {
             e.preventDefault();
             if (isNobodyRow(focusedIdx)) {
                 commitAdvance(NOBODY);

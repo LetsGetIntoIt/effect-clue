@@ -5,6 +5,7 @@ import { useState } from "react";
 import { describeAction } from "../../logic/describeAction";
 import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
+import { label } from "../keyMap";
 import { Tooltip } from "./Tooltip";
 
 const buttonClass =
@@ -91,7 +92,7 @@ export function Toolbar() {
                     title={t("undoTitle")}
                     aria-label={t("undoAria")}
                 >
-                    {t("undo")}
+                    {t("undo", { shortcut: label("global.undo") })}
                 </button>
             </Tooltip>
             <Tooltip content={redoTooltip}>
@@ -103,14 +104,14 @@ export function Toolbar() {
                     title={t("redoTitle")}
                     aria-label={t("redoAria")}
                 >
-                    {t("redo")}
+                    {t("redo", { shortcut: label("global.redo") })}
                 </button>
             </Tooltip>
             <button type="button" className={buttonClass} onClick={onShare}>
                 {copied ? t("shareCopied") : t("share")}
             </button>
             <button type="button" className={buttonClass} onClick={onNewGame}>
-                {t("newGame")}
+                {t("newGame", { shortcut: label("global.newGame") })}
             </button>
         </div>
     );
