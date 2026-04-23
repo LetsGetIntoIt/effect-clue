@@ -345,23 +345,32 @@ function PriorSuggestions() {
     const suggestions = state.suggestions;
     return (
         <div className="mt-4 border-t border-border pt-4">
-            <h3 className={SECTION_TITLE}>
-                {t("priorTitle", { count: suggestions.length })}
+            <h3
+                id="prior-suggestions"
+                tabIndex={-1}
+                className={`${SECTION_TITLE} rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2`}
+            >
+                {t("priorTitleWithShortcut", { count: suggestions.length })}
             </h3>
             {suggestions.length === 0 ? (
                 <div className="text-[13px] text-muted">
                     {t("priorEmpty")}
                 </div>
             ) : (
-                <ol className="m-0 flex list-none flex-col gap-2 p-0">
-                    {suggestions.map((s, idx) => (
-                        <PriorSuggestionItem
-                            key={s.id}
-                            suggestion={s}
-                            idx={idx}
-                        />
-                    ))}
-                </ol>
+                <>
+                    <div className="mb-1 text-[11px] text-muted">
+                        {t("priorKeyboardHint")}
+                    </div>
+                    <ol className="m-0 flex list-none flex-col gap-2 p-0">
+                        {suggestions.map((s, idx) => (
+                            <PriorSuggestionItem
+                                key={s.id}
+                                suggestion={s}
+                                idx={idx}
+                            />
+                        ))}
+                    </ol>
+                </>
             )}
         </div>
     );
@@ -396,11 +405,16 @@ function PriorSuggestionItem({
 
     const [isSelfHovered, setIsSelfHovered] = useState(false);
     const [openPillId, setOpenPillId] = useState<string | null>(null);
+    // Keyboard-driven edit mode — set when the user presses Enter on
+    // a focused row. Promotes the row into pill-mode until Escape or
+    // focus leaves the row entirely.
+    const [isKeyboardEditing, setIsKeyboardEditing] = useState(false);
 
     // Pill-mode stays engaged while any popover is open, even if the
     // pointer has left the card (popovers render in a portal outside
     // our DOM subtree).
-    const isInPillMode = isSelfHovered || openPillId !== null;
+    const isInPillMode =
+        isSelfHovered || openPillId !== null || isKeyboardEditing;
 
     // Cell → suggestion hover (reverse of the Checklist's
     // `cellIsHighlighted`). Two ways a cell can reference a suggestion:
@@ -565,14 +579,77 @@ function PriorSuggestionItem({
 
     return (
         <li
+            tabIndex={0}
+            data-suggestion-row={idx}
             className={
-                "relative flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2 text-[13px] transition-colors " +
+                "relative flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2 text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 " +
                 (isHighlighted
                     ? "border-accent bg-accent text-white"
                     : "border-border")
             }
             onMouseEnter={onMouseEnter}
             onMouseLeave={onMouseLeave}
+            onFocus={e => {
+                // Row itself gained focus (not a descendant).
+                if (e.currentTarget === e.target) {
+                    setHoveredSuggestion(idx);
+                }
+            }}
+            onBlur={e => {
+                // Keep the cross-panel highlight while focus stays
+                // anywhere inside the row (pills / popovers / ×).
+                const next = e.relatedTarget as Node | null;
+                if (next && e.currentTarget.contains(next)) return;
+                setHoveredSuggestion(null);
+                setIsKeyboardEditing(false);
+            }}
+            onKeyDown={e => {
+                // Escape inside pills: bubble up here and exit edit mode.
+                if (e.currentTarget !== e.target) {
+                    if (
+                        e.key === "Escape" &&
+                        isKeyboardEditing &&
+                        openPillId === null
+                    ) {
+                        e.preventDefault();
+                        setIsKeyboardEditing(false);
+                        e.currentTarget.focus();
+                    }
+                    return;
+                }
+                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    e.preventDefault();
+                    const dir = e.key === "ArrowDown" ? 1 : -1;
+                    let sib =
+                        dir === 1
+                            ? e.currentTarget.nextElementSibling
+                            : e.currentTarget.previousElementSibling;
+                    while (sib && !(sib instanceof HTMLLIElement)) {
+                        sib =
+                            dir === 1
+                                ? sib.nextElementSibling
+                                : sib.previousElementSibling;
+                    }
+                    if (sib instanceof HTMLElement) sib.focus();
+                } else if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    const row = e.currentTarget;
+                    setIsKeyboardEditing(true);
+                    queueMicrotask(() => {
+                        const first = row.querySelector<HTMLElement>(
+                            "[data-pill-id]",
+                        );
+                        first?.focus();
+                    });
+                } else if (e.key === "Delete" || e.key === "Backspace") {
+                    e.preventDefault();
+                    onRemove();
+                } else if (e.key === "Escape" && isKeyboardEditing) {
+                    e.preventDefault();
+                    setIsKeyboardEditing(false);
+                    e.currentTarget.focus();
+                }
+            }}
         >
             <span className="font-semibold">{idx + 1}.</span>
             <div className="min-w-0 flex-1 pr-5">

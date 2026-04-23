@@ -5,26 +5,31 @@
     },
     "tabs": {
         "setup": "Setup",
-        "play": "Play"
+        "play": "Play",
+        "setupWithShortcut": "Setup (⌘H)",
+        "playWithShortcut": "Play (⌘K)"
     },
     "bottomNav": {
         "ariaLabel": "Primary navigation",
         "checklist": "Checklist",
+        "checklistWithShortcut": "Checklist (⌘J)",
         "suggest": "Suggest",
+        "suggestWithShortcut": "Suggest (⌘K)",
         "more": "More",
-        "gameSetup": "Game setup"
+        "gameSetup": "Game setup",
+        "gameSetupWithShortcut": "Game setup (⌘H)"
     },
     "toolbar": {
-        "undo": "↶ Undo",
+        "undo": "↶ Undo (⌘Z)",
         "undoAria": "Undo",
         "undoTitle": "Undo (⌘Z / Ctrl+Z)",
-        "redo": "↷ Redo",
+        "redo": "↷ Redo (⌘⇧Z)",
         "redoAria": "Redo",
         "redoTitle": "Redo (⌘⇧Z / Ctrl+Shift+Z)",
         "share": "Share link",
         "shareCopied": "Copied!",
         "copyFallback": "Copy this URL:",
-        "newGame": "New game",
+        "newGame": "New game (⌘N)",
         "newGameConfirm": "Start a new game? This will clear all players, cards, known hands, and suggestions."
     },
     "history": {
@@ -85,7 +90,9 @@
         "addCategory": "+ add category",
         "knownCardCheckboxAria": "{player} owns {card}",
         "startPlaying": "Start playing →",
-        "continuePlaying": "Continue playing →"
+        "startPlayingWithShortcut": "Start playing → (⌘;)",
+        "continuePlaying": "Continue playing →",
+        "continuePlayingWithShortcut": "Continue playing → (⌘;)"
     },
     "deduce": {
         "title": "Deduction grid",
@@ -147,6 +154,8 @@
         "addPlayersFirst": "Add players to see recommendations.",
         "nothingUseful": "Nothing useful to ask — you've already narrowed everything down.",
         "priorTitle": "{count, plural, =0 {Prior suggestions} other {Prior suggestions (#)}}",
+        "priorTitleWithShortcut": "{count, plural, =0 {Prior suggestions (⌘L)} other {Prior suggestions (⌘L) (#)}}",
+        "priorKeyboardHint": "↑↓ navigate · Enter edit · ⌫ remove · Esc exit",
         "priorEmpty": "No suggestions yet. Add one above.",
         "suggestedLine": "<strong>{suggester}</strong> suggested {cards}",
         "refutationLine": "{status, select, refutedSeenPassed {refuted by <strong>{refuter}</strong> (showed {seen}) · passed: {passers}} refutedSeen {refuted by <strong>{refuter}</strong> (showed {seen})} refutedPassed {refuted by <strong>{refuter}</strong> · passed: {passers}} refuted {refuted by <strong>{refuter}</strong>} nobodyPassed {nobody could refute · passed: {passers}} other {nobody could refute}}",

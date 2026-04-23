@@ -35,14 +35,14 @@ export function BottomNav() {
         >
             <ul className="m-0 flex list-none items-stretch justify-between gap-1 p-1">
                 <NavTabItem
-                    label={t("checklist")}
+                    label={t("checklistWithShortcut")}
                     active={mode === "checklist"}
                     onClick={() =>
                         dispatch({ type: "setUiMode", mode: "checklist" })
                     }
                 />
                 <NavTabItem
-                    label={t("suggest")}
+                    label={t("suggestWithShortcut")}
                     active={mode === "suggest"}
                     onClick={() =>
                         dispatch({ type: "setUiMode", mode: "suggest" })
@@ -180,7 +180,7 @@ function OverflowMenu({
                         className="z-50 min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[13px] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
                     >
                         <MenuItem
-                            label={t("gameSetup")}
+                            label={t("gameSetupWithShortcut")}
                             active={setupActive}
                             onClick={closeThen(onSetup)}
                         />
