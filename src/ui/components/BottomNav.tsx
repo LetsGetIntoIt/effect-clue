@@ -1,12 +1,14 @@
 "use client";
 
 import * as RadixPopover from "@radix-ui/react-popover";
+import { LayoutGroup, motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { describeAction } from "../../logic/describeAction";
 import { useLongPress } from "../hooks/useLongPress";
 import { useClue } from "../state";
 import { label } from "../keyMap";
+import { T_SPRING_SOFT, T_STANDARD, useReducedTransition } from "../motion";
 import { OverflowMenu } from "./OverflowMenu";
 import { useToolbarActions } from "./Toolbar";
 
@@ -59,6 +61,7 @@ export function BottomNav() {
             }
         >
             <ul className="m-0 flex list-none items-stretch justify-between gap-1 p-1">
+                <LayoutGroup id="bottomnav-underline">
                 <NavTabItem
                     label={t("checklist", {
                         shortcut: label("global.gotoChecklist"),
@@ -77,6 +80,7 @@ export function BottomNav() {
                         dispatch({ type: "setUiMode", mode: "suggest" })
                     }
                 />
+                </LayoutGroup>
                 <NavIconItem
                     label={tToolbar("undoAria")}
                     glyph="↶"
@@ -117,6 +121,8 @@ function NavTabItem({
     readonly active: boolean;
     readonly onClick: () => void;
 }) {
+    const underlineTransition = useReducedTransition(T_SPRING_SOFT);
+    const colorTransition = useReducedTransition(T_STANDARD);
     return (
         <li className="flex-1">
             <button
@@ -125,13 +131,26 @@ function NavTabItem({
                 aria-selected={active}
                 onClick={onClick}
                 className={
-                    "flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--radius)] border-0 border-b-2 bg-transparent px-2 text-[13px] font-semibold " +
-                    (active
-                        ? "border-accent text-accent"
-                        : "border-transparent text-muted hover:text-accent")
+                    "relative flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--radius)] border-0 bg-transparent px-2 text-[13px] font-semibold"
                 }
             >
-                {label}
+                <motion.span
+                    animate={{
+                        color: active
+                            ? "var(--color-accent)"
+                            : "var(--color-muted)",
+                    }}
+                    transition={colorTransition}
+                >
+                    {label}
+                </motion.span>
+                {active && (
+                    <motion.span
+                        layoutId="bottomnav-active-underline"
+                        className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-accent"
+                        transition={underlineTransition}
+                    />
+                )}
             </button>
         </li>
     );

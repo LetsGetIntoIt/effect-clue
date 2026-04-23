@@ -1,6 +1,7 @@
 "use client";
 
 import * as RadixPopover from "@radix-ui/react-popover";
+import { AnimatePresence, motion } from "motion/react";
 import {
     useCallback,
     useEffect,
@@ -10,6 +11,9 @@ import {
 } from "react";
 import type { Card, Player } from "../../logic/GameObjects";
 import type { GameSetup } from "../../logic/GameSetup";
+import { T_FAST, T_SPRING_SOFT, useReducedTransition } from "../motion";
+
+const MOTION_POP_LAYOUT: "popLayout" = "popLayout";
 import { Tooltip } from "./Tooltip";
 import { matches } from "../keyMap";
 
@@ -229,8 +233,12 @@ export function PillPopover({
               ? "–"
               : "+";
     const showClear = onClear !== undefined && status === STATUS_DONE;
+    const iconTransition = useReducedTransition(T_FAST);
+    const widthTransition = useReducedTransition(T_SPRING_SOFT);
     const pillBody = (
-        <span
+        <motion.span
+            layout
+            transition={widthTransition}
             className={
                 "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[13px] " +
                 tone
@@ -238,9 +246,20 @@ export function PillPopover({
         >
             <span
                 aria-hidden
-                className="inline-block w-3 text-center text-[10px] leading-3"
+                className="relative inline-block w-3 overflow-hidden text-center text-[10px] leading-3"
             >
-                {iconGlyph}
+                <AnimatePresence mode={MOTION_POP_LAYOUT} initial={false}>
+                    <motion.span
+                        key={iconGlyph}
+                        initial={{ y: -8, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 8, opacity: 0 }}
+                        transition={iconTransition}
+                        className="inline-block"
+                    >
+                        {iconGlyph}
+                    </motion.span>
+                </AnimatePresence>
             </span>
             <span className="font-semibold">{label}</span>
             {valueDisplay !== undefined && (
@@ -267,7 +286,7 @@ export function PillPopover({
                     ×
                 </span>
             )}
-        </span>
+        </motion.span>
     );
 
     if (disabled) {
@@ -285,10 +304,11 @@ export function PillPopover({
         <RadixPopover.Root open={open} onOpenChange={onOpenChange}>
             <RadixPopover.Trigger
                 data-pill-id={pillId}
+                data-animated-focus
                 className={
                     "cursor-pointer rounded-full border-none bg-transparent p-0 " +
                     "hover:opacity-80 " +
-                    "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel " +
+                    "focus:outline-none " +
                     // While the dropdown is open, real focus is inside
                     // the list — pin the ring on the trigger anyway so
                     // the user can see which pill they're editing.

@@ -2,7 +2,7 @@
 
 import { Result } from "effect";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Card, Owner, Player, ownerLabel } from "../../logic/GameObjects";
 import {
     allCardIds,
@@ -42,6 +42,15 @@ import {
     rememberChecklistCell,
 } from "../checklistFocus";
 import { label, matches } from "../keyMap";
+import { AnimatePresence, motion } from "motion/react";
+import {
+    T_CELEBRATE,
+    T_FAST,
+    T_STANDARD,
+    T_WIGGLE,
+    useReducedTransition,
+} from "../motion";
+import { useConfetti } from "../hooks/useConfetti";
 import { CardPackRow } from "./CardPackRow";
 import { Envelope } from "./Icons";
 import { InfoPopover } from "./InfoPopover";
@@ -571,7 +580,7 @@ export function Checklist() {
                                             />
                                         ) : (
                                             <>
-                                                {cellLabel(value)}
+                                                <AnimatedCellGlyph value={value} />
                                                 {footnoteNumbers.length > 0 &&
                                                     value === undefined && (
                                                         <sup className="ml-0.5 text-[9px] font-normal text-accent">
@@ -671,6 +680,7 @@ export function Checklist() {
                                                     tabIndex={0}
                                                     aria-pressed={isKnownY}
                                                     aria-label={ariaLabel}
+                                                    data-animated-focus
                                                     data-cell-row={rowIdx}
                                                     data-cell-col={colIdx}
                                                     onFocus={onCellFocus}
@@ -727,6 +737,7 @@ export function Checklist() {
                                                         role="button"
                                                         tabIndex={0}
                                                         aria-haspopup="dialog"
+                                                        data-animated-focus
                                                         data-cell-row={rowIdx}
                                                         data-cell-col={colIdx}
                                                         onFocus={onCellFocus}
@@ -764,6 +775,7 @@ export function Checklist() {
                                                     key={`${ownerKey(owner)}-${String(entry.id)}`}
                                                     className={tdClassName}
                                                     tabIndex={0}
+                                                    data-animated-focus
                                                     data-cell-row={rowIdx}
                                                     data-cell-col={colIdx}
                                                     onFocus={onCellFocus}
@@ -1160,16 +1172,119 @@ const buildCellTitle = (args: {
     return parts.length > 0 ? parts.join("\n") : undefined;
 };
 
+// Motion-only constants (non user-facing). The "unsolved" color
+// is the app's body ink; motion can't animate "inherit" so we
+// resolve it here.
+const CSS_ACCENT = "var(--color-accent)";
+const CSS_BORDER = "var(--color-border)";
+const CSS_WHITE = "#ffffff";
+const CSS_INK = "#2a1f12";
+const MOTION_WAIT: "wait" = "wait";
+const MOTION_POP_LAYOUT: "popLayout" = "popLayout";
+
 function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
     const t = useTranslations("deduce");
     const { state } = useClue();
     const setup = state.setup;
     const progress = caseFileProgress(setup, knowledge);
+    const headerRef = useRef<HTMLDivElement>(null);
+    const fireConfetti = useConfetti();
+    const wiggleTransition = useReducedTransition(T_WIGGLE);
+    const celebrateTransition = useReducedTransition(T_CELEBRATE);
+    const crossfadeTransition = useReducedTransition(T_STANDARD);
+
+    // Per-category solved state (map keyed by category id). Used to
+    // detect the false→true transition that fires the wiggle.
+    const solvedByCategory = useMemo(() => {
+        const m = new Map<string, boolean>();
+        for (const cat of setup.categories) {
+            m.set(
+                String(cat.id),
+                caseFileAnswerFor(setup, knowledge, cat.id) !== undefined,
+            );
+        }
+        return m;
+    }, [setup, knowledge]);
+
+    // Seed `prevSolvedRef` with the initial snapshot so a reload
+    // (or first mount) of an in-progress game does NOT treat every
+    // already-solved category as a fresh solve and wiggle the
+    // whole header on load.
+    const prevSolvedRef = useRef<Map<string, boolean> | null>(null);
+    if (prevSolvedRef.current === null) {
+        prevSolvedRef.current = new Map(solvedByCategory);
+    }
+    const [wigglingIds, setWigglingIds] = useState<ReadonlySet<string>>(
+        new Set(),
+    );
+
+    useEffect(() => {
+        const prev = prevSolvedRef.current;
+        const newlySolved: string[] = [];
+        for (const [id, isSolved] of solvedByCategory) {
+            if (isSolved && !prev?.get(id)) newlySolved.push(id);
+        }
+        prevSolvedRef.current = new Map(solvedByCategory);
+        if (newlySolved.length === 0) return;
+        setWigglingIds(new Set(newlySolved));
+        const timeout = setTimeout(() => setWigglingIds(new Set()), 700);
+        return () => clearTimeout(timeout);
+    }, [solvedByCategory]);
+
+    // Accuse-ready: every category has a solved answer.
+    const allSolved = setup.categories.length > 0 &&
+        setup.categories.every(cat => solvedByCategory.get(String(cat.id)));
+    // Same reasoning as `prevSolvedRef`: seed from the initial
+    // render so loading a fully-solved game doesn't re-confetti.
+    const wasAllSolvedRef = useRef<boolean | null>(null);
+    if (wasAllSolvedRef.current === null) {
+        wasAllSolvedRef.current = allSolved;
+    }
+    const [isCelebrating, setIsCelebrating] = useState(false);
+    useEffect(() => {
+        if (allSolved && !wasAllSolvedRef.current) {
+            setIsCelebrating(true);
+            fireConfetti(headerRef.current);
+            const timeout = setTimeout(() => setIsCelebrating(false), 900);
+            wasAllSolvedRef.current = true;
+            return () => clearTimeout(timeout);
+        }
+        if (!allSolved) wasAllSolvedRef.current = false;
+        return undefined;
+    }, [allSolved, fireConfetti]);
+
+    const headerAnimate = isCelebrating
+        ? { scale: [1, 1.04, 1], boxShadow: [
+            "0 0 0 0 rgba(122, 28, 28, 0)",
+            "0 0 0 14px rgba(122, 28, 28, 0.22)",
+            "0 0 0 0 rgba(122, 28, 28, 0)",
+        ] }
+        : { scale: 1, boxShadow: "0 0 0 0 rgba(122, 28, 28, 0)" };
+
     return (
-        <div className="mb-4 rounded-[var(--radius)] border border-border bg-case-file-bg p-3">
+        <motion.div
+            ref={headerRef}
+            className="mb-4 rounded-[var(--radius)] border border-border bg-case-file-bg p-3"
+            animate={headerAnimate}
+            transition={isCelebrating ? wiggleTransition : celebrateTransition}
+        >
             <div className="mb-2.5 flex items-center gap-3 text-[13px]">
                 <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-semibold text-accent">
-                    <Envelope size={16} />
+                    <motion.span
+                        animate={
+                            wigglingIds.size > 0 || isCelebrating
+                                ? { rotate: [0, -8, 8, -4, 0], scale: [1, 1.15, 1, 1.15, 1] }
+                                : { rotate: 0, scale: 1 }
+                        }
+                        transition={
+                            wigglingIds.size > 0 || isCelebrating
+                                ? wiggleTransition
+                                : celebrateTransition
+                        }
+                        className="inline-flex"
+                    >
+                        <Envelope size={16} />
+                    </motion.span>
                     {t("caseFileProgress", {
                         percent: (progress * 100).toFixed(0),
                     })}
@@ -1198,14 +1313,26 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
                         knowledge,
                         category.id,
                     );
+                    const isWiggling = wigglingIds.has(String(category.id));
+                    const wiggleAnim = isWiggling
+                        ? { scale: [1, 1.08, 1], rotate: [0, -2, 2, 0] }
+                        : { scale: 1, rotate: 0 };
                     return (
-                        <div
+                        <motion.div
                             key={String(category.id)}
-                            className={
-                                "rounded-[var(--radius)] border p-2 text-center " +
-                                (solved
-                                    ? "border-accent bg-accent text-white"
-                                    : "border-border bg-white")
+                            className="rounded-[var(--radius)] border p-2 text-center"
+                            animate={{
+                                ...wiggleAnim,
+                                backgroundColor: solved
+                                    ? CSS_ACCENT
+                                    : CSS_WHITE,
+                                borderColor: solved
+                                    ? CSS_ACCENT
+                                    : CSS_BORDER,
+                                color: solved ? CSS_WHITE : CSS_INK,
+                            }}
+                            transition={
+                                isWiggling ? wiggleTransition : crossfadeTransition
                             }
                         >
                             <div
@@ -1216,22 +1343,38 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
                             >
                                 {category.name}
                             </div>
-                            {solved ? (
-                                <div className="text-[14px] font-semibold">
-                                    {cardName(setup, solved)}
-                                </div>
-                            ) : (
-                                <div className="text-[13px] text-muted">
-                                    {t("candidatesCount", {
-                                        count: candidates.length,
-                                    })}
-                                </div>
-                            )}
-                        </div>
+                            <AnimatePresence mode={MOTION_WAIT} initial={false}>
+                                {solved ? (
+                                    <motion.div
+                                        key="solved"
+                                        initial={{ opacity: 0, y: 4 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -4 }}
+                                        transition={crossfadeTransition}
+                                        className="text-[14px] font-semibold"
+                                    >
+                                        {cardName(setup, solved)}
+                                    </motion.div>
+                                ) : (
+                                    <motion.div
+                                        key="candidates"
+                                        initial={{ opacity: 0, y: -4 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: 4 }}
+                                        transition={crossfadeTransition}
+                                        className="text-[13px] text-muted"
+                                    >
+                                        {t("candidatesCount", {
+                                            count: candidates.length,
+                                        })}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </motion.div>
                     );
                 })}
             </div>
-        </div>
+        </motion.div>
     );
 }
 
@@ -1243,6 +1386,35 @@ const cellLabel = (value: CellValue | undefined): string => {
     if (value === N) return "·";
     return "";
 };
+
+/**
+ * Cell Y/N/blank glyph with a short pop-in/out as the value changes.
+ * Using `AnimatePresence` keyed on the glyph means each state swap
+ * renders a fresh `<motion.span>` that scales in while the outgoing
+ * one scales out — the tween is fast (120ms) so the cell still feels
+ * snappy, not animated-heavy. The cell background transition stays
+ * in CSS (`transition-colors`) so motion only owns the glyph.
+ */
+function AnimatedCellGlyph({ value }: { readonly value: CellValue | undefined }) {
+    const transition = useReducedTransition(T_FAST);
+    const glyph = cellLabel(value);
+    return (
+        <AnimatePresence mode={MOTION_POP_LAYOUT} initial={false}>
+            {glyph !== "" && (
+                <motion.span
+                    key={glyph}
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.5, opacity: 0 }}
+                    transition={transition}
+                    className="inline-block"
+                >
+                    {glyph}
+                </motion.span>
+            )}
+        </AnimatePresence>
+    );
+}
 
 const CELL_BASE =
     "w-9 min-w-9 border border-border px-2 py-1 text-center font-semibold relative";

@@ -1,7 +1,9 @@
 "use client";
 
+import { AnimatePresence, motion } from "motion/react";
 import { useCallback } from "react";
 import { useTranslations } from "next-intl";
+import { AnimatedFocusRing } from "./components/AnimatedFocusRing";
 import { BottomNav } from "./components/BottomNav";
 import { Checklist } from "./components/Checklist";
 import { GlobalContradictionBanner } from "./components/GlobalContradictionBanner";
@@ -11,6 +13,11 @@ import { TooltipProvider } from "./components/Tooltip";
 import { ConfirmProvider, useConfirm } from "./hooks/useConfirm";
 import { SelectionProvider } from "./SelectionContext";
 import { useGlobalShortcut } from "./keyMap";
+import { T_STANDARD, useReducedTransition } from "./motion";
+
+// Motion mode/group id literals — non user-facing.
+const MOTION_APP_GROUP = "app";
+const MOTION_WAIT: "wait" = "wait";
 import { ClueProvider, useClue } from "./state";
 
 /**
@@ -53,6 +60,7 @@ export function Clue() {
           <ClueProvider>
            <ConfirmProvider>
            <SelectionProvider>
+            <AnimatedFocusRing groupId={MOTION_APP_GROUP}>
             <main className="mx-auto flex h-[100dvh] max-w-[1400px] flex-col gap-5 px-5 pb-24 [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+1.5rem)]">
                 <header className="flex shrink-0 flex-wrap items-center justify-between gap-4">
                     <h1 className="m-0 text-[36px] uppercase tracking-[0.08em] text-accent drop-shadow-sm">
@@ -71,6 +79,7 @@ export function Clue() {
                 <NewGameShortcut />
             </main>
             <BottomNav />
+            </AnimatedFocusRing>
            </SelectionProvider>
            </ConfirmProvider>
           </ClueProvider>
@@ -118,27 +127,85 @@ function NewGameShortcut() {
 function TabContent() {
     const { state } = useClue();
     const mode = state.uiMode;
-    if (mode === "setup") {
-        return <Checklist />;
-    }
-    // `hidden` / `block` classes keep both children mounted on desktop
-    // and hide the off-tab one on mobile.
-    const hideOnMobileIfSuggest =
-        mode === "suggest" ? "hidden [@media(min-width:800px)]:block" : "";
-    const hideOnMobileIfChecklist =
-        mode === "checklist" ? "hidden [@media(min-width:800px)]:block" : "";
+    const transition = useReducedTransition(T_STANDARD);
+
+    // Setup is its own full-width view; Play (checklist/suggest)
+    // renders the two-pane grid. Crossfade between the two with
+    // AnimatePresence mode="wait" so their layouts don't overlap.
     return (
-        <div className="grid h-full min-h-0 gap-5 [@media(min-width:800px)]:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
-            <div className={`min-h-0 min-w-0 ${hideOnMobileIfSuggest}`}>
-                <Checklist />
-            </div>
-            <div
-                className={
-                    `min-h-0 min-w-0 overflow-y-auto ${hideOnMobileIfChecklist}`
-                }
-            >
-                <SuggestionLogPanel />
-            </div>
+        <AnimatePresence mode={MOTION_WAIT} initial={false}>
+            {mode === "setup" ? (
+                <motion.div
+                    key="setup"
+                    initial={{ opacity: 0, x: -16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -16 }}
+                    transition={transition}
+                    className="h-full min-h-0"
+                >
+                    <Checklist />
+                </motion.div>
+            ) : (
+                <motion.div
+                    key="play"
+                    initial={{ opacity: 0, x: 16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 16 }}
+                    transition={transition}
+                    className="grid h-full min-h-0 gap-5 [@media(min-width:800px)]:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]"
+                >
+                    <PlayPane
+                        visible={mode === "checklist"}
+                        className="min-h-0 min-w-0"
+                    >
+                        <Checklist />
+                    </PlayPane>
+                    <PlayPane
+                        visible={mode === "suggest"}
+                        className="min-h-0 min-w-0 overflow-y-auto"
+                    >
+                        <SuggestionLogPanel />
+                    </PlayPane>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    );
+}
+
+/**
+ * Checklist / Suggest pane. Both panes always stay mounted so the
+ * URL `?view=` state stays coherent across the 800px breakpoint.
+ *
+ * Mobile (<800px): only the active pane is visible via the
+ * `hidden [@media(min-width:800px)]:block` class on the inactive
+ * pane. No fade animation — the `hidden` class removes it from the
+ * layout entirely so the active pane fills the column.
+ *
+ * Desktop (≥800px): both panes are always visible (the `hidden`
+ * class is overridden by the media-query `:block` at 800px+).
+ *
+ * This mirrors the pre-animation behavior exactly; the refactor is
+ * only about routing Setup vs Play through `AnimatePresence` in the
+ * parent. (A previous iteration attempted to animate opacity across
+ * the breakpoint, which hid the suggest pane on desktop — avoid.)
+ */
+function PlayPane({
+    visible,
+    className,
+    children,
+}: {
+    readonly visible: boolean;
+    readonly className: string;
+    readonly children: React.ReactNode;
+}) {
+    return (
+        <div
+            className={
+                className +
+                (visible ? "" : " hidden [@media(min-width:800px)]:block")
+            }
+        >
+            {children}
         </div>
     );
 }
