@@ -3,6 +3,8 @@
 import * as RadixPopover from "@radix-ui/react-popover";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { describeAction } from "../../logic/describeAction";
+import { useLongPress } from "../hooks/useLongPress";
 import { useClue } from "../state";
 import { useToolbarActions } from "./Toolbar";
 
@@ -19,10 +21,31 @@ import { useToolbarActions } from "./Toolbar";
  * Game setup (the Setup tab), Share link, and New game.
  */
 export function BottomNav() {
-    const { state, dispatch, canUndo, canRedo, undo, redo } = useClue();
+    const { state, dispatch, canUndo, canRedo, undo, redo, nextUndo, nextRedo } =
+        useClue();
     const t = useTranslations("bottomNav");
     const tToolbar = useTranslations("toolbar");
+    const tHistory = useTranslations("history");
     const mode = state.uiMode;
+
+    const undoPreview = nextUndo
+        ? tHistory("undoTooltip", {
+              description: describeAction(
+                  nextUndo.action,
+                  nextUndo.previousState,
+                  tHistory,
+              ),
+          })
+        : undefined;
+    const redoPreview = nextRedo
+        ? tHistory("redoTooltip", {
+              description: describeAction(
+                  nextRedo.action,
+                  nextRedo.previousState,
+                  tHistory,
+              ),
+          })
+        : undefined;
 
     return (
         <nav
@@ -53,12 +76,14 @@ export function BottomNav() {
                     glyph="↶"
                     onClick={undo}
                     disabled={!canUndo}
+                    preview={undoPreview}
                 />
                 <NavIconItem
                     label={tToolbar("redoAria")}
                     glyph="↷"
                     onClick={redo}
                     disabled={!canRedo}
+                    preview={redoPreview}
                 />
                 <OverflowMenu
                     setupActive={mode === "setup"}
@@ -109,30 +134,59 @@ function NavTabItem({
 /**
  * Icon-only slot (Undo / Redo). Glyph matches the toolbar strings
  * (↶ / ↷); `aria-label` carries the real name for screen readers.
+ * On touch devices a long-press (~500 ms) reveals `preview` in a
+ * popover without firing the primary `onClick` — users can see what
+ * they're about to reverse before committing.
  */
 function NavIconItem({
     label,
     glyph,
     onClick,
     disabled,
+    preview,
 }: {
     readonly label: string;
     readonly glyph: string;
     readonly onClick: () => void;
     readonly disabled: boolean;
+    readonly preview?: string | undefined;
 }) {
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const longPress = useLongPress(() => {
+        if (disabled || !preview) return;
+        setPreviewOpen(true);
+    });
+
     return (
         <li>
-            <button
-                type="button"
-                aria-label={label}
-                title={label}
-                onClick={onClick}
-                disabled={disabled}
-                className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-[var(--radius)] border-none bg-transparent text-[20px] text-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
-            >
-                {glyph}
-            </button>
+            <RadixPopover.Root open={previewOpen} onOpenChange={setPreviewOpen}>
+                <RadixPopover.Trigger
+                    type="button"
+                    aria-label={label}
+                    onClick={onClick}
+                    disabled={disabled}
+                    className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-[var(--radius)] border-none bg-transparent text-[20px] text-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
+                    style={{ WebkitTouchCallout: "none" }}
+                    {...longPress}
+                >
+                    {glyph}
+                </RadixPopover.Trigger>
+                <RadixPopover.Portal>
+                    <RadixPopover.Content
+                        side="top"
+                        sideOffset={6}
+                        collisionPadding={8}
+                        onOpenAutoFocus={e => e.preventDefault()}
+                        className="z-50 max-w-[280px] rounded-[var(--radius)] border border-border bg-panel px-3 py-2 text-[12px] leading-snug shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
+                    >
+                        {preview ?? label}
+                        <RadixPopover.Arrow
+                            className="fill-panel stroke-border"
+                            strokeWidth={0.5}
+                        />
+                    </RadixPopover.Content>
+                </RadixPopover.Portal>
+            </RadixPopover.Root>
         </li>
     );
 }

@@ -8,7 +8,8 @@ import { GlobalContradictionBanner } from "./components/GlobalContradictionBanne
 import { SuggestionLogPanel } from "./components/SuggestionLogPanel";
 import { Toolbar } from "./components/Toolbar";
 import { TooltipProvider } from "./components/Tooltip";
-import { HoverProvider } from "./HoverContext";
+import { ConfirmProvider, useConfirm } from "./hooks/useConfirm";
+import { SelectionProvider } from "./SelectionContext";
 import { ClueProvider, useClue } from "./state";
 
 /**
@@ -47,7 +48,8 @@ export function Clue() {
     return (
         <TooltipProvider delayDuration={150} skipDelayDuration={50}>
           <ClueProvider>
-           <HoverProvider>
+           <ConfirmProvider>
+           <SelectionProvider>
             <main className="mx-auto flex h-[100dvh] max-w-[1400px] flex-col gap-5 px-5 pb-24 [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+1.5rem)]">
                 <header className="flex shrink-0 flex-wrap items-center justify-between gap-4">
                     <h1 className="m-0 text-[36px] uppercase tracking-[0.08em] text-accent drop-shadow-sm">
@@ -69,7 +71,8 @@ export function Clue() {
                 <NewGameShortcut />
             </main>
             <BottomNav />
-           </HoverProvider>
+           </SelectionProvider>
+           </ConfirmProvider>
           </ClueProvider>
         </TooltipProvider>
     );
@@ -86,18 +89,22 @@ export function Clue() {
 function NewGameShortcut() {
     const t = useTranslations("toolbar");
     const { dispatch } = useClue();
+    const confirm = useConfirm();
     useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
+        const onKeyDown = async (e: KeyboardEvent) => {
             if (!(e.metaKey || e.ctrlKey)) return;
             if (e.key !== "n" && e.key !== "N") return;
             e.preventDefault();
-            if (window.confirm(t("newGameConfirm"))) {
+            if (await confirm({ message: t("newGameConfirm") })) {
                 dispatch({ type: "newGame" });
             }
         };
-        window.addEventListener("keydown", onKeyDown);
-        return () => window.removeEventListener("keydown", onKeyDown);
-    }, [dispatch, t]);
+        const listener = (e: KeyboardEvent) => {
+            void onKeyDown(e);
+        };
+        window.addEventListener("keydown", listener);
+        return () => window.removeEventListener("keydown", listener);
+    }, [confirm, dispatch, t]);
     return null;
 }
 

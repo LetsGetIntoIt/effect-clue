@@ -284,7 +284,17 @@ export function PillPopover({
         <RadixPopover.Root open={open} onOpenChange={onOpenChange}>
             <RadixPopover.Trigger
                 data-pill-id={pillId}
-                className="cursor-pointer rounded-full border-none bg-transparent p-0 hover:opacity-80"
+                className={
+                    "cursor-pointer rounded-full border-none bg-transparent p-0 " +
+                    "hover:opacity-80 " +
+                    "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel " +
+                    // While the dropdown is open, real focus is inside
+                    // the list — pin the ring on the trigger anyway so
+                    // the user can see which pill they're editing.
+                    (open
+                        ? "ring-2 ring-accent ring-offset-2 ring-offset-panel"
+                        : "")
+                }
             >
                 {pillBody}
             </RadixPopover.Trigger>
@@ -300,13 +310,26 @@ export function PillPopover({
                         e.preventDefault();
                     }}
                     onCloseAutoFocus={e => {
-                        // Prevent Radix from returning focus to the
-                        // trigger on close. That default steals
-                        // focus from the *next* popover's list
-                        // during auto-advance (the list's mount
-                        // effect focused it; Radix's focus-return
-                        // fires later and undoes that).
-                        e.preventDefault();
+                        // During auto-advance, the next popover's
+                        // list is already focused by the time our
+                        // close fires; if we let Radix restore focus
+                        // to *this* trigger now it would steal focus
+                        // from that list. Detect by checking whether
+                        // the active element is inside another of
+                        // our popovers — if yes, suppress Radix's
+                        // default. If no (Esc / outside click /
+                        // selection with no next pill), let Radix
+                        // do its thing so the user lands back on
+                        // the trigger with a visible focus ring.
+                        const active = document.activeElement;
+                        if (
+                            active instanceof HTMLElement &&
+                            active.closest(
+                                "[data-suggestion-form-popover='true']",
+                            ) !== null
+                        ) {
+                            e.preventDefault();
+                        }
                     }}
                     onInteractOutside={e => {
                         // Auto-advance triggers a stray "outside

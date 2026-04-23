@@ -18,8 +18,10 @@ import {
     makeKnowledgeLayer,
     makeSetupLayer,
 } from "../../logic/services";
-import { useHover } from "../HoverContext";
+import { useConfirm } from "../hooks/useConfirm";
 import { useListFormatter } from "../hooks/useListFormatter";
+import { useSelection } from "../SelectionContext";
+import { InfoPopover } from "./InfoPopover";
 import { SuggestionForm } from "./SuggestionForm";
 import {
     displayCard,
@@ -38,7 +40,6 @@ import {
     pillStatusForPlayer,
     SingleSelectList,
 } from "./SuggestionPills";
-import { Tooltip } from "./Tooltip";
 import {
     DraftSuggestion,
     useClue,
@@ -149,6 +150,15 @@ const renderAnySlot = (
             });
     }
 };
+
+function RecommendationInfoIcon({ content }: { readonly content: React.ReactNode }) {
+    const tCommon = useTranslations("common");
+    return (
+        <InfoPopover asButton content={content} side="left">
+            {tCommon("infoGlyph")}
+        </InfoPopover>
+    );
+}
 
 function Recommendations() {
     const t = useTranslations("suggestions");
@@ -295,42 +305,53 @@ function Recommendations() {
                             </div>
                         );
                         return (
-                            <Tooltip key={i} content={scoreBreakdown}>
-                            <li className="py-1.5">
-                                <div>
-                                    {r.cards.map((c, ci) => {
-                                        const rawName =
-                                            setup.categories[ci]?.name ??
-                                            t("defaultCategorySingular");
-                                        const categoryLabel = rawName.toLowerCase();
-                                        return (
-                                            <span key={ci}>
-                                                {ci > 0 && " + "}
-                                                {isAnySlot(c) ? (
-                                                    <em className="text-muted">
-                                                        {renderAnySlot(
-                                                            t,
-                                                            c,
-                                                            categoryLabel,
+                            <li key={i} className="py-1.5">
+                                <div className="flex items-start gap-1.5">
+                                    <div className="min-w-0 flex-1">
+                                        <div>
+                                            {r.cards.map((c, ci) => {
+                                                const rawName =
+                                                    setup.categories[ci]?.name ??
+                                                    t("defaultCategorySingular");
+                                                const categoryLabel =
+                                                    rawName.toLowerCase();
+                                                return (
+                                                    <span key={ci}>
+                                                        {ci > 0 && " + "}
+                                                        {isAnySlot(c) ? (
+                                                            <em className="text-muted">
+                                                                {renderAnySlot(
+                                                                    t,
+                                                                    c,
+                                                                    categoryLabel,
+                                                                )}
+                                                            </em>
+                                                        ) : (
+                                                            <strong>
+                                                                {cardName(
+                                                                    setup,
+                                                                    c,
+                                                                )}
+                                                            </strong>
                                                         )}
-                                                    </em>
-                                                ) : (
-                                                    <strong>
-                                                        {cardName(setup, c)}
-                                                    </strong>
-                                                )}
+                                                    </span>
+                                                );
+                                            })}
+                                            <span className="ml-1 text-muted">
+                                                {t("score", {
+                                                    score: r.score,
+                                                })}
                                             </span>
-                                        );
-                                    })}
-                                    <span className="ml-1 text-muted">
-                                        {t("score", { score: r.score })}
-                                    </span>
-                                </div>
-                                <div className="text-[12px] text-muted">
-                                    {explanation}
+                                        </div>
+                                        <div className="text-[12px] text-muted">
+                                            {explanation}
+                                        </div>
+                                    </div>
+                                    <RecommendationInfoIcon
+                                        content={scoreBreakdown}
+                                    />
                                 </div>
                             </li>
-                            </Tooltip>
                         );
                     })}
                 </ol>
@@ -399,24 +420,33 @@ function PriorSuggestionItem({
 }) {
     const t = useTranslations("suggestions");
     const { state, dispatch, derived } = useClue();
-    const { setHoveredSuggestion, hoveredCell } = useHover();
+    const {
+        setHoveredSuggestion,
+        activeCell,
+        selectedSuggestionIndex,
+        setSelectedSuggestion,
+        activeSuggestionIndex,
+    } = useSelection();
+    const confirm = useConfirm();
     const setup = state.setup;
     const listFormatter = useListFormatter();
 
-    const [isSelfHovered, setIsSelfHovered] = useState(false);
     const [openPillId, setOpenPillId] = useState<string | null>(null);
     // Keyboard-driven edit mode — set when the user presses Enter on
     // a focused row. Promotes the row into pill-mode until Escape or
     // focus leaves the row entirely.
     const [isKeyboardEditing, setIsKeyboardEditing] = useState(false);
 
-    // Pill-mode stays engaged while any popover is open, even if the
-    // pointer has left the card (popovers render in a portal outside
-    // our DOM subtree).
+    const isSelected = selectedSuggestionIndex === idx;
+    const isActive = activeSuggestionIndex === idx;
+    // Pill-mode stays engaged while any pill popover is open (popovers
+    // render in a portal outside our DOM subtree), while this row is
+    // the active (pinned or hovered) suggestion, or while a keyboard
+    // user has promoted the row into edit mode via Enter.
     const isInPillMode =
-        isSelfHovered || openPillId !== null || isKeyboardEditing;
+        isActive || openPillId !== null || isKeyboardEditing;
 
-    // Cell → suggestion hover (reverse of the Checklist's
+    // Cell → suggestion cross-highlight (reverse of the Checklist's
     // `cellIsHighlighted`). Two ways a cell can reference a suggestion:
     //   1. Provenance chain: the cell was SET by a rule that consulted
     //      this suggestion. `chainFor` walks back through dependsOn.
@@ -425,9 +455,9 @@ function PriorSuggestionItem({
     //      numbers in the grid). `footnotesForCell` indexes those,
     //      1-based, against the cell.
     const isHighlightedByCell = useMemo(() => {
-        if (!hoveredCell) return false;
+        if (!activeCell) return false;
         if (derived.provenance) {
-            for (const { reason } of chainFor(derived.provenance, hoveredCell)) {
+            for (const { reason } of chainFor(derived.provenance, activeCell)) {
                 const tag = reason.kind._tag;
                 if (
                     tag === "NonRefuters" ||
@@ -441,12 +471,12 @@ function PriorSuggestionItem({
         if (derived.footnotes) {
             const fnNumbers = footnotesForCell(
                 derived.footnotes,
-                hoveredCell,
+                activeCell,
             );
             if (fnNumbers.includes(idx + 1)) return true;
         }
         return false;
-    }, [hoveredCell, derived.provenance, derived.footnotes, idx]);
+    }, [activeCell, derived.provenance, derived.footnotes, idx]);
 
     const isHighlighted = isInPillMode || isHighlightedByCell;
     // eslint-disable-next-line i18next/no-literal-string
@@ -505,8 +535,8 @@ function PriorSuggestionItem({
             suggestion: { ...s, nonRefuters: [] },
         });
 
-    const onRemove = () => {
-        if (window.confirm(t("removeConfirm"))) {
+    const onRemove = async () => {
+        if (await confirm({ message: t("removeConfirm") })) {
             dispatch({ type: "removeSuggestion", id: s.id });
         }
     };
@@ -547,15 +577,23 @@ function PriorSuggestionItem({
         [s.cards, setup.categories],
     );
 
-    const onMouseEnter = () => {
-        setIsSelfHovered(true);
+    // Desktop hover preview. Touch never fires these (pointer-type
+    // filter) because on iOS Safari tap synthesizes a pointerenter
+    // that would otherwise open pill-mode after every cell tap.
+    const onPointerEnter = (e: React.PointerEvent) => {
+        if (e.pointerType !== "mouse") return;
         setHoveredSuggestion(idx);
     };
-    const onMouseLeave = () => {
-        setIsSelfHovered(false);
-        // Only clear the cross-panel hover if no popover is still open;
-        // otherwise the Checklist halo disappears mid-edit.
+    const onPointerLeave = (e: React.PointerEvent) => {
+        if (e.pointerType !== "mouse") return;
         if (openPillId === null) setHoveredSuggestion(null);
+    };
+
+    // Row tap toggles pinned selection. Pill clicks bubble to the row;
+    // we guard against that with `e.target === e.currentTarget`-style
+    // stopPropagation on the pill wrapper below.
+    const onRowClick = () => {
+        setSelectedSuggestion(isSelected ? null : idx);
     };
 
     // Pill open-state toggle shared by every pill on the row.
@@ -563,7 +601,6 @@ function PriorSuggestionItem({
         setOpenPillId(prev =>
             open ? pillId : prev === pillId ? null : prev,
         );
-        if (!open && !isSelfHovered) setHoveredSuggestion(null);
     };
 
     // Refuter pill disables the Shown card pill when absent (same rule
@@ -580,15 +617,18 @@ function PriorSuggestionItem({
     return (
         <li
             tabIndex={0}
+            role="button"
+            aria-pressed={isSelected}
             data-suggestion-row={idx}
             className={
-                "relative flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2 text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 " +
+                "relative flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2 text-[13px] transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 " +
                 (isHighlighted
                     ? "border-accent bg-accent text-white"
                     : "border-border")
             }
-            onMouseEnter={onMouseEnter}
-            onMouseLeave={onMouseLeave}
+            onPointerEnter={onPointerEnter}
+            onPointerLeave={onPointerLeave}
+            onClick={onRowClick}
             onFocus={e => {
                 // Row itself gained focus (not a descendant).
                 if (e.currentTarget === e.target) {
@@ -643,7 +683,7 @@ function PriorSuggestionItem({
                     });
                 } else if (e.key === "Delete" || e.key === "Backspace") {
                     e.preventDefault();
-                    onRemove();
+                    void onRemove();
                 } else if (e.key === "Escape" && isKeyboardEditing) {
                     e.preventDefault();
                     setIsKeyboardEditing(false);
@@ -652,7 +692,14 @@ function PriorSuggestionItem({
             }}
         >
             <span className="font-semibold">{idx + 1}.</span>
-            <div className="min-w-0 flex-1 pr-5">
+            <div
+                className="min-w-0 flex-1 pr-5"
+                onClick={e => {
+                    // Pills and the remove × live here; don't let their
+                    // clicks toggle the row's pin state.
+                    if (isInPillMode) e.stopPropagation();
+                }}
+            >
                 {isInPillMode ? (
                     <div className="flex flex-wrap items-center gap-1.5">
                         <PillPopover
@@ -845,7 +892,10 @@ function PriorSuggestionItem({
                         ? "text-white/70 hover:text-white"
                         : "text-muted hover:text-accent")
                 }
-                onClick={onRemove}
+                onClick={e => {
+                    e.stopPropagation();
+                    void onRemove();
+                }}
             >
                 ×
             </button>

@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { describeAction } from "../../logic/describeAction";
+import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 import { Tooltip } from "./Tooltip";
 
@@ -21,6 +22,7 @@ const buttonClass =
 export function useToolbarActions() {
     const t = useTranslations("toolbar");
     const { dispatch, currentShareUrl } = useClue();
+    const confirm = useConfirm();
     const [copied, setCopied] = useState(false);
 
     const onShare = async () => {
@@ -39,8 +41,8 @@ export function useToolbarActions() {
         }
     };
 
-    const onNewGame = () => {
-        if (window.confirm(t("newGameConfirm"))) {
+    const onNewGame = async () => {
+        if (await confirm({ message: t("newGameConfirm") })) {
             dispatch({ type: "newGame" });
         }
     };

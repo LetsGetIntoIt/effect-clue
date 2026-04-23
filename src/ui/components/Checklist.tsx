@@ -34,7 +34,8 @@ import {
     caseFileProgress,
 } from "../../logic/Recommender";
 import { Suggestion } from "../../logic/Suggestion";
-import { useHover } from "../HoverContext";
+import { useConfirm } from "../hooks/useConfirm";
+import { useSelection } from "../SelectionContext";
 import { useClue } from "../state";
 import {
     registerChecklistFocusHandler,
@@ -42,7 +43,7 @@ import {
 } from "../checklistFocus";
 import { CardPackRow } from "./CardPackRow";
 import { Envelope } from "./Icons";
-import { Tooltip } from "./Tooltip";
+import { InfoPopover } from "./InfoPopover";
 
 /**
  * Unified tabbed checklist: the single surface for both editing the
@@ -61,7 +62,12 @@ export function Checklist() {
     const tSetup = useTranslations("setup");
     const tReasons = useTranslations("reasons");
     const { state, dispatch, derived } = useClue();
-    const { hoveredSuggestionIndex, setHoveredCell } = useHover();
+    const {
+        activeSuggestionIndex,
+        setHoveredCell,
+        setSelectedCell,
+    } = useSelection();
+    const confirm = useConfirm();
     const inSetup = state.uiMode === "setup";
     const setup = state.setup;
     const knownCards = state.knownCards;
@@ -117,7 +123,10 @@ export function Checklist() {
                     el = findAt(target.row, target.col) ?? findFirst();
                 }
                 if (el) {
-                    el.scrollIntoView({ block: "nearest", inline: "nearest" });
+                    el.scrollIntoView(
+                        // eslint-disable-next-line i18next/no-literal-string -- DOM enum values
+                        { block: "nearest", inline: "nearest" },
+                    );
                     el.focus({ preventScroll: false });
                 }
             });
@@ -180,7 +189,7 @@ export function Checklist() {
      * referenced that suggestion's index.
      */
     const cellIsHighlighted = (owner: Owner, card: Card): boolean => {
-        if (hoveredSuggestionIndex === null) return false;
+        if (activeSuggestionIndex === null) return false;
         if (!provenance) return false;
         const chain = chainFor(provenance, Cell(owner, card));
         for (const { reason } of chain) {
@@ -191,7 +200,7 @@ export function Checklist() {
                 || tag === "RefuterOwnsOneOf"
                     ? reason.kind.suggestionIndex
                     : undefined;
-            if (idx === hoveredSuggestionIndex) return true;
+            if (idx === activeSuggestionIndex) return true;
         }
         return false;
     };
@@ -262,6 +271,7 @@ export function Checklist() {
                 <thead className="sticky top-0 z-20 bg-row-header">
                     <tr>
                         <th className="border border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted">
+                            {/* eslint-disable-next-line i18next/no-literal-string -- platform-specific shortcut glyph */}
                             {inSetup ? null : "⌘J"}
                         </th>
                         {owners.flatMap(owner => {
@@ -365,7 +375,7 @@ export function Checklist() {
                                             />
                                             <button
                                                 type="button"
-                                                title={
+                                                aria-label={
                                                     canRemoveCategory
                                                         ? tSetup("removeCategoryTitle", {
                                                               name: category.name,
@@ -374,7 +384,7 @@ export function Checklist() {
                                                 }
                                                 disabled={!canRemoveCategory}
                                                 className="cursor-pointer border-none bg-transparent p-0 text-[14px] leading-none text-white/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                                                onClick={() => {
+                                                onClick={async () => {
                                                     const categoryCardIds = new Set(
                                                         category.cards.map(c => c.id),
                                                     );
@@ -393,11 +403,14 @@ export function Checklist() {
                                                     );
                                                     if (
                                                         (hasKnownCards || hasSuggestions) &&
-                                                        !window.confirm(
-                                                            tSetup("removeCategoryConfirm", {
-                                                                name: category.name,
-                                                            }),
-                                                        )
+                                                        !(await confirm({
+                                                            message: tSetup(
+                                                                "removeCategoryConfirm",
+                                                                {
+                                                                    name: category.name,
+                                                                },
+                                                            ),
+                                                        }))
                                                     ) {
                                                         return;
                                                     }
@@ -422,7 +435,7 @@ export function Checklist() {
                                             <div className="flex items-center justify-between gap-2">
                                                 <InlineTextEdit
                                                     value={entry.name}
-                                                    className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-[12px] hover:border-border focus:border-accent focus:outline-none"
+                                                    className="min-w-0 flex-1 rounded border border-border/60 bg-transparent px-1 py-0.5 text-[12px] focus:border-accent focus:outline-none"
                                                     title={tSetup("renameCardTitle")}
                                                     onCommit={next =>
                                                         dispatch({
@@ -434,7 +447,7 @@ export function Checklist() {
                                                 />
                                                 <button
                                                     type="button"
-                                                    title={
+                                                    aria-label={
                                                         canRemoveCard
                                                             ? tSetup("removeCardTitle", {
                                                                   name: entry.name,
@@ -443,7 +456,7 @@ export function Checklist() {
                                                     }
                                                     disabled={!canRemoveCard}
                                                     className="cursor-pointer border-none bg-transparent p-0 text-[14px] leading-none text-muted hover:text-danger disabled:cursor-not-allowed disabled:opacity-40"
-                                                    onClick={() => {
+                                                    onClick={async () => {
                                                         const hasKnownCards = knownCards.some(
                                                             kc => kc.card === entry.id,
                                                         );
@@ -456,11 +469,14 @@ export function Checklist() {
                                                         );
                                                         if (
                                                             (hasKnownCards || hasSuggestions) &&
-                                                            !window.confirm(
-                                                                tSetup("removeCardConfirm", {
-                                                                    card: entry.name,
-                                                                }),
-                                                            )
+                                                            !(await confirm({
+                                                                message: tSetup(
+                                                                    "removeCardConfirm",
+                                                                    {
+                                                                        card: entry.name,
+                                                                    },
+                                                                ),
+                                                            }))
                                                         ) {
                                                             return;
                                                         }
@@ -513,6 +529,18 @@ export function Checklist() {
                                             );
                                         const setupCheckbox =
                                             inSetup && isPlayerCell;
+                                        // Setup mode: the whole cell is the
+                                        // toggle target (easier to hit on
+                                        // touch than a bare checkbox).
+                                        const setupInteractive =
+                                            inSetup && isPlayerCell;
+                                        // Play mode: the cell is read-only
+                                        // w.r.t. known-card toggling, but it
+                                        // pins the cell selection (for
+                                        // cross-panel highlighting) and
+                                        // opens the deduction-chain popover.
+                                        const playInteractive =
+                                            !inSetup && isPlayerCell;
                                         const tooltipText = buildCellTitle({
                                             provenance,
                                             suggestions,
@@ -528,173 +556,226 @@ export function Checklist() {
                                                 {tooltipText}
                                             </div>
                                         ) : undefined;
-                                        const cell = (
-                                            <Tooltip
-                                                key={`${ownerKey(owner)}-${String(entry.id)}`}
-                                                content={tooltipContent}
-                                                variant="accent"
-                                            >
-                                                <td
-                                                    className={cellClass(
-                                                        value,
-                                                        // In Setup mode the checkbox
-                                                        // is the click target — no
-                                                        // cell-wide button chrome.
-                                                        isPlayerCell,
-                                                        isHighlighted,
+                                        const cellContent = setupCheckbox ? (
+                                            <input
+                                                type="checkbox"
+                                                aria-hidden
+                                                tabIndex={-1}
+                                                className="pointer-events-none h-4 w-4 accent-accent"
+                                                checked={isKnownY}
+                                                readOnly
+                                            />
+                                        ) : (
+                                            <>
+                                                {cellLabel(value)}
+                                                {footnoteNumbers.length > 0 &&
+                                                    value === undefined && (
+                                                        <sup className="ml-0.5 text-[9px] font-normal text-accent">
+                                                            {footnoteNumbers.join(
+                                                                ",",
+                                                            )}
+                                                        </sup>
                                                     )}
-                                                    onMouseEnter={() =>
-                                                        setHoveredCell(
-                                                            Cell(owner, entry.id),
+                                            </>
+                                        );
+                                        const tdClassName = cellClass(
+                                            value,
+                                            setupInteractive || playInteractive,
+                                            isHighlighted,
+                                        );
+                                        const hoverHandlers = {
+                                            onPointerEnter: (
+                                                e: React.PointerEvent<HTMLTableCellElement>,
+                                            ) => {
+                                                if (e.pointerType !== "mouse")
+                                                    return;
+                                                setHoveredCell(
+                                                    Cell(owner, entry.id),
+                                                );
+                                            },
+                                            onPointerLeave: (
+                                                e: React.PointerEvent<HTMLTableCellElement>,
+                                            ) => {
+                                                if (e.pointerType !== "mouse")
+                                                    return;
+                                                setHoveredCell(null);
+                                            },
+                                        };
+                                        // Arrow-key grid navigation: walk to
+                                        // the nearest neighbour cell with a
+                                        // data-cell-row/col pair. Shared by
+                                        // Setup (toggle) and Play (popover)
+                                        // cells so keyboard users can sweep
+                                        // through the whole grid.
+                                        const onGridArrowKey = (
+                                            e: React.KeyboardEvent<HTMLTableCellElement>,
+                                        ) => {
+                                            const deltaMap: Record<
+                                                string,
+                                                [number, number]
+                                            > = {
+                                                ArrowUp: [-1, 0],
+                                                ArrowDown: [1, 0],
+                                                ArrowLeft: [0, -1],
+                                                ArrowRight: [0, 1],
+                                            };
+                                            const delta = deltaMap[e.key];
+                                            if (!delta) return;
+                                            e.preventDefault();
+                                            const [dr, dc] = delta;
+                                            let r = rowIdx + dr;
+                                            let c = colIdx + dc;
+                                            let next: HTMLElement | null = null;
+                                            while (
+                                                r >= 0 &&
+                                                r < totalRows &&
+                                                c >= 0 &&
+                                                c < totalCols
+                                            ) {
+                                                next = document.querySelector<HTMLElement>(
+                                                    `[data-cell-row="${r}"][data-cell-col="${c}"]`,
+                                                );
+                                                if (next) break;
+                                                r += dr;
+                                                c += dc;
+                                            }
+                                            if (next) next.focus();
+                                        };
+                                        const onCellFocus = () =>
+                                            rememberChecklistCell(
+                                                rowIdx,
+                                                colIdx,
+                                            );
+                                        let cell: ReactNode;
+                                        if (setupInteractive) {
+                                            const ariaLabel = tSetup(
+                                                "knownCardCheckboxAria",
+                                                {
+                                                    player: String(
+                                                        owner._tag === "Player"
+                                                            ? owner.player
+                                                            : "",
+                                                    ),
+                                                    card: entry.name,
+                                                },
+                                            );
+                                            cell = (
+                                                <td
+                                                    key={`${ownerKey(owner)}-${String(entry.id)}`}
+                                                    className={tdClassName}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    aria-pressed={isKnownY}
+                                                    aria-label={ariaLabel}
+                                                    data-cell-row={rowIdx}
+                                                    data-cell-col={colIdx}
+                                                    onFocus={onCellFocus}
+                                                    onClick={() =>
+                                                        toggleKnownCard(
+                                                            owner,
+                                                            entry.id,
                                                         )
                                                     }
-                                                    onMouseLeave={() =>
-                                                        setHoveredCell(null)
-                                                    }
-                                                    onClick={
-                                                        isPlayerCell
-                                                            ? () =>
-                                                                  toggleKnownCard(
-                                                                      owner,
-                                                                      entry.id,
-                                                                  )
-                                                            : undefined
-                                                    }
-                                                    role={
-                                                        isPlayerCell
-                                                            ? "button"
-                                                            : undefined
-                                                    }
-                                                    aria-label={
-                                                        setupCheckbox
-                                                            ? tSetup(
-                                                                  "knownCardCheckboxAria",
-                                                                  {
-                                                                      player: String(
-                                                                          owner._tag ===
-                                                                              "Player"
-                                                                              ? owner.player
-                                                                              : "",
-                                                                      ),
-                                                                      card: entry.name,
-                                                                  },
-                                                              )
-                                                            : undefined
-                                                    }
-                                                    aria-pressed={
-                                                        setupCheckbox
-                                                            ? isKnownY
-                                                            : undefined
-                                                    }
-                                                    tabIndex={
-                                                        isPlayerCell
-                                                            ? 0
-                                                            : undefined
-                                                    }
-                                                    data-cell-row={
-                                                        isPlayerCell
-                                                            ? rowIdx
-                                                            : undefined
-                                                    }
-                                                    data-cell-col={
-                                                        isPlayerCell
-                                                            ? colIdx
-                                                            : undefined
-                                                    }
-                                                    onFocus={
-                                                        isPlayerCell
-                                                            ? () =>
-                                                                  rememberChecklistCell(
-                                                                      rowIdx,
-                                                                      colIdx,
-                                                                  )
-                                                            : undefined
-                                                    }
-                                                    onKeyDown={
-                                                        isPlayerCell
-                                                            ? e => {
-                                                                  if (
-                                                                      e.key === "Enter" ||
-                                                                      e.key === " "
-                                                                  ) {
-                                                                      e.preventDefault();
-                                                                      toggleKnownCard(
-                                                                          owner,
-                                                                          entry.id,
-                                                                      );
-                                                                      return;
-                                                                  }
-                                                                  const deltaMap: Record<
-                                                                      string,
-                                                                      [number, number]
-                                                                  > = {
-                                                                      ArrowUp: [-1, 0],
-                                                                      ArrowDown: [1, 0],
-                                                                      ArrowLeft: [0, -1],
-                                                                      ArrowRight: [0, 1],
-                                                                  };
-                                                                  const delta =
-                                                                      deltaMap[e.key];
-                                                                  if (!delta) return;
-                                                                  e.preventDefault();
-                                                                  const [dr, dc] = delta;
-                                                                  // Walk until we find
-                                                                  // another interactive
-                                                                  // cell, skipping
-                                                                  // non-player columns
-                                                                  // (e.g. CaseFile in
-                                                                  // play mode still has
-                                                                  // a cell but is not
-                                                                  // focusable).
-                                                                  let r = rowIdx + dr;
-                                                                  let c = colIdx + dc;
-                                                                  let next: HTMLElement | null =
-                                                                      null;
-                                                                  while (
-                                                                      r >= 0 &&
-                                                                      r < totalRows &&
-                                                                      c >= 0 &&
-                                                                      c < totalCols
-                                                                  ) {
-                                                                      next =
-                                                                          document.querySelector<HTMLElement>(
-                                                                              `[data-cell-row="${r}"][data-cell-col="${c}"]`,
-                                                                          );
-                                                                      if (next) break;
-                                                                      r += dr;
-                                                                      c += dc;
-                                                                  }
-                                                                  if (next) next.focus();
-                                                              }
-                                                            : undefined
-                                                    }
+                                                    onKeyDown={e => {
+                                                        if (
+                                                            e.key === "Enter" ||
+                                                            e.key === " "
+                                                        ) {
+                                                            e.preventDefault();
+                                                            toggleKnownCard(
+                                                                owner,
+                                                                entry.id,
+                                                            );
+                                                            return;
+                                                        }
+                                                        onGridArrowKey(e);
+                                                    }}
+                                                    {...hoverHandlers}
                                                 >
-                                                    {setupCheckbox ? (
-                                                        <input
-                                                            type="checkbox"
-                                                            className="pointer-events-none h-4 w-4 accent-accent"
-                                                            checked={isKnownY}
-                                                            readOnly
-                                                            tabIndex={-1}
-                                                            aria-hidden
-                                                        />
-                                                    ) : (
-                                                        <>
-                                                            {cellLabel(value)}
-                                                            {footnoteNumbers.length >
-                                                                0 &&
-                                                                value === undefined && (
-                                                                    <sup className="ml-0.5 text-[9px] font-normal text-accent">
-                                                                        {footnoteNumbers.join(
-                                                                            ",",
-                                                                        )}
-                                                                    </sup>
-                                                                )}
-                                                        </>
-                                                    )}
+                                                    {cellContent}
                                                 </td>
-                                            </Tooltip>
-                                        );
+                                            );
+                                        } else if (
+                                            playInteractive &&
+                                            tooltipContent
+                                        ) {
+                                            const thisCell = Cell(
+                                                owner,
+                                                entry.id,
+                                            );
+                                            cell = (
+                                                <InfoPopover
+                                                    key={`${ownerKey(owner)}-${String(entry.id)}`}
+                                                    content={tooltipContent}
+                                                    variant="accent"
+                                                    onOpenChange={open => {
+                                                        setSelectedCell(
+                                                            open
+                                                                ? thisCell
+                                                                : null,
+                                                        );
+                                                    }}
+                                                >
+                                                    <td
+                                                        className={tdClassName}
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        aria-haspopup="dialog"
+                                                        data-cell-row={rowIdx}
+                                                        data-cell-col={colIdx}
+                                                        onFocus={onCellFocus}
+                                                        onKeyDown={e => {
+                                                            // Enter/Space should open the
+                                                            // info popover. Radix binds
+                                                            // click-to-toggle via asChild,
+                                                            // so we synthesize a click.
+                                                            if (
+                                                                e.key === "Enter" ||
+                                                                e.key === " "
+                                                            ) {
+                                                                e.preventDefault();
+                                                                e.currentTarget.click();
+                                                                return;
+                                                            }
+                                                            onGridArrowKey(e);
+                                                        }}
+                                                        {...hoverHandlers}
+                                                    >
+                                                        {cellContent}
+                                                    </td>
+                                                </InfoPopover>
+                                            );
+                                        } else if (isPlayerCell) {
+                                            // Play-mode player cell with no
+                                            // deduction: not clickable, but
+                                            // still focusable so keyboard
+                                            // arrow navigation doesn't skip
+                                            // blank cells.
+                                            cell = (
+                                                <td
+                                                    key={`${ownerKey(owner)}-${String(entry.id)}`}
+                                                    className={tdClassName}
+                                                    tabIndex={0}
+                                                    data-cell-row={rowIdx}
+                                                    data-cell-col={colIdx}
+                                                    onFocus={onCellFocus}
+                                                    onKeyDown={onGridArrowKey}
+                                                    {...hoverHandlers}
+                                                >
+                                                    {cellContent}
+                                                </td>
+                                            );
+                                        } else {
+                                            cell = (
+                                                <td
+                                                    key={`${ownerKey(owner)}-${String(entry.id)}`}
+                                                    className={tdClassName}
+                                                    {...hoverHandlers}
+                                                >
+                                                    {cellContent}
+                                                </td>
+                                            );
+                                        }
                                         const emptyCell = (
                                             <td
                                                 key={`add-player-col-${String(entry.id)}`}
@@ -819,6 +900,7 @@ function PlayerNameInput({
 }) {
     const t = useTranslations("setup");
     const { state, dispatch } = useClue();
+    const confirm = useConfirm();
     const [editing, setEditing] = useState(String(player));
     const [error, setError] = useState("");
 
@@ -854,7 +936,7 @@ function PlayerNameInput({
     // that reference them (see the reducer's `removePlayer` branch).
     // Prompt first when that's destructive — we skip the confirm otherwise
     // so a freshly-added empty slot doesn't feel chatty.
-    const onRemove = () => {
+    const onRemove = async () => {
         const hasKnownCards = state.knownCards.some(
             kc => kc.player === player,
         );
@@ -865,9 +947,11 @@ function PlayerNameInput({
                 s.nonRefuters.some(p => p === player),
         );
         if (hasKnownCards || hasSuggestions) {
-            const ok = window.confirm(
-                t("removePlayerConfirm", { player: String(player) }),
-            );
+            const ok = await confirm({
+                message: t("removePlayerConfirm", {
+                    player: String(player),
+                }),
+            });
             if (!ok) return;
         }
         dispatch({ type: "removePlayer", player });
@@ -892,7 +976,9 @@ function PlayerNameInput({
                 <button
                     type="button"
                     className="cursor-pointer rounded border-none bg-accent px-2 py-1 text-[12px] font-semibold leading-none text-white hover:bg-accent-hover"
-                    title={t("removePlayerTitle", { player: String(player) })}
+                    aria-label={t("removePlayerTitle", {
+                        player: String(player),
+                    })}
                     onClick={onRemove}
                 >
                     &times;

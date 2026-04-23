@@ -9,6 +9,7 @@ import {
     loadCustomCardSets,
     saveCustomCardSet,
 } from "../../logic/CustomCardSets";
+import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 
 /**
@@ -20,6 +21,7 @@ import { useClue } from "../state";
  */
 export function CardPackRow() {
     const t = useTranslations("setup");
+    const confirm = useConfirm();
     const { state, dispatch } = useClue();
     const setup = state.setup;
     const hasDestructiveData =
@@ -35,8 +37,12 @@ export function CardPackRow() {
         setCustomPacks(loadCustomCardSets());
     }, []);
 
-    const onCardSet = (choice: (typeof CARD_SETS)[number]) => {
-        if (hasDestructiveData && !window.confirm(t("loadCardSetConfirm"))) return;
+    const onCardSet = async (choice: (typeof CARD_SETS)[number]) => {
+        if (
+            hasDestructiveData &&
+            !(await confirm({ message: t("loadCardSetConfirm") }))
+        )
+            return;
         dispatch({
             type: "loadCardSet",
             cardSet: choice.cardSet,
@@ -44,8 +50,12 @@ export function CardPackRow() {
         });
     };
 
-    const onCustomPack = (pack: CustomCardSet) => {
-        if (hasDestructiveData && !window.confirm(t("loadCardSetConfirm"))) return;
+    const onCustomPack = async (pack: CustomCardSet) => {
+        if (
+            hasDestructiveData &&
+            !(await confirm({ message: t("loadCardSetConfirm") }))
+        )
+            return;
         dispatch({
             type: "loadCardSet",
             cardSet: pack.cardSet,
@@ -60,11 +70,13 @@ export function CardPackRow() {
         setCustomPacks(loadCustomCardSets());
     };
 
-    const onDeleteCustomPack = (pack: CustomCardSet) => {
+    const onDeleteCustomPack = async (pack: CustomCardSet) => {
         if (
-            !window.confirm(
-                t("deleteCustomCardSetConfirm", { label: pack.label }),
-            )
+            !(await confirm({
+                message: t("deleteCustomCardSetConfirm", {
+                    label: pack.label,
+                }),
+            }))
         )
             return;
         deleteCustomCardSet(pack.id);

@@ -3,6 +3,14 @@
         "title": "Clue solver",
         "description": "Track a game of Clue and watch the solver narrow the case file down to one suspect, one weapon, and one room."
     },
+    "common": {
+        "confirm": "Confirm",
+        "cancel": "Cancel",
+        "confirmTitle": "Please confirm",
+        "close": "Close",
+        "info": "More info",
+        "infoGlyph": "ⓘ"
+    },
     "tabs": {
         "setup": "Setup",
         "play": "Play",
