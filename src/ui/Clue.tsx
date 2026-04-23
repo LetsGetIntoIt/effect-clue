@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { BottomNav } from "./components/BottomNav";
 import { Checklist } from "./components/Checklist";
@@ -65,12 +66,39 @@ export function Clue() {
                 <div className="flex min-h-0 flex-1 flex-col">
                     <TabContent />
                 </div>
+                <NewGameShortcut />
             </main>
             <BottomNav />
            </HoverProvider>
           </ClueProvider>
         </TooltipProvider>
     );
+}
+
+/**
+ * Cmd/Ctrl+N handler for starting a new game. Mounts once inside
+ * `ClueProvider` so `useClue` + i18n are available. Some browsers
+ * (Safari, Chrome on macOS) reserve Cmd+N for "new window" and do
+ * not let web pages preempt it — the binding still works in browsers
+ * that allow it (Firefox, packaged web views) and as Ctrl+N on
+ * Windows/Linux.
+ */
+function NewGameShortcut() {
+    const t = useTranslations("toolbar");
+    const { dispatch } = useClue();
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (!(e.metaKey || e.ctrlKey)) return;
+            if (e.key !== "n" && e.key !== "N") return;
+            e.preventDefault();
+            if (window.confirm(t("newGameConfirm"))) {
+                dispatch({ type: "newGame" });
+            }
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [dispatch, t]);
+    return null;
 }
 
 /**
@@ -146,7 +174,7 @@ function TabBar() {
                 className={tabClass(state.uiMode === "setup")}
                 onClick={() => dispatch({ type: "setUiMode", mode: "setup" })}
             >
-                {tTabs("setup")}
+                {tTabs("setupWithShortcut")}
             </button>
             <button
                 type="button"
@@ -155,7 +183,7 @@ function TabBar() {
                 className={tabClass(playActive)}
                 onClick={() => dispatch({ type: "setUiMode", mode: "checklist" })}
             >
-                {tTabs("play")}
+                {tTabs("playWithShortcut")}
             </button>
         </div>
     );

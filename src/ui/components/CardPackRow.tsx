@@ -77,12 +77,13 @@ export function CardPackRow() {
                 {t("cardPack")}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-                {CARD_SETS.map(choice => (
+                {CARD_SETS.map((choice, i) => (
                     <button
                         key={choice.id}
                         type="button"
                         className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-hover"
                         onClick={() => onCardSet(choice)}
+                        {...(i === 0 ? { "data-setup-first-target": "card-pack" } : {})}
                     >
                         {choice.label}
                     </button>

@@ -2,7 +2,7 @@
 
 import { Result } from "effect";
 import { useTranslations } from "next-intl";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Card, Owner, Player, ownerLabel } from "../../logic/GameObjects";
 import {
     allCardIds,
@@ -36,6 +36,10 @@ import {
 import { Suggestion } from "../../logic/Suggestion";
 import { useHover } from "../HoverContext";
 import { useClue } from "../state";
+import {
+    registerChecklistFocusHandler,
+    rememberChecklistCell,
+} from "../checklistFocus";
 import { CardPackRow } from "./CardPackRow";
 import { Envelope } from "./Icons";
 import { Tooltip } from "./Tooltip";
@@ -67,6 +71,59 @@ export function Checklist() {
     const suggestions = derived.suggestionsAsData;
 
     const owners: ReadonlyArray<Owner> = allOwners(setup);
+
+    // Flat (card → row) index used for arrow-key grid navigation.
+    // Row 0 is the first card in the first category; rows run
+    // contiguously across all categories. Cells publish their
+    // row/col via data attrs so neighbors can be queried by
+    // `[data-cell-row="N"][data-cell-col="M"]`.
+    const rowIdxByCard = useMemo(() => {
+        const m = new Map<Card, number>();
+        let i = 0;
+        for (const cat of setup.categories) {
+            for (const entry of cat.cards) m.set(entry.id, i++);
+        }
+        return m;
+    }, [setup.categories]);
+    const totalRows = rowIdxByCard.size;
+    const totalCols = owners.length;
+
+    // Handle ⌘J focus requests: locate a cell by (row,col) and
+    // focus it. "first" falls back to the first interactive cell.
+    useEffect(() => {
+        const unregister = registerChecklistFocusHandler(target => {
+            const findAt = (row: number, col: number): HTMLElement | null => {
+                const el = document.querySelector<HTMLElement>(
+                    `[data-cell-row="${row}"][data-cell-col="${col}"]`,
+                );
+                return el;
+            };
+            const findFirst = (): HTMLElement | null => {
+                for (let r = 0; r < totalRows; r++) {
+                    for (let c = 0; c < totalCols; c++) {
+                        const el = findAt(r, c);
+                        if (el) return el;
+                    }
+                }
+                return null;
+            };
+            queueMicrotask(() => {
+                let el: HTMLElement | null = null;
+                if (target === "first") {
+                    el = findFirst();
+                } else if (target === "last") {
+                    el = findFirst();
+                } else {
+                    el = findAt(target.row, target.col) ?? findFirst();
+                }
+                if (el) {
+                    el.scrollIntoView({ block: "nearest", inline: "nearest" });
+                    el.focus({ preventScroll: false });
+                }
+            });
+        });
+        return unregister;
+    }, [totalRows, totalCols]);
 
     // In Setup mode the add-player column sits between the players and
     // the case file — clicking + spawns the new player where its column
@@ -168,19 +225,23 @@ export function Checklist() {
     const cardSpan = 1 + owners.length + (inSetup ? 1 : 0);
 
     return (
-        <section className="flex h-full min-w-0 flex-col rounded-[var(--radius)] border border-border bg-panel p-4">
+        <section
+            id="checklist"
+            className="flex h-full min-w-0 flex-col rounded-[var(--radius)] border border-border bg-panel p-4"
+        >
             {inSetup && (
                 <div className="mb-3 flex shrink-0 justify-end">
                     <button
                         type="button"
+                        data-setup-cta
                         className="cursor-pointer rounded-[var(--radius)] border-none bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover"
                         onClick={() =>
                             dispatch({ type: "setUiMode", mode: "checklist" })
                         }
                     >
                         {suggestions.length > 0
-                            ? tSetup("continuePlaying")
-                            : tSetup("startPlaying")}
+                            ? tSetup("continuePlayingWithShortcut")
+                            : tSetup("startPlayingWithShortcut")}
                     </button>
                 </div>
             )}
@@ -200,7 +261,9 @@ export function Checklist() {
             <table className="w-full border-collapse text-[13px]">
                 <thead className="sticky top-0 z-20 bg-row-header">
                     <tr>
-                        <th className="border border-border bg-row-header px-2 py-1 text-center font-semibold"></th>
+                        <th className="border border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted">
+                            {inSetup ? null : "⌘J"}
+                        </th>
                         {owners.flatMap(owner => {
                             const cell = (
                                 <th
@@ -414,7 +477,9 @@ export function Checklist() {
                                             entry.name
                                         )}
                                     </th>
-                                    {owners.flatMap(owner => {
+                                    {owners.flatMap((owner, colIdx) => {
+                                        const rowIdx =
+                                            rowIdxByCard.get(entry.id) ?? -1;
                                         const value = getCellByOwnerCard(
                                             knowledge,
                                             owner,
@@ -475,7 +540,7 @@ export function Checklist() {
                                                         // In Setup mode the checkbox
                                                         // is the click target — no
                                                         // cell-wide button chrome.
-                                                        isPlayerCell && !setupCheckbox,
+                                                        isPlayerCell,
                                                         isHighlighted,
                                                     )}
                                                     onMouseEnter={() =>
@@ -487,7 +552,7 @@ export function Checklist() {
                                                         setHoveredCell(null)
                                                     }
                                                     onClick={
-                                                        isPlayerCell && !setupCheckbox
+                                                        isPlayerCell
                                                             ? () =>
                                                                   toggleKnownCard(
                                                                       owner,
@@ -496,17 +561,57 @@ export function Checklist() {
                                                             : undefined
                                                     }
                                                     role={
-                                                        isPlayerCell && !setupCheckbox
+                                                        isPlayerCell
                                                             ? "button"
                                                             : undefined
                                                     }
+                                                    aria-label={
+                                                        setupCheckbox
+                                                            ? tSetup(
+                                                                  "knownCardCheckboxAria",
+                                                                  {
+                                                                      player: String(
+                                                                          owner._tag ===
+                                                                              "Player"
+                                                                              ? owner.player
+                                                                              : "",
+                                                                      ),
+                                                                      card: entry.name,
+                                                                  },
+                                                              )
+                                                            : undefined
+                                                    }
+                                                    aria-pressed={
+                                                        setupCheckbox
+                                                            ? isKnownY
+                                                            : undefined
+                                                    }
                                                     tabIndex={
-                                                        isPlayerCell && !setupCheckbox
+                                                        isPlayerCell
                                                             ? 0
                                                             : undefined
                                                     }
+                                                    data-cell-row={
+                                                        isPlayerCell
+                                                            ? rowIdx
+                                                            : undefined
+                                                    }
+                                                    data-cell-col={
+                                                        isPlayerCell
+                                                            ? colIdx
+                                                            : undefined
+                                                    }
+                                                    onFocus={
+                                                        isPlayerCell
+                                                            ? () =>
+                                                                  rememberChecklistCell(
+                                                                      rowIdx,
+                                                                      colIdx,
+                                                                  )
+                                                            : undefined
+                                                    }
                                                     onKeyDown={
-                                                        isPlayerCell && !setupCheckbox
+                                                        isPlayerCell
                                                             ? e => {
                                                                   if (
                                                                       e.key === "Enter" ||
@@ -517,7 +622,49 @@ export function Checklist() {
                                                                           owner,
                                                                           entry.id,
                                                                       );
+                                                                      return;
                                                                   }
+                                                                  const deltaMap: Record<
+                                                                      string,
+                                                                      [number, number]
+                                                                  > = {
+                                                                      ArrowUp: [-1, 0],
+                                                                      ArrowDown: [1, 0],
+                                                                      ArrowLeft: [0, -1],
+                                                                      ArrowRight: [0, 1],
+                                                                  };
+                                                                  const delta =
+                                                                      deltaMap[e.key];
+                                                                  if (!delta) return;
+                                                                  e.preventDefault();
+                                                                  const [dr, dc] = delta;
+                                                                  // Walk until we find
+                                                                  // another interactive
+                                                                  // cell, skipping
+                                                                  // non-player columns
+                                                                  // (e.g. CaseFile in
+                                                                  // play mode still has
+                                                                  // a cell but is not
+                                                                  // focusable).
+                                                                  let r = rowIdx + dr;
+                                                                  let c = colIdx + dc;
+                                                                  let next: HTMLElement | null =
+                                                                      null;
+                                                                  while (
+                                                                      r >= 0 &&
+                                                                      r < totalRows &&
+                                                                      c >= 0 &&
+                                                                      c < totalCols
+                                                                  ) {
+                                                                      next =
+                                                                          document.querySelector<HTMLElement>(
+                                                                              `[data-cell-row="${r}"][data-cell-col="${c}"]`,
+                                                                          );
+                                                                      if (next) break;
+                                                                      r += dr;
+                                                                      c += dc;
+                                                                  }
+                                                                  if (next) next.focus();
                                                               }
                                                             : undefined
                                                     }
@@ -525,26 +672,11 @@ export function Checklist() {
                                                     {setupCheckbox ? (
                                                         <input
                                                             type="checkbox"
-                                                            className="h-4 w-4 cursor-pointer accent-accent"
+                                                            className="pointer-events-none h-4 w-4 accent-accent"
                                                             checked={isKnownY}
-                                                            onChange={() =>
-                                                                toggleKnownCard(
-                                                                    owner,
-                                                                    entry.id,
-                                                                )
-                                                            }
-                                                            aria-label={tSetup(
-                                                                "knownCardCheckboxAria",
-                                                                {
-                                                                    player: String(
-                                                                        owner._tag ===
-                                                                            "Player"
-                                                                            ? owner.player
-                                                                            : "",
-                                                                    ),
-                                                                    card: entry.name,
-                                                                },
-                                                            )}
+                                                            readOnly
+                                                            tabIndex={-1}
+                                                            aria-hidden
                                                         />
                                                     ) : (
                                                         <>

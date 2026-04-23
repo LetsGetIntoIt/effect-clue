@@ -64,6 +64,7 @@ import {
 } from "../logic/services";
 import { Layer } from "effect";
 import { requestFocusSuggestionForm } from "./suggestionFormFocus";
+import { requestFocusChecklistCell } from "./checklistFocus";
 
 type DeduceLayer = Layer.Layer<
     CardSetService | PlayerSetService | SuggestionsService
@@ -611,6 +612,117 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             lastPressAt = clear ? 0 : now;
             dispatchRaw({ type: "setUiMode", mode: "suggest" });
             requestFocusSuggestionForm({ clear });
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, []);
+
+    // Refs shared by several shortcut handlers so their useEffect
+    // deps stay empty (no listener churn when state changes).
+    const uiModeRef = useRef(state.uiMode);
+    useEffect(() => {
+        uiModeRef.current = state.uiMode;
+    }, [state.uiMode]);
+    const gameStartedRef = useRef(false);
+    useEffect(() => {
+        gameStartedRef.current =
+            state.knownCards.length > 0 || state.suggestions.length > 0;
+    }, [state.knownCards, state.suggestions]);
+
+    // Cmd/Ctrl+H: switch to the Setup tab. (Overrides the Mac
+    // "hide app" default — explicit user choice.) Smart-landing:
+    //   - game started (any knownCards OR any suggestions) → focus
+    //     the last-focused checklist cell, or the first setup cell
+    //   - fresh game → focus the first card-pack preset button
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (!(e.metaKey || e.ctrlKey)) return;
+            if (e.key !== "h" && e.key !== "H") return;
+            e.preventDefault();
+            dispatchRaw({ type: "setUiMode", mode: "setup" });
+            queueMicrotask(() => {
+                if (gameStartedRef.current) {
+                    requestFocusChecklistCell();
+                } else {
+                    const btn =
+                        document.querySelector<HTMLElement>(
+                            "[data-setup-first-target='card-pack']",
+                        );
+                    btn?.focus();
+                }
+            });
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, []);
+
+    // Cmd/Ctrl+; : jump to the Start / Continue playing CTA on the
+    // Setup tab (the primary exit action from setup).
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (!(e.metaKey || e.ctrlKey)) return;
+            if (e.key !== ";") return;
+            e.preventDefault();
+            if (uiModeRef.current !== "setup") {
+                dispatchRaw({ type: "setUiMode", mode: "setup" });
+            }
+            queueMicrotask(() => {
+                const btn =
+                    document.querySelector<HTMLElement>("[data-setup-cta]");
+                btn?.focus();
+            });
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, []);
+
+    // Cmd/Ctrl+J: jump to the Checklist. On desktop Play already
+    // shows the checklist; on mobile Play-suggest hides it, so
+    // flip to the "checklist" sub-mode first. The focus request
+    // returns the user to whichever cell they were last on.
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (!(e.metaKey || e.ctrlKey)) return;
+            if (e.key !== "j" && e.key !== "J") return;
+            e.preventDefault();
+            if (uiModeRef.current === "suggest") {
+                dispatchRaw({ type: "setUiMode", mode: "checklist" });
+            }
+            requestFocusChecklistCell();
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, []);
+
+    // Cmd/Ctrl+L: jump to the Prior suggestions log. If currently
+    // on Setup, flip to "suggest" first so the log is mounted.
+    // Focuses the first suggestion row if any exist so the user can
+    // immediately use ↑↓ — otherwise falls back to the section header
+    // (which has the empty-state message).
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (!(e.metaKey || e.ctrlKey)) return;
+            if (e.key !== "l" && e.key !== "L") return;
+            e.preventDefault();
+            if (uiModeRef.current === "setup") {
+                dispatchRaw({ type: "setUiMode", mode: "suggest" });
+            }
+            queueMicrotask(() => {
+                const header = document.getElementById("prior-suggestions");
+                header?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                });
+                const firstRow =
+                    document.querySelector<HTMLElement>(
+                        "[data-suggestion-row='0']",
+                    );
+                if (firstRow) {
+                    firstRow.focus({ preventScroll: true });
+                } else if (header instanceof HTMLElement) {
+                    header.focus({ preventScroll: true });
+                }
+            });
         };
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);

@@ -33,9 +33,15 @@ export function Tooltip({
     delayMs?: number;
     variant?: "default" | "accent";
 }) {
-    if (content === undefined || content === null || content === "") {
-        return <>{children}</>;
-    }
+    // Always render the RadixTooltip.Root wrapper (even when empty) so
+    // that the children's DOM identity doesn't flip when content appears
+    // or disappears. Swapping between `<>{children}</>` and
+    // `<RadixTooltip.Root>…{children}…</RadixTooltip.Root>` remounts the
+    // child element and drops keyboard focus — e.g. toggling a setup
+    // cell would kick focus off the cell the moment a deduction
+    // produced a new tooltip for it.
+    const hasContent =
+        content !== undefined && content !== null && content !== "";
     const toneClasses =
         variant === "accent"
             ? "border-accent bg-accent text-white"
@@ -47,23 +53,25 @@ export function Tooltip({
     return (
         <RadixTooltip.Root delayDuration={delayMs}>
             <RadixTooltip.Trigger asChild>{children}</RadixTooltip.Trigger>
-            <RadixTooltip.Portal>
-                <RadixTooltip.Content
-                    side={side}
-                    sideOffset={6}
-                    collisionPadding={8}
-                    className={
-                        "z-50 max-w-[320px] rounded-[var(--radius)] border px-3 py-2 text-[12px] leading-snug shadow-[0_6px_16px_rgba(0,0,0,0.18)] " +
-                        toneClasses
-                    }
-                >
-                    {content}
-                    <RadixTooltip.Arrow
-                        className={arrowClasses}
-                        strokeWidth={0.5}
-                    />
-                </RadixTooltip.Content>
-            </RadixTooltip.Portal>
+            {hasContent && (
+                <RadixTooltip.Portal>
+                    <RadixTooltip.Content
+                        side={side}
+                        sideOffset={6}
+                        collisionPadding={8}
+                        className={
+                            "z-50 max-w-[320px] rounded-[var(--radius)] border px-3 py-2 text-[12px] leading-snug shadow-[0_6px_16px_rgba(0,0,0,0.18)] " +
+                            toneClasses
+                        }
+                    >
+                        {content}
+                        <RadixTooltip.Arrow
+                            className={arrowClasses}
+                            strokeWidth={0.5}
+                        />
+                    </RadixTooltip.Content>
+                </RadixTooltip.Portal>
+            )}
         </RadixTooltip.Root>
     );
 }
