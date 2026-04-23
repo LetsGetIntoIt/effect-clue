@@ -575,15 +575,23 @@ export function MultiSelectList({
     // Esc, outside-click, and clicking another pill. `committedRef`
     // is set by the Enter / Nobody commit paths to skip this cleanup
     // so those don't double-commit.
+    //
+    // Both `toggled` and `onCommit` go through refs so the cleanup
+    // can use an empty dep array — otherwise, if a caller passes a
+    // non-memoized `onCommit`, the dep change re-fires the cleanup
+    // which re-invokes `onCommit` which re-renders the parent, ad
+    // infinitum ("Maximum update depth exceeded").
     const toggledRef = useRef<ReadonlyArray<Player>>(toggled);
     toggledRef.current = toggled;
+    const onCommitRef = useRef(onCommit);
+    onCommitRef.current = onCommit;
     const committedRef = useRef(false);
     useEffect(
         () => () => {
             if (committedRef.current) return;
-            onCommit(toggledRef.current, { advance: false });
+            onCommitRef.current(toggledRef.current, { advance: false });
         },
-        [onCommit],
+        [],
     );
     const commitAdvance = (
         value: ReadonlyArray<Player> | Nobody,
