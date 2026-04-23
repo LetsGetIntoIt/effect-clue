@@ -226,7 +226,6 @@ export default [
                             // Config keys used as string values.
                             "effect",
                             "next-dev",
-                            "next-start",
                         ],
                     },
                 },

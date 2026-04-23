@@ -7,19 +7,6 @@
             "runtimeArgs": ["dev"],
             "port": 3000,
             "autoPort": true
-        },
-        {
-            "name": "next-start",
-            "runtimeExecutable": "pnpm",
-            "runtimeArgs": ["start"],
-            "port": 3000,
-            "autoPort": true
-        },
-        {
-            "name": "out-serve",
-            "runtimeExecutable": "pnpm",
-            "runtimeArgs": ["dlx", "serve", "out", "-l", "4173"],
-            "port": 4173
         }
     ]
 }
