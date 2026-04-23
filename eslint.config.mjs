@@ -93,6 +93,13 @@ export default [
                             "indexOf",
                             "endsWith",
                             "startsWith",
+                            // keyMap module — first arg is a binding ID,
+                            // an internal type-system token (not user copy).
+                            "matches",
+                            "label",
+                            "allLabels",
+                            "getBinding",
+                            "useGlobalShortcut",
                             // Translator namespaces / namespace hooks.
                             // Matches `t`, `tReasons`, `tDeduce`, etc.
                             // Any local variable that's a translator

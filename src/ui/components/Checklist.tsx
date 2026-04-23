@@ -41,6 +41,7 @@ import {
     registerChecklistFocusHandler,
     rememberChecklistCell,
 } from "../checklistFocus";
+import { label, matches } from "../keyMap";
 import { CardPackRow } from "./CardPackRow";
 import { Envelope } from "./Icons";
 import { InfoPopover } from "./InfoPopover";
@@ -249,8 +250,12 @@ export function Checklist() {
                         }
                     >
                         {suggestions.length > 0
-                            ? tSetup("continuePlayingWithShortcut")
-                            : tSetup("startPlayingWithShortcut")}
+                            ? tSetup("continuePlaying", {
+                                  shortcut: label("global.gotoSetupCta"),
+                              })
+                            : tSetup("startPlaying", {
+                                  shortcut: label("global.gotoSetupCta"),
+                              })}
                     </button>
                 </div>
             )}
@@ -271,8 +276,7 @@ export function Checklist() {
                 <thead className="sticky top-0 z-20 bg-row-header">
                     <tr>
                         <th className="border border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted">
-                            {/* eslint-disable-next-line i18next/no-literal-string -- platform-specific shortcut glyph */}
-                            {inSetup ? null : "⌘J"}
+                            {inSetup ? null : label("global.gotoChecklist")}
                         </th>
                         {owners.flatMap(owner => {
                             const cell = (
@@ -610,19 +614,19 @@ export function Checklist() {
                                         const onGridArrowKey = (
                                             e: React.KeyboardEvent<HTMLTableCellElement>,
                                         ) => {
-                                            const deltaMap: Record<
-                                                string,
-                                                [number, number]
-                                            > = {
-                                                ArrowUp: [-1, 0],
-                                                ArrowDown: [1, 0],
-                                                ArrowLeft: [0, -1],
-                                                ArrowRight: [0, 1],
-                                            };
-                                            const delta = deltaMap[e.key];
-                                            if (!delta) return;
+                                            const native = e.nativeEvent;
+                                            const dr = matches("nav.up", native)
+                                                ? -1
+                                                : matches("nav.down", native)
+                                                  ? 1
+                                                  : 0;
+                                            const dc = matches("nav.left", native)
+                                                ? -1
+                                                : matches("nav.right", native)
+                                                  ? 1
+                                                  : 0;
+                                            if (dr === 0 && dc === 0) return;
                                             e.preventDefault();
-                                            const [dr, dc] = delta;
                                             let r = rowIdx + dr;
                                             let c = colIdx + dc;
                                             let next: HTMLElement | null = null;
@@ -678,8 +682,10 @@ export function Checklist() {
                                                     }
                                                     onKeyDown={e => {
                                                         if (
-                                                            e.key === "Enter" ||
-                                                            e.key === " "
+                                                            matches(
+                                                                "action.toggle",
+                                                                e.nativeEvent,
+                                                            )
                                                         ) {
                                                             e.preventDefault();
                                                             toggleKnownCard(
@@ -730,8 +736,10 @@ export function Checklist() {
                                                             // click-to-toggle via asChild,
                                                             // so we synthesize a click.
                                                             if (
-                                                                e.key === "Enter" ||
-                                                                e.key === " "
+                                                                matches(
+                                                                    "action.toggle",
+                                                                    e.nativeEvent,
+                                                                )
                                                             ) {
                                                                 e.preventDefault();
                                                                 e.currentTarget.click();

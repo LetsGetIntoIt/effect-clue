@@ -44,6 +44,7 @@ import {
     DraftSuggestion,
     useClue,
 } from "../state";
+import { label, matches } from "../keyMap";
 
 const SECTION_TITLE = "mt-0 mb-2 text-[14px] font-semibold";
 // Kept for the recommendations chooser below — the suggestion form
@@ -371,7 +372,10 @@ function PriorSuggestions() {
                 tabIndex={-1}
                 className={`${SECTION_TITLE} rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2`}
             >
-                {t("priorTitleWithShortcut", { count: suggestions.length })}
+                {t("priorTitle", {
+                    count: suggestions.length,
+                    shortcut: label("global.gotoPriorLog"),
+                })}
             </h3>
             {suggestions.length === 0 ? (
                 <div className="text-[13px] text-muted">
@@ -644,10 +648,11 @@ function PriorSuggestionItem({
                 setIsKeyboardEditing(false);
             }}
             onKeyDown={e => {
+                const native = e.nativeEvent;
                 // Escape inside pills: bubble up here and exit edit mode.
                 if (e.currentTarget !== e.target) {
                     if (
-                        e.key === "Escape" &&
+                        matches("action.cancel", native) &&
                         isKeyboardEditing &&
                         openPillId === null
                     ) {
@@ -657,9 +662,12 @@ function PriorSuggestionItem({
                     }
                     return;
                 }
-                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                if (
+                    matches("nav.down", native) ||
+                    matches("nav.up", native)
+                ) {
                     e.preventDefault();
-                    const dir = e.key === "ArrowDown" ? 1 : -1;
+                    const dir = matches("nav.down", native) ? 1 : -1;
                     let sib =
                         dir === 1
                             ? e.currentTarget.nextElementSibling
@@ -671,7 +679,7 @@ function PriorSuggestionItem({
                                 : sib.previousElementSibling;
                     }
                     if (sib instanceof HTMLElement) sib.focus();
-                } else if (e.key === "Enter" || e.key === " ") {
+                } else if (matches("action.toggle", native)) {
                     e.preventDefault();
                     const row = e.currentTarget;
                     setIsKeyboardEditing(true);
@@ -681,10 +689,13 @@ function PriorSuggestionItem({
                         );
                         first?.focus();
                     });
-                } else if (e.key === "Delete" || e.key === "Backspace") {
+                } else if (matches("action.remove", native)) {
                     e.preventDefault();
                     void onRemove();
-                } else if (e.key === "Escape" && isKeyboardEditing) {
+                } else if (
+                    matches("action.cancel", native) &&
+                    isKeyboardEditing
+                ) {
                     e.preventDefault();
                     setIsKeyboardEditing(false);
                     e.currentTarget.focus();
