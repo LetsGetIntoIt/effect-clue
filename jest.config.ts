@@ -106,7 +106,10 @@ export default {
   transform: {
     "^.+\\.tsx?$": [
       "ts-jest",
-      { useESM: true, tsconfig: { module: "esnext" } },
+      {
+        useESM: true,
+        tsconfig: { module: "esnext", jsx: "react-jsx" },
+      },
     ],
   },
 
@@ -151,8 +154,13 @@ export default {
   // A list of paths to snapshot serializer modules Jest should use for snapshot testing
   // snapshotSerializers: [],
 
-  // The test environment that will be used for testing
-  testEnvironment: "node",
+  // The test environment that will be used for testing.
+  // jsdom is required by React Testing Library; the pure-logic tests
+  // under `src/logic` don't care which environment they run in.
+  testEnvironment: "jsdom",
+
+  // Registers jest-dom matchers (`toBeInTheDocument`, etc.)
+  setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
 
   // Options that will be passed to the testEnvironment
   // testEnvironmentOptions: {},
@@ -161,7 +169,10 @@ export default {
   // testLocationInResults: false,
 
   // The glob patterns Jest uses to detect test files
-  testMatch: ["**/src/**/__tests__/**/*.ts", "**/src/**/?(*.)+(spec|test).ts"],
+  testMatch: [
+    "**/src/**/__tests__/**/*.{ts,tsx}",
+    "**/src/**/?(*.)+(spec|test).{ts,tsx}",
+  ],
 
   // An array of regexp pattern strings that are matched against all test paths, matched tests are skipped
   // testPathIgnorePatterns: [

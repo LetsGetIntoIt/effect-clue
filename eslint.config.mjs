@@ -244,7 +244,7 @@ export default [
         // rule is aimed at user-facing copy, and these files don't
         // render anything to the DOM.
         files: [
-            "src/**/*.test.ts",
+            "src/**/*.test.{ts,tsx}",
             "src/**/test-utils/**/*.ts",
             "src/logic/**/*.ts",
             "src/i18n/**/*.ts",
@@ -253,6 +253,7 @@ export default [
             "src/ui/describeAction.ts",
             "next.config.ts",
             "jest.config.ts",
+            "jest.setup.ts",
             "postcss.config.*",
         ],
         rules: {
