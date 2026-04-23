@@ -28,5 +28,6 @@ export function registerChecklistFocusHandler(h: Handler): () => void {
 
 export function requestFocusChecklistCell(): void {
     if (!current) return;
+    // eslint-disable-next-line i18next/no-literal-string -- sentinel, not user copy
     current(lastFocused ?? "first");
 }
