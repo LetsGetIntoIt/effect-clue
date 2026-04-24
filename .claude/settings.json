@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm install)",
+      "Bash(pnpm typecheck)",
+      "Bash(pnpm test)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm knip)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm i18n:check)",
+      "Bash(pnpm view *)",
+      "Bash(git commit)",
+      "Bash(git commit *)",
+      "Bash(git push)",
+      "Bash(git push -u *)",
+      "Bash(gh pr create)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr edit)",
+      "Bash(gh pr edit *)",
+      "mcp__Claude_Preview__preview_screenshot",
+      "mcp__Claude_Preview__preview_console_logs",
+      "mcp__Claude_Preview__preview_snapshot",
+      "mcp__Claude_Preview__preview_list",
+      "mcp__Claude_Preview__preview_logs",
+      "mcp__Claude_Preview__preview_click",
+      "mcp__Claude_Preview__preview_fill",
+      "mcp__Claude_Preview__preview_resize",
+      "mcp__Claude_Preview__preview_start",
+      "mcp__Claude_Preview__preview_stop"
+    ]
+  }
+}
