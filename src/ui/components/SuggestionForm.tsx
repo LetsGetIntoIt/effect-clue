@@ -384,7 +384,15 @@ export function SuggestionForm({
             const onPillTrigger =
                 root.contains(active) &&
                 active.closest("[data-pill-id]") !== null;
-            const inPopover = isInsideSuggestionPopover(active);
+            // `isInsideSuggestionPopover` matches ANY pill popover
+            // (the Add form, Edit-prior-suggestion rows, …). Restrict
+            // to popovers whose trigger lives in *this* form's root —
+            // otherwise we'd steal arrow-nav from the prior-suggestion
+            // rows whose popovers happen to share the attribute.
+            const inPopover =
+                isInsideSuggestionPopover(active) &&
+                root.querySelector('[data-pill-id][data-state="open"]') !==
+                    null;
             if (!onPillTrigger && !inPopover && !onSubmitBtn) return;
 
             // Resolve the "current" pill we're navigating from.

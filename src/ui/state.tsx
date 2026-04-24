@@ -652,8 +652,11 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     );
 
     // Cmd/Ctrl+L: jump to the Prior suggestions log. Focuses the
-    // first suggestion row if any exist so the user can immediately
-    // use ↑↓ — otherwise falls back to the section header (empty state).
+    // first rendered row so the user can immediately use ↑↓ — "first"
+    // means first in DOM order, not `data-suggestion-row="0"`, since
+    // the list is rendered newest-first and could be reordered later
+    // without touching this shortcut. Falls back to the section
+    // header when the list is empty.
     useGlobalShortcut(
         "global.gotoPriorLog",
         useCallback(() => {
@@ -667,7 +670,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
                     block: "start",
                 });
                 const firstRow = document.querySelector<HTMLElement>(
-                    "[data-suggestion-row='0']",
+                    "[data-suggestion-row]",
                 );
                 if (firstRow) {
                     firstRow.focus({ preventScroll: true });
