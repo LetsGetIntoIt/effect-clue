@@ -1598,8 +1598,15 @@ function AnimatedCellGlyph({ value }: { readonly value: CellValue | undefined })
 const CELL_BASE =
     "w-9 min-w-9 border-r border-b border-border px-2 py-1 text-center font-semibold relative";
 
+// Note: we intentionally don't draw a `focus:ring-*` here — cells
+// opt into the app's sliding `AnimatedFocusRing` via
+// `data-animated-focus`, which renders a single motion-driven ring
+// that slides between focused cells. A stacked Tailwind ring would
+// paint a second, instant-jumping outline on top of the animated
+// one. The native outline is already suppressed globally on
+// `[data-animated-focus]:focus-visible` (see globals.css).
 const CELL_INTERACTIVE =
-    " cursor-pointer hover:z-10 hover:ring-2 hover:ring-accent/40 focus:z-10 focus:outline-none focus:ring-2 focus:ring-accent";
+    " cursor-pointer hover:z-10 hover:ring-2 hover:ring-accent/40 focus:z-10 focus:outline-none";
 
 const CELL_HIGHLIGHTED =
     " z-10 ring-2 ring-accent ring-offset-1 ring-offset-panel";
