@@ -3,7 +3,6 @@
 import { AnimatePresence, motion, type Variants } from "motion/react";
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { AnimatedFocusRing } from "./components/AnimatedFocusRing";
 import { BottomNav } from "./components/BottomNav";
 import { Checklist } from "./components/Checklist";
 import { GlobalContradictionBanner } from "./components/GlobalContradictionBanner";
@@ -19,7 +18,6 @@ import type { UiMode } from "../logic/ClueState";
 import { ClueProvider, useClue } from "./state";
 
 // Non user-facing literals.
-const MOTION_APP_GROUP = "app";
 const VARIANT_INITIAL = "initial";
 const VARIANT_ANIMATE = "animate";
 const VARIANT_EXIT = "exit";
@@ -94,7 +92,6 @@ export function Clue() {
           <ClueProvider>
            <ConfirmProvider>
            <SelectionProvider>
-            <AnimatedFocusRing groupId={MOTION_APP_GROUP}>
             <main className="mx-auto flex h-[100dvh] max-w-[1400px] flex-col gap-5 px-5 pb-24 [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+1.5rem)]">
                 <header className="flex shrink-0 flex-wrap items-center justify-between gap-4">
                     <h1 className="m-0 text-[36px] uppercase tracking-[0.08em] text-accent drop-shadow-sm">
@@ -113,7 +110,6 @@ export function Clue() {
                 <NewGameShortcut />
             </main>
             <BottomNav />
-            </AnimatedFocusRing>
            </SelectionProvider>
            </ConfirmProvider>
           </ClueProvider>

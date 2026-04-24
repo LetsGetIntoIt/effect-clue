@@ -83,9 +83,9 @@ describe("Clue — top-level structure", () => {
 
     test("provider stack renders without throwing", () => {
         // Clue mounts TooltipProvider + ClueProvider + ConfirmProvider +
-        // SelectionProvider + AnimatedFocusRing together. If any of
-        // them had a missing peer or threw on mount, render() would
-        // propagate the error — this test pins that green path.
+        // SelectionProvider together. If any of them had a missing peer
+        // or threw on mount, render() would propagate the error — this
+        // test pins that green path.
         expect(() => render(<Clue />)).not.toThrow();
     });
 

@@ -841,7 +841,6 @@ export function Checklist() {
                                                     tabIndex={0}
                                                     aria-pressed={isKnownY}
                                                     aria-label={ariaLabel}
-                                                    data-animated-focus
                                                     data-cell-row={rowIdx}
                                                     data-cell-col={colIdx}
                                                     onFocus={onCellFocus}
@@ -898,7 +897,6 @@ export function Checklist() {
                                                         role="button"
                                                         tabIndex={0}
                                                         aria-haspopup="dialog"
-                                                        data-animated-focus
                                                         data-cell-row={rowIdx}
                                                         data-cell-col={colIdx}
                                                         onFocus={onCellFocus}
@@ -936,7 +934,6 @@ export function Checklist() {
                                                     key={`${ownerKey(owner)}-${String(entry.id)}`}
                                                     className={tdClassName}
                                                     tabIndex={0}
-                                                    data-animated-focus
                                                     data-cell-row={rowIdx}
                                                     data-cell-col={colIdx}
                                                     onFocus={onCellFocus}
@@ -1632,15 +1629,8 @@ function AnimatedCellGlyph({ value }: { readonly value: CellValue | undefined })
 const CELL_BASE =
     "w-9 min-w-9 border-r border-b border-border px-2 py-1 text-center font-semibold relative";
 
-// Note: we intentionally don't draw a `focus:ring-*` here — cells
-// opt into the app's sliding `AnimatedFocusRing` via
-// `data-animated-focus`, which renders a single motion-driven ring
-// that slides between focused cells. A stacked Tailwind ring would
-// paint a second, instant-jumping outline on top of the animated
-// one. The native outline is already suppressed globally on
-// `[data-animated-focus]:focus-visible` (see globals.css).
 const CELL_INTERACTIVE =
-    " cursor-pointer hover:z-10 hover:ring-2 hover:ring-accent/40 focus:z-10 focus:outline-none";
+    " cursor-pointer hover:z-10 hover:ring-2 hover:ring-accent/40 focus-visible:z-10";
 
 const CELL_HIGHLIGHTED =
     " z-10 ring-2 ring-accent ring-offset-1 ring-offset-panel";
