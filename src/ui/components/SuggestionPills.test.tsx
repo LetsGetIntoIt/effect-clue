@@ -1,4 +1,4 @@
-import { describe, expect, jest, test } from "@jest/globals";
+import { describe, expect, test, vi, type Mock } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect, useState } from "react";
@@ -38,7 +38,12 @@ describe("MultiSelectList — onCommit identity stability", () => {
         function Harness({
             onCommitSpy,
         }: {
-            readonly onCommitSpy: jest.Mock;
+            readonly onCommitSpy: Mock<
+                (
+                    value: ReadonlyArray<Player> | typeof NOBODY,
+                    opts?: { advance: boolean },
+                ) => void
+            >;
         }) {
             renderCount += 1;
             if (renderCount > MAX_RENDERS) {
@@ -74,7 +79,7 @@ describe("MultiSelectList — onCommit identity stability", () => {
             );
         }
 
-        const onCommitSpy = jest.fn();
+        const onCommitSpy = vi.fn();
         expect(() => render(<Harness onCommitSpy={onCommitSpy} />)).not.toThrow();
         // The list lives on; onCommit should never have fired during its
         // lifetime (the cleanup only runs on unmount now).
@@ -84,7 +89,7 @@ describe("MultiSelectList — onCommit identity stability", () => {
 
     test("commits toggled state exactly once on unmount", async () => {
         const user = userEvent.setup();
-        const onCommit = jest.fn();
+        const onCommit = vi.fn();
         const { unmount } = render(
             <MultiSelectList
                 options={playerOpts}
@@ -131,14 +136,14 @@ describe("MultiSelectList — onCommit identity stability", () => {
                 </div>
             );
         }
-        const spy = jest.fn();
+        const spy = vi.fn();
         render(<Harness />);
         expect(spy).not.toHaveBeenCalled();
     });
 
     test("Enter commits current toggled set and advances", async () => {
         const user = userEvent.setup();
-        const onCommit = jest.fn();
+        const onCommit = vi.fn();
         render(
             <MultiSelectList
                 options={playerOpts}
@@ -160,7 +165,7 @@ describe("MultiSelectList — onCommit identity stability", () => {
 
     test("selecting Nobody commits NOBODY and advances", async () => {
         const user = userEvent.setup();
-        const onCommit = jest.fn();
+        const onCommit = vi.fn();
         render(
             <MultiSelectList
                 options={playerOpts}

@@ -1,3 +1,4 @@
+import { describe, expect, test } from "vitest";
 import { Result } from "effect";
 import { Card, Player, PlayerOwner } from "./GameObjects";
 import { CLASSIC_SETUP_3P } from "./GameSetup";
@@ -10,8 +11,6 @@ import {
 import { buildInitialKnowledge, KnownCard } from "./InitialKnowledge";
 import { cardByName } from "./test-utils/CardByName";
 import { runDeduce } from "./test-utils/RunDeduce";
-
-import "./test-utils/EffectExpectEquals";
 
 const setup = CLASSIC_SETUP_3P;
 const A = Player("Anisha");

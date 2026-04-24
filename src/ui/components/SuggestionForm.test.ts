@@ -1,3 +1,4 @@
+import { describe, expect, test } from "vitest";
 import { Player } from "../../logic/GameObjects";
 import { cardByName } from "../../logic/test-utils/CardByName";
 import { CLASSIC_SETUP_3P } from "../../logic/GameSetup";

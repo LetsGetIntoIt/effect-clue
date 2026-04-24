@@ -1,3 +1,4 @@
+import { describe, expect, test } from "vitest";
 import { CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
 import { CLASSIC_SETUP_3P } from "./GameSetup";
 import {
@@ -11,8 +12,6 @@ import type { AnySlot } from "./Recommender";
 import { cardByName } from "./test-utils/CardByName";
 import { expectDefined } from "./test-utils/Expect";
 import { runConsolidate, runRecommend } from "./test-utils/RunRecommend";
-
-import "./test-utils/EffectExpectEquals";
 
 const setup = CLASSIC_SETUP_3P;
 const A = Player("Anisha");

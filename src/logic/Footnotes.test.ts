@@ -1,3 +1,4 @@
+import { describe, expect, test } from "vitest";
 import { Player, PlayerOwner } from "./GameObjects";
 import { CLASSIC_SETUP_3P } from "./GameSetup";
 import {
@@ -11,8 +12,6 @@ import { MutableHashMap } from "effect";
 import { refuterCandidateFootnotes, footnotesForCell } from "./Footnotes";
 import { Suggestion, SuggestionId } from "./Suggestion";
 import { cardByName } from "./test-utils/CardByName";
-
-import "./test-utils/EffectExpectEquals";
 
 const setup = CLASSIC_SETUP_3P;
 const A = Player("Anisha");

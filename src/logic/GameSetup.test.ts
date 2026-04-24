@@ -1,3 +1,4 @@
+import { describe, expect, test } from "vitest";
 import { disambiguateName, toRoman } from "./GameSetup";
 
 describe("toRoman", () => {
