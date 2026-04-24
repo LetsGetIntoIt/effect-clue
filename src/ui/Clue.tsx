@@ -157,7 +157,7 @@ function NewGameShortcut() {
  * `mode`, so the slide happens at the pane level there instead.
  */
 function TabContent() {
-    const { state } = useClue();
+    const { state, hydrated } = useClue();
     const mode = state.uiMode;
     const transition = useReducedTransition(T_STANDARD, { fadeMs: 120 });
 
@@ -166,30 +166,23 @@ function TabContent() {
     // new mode — exactly what's needed to choose enter/exit sides.
     const prevModeRef = useRef<UiMode>(mode);
     const direction = getDirection(prevModeRef.current, mode);
-
-    // The reducer defaults `uiMode` to `"setup"` and the hydration
-    // effect dispatches the URL-derived mode afterwards, which
-    // AnimatePresence would otherwise animate as a real transition
-    // (`initial={false}` only suppresses the first-mount enter, not
-    // the subsequent key swap). Collapse the very first mode change
-    // after mount to a zero-duration transition so `?view=checklist`
-    // and `?view=suggest` land instantly.
-    const hadFirstChangeRef = useRef(false);
-    const isFirstChange =
-        !hadFirstChangeRef.current && mode !== prevModeRef.current;
-    const effectiveTransition = isFirstChange ? { duration: 0 } : transition;
     useEffect(() => {
-        if (mode !== prevModeRef.current) {
-            hadFirstChangeRef.current = true;
-            prevModeRef.current = mode;
-        }
+        prevModeRef.current = mode;
     }, [mode]);
 
     const topLevelKey: "setup" | "play" =
         mode === UI_SETUP ? UI_SETUP : TOP_LEVEL_PLAY;
 
+    // Until URL/localStorage hydration resolves the real view, render
+    // the wrapper empty so the default `"setup"` pane doesn't flash
+    // between initial mount and the hydrated dispatch. Gating the
+    // AnimatePresence (not an early return) keeps hook order stable
+    // across the transition. AnimatePresence only mounts once
+    // `hydrated` is true, so `initial={false}` correctly skips the
+    // entry animation on whichever hydrated view wins.
     return (
         <div className="relative h-full min-h-0 overflow-hidden">
+            {!hydrated ? null : (
             <AnimatePresence custom={direction} initial={false}>
                 {topLevelKey === UI_SETUP ? (
                     <motion.div
@@ -199,7 +192,7 @@ function TabContent() {
                         initial={VARIANT_INITIAL}
                         animate={VARIANT_ANIMATE}
                         exit={VARIANT_EXIT}
-                        transition={effectiveTransition}
+                        transition={transition}
                         className="absolute inset-0 min-h-0"
                     >
                         <Checklist />
@@ -212,7 +205,7 @@ function TabContent() {
                         initial={VARIANT_INITIAL}
                         animate={VARIANT_ANIMATE}
                         exit={VARIANT_EXIT}
-                        transition={effectiveTransition}
+                        transition={transition}
                         className="absolute inset-0 min-h-0"
                     >
                         <PlayGrid
@@ -221,6 +214,7 @@ function TabContent() {
                     </motion.div>
                 )}
             </AnimatePresence>
+            )}
         </div>
     );
 }
