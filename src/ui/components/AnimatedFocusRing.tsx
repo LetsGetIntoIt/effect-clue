@@ -150,6 +150,18 @@ function FocusRingOverlay({ target }: { readonly target: HTMLElement | null }) {
         return () => cancelAnimationFrame(rafId);
     }, [target]);
 
+    // Position is bound to `style` (instant CSS) so the ring is glued
+    // to the target's current rect every frame the rAF tick updates
+    // it. Only opacity is animated by motion — the ring fades in on
+    // first focus and out when focus leaves an animated-focus target.
+    //
+    // Why not animate top/left/width/height through `animate`? When
+    // the previous target was inside a sliding pane (Cmd+H/J/L view
+    // switch), motion's spring would interpolate from that target's
+    // mid-transform rect to the new one, leaving the ring chasing the
+    // page mid-animation and ending up offset. CSS-bound position
+    // keeps the ring locked to the current focused element in every
+    // frame, regardless of when focus fires relative to the slide.
     return (
         <AnimatePresence>
             {rect !== null ? (
@@ -159,21 +171,13 @@ function FocusRingOverlay({ target }: { readonly target: HTMLElement | null }) {
                     style={{
                         boxShadow:
                             "0 0 0 2px var(--color-accent), 0 0 0 4px var(--color-panel)",
-                    }}
-                    initial={{
-                        opacity: 0,
                         top: rect.top,
                         left: rect.left,
                         width: rect.width,
                         height: rect.height,
                     }}
-                    animate={{
-                        opacity: 1,
-                        top: rect.top,
-                        left: rect.left,
-                        width: rect.width,
-                        height: rect.height,
-                    }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={transition}
                     aria-hidden

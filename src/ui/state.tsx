@@ -91,20 +91,6 @@ function needsPaneSettle(fromMode: UiMode, toMode: UiMode): boolean {
     return !window.matchMedia("(min-width: 800px)").matches;
 }
 
-/**
- * Run `fn` after the pane slide has settled (so focus/scroll lands on
- * the element at its final position, not mid-animation). When no
- * settle is needed, defer to a microtask so callers can dispatch a
- * `setUiMode` first and let the render flush before the DOM work.
- */
-function afterPaneSettle(needsDelay: boolean, fn: () => void): void {
-    if (needsDelay) {
-        setTimeout(fn, PANE_SETTLE_MS);
-    } else {
-        queueMicrotask(fn);
-    }
-}
-
 export type { DraftSuggestion } from "../logic/ClueState";
 import type { ClueAction, ClueState } from "../logic/ClueState";
 
@@ -694,15 +680,10 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     useGlobalShortcut(
         "global.gotoChecklist",
         useCallback(() => {
-            const needsDelay = needsPaneSettle(uiModeRef.current, "checklist");
             if (uiModeRef.current !== "checklist") {
                 dispatchRaw({ type: "setUiMode", mode: "checklist" });
             }
-            // On mobile crossing from suggest to checklist, the target
-            // cell sits inside a pane that's still `inert` until the
-            // slide completes — deferring keeps focus from silently
-            // failing and lets scrollIntoView land on the final rect.
-            afterPaneSettle(needsDelay, requestFocusChecklistCell);
+            requestFocusChecklistCell();
         }, []),
     );
 
@@ -715,16 +696,10 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     useGlobalShortcut(
         "global.gotoPriorLog",
         useCallback(() => {
-            const needsDelay = needsPaneSettle(uiModeRef.current, "suggest");
             if (uiModeRef.current !== "suggest") {
                 dispatchRaw({ type: "setUiMode", mode: "suggest" });
             }
-            // Wait for the suggest pane to slide in before scrolling
-            // to / focusing the prior-suggestions header — the element
-            // is off-screen and `inert` mid-animation. Instant
-            // scrollIntoView after the settle feels cleaner than a
-            // smooth scroll stacked on the pane transition.
-            afterPaneSettle(needsDelay, () => {
+            queueMicrotask(() => {
                 const header = document.getElementById("prior-suggestions");
                 header?.scrollIntoView({ block: "start" });
                 const firstRow = document.querySelector<HTMLElement>(
