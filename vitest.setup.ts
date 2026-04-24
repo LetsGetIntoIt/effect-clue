@@ -22,6 +22,28 @@ afterEach(() => {
 import { addEqualityTesters } from "@effect/vitest";
 addEqualityTesters();
 
+// jsdom doesn't ship `matchMedia`. Several UI hooks
+// (`useIsDesktop`, motion's `useReducedMotion`) read it during
+// render, so any test that mounts a component reaching those hooks
+// would crash without this polyfill. The default returns `matches:
+// false` — tests that need a specific breakpoint override it
+// in-file via `vi.spyOn(window, "matchMedia")`.
+if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
+    Object.defineProperty(window, "matchMedia", {
+        writable: true,
+        value: (query: string): MediaQueryList => ({
+            matches: false,
+            media: query,
+            onchange: null,
+            addListener: () => {},
+            removeListener: () => {},
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            dispatchEvent: () => false,
+        }),
+    });
+}
+
 // jsdom ships without `TextEncoder` / `TextDecoder` on the global.
 // Some dependencies (effect's `Encoding` module) reference them at
 // module-load time, so polyfill before any test imports them.
