@@ -306,7 +306,6 @@ export function PillPopover({
         <RadixPopover.Root open={open} onOpenChange={onOpenChange}>
             <RadixPopover.Trigger
                 data-pill-id={pillId}
-                data-animated-focus
                 aria-disabled={disabled ? true : undefined}
                 aria-invalid={hasError ? true : undefined}
                 aria-describedby={
@@ -316,7 +315,6 @@ export function PillPopover({
                     (disabled ? "cursor-not-allowed " : "cursor-pointer ") +
                     "rounded-full border-none bg-transparent p-0 " +
                     "hover:opacity-80 " +
-                    "focus:outline-none " +
                     // While the dropdown is open, real focus is inside
                     // the list — pin the ring on the trigger anyway so
                     // the user can see which pill they're editing.

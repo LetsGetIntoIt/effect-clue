@@ -870,10 +870,9 @@ function PriorSuggestionItem({
             tabIndex={0}
             role="button"
             aria-pressed={isSelected}
-            data-animated-focus
             data-suggestion-row={idx}
             className={
-                "relative flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2 text-[13px] transition-colors cursor-pointer focus:outline-none overflow-hidden " +
+                "relative flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2 text-[13px] transition-colors cursor-pointer overflow-hidden " +
                 (isHighlighted
                     ? "border-accent bg-accent text-white"
                     : "border-border")
