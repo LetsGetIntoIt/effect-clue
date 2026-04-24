@@ -447,7 +447,6 @@ export function SingleSelectList<T>({
         >
     >(
         () => [
-            ...options.map(o => ({ kind: "option" as const, option: o })),
             ...(nobodyLabel !== null && nobodyValue !== null
                 ? [
                       {
@@ -457,17 +456,20 @@ export function SingleSelectList<T>({
                       },
                   ]
                 : []),
+            ...options.map(o => ({ kind: "option" as const, option: o })),
         ],
         [options, nobodyLabel, nobodyValue],
     );
 
     const initialIdx = useMemo(() => {
         if (selected !== null) {
-            const idx = options.findIndex(o => o.value === selected);
+            const idx = rows.findIndex(
+                r => r.kind === "option" && r.option.value === selected,
+            );
             if (idx >= 0) return idx;
         }
         return 0;
-    }, [selected, options]);
+    }, [selected, rows]);
     const [focusedIdx, setFocusedIdx] = useState(initialIdx);
 
     const listRef = useRef<HTMLUListElement>(null);
@@ -539,7 +541,7 @@ export function SingleSelectList<T>({
                             "flex cursor-pointer items-center gap-1.5 rounded px-3 py-2 text-[13px]" +
                             (highlighted ? " bg-accent/15" : "") +
                             (row.kind === "nobody"
-                                ? " border-t border-border/60 text-muted"
+                                ? " border-b border-border/60 text-muted"
                                 : "")
                         }
                         onMouseEnter={() => setFocusedIdx(i)}
@@ -631,7 +633,7 @@ export function MultiSelectList({
     };
 
     const rowCount = options.length + 1; // + "nobody" row
-    const isNobodyRow = (i: number) => i === options.length;
+    const isNobodyRow = (i: number) => i === 0;
 
     const toggle = (player: Player) => {
         setToggled(prev =>
@@ -674,7 +676,7 @@ export function MultiSelectList({
                 commitAdvance(NOBODY);
                 return;
             }
-            const opt = options[focusedIdx];
+            const opt = options[focusedIdx - 1];
             if (opt !== undefined) toggle(opt.value);
             return;
         }
@@ -699,9 +701,25 @@ export function MultiSelectList({
                 onKeyDown={onKeyDown}
                 className="m-0 max-h-[240px] list-none overflow-y-auto p-0 outline-none"
             >
+                <li
+                    role="option"
+                    aria-selected={nobodyChosen}
+                    className={
+                        "flex cursor-pointer items-center gap-1.5 rounded border-b border-border/60 px-3 py-2 text-[13px] text-muted" +
+                        (focusedIdx === 0 ? " bg-accent/15" : "")
+                    }
+                    onMouseEnter={() => setFocusedIdx(0)}
+                    onMouseDown={e => {
+                        e.preventDefault();
+                        commitAdvance(NOBODY);
+                    }}
+                >
+                    {nobodyLabel}
+                </li>
                 {options.map((opt, i) => {
+                    const rowIdx = i + 1;
                     const checked = toggled.some(p => p === opt.value);
-                    const highlighted = i === focusedIdx;
+                    const highlighted = rowIdx === focusedIdx;
                     return (
                         <li
                             key={String(opt.value)}
@@ -711,7 +729,7 @@ export function MultiSelectList({
                                 "flex cursor-pointer items-center gap-1.5 rounded px-3 py-2 text-[13px]" +
                                 (highlighted ? " bg-accent/15" : "")
                             }
-                            onMouseEnter={() => setFocusedIdx(i)}
+                            onMouseEnter={() => setFocusedIdx(rowIdx)}
                             onMouseDown={e => {
                                 e.preventDefault();
                                 toggle(opt.value);
@@ -732,23 +750,6 @@ export function MultiSelectList({
                         </li>
                     );
                 })}
-                <li
-                    role="option"
-                    aria-selected={nobodyChosen}
-                    className={
-                        "flex cursor-pointer items-center gap-1.5 rounded border-t border-border/60 px-3 py-2 text-[13px] text-muted" +
-                        (focusedIdx === options.length
-                            ? " bg-accent/15"
-                            : "")
-                    }
-                    onMouseEnter={() => setFocusedIdx(options.length)}
-                    onMouseDown={e => {
-                        e.preventDefault();
-                        commitAdvance(NOBODY);
-                    }}
-                >
-                    {nobodyLabel}
-                </li>
             </ul>
             <div className="mt-1 flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-muted">
                 <span>{commitHint}</span>
