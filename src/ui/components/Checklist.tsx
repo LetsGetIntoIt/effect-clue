@@ -2,7 +2,14 @@
 
 import { Result } from "effect";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    type ReactNode,
+} from "react";
 import { Card, Owner, Player, ownerLabel } from "../../logic/GameObjects";
 import {
     allCardIds,
@@ -241,14 +248,40 @@ export function Checklist() {
         maxCol: totalCols - 1,
     };
 
-    // Handle ⌘J focus requests: locate a cell by (row,col) and
+    // Handle ⌘J / ⌘H focus requests: locate a cell by (row,col) and
     // focus it. "first" falls back to the first interactive cell.
-    useEffect(() => {
+    //
+    // Registered via `useLayoutEffect` (not `useEffect`) so the
+    // handler is in place before any `queueMicrotask` queued by the
+    // Cmd+H/J shortcut runs — a useEffect runs after paint, by which
+    // point the focus call has already fired against the previously-
+    // registered (exiting) Checklist.
+    //
+    // Cell lookups are scoped to `rootRef` so during the
+    // AnimatePresence swap (both Checklists briefly in the DOM) the
+    // handler can't grab the exiting pane's cell via a global
+    // `document.querySelector`.
+    //
+    // Deps are empty (register once on mount) so this Checklist
+    // can't re-register itself when its `bounds` change. Otherwise
+    // the swap goes "old mount → new mount → old re-register" — the
+    // exiting Checklist's `bounds` flip when `uiMode` changes and it
+    // would re-register last, winning the `current` slot. Bounds and
+    // the root are read through refs at handler-call time instead.
+    const rootRef = useRef<HTMLElement>(null);
+    const boundsRef = useRef(bounds);
+    boundsRef.current = bounds;
+    useLayoutEffect(() => {
+        const findInRoot = (r: number, c: number): HTMLElement | null =>
+            rootRef.current?.querySelector<HTMLElement>(
+                `[data-cell-row="${r}"][data-cell-col="${c}"]`,
+            ) ?? null;
         const unregister = registerChecklistFocusHandler(target => {
+            const b = boundsRef.current;
             const findFirst = (): HTMLElement | null => {
-                for (let r = bounds.minRow; r <= bounds.maxRow; r++) {
-                    for (let c = bounds.minCol; c <= bounds.maxCol; c++) {
-                        const el = findNavCell(r, c);
+                for (let r = b.minRow; r <= b.maxRow; r++) {
+                    for (let c = b.minCol; c <= b.maxCol; c++) {
+                        const el = findInRoot(r, c);
                         if (el) return el;
                     }
                 }
@@ -261,7 +294,7 @@ export function Checklist() {
                 } else if (target === "last") {
                     el = findFirst();
                 } else {
-                    el = findNavCell(target.row, target.col) ?? findFirst();
+                    el = findInRoot(target.row, target.col) ?? findFirst();
                 }
                 if (el) {
                     el.scrollIntoView(
@@ -273,7 +306,7 @@ export function Checklist() {
             });
         });
         return unregister;
-    }, [bounds.minRow, bounds.maxRow, bounds.minCol, bounds.maxCol]);
+    }, []);
 
     // In Setup mode the add-player column sits between the players and
     // the case file — clicking + spawns the new player where its column
@@ -376,6 +409,7 @@ export function Checklist() {
 
     return (
         <section
+            ref={rootRef}
             id="checklist"
             className="flex h-full min-w-0 flex-col rounded-[var(--radius)] border border-border bg-panel p-4"
         >
@@ -1598,8 +1632,15 @@ function AnimatedCellGlyph({ value }: { readonly value: CellValue | undefined })
 const CELL_BASE =
     "w-9 min-w-9 border-r border-b border-border px-2 py-1 text-center font-semibold relative";
 
+// Note: we intentionally don't draw a `focus:ring-*` here — cells
+// opt into the app's sliding `AnimatedFocusRing` via
+// `data-animated-focus`, which renders a single motion-driven ring
+// that slides between focused cells. A stacked Tailwind ring would
+// paint a second, instant-jumping outline on top of the animated
+// one. The native outline is already suppressed globally on
+// `[data-animated-focus]:focus-visible` (see globals.css).
 const CELL_INTERACTIVE =
-    " cursor-pointer hover:z-10 hover:ring-2 hover:ring-accent/40 focus:z-10 focus:outline-none focus:ring-2 focus:ring-accent";
+    " cursor-pointer hover:z-10 hover:ring-2 hover:ring-accent/40 focus:z-10 focus:outline-none";
 
 const CELL_HIGHLIGHTED =
     " z-10 ring-2 ring-accent ring-offset-1 ring-offset-panel";

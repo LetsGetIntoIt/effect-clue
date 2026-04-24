@@ -11,18 +11,20 @@ import {
 import { T_SPRING_SOFT, useReducedTransition } from "../motion";
 
 /**
- * Sliding focus ring overlay. Listens at the document level for
- * keyboard focus changes; paints a single `<motion.span>` fixed to
- * the viewport, sized and positioned over whichever focusable
- * element currently has keyboard `:focus-visible` AND opts in via
- * `data-animated-focus`.
+ * Single focus-ring overlay glued to whichever focusable element
+ * currently has keyboard `:focus-visible` AND opts in via
+ * `data-animated-focus`. Listens at the document level for focus
+ * changes and paints a `<motion.span>` fixed to the viewport, sized
+ * and positioned on top of that element via `style` so it tracks the
+ * element 1:1 each frame (no spring lag during view-switch slides
+ * or layout animations of the focused element itself).
  *
  * Mounted once near the app root. Focus targets annotate themselves
  * with `data-animated-focus`; the global `*:focus-visible` outline
  * is suppressed on those via a scoped selector in globals.css. The
- * result: a single ring that slides across the entire app as focus
- * moves between cells, pills, and list items — fading in on first
- * keyboard focus, out when focus leaves animated-focus targets.
+ * ring fades in on first keyboard focus and out when focus leaves
+ * an animated-focus target; movement between targets is a snap
+ * (position is CSS-bound, not motion-animated).
  *
  * This component renders no layout-affecting DOM — just an
  * `AnimatePresence` that portals the ring via fixed positioning.
@@ -105,7 +107,7 @@ export function AnimatedFocusRing({
 
 function FocusRingOverlay({ target }: { readonly target: HTMLElement | null }) {
     const [rect, setRect] = useState<Rect | null>(null);
-    const transition = useReducedTransition(T_SPRING_SOFT);
+    const opacityTransition = useReducedTransition(T_SPRING_SOFT);
 
     useLayoutEffect(() => {
         if (!target) {
@@ -150,6 +152,13 @@ function FocusRingOverlay({ target }: { readonly target: HTMLElement | null }) {
         return () => cancelAnimationFrame(rafId);
     }, [target]);
 
+    // Position is CSS-bound — each rAF tick re-renders with the
+    // target's current rect in `style`, so the ring tracks the focused
+    // element 1:1 with no motion-driven interpolation. Routing
+    // top/left/width/height through `animate` instead would let
+    // motion's spring chase the previous target's mid-transform rect
+    // during a view-switch slide and land offset. Only opacity is
+    // motion-animated, for the fade-in/out around focus enter/leave.
     return (
         <AnimatePresence>
             {rect !== null ? (
@@ -159,23 +168,15 @@ function FocusRingOverlay({ target }: { readonly target: HTMLElement | null }) {
                     style={{
                         boxShadow:
                             "0 0 0 2px var(--color-accent), 0 0 0 4px var(--color-panel)",
-                    }}
-                    initial={{
-                        opacity: 0,
                         top: rect.top,
                         left: rect.left,
                         width: rect.width,
                         height: rect.height,
                     }}
-                    animate={{
-                        opacity: 1,
-                        top: rect.top,
-                        left: rect.left,
-                        width: rect.width,
-                        height: rect.height,
-                    }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={transition}
+                    transition={opacityTransition}
                     aria-hidden
                 />
             ) : null}

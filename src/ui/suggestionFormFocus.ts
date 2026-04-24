@@ -10,16 +10,34 @@
 type Handler = (options: { clear: boolean }) => void;
 
 let current: Handler | null = null;
-let pending: { clear: boolean; expiresAt: number } | null = null;
+let pending: {
+    clear: boolean;
+    settleMs: number;
+    expiresAt: number;
+} | null = null;
 
 const PENDING_WINDOW_MS = 500;
+
+/**
+ * Invoke the handler now or after `settleMs` milliseconds. Callers use
+ * the delayed path when a view/pane transition is about to run, so the
+ * popover anchored to the Suggester pill opens against the pill's final
+ * position rather than a mid-slide measurement.
+ */
+function invokeHandler(h: Handler, clear: boolean, settleMs: number): void {
+    if (settleMs > 0) {
+        setTimeout(() => h({ clear }), settleMs);
+    } else {
+        h({ clear });
+    }
+}
 
 export function registerSuggestionFormFocusHandler(h: Handler): () => void {
     current = h;
     if (pending && Date.now() < pending.expiresAt) {
-        const { clear } = pending;
+        const { clear, settleMs } = pending;
         pending = null;
-        queueMicrotask(() => h({ clear }));
+        queueMicrotask(() => invokeHandler(h, clear, settleMs));
     } else {
         pending = null;
     }
@@ -28,12 +46,17 @@ export function registerSuggestionFormFocusHandler(h: Handler): () => void {
     };
 }
 
-export function requestFocusSuggestionForm(options: { clear: boolean }): void {
+export function requestFocusSuggestionForm(options: {
+    clear: boolean;
+    settleMs?: number;
+}): void {
+    const settleMs = options.settleMs ?? 0;
     if (current) {
-        current(options);
+        invokeHandler(current, options.clear, settleMs);
     } else {
         pending = {
             clear: options.clear,
+            settleMs,
             expiresAt: Date.now() + PENDING_WINDOW_MS,
         };
     }

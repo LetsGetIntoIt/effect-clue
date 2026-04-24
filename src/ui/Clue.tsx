@@ -157,7 +157,7 @@ function NewGameShortcut() {
  * `mode`, so the slide happens at the pane level there instead.
  */
 function TabContent() {
-    const { state } = useClue();
+    const { state, hydrated } = useClue();
     const mode = state.uiMode;
     const transition = useReducedTransition(T_STANDARD, { fadeMs: 120 });
 
@@ -173,8 +173,18 @@ function TabContent() {
     const topLevelKey: "setup" | "play" =
         mode === UI_SETUP ? UI_SETUP : TOP_LEVEL_PLAY;
 
+    // Until URL/localStorage hydration resolves the real view, render
+    // a view-agnostic skeleton so the default `"setup"` pane doesn't
+    // flash between initial mount and the hydrated dispatch. Gating
+    // the AnimatePresence (not an early return) keeps hook order
+    // stable across the transition. AnimatePresence only mounts once
+    // `hydrated` is true, so `initial={false}` correctly skips the
+    // entry animation on whichever hydrated view wins.
     return (
         <div className="relative h-full min-h-0 overflow-hidden">
+            {!hydrated ? (
+                <ViewSkeleton />
+            ) : (
             <AnimatePresence custom={direction} initial={false}>
                 {topLevelKey === UI_SETUP ? (
                     <motion.div
@@ -206,6 +216,39 @@ function TabContent() {
                     </motion.div>
                 )}
             </AnimatePresence>
+            )}
+        </div>
+    );
+}
+
+/**
+ * View-agnostic loading skeleton. On mobile it renders a single pane
+ * (matching the one visible pane in Setup, Checklist, and Suggest
+ * modes). On desktop (≥800px) it mirrors the Play grid's two-column
+ * layout so the skeleton shape is close to whichever view lands —
+ * the left column wins for Setup (where the right panel disappears
+ * in one frame), and both columns match the Play grid. Rectangles
+ * stand in for a heading bar, a subtitle / progress row, and the
+ * main content area. `motion-safe:animate-pulse` lets reduced-motion
+ * users see a static skeleton.
+ */
+function ViewSkeleton() {
+    const pane = (
+        <div className="flex h-full min-h-0 flex-col gap-3 rounded-[var(--radius)] border border-border/40 bg-panel/40 p-4">
+            <div className="h-5 w-1/3 rounded bg-border/40" />
+            <div className="h-3 w-2/3 rounded bg-border/30" />
+            <div className="mt-1 min-h-20 flex-1 rounded bg-border/20" />
+        </div>
+    );
+    return (
+        <div
+            aria-hidden
+            className="relative h-full min-h-0 motion-safe:animate-pulse [@media(min-width:800px)]:grid [@media(min-width:800px)]:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] [@media(min-width:800px)]:gap-5"
+        >
+            {pane}
+            <div className="hidden h-full min-h-0 [@media(min-width:800px)]:block">
+                {pane}
+            </div>
         </div>
     );
 }

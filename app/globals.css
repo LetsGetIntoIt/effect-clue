@@ -119,9 +119,10 @@ h3 {
     border-radius: 3px;
 }
 
-/* Elements opting into the app's sliding `AnimatedFocusRing`
-   suppress the native outline — the motion-driven ring replaces
-   it and slides between targets on keyboard navigation. */
+/* Elements opting into the app's `AnimatedFocusRing` suppress the
+   native outline — the JS-tracked ring replaces it and stays glued
+   to the focused element through layout animations and view
+   transitions. */
 [data-animated-focus]:focus-visible {
     outline: none;
 }

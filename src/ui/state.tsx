@@ -8,6 +8,7 @@ import {
     useMemo,
     useReducer,
     useRef,
+    useState,
     type ReactNode,
 } from "react";
 import {
@@ -66,10 +67,29 @@ import { Layer } from "effect";
 import { requestFocusSuggestionForm } from "./suggestionFormFocus";
 import { requestFocusChecklistCell } from "./checklistFocus";
 import { useGlobalShortcut } from "./keyMap";
+import { PANE_SETTLE_MS } from "./motion";
+import type { UiMode } from "../logic/ClueState";
 
 type DeduceLayer = Layer.Layer<
     CardSetService | PlayerSetService | SuggestionsService
 >;
+
+/**
+ * Whether a uiMode transition triggers a visible slide whose target
+ * DOM we shouldn't measure/focus/scroll-to until the pane has settled.
+ *
+ * - `setup ↔ play` animates the top-level AnimatePresence on every
+ *   breakpoint.
+ * - `checklist ↔ suggest` only animates on mobile (the desktop layout
+ *   shows both panes statically).
+ * - No transition when the mode isn't actually changing.
+ */
+function needsPaneSettle(fromMode: UiMode, toMode: UiMode): boolean {
+    if (fromMode === toMode) return false;
+    if (fromMode === "setup" || toMode === "setup") return true;
+    if (typeof window === "undefined") return false;
+    return !window.matchMedia("(min-width: 800px)").matches;
+}
 
 export type { DraftSuggestion } from "../logic/ClueState";
 import type { ClueAction, ClueState } from "../logic/ClueState";
@@ -453,6 +473,14 @@ interface ClueContextValue {
     readonly undo: () => void;
     readonly redo: () => void;
     /**
+     * False on the very first render (server/SSG snapshot and the
+     * initial client render) while the URL/localStorage hydration
+     * effect hasn't resolved the real `uiMode` yet. Consumers gate
+     * view-specific UI behind this so the default `"setup"` pane
+     * doesn't flash before the hydrated view takes over.
+     */
+    readonly hydrated: boolean;
+    /**
      * The action that the next `undo()` would reverse, plus the state
      * snapshot *before* that action fired (so id-keyed actions can
      * resolve names via the pre-action `setup`). `undefined` when the
@@ -610,8 +638,16 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             const now = Date.now();
             const clear = now - lastGotoPlayAtRef.current < DOUBLE_TAP_MS;
             lastGotoPlayAtRef.current = clear ? 0 : now;
+            const needsDelay = needsPaneSettle(uiModeRef.current, "suggest");
             dispatchRaw({ type: "setUiMode", mode: "suggest" });
-            requestFocusSuggestionForm({ clear });
+            // Opening the Suggester popover has to wait until the pane
+            // slide settles — Radix measures the trigger's rect at open
+            // time, so opening mid-slide anchors the menu to a stale
+            // position that doesn't follow the pill into place.
+            requestFocusSuggestionForm({
+                clear,
+                settleMs: needsDelay ? PANE_SETTLE_MS : 0,
+            });
         }, []),
     );
 
@@ -647,7 +683,13 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             if (uiModeRef.current !== "checklist") {
                 dispatchRaw({ type: "setUiMode", mode: "checklist" });
             }
-            requestFocusChecklistCell();
+            // Defer the focus call so React can commit the swap and
+            // the entering Checklist's useLayoutEffect can register
+            // its handler first. Calling synchronously would invoke
+            // the still-current exiting Checklist's handler, which
+            // would scroll/focus into the pane that's about to slide
+            // off (matches the Cmd+H/L pattern).
+            queueMicrotask(requestFocusChecklistCell);
         }, []),
     );
 
@@ -660,15 +702,12 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     useGlobalShortcut(
         "global.gotoPriorLog",
         useCallback(() => {
-            if (uiModeRef.current === "setup") {
+            if (uiModeRef.current !== "suggest") {
                 dispatchRaw({ type: "setUiMode", mode: "suggest" });
             }
             queueMicrotask(() => {
                 const header = document.getElementById("prior-suggestions");
-                header?.scrollIntoView({
-                    behavior: "smooth",
-                    block: "start",
-                });
+                header?.scrollIntoView({ block: "start" });
                 const firstRow = document.querySelector<HTMLElement>(
                     "[data-suggestion-row]",
                 );
@@ -766,6 +805,13 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     // ---- Persistence --------------------------------------------------
 
     const didHydrate = useRef(false);
+    // State mirror of `didHydrate` for consumers that need to gate
+    // rendering on it (refs don't trigger re-renders). Starts false
+    // on SSG and the initial client render so they match; flips true
+    // after the hydration effect resolves, so TabContent can paint a
+    // neutral skeleton until we know which view to render instead of
+    // flashing the default `"setup"` pane.
+    const [hydrated, setHydrated] = useState(false);
 
     // One-shot hydration on mount: URL first, then localStorage. The
     // `?view=setup|checklist|suggest` param overrides the smart default;
@@ -780,10 +826,10 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         const params = new URLSearchParams(window.location.search);
         const stateParam = params.get("state");
         const viewParam = params.get("view");
-        let hydrated: GameSession | undefined;
-        if (stateParam) hydrated = decodeSessionFromUrl(stateParam);
-        if (!hydrated) hydrated = loadFromLocalStorage();
-        if (hydrated) dispatch({ type: "replaceSession", session: hydrated });
+        let session: GameSession | undefined;
+        if (stateParam) session = decodeSessionFromUrl(stateParam);
+        if (!session) session = loadFromLocalStorage();
+        if (session) dispatch({ type: "replaceSession", session });
 
         // View precedence: explicit `?view=` wins; otherwise pick based
         // on hydrated suggestions. The default state.uiMode is "setup",
@@ -794,9 +840,10 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             dispatch({ type: "setUiMode", mode: "suggest" });
         } else if (viewParam === "setup") {
             // No-op: default is already "setup".
-        } else if (hydrated && hydrated.suggestions.length > 0) {
+        } else if (session && session.suggestions.length > 0) {
             dispatch({ type: "setUiMode", mode: "checklist" });
         }
+        setHydrated(true);
     }, []);
 
     // Mirror `uiMode` to the URL as `?view=setup|checklist|suggest`.
@@ -874,6 +921,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             redo,
             nextUndo,
             nextRedo,
+            hydrated,
         }),
         [
             state,
@@ -887,6 +935,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             redo,
             nextUndo,
             nextRedo,
+            hydrated,
         ],
     );
 
