@@ -371,7 +371,7 @@ describe("structured Contradiction info", () => {
 
         try {
             applySlice(slice)(k);
-            fail("expected Contradiction");
+            expect.fail("expected Contradiction");
         } catch (e) {
             expect(e).toBeInstanceOf(Contradiction);
             const c = e as Contradiction;
@@ -384,7 +384,7 @@ describe("structured Contradiction info", () => {
         const k = setCell(emptyKnowledge, Cell(PlayerOwner(A), KNIFE), Y);
         try {
             setCell(k, Cell(PlayerOwner(A), KNIFE), N);
-            fail("expected Contradiction");
+            expect.fail("expected Contradiction");
         } catch (e) {
             expect(e).toBeInstanceOf(Contradiction);
             const c = e as Contradiction;
@@ -410,7 +410,7 @@ describe("structured Contradiction info", () => {
         })];
         try {
             refuterShowedCard(suggestions)(k);
-            fail("expected Contradiction");
+            expect.fail("expected Contradiction");
         } catch (e) {
             expect(e).toBeInstanceOf(Contradiction);
             const c = e as Contradiction;
