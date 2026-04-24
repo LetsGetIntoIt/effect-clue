@@ -4,6 +4,23 @@
 
 Use `pnpm` for everything. Never `npm`, `yarn`, or `bun`.
 
+## Install dependencies
+
+Run `pnpm install` from the repo root before anything else — immediately after cloning, after switching branches, and whenever `package.json` or `pnpm-lock.yaml` changes. Every script in this repo reads from `node_modules` and will error out if it hasn't been populated.
+
+Scripts that require `pnpm install`:
+
+- `pnpm typecheck` — TypeScript (`tsc --noEmit`)
+- `pnpm lint` — ESLint (with `eslint-plugin-i18next`)
+- `pnpm test` / `pnpm test:debug` — Jest test runner
+- `pnpm knip` — unused-exports audit
+- `pnpm i18n:check` — orphan-key audit (`scripts/check-i18n-keys.mjs`)
+- `pnpm dev` — Next.js dev server (used by the `next-dev` preview)
+- `pnpm build` — static export
+- `pnpm start` — serve the static export
+
+The `next-dev` preview configured in `.claude/launch.json` runs `pnpm install && pnpm dev` itself, so previews are self-healing — but the pre-commit checks above are not. If any of them fails with a module-not-found error, run `pnpm install` first and retry.
+
 ## Verification checks
 
 All of these must pass green before every commit:
