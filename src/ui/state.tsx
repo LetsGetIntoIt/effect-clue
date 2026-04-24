@@ -683,7 +683,13 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             if (uiModeRef.current !== "checklist") {
                 dispatchRaw({ type: "setUiMode", mode: "checklist" });
             }
-            requestFocusChecklistCell();
+            // Defer the focus call so React can commit the swap and
+            // the entering Checklist's useLayoutEffect can register
+            // its handler first. Calling synchronously would invoke
+            // the still-current exiting Checklist's handler, which
+            // would scroll/focus into the pane that's about to slide
+            // off (matches the Cmd+H/L pattern).
+            queueMicrotask(requestFocusChecklistCell);
         }, []),
     );
 
