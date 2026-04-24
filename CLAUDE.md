@@ -12,7 +12,7 @@ Scripts that require `pnpm install`:
 
 - `pnpm typecheck` — TypeScript (`tsc --noEmit`)
 - `pnpm lint` — ESLint (with `eslint-plugin-i18next`)
-- `pnpm test` / `pnpm test:debug` — Jest test runner
+- `pnpm test` — Vitest (run mode) / `pnpm test:watch` — Vitest watch / `pnpm test:ui` — Vitest UI
 - `pnpm knip` — unused-exports audit
 - `pnpm i18n:check` — orphan-key audit (`scripts/check-i18n-keys.mjs`)
 - `pnpm dev` — Next.js dev server (used by the `next-dev` preview)

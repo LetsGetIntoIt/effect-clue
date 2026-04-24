@@ -1,3 +1,4 @@
+import { describe, expect, test } from "vitest";
 import { HashMap, Result } from "effect";
 import { CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
 import { cardIdsInCategory, CLASSIC_SETUP_3P } from "./GameSetup";
@@ -14,8 +15,6 @@ import {
 } from "./Knowledge";
 import { Suggestion } from "./Suggestion";
 import { runDeduce } from "./test-utils/RunDeduce";
-
-import "./test-utils/EffectExpectEquals";
 
 const setup = CLASSIC_SETUP_3P;
 // Suspect category id is the branded string "category-suspects" in the

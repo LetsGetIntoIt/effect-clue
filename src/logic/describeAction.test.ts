@@ -1,3 +1,4 @@
+import { describe, expect, test } from "vitest";
 import { describeAction } from "./describeAction";
 import type { ClueAction, ClueState, DraftSuggestion } from "./ClueState";
 import { Card, CardCategory, Player } from "./GameObjects";

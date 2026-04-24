@@ -1,17 +1,16 @@
-import { beforeAll, describe, expect, jest, test } from "@jest/globals";
-import "@testing-library/jest-dom/jest-globals";
+import { describe, expect, test, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { forwardRef, createElement } from "react";
 import type { ReactNode } from "react";
 
 // -----------------------------------------------------------------------
-// ESM mocks — must go through `jest.unstable_mockModule` because ts-jest
-// under ESM does not hoist classic `jest.mock` calls. Modules that depend
-// on the mocks get imported dynamically inside `beforeAll` below.
+// ESM mocks. Vitest hoists `vi.mock` calls to the top of the file, so
+// regular top-level imports below see the mocked modules — no deferred-
+// import dance required.
 // -----------------------------------------------------------------------
 
-jest.unstable_mockModule("next-intl", () => {
+vi.mock("next-intl", () => {
     // Return the translation key so assertions can look for stable
     // strings (`pillSuggester`, `pillPassers`, …) without pulling in
     // the full message catalog.
@@ -28,7 +27,7 @@ jest.unstable_mockModule("next-intl", () => {
 // don't play well in jsdom. Replace every `motion.<tag>` with a plain
 // DOM element and make `AnimatePresence` a passthrough — we care about
 // DOM structure, not animations, for these tests.
-jest.unstable_mockModule("motion/react", () => {
+vi.mock("motion/react", () => {
     const motion = new Proxy(
         {},
         {
@@ -64,44 +63,17 @@ jest.unstable_mockModule("motion/react", () => {
     };
 });
 
-// Deferred imports: resolved after mocks are registered, below.
-type Deferred = {
-    readonly SuggestionForm: typeof import("./SuggestionForm").SuggestionForm;
-    readonly TooltipProvider: typeof import("./Tooltip").TooltipProvider;
-    readonly setup: typeof import("../../logic/GameSetup").CLASSIC_SETUP_3P;
-    readonly SuggestionId: typeof import(
-        "../../logic/Suggestion"
-    ).SuggestionId;
-    readonly Player: typeof import("../../logic/GameObjects").Player;
-    readonly cardByName: typeof import(
-        "../../logic/test-utils/CardByName"
-    ).cardByName;
-};
-let deferred: Deferred;
+import { SuggestionForm } from "./SuggestionForm";
+import { TooltipProvider } from "./Tooltip";
+import { CLASSIC_SETUP_3P as setup } from "../../logic/GameSetup";
+import { SuggestionId } from "../../logic/Suggestion";
+import { Player } from "../../logic/GameObjects";
+import { cardByName } from "../../logic/test-utils/CardByName";
 
 const renderForm = (
     ui: React.ReactElement,
 ): ReturnType<typeof render> =>
-    render(<deferred.TooltipProvider>{ui}</deferred.TooltipProvider>);
-
-beforeAll(async () => {
-    // Sequential awaits — Jest 29's VM ESM linker can't resolve
-    // transitive `effect` dependencies when multiple imports race.
-    const { SuggestionForm } = await import("./SuggestionForm");
-    const { TooltipProvider } = await import("./Tooltip");
-    const { CLASSIC_SETUP_3P } = await import("../../logic/GameSetup");
-    const { SuggestionId } = await import("../../logic/Suggestion");
-    const { Player } = await import("../../logic/GameObjects");
-    const { cardByName } = await import("../../logic/test-utils/CardByName");
-    deferred = {
-        SuggestionForm,
-        TooltipProvider,
-        setup: CLASSIC_SETUP_3P,
-        SuggestionId,
-        Player,
-        cardByName,
-    };
-});
+    render(<TooltipProvider>{ui}</TooltipProvider>);
 
 // -----------------------------------------------------------------------
 // Helpers
@@ -137,8 +109,7 @@ const getCurrentPopover = (): HTMLElement => {
 
 describe("SuggestionForm — rendering", () => {
     test("renders triggers for every pill, including the disabled Shown-card", () => {
-        const { SuggestionForm, setup } = deferred;
-        renderForm(<SuggestionForm setup={setup} onSubmit={jest.fn()} />);
+        renderForm(<SuggestionForm setup={setup} onSubmit={vi.fn()} />);
         // Disabled pills are now focusable buttons (keyboard users can
         // Tab to them and the popover explains the reason). All seven
         // pills surface as data-pill-id triggers.
@@ -157,8 +128,7 @@ describe("SuggestionForm — rendering", () => {
     });
 
     test("Add button is aria-disabled until all required slots are filled", () => {
-        const { SuggestionForm, setup } = deferred;
-        renderForm(<SuggestionForm setup={setup} onSubmit={jest.fn()} />);
+        renderForm(<SuggestionForm setup={setup} onSubmit={vi.fn()} />);
         const submit = screen.getByRole("button", { name: /submit/ });
         // Uses aria-disabled (not the `disabled` attribute) so the
         // button stays in the tab order and can surface its
@@ -167,8 +137,7 @@ describe("SuggestionForm — rendering", () => {
     });
 
     test("Shown-card trigger is rendered but aria-disabled until a refuter is picked", () => {
-        const { SuggestionForm, setup } = deferred;
-        renderForm(<SuggestionForm setup={setup} onSubmit={jest.fn()} />);
+        renderForm(<SuggestionForm setup={setup} onSubmit={vi.fn()} />);
         const seenTrigger = document.querySelector(
             "[data-pill-id='seenCard']",
         );
@@ -183,14 +152,13 @@ describe("SuggestionForm — rendering", () => {
 
 describe("SuggestionForm — submit flow", () => {
     test("picking suggester + one card per category enables submit and dispatches the draft", async () => {
-        const { SuggestionForm, setup, Player, cardByName } = deferred;
         const A = Player("Anisha");
         const MUSTARD = cardByName(setup, "Col. Mustard");
         const KNIFE = cardByName(setup, "Knife");
         const KITCHEN = cardByName(setup, "Kitchen");
 
         const user = userEvent.setup();
-        const onSubmit = jest.fn();
+        const onSubmit = vi.fn();
         renderForm(<SuggestionForm setup={setup} onSubmit={onSubmit} />);
 
         // Click the first pill; auto-advance opens each subsequent
@@ -242,12 +210,11 @@ describe("SuggestionForm — submit flow", () => {
 
 describe("SuggestionForm — passers (MultiSelect) pill", () => {
     test("toggling two players then pressing OK commits the full set", async () => {
-        const { SuggestionForm, setup, Player } = deferred;
         const B = Player("Bob");
         const C = Player("Cho");
 
         const user = userEvent.setup();
-        const onSubmit = jest.fn();
+        const onSubmit = vi.fn();
         renderForm(<SuggestionForm setup={setup} onSubmit={onSubmit} />);
 
         // Fill required fields first so we can submit and inspect the draft.
@@ -288,9 +255,8 @@ describe("SuggestionForm — passers (MultiSelect) pill", () => {
         // passers pill must not loop. Guards against re-introducing
         // the bug via a form callsite that passes a non-memoized
         // `onCommit` to MultiSelectList.
-        const { SuggestionForm, setup } = deferred;
         const user = userEvent.setup();
-        const onSubmit = jest.fn();
+        const onSubmit = vi.fn();
         expect(() =>
             renderForm(<SuggestionForm setup={setup} onSubmit={onSubmit} />),
         ).not.toThrow();
@@ -309,8 +275,6 @@ describe("SuggestionForm — passers (MultiSelect) pill", () => {
 
 describe("SuggestionForm — edit mode", () => {
     test("pre-populates from the suggestion prop", () => {
-        const { SuggestionForm, setup, Player, cardByName, SuggestionId } =
-            deferred;
         const A = Player("Anisha");
         const B = Player("Bob");
         const C = Player("Cho");
@@ -329,7 +293,7 @@ describe("SuggestionForm — edit mode", () => {
             <SuggestionForm
                 setup={setup}
                 suggestion={existing}
-                onSubmit={jest.fn()}
+                onSubmit={vi.fn()}
             />,
         );
         // Each pill renders its value as `LABEL: display`; assert each
@@ -365,9 +329,8 @@ describe("SuggestionForm — edit mode", () => {
 
 describe("SuggestionForm — auto-advance after picking a refuter", () => {
     test("focus lands on Shown-card (not Add) once a refuter is chosen", async () => {
-        const { SuggestionForm, setup } = deferred;
         const user = userEvent.setup();
-        renderForm(<SuggestionForm setup={setup} onSubmit={jest.fn()} />);
+        renderForm(<SuggestionForm setup={setup} onSubmit={vi.fn()} />);
 
         // Drive a full suggestion: suggester + 3 cards.
         const pSug = await openPopover(user, /pillSuggester/);
@@ -417,8 +380,6 @@ describe("SuggestionForm — auto-advance after picking a refuter", () => {
 
 describe("SuggestionForm — stale Shown card error state", () => {
     test("swapping the weapon after setting a shown card flags Shown card as invalid", async () => {
-        const { SuggestionForm, setup, Player, cardByName, SuggestionId } =
-            deferred;
         const A = Player("Anisha");
         const B = Player("Bob");
         const MUSTARD = cardByName(setup, "Col. Mustard");
@@ -438,7 +399,7 @@ describe("SuggestionForm — stale Shown card error state", () => {
                     refuter: B,
                     seenCard: KNIFE,
                 }}
-                onSubmit={jest.fn()}
+                onSubmit={vi.fn()}
             />,
         );
 
@@ -483,9 +444,8 @@ describe("SuggestionForm — stale Shown card error state", () => {
 
 describe("SuggestionForm — disabled pill popover", () => {
     test("opening the disabled Shown-card pill shows its disabledHint", async () => {
-        const { SuggestionForm, setup } = deferred;
         const user = userEvent.setup();
-        renderForm(<SuggestionForm setup={setup} onSubmit={jest.fn()} />);
+        renderForm(<SuggestionForm setup={setup} onSubmit={vi.fn()} />);
 
         const seen = document.querySelector(
             "[data-pill-id='seenCard']",
@@ -507,9 +467,8 @@ describe("SuggestionForm — disabled pill popover", () => {
 
 describe("SuggestionForm — disabled Add button", () => {
     test("empty form: Add button is aria-disabled and clicking is a no-op", async () => {
-        const { SuggestionForm, setup } = deferred;
         const user = userEvent.setup();
-        const onSubmit = jest.fn();
+        const onSubmit = vi.fn();
         renderForm(<SuggestionForm setup={setup} onSubmit={onSubmit} />);
         const submit = screen.getByRole("button", { name: /submit/ });
         expect(submit).toHaveAttribute("aria-disabled", "true");
@@ -518,9 +477,8 @@ describe("SuggestionForm — disabled Add button", () => {
     });
 
     test("filling required pills clears aria-disabled", async () => {
-        const { SuggestionForm, setup } = deferred;
         const user = userEvent.setup();
-        renderForm(<SuggestionForm setup={setup} onSubmit={jest.fn()} />);
+        renderForm(<SuggestionForm setup={setup} onSubmit={vi.fn()} />);
         const pSug = await openPopover(user, /pillSuggester/);
         await user.click(
             within(pSug).getByRole("option", { name: /Anisha/ }),

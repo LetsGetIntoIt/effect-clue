@@ -1,3 +1,4 @@
+import { describe, expect, test } from "vitest";
 import { Card, CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
 import { cardIdsInCategory, CLASSIC_SETUP_3P } from "./GameSetup";
 import { cardByName } from "./test-utils/CardByName";
@@ -26,8 +27,6 @@ import {
     Slice,
 } from "./Rules";
 import { Suggestion } from "./Suggestion";
-
-import "./test-utils/EffectExpectEquals";
 
 const setup = CLASSIC_SETUP_3P;
 const suspectsCategory = expectDefined(

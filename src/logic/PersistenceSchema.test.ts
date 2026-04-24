@@ -1,3 +1,4 @@
+import { describe, expect, test } from "vitest";
 import { Result } from "effect";
 import { CLASSIC_SETUP_3P } from "./GameSetup";
 import { decodeSession, encodeSession } from "./Persistence";

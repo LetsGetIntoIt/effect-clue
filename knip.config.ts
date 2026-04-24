@@ -3,7 +3,7 @@ import type { KnipConfig } from "knip";
 const config: KnipConfig = {
 	// Tests live alongside source files; include them so test-only exports
 	// (e.g. preset fixtures) are counted as used.
-	entry: ["src/**/*.test.ts"],
+	entry: ["src/**/*.test.{ts,tsx}"],
 	project: ["app/**/*.{ts,tsx}", "src/**/*.{ts,tsx}"],
 	ignore: ["src/logic/test-utils/**"],
 	ignoreDependencies: [
@@ -12,9 +12,6 @@ const config: KnipConfig = {
 		// the top level keeps CSS tooling and editor integrations happy,
 		// even though nothing imports it directly.
 		"tailwindcss",
-		// ts-node is used implicitly by jest-config and next to load
-		// *.config.ts files.
-		"ts-node",
 	],
 };
 

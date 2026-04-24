@@ -4,6 +4,7 @@
  * or any already-deduced cell values. Lives apart from the unit tests
  * because it cuts across multiple modules.
  */
+import { describe, expect, test } from "vitest";
 import { Result } from "effect";
 import {
     Card,
@@ -26,8 +27,6 @@ import {
 import { Suggestion, SuggestionId } from "./Suggestion";
 import { cardByName } from "./test-utils/CardByName";
 import { runDeduce } from "./test-utils/RunDeduce";
-
-import "./test-utils/EffectExpectEquals";
 
 const setup = CLASSIC_SETUP_3P;
 const A = Player("Anisha");

@@ -1,3 +1,4 @@
+import { describe, expect, test } from "vitest";
 import { Effect, HashMap } from "effect";
 import { CLASSIC_SETUP_3P } from "../GameSetup";
 import { emptyKnowledge } from "../Knowledge";
