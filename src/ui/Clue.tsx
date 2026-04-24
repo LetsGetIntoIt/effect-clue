@@ -166,8 +166,23 @@ function TabContent() {
     // new mode — exactly what's needed to choose enter/exit sides.
     const prevModeRef = useRef<UiMode>(mode);
     const direction = getDirection(prevModeRef.current, mode);
+
+    // The reducer defaults `uiMode` to `"setup"` and the hydration
+    // effect dispatches the URL-derived mode afterwards, which
+    // AnimatePresence would otherwise animate as a real transition
+    // (`initial={false}` only suppresses the first-mount enter, not
+    // the subsequent key swap). Collapse the very first mode change
+    // after mount to a zero-duration transition so `?view=checklist`
+    // and `?view=suggest` land instantly.
+    const hadFirstChangeRef = useRef(false);
+    const isFirstChange =
+        !hadFirstChangeRef.current && mode !== prevModeRef.current;
+    const effectiveTransition = isFirstChange ? { duration: 0 } : transition;
     useEffect(() => {
-        prevModeRef.current = mode;
+        if (mode !== prevModeRef.current) {
+            hadFirstChangeRef.current = true;
+            prevModeRef.current = mode;
+        }
     }, [mode]);
 
     const topLevelKey: "setup" | "play" =
@@ -184,7 +199,7 @@ function TabContent() {
                         initial={VARIANT_INITIAL}
                         animate={VARIANT_ANIMATE}
                         exit={VARIANT_EXIT}
-                        transition={transition}
+                        transition={effectiveTransition}
                         className="absolute inset-0 min-h-0"
                     >
                         <Checklist />
@@ -197,7 +212,7 @@ function TabContent() {
                         initial={VARIANT_INITIAL}
                         animate={VARIANT_ANIMATE}
                         exit={VARIANT_EXIT}
-                        transition={transition}
+                        transition={effectiveTransition}
                         className="absolute inset-0 min-h-0"
                     >
                         <PlayGrid

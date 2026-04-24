@@ -23,6 +23,16 @@ export const T_STANDARD: Transition = {
     ease: [0.22, 1, 0.36, 1],
 };
 
+/**
+ * How long to wait after starting a view/pane transition before
+ * running post-transition side effects (opening a popover anchored to
+ * a newly-visible pill, scrolling to a freshly-revealed row, focusing
+ * a cell that was in an `inert` subtree a moment ago). Matches
+ * `T_STANDARD.duration` plus a one-frame buffer so the target element
+ * has settled into its final position before we measure or focus it.
+ */
+export const PANE_SETTLE_MS = 210;
+
 export const T_SPRING_SOFT: Transition = {
     type: "spring",
     stiffness: 320,
