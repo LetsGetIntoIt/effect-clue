@@ -32,12 +32,13 @@ const pluginHtmlEntitiesRegex = require(
 export default [
     {
         ignores: [
-            ".next/**",
-            "node_modules/**",
-            "coverage/**",
-            "dist/**",
-            "out/**",
-            "messages/**",
+            "**/.next/**",
+            "**/node_modules/**",
+            "**/coverage/**",
+            "**/dist/**",
+            "**/out/**",
+            "**/messages/**",
+            "**/.claude/worktrees/**",
         ],
     },
     {
