@@ -1,6 +1,6 @@
 "use client";
 
-import { Result } from "effect";
+import { Equal, Result } from "effect";
 import { useTranslations } from "next-intl";
 import {
     useEffect,
@@ -44,6 +44,7 @@ import { Suggestion } from "../../logic/Suggestion";
 import { useConfirm } from "../hooks/useConfirm";
 import { useSelection } from "../SelectionContext";
 import { useClue } from "../state";
+import { useWhyHoverIntent } from "../checklistPopoverIntent";
 import {
     registerChecklistFocusHandler,
     rememberChecklistCell,
@@ -210,9 +211,15 @@ export function Checklist() {
     const { state, dispatch, derived } = useClue();
     const {
         activeSuggestionIndex,
-        setHoveredCell,
-        setSelectedCell,
+        popoverCell,
+        setPopoverCell,
     } = useSelection();
+    const {
+        onCellPointerEnter,
+        onCellPointerLeave,
+        onGridLeave,
+        cancelExitTimer,
+    } = useWhyHoverIntent();
     const confirm = useConfirm();
     const inSetup = state.uiMode === "setup";
     const setup = state.setup;
@@ -412,6 +419,16 @@ export function Checklist() {
             ref={rootRef}
             id="checklist"
             className="flex h-full min-w-0 flex-col rounded-[var(--radius)] border border-border bg-panel p-4"
+            onMouseLeave={onGridLeave}
+            onBlur={e => {
+                // Focus left the checklist root entirely (relatedTarget
+                // is outside the section). Exit popovers mode so the
+                // tab key moving focus away from the grid doesn't
+                // leave a stranded popover + suggestion highlight.
+                const next = e.relatedTarget as Node | null;
+                if (next && e.currentTarget.contains(next)) return;
+                onGridLeave();
+            }}
         >
             {inSetup && (
                 <div className="mb-3 flex shrink-0 justify-end">
@@ -788,14 +805,29 @@ export function Checklist() {
                                             setupInteractive || playInteractive,
                                             isHighlighted,
                                         );
+                                        const thisCellForHover = Cell(
+                                            owner,
+                                            entry.id,
+                                        );
+                                        // Hover handlers are provided for
+                                        // every cell so the grid-leave /
+                                        // decay accounting stays consistent
+                                        // whether or not this particular
+                                        // cell has a deduction to show.
+                                        // Non-deducible cells never satisfy
+                                        // the "open a popover" path, but
+                                        // moving onto them still resets the
+                                        // decay timer so sweeping across a
+                                        // mix of deducible and empty cells
+                                        // behaves intuitively.
                                         const hoverHandlers = {
                                             onPointerEnter: (
                                                 e: React.PointerEvent<HTMLTableCellElement>,
                                             ) => {
                                                 if (e.pointerType !== "mouse")
                                                     return;
-                                                setHoveredCell(
-                                                    Cell(owner, entry.id),
+                                                onCellPointerEnter(
+                                                    thisCellForHover,
                                                 );
                                             },
                                             onPointerLeave: (
@@ -803,7 +835,7 @@ export function Checklist() {
                                             ) => {
                                                 if (e.pointerType !== "mouse")
                                                     return;
-                                                setHoveredCell(null);
+                                                onCellPointerLeave();
                                             },
                                         };
                                         // Arrow-key grid navigation: walk to
@@ -879,17 +911,37 @@ export function Checklist() {
                                                 owner,
                                                 entry.id,
                                             );
+                                            const isOpen = Equal.equals(
+                                                popoverCell,
+                                                thisCell,
+                                            );
                                             cell = (
                                                 <InfoPopover
                                                     key={`${ownerKey(owner)}-${String(entry.id)}`}
                                                     content={tooltipContent}
                                                     variant="accent"
+                                                    open={isOpen}
                                                     onOpenChange={open => {
-                                                        setSelectedCell(
-                                                            open
-                                                                ? thisCell
-                                                                : null,
-                                                        );
+                                                        if (open) {
+                                                            // Explicit
+                                                            // activation
+                                                            // (click /
+                                                            // tap /
+                                                            // keyboard) —
+                                                            // overrides
+                                                            // any
+                                                            // in-flight
+                                                            // exit
+                                                            // timer.
+                                                            cancelExitTimer();
+                                                            setPopoverCell(
+                                                                thisCell,
+                                                            );
+                                                        } else {
+                                                            setPopoverCell(
+                                                                null,
+                                                            );
+                                                        }
                                                     }}
                                                 >
                                                     <td

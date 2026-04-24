@@ -25,23 +25,30 @@ interface InfoPopoverProps {
     /** When provided, overrides the max-width of the content. */
     readonly maxWidthPx?: number;
     /**
+     * Optional controlled-open prop. When provided, the component is
+     * controlled — the parent owns open/closed state and this component
+     * simply renders what it's told. When omitted, the component keeps
+     * its uncontrolled (click-to-toggle) behavior.
+     */
+    readonly open?: boolean;
+    /**
      * Callback fired whenever the popover opens or closes. Useful for
-     * syncing external state (e.g. pinning the corresponding cell's
-     * selection).
+     * syncing external state (e.g. the grid's hover-intent popover cell
+     * or pinning the corresponding cell's selection).
      */
     readonly onOpenChange?: (open: boolean) => void;
 }
 
 /**
- * Click/tap-to-reveal info popover. Unlike `Tooltip` (hover-only,
- * desktop-only), this works identically on desktop and touch: the only
- * way to open it is an explicit click, tap, or keyboard activation. We
- * deliberately do NOT open on hover — users on touch devices can't
- * hover, and having desktop behave differently from mobile leads to
- * "the Mac shows something the phone doesn't" bug reports.
+ * Info popover for grid cells and ⓘ triggers. By default works on both
+ * desktop and touch via click/tap/keyboard activation — the underlying
+ * Radix Popover renders a focusable dialog that keyboard users can
+ * read and dismiss.
  *
- * Built on Radix Popover (not Tooltip), so the content is a focusable
- * dialog that keyboard users can read and dismiss.
+ * Callers can additionally drive the open state themselves (see `open`
+ * and `onOpenChange`) — for example, the Checklist uses a shared
+ * hover-intent hook to open popovers after a delay on desktop while
+ * still routing click/tap/Enter through the same component.
  */
 export function InfoPopover({
     content,
@@ -51,16 +58,19 @@ export function InfoPopover({
     variant = "default",
     asButton = false,
     maxWidthPx = 320,
+    open: controlledOpen,
     onOpenChange,
 }: InfoPopoverProps) {
     const tCommon = useTranslations("common");
-    const [open, setOpenState] = useState(false);
+    const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+    const isControlled = controlledOpen !== undefined;
+    const open = isControlled ? controlledOpen : uncontrolledOpen;
     const setOpen = useCallback(
         (next: boolean) => {
-            setOpenState(next);
+            if (!isControlled) setUncontrolledOpen(next);
             onOpenChange?.(next);
         },
-        [onOpenChange],
+        [isControlled, onOpenChange],
     );
 
     const toneClasses =

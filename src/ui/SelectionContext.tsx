@@ -16,29 +16,30 @@ import type { Cell } from "../logic/Knowledge";
  * pin/hover to flood the undo history or the localStorage payload, and
  * we don't want it to re-trigger the deducer memo chain in ClueProvider.
  *
- * Two kinds of cross-highlight state live here:
- *  - **Selection (pin)**: persistent on tap. Works on touch and mouse.
- *    `selectedCell` / `selectedSuggestionIndex`. Primary driver of the
- *    ring effect on both devices.
- *  - **Hover (preview)**: transient on mouse hover. Only fires on
- *    `pointerType === 'mouse'` (touch never sets these). `hoveredCell`
- *    / `hoveredSuggestionIndex`.
- *
- * Consumers pick the *active* value — the selection if one is pinned,
- * otherwise the hover — via `activeCell` / `activeSuggestionIndex`,
- * which are derived and returned from the hook for convenience.
+ * Cross-highlight state:
+ *  - **Suggestion log → checklist cells:** `hoveredSuggestionIndex`
+ *    (mouse hover, desktop-only) + `selectedSuggestionIndex` (tap/click
+ *    pin). `activeSuggestionIndex = selected ?? hovered`.
+ *  - **Checklist cells → suggestion log:** `popoverCell` is the cell
+ *    whose "why" popover is currently visible (opened by delayed hover,
+ *    click, tap, or keyboard activation, closed by the hover-intent
+ *    decay or explicit dismiss). `activeCell = popoverCell` — we
+ *    deliberately do NOT highlight suggestions on raw cell hover, only
+ *    when the user has signalled intent by causing the popover to open.
  */
 interface SelectionContextValue {
     readonly hoveredSuggestionIndex: number | null;
     readonly setHoveredSuggestion: (i: number | null) => void;
-    readonly hoveredCell: Cell | null;
-    readonly setHoveredCell: (c: Cell | null) => void;
     readonly selectedSuggestionIndex: number | null;
     readonly setSelectedSuggestion: (i: number | null) => void;
-    readonly selectedCell: Cell | null;
-    readonly setSelectedCell: (c: Cell | null) => void;
-    /** Selection takes precedence over hover. */
+    readonly popoverCell: Cell | null;
+    readonly setPopoverCell: (c: Cell | null) => void;
+    /** Selection takes precedence over hover (suggestion log only). */
     readonly activeSuggestionIndex: number | null;
+    /**
+     * The cell whose "why" popover is currently visible. Drives the
+     * suggestion→cell cross-highlight. `null` when no popover is open.
+     */
     readonly activeCell: Cell | null;
 }
 
@@ -52,40 +53,36 @@ export function SelectionProvider({
     readonly children: ReactNode;
 }) {
     const [hoveredSuggestionIndex, setHovered] = useState<number | null>(null);
-    const [hoveredCell, setHoveredCellState] = useState<Cell | null>(null);
     const [selectedSuggestionIndex, setSelectedSuggestion] = useState<
         number | null
     >(null);
-    const [selectedCell, setSelectedCell] = useState<Cell | null>(null);
+    const [popoverCell, setPopoverCellState] = useState<Cell | null>(null);
 
     const setHoveredSuggestion = useCallback((i: number | null) => {
         setHovered(i);
     }, []);
-    const setHoveredCell = useCallback((c: Cell | null) => {
-        setHoveredCellState(c);
+    const setPopoverCell = useCallback((c: Cell | null) => {
+        setPopoverCellState(c);
     }, []);
 
     const value = useMemo<SelectionContextValue>(
         () => ({
             hoveredSuggestionIndex,
             setHoveredSuggestion,
-            hoveredCell,
-            setHoveredCell,
             selectedSuggestionIndex,
             setSelectedSuggestion,
-            selectedCell,
-            setSelectedCell,
+            popoverCell,
+            setPopoverCell,
             activeSuggestionIndex:
                 selectedSuggestionIndex ?? hoveredSuggestionIndex,
-            activeCell: selectedCell ?? hoveredCell,
+            activeCell: popoverCell,
         }),
         [
             hoveredSuggestionIndex,
             setHoveredSuggestion,
-            hoveredCell,
-            setHoveredCell,
             selectedSuggestionIndex,
-            selectedCell,
+            popoverCell,
+            setPopoverCell,
         ],
     );
     return (
