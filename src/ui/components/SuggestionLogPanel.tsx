@@ -3,7 +3,7 @@
 import { Effect, Layer, Result } from "effect";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, Player } from "../../logic/GameObjects";
 import { footnotesForCell } from "../../logic/Footnotes";
 import { cardName } from "../../logic/GameSetup";
@@ -20,6 +20,7 @@ import {
     makeSetupLayer,
 } from "../../logic/services";
 import { useConfirm } from "../hooks/useConfirm";
+import { useIsDesktop } from "../hooks/useIsDesktop";
 import { useListFormatter } from "../hooks/useListFormatter";
 import { useSelection } from "../SelectionContext";
 import { InfoPopover } from "./InfoPopover";
@@ -40,6 +41,7 @@ import {
     displayPassers,
     displayPlayer,
     displayPlayerOpt,
+    isInsideSuggestionPopover,
     isNobody,
     MultiSelectList,
     NOBODY,
@@ -422,6 +424,7 @@ function RecommendationsBody({
 function PriorSuggestions() {
     const t = useTranslations("suggestions");
     const { state } = useClue();
+    const isDesktop = useIsDesktop();
     const suggestions = state.suggestions;
     return (
         <div className="mt-4 border-t border-border pt-4">
@@ -441,9 +444,11 @@ function PriorSuggestions() {
                 </div>
             ) : (
                 <>
-                    <div className="mb-1 text-[11px] text-muted">
-                        {t("priorKeyboardHint")}
-                    </div>
+                    {isDesktop && (
+                        <div className="mb-1 text-[11px] text-muted">
+                            {t("priorKeyboardHint")}
+                        </div>
+                    )}
                     <ol className="m-0 flex list-none flex-col gap-2 p-0">
                         <AnimatePresence initial={false}>
                             {suggestions
@@ -496,6 +501,7 @@ function PriorSuggestionItem({
         activeSuggestionIndex,
     } = useSelection();
     const confirm = useConfirm();
+    const isDesktop = useIsDesktop();
     const setup = state.setup;
     const listFormatter = useListFormatter();
 
@@ -504,6 +510,10 @@ function PriorSuggestionItem({
     // a focused row. Promotes the row into pill-mode until Escape or
     // focus leaves the row entirely.
     const [isKeyboardEditing, setIsKeyboardEditing] = useState(false);
+    // Row-level keyboard focus tracker. Only true while focus is on
+    // the <li> itself (not descendant pills / ×) — drives the
+    // "Press Enter to edit" cue on desktop.
+    const [isRowFocused, setIsRowFocused] = useState(false);
 
     const isSelected = selectedSuggestionIndex === idx;
     const isActive = activeSuggestionIndex === idx;
@@ -675,6 +685,122 @@ function PriorSuggestionItem({
     // the Add form uses: can't pick a shown card if nobody refuted).
     const seenDisabled = s.refuter === undefined;
 
+    // Pill IDs for this row, in visual order. Used by the arrow-key
+    // nav and the advance-on-commit logic that mirror SuggestionForm's
+    // behaviour. The seenCard pill is skipped when disabled (no
+    // refuter).
+    const pillIds = useMemo<ReadonlyArray<string>>(() => {
+        const ids = [`suggester-${s.id}`];
+        setup.categories.forEach((_, i) => {
+            ids.push(`card-${s.id}-${i}`);
+        });
+        ids.push(`passers-${s.id}`);
+        ids.push(`refuter-${s.id}`);
+        ids.push(`seenCard-${s.id}`);
+        return ids;
+    }, [s.id, setup.categories]);
+
+    // `next` defaults to the *current* `s` — callers pass a post-commit
+    // snapshot when a commit just swapped `refuter` so the advance
+    // skips an unreachable shown-card pill immediately.
+    const advanceFrom = (
+        fromId: string,
+        nextSuggestion: DraftSuggestion = s,
+    ) => {
+        const idx = pillIds.indexOf(fromId);
+        if (idx < 0) {
+            setOpenPillId(null);
+            return;
+        }
+        for (let i = idx + 1; i < pillIds.length; i++) {
+            const id = pillIds[i];
+            if (id === undefined) continue;
+            if (
+                id.startsWith("seenCard-") &&
+                nextSuggestion.refuter === undefined
+            ) {
+                continue;
+            }
+            setOpenPillId(id);
+            return;
+        }
+        setOpenPillId(null);
+    };
+
+    // Row ref for scoping the arrow-key nav listener to this row's
+    // pills + popovers (popovers live in a Radix portal, so the row
+    // can't own the keydown directly).
+    const rowRef = useRef<HTMLLIElement>(null);
+
+    // ArrowLeft / ArrowRight between pills — matches SuggestionForm's
+    // behaviour for the Add-a-suggestion flow. Active when focus is on
+    // one of this row's pill triggers, or inside one of its popovers.
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+            const isLeft = matches("nav.left", e);
+            const isRight = matches("nav.right", e);
+            if (!isLeft && !isRight) return;
+
+            const rowEl = rowRef.current;
+            const active = document.activeElement as Element | null;
+            if (!rowEl || !active) return;
+
+            // Determine which pill the user is currently on. Either
+            // focus is on a trigger inside this row, or a popover
+            // (portalled outside the row) is open for one of our
+            // pills.
+            let currentPillId: string | null = null;
+            if (rowEl.contains(active)) {
+                const trig = active.closest("[data-pill-id]");
+                if (trig) {
+                    currentPillId = trig.getAttribute("data-pill-id");
+                }
+            }
+            if (
+                currentPillId === null &&
+                openPillId !== null &&
+                pillIds.includes(openPillId) &&
+                isInsideSuggestionPopover(active) &&
+                rowEl.querySelector(
+                    '[data-pill-id][data-state="open"]',
+                ) !== null
+            ) {
+                currentPillId = openPillId;
+            }
+            if (currentPillId === null || !pillIds.includes(currentPillId)) {
+                return;
+            }
+
+            const dir = isRight ? 1 : -1;
+            let targetId: string | null = null;
+            for (
+                let i = pillIds.indexOf(currentPillId) + dir;
+                i >= 0 && i < pillIds.length;
+                i += dir
+            ) {
+                const id = pillIds[i];
+                if (id === undefined) continue;
+                if (
+                    id.startsWith("seenCard-") &&
+                    s.refuter === undefined
+                ) {
+                    continue;
+                }
+                targetId = id;
+                break;
+            }
+            if (targetId === null) {
+                if (isLeft) e.preventDefault();
+                return;
+            }
+            e.preventDefault();
+            setOpenPillId(targetId);
+        };
+        document.addEventListener("keydown", onKeyDown);
+        return () => document.removeEventListener("keydown", onKeyDown);
+    }, [pillIds, openPillId, s.refuter]);
+
     // Internal-consistency validation: unlike the Add form (where
     // option-builders prevent most paradoxes at input time and pill
     // ordering gates PILL_SEEN behind the refuter), the inline edit
@@ -729,6 +855,7 @@ function PriorSuggestionItem({
 
     return (
         <motion.li
+            ref={rowRef}
             layout
             // Larger initial y offset so a newly-added suggestion
             // visually "drops in" from the Add-a-suggestion form
@@ -758,9 +885,16 @@ function PriorSuggestionItem({
                 // Row itself gained focus (not a descendant).
                 if (e.currentTarget === e.target) {
                     setHoveredSuggestion(idx);
+                    setIsRowFocused(true);
                 }
             }}
             onBlur={e => {
+                // Row-level focus left (whether or not focus stays
+                // inside the row via pills/×, the row itself is no
+                // longer the focused element).
+                if (e.target === e.currentTarget) {
+                    setIsRowFocused(false);
+                }
                 // Keep the cross-panel highlight while focus stays
                 // anywhere inside the row (pills / popovers / ×).
                 const next = e.relatedTarget as Node | null;
@@ -854,9 +988,15 @@ function PriorSuggestionItem({
                                 options={suggesterOpts}
                                 selected={s.suggester}
                                 onCommit={value => {
-                                    if (!isNobody(value))
+                                    if (!isNobody(value)) {
                                         commit({ suggester: value });
-                                    setOpenPillId(null);
+                                        advanceFrom(`suggester-${s.id}`, {
+                                            ...s,
+                                            suggester: value,
+                                        });
+                                    } else {
+                                        setOpenPillId(null);
+                                    }
                                 }}
                                 nobodyLabel={null}
                                 nobodyValue={null}
@@ -888,11 +1028,16 @@ function PriorSuggestionItem({
                                         selected={cardId}
                                         onCommit={value => {
                                             if (!isNobody(value)) {
-                                                const next = [...s.cards];
-                                                next[i] = value;
-                                                commit({ cards: next });
+                                                const nextCards = [...s.cards];
+                                                nextCards[i] = value;
+                                                commit({ cards: nextCards });
+                                                advanceFrom(pid, {
+                                                    ...s,
+                                                    cards: nextCards,
+                                                });
+                                            } else {
+                                                setOpenPillId(null);
                                             }
-                                            setOpenPillId(null);
                                         }}
                                         nobodyLabel={null}
                                         nobodyValue={null}
@@ -920,7 +1065,25 @@ function PriorSuggestionItem({
                                 nobodyChosen={false}
                                 nobodyLabel={t("popoverNobodyPassed")}
                                 commitHint={t("popoverCommitHint")}
-                                onCommit={commitPassers}
+                                onCommit={(value, opts) => {
+                                    commitPassers(value);
+                                    // MultiSelectList fires an
+                                    // `advance: false` commit from its
+                                    // unmount cleanup (to persist
+                                    // toggled state on outside-click /
+                                    // Esc / arrow-nav-away). Auto-
+                                    // advancing there would hijack the
+                                    // very nav that caused the unmount
+                                    // and open the wrong pill.
+                                    if (opts?.advance === false) return;
+                                    const nextNonRefuters = isNobody(value)
+                                        ? []
+                                        : Array.from(new Set(value));
+                                    advanceFrom(`passers-${s.id}`, {
+                                        ...s,
+                                        nonRefuters: nextNonRefuters,
+                                    });
+                                }}
                             />
                         </PillPopover>
 
@@ -948,7 +1111,24 @@ function PriorSuggestionItem({
                                 selected={s.refuter ?? null}
                                 onCommit={value => {
                                     commitRefuter(value);
-                                    setOpenPillId(null);
+                                    // Post-commit shape: nobody clears both
+                                    // refuter and seenCard; otherwise refuter
+                                    // is set (keep any existing seenCard —
+                                    // the error banner will surface a stale
+                                    // pairing if the user later fixes it).
+                                    const nextS: DraftSuggestion = isNobody(
+                                        value,
+                                    )
+                                        ? (() => {
+                                              const {
+                                                  refuter: _r,
+                                                  seenCard: _sc,
+                                                  ...rest
+                                              } = s;
+                                              return rest;
+                                          })()
+                                        : { ...s, refuter: value };
+                                    advanceFrom(`refuter-${s.id}`, nextS);
                                 }}
                                 nobodyLabel={t("popoverNobodyRefuted")}
                                 nobodyValue={NOBODY}
@@ -984,6 +1164,9 @@ function PriorSuggestionItem({
                                 selected={s.seenCard ?? null}
                                 onCommit={value => {
                                     commitSeenCard(value);
+                                    // seenCard is the last pill — no
+                                    // advance target; just close the
+                                    // popover.
                                     setOpenPillId(null);
                                 }}
                                 nobodyLabel={t("popoverNoShownCard")}
@@ -1025,14 +1208,39 @@ function PriorSuggestionItem({
                                 ),
                             })}
                         </div>
+                        {!isDesktop && (
+                            <div
+                                className={
+                                    "mt-0.5 text-[11px] " +
+                                    (isHighlighted
+                                        ? "text-white/70"
+                                        : "text-muted")
+                                }
+                            >
+                                {t("priorRowHintMobile")}
+                            </div>
+                        )}
                     </>
+                )}
+                {isDesktop && isRowFocused && !isKeyboardEditing && (
+                    <div
+                        className={
+                            "mt-0.5 text-[11px] " +
+                            (isHighlighted ? "text-white/70" : "text-muted")
+                        }
+                    >
+                        {t("priorRowHintDesktop")}
+                    </div>
                 )}
             </div>
             <button
                 type="button"
                 aria-label={t("removeAction")}
                 className={
-                    "absolute right-1.5 top-1 cursor-pointer rounded border-none bg-transparent px-1 text-[16px] leading-none " +
+                    "absolute cursor-pointer rounded border-none bg-transparent leading-none " +
+                    (isDesktop
+                        ? "right-1.5 top-1 px-1 text-[16px] "
+                        : "right-0.5 top-0.5 min-h-[32px] min-w-[32px] px-2 py-1 text-[22px] ") +
                     (isHighlighted
                         ? "text-white/70 hover:text-white"
                         : "text-muted hover:text-accent")

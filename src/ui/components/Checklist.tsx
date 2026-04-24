@@ -56,6 +56,135 @@ import { Envelope } from "./Icons";
 import { InfoPopover } from "./InfoPopover";
 
 /**
+ * Box around the grid nav ring. Setup mode extends the ring to
+ * include the player-name (row -2), hand-size (row -1), and
+ * card-name (col -1) input cells; Play mode collapses to the
+ * body-cell rectangle (0..rows-1, 0..cols-1).
+ */
+type GridBounds = {
+    readonly minRow: number;
+    readonly maxRow: number;
+    readonly minCol: number;
+    readonly maxCol: number;
+};
+
+function findNavCell(r: number, c: number): HTMLElement | null {
+    return document.querySelector<HTMLElement>(
+        `[data-cell-row="${r}"][data-cell-col="${c}"]`,
+    );
+}
+
+/**
+ * Arrow-key grid navigation. Up/Down/Left/Right walk to the nearest
+ * neighbour cell published with `data-cell-row` / `data-cell-col`.
+ * Cmd/Ctrl + Arrow jumps to the edge of the grid in that direction;
+ * if the exact edge cell is empty (e.g. Case File column has no
+ * player-name row), it walks back toward the origin and picks the
+ * first cell found.
+ *
+ * When `isTextInput` is true, Left/Right only navigate at the text
+ * boundary (cursor at pos 0 or end, no selection) so mid-string
+ * editing feels normal. Up/Down always navigate (single-line
+ * inputs). Cmd+Arrow always navigates (overrides browser Home/End).
+ */
+function navigateGrid(
+    e: React.KeyboardEvent<HTMLElement>,
+    rowIdx: number,
+    colIdx: number,
+    bounds: GridBounds,
+    opts: { readonly isTextInput?: boolean } = {},
+): void {
+    const native = e.nativeEvent;
+    // Shift/alt + arrow is reserved for browser selection / word-skip
+    // inside text inputs and has no existing grid-nav semantics.
+    if (native.shiftKey || native.altKey) return;
+    const isArrowKey =
+        native.key === "ArrowUp" ||
+        native.key === "ArrowDown" ||
+        native.key === "ArrowLeft" ||
+        native.key === "ArrowRight";
+    const isMod = (native.metaKey || native.ctrlKey) && isArrowKey;
+    // Text inputs restrict nav to actual arrow keys (+ Cmd+Arrow).
+    // WASD / IJKL alternates would hijack typing otherwise.
+    const allowAlt = !opts.isTextInput;
+    const up =
+        (allowAlt && matches("nav.up", native)) ||
+        native.key === "ArrowUp";
+    const down =
+        (allowAlt && matches("nav.down", native)) ||
+        native.key === "ArrowDown";
+    const left =
+        (allowAlt && matches("nav.left", native)) ||
+        native.key === "ArrowLeft";
+    const right =
+        (allowAlt && matches("nav.right", native)) ||
+        native.key === "ArrowRight";
+    if (!up && !down && !left && !right) return;
+
+    const dr = up ? -1 : down ? 1 : 0;
+    const dc = left ? -1 : right ? 1 : 0;
+
+    if (opts.isTextInput && !isMod && (left || right)) {
+        const el = e.currentTarget as HTMLInputElement;
+        const selStart = el.selectionStart ?? 0;
+        const selEnd = el.selectionEnd ?? 0;
+        const len = el.value.length;
+        if (selStart !== selEnd) return;
+        if (left && selStart > 0) return;
+        if (right && selEnd < len) return;
+    }
+
+    const current = e.currentTarget as HTMLElement;
+    let target: HTMLElement | null = null;
+    if (isMod) {
+        // Start at the far edge along each active axis; walk back
+        // toward origin by (-dr, -dc).
+        let r = dr !== 0 ? (dr > 0 ? bounds.maxRow : bounds.minRow) : rowIdx;
+        let c = dc !== 0 ? (dc > 0 ? bounds.maxCol : bounds.minCol) : colIdx;
+        while (
+            r >= bounds.minRow &&
+            r <= bounds.maxRow &&
+            c >= bounds.minCol &&
+            c <= bounds.maxCol
+        ) {
+            const found = findNavCell(r, c);
+            if (found && found !== current) {
+                target = found;
+                break;
+            }
+            if (dr < 0 && r >= rowIdx) break;
+            if (dr > 0 && r <= rowIdx) break;
+            if (dc < 0 && c >= colIdx) break;
+            if (dc > 0 && c <= colIdx) break;
+            r -= dr;
+            c -= dc;
+        }
+    } else {
+        let r = rowIdx + dr;
+        let c = colIdx + dc;
+        while (
+            r >= bounds.minRow &&
+            r <= bounds.maxRow &&
+            c >= bounds.minCol &&
+            c <= bounds.maxCol
+        ) {
+            const found = findNavCell(r, c);
+            if (found) {
+                target = found;
+                break;
+            }
+            r += dr;
+            c += dc;
+        }
+    }
+
+    if (target) {
+        e.preventDefault();
+        target.focus();
+    }
+}
+
+/**
  * Unified tabbed checklist: the single surface for both editing the
  * deck / roster (Setup mode) and tracking deductions (Play mode).
  * State-slice ownership is one tab-gate deep: `inSetup` controls
@@ -103,21 +232,23 @@ export function Checklist() {
     }, [setup.categories]);
     const totalRows = rowIdxByCard.size;
     const totalCols = owners.length;
+    // Setup mode extends the nav ring up (player-name row -2,
+    // hand-size row -1) and left (card-name col -1).
+    const bounds: GridBounds = {
+        minRow: inSetup ? -2 : 0,
+        maxRow: totalRows - 1,
+        minCol: inSetup ? -1 : 0,
+        maxCol: totalCols - 1,
+    };
 
     // Handle ⌘J focus requests: locate a cell by (row,col) and
     // focus it. "first" falls back to the first interactive cell.
     useEffect(() => {
         const unregister = registerChecklistFocusHandler(target => {
-            const findAt = (row: number, col: number): HTMLElement | null => {
-                const el = document.querySelector<HTMLElement>(
-                    `[data-cell-row="${row}"][data-cell-col="${col}"]`,
-                );
-                return el;
-            };
             const findFirst = (): HTMLElement | null => {
-                for (let r = 0; r < totalRows; r++) {
-                    for (let c = 0; c < totalCols; c++) {
-                        const el = findAt(r, c);
+                for (let r = bounds.minRow; r <= bounds.maxRow; r++) {
+                    for (let c = bounds.minCol; c <= bounds.maxCol; c++) {
+                        const el = findNavCell(r, c);
                         if (el) return el;
                     }
                 }
@@ -130,7 +261,7 @@ export function Checklist() {
                 } else if (target === "last") {
                     el = findFirst();
                 } else {
-                    el = findAt(target.row, target.col) ?? findFirst();
+                    el = findNavCell(target.row, target.col) ?? findFirst();
                 }
                 if (el) {
                     el.scrollIntoView(
@@ -142,7 +273,7 @@ export function Checklist() {
             });
         });
         return unregister;
-    }, [totalRows, totalCols]);
+    }, [bounds.minRow, bounds.maxRow, bounds.minCol, bounds.maxCol]);
 
     // In Setup mode the add-player column sits between the players and
     // the case file — clicking + spawns the new player where its column
@@ -287,7 +418,7 @@ export function Checklist() {
                         <th className="border-r border-b border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted">
                             {inSetup ? null : label("global.gotoChecklist")}
                         </th>
-                        {owners.flatMap(owner => {
+                        {owners.flatMap((owner, ownerIdx) => {
                             const cell = (
                                 <th
                                     key={ownerKey(owner)}
@@ -297,6 +428,8 @@ export function Checklist() {
                                         <PlayerNameInput
                                             player={owner.player}
                                             allPlayers={setup.players}
+                                            colIdx={ownerIdx}
+                                            bounds={bounds}
                                         />
                                     ) : (
                                         ownerLabel(owner)
@@ -313,7 +446,7 @@ export function Checklist() {
                             <th className="whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-left font-semibold">
                                 {tSetup("handSize")}
                             </th>
-                            {owners.flatMap(owner => {
+                            {owners.flatMap((owner, ownerIdx) => {
                                 let cell: ReactNode;
                                 if (owner._tag !== "Player") {
                                     cell = (
@@ -344,6 +477,23 @@ export function Checklist() {
                                                     def === undefined
                                                         ? ""
                                                         : String(def)
+                                                }
+                                                data-cell-row={-1}
+                                                data-cell-col={ownerIdx}
+                                                onFocus={() =>
+                                                    rememberChecklistCell(
+                                                        -1,
+                                                        ownerIdx,
+                                                    )
+                                                }
+                                                onKeyDown={e =>
+                                                    navigateGrid(
+                                                        e,
+                                                        -1,
+                                                        ownerIdx,
+                                                        bounds,
+                                                        { isTextInput: true },
+                                                    )
                                                 }
                                                 onChange={e =>
                                                     onHandSizeChange(
@@ -441,7 +591,10 @@ export function Checklist() {
                                     )}
                                 </th>
                             </tr>,
-                            ...category.cards.map(entry => (
+                            ...category.cards.map(entry => {
+                                const cardRowIdx =
+                                    rowIdxByCard.get(entry.id) ?? -1;
+                                return (
                                 <tr key={String(entry.id)}>
                                     <th className="w-px whitespace-nowrap border-r border-b border-border px-2 py-1 text-left font-normal">
                                         {inSetup ? (
@@ -457,6 +610,11 @@ export function Checklist() {
                                                             name: next,
                                                         })
                                                     }
+                                                    navCell={{
+                                                        rowIdx: cardRowIdx,
+                                                        colIdx: -1,
+                                                        bounds,
+                                                    }}
                                                 />
                                                 <button
                                                     type="button"
@@ -622,38 +780,7 @@ export function Checklist() {
                                         // through the whole grid.
                                         const onGridArrowKey = (
                                             e: React.KeyboardEvent<HTMLTableCellElement>,
-                                        ) => {
-                                            const native = e.nativeEvent;
-                                            const dr = matches("nav.up", native)
-                                                ? -1
-                                                : matches("nav.down", native)
-                                                  ? 1
-                                                  : 0;
-                                            const dc = matches("nav.left", native)
-                                                ? -1
-                                                : matches("nav.right", native)
-                                                  ? 1
-                                                  : 0;
-                                            if (dr === 0 && dc === 0) return;
-                                            e.preventDefault();
-                                            let r = rowIdx + dr;
-                                            let c = colIdx + dc;
-                                            let next: HTMLElement | null = null;
-                                            while (
-                                                r >= 0 &&
-                                                r < totalRows &&
-                                                c >= 0 &&
-                                                c < totalCols
-                                            ) {
-                                                next = document.querySelector<HTMLElement>(
-                                                    `[data-cell-row="${r}"][data-cell-col="${c}"]`,
-                                                );
-                                                if (next) break;
-                                                r += dr;
-                                                c += dc;
-                                            }
-                                            if (next) next.focus();
-                                        };
+                                        ) => navigateGrid(e, rowIdx, colIdx, bounds);
                                         const onCellFocus = () =>
                                             rememberChecklistCell(
                                                 rowIdx,
@@ -807,7 +934,8 @@ export function Checklist() {
                                             : [cell];
                                     })}
                                 </tr>
-                            )),
+                                );
+                            }),
                             ...(inSetup
                                 ? [
                                       <tr key={`add-card-${String(category.id)}`}>
@@ -861,17 +989,28 @@ export function Checklist() {
 /**
  * Editable text cell. Commits the new value on blur or Enter; resets
  * to the external value on Escape or if the input is cleared.
+ *
+ * If `navCell` is provided the input joins the Checklist grid nav
+ * ring at that (row, col): arrow keys walk to neighbour cells
+ * (Left/Right only at the text boundary), Cmd/Ctrl+Arrow jumps to
+ * the edge.
  */
 function InlineTextEdit({
     value,
     onCommit,
     className,
     title,
+    navCell,
 }: {
     value: string;
     onCommit: (next: string) => void;
     className?: string;
     title?: string;
+    navCell?: {
+        readonly rowIdx: number;
+        readonly colIdx: number;
+        readonly bounds: GridBounds;
+    };
 }) {
     const [local, setLocal] = useState(value);
     useEffect(() => {
@@ -893,9 +1032,34 @@ function InlineTextEdit({
             value={local}
             className={className}
             title={title}
+            {...(navCell
+                ? {
+                      "data-cell-row": navCell.rowIdx,
+                      "data-cell-col": navCell.colIdx,
+                  }
+                : {})}
+            onFocus={
+                navCell
+                    ? () =>
+                          rememberChecklistCell(
+                              navCell.rowIdx,
+                              navCell.colIdx,
+                          )
+                    : undefined
+            }
             onChange={e => setLocal(e.currentTarget.value)}
             onBlur={commit}
             onKeyDown={e => {
+                if (navCell) {
+                    navigateGrid(
+                        e,
+                        navCell.rowIdx,
+                        navCell.colIdx,
+                        navCell.bounds,
+                        { isTextInput: true },
+                    );
+                    if (e.defaultPrevented) return;
+                }
                 if (e.key === "Enter") {
                     (e.currentTarget as HTMLInputElement).blur();
                 } else if (e.key === "Escape") {
@@ -910,13 +1074,21 @@ function InlineTextEdit({
 /**
  * Editable player-name header with remove-× button. Handles the
  * duplicate-name check locally so the reducer doesn't have to.
+ *
+ * The input joins the Checklist grid nav ring at row -2 so arrow
+ * keys sweep between player-name inputs and down into the hand-size
+ * and card cells; Cmd/Ctrl+Arrow jumps to the grid edge.
  */
 function PlayerNameInput({
     player,
     allPlayers,
+    colIdx,
+    bounds,
 }: {
     player: Player;
     allPlayers: ReadonlyArray<Player>;
+    colIdx: number;
+    bounds: GridBounds;
 }) {
     const t = useTranslations("setup");
     const { state, dispatch } = useClue();
@@ -984,12 +1156,19 @@ function PlayerNameInput({
                     type="text"
                     className="box-border min-w-0 flex-1 rounded border border-border px-1.5 py-1 text-[12px]"
                     value={editing}
+                    data-cell-row={-2}
+                    data-cell-col={colIdx}
+                    onFocus={() => rememberChecklistCell(-2, colIdx)}
                     onChange={e => {
                         setEditing(e.currentTarget.value);
                         setError("");
                     }}
                     onBlur={commit}
                     onKeyDown={e => {
+                        navigateGrid(e, -2, colIdx, bounds, {
+                            isTextInput: true,
+                        });
+                        if (e.defaultPrevented) return;
                         if (e.key === "Enter") commit();
                     }}
                 />
