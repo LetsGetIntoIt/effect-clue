@@ -56,6 +56,20 @@ Tests live next to source (`Foo.test.ts(x)` beside `Foo.ts(x)`) — match that p
 - Always merge with a **merge commit** — not squash, not rebase.
 - Only merge when I explicitly ask. Sometimes I'll ask you to open the PR and I'll merge it myself. If unsure whether to merge, ask.
 
+## Rebasing on latest `origin/main`
+
+When I ask you to "rebase on/against latest origin/main" (or "latest remote main"):
+
+1. **Commit any work in progress first** so the rebase has a clean tree to operate on. A separate commit before the rebase is cheaper to amend later than a partial commit mid-rebase.
+2. `git fetch origin main` — pull the latest refs without touching your branch.
+3. Skim `git log --oneline HEAD..origin/main` and `git log --stat <new-commits>` to understand what landed upstream. Cross-reference with the files this branch touches — that's where conflicts and silent regressions will be.
+4. `git rebase origin/main`. If conflicts surface, resolve each one by hand and `git rebase --continue`. Don't `--skip` your own commit and don't `--abort` unless the conflict is truly intractable.
+5. **Reapply matching upstream patterns to any new code we wrote.** If the upstream commit removed a pattern (e.g. `data-animated-focus`, `focus:outline-none`, a deprecated import), our new code added since the rebase point may still use it — search the diff and apply the same cleanup so we don't reintroduce what was just removed.
+6. Re-run the full pre-commit green-check set — `pnpm typecheck && pnpm lint && pnpm test && pnpm knip && pnpm i18n:check`. A clean rebase is not the same as a green rebase.
+7. Verify in the `next-dev` preview if anything we changed is observable in the browser.
+8. Amend the rebased commit only if your fixes belong to it (style cleanup, conflict resolution). Otherwise stack a new commit.
+9. If the rebase required substantial reworking, **tell me before pushing or merging** so I can re-test before it ships.
+
 ## Commit message format
 
 - **Title**: imperative mood, under ~70 chars.
