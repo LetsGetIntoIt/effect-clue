@@ -499,3 +499,273 @@ describe("SuggestionForm — disabled Add button", () => {
         expect(submit).toHaveAttribute("aria-disabled", "false");
     });
 });
+
+// -----------------------------------------------------------------------
+// Nobody sentinel mappings
+// -----------------------------------------------------------------------
+
+describe("SuggestionForm — Nobody sentinel", () => {
+    // Fill suggester + all three required card pills; leaves focus
+    // on the passers popover (auto-advance). Returns the fresh user
+    // handle so the caller can drive the rest of the flow.
+    const fillRequired = async (user: ReturnType<typeof userEvent.setup>) => {
+        const p = await openPopover(user, /pillSuggester/);
+        await user.click(within(p).getByRole("option", { name: /Anisha/ }));
+        const p2 = getCurrentPopover();
+        await user.click(within(p2).getByRole("option", { name: /Col\. Mustard/ }));
+        const p3 = getCurrentPopover();
+        await user.click(within(p3).getByRole("option", { name: /Knife/ }));
+        const p4 = getCurrentPopover();
+        await user.click(within(p4).getByRole("option", { name: /^Kitchen$/ }));
+    };
+
+    test("Nobody in the passers popover maps to an empty nonRefuters array", async () => {
+        const user = userEvent.setup();
+        const onSubmit = vi.fn();
+        renderForm(<SuggestionForm setup={setup} onSubmit={onSubmit} />);
+        await fillRequired(user);
+
+        // Passers popover is now open (auto-advance landed here).
+        // Pick the Nobody row.
+        const pPass = getCurrentPopover();
+        await user.click(
+            within(pPass).getByRole("option", { name: /popoverNobodyPassed/ }),
+        );
+
+        // Auto-advance lands on refuter; escape so we can click Submit.
+        await user.keyboard("{Escape}");
+
+        const submit = screen.getByRole("button", { name: /submit/ });
+        await user.click(submit);
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+        const draft = onSubmit.mock.calls[0]![0] as {
+            readonly nonRefuters: ReadonlyArray<unknown>;
+        };
+        expect(draft.nonRefuters).toEqual([]);
+    });
+
+    test("Nobody in the refuter popover → submitted draft has no refuter field", async () => {
+        const user = userEvent.setup();
+        const onSubmit = vi.fn();
+        renderForm(<SuggestionForm setup={setup} onSubmit={onSubmit} />);
+        await fillRequired(user);
+        await user.keyboard("{Escape}"); // close passers
+
+        // Open refuter popover and pick Nobody.
+        await user.click(screen.getByRole("button", { name: /pillRefuter/ }));
+        const pRef = getCurrentPopover();
+        await user.click(
+            within(pRef).getByRole("option", { name: /popoverNobodyRefuted/ }),
+        );
+
+        const submit = screen.getByRole("button", { name: /submit/ });
+        await user.click(submit);
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+        const draft = onSubmit.mock.calls[0]![0] as Record<string, unknown>;
+        // exactOptionalPropertyTypes: the `refuter` key is omitted, not set
+        // to `undefined`, when nobody refuted.
+        expect("refuter" in draft).toBe(false);
+    });
+
+    test("picking Nobody for refuter clears a previously-set seenCard (shown-card pill turns off)", async () => {
+        const user = userEvent.setup();
+        const onSubmit = vi.fn();
+        renderForm(<SuggestionForm setup={setup} onSubmit={onSubmit} />);
+        await fillRequired(user);
+        await user.keyboard("{Escape}"); // close passers
+
+        // Pick Bob as refuter → shown-card pill enables.
+        await user.click(screen.getByRole("button", { name: /pillRefuter/ }));
+        const pRef = getCurrentPopover();
+        await user.click(within(pRef).getByRole("option", { name: /Bob/ }));
+        // Auto-advance opens the seen-card popover; pick Knife.
+        const pSeen = getCurrentPopover();
+        await user.click(within(pSeen).getByRole("option", { name: /Knife/ }));
+
+        // Now flip the refuter back to Nobody — seenCard should clear
+        // because the shown-card pill is disabled again.
+        await user.click(screen.getByRole("button", { name: /pillRefuter/ }));
+        const pRef2 = getCurrentPopover();
+        await user.click(
+            within(pRef2).getByRole("option", { name: /popoverNobodyRefuted/ }),
+        );
+
+        const submit = screen.getByRole("button", { name: /submit/ });
+        await user.click(submit);
+        const draft = onSubmit.mock.calls[0]![0] as Record<string, unknown>;
+        expect("refuter" in draft).toBe(false);
+        expect("seenCard" in draft).toBe(false);
+    });
+});
+
+// -----------------------------------------------------------------------
+// Cmd/Ctrl+Enter keyboard submission
+// -----------------------------------------------------------------------
+
+describe("SuggestionForm — Cmd/Ctrl+Enter submission", () => {
+    test("Cmd+Enter submits a completed form from anywhere in the document", async () => {
+        const user = userEvent.setup();
+        const onSubmit = vi.fn();
+        renderForm(<SuggestionForm setup={setup} onSubmit={onSubmit} />);
+
+        // Fill required fields.
+        const p1 = await openPopover(user, /pillSuggester/);
+        await user.click(within(p1).getByRole("option", { name: /Anisha/ }));
+        const p2 = getCurrentPopover();
+        await user.click(within(p2).getByRole("option", { name: /Col\. Mustard/ }));
+        const p3 = getCurrentPopover();
+        await user.click(within(p3).getByRole("option", { name: /Knife/ }));
+        const p4 = getCurrentPopover();
+        await user.click(within(p4).getByRole("option", { name: /^Kitchen$/ }));
+        // Passers popover is open; Cmd+Enter should submit even with it open.
+        await user.keyboard("{Meta>}{Enter}{/Meta}");
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+
+    test("Cmd+Enter on an incomplete form is a no-op", async () => {
+        const user = userEvent.setup();
+        const onSubmit = vi.fn();
+        renderForm(<SuggestionForm setup={setup} onSubmit={onSubmit} />);
+        await user.keyboard("{Meta>}{Enter}{/Meta}");
+        expect(onSubmit).not.toHaveBeenCalled();
+    });
+});
+
+// -----------------------------------------------------------------------
+// Cancel button
+// -----------------------------------------------------------------------
+
+describe("SuggestionForm — cancel button", () => {
+    test("no Cancel button when `onCancel` is not provided", () => {
+        renderForm(<SuggestionForm setup={setup} onSubmit={vi.fn()} />);
+        expect(
+            screen.queryByRole("button", { name: /cancelAction/ }),
+        ).toBeNull();
+    });
+
+    test("Cancel button renders and fires `onCancel` without calling `onSubmit`", async () => {
+        const user = userEvent.setup();
+        const onSubmit = vi.fn();
+        const onCancel = vi.fn();
+        renderForm(
+            <SuggestionForm
+                setup={setup}
+                onSubmit={onSubmit}
+                onCancel={onCancel}
+            />,
+        );
+        const cancel = screen.getByRole("button", { name: /cancelAction/ });
+        await user.click(cancel);
+        expect(onCancel).toHaveBeenCalledTimes(1);
+        expect(onSubmit).not.toHaveBeenCalled();
+    });
+});
+
+// -----------------------------------------------------------------------
+// Edit-mode re-seeding on suggestion prop change
+// -----------------------------------------------------------------------
+
+describe("SuggestionForm — re-seed when `suggestion` prop id changes", () => {
+    test("swapping the `suggestion` prop to a different id re-populates the pills", () => {
+        const A = Player("Anisha");
+        const B = Player("Bob");
+        const MUSTARD = cardByName(setup, "Col. Mustard");
+        const KNIFE = cardByName(setup, "Knife");
+        const KITCHEN = cardByName(setup, "Kitchen");
+        const PLUM = cardByName(setup, "Prof. Plum");
+        const ROPE = cardByName(setup, "Rope");
+        const HALL = cardByName(setup, "Hall");
+
+        const { rerender } = render(
+            <TooltipProvider>
+                <SuggestionForm
+                    setup={setup}
+                    suggestion={{
+                        id: SuggestionId("first"),
+                        suggester: A,
+                        cards: [MUSTARD, KNIFE, KITCHEN],
+                        nonRefuters: [],
+                    }}
+                    onSubmit={vi.fn()}
+                />
+            </TooltipProvider>,
+        );
+        // Pills show the first draft's values.
+        expect(
+            screen.getByRole("button", { name: /pillSuggester.*Anisha/ }),
+        ).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /Col\. Mustard/ }))
+            .toBeInTheDocument();
+
+        rerender(
+            <TooltipProvider>
+                <SuggestionForm
+                    setup={setup}
+                    suggestion={{
+                        id: SuggestionId("second"),
+                        suggester: B,
+                        cards: [PLUM, ROPE, HALL],
+                        nonRefuters: [],
+                    }}
+                    onSubmit={vi.fn()}
+                />
+            </TooltipProvider>,
+        );
+        // Pills now show the second draft's values.
+        expect(
+            screen.getByRole("button", { name: /pillSuggester.*Bob/ }),
+        ).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /Prof\. Plum/ }))
+            .toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /Rope/ }))
+            .toBeInTheDocument();
+        // And the old values are gone.
+        expect(
+            screen.queryByRole("button", { name: /Col\. Mustard/ }),
+        ).toBeNull();
+    });
+
+    test("re-rendering with the same suggestion id does NOT wipe user edits", async () => {
+        const user = userEvent.setup();
+        const A = Player("Anisha");
+        const B = Player("Bob");
+        const MUSTARD = cardByName(setup, "Col. Mustard");
+        const KNIFE = cardByName(setup, "Knife");
+        const KITCHEN = cardByName(setup, "Kitchen");
+        const existing = {
+            id: SuggestionId("stable"),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN] as const,
+            nonRefuters: [] as const,
+        };
+        const { rerender } = render(
+            <TooltipProvider>
+                <SuggestionForm
+                    setup={setup}
+                    suggestion={existing}
+                    onSubmit={vi.fn()}
+                />
+            </TooltipProvider>,
+        );
+        // Edit the suggester from Anisha → Bob in-place.
+        await user.click(
+            screen.getByRole("button", { name: /pillSuggester/ }),
+        );
+        const pop = getCurrentPopover();
+        await user.click(within(pop).getByRole("option", { name: /Bob/ }));
+        // Same prop (same id, same values) — re-seed guard must not fire.
+        rerender(
+            <TooltipProvider>
+                <SuggestionForm
+                    setup={setup}
+                    suggestion={existing}
+                    onSubmit={vi.fn()}
+                />
+            </TooltipProvider>,
+        );
+        expect(
+            screen.getByRole("button", { name: /pillSuggester.*Bob/ }),
+        ).toBeInTheDocument();
+        expect(B).toBeDefined(); // touch B to keep the import tidy
+    });
+});
