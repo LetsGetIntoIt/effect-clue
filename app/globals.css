@@ -35,6 +35,11 @@
     --color-accent: #7a1c1c;
     --color-accent-hover: #5e1414;
 
+    /* Category header strip on the checklist — a muted cousin of the
+     * accent so "why this value" popovers (which use --color-accent)
+     * read as a distinct layer stacked over these rows. */
+    --color-category-header: #8e4545;
+
     /* --- Y = claimed / confirmed (detective's green tick). */
     --color-yes: #2f5e1f;
     --color-yes-bg: #d7e4bf;

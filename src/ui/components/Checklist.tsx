@@ -370,7 +370,7 @@ export function Checklist() {
                             <tr key={`h-${String(category.id)}`}>
                                 <th
                                     colSpan={cardSpan}
-                                    className="border border-border bg-accent px-2 py-1.5 text-left text-[11px] uppercase tracking-[0.05em] text-white"
+                                    className="border border-border bg-category-header px-2 py-1.5 text-left text-[11px] uppercase tracking-[0.05em] text-white"
                                 >
                                     {inSetup ? (
                                         <div className="flex items-center justify-between gap-2">
