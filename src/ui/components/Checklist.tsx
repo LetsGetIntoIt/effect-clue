@@ -153,7 +153,7 @@ export function Checklist() {
     const addPlayerHeaderCell = (
         <th
             key="add-player-col"
-            className="w-px whitespace-nowrap border border-border bg-row-header px-1.5 py-1 text-center"
+            className="w-px whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-center"
         >
             <button
                 type="button"
@@ -166,7 +166,7 @@ export function Checklist() {
         </th>
     );
     const addPlayerEmptyCell = (
-        <td key="add-player-col" className="border border-border" />
+        <td key="add-player-col" className="border-r border-b border-border" />
     );
 
     const handSizeMap = new Map(state.handSizes);
@@ -281,17 +281,17 @@ export function Checklist() {
                 </div>
             )}
             <div className="-mx-4 min-h-0 flex-1 overflow-auto px-4">
-            <table className="w-full border-collapse text-[13px]">
+            <table className="w-full border-separate border-spacing-0 border-t border-l border-border text-[13px]">
                 <thead className="sticky top-0 z-20 bg-row-header">
                     <tr>
-                        <th className="border border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted">
+                        <th className="border-r border-b border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted">
                             {inSetup ? null : label("global.gotoChecklist")}
                         </th>
                         {owners.flatMap(owner => {
                             const cell = (
                                 <th
                                     key={ownerKey(owner)}
-                                    className="border border-border bg-row-header px-2 py-1 text-center align-top font-semibold"
+                                    className="border-r border-b border-border bg-row-header px-2 py-1 text-center align-top font-semibold"
                                 >
                                     {inSetup && owner._tag === "Player" ? (
                                         <PlayerNameInput
@@ -310,7 +310,7 @@ export function Checklist() {
                     </tr>
                     {inSetup && (
                         <tr>
-                            <th className="whitespace-nowrap border border-border bg-row-header px-1.5 py-1 text-left font-semibold">
+                            <th className="whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-left font-semibold">
                                 {tSetup("handSize")}
                             </th>
                             {owners.flatMap(owner => {
@@ -319,7 +319,7 @@ export function Checklist() {
                                     cell = (
                                         <td
                                             key={ownerKey(owner)}
-                                            className="border border-border"
+                                            className="border-r border-b border-border"
                                         />
                                     );
                                 } else {
@@ -328,7 +328,7 @@ export function Checklist() {
                                     cell = (
                                         <td
                                             key={ownerKey(owner)}
-                                            className="border border-border px-1.5 py-1 text-center"
+                                            className="border-r border-b border-border px-1.5 py-1 text-center"
                                         >
                                             <input
                                                 type="number"
@@ -370,7 +370,7 @@ export function Checklist() {
                             <tr key={`h-${String(category.id)}`}>
                                 <th
                                     colSpan={cardSpan}
-                                    className="border border-border bg-category-header px-2 py-1.5 text-left text-[11px] uppercase tracking-[0.05em] text-white"
+                                    className="border-r border-b border-border bg-category-header px-2 py-1.5 text-left text-[11px] uppercase tracking-[0.05em] text-white"
                                 >
                                     {inSetup ? (
                                         <div className="flex items-center justify-between gap-2">
@@ -443,7 +443,7 @@ export function Checklist() {
                             </tr>,
                             ...category.cards.map(entry => (
                                 <tr key={String(entry.id)}>
-                                    <th className="w-px whitespace-nowrap border border-border px-2 py-1 text-left font-normal">
+                                    <th className="w-px whitespace-nowrap border-r border-b border-border px-2 py-1 text-left font-normal">
                                         {inSetup ? (
                                             <div className="flex items-center justify-between gap-2">
                                                 <InlineTextEdit
@@ -799,7 +799,7 @@ export function Checklist() {
                                         const emptyCell = (
                                             <td
                                                 key={`add-player-col-${String(entry.id)}`}
-                                                className="border border-border"
+                                                className="border-r border-b border-border"
                                             />
                                         );
                                         return inSetup && owner._tag === "CaseFile"
@@ -813,7 +813,7 @@ export function Checklist() {
                                       <tr key={`add-card-${String(category.id)}`}>
                                           <th
                                               colSpan={cardSpan}
-                                              className="border border-border bg-row-alt px-1.5 py-1 text-left"
+                                              className="border-r border-b border-border bg-row-alt px-1.5 py-1 text-left"
                                           >
                                               <button
                                                   type="button"
@@ -837,7 +837,7 @@ export function Checklist() {
                         <tr>
                             <th
                                 colSpan={cardSpan}
-                                className="border border-border bg-row-alt px-1.5 py-2 text-center"
+                                className="border-r border-b border-border bg-row-alt px-1.5 py-2 text-center"
                             >
                                 <button
                                     type="button"
@@ -1417,7 +1417,7 @@ function AnimatedCellGlyph({ value }: { readonly value: CellValue | undefined })
 }
 
 const CELL_BASE =
-    "w-9 min-w-9 border border-border px-2 py-1 text-center font-semibold relative";
+    "w-9 min-w-9 border-r border-b border-border px-2 py-1 text-center font-semibold relative";
 
 const CELL_INTERACTIVE =
     " cursor-pointer hover:z-10 hover:ring-2 hover:ring-accent/40 focus:z-10 focus:outline-none focus:ring-2 focus:ring-accent";
