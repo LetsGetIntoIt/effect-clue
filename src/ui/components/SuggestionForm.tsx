@@ -2,8 +2,10 @@
 
 import { useTranslations } from "next-intl";
 import {
+    forwardRef,
     useCallback,
     useEffect,
+    useImperativeHandle,
     useMemo,
     useRef,
     useState,
@@ -13,7 +15,6 @@ import type { GameSetup } from "../../logic/GameSetup";
 import { categoryOfCard } from "../../logic/GameSetup";
 import type { Card, Player } from "../../logic/GameObjects";
 import { newSuggestionId } from "../../logic/Suggestion";
-import { registerSuggestionFormFocusHandler } from "../suggestionFormFocus";
 import { label, matches } from "../keyMap";
 import { Tooltip } from "./Tooltip";
 import {
@@ -34,6 +35,66 @@ import {
     pillStatusForPlayer,
     SingleSelectList,
 } from "./SuggestionPills";
+
+/**
+ * Imperative handle exposed via `ref` so callers can drive focus
+ * without baking global keyboard bindings into the form. Used by the
+ * Add-suggestion mount to honour the Cmd+K shortcut.
+ */
+export interface SuggestionFormHandle {
+    readonly focusFirstPill: (options?: { readonly clear?: boolean }) => void;
+}
+
+interface SuggestionFormProps {
+    readonly setup: GameSetup;
+    readonly suggestion?: DraftSuggestion;
+    readonly onSubmit: (draft: DraftSuggestion) => void;
+    readonly onCancel?: () => void;
+    /**
+     * `"onAccent"` flips the form's interior styling for use inside a
+     * red-bg edit row: pills render light-on-red, the submit button
+     * inverts to a light pill on accent, and the form's own outer
+     * spacing collapses (the row owns the chrome).
+     */
+    readonly variant?: "default" | "onAccent";
+    /** Hide the h3 title (used inline within an existing row). */
+    readonly showHeader?: boolean;
+    /** Hide the top-right "× Clear inputs" link. */
+    readonly showClearInputs?: boolean;
+    /**
+     * Per-pill clear (×) affordance for the optional pills. Each flag,
+     * when true AND the corresponding field has a value, renders a
+     * tiny × on the pill chip itself (see `PillPopover.onClear`).
+     */
+    readonly pillClearable?: {
+        readonly passers?: boolean;
+        readonly refuter?: boolean;
+        readonly seenCard?: boolean;
+    };
+    /**
+     * Drives the submit button label and the disabled-tooltip phrasing.
+     * Defaults to `"update"` when `suggestion` is provided, otherwise
+     * `"add"`.
+     */
+    readonly submitLabel?: "add" | "update";
+    /**
+     * Optional outer element whose focus also counts as "in the form"
+     * for Cmd+Enter. The inline-edit row passes its `<li>` ref here so
+     * Cmd+Enter from anywhere in the row (including the row itself)
+     * commits the draft. Each form keeps its own scope, so two forms
+     * mounted at once never both fire on the same shortcut.
+     */
+    readonly keyboardScopeRef?: React.RefObject<HTMLElement | null>;
+    /**
+     * Fired after a successful submit, deferred via `setTimeout(_, 0)`
+     * so the caller's `onSubmit` state changes (and any unmount they
+     * trigger) have flushed first. Lets the caller place focus on an
+     * element that survives the commit — e.g. the inline-edit row
+     * refocuses its `<li>` here so the just-edited row keeps keyboard
+     * context after the form unmounts.
+     */
+    readonly afterSubmit?: () => void;
+}
 
 /**
  * Pill-driven form for composing (or editing) a suggestion.
@@ -69,17 +130,29 @@ import {
  * "no card shown" state — distinct from "not decided yet" — and the
  * pill renders a checked `✓` instead of the dashed outline.
  */
-export function SuggestionForm({
-    setup,
-    suggestion,
-    onSubmit,
-    onCancel,
-}: {
-    readonly setup: GameSetup;
-    readonly suggestion?: DraftSuggestion;
-    readonly onSubmit: (draft: DraftSuggestion) => void;
-    readonly onCancel?: () => void;
-}): React.ReactElement {
+export const SuggestionForm = forwardRef<
+    SuggestionFormHandle,
+    SuggestionFormProps
+>(function SuggestionForm(
+    {
+        setup,
+        suggestion,
+        onSubmit,
+        onCancel,
+        variant = "default",
+        showHeader = true,
+        showClearInputs = true,
+        pillClearable,
+        submitLabel,
+        keyboardScopeRef,
+        afterSubmit,
+    },
+    ref,
+): React.ReactElement {
+    const effectiveSubmitLabel: "add" | "update" =
+        // eslint-disable-next-line i18next/no-literal-string -- internal mode discriminator
+        submitLabel ?? (suggestion !== undefined ? "update" : "add");
+    const onAccent = variant === "onAccent";
     const t = useTranslations("suggestions");
 
     // --- Form state ----------------------------------------------------
@@ -298,9 +371,12 @@ export function SuggestionForm({
         if (canSubmit) return undefined;
         if (errors.size > 0) {
             const fields = Array.from(errors.keys()).map(pillLabelFor);
-            return t("submitDisabledFixError", {
-                fields: formatFieldList(fields),
-            });
+            return t(
+                effectiveSubmitLabel === "update"
+                    ? "submitDisabledFixErrorUpdate"
+                    : "submitDisabledFixError",
+                { fields: formatFieldList(fields) },
+            );
         }
         const missing: Array<string> = [];
         if (form.suggester === null) missing.push(t("pillSuggester"));
@@ -310,10 +386,21 @@ export function SuggestionForm({
             }
         });
         if (missing.length === 0) return undefined;
-        return t("submitDisabledFillIn", {
-            fields: formatFieldList(missing),
-        });
-    }, [canSubmit, errors, form, setup.categories, pillLabelFor, t]);
+        return t(
+            effectiveSubmitLabel === "update"
+                ? "submitDisabledFillInUpdate"
+                : "submitDisabledFillIn",
+            { fields: formatFieldList(missing) },
+        );
+    }, [
+        canSubmit,
+        errors,
+        form,
+        setup.categories,
+        pillLabelFor,
+        t,
+        effectiveSubmitLabel,
+    ]);
 
     const doSubmit = useCallback(() => {
         if (!canSubmit || draft === null) return;
@@ -325,28 +412,37 @@ export function SuggestionForm({
             setForm(emptyFormState(setup));
             setOpenPillId(PILL_SUGGESTER);
         }
-    }, [canSubmit, draft, onSubmit, suggestion, setup]);
+        if (afterSubmit !== undefined) {
+            // Defer past React's commit (and any unmount the parent's
+            // onSubmit triggered). setTimeout puts this on the
+            // macrotask queue, so it always lands after the current
+            // task's microtasks — including React's batched flush.
+            setTimeout(afterSubmit, 0);
+        }
+    }, [canSubmit, draft, onSubmit, suggestion, setup, afterSubmit]);
 
     /**
      * Cmd/Ctrl+Enter submits from anywhere inside the form —
-     * including inside any open popover content. The popovers render
-     * in a Radix Portal, so we catch the event at the document level
-     * only while the form is mounted AND a popover is open OR focus
-     * is within the form root.
+     * including inside any open popover content, and (when the parent
+     * widens it via `keyboardScopeRef`) inside the wrapping container
+     * such as the inline-edit row's `<li>`. Each form keeps its own
+     * scope so two mounted forms never both fire.
      */
     const formRootRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
             if (!matches("action.submit", e)) return;
-            // Only handle if focus is inside our form root or in any
-            // Radix portal popover owned by our form (we check by
-            // walking up from the focused element).
             const active = document.activeElement as Element | null;
             const root = formRootRef.current;
+            const scope = keyboardScopeRef?.current ?? null;
             if (
                 !root ||
                 !active ||
-                !(root.contains(active) || isInsideSuggestionPopover(active))
+                !(
+                    root.contains(active) ||
+                    isInsideSuggestionPopover(active) ||
+                    (scope !== null && scope.contains(active))
+                )
             ) {
                 return;
             }
@@ -355,7 +451,7 @@ export function SuggestionForm({
         };
         document.addEventListener("keydown", onKeyDown);
         return () => document.removeEventListener("keydown", onKeyDown);
-    }, [doSubmit]);
+    }, [doSubmit, keyboardScopeRef]);
 
     /**
      * Pill-to-pill navigation keys. ArrowLeft/Right and Tab/Shift+Tab
@@ -465,45 +561,87 @@ export function SuggestionForm({
         setOpenPillId(null);
     }, [setup]);
 
-    // Cmd/Ctrl+K shortcut: the global listener in ClueProvider calls
-    // `requestFocusSuggestionForm`; we register the actual focus/clear
-    // action here so it runs against our local state.
-    useEffect(() => {
-        return registerSuggestionFormFocusHandler(({ clear }) => {
-            if (clear) setForm(emptyFormState(setup));
-            setOpenPillId(PILL_SUGGESTER);
-        });
-    }, [setup]);
+    // Imperative handle: callers (e.g. AddSuggestion wiring up the
+    // global Cmd+K shortcut) drive focus through `focusFirstPill`. The
+    // form itself stays oblivious to global keyboard bindings.
+    useImperativeHandle(
+        ref,
+        () => ({
+            focusFirstPill: ({ clear } = {}) => {
+                if (clear === true) setForm(emptyFormState(setup));
+                setOpenPillId(PILL_SUGGESTER);
+            },
+        }),
+        [setup],
+    );
+
+    // Per-pill clear callbacks for the optional pills. Wired into the
+    // `pillClearable` prop — each callback resets that field (and any
+    // dependent fields, e.g. clearing refuter must also clear seenCard
+    // because PILL_SEEN becomes unreachable).
+    const onClearPassers = useCallback(
+        () => setForm(f => ({ ...f, nonRefuters: null })),
+        [],
+    );
+    const onClearRefuter = useCallback(
+        () => setForm(f => ({ ...f, refuter: null, seenCard: null })),
+        [],
+    );
+    const onClearSeenCard = useCallback(
+        () => setForm(f => ({ ...f, seenCard: null })),
+        [],
+    );
 
     // --- Render --------------------------------------------------------
+    const showHeaderBar = showHeader || showClearInputs;
+    // Submit button styling. On the default form: filled accent when
+    // active, muted-fill when blocked. On the onAccent variant (sitting
+    // inside a red-bg row): invert to a light pill on accent so the
+    // button reads as a distinct primary action against the same
+    // background colour.
+    const submitButtonClass =
+        "rounded border-none px-3 py-2 text-[13px] " +
+        (onAccent
+            ? canSubmit
+                ? "cursor-pointer bg-panel text-accent"
+                : "cursor-not-allowed bg-panel/40 text-accent/60"
+            : canSubmit
+              ? "cursor-pointer bg-accent text-white"
+              : "cursor-not-allowed bg-unknown-bg text-muted/70");
     return (
         <div ref={formRootRef}>
-            <div className="mb-2 flex items-center justify-between gap-2">
-                <h3 className="mt-0 mb-0 text-[14px] font-semibold">
-                    {suggestion !== undefined
-                        ? t("editTitle")
-                        : t.rich("addTitle", {
-                              shortcutKey: label("global.gotoPlay"),
-                              shortcut: chunks => (
-                                  <span className="font-normal text-muted">
-                                      {chunks}
-                                  </span>
-                              ),
-                          })}
-                </h3>
-                {hasAnyInput && (
-                    <button
-                        type="button"
-                        onClick={onClearInputs}
-                        className="inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-[12px] text-muted hover:text-accent"
-                    >
-                        <span aria-hidden className="text-[14px] leading-none">
-                            ×
-                        </span>
-                        {t("clearInputs")}
-                    </button>
-                )}
-            </div>
+            {showHeaderBar && (
+                <div className="mb-2 flex items-center justify-between gap-2">
+                    {showHeader ? (
+                        <h3 className="mt-0 mb-0 text-[14px] font-semibold">
+                            {suggestion !== undefined
+                                ? t("editTitle")
+                                : t.rich("addTitle", {
+                                      shortcutKey: label("global.gotoPlay"),
+                                      shortcut: chunks => (
+                                          <span className="font-normal text-muted">
+                                              {chunks}
+                                          </span>
+                                      ),
+                                  })}
+                        </h3>
+                    ) : (
+                        <span />
+                    )}
+                    {showClearInputs && hasAnyInput && (
+                        <button
+                            type="button"
+                            onClick={onClearInputs}
+                            className="inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-[12px] text-muted hover:text-accent"
+                        >
+                            <span aria-hidden className="text-[14px] leading-none">
+                                ×
+                            </span>
+                            {t("clearInputs")}
+                        </button>
+                    )}
+                </div>
+            )}
             <div className="flex flex-wrap items-center gap-1.5">
                 {/* Suggester pill */}
                 <PillPopover
@@ -512,6 +650,7 @@ export function SuggestionForm({
                     status={pillStatusForPlayer(form.suggester, false)}
                     valueDisplay={displayPlayer(form.suggester)}
                     errorReason={errorReasonFor(PILL_SUGGESTER)}
+                    variant={variant}
                     open={openPillId === PILL_SUGGESTER}
                     onOpenChange={onOpenChangeFor(PILL_SUGGESTER)}
                 >
@@ -536,6 +675,7 @@ export function SuggestionForm({
                             setup,
                         )}
                         errorReason={errorReasonFor(`card-${i}` as PillId)}
+                        variant={variant}
                         open={openPillId === (`card-${i}` as PillId)}
                         onOpenChange={onOpenChangeFor(
                             `card-${i}` as PillId,
@@ -561,8 +701,13 @@ export function SuggestionForm({
                     status={pillStatusForPassers(form.nonRefuters)}
                     valueDisplay={displayPassers(form.nonRefuters, t)}
                     errorReason={errorReasonFor(PILL_PASSERS)}
+                    variant={variant}
                     open={openPillId === PILL_PASSERS}
                     onOpenChange={onOpenChangeFor(PILL_PASSERS)}
+                    {...(pillClearable?.passers === true &&
+                    form.nonRefuters !== null
+                        ? { onClear: onClearPassers }
+                        : {})}
                 >
                     <MultiSelectList
                         options={passersOptions(setup, form)}
@@ -588,8 +733,12 @@ export function SuggestionForm({
                     status={pillStatusForPlayer(form.refuter, true)}
                     valueDisplay={displayPlayerOpt(form.refuter, t)}
                     errorReason={errorReasonFor(PILL_REFUTER)}
+                    variant={variant}
                     open={openPillId === PILL_REFUTER}
                     onOpenChange={onOpenChangeFor(PILL_REFUTER)}
+                    {...(pillClearable?.refuter === true && form.refuter !== null
+                        ? { onClear: onClearRefuter }
+                        : {})}
                 >
                     <SingleSelectList<Player>
                         options={refuterOptions(setup, form)}
@@ -611,8 +760,12 @@ export function SuggestionForm({
                     disabled={isPillDisabled(PILL_SEEN)}
                     disabledHint={t("pillSeenDisabledHint")}
                     errorReason={errorReasonFor(PILL_SEEN)}
+                    variant={variant}
                     open={openPillId === PILL_SEEN}
                     onOpenChange={onOpenChangeFor(PILL_SEEN)}
+                    {...(pillClearable?.seenCard === true && form.seenCard !== null
+                        ? { onClear: onClearSeenCard }
+                        : {})}
                 >
                     <SingleSelectList<Card>
                         options={suggestedCardOptions(form, setup)}
@@ -626,9 +779,9 @@ export function SuggestionForm({
                 </PillPopover>
 
                 {/*
-                  * Add button lives inline with the pills so the whole
-                  * form reads as a single row. Matches the pill height
-                  * (px-3 py-2 text-[13px]) but keeps the default
+                  * Add/Update button lives inline with the pills so the
+                  * whole form reads as a single row. Matches the pill
+                  * height (px-3 py-2 text-[13px]) but keeps the default
                   * `rounded` radius instead of `rounded-full`, so it
                   * reads as a squared-off primary action distinct from
                   * the round pills.
@@ -637,16 +790,16 @@ export function SuggestionForm({
                     <button
                         type="button"
                         ref={submitBtnRef}
-                        className={
-                            "rounded border-none px-3 py-2 text-[13px] " +
-                            (canSubmit
-                                ? "cursor-pointer bg-accent text-white"
-                                : "cursor-not-allowed bg-unknown-bg text-muted/70")
-                        }
+                        className={submitButtonClass}
                         aria-disabled={!canSubmit}
                         onClick={doSubmit}
                     >
-                        {t("submit", { shortcut: label("action.submit") })}
+                        {t(
+                            effectiveSubmitLabel === "update"
+                                ? "updateAction"
+                                : "submit",
+                            { shortcut: label("action.submit") },
+                        )}
                     </button>
                 </Tooltip>
                 {onCancel !== undefined && (
@@ -661,7 +814,7 @@ export function SuggestionForm({
             </div>
         </div>
     );
-}
+});
 
 // ---- Form state -------------------------------------------------------
 
@@ -777,7 +930,7 @@ export type PillId =
 type OpenTarget = PillId | "submit" | null;
 
 export const PILL_SUGGESTER: PillId = "suggester";
-export const PILL_PASSERS: PillId = "passers";
+const PILL_PASSERS: PillId = "passers";
 export const PILL_REFUTER: PillId = "refuter";
 export const PILL_SEEN: PillId = "seenCard";
 const TARGET_SUBMIT = "submit" as const;
@@ -853,7 +1006,7 @@ export const isPillDisabledFor = (
  * a single suggestion — not external contradictions caught by the
  * solver. `GlobalContradictionBanner` covers the latter.
  */
-export type PillErrorCode =
+type PillErrorCode =
     | "seenCardNotSuggested"
     | "seenCardWithoutRefuter"
     | "suggesterIsRefuter"
