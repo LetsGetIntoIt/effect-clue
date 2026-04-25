@@ -1682,7 +1682,7 @@ const CELL_BASE =
     "w-9 min-w-9 border-r border-b border-border px-2 py-1 text-center font-semibold relative";
 
 const CELL_INTERACTIVE =
-    " cursor-pointer hover:z-10 hover:ring-2 hover:ring-accent/40 focus-visible:z-10";
+    " cursor-pointer hover:z-10 hover:rounded-[2px] hover:ring-2 hover:ring-accent/30 focus-visible:z-20 focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:rounded-[2px]";
 
 const CELL_HIGHLIGHTED =
     " z-10 ring-2 ring-accent ring-offset-1 ring-offset-panel";
