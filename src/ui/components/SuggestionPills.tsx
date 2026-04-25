@@ -157,13 +157,6 @@ export const isInsideSuggestionPopover = (el: Element): boolean =>
  * Radix Popover Trigger; the candidate list lives inside Radix
  * Popover Content (portalled to `document.body`).
  *
- * `variant`:
- *   - "default": regular parchment theme
- *   - "onAccent": used when the pill is sitting on a red-accent
- *     background (hovered prior-suggestion card); inverts colours so
- *     filled pills are light-on-red and empty ones read as light
- *     placeholders.
- *
  * `onClear`: optional clear-affordance. When provided AND the pill
  * is in `STATUS_DONE`, renders a tiny × after the value. Used by
  * the prior-suggestion edit pills so users can unset an optional
@@ -180,7 +173,6 @@ export function PillPopover({
     errorReason,
     open,
     onOpenChange,
-    variant = "default",
     onClear,
     children,
 }: {
@@ -193,7 +185,6 @@ export function PillPopover({
     readonly errorReason?: string | undefined;
     readonly open: boolean;
     readonly onOpenChange: (open: boolean) => void;
-    readonly variant?: "default" | "onAccent";
     readonly onClear?: () => void;
     readonly children: React.ReactNode;
 }): React.ReactElement {
@@ -206,7 +197,7 @@ export function PillPopover({
     // pill (internal inconsistency) shows a `!` in a danger tone —
     // the user can still open the popover to correct the value.
     //
-    // Matrix (default variant):
+    // Matrix:
     //   state              | outline       | icon
     //   -------------------+---------------+-----
     //   error              | danger        | !
@@ -215,24 +206,14 @@ export function PillPopover({
     //   pendingOptional    | dashed border | +      (disabled → "–")
     const hasError = errorReason !== undefined && !disabled;
     const tone = hasError
-        ? variant === "onAccent"
-            ? "bg-danger-bg text-danger border-danger"
-            : "bg-danger-bg text-danger border-danger-border"
-        : variant === "onAccent"
-            ? status === STATUS_DONE
-                ? "bg-panel text-accent border-panel"
-                : status === STATUS_PENDING_REQ
-                  ? "bg-transparent text-white/80 border-white/60"
-                  : disabled
-                    ? "bg-transparent text-white/40 border-dashed border-white/40"
-                    : "bg-transparent text-white/80 border-dashed border-white/70"
-            : status === STATUS_DONE
-              ? "bg-accent text-white border-accent"
-              : status === STATUS_PENDING_REQ
-                ? "bg-transparent text-muted border-border"
-                : disabled
-                  ? "bg-transparent text-muted/60 border-dashed border-border/50"
-                  : "bg-transparent text-muted border-dashed border-border";
+        ? "bg-danger-bg text-danger border-danger-border"
+        : status === STATUS_DONE
+          ? "bg-accent text-white border-accent"
+          : status === STATUS_PENDING_REQ
+            ? "bg-transparent text-muted border-border"
+            : disabled
+              ? "bg-transparent text-muted/60 border-dashed border-border/50"
+              : "bg-transparent text-muted border-dashed border-border";
     const iconGlyph = hasError
         ? "!"
         : status === STATUS_DONE
