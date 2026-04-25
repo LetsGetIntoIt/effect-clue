@@ -661,16 +661,16 @@ function PriorSuggestionItem({
             aria-pressed={isSelected}
             data-suggestion-row={idx}
             className={
-                // Edit mode is a strong fill; cell-cross-highlight and
-                // hover are subtler outline rings. Keyboard focus is
-                // covered by the app-wide `:focus-visible` outline (see
-                // app/globals.css), so we don't add a ring there.
-                "relative flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2 text-[13px] transition-colors cursor-pointer overflow-hidden " +
-                (isEditing
-                    ? "border-accent bg-accent text-white "
-                    : (isHighlightedByCell
-                          ? "border-border ring-2 ring-accent ring-offset-1 ring-offset-panel "
-                          : "border-border hover:ring-2 hover:ring-accent hover:ring-offset-1 hover:ring-offset-panel "))
+                // Edit mode and cell-cross-highlight share the same
+                // outline-ring treatment so the inline form's pill
+                // focus rings stay legible. Keyboard focus on the row
+                // itself is covered by the app-wide `:focus-visible`
+                // outline (see app/globals.css), so we don't add one
+                // here.
+                "relative flex items-start gap-2 rounded-[var(--radius)] border border-border px-3 py-2 text-[13px] transition-colors cursor-pointer overflow-hidden " +
+                (isEditing || isHighlightedByCell
+                    ? "ring-2 ring-accent ring-offset-1 ring-offset-panel "
+                    : "hover:ring-2 hover:ring-accent hover:ring-offset-1 hover:ring-offset-panel ")
             }
             onPointerEnter={onPointerEnter}
             onPointerLeave={onPointerLeave}
@@ -780,7 +780,6 @@ function PriorSuggestionItem({
                             suggestion={s}
                             onSubmit={onCommitEdit}
                             afterSubmit={refocusRow}
-                            variant="onAccent"
                             showHeader={false}
                             showClearInputs={false}
                             pillClearable={{
@@ -855,7 +854,7 @@ function PriorSuggestionItem({
                         exitEdit();
                         refocusRow();
                     }}
-                    className="absolute right-1 top-1 min-h-[44px] min-w-[44px] cursor-pointer rounded border-none bg-transparent px-2 py-1 text-[22px] leading-none text-white/80 hover:text-white"
+                    className="absolute right-1 top-1 min-h-[44px] min-w-[44px] cursor-pointer rounded border-none bg-transparent px-2 py-1 text-[22px] leading-none text-muted hover:text-accent"
                 >
                     ×
                 </button>

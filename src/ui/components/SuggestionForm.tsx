@@ -50,13 +50,6 @@ interface SuggestionFormProps {
     readonly suggestion?: DraftSuggestion;
     readonly onSubmit: (draft: DraftSuggestion) => void;
     readonly onCancel?: () => void;
-    /**
-     * `"onAccent"` flips the form's interior styling for use inside a
-     * red-bg edit row: pills render light-on-red, the submit button
-     * inverts to a light pill on accent, and the form's own outer
-     * spacing collapses (the row owns the chrome).
-     */
-    readonly variant?: "default" | "onAccent";
     /** Hide the h3 title (used inline within an existing row). */
     readonly showHeader?: boolean;
     /** Hide the top-right "× Clear inputs" link. */
@@ -139,7 +132,6 @@ export const SuggestionForm = forwardRef<
         suggestion,
         onSubmit,
         onCancel,
-        variant = "default",
         showHeader = true,
         showClearInputs = true,
         pillClearable,
@@ -152,7 +144,6 @@ export const SuggestionForm = forwardRef<
     const effectiveSubmitLabel: "add" | "update" =
         // eslint-disable-next-line i18next/no-literal-string -- internal mode discriminator
         submitLabel ?? (suggestion !== undefined ? "update" : "add");
-    const onAccent = variant === "onAccent";
     const t = useTranslations("suggestions");
 
     // --- Form state ----------------------------------------------------
@@ -594,20 +585,11 @@ export const SuggestionForm = forwardRef<
 
     // --- Render --------------------------------------------------------
     const showHeaderBar = showHeader || showClearInputs;
-    // Submit button styling. On the default form: filled accent when
-    // active, muted-fill when blocked. On the onAccent variant (sitting
-    // inside a red-bg row): invert to a light pill on accent so the
-    // button reads as a distinct primary action against the same
-    // background colour.
     const submitButtonClass =
         "rounded border-none px-3 py-2 text-[13px] " +
-        (onAccent
-            ? canSubmit
-                ? "cursor-pointer bg-panel text-accent"
-                : "cursor-not-allowed bg-panel/40 text-accent/60"
-            : canSubmit
-              ? "cursor-pointer bg-accent text-white"
-              : "cursor-not-allowed bg-unknown-bg text-muted/70");
+        (canSubmit
+            ? "cursor-pointer bg-accent text-white"
+            : "cursor-not-allowed bg-unknown-bg text-muted/70");
     return (
         <div ref={formRootRef}>
             {showHeaderBar && (
@@ -650,7 +632,6 @@ export const SuggestionForm = forwardRef<
                     status={pillStatusForPlayer(form.suggester, false)}
                     valueDisplay={displayPlayer(form.suggester)}
                     errorReason={errorReasonFor(PILL_SUGGESTER)}
-                    variant={variant}
                     open={openPillId === PILL_SUGGESTER}
                     onOpenChange={onOpenChangeFor(PILL_SUGGESTER)}
                 >
@@ -675,7 +656,6 @@ export const SuggestionForm = forwardRef<
                             setup,
                         )}
                         errorReason={errorReasonFor(`card-${i}` as PillId)}
-                        variant={variant}
                         open={openPillId === (`card-${i}` as PillId)}
                         onOpenChange={onOpenChangeFor(
                             `card-${i}` as PillId,
@@ -701,7 +681,6 @@ export const SuggestionForm = forwardRef<
                     status={pillStatusForPassers(form.nonRefuters)}
                     valueDisplay={displayPassers(form.nonRefuters, t)}
                     errorReason={errorReasonFor(PILL_PASSERS)}
-                    variant={variant}
                     open={openPillId === PILL_PASSERS}
                     onOpenChange={onOpenChangeFor(PILL_PASSERS)}
                     {...(pillClearable?.passers === true &&
@@ -733,7 +712,6 @@ export const SuggestionForm = forwardRef<
                     status={pillStatusForPlayer(form.refuter, true)}
                     valueDisplay={displayPlayerOpt(form.refuter, t)}
                     errorReason={errorReasonFor(PILL_REFUTER)}
-                    variant={variant}
                     open={openPillId === PILL_REFUTER}
                     onOpenChange={onOpenChangeFor(PILL_REFUTER)}
                     {...(pillClearable?.refuter === true && form.refuter !== null
@@ -760,7 +738,6 @@ export const SuggestionForm = forwardRef<
                     disabled={isPillDisabled(PILL_SEEN)}
                     disabledHint={t("pillSeenDisabledHint")}
                     errorReason={errorReasonFor(PILL_SEEN)}
-                    variant={variant}
                     open={openPillId === PILL_SEEN}
                     onOpenChange={onOpenChangeFor(PILL_SEEN)}
                     {...(pillClearable?.seenCard === true && form.seenCard !== null
