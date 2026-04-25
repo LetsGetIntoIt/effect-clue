@@ -13,31 +13,41 @@ vi.mock("next-intl", () => {
 });
 
 vi.mock("motion/react", () => {
+    // Memoize per tag — without this, every access to `motion.li` (etc.)
+    // returns a *new* forwardRef component, so React sees a new
+    // component type on every render and unmounts/remounts the DOM
+    // node. That breaks anything that depends on a stable element
+    // across renders, like keyboard focus on the row.
+    const motionCache: Record<string, React.ComponentType<unknown>> = {};
     const motion = new Proxy(
         {},
         {
-            get: (_t, tag: string) =>
-                forwardRef(
-                    (
-                        props: Record<string, unknown>,
-                        ref: React.Ref<HTMLElement>,
-                    ) => {
-                        const {
-                            layout: _layout,
-                            layoutId: _layoutId,
-                            initial: _initial,
-                            animate: _animate,
-                            exit: _exit,
-                            transition: _transition,
-                            variants: _variants,
-                            custom: _custom,
-                            whileHover: _whileHover,
-                            whileTap: _whileTap,
-                            ...rest
-                        } = props;
-                        return createElement(tag, { ...rest, ref });
-                    },
-                ),
+            get: (_t, tag: string) => {
+                if (motionCache[tag] === undefined) {
+                    motionCache[tag] = forwardRef(
+                        (
+                            props: Record<string, unknown>,
+                            ref: React.Ref<HTMLElement>,
+                        ) => {
+                            const {
+                                layout: _layout,
+                                layoutId: _layoutId,
+                                initial: _initial,
+                                animate: _animate,
+                                exit: _exit,
+                                transition: _transition,
+                                variants: _variants,
+                                custom: _custom,
+                                whileHover: _whileHover,
+                                whileTap: _whileTap,
+                                ...rest
+                            } = props;
+                            return createElement(tag, { ...rest, ref });
+                        },
+                    ) as React.ComponentType<unknown>;
+                }
+                return motionCache[tag];
+            },
         },
     );
     return {
@@ -213,6 +223,75 @@ describe("PriorSuggestionItem — exiting edit mode", () => {
         fireEvent.pointerDown(cell!);
         fireEvent.click(cell!);
         await waitPillsHidden();
+    });
+});
+
+describe("PriorSuggestionItem — focus restoration after edit ends", () => {
+    test("clicking Update returns focus to the row", async () => {
+        await seedOneSuggestionAndMount();
+        fireEvent.click(getRow());
+        await waitPillsVisible();
+        fireEvent.click(
+            within(getRow()).getByRole("button", { name: /updateAction/ }),
+        );
+        await waitPillsHidden();
+        await waitFor(() => {
+            expect(document.activeElement).toBe(getRow());
+        });
+    });
+
+    test("clicking the × cancel button returns focus to the row", async () => {
+        await seedOneSuggestionAndMount();
+        fireEvent.click(getRow());
+        await waitPillsVisible();
+        fireEvent.click(
+            within(getRow()).getByRole("button", { name: "cancelEditAria" }),
+        );
+        await waitPillsHidden();
+        await waitFor(() => {
+            expect(document.activeElement).toBe(getRow());
+        });
+    });
+});
+
+describe("PriorSuggestionItem — keyboard navigation across disabled pills", () => {
+    test("ArrowRight from refuter (no value) opens the disabled seenCard pill, then Update", async () => {
+        // Bug repro: edit a suggestion whose refuter is unset, so
+        // PILL_SEEN ("Shown card") is disabled. With the old bespoke
+        // nav handler, ArrowRight skipped the disabled pill and never
+        // landed on Update. Sharing SuggestionForm fixes both: the
+        // disabled pill IS focusable (its popover shows the "why
+        // disabled" hint), and Update is the terminal target.
+        await seedOneSuggestionAndMount();
+        fireEvent.click(getRow());
+        await waitPillsVisible();
+        const refuterTrigger = getRow().querySelector<HTMLElement>(
+            "[data-pill-id='refuter']",
+        );
+        expect(refuterTrigger).not.toBeNull();
+        refuterTrigger!.focus();
+        fireEvent.keyDown(document, {
+            key: "ArrowRight",
+            code: "ArrowRight",
+        });
+        const seenTrigger = getRow().querySelector<HTMLElement>(
+            "[data-pill-id='seenCard']",
+        );
+        expect(seenTrigger).not.toBeNull();
+        await waitFor(() => {
+            expect(seenTrigger!.getAttribute("data-state")).toBe("open");
+        });
+        // ArrowRight again → Update button.
+        fireEvent.keyDown(document, {
+            key: "ArrowRight",
+            code: "ArrowRight",
+        });
+        const updateBtn = within(getRow()).getByRole("button", {
+            name: /updateAction/,
+        });
+        await waitFor(() => {
+            expect(document.activeElement).toBe(updateBtn);
+        });
     });
 });
 

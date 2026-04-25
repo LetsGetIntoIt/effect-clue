@@ -187,6 +187,8 @@
         "pillErrorRefuterInPassers": "Refuter cannot also have passed",
         "submitDisabledFillIn": "Fill in {fields} to add",
         "submitDisabledFixError": "Fix the {fields} before adding",
+        "submitDisabledFillInUpdate": "Fill in {fields} to update",
+        "submitDisabledFixErrorUpdate": "Fix the {fields} before updating",
         "popoverNobodyPassed": "Nobody passed",
         "popoverNobodyRefuted": "Nobody refuted",
         "popoverNoShownCard": "Unknown / unseen",
