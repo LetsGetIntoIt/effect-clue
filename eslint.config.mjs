@@ -252,6 +252,13 @@ export default [
             "src/ui/state.tsx",
             "src/ui/HoverContext.tsx",
             "src/ui/describeAction.ts",
+            // Observability + analytics modules deal in internal
+            // string keys (event names, OTel attribute keys, env-var
+            // values) — never user-facing copy.
+            "src/analytics/**/*.ts",
+            "src/observability/**/*.ts",
+            "app/Providers.tsx",
+            "instrumentation-client.ts",
             "next.config.ts",
             "jest.config.ts",
             "jest.setup.ts",
