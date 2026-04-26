@@ -73,7 +73,7 @@ export function SplashModal({
                     <Dialog.Description className="sr-only">
                         {t("description")}
                     </Dialog.Description>
-                    <div className="flex-1 overflow-y-auto px-5 pt-3">
+                    <div className="flex-1 overflow-y-auto px-5 pt-3 pb-5">
                         <AboutContent context="modal" />
                     </div>
                     <div className="shrink-0 border-t border-border bg-panel px-5 pt-4 pb-5">
@@ -93,7 +93,7 @@ export function SplashModal({
                             <span>{t("startPlaying")}</span>
                             <ArrowRightIcon size={20} />
                         </button>
-                        <label className="mt-3 flex items-center justify-center gap-2 text-[13px] text-muted">
+                        <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 text-[13px] text-muted">
                             <input
                                 type="checkbox"
                                 checked={dontShowAgain}
