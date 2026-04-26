@@ -8,6 +8,8 @@ Use `pnpm` for everything. Never `npm`, `yarn`, or `bun`.
 
 Once per shell session, run `nvm use` from the repo root — it picks the version from `.nvmrc`. With `engine-strict=true` in `.npmrc`, every other script (`pnpm install`, `pnpm test`, etc.) will refuse to run on the wrong Node version, so getting this right once at the start of a session is what unblocks everything else. You don't need to re-run it before every command in the same shell.
 
+**Only `source ~/.nvm/nvm.sh` if `nvm use` actually fails with `command not found`.** Most shells load nvm through `.zshrc`/`.bashrc` already, and sourcing it preemptively triggers a permission prompt that slows every command. Try `nvm use` first; only fall back to sourcing if it isn't on PATH. Both are once-per-shell — once you've run `nvm use` (and `source` if it was needed), the correct Node version is locked in for the rest of that shell, and every subsequent `pnpm` / `node` / build command works without re-running either.
+
 ## Install dependencies
 
 Once per shell session — and after any `package.json` / `pnpm-lock.yaml` change — run `pnpm install` from the repo root (after `nvm use`). Every script in this repo reads from `node_modules` and will error out if it hasn't been populated.
