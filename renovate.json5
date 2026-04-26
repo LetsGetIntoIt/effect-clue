@@ -1,0 +1,6 @@
+{
+    $schema: "https://docs.renovatebot.com/renovate-schema.json",
+    extends: [
+        "github>StoryCut/renovate-config:js-app.json5",
+    ],
+}
