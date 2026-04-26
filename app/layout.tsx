@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Alfa_Slab_One, Crimson_Text } from "next/font/google";
 import { I18nProvider } from "../src/i18n/I18nProvider";
 import { messages } from "../src/i18n/messages";
+import { Providers } from "./Providers";
 import "./globals.css";
 
 /**
@@ -49,7 +50,9 @@ export default function RootLayout({
             className={`${displayFont.variable} ${bodyFont.variable}`}
         >
             <body>
-                <I18nProvider>{children}</I18nProvider>
+                <Providers>
+                    <I18nProvider>{children}</I18nProvider>
+                </Providers>
             </body>
         </html>
     );

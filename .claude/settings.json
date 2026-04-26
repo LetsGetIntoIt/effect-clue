@@ -1,6 +1,11 @@
 {
   "permissions": {
     "allow": [
+      "Bash(nvm use)",
+      "Bash(nvm use *)",
+      "Bash(nvm install)",
+      "Bash(nvm install *)",
+      "Bash(source ~/.nvm/nvm.sh)",
       "Bash(pnpm install)",
       "Bash(pnpm typecheck)",
       "Bash(pnpm test)",

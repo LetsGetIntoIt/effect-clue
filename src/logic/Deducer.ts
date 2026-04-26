@@ -2,14 +2,7 @@ import { Effect, Equal, Result } from "effect";
 import { Cell, Contradiction, Knowledge } from "./Knowledge";
 import { GameSetup } from "./GameSetup";
 import { applyAllRules } from "./Rules";
-import {
-    CardSetService,
-    PlayerSetService,
-    SuggestionsService,
-    getCardSet,
-    getPlayerSet,
-    getSuggestions,
-} from "./services";
+import { getCardSet, getPlayerSet, getSuggestions } from "./services";
 
 /**
  * Structured contradiction information the UI can act on without
@@ -72,36 +65,29 @@ const traceOf = (error: Contradiction): ContradictionTrace => ({
  * removes), so this is guaranteed to terminate in at most
  * |owners| × |cards| iterations.
  */
-const deduce = (
-    initial: Knowledge,
-): Effect.Effect<
-    Knowledge,
-    ContradictionTrace,
-    CardSetService | PlayerSetService | SuggestionsService
-> =>
-    Effect.gen(function* () {
-        const cardSet = yield* getCardSet;
-        const playerSet = yield* getPlayerSet;
-        const suggestions = yield* getSuggestions;
-        const setup = GameSetup({ cardSet, playerSet });
-        const rule = applyAllRules(setup, suggestions);
-        let current = initial;
-        try {
-            // Bound the loop defensively — one iteration per cell would be
-            // the worst case, so an order of magnitude above that is plenty.
-            const maxIterations = 1000;
-            for (let i = 0; i < maxIterations; i++) {
-                const next = rule(current);
-                if (Equal.equals(next, current)) return next;
-                current = next;
-            }
-            return current;
-        } catch (e) {
-            if (e instanceof Contradiction) {
-                return yield* Effect.fail(traceOf(e));
-            }
-            throw e;
+const deduce = Effect.fn("deducer.evaluate")(function* (initial: Knowledge) {
+    const cardSet = yield* getCardSet;
+    const playerSet = yield* getPlayerSet;
+    const suggestions = yield* getSuggestions;
+    const setup = GameSetup({ cardSet, playerSet });
+    const rule = applyAllRules(setup, suggestions);
+    let current = initial;
+    try {
+        // Bound the loop defensively — one iteration per cell would be
+        // the worst case, so an order of magnitude above that is plenty.
+        const maxIterations = 1000;
+        for (let i = 0; i < maxIterations; i++) {
+            const next = rule(current);
+            if (Equal.equals(next, current)) return next;
+            current = next;
         }
-    });
+        return current;
+    } catch (e) {
+        if (e instanceof Contradiction) {
+            return yield* Effect.fail(traceOf(e));
+        }
+        throw e;
+    }
+});
 
 export default deduce;

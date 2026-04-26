@@ -1,3 +1,4 @@
+import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 /**
@@ -30,4 +31,20 @@ const nextConfig: NextConfig = {
     },
 };
 
-export default nextConfig;
+/**
+ * `withSentryConfig` only does work at build time — it injects a
+ * webpack plugin that uploads source maps to Sentry. When
+ * `SENTRY_AUTH_TOKEN` is unset (local dev) the plugin no-ops and
+ * the build runs unchanged.
+ */
+const sentryOrg = process.env["SENTRY_ORG"];
+const sentryProject = process.env["SENTRY_PROJECT"];
+const sentryAuthToken = process.env["SENTRY_AUTH_TOKEN"];
+
+export default withSentryConfig(nextConfig, {
+    silent: true,
+    widenClientFileUpload: true,
+    ...(sentryOrg !== undefined && { org: sentryOrg }),
+    ...(sentryProject !== undefined && { project: sentryProject }),
+    ...(sentryAuthToken !== undefined && { authToken: sentryAuthToken }),
+});

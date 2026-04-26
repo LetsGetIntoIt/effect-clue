@@ -35,6 +35,7 @@ import {
 } from "../logic/InitialKnowledge";
 import { Effect, Result } from "effect";
 import deduce, { type DeductionResult } from "../logic/Deducer";
+import { TelemetryRuntime } from "../observability/runtime";
 import {
     newSuggestionId,
     Suggestion,
@@ -443,7 +444,7 @@ const deriveState = (
     // deduceWithExplanations now fails via the Effect failure channel
     // on contradiction; Effect.result materialises it back to a Result
     // so we can branch here without a try/catch.
-    const traced = Effect.runSync(
+    const traced = TelemetryRuntime.runSync(
         Effect.result(deduceWithExplanations(initialKnowledge)).pipe(
             Effect.provide(deduceLayer),
         ),
@@ -766,7 +767,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             // contradiction is detected; Effect.result materialises it
             // back to Result<Knowledge, ContradictionTrace> so downstream
             // UI code keeps its isSuccess / isFailure branching intact.
-            Effect.runSync(
+            TelemetryRuntime.runSync(
                 Effect.result(deduce(initialKnowledge)).pipe(
                     Effect.provide(deduceLayer),
                 ),
