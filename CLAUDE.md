@@ -56,6 +56,23 @@ When modifying behavior:
 
 Tests live next to source (`Foo.test.ts(x)` beside `Foo.ts(x)`) — match that pattern.
 
+## Observability and analytics
+
+For **every change** — not just observability-flavored work — pause to think across the whole app, not just the diff:
+
+1. **Are there events worth tracking from this change?** Look at what the new code actually does — any user action, state transition, success / failure outcome, or interesting moment a future you would want to query in PostHog. If yes, add a typed emitter in `src/analytics/events.ts` and call it at the right boundary. Never invent event names inline at the call site — every event lives in `events.ts` so renaming is a TypeScript-checked change.
+2. **Does this affect an existing funnel?** The three production funnels are:
+   - **Onboarding:** `game_setup_started → player_added → cards_dealt → game_started`
+   - **First completion:** `game_started → suggestion_made → deduction_revealed → game_finished`
+   - **Solver engagement:** `game_started → why_tooltip_opened → accusation_made`
+
+   If the change moves, removes, or renames any step, update the emitter AND call it out in the PR description so the funnel definition in the PostHog UI can be re-pointed.
+3. **Is this Effect code worth tracing?** Anything heavy (deducer-class work, large derivations), I/O-bound (localStorage, fetch), or that you'd want to debug in production — wrap it in `Effect.fn("module.operation")` and run via `TelemetryRuntime` (`src/observability/runtime.ts`) so the span lands on Honeycomb.
+4. **Are there new error paths?** Sentry auto-captures unhandled JS errors. For typed Effect failures we still want visibility on, `Effect.logError("...", { cause })` ships them to Honeycomb logs and adds a Sentry breadcrumb.
+5. **Walk the whole flow, not just the diff.** Trace the user from page load through this change and back out. If a debug session a month from now would need an event / span / log that isn't there, add it now while the context is fresh.
+
+The PR description should list new/changed events, funnels, and spans, and call out anything that needs configuration on the PostHog or Honeycomb dashboards.
+
 ## PR workflow
 
 - Always open a PR. Never merge directly to `main`.
