@@ -50,7 +50,9 @@
       "mcp__Claude_Preview__preview_fill",
       "mcp__Claude_Preview__preview_resize",
       "mcp__Claude_Preview__preview_start",
-      "mcp__Claude_Preview__preview_stop"
+      "mcp__Claude_Preview__preview_stop",
+      "mcp__effect-docs__effect_docs_search",
+      "mcp__effect-docs__get_effect_doc"
     ]
   }
 }
