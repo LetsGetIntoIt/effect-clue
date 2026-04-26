@@ -4,11 +4,14 @@ import * as RadixPopover from "@radix-ui/react-popover";
 import { LayoutGroup, motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { aboutLinkClicked } from "../../analytics/events";
 import { describeAction } from "../../logic/describeAction";
+import { routes } from "../../routes";
 import { useLongPress } from "../hooks/useLongPress";
 import { useClue } from "../state";
 import { label } from "../keyMap";
 import { T_SPRING_SOFT, T_STANDARD, useReducedTransition } from "../motion";
+import { ExternalLinkIcon } from "./Icons";
 import { OverflowMenu } from "./OverflowMenu";
 import { useToolbarActions } from "./Toolbar";
 
@@ -260,6 +263,14 @@ function BottomOverflowMenu({
                             shortcut: label("global.newGame"),
                         }),
                         onClick: onNewGame,
+                    },
+                    {
+                        label: t("about"),
+                        trailingIcon: <ExternalLinkIcon size={14} />,
+                        onClick: () => {
+                            aboutLinkClicked({ source: "overflow_menu" });
+                            window.open(routes.about, "about-page", "noopener");
+                        },
                     },
                 ]}
             />

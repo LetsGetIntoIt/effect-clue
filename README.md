@@ -37,10 +37,13 @@ The app is a client-only static SPA. There is no server, no API, and no account:
 ## Repository layout
 
 ```
-app/                    Next.js App Router entry — layout, providers, single page.
-  page.tsx              Renders <Clue/>; the entire app is one client boundary.
+app/                    Next.js App Router entry — layout, providers, three routes.
+  page.tsx              Server component; redirects / → /play (build-time meta refresh).
+  play/page.tsx         Renders <Clue/> + <SplashModal/>; the main game UI.
+  about/page.tsx        Renders shared <AboutContent/> (motivation copy + YouTube embed).
 
 src/
+  routes.ts             Single source of truth for in-app paths.
   logic/                Pure Effect game model (no React).
     GameSetup.ts          Players, card packs, dealt cards.
     Knowledge.ts          The (player × card) grid + cell values.
@@ -50,12 +53,14 @@ src/
     Recommender.ts        Suggests the next move.
     Provenance.ts         "Why does this cell have this value?" footnotes.
     Persistence.ts        localStorage round-trip via PersistenceSchema.
+    SplashState.ts        localStorage timestamps for the about-app splash modal.
     services/             Effect services injected as ambient context (CardSet, PlayerSet, …).
   ui/                   React 19 client components.
     Clue.tsx              Top-level shell, mobile/desktop layout switch.
     state.tsx             ClueProvider — wraps deducer in useMemo, owns undo/redo.
-    components/           Checklist, SuggestionForm, Toolbar, Tooltip, …
-    hooks/                useConfirm, useIsDesktop, …
+    components/           Checklist, SuggestionForm, Toolbar, AboutContent,
+                          SplashModal, YouTubeEmbed, …
+    hooks/                useConfirm, useIsDesktop, useSplashGate, …
   i18n/                 next-intl provider + flat message map.
   analytics/            PostHog client + typed event emitters + Web Vitals.
   observability/        Effect → OpenTelemetry → Honeycomb runtime.
@@ -64,7 +69,7 @@ messages/en.json        UI strings.
 scripts/check-i18n-keys.mjs   Audits orphan/missing translation keys.
 
 .github/workflows/ci.yml   typecheck / lint / test / knip / i18n-check / build
-renovate.json              Dependency PRs.
+renovate.json5             Dependency PRs.
 CODEOWNERS                 Review routing.
 ```
 

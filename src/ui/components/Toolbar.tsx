@@ -2,10 +2,13 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { aboutLinkClicked } from "../../analytics/events";
 import { describeAction } from "../../logic/describeAction";
+import { routes } from "../../routes";
 import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 import { label } from "../keyMap";
+import { ExternalLinkIcon } from "./Icons";
 import { OverflowMenu } from "./OverflowMenu";
 import { Tooltip } from "./Tooltip";
 
@@ -142,6 +145,14 @@ export function Toolbar() {
                             shortcut: label("global.newGame"),
                         }),
                         onClick: onNewGame,
+                    },
+                    {
+                        label: tNav("about"),
+                        trailingIcon: <ExternalLinkIcon size={14} />,
+                        onClick: () => {
+                            aboutLinkClicked({ source: "overflow_menu" });
+                            window.open(routes.about, "about-page", "noopener");
+                        },
                     },
                 ]}
             />
