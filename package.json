@@ -52,6 +52,7 @@
 		"@opentelemetry/sdk-trace-web": "2.7.0",
 		"@opentelemetry/semantic-conventions": "1.40.0",
 		"@radix-ui/react-alert-dialog": "1.1.15",
+		"@radix-ui/react-dialog": "1.1.15",
 		"@radix-ui/react-popover": "1.1.15",
 		"@radix-ui/react-tooltip": "1.2.8",
 		"@sentry/nextjs": "10.50.0",
@@ -63,6 +64,7 @@
 		"posthog-js": "1.372.1",
 		"react": "19.2.5",
 		"react-dom": "19.2.5",
+		"react-youtube": "10.1.0",
 		"web-vitals": "5.2.0"
 	},
 	"devDependencies": {

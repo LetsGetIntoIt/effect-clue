@@ -8,7 +8,16 @@ Use `pnpm` for everything. Never `npm`, `yarn`, or `bun`.
 
 Once per shell session, run `nvm use` from the repo root — it picks the version from `.nvmrc`. With `engine-strict=true` in `.npmrc`, every other script (`pnpm install`, `pnpm test`, etc.) will refuse to run on the wrong Node version, so getting this right once at the start of a session is what unblocks everything else. You don't need to re-run it before every command in the same shell.
 
-**Only `source ~/.nvm/nvm.sh` if `nvm use` actually fails with `command not found`.** Most shells load nvm through `.zshrc`/`.bashrc` already, and sourcing it preemptively triggers a permission prompt that slows every command. Try `nvm use` first; only fall back to sourcing if it isn't on PATH. Both are once-per-shell — once you've run `nvm use` (and `source` if it was needed), the correct Node version is locked in for the rest of that shell, and every subsequent `pnpm` / `node` / build command works without re-running either.
+**Once per session, not once per command.** Run `nvm use` (and the `source` fix below if it errors) once, then run every other `pnpm` / `node` / build command on its own. Don't keep prepending `export NVM_DIR=… && source … && nvm use && pnpm …` to every command — the active Node binary stays on PATH for subsequent commands in the same session, so re-running the env setup is just noise (and extra permission prompts).
+
+**`source ~/.nvm/nvm.sh` whenever `nvm use` fails for any reason.** The two failure modes both point at the same fix:
+
+- `nvm: command not found` — nvm isn't on PATH at all.
+- `version "vX.Y.Z" is not yet installed` even though `~/.nvm/versions/node/vX.Y.Z` exists — `NVM_DIR` is unset, so nvm can't see the installed versions. This happens in sandboxed / non-interactive shells where `.zshrc` / `.bashrc` didn't run.
+
+In both cases run `export NVM_DIR="$HOME/.nvm" && source "$HOME/.nvm/nvm.sh"` and retry `nvm use`. Don't try to `nvm install` your way out of the second one — the version is already there, the env is just blind to it.
+
+Most interactive shells load nvm through `.zshrc` / `.bashrc` already, so sourcing preemptively can trigger a permission prompt for no reason. Try `nvm use` first; source on any failure.
 
 ## Install dependencies
 

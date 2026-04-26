@@ -2,12 +2,13 @@
 
 import * as RadixPopover from "@radix-ui/react-popover";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { T_FAST, useReducedTransition } from "../motion";
 
 interface OverflowMenuItem {
     readonly label: string;
     readonly active?: boolean;
+    readonly trailingIcon?: ReactNode;
     readonly onClick: () => void | Promise<void>;
 }
 
@@ -55,15 +56,15 @@ export function OverflowMenu({
                 >
                     {items.map((item, i) => {
                         const handleClick = closeThen(item.onClick);
-                        const content = item.active === undefined ? (
+                        const content = (
                             <MenuItem
                                 label={item.label}
-                                onClick={handleClick}
-                            />
-                        ) : (
-                            <MenuItem
-                                label={item.label}
-                                active={item.active}
+                                {...(item.active !== undefined
+                                    ? { active: item.active }
+                                    : {})}
+                                {...(item.trailingIcon !== undefined
+                                    ? { trailingIcon: item.trailingIcon }
+                                    : {})}
                                 onClick={handleClick}
                             />
                         );
@@ -87,10 +88,12 @@ export function OverflowMenu({
 function MenuItem({
     label,
     active,
+    trailingIcon,
     onClick,
 }: {
     readonly label: string;
     readonly active?: boolean;
+    readonly trailingIcon?: ReactNode;
     readonly onClick: () => void;
 }) {
     return (
@@ -98,11 +101,16 @@ function MenuItem({
             type="button"
             onClick={onClick}
             className={
-                "block w-full cursor-pointer rounded-[var(--radius)] border-none bg-transparent px-3 py-2 text-left text-[13px] hover:bg-hover " +
+                "flex w-full items-center justify-between gap-2 cursor-pointer rounded-[var(--radius)] border-none bg-transparent px-3 py-2 text-left text-[13px] hover:bg-hover " +
                 (active ? "text-accent font-semibold" : "text-inherit")
             }
         >
-            {label}
+            <span>{label}</span>
+            {trailingIcon !== undefined ? (
+                <span className="flex shrink-0 items-center text-muted">
+                    {trailingIcon}
+                </span>
+            ) : null}
         </button>
     );
 }

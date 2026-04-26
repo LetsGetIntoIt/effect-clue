@@ -15,7 +15,22 @@
         "checklist": "Checklist ({shortcut})",
         "suggest": "Suggest ({shortcut})",
         "more": "More",
-        "gameSetup": "Game setup ({shortcut})"
+        "gameSetup": "Game setup ({shortcut})",
+        "about": "About"
+    },
+    "splash": {
+        "title": "Welcome to the Clue solver",
+        "description": "Learn what this solver does for you, and start playing.",
+        "startPlaying": "Let's solve a murder!",
+        "dontShowAgain": "Don't show this again",
+        "close": "Close"
+    },
+    "about": {
+        "title": "More than process of elimination",
+        "motivation": "Every suggestion leaks information. Keeping track of who must hold what gets hard fast — too much to do in your head.",
+        "videoCallout": "This solver does the bookkeeping for you. It finds clues you'd miss and teaches the strategy as you play. Watch the kickoff video to learn the logic — so you can be the best detective in the room.",
+        "videoTitle": "Clue strategy explainer",
+        "pageHeading": "About the Clue solver"
     },
     "toolbar": {
         "undo": "↶ Undo ({shortcut})",

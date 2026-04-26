@@ -31,7 +31,7 @@ const root = path.resolve(
 );
 const messagesPath = path.join(root, "messages/en.json");
 const srcDir = path.join(root, "src");
-const layoutFile = path.join(root, "app/layout.tsx");
+const appDir = path.join(root, "app");
 
 // --- load keys ----------------------------------------------------------
 const messages = JSON.parse(fs.readFileSync(messagesPath, "utf8"));
@@ -61,7 +61,7 @@ const walk = (dir) => {
     }
 };
 walk(srcDir);
-if (fs.existsSync(layoutFile)) srcFiles.push(layoutFile);
+if (fs.existsSync(appDir)) walk(appDir);
 
 const stringsInSource = new Set();
 const templateSuffixes = new Set();

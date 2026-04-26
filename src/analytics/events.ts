@@ -17,6 +17,8 @@
  *   Feature usage       : whyTooltipOpened, checklistRowClicked,
  *                         undoUsed, redoUsed, settingsOpened,
  *                         languageChanged, localstorageCleared
+ *   Onboarding / splash : splashScreenViewed, splashScreenDismissed,
+ *                         youtubeEmbedPlayed, aboutLinkClicked
  *   Performance signals : webVital, deducerRun
  *
  * `$pageview` is auto-emitted by PostHog (capture_pageview: true) so it
@@ -144,6 +146,26 @@ export const languageChanged = (props: { from: string; to: string }): void =>
 
 export const localstorageCleared = (props: { hadActiveGame: boolean }): void =>
     capture("localstorage_cleared", props);
+
+// ── Onboarding / splash ───────────────────────────────────────────────────
+
+export const splashScreenViewed = (props: {
+    dismissedBefore: boolean;
+    daysSinceLastVisit: number | null;
+}): void => capture("splash_screen_viewed", props);
+
+export const splashScreenDismissed = (props: {
+    method: "start_playing" | "x_button";
+    dontShowAgainChecked: boolean;
+}): void => capture("splash_screen_dismissed", props);
+
+export const youtubeEmbedPlayed = (props: {
+    context: "page" | "modal";
+}): void => capture("youtube_embed_played", props);
+
+export const aboutLinkClicked = (props: {
+    source: "overflow_menu";
+}): void => capture("about_link_clicked", props);
 
 // ── Performance signals ───────────────────────────────────────────────────
 

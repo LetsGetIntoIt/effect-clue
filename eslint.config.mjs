@@ -130,6 +130,14 @@ export default [
                             // Effect services register themselves with a
                             // string key; that's a type-system token.
                             "Context\\.Service",
+                            // `Effect.fn("module.operation")` names a
+                            // tracing span — internal observability key,
+                            // never user copy.
+                            "Effect\\.fn",
+                            // `window.open(url, targetName, features)`
+                            // takes the route, the named-tab target, and
+                            // a features list — none of them user copy.
+                            "window\\.open",
                         ],
                     },
                     // Exempt attributes that carry non-copy values
@@ -155,6 +163,10 @@ export default [
                             "side",
                             "align",
                             "variant",
+                            // `<AboutContent context="page" | "modal" />`
+                            // — discriminator for which surface fired
+                            // an analytics event, not user copy.
+                            "context",
                         ],
                     },
                     // Ignore object-property values on common setup
@@ -178,6 +190,12 @@ export default [
                             "runtimeExecutable",
                             "packageManager",
                             "name",
+                            // Analytics-event prop discriminators —
+                            // `method`, `source`, `context` are all
+                            // PostHog event property keys, not copy.
+                            "method",
+                            "source",
+                            "context",
                         ],
                     },
                     // Additional common words that are discriminator
