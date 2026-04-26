@@ -112,17 +112,13 @@ export function ContradictionBanner({
 
     return (
         <div className="mb-3 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-3 text-[13px] text-danger">
+            <div className="mb-2">
+                <div className="font-semibold">{t("bannerTitle")}</div>
+                <div className="text-[12px] opacity-80">{t("bannerHelp")}</div>
+            </div>
             {!hasOffendingSuggestions && (
                 <div className="mb-2">
-                    {t.rich("full", {
-                        reason: prettifyReason(trace.reason),
-                        strong: chunks => <strong>{chunks}</strong>,
-                    })}
-                </div>
-            )}
-            {hasOffendingSuggestions && (
-                <div className="mb-2 font-semibold">
-                    {t("offendingInputsHeader")}
+                    {prettifyReason(trace.reason)}
                 </div>
             )}
             {(hasOffendingSuggestions || fixes.length > 0) && (
@@ -155,11 +151,6 @@ export function ContradictionBanner({
                             />
                         );
                     })}
-                    {!hasOffendingSuggestions && fixes.length > 0 && (
-                        <li className="-mt-1 mb-1 text-[12px] font-semibold uppercase tracking-[0.05em] text-danger">
-                            {t("offendingInputsHeader")}
-                        </li>
-                    )}
                     {fixes.map((fix, i) => {
                         if (fix.kind === "unset-known-card") {
                             return (

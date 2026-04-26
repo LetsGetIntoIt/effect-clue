@@ -214,8 +214,8 @@
         "pillValueUnknown": "unknown"
     },
     "contradictions": {
-        "full": "<strong>Contradiction:</strong> {reason}",
-        "offendingInputsHeader": "Offending inputs",
+        "bannerTitle": "Contradiction!",
+        "bannerHelp": "Some of the information you provided doesn't add up",
         "suggestionLabel": "Suggestion #{index} by {player}",
         "suggestionLabelNoPlayer": "Suggestion #{index}",
         "suggestionCardsLine": "<strong>{suggester}</strong> suggested {cards}.",
