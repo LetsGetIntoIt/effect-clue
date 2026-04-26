@@ -85,6 +85,56 @@ export function ArrowRightIcon({ className, size = 18 }: IconProps) {
     );
 }
 
+/**
+ * Curved arrow looping back to the left — paired with the Undo control.
+ * Same 24×24 viewBox + currentColor stroke as the rest of the set so it
+ * sits flush in the bottom-nav slots.
+ */
+export function UndoIcon({ className, size = 20 }: IconProps) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+            className={className}
+        >
+            <polyline points="9 14 4 9 9 4" />
+            <path d="M4 9h9a7 7 0 0 1 0 14h-3" />
+        </svg>
+    );
+}
+
+/** Mirror of {@link UndoIcon} — paired with the Redo control. */
+export function RedoIcon({ className, size = 20 }: IconProps) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+            className={className}
+        >
+            <polyline points="15 14 20 9 15 4" />
+            <path d="M20 9h-9a7 7 0 0 0 0 14h3" />
+        </svg>
+    );
+}
+
 /** Arrow leaving a frame — paired with links that open in a new tab. */
 export function ExternalLinkIcon({ className, size = 14 }: IconProps) {
     return (

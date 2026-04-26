@@ -8,7 +8,7 @@ import { routes } from "../../routes";
 import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 import { label } from "../keyMap";
-import { ExternalLinkIcon } from "./Icons";
+import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
 import { OverflowMenu } from "./OverflowMenu";
 import { Tooltip } from "./Tooltip";
 
@@ -101,24 +101,26 @@ export function Toolbar() {
             <Tooltip content={undoTooltip}>
                 <button
                     type="button"
-                    className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-40`}
+                    className={`${buttonClass} inline-flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-40`}
                     onClick={undo}
                     disabled={!canUndo}
                     title={t("undoTitle")}
                     aria-label={t("undoAria")}
                 >
+                    <UndoIcon size={15} className="shrink-0" />
                     {t("undo", { shortcut: label("global.undo") })}
                 </button>
             </Tooltip>
             <Tooltip content={redoTooltip}>
                 <button
                     type="button"
-                    className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-40`}
+                    className={`${buttonClass} inline-flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-40`}
                     onClick={redo}
                     disabled={!canRedo}
                     title={t("redoTitle")}
                     aria-label={t("redoAria")}
                 >
+                    <RedoIcon size={15} className="shrink-0" />
                     {t("redo", { shortcut: label("global.redo") })}
                 </button>
             </Tooltip>

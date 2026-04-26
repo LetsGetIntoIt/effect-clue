@@ -1,5 +1,6 @@
 import { Effect, Equal, Result } from "effect";
 import { Cell, Contradiction, Knowledge } from "./Knowledge";
+import { ContradictionKind } from "./ContradictionKind";
 import { GameSetup } from "./GameSetup";
 import { applyAllRules } from "./Rules";
 import { getCardSet, getPlayerSet, getSuggestions } from "./services";
@@ -26,6 +27,13 @@ export interface ContradictionTrace {
     readonly offendingCells: ReadonlyArray<Cell>;
     readonly offendingSuggestionIndices: ReadonlyArray<number>;
     readonly sliceLabel?: string | undefined;
+    /**
+     * Structured identity of the rule that raised the conflict — see
+     * `ContradictionKind`. The UI dispatches on `_tag` to render
+     * rule-specific copy ("Player passed on this suggestion, so they
+     * can't have …") instead of a generic cell-conflict sentence.
+     */
+    readonly contradictionKind?: ContradictionKind | undefined;
 }
 
 /**
@@ -46,6 +54,7 @@ const traceOf = (error: Contradiction): ContradictionTrace => ({
             ? [error.suggestionIndex]
             : [],
     sliceLabel: error.sliceLabel,
+    contradictionKind: error.contradictionKind,
 });
 
 /**

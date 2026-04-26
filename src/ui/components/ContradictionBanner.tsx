@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import { Card, Player } from "../../logic/GameObjects";
-import { GameSetup, cardName } from "../../logic/GameSetup";
+import { GameSetup, cardName, categoryName } from "../../logic/GameSetup";
 import { ContradictionTrace } from "../../logic/Deducer";
 import { DraftSuggestion } from "../../logic/ClueState";
 import { useClue } from "../state";
@@ -138,6 +138,7 @@ export function ContradictionBanner({
                                 conflictNode={describeSuggestionConflict(
                                     trace,
                                     setup,
+                                    s,
                                     t,
                                     prettifyReason,
                                 )}
@@ -262,7 +263,7 @@ function OffendingSuggestionRow({
                 </div>
             )}
             {conflictNode && <div>{conflictNode}</div>}
-            <div className="mt-1 flex gap-2">
+            <div className="mt-1 flex justify-end gap-2">
                 <button
                     type="button"
                     className="cursor-pointer rounded border border-danger-border bg-white px-2 py-0.5 text-[12px] text-danger hover:bg-danger-bg"
@@ -317,25 +318,110 @@ function renderRefuterSentence(
 }
 
 /**
- * Translate the raw `Contradiction` reason string into a human-friendly
- * sentence inline with the offending suggestion. Templates this matches:
+ * Render a sentence that names *both* the rule that fired and the
+ * conflicting fact. Dispatches on `trace.contradictionKind._tag`:
  *
- *   - cell conflict (Knowledge.ts): "tried to set {owner}/{card} to {Y|N} but it is already {N|Y}"
- *   - card-ownership slice (Rules.ts): slice label "card ownership: {CARD}", reason has "has 2 Ys ..."
- *   - hand-size slice (Rules.ts): slice label "hand size: {PLAYER}", reason has "has N Ys ..."
+ *   - `NonRefuters`       — "X passed on this suggestion, so they can't
+ *                            have Y — but X is already known to have Y."
+ *   - `RefuterShowed`     — "X showed Y to refute, but X is already
+ *                            known not to have Y."
+ *   - `RefuterOwnsOneOf`  — "X refuted without showing a card, so they
+ *                            must own one of {cards}, but X is already
+ *                            known not to have any."
+ *   - `Slice…`            — slice over- or under-saturation copy
+ *                            (card ownership / player hand / case file).
  *
- * Falls back to the prettified raw reason string for shapes we don't
- * recognise — better something verbatim than nothing.
+ * Falls through to the legacy regex parse on the raw reason string when
+ * `contradictionKind` is undefined or `DirectCell` (e.g. two raw
+ * known-card inputs collide), so we never regress on what we say today.
  */
 function describeSuggestionConflict(
     trace: ContradictionTrace,
     setup: GameSetup,
+    suggestion: DraftSuggestion | undefined,
     t: ReturnType<typeof useTranslations<"contradictions">>,
     prettify: (s: string) => string,
 ): ReactNode {
     const strong = (chunks: ReactNode) => <strong>{chunks}</strong>;
+    const cell = trace.offendingCells[0];
+    const offendingPlayer =
+        cell && cell.owner._tag === "Player" ? cell.owner.player : undefined;
+    const offendingCardLabel = cell ? cardName(setup, cell.card) : undefined;
 
-    // Cell conflict: "tried to set <owner>/<cardId> to <Y|N> but it is already <N|Y>"
+    const kind = trace.contradictionKind;
+    if (kind) {
+        switch (kind._tag) {
+            case "NonRefuters":
+                if (offendingPlayer && offendingCardLabel) {
+                    return t.rich("conflictNonRefuterAlreadyOwns", {
+                        player: String(offendingPlayer),
+                        card: offendingCardLabel,
+                        strong,
+                    });
+                }
+                break;
+            case "RefuterShowed":
+                if (suggestion?.refuter && suggestion.seenCard !== undefined) {
+                    return t.rich("conflictRefuterShowedButCantOwn", {
+                        refuter: String(suggestion.refuter),
+                        card: cardName(setup, suggestion.seenCard),
+                        strong,
+                    });
+                }
+                break;
+            case "RefuterOwnsOneOf":
+                if (suggestion?.refuter) {
+                    return t.rich("conflictRefuterOwnsOneOfImpossible", {
+                        refuter: String(suggestion.refuter),
+                        cards: joinCardNames(setup, suggestion.cards),
+                        strong,
+                    });
+                }
+                break;
+            case "SliceCardOwnership": {
+                const cardLabel = cardName(setup, kind.card);
+                return kind.direction === "over"
+                    ? t.rich("conflictCardHasOtherOwner", {
+                          card: cardLabel,
+                          strong,
+                      })
+                    : t.rich("conflictCardNoPossibleOwner", {
+                          card: cardLabel,
+                          strong,
+                      });
+            }
+            case "SlicePlayerHand":
+                return kind.direction === "over"
+                    ? t.rich("conflictHandSizeOverflow", {
+                          player: String(kind.player),
+                          handSize: kind.handSize,
+                          strong,
+                      })
+                    : t.rich("conflictHandSizeUnderflow", {
+                          player: String(kind.player),
+                          handSize: kind.handSize,
+                          strong,
+                      });
+            case "SliceCaseFileCategory": {
+                const catLabel = categoryName(setup, kind.category) ?? String(kind.category);
+                return kind.direction === "over"
+                    ? t.rich("conflictCaseFileCategoryConflict", {
+                          category: catLabel,
+                          strong,
+                      })
+                    : t.rich("conflictCaseFileCategoryNoOption", {
+                          category: catLabel,
+                          strong,
+                      });
+            }
+            case "DirectCell":
+                break; // fall through to legacy parse
+        }
+    }
+
+    // Legacy fallback: parse the raw reason string for cell conflicts
+    // raised by `setCell` outside any rule wrapping (or when
+    // `contradictionKind` was lost across boundaries).
     const cellMatch = /^tried to set (.+?)\/(.+?) to ([YN]) but it is already ([YN])$/.exec(
         trace.reason,
     );
@@ -354,26 +440,6 @@ function describeSuggestionConflict(
             card: cardDisplay,
             strong,
         });
-    }
-
-    // Slice over-saturation: prefer sliceLabel, which encodes the kind.
-    if (trace.sliceLabel) {
-        const cardOwn = /^card ownership: (.+)$/.exec(trace.sliceLabel);
-        if (cardOwn) {
-            const cardDisplay =
-                lookupCardName(setup, cardOwn[1]!) ?? cardOwn[1]!;
-            return t.rich("conflictCardHasOtherOwner", {
-                card: cardDisplay,
-                strong,
-            });
-        }
-        const handSize = /^hand size: (.+)$/.exec(trace.sliceLabel);
-        if (handSize) {
-            return t.rich("conflictHandSizeOverflow", {
-                player: handSize[1]!,
-                strong,
-            });
-        }
     }
 
     return prettify(trace.reason);
