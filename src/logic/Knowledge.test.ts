@@ -183,6 +183,22 @@ describe("setCell", () => {
             expect(c.reason).toMatch(/N/);
         }
     });
+
+    test("setCell-raised Contradictions leave contradictionKind undefined", () => {
+        // The cell-conflict helper is the `DirectCell` fallback path —
+        // every rule wrapper in Rules.ts overwrites this with its own
+        // kind, but a raw setCell collision (e.g. two known-card
+        // checkboxes that disagree) produces no kind so the UI uses
+        // the legacy generic "X is already known to have Y" copy.
+        const k = setCell(emptyKnowledge, Cell(PlayerOwner(A), KNIFE), Y);
+        try {
+            setCell(k, Cell(PlayerOwner(A), KNIFE), N);
+            throw new Error("expected Contradiction");
+        } catch (e) {
+            expect(e).toBeInstanceOf(Contradiction);
+            expect((e as Contradiction).contradictionKind).toBeUndefined();
+        }
+    });
 });
 
 describe("setHandSize", () => {

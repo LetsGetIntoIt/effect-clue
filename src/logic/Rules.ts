@@ -1,4 +1,4 @@
-import { pipe } from "effect";
+import { Match, pipe } from "effect";
 import {
     CaseFileOwner,
     PlayerOwner,
@@ -13,6 +13,7 @@ import {
     setCell,
     Y,
 } from "./Knowledge";
+import { ContradictionKind } from "./ContradictionKind";
 import {
     allCardIds,
     allOwners,
@@ -28,6 +29,45 @@ import {
     RefuterOwnsOneOf,
     RefuterShowed,
 } from "./Provenance";
+
+/**
+ * Map a slice's `ReasonKind` (which always identifies one of three
+ * consistency families — card ownership, player hand, case-file
+ * category) to the matching `ContradictionKind` so the UI can name
+ * which constraint over- or under-saturated.
+ *
+ * Slices are never built from `NonRefuters` / `RefuterShowed` /
+ * `RefuterOwnsOneOf` / `InitialKnownCard` / `InitialHandSize` — those
+ * are deduction-rule kinds, not consistency-rule kinds — so the
+ * default branch should never fire at runtime, but typescript-narrows
+ * to those tags want a fallback.
+ */
+const sliceKindToContradiction = (
+    kind: ReasonKind,
+    direction: "over" | "under",
+    handSize: number,
+): ContradictionKind =>
+    Match.value(kind).pipe(
+        Match.tag("CardOwnership", ({ card }) => ({
+            _tag: "SliceCardOwnership" as const,
+            card,
+            direction,
+        })),
+        Match.tag("PlayerHand", ({ player }) => ({
+            _tag: "SlicePlayerHand" as const,
+            player,
+            handSize,
+            direction,
+        })),
+        Match.tag("CaseFileCategory", ({ category }) => ({
+            _tag: "SliceCaseFileCategory" as const,
+            category,
+            direction,
+        })),
+        Match.orElse(
+            (): ContradictionKind => ({ _tag: "DirectCell" }),
+        ),
+    );
 
 /**
  * A "slice" is a set of cells that has a known exact number of Ys among
@@ -94,6 +134,11 @@ export const applySlice = (
                 `exactly ${slice.yCount}`,
             offendingCells: yCells,
             sliceLabel: slice.label,
+            contradictionKind: sliceKindToContradiction(
+                slice.kind,
+                "over",
+                slice.yCount,
+            ),
         });
     }
     if (ns > nCount) {
@@ -103,6 +148,11 @@ export const applySlice = (
                 `at most ${nCount}`,
             offendingCells: nCells,
             sliceLabel: slice.label,
+            contradictionKind: sliceKindToContradiction(
+                slice.kind,
+                "under",
+                slice.yCount,
+            ),
         });
     }
 
@@ -244,6 +294,10 @@ export const nonRefutersDontHaveSuggestedCards = (
                                 : [cell],
                             sliceLabel: e.sliceLabel,
                             suggestionIndex,
+                            contradictionKind: {
+                                _tag: "NonRefuters",
+                                suggestionIndex,
+                            },
                         });
                     }
                     throw e;
@@ -286,6 +340,10 @@ export const refuterShowedCard = (
                         : [cell],
                     sliceLabel: e.sliceLabel,
                     suggestionIndex,
+                    contradictionKind: {
+                        _tag: "RefuterShowed",
+                        suggestionIndex,
+                    },
                 });
             }
             throw e;
@@ -346,6 +404,10 @@ export const refuterOwnsOneOf = (
                             : [cell, ...nCells],
                         sliceLabel: e.sliceLabel,
                         suggestionIndex,
+                        contradictionKind: {
+                            _tag: "RefuterOwnsOneOf",
+                            suggestionIndex,
+                        },
                     });
                 }
                 throw e;

@@ -417,4 +417,130 @@ describe("structured Contradiction info", () => {
             expect(c.suggestionIndex).toBe(0);
         }
     });
+
+    test("over-Y card-ownership slice tags contradictionKind as SliceCardOwnership/over", () => {
+        const slice: Slice = {
+            cells: [
+                Cell(PlayerOwner(A), KNIFE),
+                Cell(PlayerOwner(B), KNIFE),
+                Cell(PlayerOwner(C), KNIFE),
+                Cell(CaseFileOwner(), KNIFE),
+            ],
+            yCount: 1,
+            label: `card ownership: ${KNIFE}`,
+            kind: CardOwnership({ card: KNIFE }),
+        };
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(PlayerOwner(A), KNIFE), Y);
+        k = setCell(k, Cell(PlayerOwner(B), KNIFE), Y);
+        try {
+            applySlice(slice)(k);
+            expect.fail("expected Contradiction");
+        } catch (e) {
+            expect(e).toBeInstanceOf(Contradiction);
+            const c = e as Contradiction;
+            expect(c.contradictionKind).toBeDefined();
+            expect(c.contradictionKind?._tag).toBe("SliceCardOwnership");
+            expect(
+                (c.contradictionKind as { card: Card } | undefined)?.card,
+            ).toBe(KNIFE);
+            expect(
+                (c.contradictionKind as { direction: "over" | "under" } | undefined)
+                    ?.direction,
+            ).toBe("over");
+        }
+    });
+
+    test("over-N card-ownership slice tags contradictionKind as SliceCardOwnership/under", () => {
+        const slice: Slice = {
+            cells: [
+                Cell(PlayerOwner(A), KNIFE),
+                Cell(PlayerOwner(B), KNIFE),
+                Cell(PlayerOwner(C), KNIFE),
+                Cell(CaseFileOwner(), KNIFE),
+            ],
+            yCount: 1,
+            label: `card ownership: ${KNIFE}`,
+            kind: CardOwnership({ card: KNIFE }),
+        };
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(PlayerOwner(A), KNIFE), N);
+        k = setCell(k, Cell(PlayerOwner(B), KNIFE), N);
+        k = setCell(k, Cell(PlayerOwner(C), KNIFE), N);
+        k = setCell(k, Cell(CaseFileOwner(), KNIFE), N);
+        try {
+            applySlice(slice)(k);
+            expect.fail("expected Contradiction");
+        } catch (e) {
+            expect(e).toBeInstanceOf(Contradiction);
+            const c = e as Contradiction;
+            expect(c.contradictionKind?._tag).toBe("SliceCardOwnership");
+            expect(
+                (c.contradictionKind as { direction: "over" | "under" } | undefined)
+                    ?.direction,
+            ).toBe("under");
+        }
+    });
+
+    test("nonRefutersDontHaveSuggestedCards tags contradictionKind as NonRefuters", () => {
+        // Anisha is known to have Plum. A suggestion where Anisha was a
+        // non-refuter that names Plum forces setCell(Anisha, Plum, N) →
+        // collision with the existing Y → wrapped Contradiction.
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(PlayerOwner(A), PLUM), Y);
+        const suggestions = [Suggestion({
+            suggester: B,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [A],
+            refuter: undefined,
+            seenCard: undefined,
+        })];
+        try {
+            nonRefutersDontHaveSuggestedCards(suggestions)(k);
+            expect.fail("expected Contradiction");
+        } catch (e) {
+            expect(e).toBeInstanceOf(Contradiction);
+            const c = e as Contradiction;
+            expect(c.contradictionKind?._tag).toBe("NonRefuters");
+            expect(
+                (c.contradictionKind as { suggestionIndex: number } | undefined)
+                    ?.suggestionIndex,
+            ).toBe(0);
+        }
+    });
+
+    test("refuterShowedCard tags contradictionKind as RefuterShowed", () => {
+        // Bob is already known not to have Plum, but the suggestion says
+        // Bob refuted by showing Plum → setCell collision → wrapped.
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(PlayerOwner(B), PLUM), N);
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [],
+            refuter: B,
+            seenCard: PLUM,
+        })];
+        try {
+            refuterShowedCard(suggestions)(k);
+            expect.fail("expected Contradiction");
+        } catch (e) {
+            expect(e).toBeInstanceOf(Contradiction);
+            const c = e as Contradiction;
+            expect(c.contradictionKind?._tag).toBe("RefuterShowed");
+            expect(
+                (c.contradictionKind as { suggestionIndex: number } | undefined)
+                    ?.suggestionIndex,
+            ).toBe(0);
+        }
+    });
+
+    // refuterOwnsOneOf wraps setCell defensively (matching the shape of
+    // the other suggestion rules), but in practice its catch is
+    // unreachable when run in isolation: the rule only sets cells from
+    // the `unknowns` list, and setCell never throws on an unknown cell.
+    // Contradictions that originate from a refuterOwnsOneOf inference
+    // surface via a downstream consistency slice (`SliceCardOwnership`
+    // or `SlicePlayerHand`) on a later iteration of the deducer's
+    // fixed-point loop. The slice test cases above cover that path.
 });

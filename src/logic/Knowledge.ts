@@ -1,4 +1,5 @@
 import { Data, HashMap, Option } from "effect";
+import { ContradictionKind } from "./ContradictionKind";
 import { Card, Owner, ownerLabel } from "./GameObjects";
 
 /**
@@ -119,6 +120,14 @@ export class Contradiction extends Data.TaggedError("Contradiction")<{
     readonly offendingCells: ReadonlyArray<Cell>;
     readonly sliceLabel?: string | undefined;
     readonly suggestionIndex?: number | undefined;
+    /**
+     * Structured identity of the rule that raised this contradiction.
+     * Optional so the cell-conflict helper at `cellConflictContradiction`
+     * can leave it `undefined` for the `DirectCell` fallback — every
+     * rule wrapper in Rules.ts overwrites it with its own kind so the
+     * UI can render rule-specific copy.
+     */
+    readonly contradictionKind?: ContradictionKind | undefined;
 }> {}
 
 const cellConflictContradiction = (

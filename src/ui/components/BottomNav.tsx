@@ -3,7 +3,7 @@
 import * as RadixPopover from "@radix-ui/react-popover";
 import { LayoutGroup, motion } from "motion/react";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { ReactNode, useState } from "react";
 import { aboutLinkClicked } from "../../analytics/events";
 import { describeAction } from "../../logic/describeAction";
 import { routes } from "../../routes";
@@ -11,7 +11,7 @@ import { useLongPress } from "../hooks/useLongPress";
 import { useClue } from "../state";
 import { label } from "../keyMap";
 import { T_SPRING_SOFT, T_STANDARD, useReducedTransition } from "../motion";
-import { ExternalLinkIcon } from "./Icons";
+import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
 import { OverflowMenu } from "./OverflowMenu";
 import { useToolbarActions } from "./Toolbar";
 
@@ -86,14 +86,14 @@ export function BottomNav() {
                 </LayoutGroup>
                 <NavIconItem
                     label={tToolbar("undoAria")}
-                    glyph="↶"
+                    icon={<UndoIcon size={20} />}
                     onClick={undo}
                     disabled={!canUndo}
                     preview={undoPreview}
                 />
                 <NavIconItem
                     label={tToolbar("redoAria")}
-                    glyph="↷"
+                    icon={<RedoIcon size={20} />}
                     onClick={redo}
                     disabled={!canRedo}
                     preview={redoPreview}
@@ -160,21 +160,21 @@ function NavTabItem({
 }
 
 /**
- * Icon-only slot (Undo / Redo). Glyph matches the toolbar strings
- * (↶ / ↷); `aria-label` carries the real name for screen readers.
- * On touch devices a long-press (~500 ms) reveals `preview` in a
- * popover without firing the primary `onClick` — users can see what
- * they're about to reverse before committing.
+ * Icon-only slot (Undo / Redo). `icon` is a ReactNode (the inline-SVG
+ * components from Icons.tsx); `aria-label` carries the real name for
+ * screen readers. On touch devices a long-press (~500 ms) reveals
+ * `preview` in a popover without firing the primary `onClick` — users
+ * can see what they're about to reverse before committing.
  */
 function NavIconItem({
     label,
-    glyph,
+    icon,
     onClick,
     disabled,
     preview,
 }: {
     readonly label: string;
-    readonly glyph: string;
+    readonly icon: ReactNode;
     readonly onClick: () => void;
     readonly disabled: boolean;
     readonly preview?: string | undefined;
@@ -193,11 +193,11 @@ function NavIconItem({
                     aria-label={label}
                     onClick={onClick}
                     disabled={disabled}
-                    className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-[var(--radius)] border-none bg-transparent text-[20px] text-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
+                    className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-[var(--radius)] border-none bg-transparent text-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
                     style={{ WebkitTouchCallout: "none" }}
                     {...longPress}
                 >
-                    {glyph}
+                    {icon}
                 </RadixPopover.Trigger>
                 <RadixPopover.Portal>
                     <RadixPopover.Content
