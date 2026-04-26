@@ -4,7 +4,7 @@ A solver for the board game **Clue** (a.k.a. *Cluedo*) — a single-page web app
 
 The app is a client-only static SPA. There is no server, no API, and no account: state lives in `localStorage` and the deducer runs in your browser.
 
-> **Production:** _TBD — fill in deployment URL_
+> **Production:** <https://winclue.vercel.app/>
 
 ---
 
