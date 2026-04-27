@@ -337,8 +337,11 @@ function Recommendations() {
     // this pane starts at the same x.
     const caretTransition = useReducedTransition(T_STANDARD);
     const bodyTransition = useReducedTransition(T_STANDARD);
+    // Smaller / lighter than `SECTION_TITLE` so the recommendations
+    // heading reads as a secondary affordance — the primary heading
+    // is "Add a suggestion" right below.
     const header = (
-        <h3 className={SECTION_TITLE}>
+        <h3 className="mt-0 mb-1 text-[12px] font-normal text-muted">
             <button
                 type="button"
                 aria-expanded={expanded}
@@ -350,7 +353,7 @@ function Recommendations() {
                     aria-hidden
                     animate={{ rotate: expanded ? 90 : 0 }}
                     transition={caretTransition}
-                    className="inline-block text-[16px] leading-none text-muted"
+                    className="inline-block text-[12px] leading-none"
                 >
                     {CARET_GLYPH}
                 </motion.span>
