@@ -42,7 +42,7 @@ export const isNobody = (v: unknown): v is Nobody => v === NOBODY;
 
 // ---- Pill status ------------------------------------------------------
 
-type PillStatus =
+export type PillStatus =
     | "done"
     | "pendingRequired"
     | "pendingOptional"

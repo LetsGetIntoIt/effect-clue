@@ -15,21 +15,25 @@ import type { GameSetup } from "../../logic/GameSetup";
 import { categoryOfCard } from "../../logic/GameSetup";
 import type { Card, Player } from "../../logic/GameObjects";
 import { newSuggestionId } from "../../logic/Suggestion";
-import { label, matches } from "../keyMap";
-import { Tooltip } from "./Tooltip";
+import { label } from "../keyMap";
+import {
+    nextEnabledPill,
+    type OpenTarget,
+    PillForm,
+    type PillFormHandle,
+    type PillSlot,
+} from "./PillForm";
 import {
     displayCard,
     displayCardOpt,
     displayPassers,
     displayPlayer,
     displayPlayerOpt,
-    isInsideSuggestionPopover,
     isNobody,
     MultiSelectList,
     NOBODY,
     type Nobody,
     type Option,
-    PillPopover,
     pillStatusForCard,
     pillStatusForPassers,
     pillStatusForPlayer,
@@ -193,12 +197,14 @@ export const SuggestionForm = forwardRef<
     // The terminal value "submit" means "no popover open; the Add
     // button should get focus." See the effect below.
     const [openPillId, setOpenPillId] = useState<OpenTarget>(null);
-    const submitBtnRef = useRef<HTMLButtonElement>(null);
-    useEffect(() => {
-        if (openPillId === TARGET_SUBMIT) {
-            submitBtnRef.current?.focus();
-        }
-    }, [openPillId]);
+    const pillFormRef = useRef<PillFormHandle>(null);
+    // Narrow `setOpenPillId` to `(next) => void` so PillForm's prop
+    // type — which expects a value-only setter, not React's
+    // `Dispatch<SetStateAction<T>>` overload — accepts it directly.
+    const onOpenPillIdChange = useCallback(
+        (next: OpenTarget) => setOpenPillId(next),
+        [],
+    );
 
     /**
      * Commit a new form AND move focus to the next enabled pill.
@@ -211,33 +217,19 @@ export const SuggestionForm = forwardRef<
         (next: FormState, from: PillId) => {
             setForm(next);
             setOpenPillId(
+                // `nextEnabledPill` is generic over the slot id (string);
+                // narrow to PillId at the boundary so `isPillDisabledFor`
+                // gets the typed key it expects.
                 nextEnabledPill(pillSequence, from, id =>
-                    isPillDisabledFor(next, id),
+                    isPillDisabledFor(next, id as PillId),
                 ),
             );
         },
         [pillSequence],
     );
 
-    /**
-     * Per-pill open-state updater. Fires `setOpenPillId` to this
-     * pill when `open` goes true; clears the state only when it was
-     * *this* pill that was open.
-     *
-     * Why the guard? Each pill owns its own 150ms close timer. If
-     * the pointer moves quickly from pill A to pill B, B's enter
-     * fires first and opens B — then A's delayed close fires 150ms
-     * later. Without the guard, A's close would clobber B's state.
-     * With the guard, A's "close me" only acts if we're still on A.
-     */
-    const onOpenChangeFor = useCallback(
-        (pillId: PillId) => (open: boolean) => {
-            setOpenPillId(prev =>
-                open ? pillId : prev === pillId ? null : prev,
-            );
-        },
-        [],
-    );
+    // Per-pill open-change handlers (the close-timer race-guard) live
+    // in `<PillForm>` now.
 
     // --- Commit helpers ------------------------------------------------
     //
@@ -412,127 +404,8 @@ export const SuggestionForm = forwardRef<
         }
     }, [canSubmit, draft, onSubmit, suggestion, setup, afterSubmit]);
 
-    /**
-     * Cmd/Ctrl+Enter submits from anywhere inside the form —
-     * including inside any open popover content, and (when the parent
-     * widens it via `keyboardScopeRef`) inside the wrapping container
-     * such as the inline-edit row's `<li>`. Each form keeps its own
-     * scope so two mounted forms never both fire.
-     */
-    const formRootRef = useRef<HTMLDivElement>(null);
-    useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (!matches("action.submit", e)) return;
-            const active = document.activeElement as Element | null;
-            const root = formRootRef.current;
-            const scope = keyboardScopeRef?.current ?? null;
-            if (
-                !root ||
-                !active ||
-                !(
-                    root.contains(active) ||
-                    isInsideSuggestionPopover(active) ||
-                    (scope !== null && scope.contains(active))
-                )
-            ) {
-                return;
-            }
-            e.preventDefault();
-            doSubmit();
-        };
-        document.addEventListener("keydown", onKeyDown);
-        return () => document.removeEventListener("keydown", onKeyDown);
-    }, [doSubmit, keyboardScopeRef]);
-
-    /**
-     * Pill-to-pill navigation keys. ArrowLeft/Right and Tab/Shift+Tab
-     * step backward/forward through the enabled-pill sequence,
-     * opening each pill's popover (mirrors auto-advance-on-commit).
-     *
-     * Boundary rule: Shift+Tab at the head escapes the form (don't
-     * preventDefault) so keyboard users aren't trapped. ArrowLeft at
-     * the head is a no-op — arrow keys aren't expected to leave the
-     * widget.
-     */
-    useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (e.metaKey || e.ctrlKey || e.altKey) return;
-            const isLeft = matches("nav.left", e);
-            const isRight = matches("nav.right", e);
-            const isShiftTab = e.key === "Tab" && e.shiftKey;
-            const isTab = e.key === "Tab" && !e.shiftKey;
-            if (!isLeft && !isRight && !isShiftTab && !isTab) return;
-
-            const root = formRootRef.current;
-            const active = document.activeElement as Element | null;
-            if (!root || !active) return;
-
-            const onSubmitBtn = active === submitBtnRef.current;
-            const onPillTrigger =
-                root.contains(active) &&
-                active.closest("[data-pill-id]") !== null;
-            // `isInsideSuggestionPopover` matches ANY pill popover
-            // (the Add form, Edit-prior-suggestion rows, …). Restrict
-            // to popovers whose trigger lives in *this* form's root —
-            // otherwise we'd steal arrow-nav from the prior-suggestion
-            // rows whose popovers happen to share the attribute.
-            const inPopover =
-                isInsideSuggestionPopover(active) &&
-                root.querySelector('[data-pill-id][data-state="open"]') !==
-                    null;
-            if (!onPillTrigger && !inPopover && !onSubmitBtn) return;
-
-            // Resolve the "current" pill we're navigating from.
-            let current: PillId | null = null;
-            let onSubmitTarget = false;
-            if (
-                openPillId !== null &&
-                openPillId !== TARGET_SUBMIT
-            ) {
-                current = openPillId;
-            } else if (openPillId === TARGET_SUBMIT || onSubmitBtn) {
-                onSubmitTarget = true;
-            } else if (onPillTrigger) {
-                const id = active
-                    .closest("[data-pill-id]")
-                    ?.getAttribute("data-pill-id");
-                if (id !== null && id !== undefined) {
-                    current = id as PillId;
-                }
-            }
-
-            const goingBack = isLeft || isShiftTab;
-
-            if (goingBack) {
-                // Explicit keyboard nav INCLUDES disabled pills — a
-                // disabled pill is now focusable and its popover shows
-                // the reason it's unavailable.
-                const from =
-                    current ?? pillSequence[pillSequence.length - 1] ?? null;
-                if (from === null) return;
-                const target = onSubmitTarget
-                    ? from
-                    : prevPill(pillSequence, from);
-                if (target === null) {
-                    // At the head. Arrows stay put; Shift+Tab escapes.
-                    if (isLeft) e.preventDefault();
-                    return;
-                }
-                e.preventDefault();
-                setOpenPillId(target);
-                return;
-            }
-
-            // Forward (ArrowRight or Tab)
-            if (onSubmitTarget) return; // already at terminal; let native run
-            if (current === null) return;
-            const target = nextPill(pillSequence, current);
-            e.preventDefault();
-            setOpenPillId(target);
-        };
-        document.addEventListener("keydown", onKeyDown);
-        return () => document.removeEventListener("keydown", onKeyDown);
-    }, [pillSequence, openPillId]);
+    // Pill-to-pill keyboard nav (Tab + Arrow), Cmd+Enter submit, and
+    // submit-button auto-focus all live in `<PillForm>` now.
 
     // --- Clear-inputs affordance ---------------------------------------
     //
@@ -583,84 +456,45 @@ export const SuggestionForm = forwardRef<
         [],
     );
 
-    // --- Render --------------------------------------------------------
-    const showHeaderBar = showHeader || showClearInputs;
-    const submitButtonClass =
-        "rounded border-none px-3 py-2 text-[13px] " +
-        (canSubmit
-            ? "cursor-pointer bg-accent text-white"
-            : "cursor-not-allowed bg-unknown-bg text-muted/70");
-    return (
-        <div ref={formRootRef}>
-            {showHeaderBar && (
-                <div className="mb-2 flex items-center justify-between gap-2">
-                    {showHeader ? (
-                        <h3 className="mt-0 mb-0 text-[14px] font-semibold">
-                            {suggestion !== undefined
-                                ? t("editTitle")
-                                : t.rich("addTitle", {
-                                      shortcutKey: label("global.gotoPlay"),
-                                      shortcut: chunks => (
-                                          <span className="font-normal text-muted">
-                                              {chunks}
-                                          </span>
-                                      ),
-                                  })}
-                        </h3>
-                    ) : (
-                        <span />
-                    )}
-                    {showClearInputs && hasAnyInput && (
-                        <button
-                            type="button"
-                            onClick={onClearInputs}
-                            className="inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-[12px] text-muted hover:text-accent"
-                        >
-                            <span aria-hidden className="text-[14px] leading-none">
-                                ×
-                            </span>
-                            {t("clearInputs")}
-                        </button>
-                    )}
-                </div>
-            )}
-            <div className="flex flex-wrap items-center gap-1.5">
-                {/* Suggester pill */}
-                <PillPopover
-                    pillId={PILL_SUGGESTER}
-                    label={t("pillSuggester")}
-                    status={pillStatusForPlayer(form.suggester, false)}
-                    valueDisplay={displayPlayer(form.suggester)}
-                    errorReason={errorReasonFor(PILL_SUGGESTER)}
-                    open={openPillId === PILL_SUGGESTER}
-                    onOpenChange={onOpenChangeFor(PILL_SUGGESTER)}
-                >
-                    <SingleSelectList<Player>
-                        options={suggesterOptions(setup, form)}
-                        selected={form.suggester}
-                        onCommit={commitSuggester}
-                        nobodyLabel={null}
-                        nobodyValue={null}
-                    />
-                </PillPopover>
+    // --- Slot configs --------------------------------------------------
+    //
+    // Build the per-pill `PillSlot` records that the shared
+    // `<PillForm>` renders. Each slot's `content` is the popover body
+    // (single- or multi-select list) — the closure captures the
+    // current form snapshot so the commit handler can compute the
+    // post-commit state and call `commitAndAdvance`.
+    const slots: ReadonlyArray<PillSlot> = useMemo(() => {
+        const suggesterSlot: PillSlot = {
+            id: PILL_SUGGESTER,
+            label: t("pillSuggester"),
+            status: pillStatusForPlayer(form.suggester, false),
+            valueDisplay: displayPlayer(form.suggester),
+            ...(errorReasonFor(PILL_SUGGESTER) !== undefined
+                ? { errorReason: errorReasonFor(PILL_SUGGESTER) }
+                : {}),
+            content: (
+                <SingleSelectList<Player>
+                    options={suggesterOptions(setup, form)}
+                    selected={form.suggester}
+                    onCommit={commitSuggester}
+                    nobodyLabel={null}
+                    nobodyValue={null}
+                />
+            ),
+        };
 
-                {/* Per-category card pills */}
-                {setup.categories.map((cat, i) => (
-                    <PillPopover
-                        key={cat.id}
-                        pillId={`card-${i}` as PillId}
-                        label={cat.name}
-                        status={pillStatusForCard(form.cards[i] ?? null, false)}
-                        valueDisplay={displayCard(
-                            form.cards[i] ?? null,
-                            setup,
-                        )}
-                        errorReason={errorReasonFor(`card-${i}` as PillId)}
-                        open={openPillId === (`card-${i}` as PillId)}
-                        onOpenChange={onOpenChangeFor(
-                            `card-${i}` as PillId,
-                        )}
-                    >
+        const cardSlots: ReadonlyArray<PillSlot> = setup.categories.map(
+            (cat, i) => {
+                const id = `card-${i}` as PillId;
+                return {
+                    id,
+                    label: cat.name,
+                    status: pillStatusForCard(form.cards[i] ?? null, false),
+                    valueDisplay: displayCard(form.cards[i] ?? null, setup),
+                    ...(errorReasonFor(id) !== undefined
+                        ? { errorReason: errorReasonFor(id) }
+                        : {}),
+                    content: (
                         <SingleSelectList<Card>
                             options={cat.cards.map(c => ({
                                 value: c.id,
@@ -671,125 +505,158 @@ export const SuggestionForm = forwardRef<
                             nobodyLabel={null}
                             nobodyValue={null}
                         />
-                    </PillPopover>
-                ))}
+                    ),
+                };
+            },
+        );
 
-                {/* Passed-by (multi-select with "nobody" escape hatch) */}
-                <PillPopover
-                    pillId={PILL_PASSERS}
-                    label={t("pillPassers")}
-                    status={pillStatusForPassers(form.nonRefuters)}
-                    valueDisplay={displayPassers(form.nonRefuters, t)}
-                    errorReason={errorReasonFor(PILL_PASSERS)}
-                    open={openPillId === PILL_PASSERS}
-                    onOpenChange={onOpenChangeFor(PILL_PASSERS)}
-                    {...(pillClearable?.passers === true &&
-                    form.nonRefuters !== null
-                        ? { onClear: onClearPassers }
-                        : {})}
-                >
-                    <MultiSelectList
-                        options={passersOptions(setup, form)}
-                        selected={
-                            Array.isArray(form.nonRefuters)
-                                ? form.nonRefuters
-                                : []
-                        }
-                        nobodyChosen={
-                            form.nonRefuters !== null &&
-                            isNobody(form.nonRefuters)
-                        }
-                        nobodyLabel={t("popoverNobodyPassed")}
-                        commitHint={t("popoverCommitHint")}
-                        onCommit={commitPassers}
-                    />
-                </PillPopover>
+        const passersSlot: PillSlot = {
+            id: PILL_PASSERS,
+            label: t("pillPassers"),
+            status: pillStatusForPassers(form.nonRefuters),
+            valueDisplay: displayPassers(form.nonRefuters, t),
+            ...(errorReasonFor(PILL_PASSERS) !== undefined
+                ? { errorReason: errorReasonFor(PILL_PASSERS) }
+                : {}),
+            ...(pillClearable?.passers === true && form.nonRefuters !== null
+                ? { onClear: onClearPassers }
+                : {}),
+            content: (
+                <MultiSelectList
+                    options={passersOptions(setup, form)}
+                    selected={
+                        Array.isArray(form.nonRefuters)
+                            ? form.nonRefuters
+                            : []
+                    }
+                    nobodyChosen={
+                        form.nonRefuters !== null &&
+                        isNobody(form.nonRefuters)
+                    }
+                    nobodyLabel={t("popoverNobodyPassed")}
+                    commitHint={t("popoverCommitHint")}
+                    onCommit={commitPassers}
+                />
+            ),
+        };
 
-                {/* Refuted-by (single-select + "nobody") */}
-                <PillPopover
-                    pillId={PILL_REFUTER}
-                    label={t("pillRefuter")}
-                    status={pillStatusForPlayer(form.refuter, true)}
-                    valueDisplay={displayPlayerOpt(form.refuter, t)}
-                    errorReason={errorReasonFor(PILL_REFUTER)}
-                    open={openPillId === PILL_REFUTER}
-                    onOpenChange={onOpenChangeFor(PILL_REFUTER)}
-                    {...(pillClearable?.refuter === true && form.refuter !== null
-                        ? { onClear: onClearRefuter }
-                        : {})}
-                >
-                    <SingleSelectList<Player>
-                        options={refuterOptions(setup, form)}
-                        selected={
-                            isNobody(form.refuter) ? null : form.refuter
-                        }
-                        onCommit={commitRefuter}
-                        nobodyLabel={t("popoverNobodyRefuted")}
-                        nobodyValue={NOBODY}
-                    />
-                </PillPopover>
+        const refuterSlot: PillSlot = {
+            id: PILL_REFUTER,
+            label: t("pillRefuter"),
+            status: pillStatusForPlayer(form.refuter, true),
+            valueDisplay: displayPlayerOpt(form.refuter, t),
+            ...(errorReasonFor(PILL_REFUTER) !== undefined
+                ? { errorReason: errorReasonFor(PILL_REFUTER) }
+                : {}),
+            ...(pillClearable?.refuter === true && form.refuter !== null
+                ? { onClear: onClearRefuter }
+                : {}),
+            content: (
+                <SingleSelectList<Player>
+                    options={refuterOptions(setup, form)}
+                    selected={
+                        isNobody(form.refuter) ? null : form.refuter
+                    }
+                    onCommit={commitRefuter}
+                    nobodyLabel={t("popoverNobodyRefuted")}
+                    nobodyValue={NOBODY}
+                />
+            ),
+        };
 
-                {/* Shown card (gated on a resolved refuter) */}
-                <PillPopover
-                    pillId={PILL_SEEN}
-                    label={t("pillSeen")}
-                    status={pillStatusForCard(form.seenCard, true)}
-                    valueDisplay={displayCardOpt(form.seenCard, setup, t)}
-                    disabled={isPillDisabled(PILL_SEEN)}
-                    disabledHint={t("pillSeenDisabledHint")}
-                    errorReason={errorReasonFor(PILL_SEEN)}
-                    open={openPillId === PILL_SEEN}
-                    onOpenChange={onOpenChangeFor(PILL_SEEN)}
-                    {...(pillClearable?.seenCard === true && form.seenCard !== null
-                        ? { onClear: onClearSeenCard }
-                        : {})}
-                >
-                    <SingleSelectList<Card>
-                        options={suggestedCardOptions(form, setup)}
-                        selected={
-                            isNobody(form.seenCard) ? null : form.seenCard
-                        }
-                        onCommit={commitSeenCard}
-                        nobodyLabel={t("popoverNoShownCard")}
-                        nobodyValue={NOBODY}
-                    />
-                </PillPopover>
+        const seenSlot: PillSlot = {
+            id: PILL_SEEN,
+            label: t("pillSeen"),
+            status: pillStatusForCard(form.seenCard, true),
+            valueDisplay: displayCardOpt(form.seenCard, setup, t),
+            disabled: isPillDisabled(PILL_SEEN),
+            disabledHint: t("pillSeenDisabledHint"),
+            ...(errorReasonFor(PILL_SEEN) !== undefined
+                ? { errorReason: errorReasonFor(PILL_SEEN) }
+                : {}),
+            ...(pillClearable?.seenCard === true && form.seenCard !== null
+                ? { onClear: onClearSeenCard }
+                : {}),
+            content: (
+                <SingleSelectList<Card>
+                    options={suggestedCardOptions(form, setup)}
+                    selected={
+                        isNobody(form.seenCard) ? null : form.seenCard
+                    }
+                    onCommit={commitSeenCard}
+                    nobodyLabel={t("popoverNoShownCard")}
+                    nobodyValue={NOBODY}
+                />
+            ),
+        };
 
-                {/*
-                  * Add/Update button lives inline with the pills so the
-                  * whole form reads as a single row. Matches the pill
-                  * height (px-3 py-2 text-[13px]) but keeps the default
-                  * `rounded` radius instead of `rounded-full`, so it
-                  * reads as a squared-off primary action distinct from
-                  * the round pills.
-                  */}
-                <Tooltip content={submitBlockReason}>
-                    <button
-                        type="button"
-                        ref={submitBtnRef}
-                        className={submitButtonClass}
-                        aria-disabled={!canSubmit}
-                        onClick={doSubmit}
-                    >
-                        {t(
-                            effectiveSubmitLabel === "update"
-                                ? "updateAction"
-                                : "submit",
-                            { shortcut: label("action.submit") },
-                        )}
-                    </button>
-                </Tooltip>
-                {onCancel !== undefined && (
-                    <button
-                        type="button"
-                        className="cursor-pointer rounded border border-border bg-white px-3 py-2 text-[13px]"
-                        onClick={onCancel}
-                    >
-                        {t("cancelAction")}
-                    </button>
-                )}
-            </div>
-        </div>
+        return [
+            suggesterSlot,
+            ...cardSlots,
+            passersSlot,
+            refuterSlot,
+            seenSlot,
+        ];
+    }, [
+        form,
+        setup,
+        t,
+        commitSuggester,
+        commitCard,
+        commitPassers,
+        commitRefuter,
+        commitSeenCard,
+        errorReasonFor,
+        isPillDisabled,
+        onClearPassers,
+        onClearRefuter,
+        onClearSeenCard,
+        pillClearable,
+    ]);
+
+    // --- Render --------------------------------------------------------
+    const headerTitle = showHeader ? (
+        <h3 className="mt-0 mb-0 text-[14px] font-semibold">
+            {suggestion !== undefined
+                ? t("editTitle")
+                : t.rich("addTitle", {
+                      shortcutKey: label("global.gotoPlay"),
+                      shortcut: chunks => (
+                          <span className="font-normal text-muted">
+                              {chunks}
+                          </span>
+                      ),
+                  })}
+        </h3>
+    ) : undefined;
+
+    return (
+        <PillForm
+            ref={pillFormRef}
+            slots={slots}
+            pillSequence={pillSequence}
+            openPillId={openPillId}
+            onOpenPillIdChange={onOpenPillIdChange}
+            canSubmit={canSubmit}
+            submitLabel={t(
+                effectiveSubmitLabel === "update" ? "updateAction" : "submit",
+                { shortcut: label("action.submit") },
+            )}
+            {...(submitBlockReason !== undefined ? { submitBlockReason } : {})}
+            onSubmit={doSubmit}
+            {...(onCancel !== undefined
+                ? { onCancel, cancelLabel: t("cancelAction") }
+                : {})}
+            {...(headerTitle !== undefined ? { headerTitle } : {})}
+            {...(showClearInputs
+                ? {
+                      clearInputsLabel: t("clearInputs"),
+                      hasAnyInput,
+                      onClearInputs,
+                  }
+                : {})}
+            {...(keyboardScopeRef !== undefined ? { keyboardScopeRef } : {})}
+        />
     );
 });
 
@@ -900,17 +767,14 @@ export type PillId =
     | "refuter"
     | "seenCard";
 
- 
-// PillId + OpenTarget string literals are internal discriminators,
-// never shown to the user. They drive the auto-advance state
-// machine; keeping them as raw strings makes the code readable.
-type OpenTarget = PillId | "submit" | null;
+
+// PillId string literals are internal discriminators, never shown to
+// the user. `OpenTarget` and `TARGET_SUBMIT` come from `PillForm`.
 
 export const PILL_SUGGESTER: PillId = "suggester";
 const PILL_PASSERS: PillId = "passers";
 export const PILL_REFUTER: PillId = "refuter";
 export const PILL_SEEN: PillId = "seenCard";
-const TARGET_SUBMIT = "submit" as const;
 
 const buildPillSequence = (setup: GameSetup): ReadonlyArray<PillId> => {
     const ids: Array<PillId> = [PILL_SUGGESTER];
@@ -921,48 +785,7 @@ const buildPillSequence = (setup: GameSetup): ReadonlyArray<PillId> => {
     return ids;
 };
 
-/**
- * Given the current pill and a disabled-check, find the next pill in
- * `sequence` that isn't disabled. Returns `TARGET_SUBMIT` when the
- * sequence runs out — the Add button is the terminal focus target.
- */
-const nextEnabledPill = (
-    sequence: ReadonlyArray<PillId>,
-    current: PillId,
-    isDisabled: (id: PillId) => boolean,
-): OpenTarget => {
-    const idx = sequence.indexOf(current);
-    for (let i = idx + 1; i < sequence.length; i++) {
-        const id = sequence[i]!;
-        if (!isDisabled(id)) return id;
-    }
-    return TARGET_SUBMIT;
-};
-
-/**
- * Next pill in the sequence regardless of disabled state — for
- * explicit keyboard navigation (Tab / ArrowRight). Disabled pills
- * ARE focusable now; their popover explains the reason. Auto-advance
- * after commit still uses `nextEnabledPill` so focus doesn't stop on
- * a pill the user can't act on.
- */
-const nextPill = (
-    sequence: ReadonlyArray<PillId>,
-    current: PillId,
-): OpenTarget => {
-    const idx = sequence.indexOf(current);
-    if (idx < 0 || idx >= sequence.length - 1) return TARGET_SUBMIT;
-    return sequence[idx + 1]!;
-};
-
-const prevPill = (
-    sequence: ReadonlyArray<PillId>,
-    current: PillId,
-): PillId | null => {
-    const idx = sequence.indexOf(current);
-    if (idx <= 0) return null;
-    return sequence[idx - 1]!;
-};
+// `nextPill` / `prevPill` (Tab/Arrow nav) live in `<PillForm>` now.
 
 // ---- Disabled-pill + internal-consistency helpers --------------------
 

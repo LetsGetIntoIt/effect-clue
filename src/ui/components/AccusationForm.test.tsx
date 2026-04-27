@@ -139,30 +139,30 @@ describe("AccusationForm", () => {
         renderForm(<AccusationForm setup={setup} onSubmit={onSubmit} />);
 
         const submit = screen.getByRole("button", { name: /^submit$/ });
-        expect(submit).toBeDisabled();
+        expect(submit).toHaveAttribute("aria-disabled", "true");
 
         const pop1 = await openPopover(user, /pillAccuser/);
         await user.click(
             within(pop1).getByRole("option", { name: /Anisha/ }),
         );
         // Still missing all three cards.
-        expect(submit).toBeDisabled();
+        expect(submit).toHaveAttribute("aria-disabled", "true");
 
         const pop2 = getCurrentPopover();
         await user.click(
             within(pop2).getByRole("option", { name: /Prof\. Plum/ }),
         );
-        expect(submit).toBeDisabled();
+        expect(submit).toHaveAttribute("aria-disabled", "true");
 
         const pop3 = getCurrentPopover();
         await user.click(within(pop3).getByRole("option", { name: /Knife/ }));
-        expect(submit).toBeDisabled();
+        expect(submit).toHaveAttribute("aria-disabled", "true");
 
         const pop4 = getCurrentPopover();
         await user.click(
             within(pop4).getByRole("option", { name: /^Kitchen$/ }),
         );
-        expect(submit).not.toBeDisabled();
+        expect(submit).not.toHaveAttribute("aria-disabled", "true");
     });
 
     test("edit mode: pre-populates from the accusation prop and submits with the same id", async () => {
@@ -186,7 +186,7 @@ describe("AccusationForm", () => {
         const updateBtn = screen.getByRole("button", {
             name: /^updateAction$/,
         });
-        expect(updateBtn).not.toBeDisabled();
+        expect(updateBtn).not.toHaveAttribute("aria-disabled", "true");
 
         await user.click(updateBtn);
 
