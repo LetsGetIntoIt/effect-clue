@@ -2,7 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { aboutLinkClicked } from "../../analytics/events";
+import { aboutLinkClicked, gameSetupStarted } from "../../analytics/events";
+import { startSetup } from "../../analytics/gameSession";
 import { describeAction } from "../../logic/describeAction";
 import { routes } from "../../routes";
 import { useConfirm } from "../hooks/useConfirm";
@@ -48,7 +49,9 @@ export function useToolbarActions() {
 
     const onNewGame = async () => {
         if (await confirm({ message: t("newGameConfirm") })) {
+            startSetup();
             dispatch({ type: "newGame" });
+            gameSetupStarted();
         }
     };
 

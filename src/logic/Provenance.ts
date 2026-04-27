@@ -1,5 +1,4 @@
 import { Data, Effect, Equal, HashMap, Match, MutableHashMap, MutableHashSet, Option } from "effect";
-import type { ContradictionTrace } from "./Deducer";
 import { Card, CardCategory, Player, ownerLabel } from "./GameObjects";
 import { Cell, CellValue, Contradiction, Knowledge } from "./Knowledge";
 import { applyConsistencyRules, applyDeductionRules } from "./Rules";
@@ -10,9 +9,6 @@ import {
 } from "./GameSetup";
 import { Suggestion, suggestionCards } from "./Suggestion";
 import {
-    CardSetService,
-    PlayerSetService,
-    SuggestionsService,
     getCardSet,
     getPlayerSet,
     getSuggestions,
@@ -343,14 +339,8 @@ export const describeReason = (
  * service layer. Use `runDeduceWithExplanations` from test-utils for
  * synchronous test call sites.
  */
-export const deduceWithExplanations = (
-    initial: Knowledge,
-): Effect.Effect<
-    { knowledge: Knowledge; provenance: Provenance },
-    ContradictionTrace,
-    CardSetService | PlayerSetService | SuggestionsService
-> =>
-    Effect.gen(function* () {
+export const deduceWithExplanations = Effect.fn("deducer.evaluateWithProvenance")(
+    function* (initial: Knowledge) {
         const cardSet = yield* getCardSet;
         const playerSet = yield* getPlayerSet;
         const suggestions = yield* getSuggestions;

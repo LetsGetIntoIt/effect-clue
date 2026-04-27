@@ -20,6 +20,8 @@ import {
 import {
     allCardEntries,
     CardEntry,
+    categoryName as resolveCategoryName,
+    categoryOfCard,
     Category,
     DEFAULT_SETUP,
     disambiguateName,
@@ -28,7 +30,24 @@ import {
     GameSetup,
     newGameSetup,
 } from "../logic/GameSetup";
-import type { Knowledge } from "../logic/Knowledge";
+import { HashMap } from "effect";
+import { caseFileProgress } from "../logic/Recommender";
+import {
+    caseFileSolved,
+    deductionRevealed,
+    gameSetupStarted,
+    gameStarted,
+} from "../analytics/events";
+import {
+    claimCaseFileSolved,
+    claimGameStarted,
+    gameDurationMs,
+    isFirstSession,
+    setupDurationMs,
+    startSetup,
+} from "../analytics/gameSession";
+import type { Cell, CellValue, Knowledge } from "../logic/Knowledge";
+import { chainFor } from "../logic/Provenance";
 import {
     buildInitialKnowledge,
     KnownCard,
@@ -880,6 +899,98 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         };
         saveToLocalStorage(session);
     }, [state, suggestionsAsData]);
+
+    // ---- Analytics: state-driven funnel events ----------------------------
+
+    // 1) `game_setup_started` on initial mount when the user lands in
+    //    setup mode and no analytics session has been opened yet
+    //    (a fresh visit, vs the Toolbar/Clue handlers that fire it
+    //    explicitly on a "New Game" click).
+    useEffect(() => {
+        if (!hydrated) return;
+        if (state.uiMode === "setup" && isFirstSession()) {
+            startSetup();
+            gameSetupStarted();
+        }
+    }, [hydrated]);
+
+    // 2) `game_started` on the FIRST setup → checklist transition per
+    //    game. The first post-hydration render snapshots `prevUiMode`
+    //    without firing — that's the hydration-completion render
+    //    itself, where uiMode may have flipped from the default
+    //    "setup" to whatever localStorage / ?view= chose.
+    const prevUiModeForAnalyticsRef = useRef<UiMode | null>(null);
+    useEffect(() => {
+        if (!hydrated) return;
+        const prev = prevUiModeForAnalyticsRef.current;
+        prevUiModeForAnalyticsRef.current = state.uiMode;
+        if (prev === null) return;
+        if (prev === "setup" && state.uiMode === "checklist") {
+            if (claimGameStarted()) {
+                gameStarted({
+                    playerCount: state.setup.players.length,
+                    setupDurationMs: setupDurationMs(),
+                });
+            }
+        }
+    }, [hydrated, state.uiMode, state.setup.players.length]);
+
+    // 3) `deduction_revealed` per newly-derived cell, and
+    //    `case_file_solved` once the deducer narrows every category to
+    //    a single candidate. Both ride the same diff: snapshot the
+    //    current checklist into a ref, then on the next derivation
+    //    walk the new HashMap and fire one event per cell that wasn't
+    //    in the prior snapshot. The deducer is monotone (only adds
+    //    cells, never removes) so a HashMap.has check on the prior
+    //    map is sufficient.
+    const prevChecklistRef = useRef<HashMap.HashMap<Cell, CellValue> | null>(
+        null,
+    );
+    useEffect(() => {
+        if (!hydrated) return;
+        if (!Result.isSuccess(derived.deductionResult)) {
+            // Contradiction: don't diff or fire — the knowledge is
+            // invalid until the user fixes the inputs. Reset the
+            // snapshot so when they recover we don't claim every
+            // existing cell as "newly revealed".
+            prevChecklistRef.current = null;
+            return;
+        }
+        const knowledge = derived.deductionResult.success;
+        const newChecklist = knowledge.checklist;
+        const prev = prevChecklistRef.current;
+        prevChecklistRef.current = newChecklist;
+        if (prev !== null) {
+            HashMap.forEach(newChecklist, (_value, cell) => {
+                if (!HashMap.has(prev, cell)) {
+                    const catId = categoryOfCard(state.setup.cardSet, cell.card);
+                    const chain = derived.provenance
+                        ? chainFor(derived.provenance, cell)
+                        : [];
+                    deductionRevealed({
+                        categoryName: catId
+                            ? resolveCategoryName(state.setup.cardSet, catId)
+                            : "",
+                        deductionChainLength: chain.length,
+                    });
+                }
+            });
+        }
+        if (caseFileProgress(state.setup, knowledge) === 1) {
+            if (claimCaseFileSolved()) {
+                caseFileSolved({
+                    durationMs: gameDurationMs(),
+                    suggestionsCount: state.suggestions.length,
+                });
+            }
+        }
+    }, [
+        hydrated,
+        derived.deductionResult,
+        derived.provenance,
+        state.setup,
+        state.suggestions.length,
+    ]);
 
     const hasGameData = useCallback((): boolean => {
         if (state.knownCards.length > 0) return true;

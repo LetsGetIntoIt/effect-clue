@@ -4,6 +4,7 @@ import { Effect, Layer, Result } from "effect";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { suggestionMade } from "../../analytics/events";
 import { Player } from "../../logic/GameObjects";
 import { footnotesForCell } from "../../logic/Footnotes";
 import { cardName } from "../../logic/GameSetup";
@@ -94,9 +95,18 @@ function AddSuggestion() {
         <SuggestionForm
             ref={formRef}
             setup={state.setup}
-            onSubmit={draft =>
-                dispatch({ type: "addSuggestion", suggestion: draft })
-            }
+            onSubmit={draft => {
+                dispatch({ type: "addSuggestion", suggestion: draft });
+                const setup = state.setup;
+                const [c0, c1, c2] = draft.cards;
+                suggestionMade({
+                    turnNumber: state.suggestions.length + 1,
+                    suspect: c0 ? cardName(setup.cardSet, c0) : "",
+                    weapon: c1 ? cardName(setup.cardSet, c1) : "",
+                    room: c2 ? cardName(setup.cardSet, c2) : "",
+                    suggestingPlayer: String(draft.suggester),
+                });
+            }}
         />
     );
 }

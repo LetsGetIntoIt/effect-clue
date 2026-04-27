@@ -2,6 +2,8 @@
 
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
+import { cardsDealt } from "../../analytics/events";
+import type { CardSet } from "../../logic/CardSet";
 import { CARD_SETS } from "../../logic/GameSetup";
 import {
     CustomCardSet,
@@ -37,6 +39,9 @@ export function CardPackRow() {
         setCustomPacks(loadCustomCardSets());
     }, []);
 
+    const totalCardsIn = (cardSet: CardSet): number =>
+        cardSet.categories.reduce((n, c) => n + c.cards.length, 0);
+
     const onCardSet = async (choice: (typeof CARD_SETS)[number]) => {
         if (
             hasDestructiveData &&
@@ -47,6 +52,10 @@ export function CardPackRow() {
             type: "loadCardSet",
             cardSet: choice.cardSet,
             label: choice.label,
+        });
+        cardsDealt({
+            playerCount: state.setup.players.length,
+            totalCards: totalCardsIn(choice.cardSet),
         });
     };
 
@@ -60,6 +69,10 @@ export function CardPackRow() {
             type: "loadCardSet",
             cardSet: pack.cardSet,
             label: pack.label,
+        });
+        cardsDealt({
+            playerCount: state.setup.players.length,
+            totalCards: totalCardsIn(pack.cardSet),
         });
     };
 

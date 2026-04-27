@@ -3,6 +3,8 @@
 import { AnimatePresence, motion, type Variants } from "motion/react";
 import { useCallback, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
+import { gameSetupStarted } from "../analytics/events";
+import { startSetup } from "../analytics/gameSession";
 import { BottomNav } from "./components/BottomNav";
 import { Checklist } from "./components/Checklist";
 import { GlobalContradictionBanner } from "./components/GlobalContradictionBanner";
@@ -129,7 +131,11 @@ function NewGameShortcut() {
         "global.newGame",
         useCallback(() => {
             void confirm({ message: t("newGameConfirm") }).then(ok => {
-                if (ok) dispatch({ type: "newGame" });
+                if (ok) {
+                    startSetup();
+                    dispatch({ type: "newGame" });
+                    gameSetupStarted();
+                }
             });
         }, [confirm, dispatch, t]),
     );
