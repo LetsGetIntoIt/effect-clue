@@ -176,6 +176,7 @@
     "suggestions": {
         "title": "Suggestion log",
         "addTitle": "Add a suggestion <shortcut>({shortcutKey})</shortcut>",
+        "addAccusationToggleLink": "log failed accusation instead",
         "recommendationsTitle": "Next-suggestion recommendations",
         "suggestingAs": "Suggesting as: ",
         "resolveContradictionFirst": "Resolve the contradiction to see recommendations.",
@@ -232,11 +233,9 @@
         "pillValueUnknown": "unknown"
     },
     "accusations": {
-        "title": "Failed accusations",
         "addTitle": "Log a failed accusation",
         "editTitle": "Edit accusation",
-        "priorTitle": "{count, plural, =0 {Prior failed accusations} other {Prior failed accusations (#)}}",
-        "priorEmpty": "No failed accusations yet.",
+        "addSuggestionToggleLink": "back to suggestion",
         "accusedLine": "<strong>{accuser}</strong> accused {cards} (failed)",
         "pillAccuser": "Accuser",
         "submit": "Log",

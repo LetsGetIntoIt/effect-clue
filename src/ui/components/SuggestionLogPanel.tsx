@@ -89,38 +89,154 @@ export function SuggestionLogPanel() {
 }
 
 /**
+ * Inactivity timeout that flips the accusation form back to the
+ * suggestion form (1 minute, matching the user's mental model of
+ * "I switched, then got distracted"). Reset on every interaction
+ * inside the form.
+ */
+const ACCUSATION_IDLE_TIMEOUT_MS = 60_000;
+
+// Module-level mode sentinels — kept as `as const` so the lint rule's
+// type-narrowing exemption applies and no inline literal warnings.
+const SUGGESTION_MODE = "suggestion" as const;
+const ACCUSATION_MODE = "accusation" as const;
+
+/**
  * Top of the log: the pill-driven form for composing a new
- * suggestion. Delegates the entire UI to `<SuggestionForm>` — the
- * panel only wires the reducer dispatch and the global Cmd+K shortcut
- * (the form itself is unaware of any global keybinding).
+ * suggestion. Two modes share this slot:
+ *
+ *   - `"suggestion"` (default) renders `<SuggestionForm>`. The
+ *     header reads "Add a suggestion" with a `log failed accusation
+ *     instead` link beside it.
+ *   - `"accusation"` renders `<AccusationForm>`. The header reads
+ *     "Log a failed accusation" with a `back to suggestion` link.
+ *
+ * Auto-revert: while in accusation mode, any 60-second window of
+ * inactivity (no pointer / key events inside the form) flips back
+ * to suggestion mode. Submitting an accusation flips immediately.
  */
 function AddSuggestion() {
     const { dispatch, state } = useClue();
-    const formRef = useRef<SuggestionFormHandle>(null);
+    const t = useTranslations("suggestions");
+    const tAcc = useTranslations("accusations");
+    const suggestionFormRef = useRef<SuggestionFormHandle>(null);
     useEffect(
         () =>
             registerSuggestionFormFocusHandler(({ clear }) =>
-                formRef.current?.focusFirstPill({ clear }),
+                suggestionFormRef.current?.focusFirstPill({ clear }),
             ),
         [],
     );
+
+    type Mode = typeof SUGGESTION_MODE | typeof ACCUSATION_MODE;
+    const [mode, setMode] = useState<Mode>(SUGGESTION_MODE);
+
+    // Idle-timer ref. Reset on every pointer / key event inside the
+    // wrapper while in accusation mode. Cleared when we flip back.
+    const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const clearIdleTimer = () => {
+        if (idleTimerRef.current !== null) {
+            clearTimeout(idleTimerRef.current);
+            idleTimerRef.current = null;
+        }
+    };
+    const armIdleTimer = () => {
+        clearIdleTimer();
+        idleTimerRef.current = setTimeout(() => {
+            setMode(SUGGESTION_MODE);
+        }, ACCUSATION_IDLE_TIMEOUT_MS);
+    };
+    useEffect(() => {
+        if (mode === ACCUSATION_MODE) armIdleTimer();
+        else clearIdleTimer();
+        return clearIdleTimer;
+        // armIdleTimer / clearIdleTimer are intentionally re-created on
+        // every render without joining the dep array — they only read
+        // refs and the stable setMode callback.
+    }, [mode]);
+
+    const onWrapperActivity = () => {
+        if (mode === ACCUSATION_MODE) armIdleTimer();
+    };
+
+    const headline =
+        mode === SUGGESTION_MODE ? (
+            <>
+                {t.rich("addTitle", {
+                    shortcutKey: label("global.gotoPlay"),
+                    shortcut: chunks => (
+                        <span className="font-normal text-muted">
+                            {chunks}
+                        </span>
+                    ),
+                })}{" "}
+                <button
+                    type="button"
+                    onClick={() => setMode(ACCUSATION_MODE)}
+                    className="cursor-pointer border-none bg-transparent p-0 text-[12px] font-normal text-muted underline-offset-2 hover:text-accent hover:underline"
+                >
+                    {t("addAccusationToggleLink")}
+                </button>
+            </>
+        ) : (
+            <>
+                {tAcc("addTitle")}{" "}
+                <button
+                    type="button"
+                    onClick={() => setMode(SUGGESTION_MODE)}
+                    className="cursor-pointer border-none bg-transparent p-0 text-[12px] font-normal text-muted underline-offset-2 hover:text-accent hover:underline"
+                >
+                    {tAcc("addSuggestionToggleLink")}
+                </button>
+            </>
+        );
+
     return (
-        <SuggestionForm
-            ref={formRef}
-            setup={state.setup}
-            onSubmit={draft => {
-                dispatch({ type: "addSuggestion", suggestion: draft });
-                const setup = state.setup;
-                const [c0, c1, c2] = draft.cards;
-                suggestionMade({
-                    turnNumber: state.suggestions.length + 1,
-                    suspect: c0 ? cardName(setup.cardSet, c0) : "",
-                    weapon: c1 ? cardName(setup.cardSet, c1) : "",
-                    room: c2 ? cardName(setup.cardSet, c2) : "",
-                    suggestingPlayer: String(draft.suggester),
-                });
-            }}
-        />
+        <div
+            onPointerDown={onWrapperActivity}
+            onKeyDown={onWrapperActivity}
+            onPointerMove={onWrapperActivity}
+        >
+            <h3 className={`${SECTION_TITLE} flex items-baseline gap-2`}>
+                {headline}
+            </h3>
+            {mode === SUGGESTION_MODE ? (
+                <SuggestionForm
+                    ref={suggestionFormRef}
+                    setup={state.setup}
+                    showHeader={false}
+                    onSubmit={draft => {
+                        dispatch({
+                            type: "addSuggestion",
+                            suggestion: draft,
+                        });
+                        const setup = state.setup;
+                        const [c0, c1, c2] = draft.cards;
+                        suggestionMade({
+                            turnNumber: state.suggestions.length + 1,
+                            suspect: c0 ? cardName(setup.cardSet, c0) : "",
+                            weapon: c1 ? cardName(setup.cardSet, c1) : "",
+                            room: c2 ? cardName(setup.cardSet, c2) : "",
+                            suggestingPlayer: String(draft.suggester),
+                        });
+                    }}
+                />
+            ) : (
+                <AccusationForm
+                    setup={state.setup}
+                    showHeader={false}
+                    onSubmit={draft => {
+                        dispatch({
+                            type: "addAccusation",
+                            accusation: draft,
+                        });
+                        // Submission flips back so the next thing the
+                        // user types is a regular suggestion.
+                        setMode(SUGGESTION_MODE);
+                    }}
+                />
+            )}
+        </div>
     );
 }
 
