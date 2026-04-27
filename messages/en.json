@@ -179,6 +179,7 @@
         "resolveContradictionFirst": "Resolve the contradiction to see recommendations.",
         "addPlayersFirst": "Add players to see recommendations.",
         "nothingUseful": "Nothing useful to ask — you've already narrowed everything down.",
+        "recommendationsCalculating": "Calculating recommendations…",
         "priorTitle": "{count, plural, =0 {Prior suggestions ({shortcut})} other {Prior suggestions ({shortcut}) (#)}}",
         "priorKeyboardHint": "↑↓ navigate · Enter edit · ⌫ remove · Esc exit",
         "priorRowHintDesktop": "Press Enter to edit",

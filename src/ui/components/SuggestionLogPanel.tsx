@@ -1,6 +1,7 @@
 "use client";
 
-import { Effect, Layer, Result } from "effect";
+import { Effect, Fiber, Layer, Result } from "effect";
+import type { Card } from "../../logic/GameObjects";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -18,7 +19,11 @@ import {
     isAnySlot,
     recommendAction,
 } from "../../logic/Recommender";
-import type { ActionRecommendation, AnySlot } from "../../logic/Recommender";
+import type {
+    ActionRecommendation,
+    AnySlot,
+    RecommendationDescription,
+} from "../../logic/Recommender";
 import {
     makeAccusationsLayer,
     makeKnowledgeLayer,
@@ -260,6 +265,69 @@ function Recommendations() {
     );
 }
 
+/**
+ * Inline 14×14 SVG spinner shown while the recommender is working.
+ * Tailwind's `animate-spin` powers the rotation; the colour follows
+ * the muted ink so it's unobtrusive next to the "Calculating…"
+ * caption. Marked aria-hidden because the surrounding role="status"
+ * + aria-live="polite" wrapper reads the caption to assistive
+ * technology.
+ */
+function Spinner() {
+    return (
+        <svg
+            className="h-3.5 w-3.5 animate-spin text-muted"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+        >
+            <circle
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeOpacity="0.25"
+                strokeWidth="3"
+            />
+            <path
+                fill="currentColor"
+                d="M4 12a8 8 0 0 1 8-8v3a5 5 0 0 0-5 5H4z"
+            />
+        </svg>
+    );
+}
+
+/**
+ * One row in the rendered recommendations list. Pre-computed in the
+ * async pipeline below so the render path is purely declarative — no
+ * Effect.runSync inside the JSX.
+ */
+interface RecommendationItem {
+    readonly cards: ReadonlyArray<Card | AnySlot>;
+    readonly score: number;
+    readonly groupSize: number;
+    readonly description: RecommendationDescription;
+}
+
+/**
+ * Async state machine driving the recommendations panel. The
+ * recommender's heavy work (info-gain scoring across ~324 candidate
+ * triples × ~5 outcomes each) runs off the React render path so a
+ * stale fiber can be interrupted when inputs change and React paints
+ * a loading state in between.
+ *
+ * `pending` is the bootstrap state and the state we revert to whenever
+ * inputs change. `ready` carries the resolved action + pre-described
+ * items so the JSX is purely declarative.
+ */
+type RecommendationsState =
+    | { readonly kind: "pending" }
+    | {
+          readonly kind: "ready";
+          readonly action: ActionRecommendation;
+          readonly items: ReadonlyArray<RecommendationItem>;
+      };
+
 function RecommendationsBody({
     setup,
     result,
@@ -279,10 +347,10 @@ function RecommendationsBody({
 
     const knowledge = Result.getOrUndefined(result);
 
-    // Shared service layer for the three recommender Effect.gen
-    // paths below — built once per render, reused across all calls.
-    // The info-gain scorer reads suggestions + accusations from
-    // services as well, so the full clue layer is plumbed in.
+    // Shared service layer for the recommender pipeline below. The
+    // info-gain scorer reads setup + knowledge + suggestions +
+    // accusations from services, so the full clue layer is plumbed
+    // in. Rebuilt only when one of the inputs changes (memoised).
     const recommendLayer = useMemo(
         () =>
             knowledge === undefined
@@ -296,6 +364,76 @@ function RecommendationsBody({
         [setup, knowledge, suggestionsAsData, accusationsAsData],
     );
 
+    const [recState, setRecState] = useState<RecommendationsState>({
+        kind: "pending",
+    });
+
+    // Drive the async pipeline. Whenever the layer or asPlayer changes
+    // we kick off a new fiber via `Effect.runFork`; the cleanup
+    // callback interrupts the in-flight fiber so a stale calculation
+    // doesn't overwrite a fresher one.
+    useEffect(() => {
+        if (recommendLayer === null || !asPlayer) {
+            setRecState({ kind: "pending" });
+            return;
+        }
+        let cancelled = false;
+        setRecState({ kind: "pending" });
+
+        const program = Effect.gen(function* () {
+            const action = yield* recommendAction(Player(asPlayer), 50);
+            const recs =
+                action._tag === "Suggest" || action._tag === "NearlySolved"
+                    ? action.suggestions.recommendations
+                    : [];
+            const consolidated = (
+                yield* consolidateRecommendations(recs)
+            ).slice(0, 5);
+            const items = yield* Effect.forEach(consolidated, row =>
+                Effect.gen(function* () {
+                    const description = yield* describeRecommendation({
+                        cards: row.cards.flatMap(c =>
+                            isAnySlot(c) ? [] : [c],
+                        ),
+                        score: row.score,
+                    });
+                    return {
+                        cards: row.cards,
+                        score: row.score,
+                        groupSize: row.groupSize,
+                        description,
+                    };
+                }),
+            );
+            return { action, items };
+        });
+
+        const fiber = Effect.runFork(
+            program.pipe(
+                Effect.provide(recommendLayer),
+                Effect.tap(out =>
+                    Effect.sync(() => {
+                        if (cancelled) return;
+                        setRecState({
+                            kind: "ready",
+                            action: out.action,
+                            items: out.items,
+                        });
+                    }),
+                ),
+            ),
+        );
+
+        return () => {
+            cancelled = true;
+            // Fiber.interrupt is itself an Effect — fire-and-forget via
+            // runFork so stale fibers actually wind down. The fiber may
+            // have already completed; interrupting a finished fiber is
+            // a no-op.
+            Effect.runFork(Fiber.interrupt(fiber));
+        };
+    }, [recommendLayer, asPlayer]);
+
     if (knowledge === undefined || !asPlayer || recommendLayer === null) {
         return (
             <div className="mt-2 text-[13px] text-muted">
@@ -306,27 +444,36 @@ function RecommendationsBody({
         );
     }
 
-    const action: ActionRecommendation = Effect.runSync(
-        recommendAction(Player(asPlayer), 50).pipe(
-            Effect.provide(recommendLayer),
-        ),
-    );
+    if (recState.kind === "pending") {
+        return (
+            <>
+                <label className={`${LABEL_ROW} mt-2`}>
+                    {t("suggestingAs")}
+                    <select
+                        value={asPlayer}
+                        onChange={e => setAsPlayer(e.currentTarget.value)}
+                        className={SELECT_CLASS}
+                    >
+                        {setup.players.map(p => (
+                            <option key={p} value={p}>
+                                {p}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <div
+                    className="mt-2 flex items-center gap-2 text-[13px] text-muted"
+                    role="status"
+                    aria-live="polite"
+                >
+                    <Spinner />
+                    <span>{t("recommendationsCalculating")}</span>
+                </div>
+            </>
+        );
+    }
 
-    // The Accuse/Nothing branches don't have an underlying suggestion list;
-    // they short-circuit the rest of the body.
-    const suggestionResult =
-        action._tag === "Suggest" || action._tag === "NearlySolved"
-            ? action.suggestions
-            : null;
-
-    const consolidated =
-        suggestionResult === null
-            ? []
-            : Effect.runSync(
-                  consolidateRecommendations(
-                      suggestionResult.recommendations,
-                  ).pipe(Effect.provide(recommendLayer)),
-              ).slice(0, 5);
+    const { action, items } = recState;
 
     const accuseBanner =
         action._tag === "Accuse" ? (
@@ -385,26 +532,17 @@ function RecommendationsBody({
                     ))}
                 </select>
             </label>
-            {consolidated.length === 0 ? (
+            {items.length === 0 ? (
                 <div className="mt-2 text-[13px] text-muted">
-                    {action._tag === "Accuse"
-                        ? null
-                        : action._tag === "Nothing"
-                          ? t("nothingUseful")
-                          : t("nothingUseful")}
+                    {action._tag === "Accuse" ? null : t("nothingUseful")}
                 </div>
             ) : (
                 <ol className="mt-2 list-decimal pl-6 text-[13px]">
-                    {consolidated.map((r, i) => {
-                        const desc = Effect.runSync(
-                            describeRecommendation({
-                                cards: r.cards.flatMap(c =>
-                                    isAnySlot(c) ? [] : [c],
-                                ),
-                                score: r.score,
-                            }).pipe(Effect.provide(recommendLayer)),
+                    {items.map((r, i) => {
+                        const explanation = tRecs(
+                            r.description.kind,
+                            r.description.params,
                         );
-                        const explanation = tRecs(desc.kind, desc.params);
                         // Score is the expected number of unknown cells
                         // a refutation of this triple would reveal —
                         // already a probability-weighted average. Show

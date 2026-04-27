@@ -191,7 +191,16 @@ export const recommendSuggestions = (
         const accusations = yield* getAccusations;
         const setup = GameSetup({ cardSet, playerSet });
 
+        // Cartesian iteration over case-file candidates. The hot loop:
+        // each `expectedInfoGain` runs ~5 deducer passes per candidate, so
+        // a fresh classic 3p game (6 × 6 × 9 = 324 triples) is roughly
+        // 1500 deducer calls — sub-second on a laptop but enough to skip
+        // a frame in a worst-case browser. We yield to the runtime every
+        // YIELD_EVERY candidates so React can paint its loading state and
+        // a stale fiber gets a chance to be interrupted by a newer one.
+        const YIELD_EVERY = 16;
         const results: Recommendation[] = [];
+        let processed = 0;
         for (const cards of cartesianCandidates(setup, knowledge)) {
             const score = expectedInfoGain(
                 setup,
@@ -201,17 +210,25 @@ export const recommendSuggestions = (
                 suggester,
                 cards,
             );
-            if (score <= 0) continue;
-            // outcomeCount is informational; recompute lazily only for
-            // the recs that survive scoring.
-            results.push(
-                Recommendation({
-                    suggester,
-                    cards,
-                    score,
-                    outcomeCount: 0, // populated on first describe
-                }),
-            );
+            if (score > 0) {
+                // outcomeCount is informational; recompute lazily only
+                // for the recs that survive scoring.
+                results.push(
+                    Recommendation({
+                        suggester,
+                        cards,
+                        score,
+                        outcomeCount: 0, // populated on first describe
+                    }),
+                );
+            }
+            processed += 1;
+            if (processed % YIELD_EVERY === 0) {
+                // `Effect.yieldNow` is an Effect (not a function) — yields
+                // control to the runtime so other fibers / event-loop
+                // tasks (React paints, fiber interruption) can interleave.
+                yield* Effect.yieldNow;
+            }
         }
 
         // Primary: descending score. Tiebreak: lexicographic by joined names.
@@ -248,7 +265,7 @@ export const recommendSuggestions = (
  *     "expected to reveal ~N cells" rendered as a plural-aware
  *     sentence. Used whenever no more specific variant applies.
  */
-type RecommendationDescription =
+export type RecommendationDescription =
     | {
           readonly kind: "oneGuessFromCasefile";
           readonly params: { readonly category: string };
@@ -601,6 +618,10 @@ export const consolidateRecommendations = (
             }
 
             out.push(...rows);
+            // Yield at tier boundaries so a long input (many score tiers)
+            // doesn't monopolise the runtime — `recommendSuggestions`
+            // already yields per-candidate, so this is mostly a courtesy.
+            yield* Effect.yieldNow;
         }
         return out;
     });
