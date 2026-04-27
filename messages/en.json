@@ -168,6 +168,8 @@
         "expectedReveal": "Expected to reveal about {cellCount, plural, one {# checklist cell} other {# checklist cells}} on average.",
         "accuseNowTitle": "You've solved it — accuse now",
         "accuseNowBody": "The case file is fully pinned: {cards}. Make the accusation to win the game.",
+        "accuseNowLog": "Log this accusation",
+        "accuseNowLogTitle": "Add this accusation to the failed-accusation log (only if it turns out to be wrong)",
         "nearlySolvedTitle": "One refutation away",
         "nearlySolvedBody": "Every category but {category} is pinned. Two candidates remain in {category} — one well-chosen suggestion narrows it to one."
     },
@@ -228,6 +230,21 @@
         "clearInputs": "Clear inputs",
         "pillValueNobody": "nobody",
         "pillValueUnknown": "unknown"
+    },
+    "accusations": {
+        "title": "Failed accusations",
+        "addTitle": "Log a failed accusation",
+        "editTitle": "Edit accusation",
+        "priorTitle": "{count, plural, =0 {Prior failed accusations} other {Prior failed accusations (#)}}",
+        "priorEmpty": "No failed accusations yet.",
+        "accusedLine": "<strong>{accuser}</strong> accused {cards} (failed)",
+        "pillAccuser": "Accuser",
+        "submit": "Log",
+        "updateAction": "Update",
+        "cancelAction": "Cancel",
+        "editAction": "Edit",
+        "removeAction": "Remove accusation",
+        "removeConfirm": "Remove this accusation?"
     },
     "contradictions": {
         "bannerTitle": "Contradiction!",

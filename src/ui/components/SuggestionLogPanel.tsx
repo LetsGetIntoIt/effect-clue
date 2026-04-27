@@ -1,6 +1,7 @@
 "use client";
 
 import { Effect, Fiber, Layer, Result } from "effect";
+import { newAccusationId } from "../../logic/Accusation";
 import type { Card } from "../../logic/GameObjects";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
@@ -35,6 +36,7 @@ import { useIsDesktop } from "../hooks/useIsDesktop";
 import { useListFormatter } from "../hooks/useListFormatter";
 import { useSelection } from "../SelectionContext";
 import { InfoPopover } from "./InfoPopover";
+import { AccusationLogPanel } from "./AccusationLogPanel";
 import {
     SuggestionForm,
     type SuggestionFormHandle,
@@ -81,6 +83,7 @@ export function SuggestionLogPanel() {
             </div>
             <AddSuggestion />
             <PriorSuggestions />
+            <AccusationLogPanel />
         </section>
     );
 }
@@ -262,6 +265,48 @@ function Recommendations() {
                 )}
             </AnimatePresence>
         </div>
+    );
+}
+
+/**
+ * "Log this accusation" button rendered inside the accuse-now banner.
+ * Dispatches `addAccusation` with the deduced triple + the player the
+ * recommender is targeting, then mints a fresh id via the reducer's
+ * standard path. If the accusation later turns out wrong, the
+ * `failedAccusationEliminate` rule + ContradictionBanner will
+ * surface the inconsistency.
+ */
+function LogAccusationButton({
+    accuser,
+    cards,
+}: {
+    readonly accuser: Player;
+    readonly cards: ReadonlyArray<Card>;
+}) {
+    const tRecs = useTranslations("recommendations");
+    const { dispatch } = useClue();
+    return (
+        <button
+            type="button"
+            title={tRecs("accuseNowLogTitle")}
+            className="cursor-pointer rounded border border-accent bg-transparent px-3 py-1 text-[13px] text-accent hover:bg-accent hover:text-white"
+            onClick={() => {
+                dispatch({
+                    type: "addAccusation",
+                    accusation: {
+                        // Reducer mints a stable id when this empty
+                        // sentinel comes through `replaceSession`-style
+                        // hydration; for direct dispatch we mint one
+                        // here instead.
+                        id: newAccusationId(),
+                        accuser,
+                        cards: [...cards],
+                    },
+                });
+            }}
+        >
+            {tRecs("accuseNowLog")}
+        </button>
     );
 }
 
@@ -490,6 +535,18 @@ function RecommendationsBody({
                             .map(c => cardName(setup, c))
                             .join(" + "),
                     })}
+                </div>
+                {/* "Log this accusation" — drops the deduced triple
+                    into the failed-accusation log so the user can
+                    follow it up if the accusation turns out wrong.
+                    The banner only appears when the case file is
+                    fully pinned, so the cards are guaranteed
+                    one-per-category. */}
+                <div className="mt-2">
+                    <LogAccusationButton
+                        accuser={action.accuser}
+                        cards={action.cards}
+                    />
                 </div>
             </div>
         ) : null;

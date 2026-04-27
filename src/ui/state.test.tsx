@@ -7,6 +7,13 @@ import { Player } from "../logic/GameObjects";
 import { CLASSIC_SETUP_3P, DEFAULT_SETUP } from "../logic/GameSetup";
 import { KnownCard } from "../logic/InitialKnowledge";
 import type { GameSession } from "../logic/Persistence";
+import { CaseFileOwner } from "../logic/GameObjects";
+import { Cell, getCell, N as N_VAL, Y as Y_VAL } from "../logic/Knowledge";
+import { Result } from "effect";
+import {
+    AccusationId,
+    newAccusationId,
+} from "../logic/Accusation";
 import {
     newSuggestionId,
     Suggestion,
@@ -660,5 +667,139 @@ describe("derived values", () => {
         }));
         const after = HashMap.size(result.current.derived.initialKnowledge.checklist);
         expect(after).toBeGreaterThan(before);
+    });
+});
+
+describe("accusations end-to-end", () => {
+    test("addAccusation surfaces in derived.accusationsAsData", () => {
+        const { result } = renderClue();
+        // Use the default setup's players — no need to swap to
+        // CLASSIC_SETUP_3P for this assertion.
+        const [first] = result.current.state.setup.players;
+        const knife = cardByName(
+            result.current.state.setup,
+            // CLASSIC_SETUP_3P contains "Knife"; DEFAULT_SETUP varies
+            // by build but exposes the same names.
+            "Knife",
+        );
+        if (first === undefined || knife === undefined) {
+            throw new Error("default setup is missing players or knife");
+        }
+        const draft = {
+            id: newAccusationId(),
+            accuser: first,
+            cards: [knife],
+        };
+        act(() =>
+            result.current.dispatch({
+                type: "addAccusation",
+                accusation: draft,
+            }),
+        );
+        expect(result.current.derived.accusationsAsData).toHaveLength(1);
+        expect(result.current.derived.accusationsAsData[0]?.accuser).toBe(
+            first,
+        );
+    });
+
+    test("dispatching a failed accusation triggers failedAccusationEliminate when two case-file cells are pinned", () => {
+        // Replace the session with CLASSIC_SETUP_3P + a contrived
+        // initial knowledge that pins PLUM and KNIFE to Y in the case
+        // file (via knownCard cascades). Then dispatch a failed
+        // accusation `(Plum, Knife, Conservatory)` — the rule should
+        // force `Conservatory = N` for the case file.
+        const { result } = renderClue();
+        const setup = CLASSIC_SETUP_3P;
+        const A = Player("Anisha");
+        const B = Player("Bob");
+        const C = Player("Cho");
+        const PLUM = cardByName(setup, "Prof. Plum");
+        const KNIFE = cardByName(setup, "Knife");
+        const CONSERV = cardByName(setup, "Conservatory");
+
+        // Build the suspect category so that Plum is the only
+        // remaining case-file candidate: assign all 5 other suspects
+        // to player A. Likewise for weapons → Knife. Hand sizes set
+        // so the deducer believes A's row.
+        const otherSuspects = setup.categories
+            .find(c => c.name === "Suspect")!
+            .cards.filter(e => e.id !== PLUM)
+            .map(e => e.id);
+        const otherWeapons = setup.categories
+            .find(c => c.name === "Weapon")!
+            .cards.filter(e => e.id !== KNIFE)
+            .map(e => e.id);
+
+        act(() =>
+            result.current.dispatch({
+                type: "replaceSession",
+                session: {
+                    setup,
+                    hands: [
+                        {
+                            player: A,
+                            cards: [...otherSuspects, ...otherWeapons],
+                        },
+                    ],
+                    handSizes: [
+                        {
+                            player: A,
+                            size: otherSuspects.length + otherWeapons.length,
+                        },
+                        // B and C carry the rest of the deck (rooms +
+                        // case-file). Hand sizes are computed so the
+                        // remaining 9 rooms - 1 case-file = 8 rooms
+                        // distribute across B+C, totalling 8 cards.
+                        // Set B = 4, C = 4 so the deducer can solve.
+                        { player: B, size: 4 },
+                        { player: C, size: 4 },
+                    ],
+                    suggestions: [],
+                    accusations: [],
+                },
+            }),
+        );
+
+        // Sanity: deduction should have pinned Plum (suspect) and
+        // Knife (weapon) into the case file via card-ownership slices.
+        const ded1 = result.current.derived.deductionResult;
+        if (!Result.isSuccess(ded1)) {
+            throw new Error(
+                `expected initial deduction to succeed, got: ${JSON.stringify(ded1)}`,
+            );
+        }
+        expect(
+            getCell(ded1.success, Cell(CaseFileOwner(), PLUM)),
+        ).toBe(Y_VAL);
+        expect(
+            getCell(ded1.success, Cell(CaseFileOwner(), KNIFE)),
+        ).toBe(Y_VAL);
+        // Conservatory is not yet pinned.
+        expect(
+            getCell(ded1.success, Cell(CaseFileOwner(), CONSERV)),
+        ).toBeUndefined();
+
+        // Now log a failed accusation naming PLUM + KNIFE + CONSERV.
+        act(() =>
+            result.current.dispatch({
+                type: "addAccusation",
+                accusation: {
+                    id: AccusationId(""),
+                    accuser: A,
+                    cards: [PLUM, KNIFE, CONSERV],
+                },
+            }),
+        );
+
+        // failedAccusationEliminate forces CONSERV = N for case file.
+        const ded2 = result.current.derived.deductionResult;
+        if (!Result.isSuccess(ded2)) {
+            throw new Error(
+                `expected deduction to remain successful, got: ${JSON.stringify(ded2)}`,
+            );
+        }
+        expect(
+            getCell(ded2.success, Cell(CaseFileOwner(), CONSERV)),
+        ).toBe(N_VAL);
     });
 });
