@@ -182,6 +182,36 @@ describe("deduce", () => {
         expect(getCellByOwnerCard(k, PlayerOwner(B), KITCHEN)).toBe(N);
     });
 
+    // Regression: when the suggester owns one of the suggested cards,
+    // the card-ownership slice cascades that Y into N on every other
+    // owner's row, including the refuter's. refuterOwnsOneOf then has
+    // exactly one unknown across the three suggested cards and forces
+    // it to Y — all in one trip through the fixed-point loop.
+    test("suggester-owned card cascade narrows refuter to a single Y", () => {
+        let knowledge = emptyKnowledge;
+        // Anisha (the suggester) owns Plum.
+        knowledge = setCell(knowledge, Cell(PlayerOwner(A), PLUM),  Y);
+        // We've previously confirmed Bob doesn't own the Knife.
+        knowledge = setCell(knowledge, Cell(PlayerOwner(B), KNIFE), N);
+
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [],
+            refuter: B,
+        })];
+
+        const result = runDeduce(setup, suggestions, knowledge);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+
+        // Cascade: A/Plum=Y → B/Plum=N (and C/Plum=N, CF/Plum=N).
+        expect(getCellByOwnerCard(result.success, PlayerOwner(B), PLUM)).toBe(N);
+        // With B/Plum=N and B/Knife=N, Bob's refutation must have used
+        // Conservatory.
+        expect(getCellByOwnerCard(result.success, PlayerOwner(B), CONSERV)).toBe(Y);
+    });
+
     test("contradiction is surfaced as a result", () => {
         let knowledge = emptyKnowledge;
         // Both Anisha and Bob have Knife? That's a contradiction once the

@@ -16,6 +16,7 @@ import {
 import { CardOwnership } from "./Provenance";
 import type { SetCellRecord, Tracer } from "./Provenance";
 import {
+    applyAllRules,
     applyConsistencyRules,
     applySlice,
     cardOwnershipSlices,
@@ -210,6 +211,37 @@ describe("deduction rules", () => {
         })];
         k = refuterOwnsOneOf(suggestions)(k);
         expect(getCellByOwnerCard(k, PlayerOwner(B), KNIFE)).toBeUndefined();
+    });
+
+    // Regression: when the suggester owns one of the named cards, the
+    // card-ownership consistency slice cascades that Y into N on the
+    // refuter's row in the same iteration of applyAllRules. That extra N
+    // is exactly what refuterOwnsOneOf needs to narrow the remaining two
+    // cards to one. This test guards the cascade — a future reorder of
+    // the rule pipeline (e.g. moving applyDeductionRules ahead of
+    // applyConsistencyRules) would silently regress it without this
+    // assertion. The behaviour itself is implicit; no rule code change
+    // is required.
+    test("applyAllRules: suggester-owned card cascades through card-ownership "
+        + "so refuterOwnsOneOf narrows on a single explicit N", () => {
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(PlayerOwner(A), PLUM),  Y);
+        k = setCell(k, Cell(PlayerOwner(B), KNIFE), N);
+
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [],
+            refuter: B,
+        })];
+
+        k = applyAllRules(setup, suggestions)(k);
+
+        // Cascade: A/Plum=Y forces B/Plum=N via card-ownership slice.
+        expect(getCellByOwnerCard(k, PlayerOwner(B), PLUM)).toBe(N);
+        // refuterOwnsOneOf then sees two Ns on B's row for the suggested
+        // cards and forces the remaining one (Conservatory) to Y.
+        expect(getCellByOwnerCard(k, PlayerOwner(B), CONSERV)).toBe(Y);
     });
 });
 

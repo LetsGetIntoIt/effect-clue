@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { MutableHashMap } from "effect";
+import { MutableHashMap, Result } from "effect";
 import { CLASSIC_SETUP_3P } from "./GameSetup";
 import { CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
-import { Cell, N, Y } from "./Knowledge";
+import { Cell, emptyKnowledge, N, setCell, Y } from "./Knowledge";
 import {
     CardOwnership,
     CaseFileCategory,
@@ -17,11 +17,13 @@ import {
 } from "./Provenance";
 import { cardByName } from "./test-utils/CardByName";
 import { newSuggestionId, Suggestion } from "./Suggestion";
+import { runDeduceWithExplanations } from "./test-utils/RunDeduce";
 
 const setup = CLASSIC_SETUP_3P;
 const KNIFE = cardByName(setup, "Knife");
 const PLUM = cardByName(setup, "Prof. Plum");
 const KITCHEN = cardByName(setup, "Kitchen");
+const CONSERV = cardByName(setup, "Conservatory");
 const A = Player("Anisha");
 const B = Player("Bob");
 const C = Player("Cho");
@@ -371,5 +373,45 @@ describe("describeReason", () => {
         expect(desc.params.cellPlayer).toBe("Case file");
         expect(desc.params.cellCard).toBe("Prof. Plum");
         expect(desc.params.value).toBe(N);
+    });
+});
+
+// -----------------------------------------------------------------------
+// suggester-owned cascade chain (regression for Item 1 of the optimization
+// plan): asserts that when refuterOwnsOneOf forces a cell because the
+// suggester owns one of the suggested cards, the provenance chain walks
+// back through the card-ownership cascade so the UI tooltip can explain
+// the full derivation.
+// -----------------------------------------------------------------------
+
+describe("suggester-owned cascade provenance", () => {
+    test("chainFor walks RefuterOwnsOneOf → CardOwnership → initial input", () => {
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(PlayerOwner(A), PLUM),  Y);
+        knowledge = setCell(knowledge, Cell(PlayerOwner(B), KNIFE), N);
+
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [],
+            refuter: B,
+        })];
+
+        const result = runDeduceWithExplanations(setup, suggestions, knowledge);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+
+        const { provenance } = result.success;
+        const conservCell = Cell(PlayerOwner(B), CONSERV);
+        const chain = chainFor(provenance, conservCell);
+        const tags = chain.map(e => e.reason.kind._tag);
+
+        // The terminal entry is the cell we asked about — forced by
+        // refuterOwnsOneOf.
+        expect(chain.at(-1)?.cell).toEqual(conservCell);
+        expect(tags.at(-1)).toBe("RefuterOwnsOneOf");
+        // Somewhere upstream the chain must include the card-ownership
+        // cascade that turned A/Plum=Y into B/Plum=N.
+        expect(tags).toContain("CardOwnership");
     });
 });
