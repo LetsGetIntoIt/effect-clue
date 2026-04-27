@@ -27,7 +27,45 @@
  * telemetry secrets) the layer is `Layer.empty` and the runtime
  * functions identically to a bare `Effect.runSync` / `Effect.runPromise`.
  */
-import { ManagedRuntime } from "effect";
+import { registerInstrumentations } from "@opentelemetry/instrumentation";
+import { DocumentLoadInstrumentation } from "@opentelemetry/instrumentation-document-load";
+import { UserInteractionInstrumentation } from "@opentelemetry/instrumentation-user-interaction";
+import { Effect, ManagedRuntime } from "effect";
 import { TelemetryLayer } from "./telemetry";
 
 export const TelemetryRuntime = ManagedRuntime.make(TelemetryLayer);
+
+/**
+ * Wake the runtime once at module load (browser only, when the
+ * Honeycomb key is present) so the OTel WebSDK becomes the active
+ * global tracer BEFORE we register the browser auto-instrumentations.
+ *
+ * Order matters: if instrumentations create spans against the Noop
+ * tracer (because the SDK hasn't materialized yet), those spans are
+ * dropped silently — which is exactly the "single span per trace"
+ * mode we're trying to fix. By running an empty effect first, we
+ * force `WebTracerProvider.register()` to run synchronously so that
+ * `tracer.startSpan(...)` calls from `DocumentLoadInstrumentation`
+ * and `UserInteractionInstrumentation` reach the real exporter.
+ *
+ * `DocumentLoadInstrumentation` creates a `documentLoad` span with the
+ * navigation-timing waterfall (DNS → connect → response → DOM ready
+ * → load → first paint). It also captures resource fetches that
+ * happened during the initial load.
+ *
+ * `UserInteractionInstrumentation` wraps `addEventListener` so each
+ * click on a tracked element produces a span linked to the handler
+ * timing.
+ */
+if (
+    typeof window !== "undefined" &&
+    process.env["NEXT_PUBLIC_HONEYCOMB_API_KEY"]
+) {
+    TelemetryRuntime.runSync(Effect.void);
+    registerInstrumentations({
+        instrumentations: [
+            new DocumentLoadInstrumentation(),
+            new UserInteractionInstrumentation(),
+        ],
+    });
+}

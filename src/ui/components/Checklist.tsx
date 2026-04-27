@@ -2,6 +2,7 @@
 
 import { Equal, Result } from "effect";
 import { useTranslations } from "next-intl";
+import { playerAdded, whyTooltipOpened } from "../../analytics/events";
 import {
     useEffect,
     useLayoutEffect,
@@ -16,6 +17,8 @@ import {
     allOwners,
     cardName,
     caseFileSize,
+    categoryName,
+    categoryOfCard,
     defaultHandSizes,
 } from "../../logic/GameSetup";
 import {
@@ -229,6 +232,25 @@ export function Checklist() {
     const provenance = derived.provenance;
     const suggestions = derived.suggestionsAsData;
 
+    // Fire `why_tooltip_opened` whenever the popover transitions from
+    // closed (or another cell) to open on a new cell. Cells are fresh
+    // `Cell(owner, card)` instances on each open, so reference equality
+    // is the right dedupe — a re-open of the same coordinates after a
+    // close still produces a new instance and counts as a new event.
+    const prevPopoverCellRef = useRef<Cell | null>(null);
+    useEffect(() => {
+        const prev = prevPopoverCellRef.current;
+        prevPopoverCellRef.current = popoverCell;
+        if (popoverCell !== null && popoverCell !== prev) {
+            const catId = categoryOfCard(setup.cardSet, popoverCell.card);
+            whyTooltipOpened({
+                categoryName: catId
+                    ? categoryName(setup.cardSet, catId)
+                    : "",
+            });
+        }
+    }, [popoverCell, setup.cardSet]);
+
     const owners: ReadonlyArray<Owner> = allOwners(setup);
 
     // Flat (card → row) index used for arrow-key grid navigation.
@@ -330,7 +352,14 @@ export function Checklist() {
                 type="button"
                 className="cursor-pointer whitespace-nowrap rounded border-none bg-accent px-2 py-1 text-[12px] font-semibold leading-none text-white hover:bg-accent-hover"
                 title={tSetup("addPlayerTitle")}
-                onClick={() => dispatch({ type: "addPlayer" })}
+                onClick={() => {
+                    const position = state.setup.players.length;
+                    dispatch({ type: "addPlayer" });
+                    playerAdded({
+                        playerCount: position + 1,
+                        position,
+                    });
+                }}
             >
                 {tSetup("addPlayerLabel")}
             </button>

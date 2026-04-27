@@ -11,15 +11,23 @@
  *   Game-setup funnel   : gameSetupStarted, playerAdded, playerRemoved,
  *                         cardsDealt, gameStarted
  *   Gameplay            : suggestionMade, suggestionDisproven,
- *                         suggestionPassed, accusationMade, cardMarked,
- *                         deductionRevealed, priorSuggestionEdited
- *   Game close-out      : gameFinished, gameAbandoned
+ *                         suggestionPassed, cardMarked, deductionRevealed,
+ *                         priorSuggestionEdited
+ *   Solve outcome       : caseFileSolved (deducer narrowed every category
+ *                         to exactly one candidate), gameAbandoned
  *   Feature usage       : whyTooltipOpened, checklistRowClicked,
  *                         undoUsed, redoUsed, settingsOpened,
  *                         languageChanged, localstorageCleared
  *   Onboarding / splash : splashScreenViewed, splashScreenDismissed,
  *                         youtubeEmbedPlayed, aboutLinkClicked
  *   Performance signals : webVital, deducerRun
+ *
+ * Note: this app is a Clue *solver*, not a Clue *game* — the user records
+ * what other players suggested in their physical game, and the deducer
+ * tells them what's true. There is no real-life "I make my accusation"
+ * moment in the app, and "game finished" only meaningfully happens once
+ * the deducer narrows the case file to a single suspect / weapon / room.
+ * Both signals collapse into `caseFileSolved`.
  *
  * `$pageview` is auto-emitted by PostHog (capture_pageview: true) so it
  * has no helper here.
@@ -56,7 +64,6 @@ export const playerRemoved = (props: { playerCount: number }): void =>
 
 export const cardsDealt = (props: {
     playerCount: number;
-    dealMethod: "auto" | "manual";
     totalCards: number;
 }): void => capture("cards_dealt", props);
 
@@ -86,14 +93,6 @@ export const suggestionPassed = (props: {
     passingPlayersCount: number;
 }): void => capture("suggestion_passed", props);
 
-export const accusationMade = (props: {
-    turnNumber: number;
-    correct: boolean;
-    suspect: string;
-    weapon: string;
-    room: string;
-}): void => capture("accusation_made", props);
-
 export const cardMarked = (props: {
     cardType: "suspect" | "weapon" | "room";
     markType: "has" | "doesnt-have" | "unknown";
@@ -101,21 +100,26 @@ export const cardMarked = (props: {
 }): void => capture("card_marked", props);
 
 export const deductionRevealed = (props: {
-    cardType: "suspect" | "weapon" | "room";
+    /**
+     * The display name of the category the newly-derived cell belongs
+     * to. Categories are user-configurable in this app — for a stock
+     * Clue game this will be "Suspect", "Weapon", or "Room", but
+     * custom decks can be anything. Funnel queries should treat this
+     * as a free-form string, not an enum.
+     */
+    categoryName: string;
     deductionChainLength: number;
 }): void => capture("deduction_revealed", props);
 
 export const priorSuggestionEdited = (props: { turnNumber: number }): void =>
     capture("prior_suggestion_edited", props);
 
-// ── Game close-out ────────────────────────────────────────────────────────
+// ── Solve outcome ─────────────────────────────────────────────────────────
 
-export const gameFinished = (props: {
-    outcome: "solved" | "wrong-accusation" | "abandoned";
+export const caseFileSolved = (props: {
     durationMs: number;
-    turnCount: number;
-    accusationAttempts: number;
-}): void => capture("game_finished", props);
+    suggestionsCount: number;
+}): void => capture("case_file_solved", props);
 
 export const gameAbandoned = (props: {
     durationMs: number;
@@ -125,8 +129,8 @@ export const gameAbandoned = (props: {
 // ── Feature usage ─────────────────────────────────────────────────────────
 
 export const whyTooltipOpened = (props: {
-    deductionId: string;
-    cardType: "suspect" | "weapon" | "room";
+    /** See `deductionRevealed.categoryName` — same free-form rationale. */
+    categoryName: string;
 }): void => capture("why_tooltip_opened", props);
 
 export const checklistRowClicked = (props: {

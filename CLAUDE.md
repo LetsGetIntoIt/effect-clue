@@ -72,8 +72,10 @@ For **every change** — not just observability-flavored work — pause to think
 1. **Are there events worth tracking from this change?** Look at what the new code actually does — any user action, state transition, success / failure outcome, or interesting moment a future you would want to query in PostHog. If yes, add a typed emitter in `src/analytics/events.ts` and call it at the right boundary. Never invent event names inline at the call site — every event lives in `events.ts` so renaming is a TypeScript-checked change.
 2. **Does this affect an existing funnel?** The three production funnels are:
    - **Onboarding:** `game_setup_started → player_added → cards_dealt → game_started`
-   - **First completion:** `game_started → suggestion_made → deduction_revealed → game_finished`
-   - **Solver engagement:** `game_started → why_tooltip_opened → accusation_made`
+   - **First completion:** `game_started → suggestion_made → deduction_revealed → case_file_solved`
+   - **Solver engagement:** `game_started → why_tooltip_opened → case_file_solved`
+
+   This app is a Clue *solver*, not a Clue *game* — there's no real-life "I make my accusation" moment, and "game finished" only meaningfully happens once the deducer narrows the case file to a single suspect / weapon / room. Both signals collapse into `case_file_solved`, which fires the moment every category has exactly one candidate.
 
    If the change moves, removes, or renames any step, update the emitter AND call it out in the PR description so the funnel definition in the PostHog UI can be re-pointed.
 3. **Is this Effect code worth tracing?** Anything heavy (deducer-class work, large derivations), I/O-bound (localStorage, fetch), or that you'd want to debug in production — wrap it in `Effect.fn("module.operation")` and run via `TelemetryRuntime` (`src/observability/runtime.ts`) so the span lands on Honeycomb.
