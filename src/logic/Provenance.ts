@@ -191,7 +191,7 @@ export const chainFor = (
  * templates interpolate these so lines read as concrete facts about a
  * specific (player, card) rather than a generic "this cell".
  */
-export interface CellParams {
+interface CellParams {
     readonly cellPlayer: string;
     readonly cellCard: string;
     readonly value: CellValue;

@@ -63,7 +63,7 @@ const PersistedSuggestionSchema = Schema.Struct({
 /**
  * Canonical v4 session shape. The only version the decoder accepts.
  */
-export const PersistedSessionV4Schema = Schema.Struct({
+const PersistedSessionV4Schema = Schema.Struct({
     version: Schema.Literal(4),
     setup: PersistedGameSetupSchema,
     hands: Schema.Array(PersistedHandSchema),
