@@ -20,8 +20,10 @@ import {
 } from "../../logic/Recommender";
 import type { ActionRecommendation, AnySlot } from "../../logic/Recommender";
 import {
+    makeAccusationsLayer,
     makeKnowledgeLayer,
     makeSetupLayer,
+    makeSuggestionsLayer,
 } from "../../logic/services";
 import { useConfirm } from "../hooks/useConfirm";
 import { useIsDesktop } from "../hooks/useIsDesktop";
@@ -271,11 +273,16 @@ function RecommendationsBody({
 }) {
     const t = useTranslations("suggestions");
     const tRecs = useTranslations("recommendations");
+    const { derived } = useClue();
+    const suggestionsAsData = derived.suggestionsAsData;
+    const accusationsAsData = derived.accusationsAsData;
 
     const knowledge = Result.getOrUndefined(result);
 
     // Shared service layer for the three recommender Effect.gen
     // paths below — built once per render, reused across all calls.
+    // The info-gain scorer reads suggestions + accusations from
+    // services as well, so the full clue layer is plumbed in.
     const recommendLayer = useMemo(
         () =>
             knowledge === undefined
@@ -283,8 +290,10 @@ function RecommendationsBody({
                 : Layer.mergeAll(
                       makeSetupLayer(setup),
                       makeKnowledgeLayer(knowledge),
+                      makeSuggestionsLayer(suggestionsAsData),
+                      makeAccusationsLayer(accusationsAsData),
                   ),
-        [setup, knowledge],
+        [setup, knowledge, suggestionsAsData, accusationsAsData],
     );
 
     if (knowledge === undefined || !asPlayer || recommendLayer === null) {
@@ -392,24 +401,25 @@ function RecommendationsBody({
                                 cards: r.cards.flatMap(c =>
                                     isAnySlot(c) ? [] : [c],
                                 ),
-                                cellInfoScore: r.cellInfoScore,
-                                caseFileOpennessScore: r.caseFileOpennessScore,
-                                refuterUncertaintyScore: r.refuterUncertaintyScore,
+                                score: r.score,
                             }).pipe(Effect.provide(recommendLayer)),
                         );
                         const explanation = tRecs(desc.kind, desc.params);
+                        // Score is the expected number of unknown cells
+                        // a refutation of this triple would reveal —
+                        // already a probability-weighted average. Show
+                        // it raw (one decimal) and, when consolidated,
+                        // how many specific triples the row covers.
                         const scoreBreakdown = (
                             <div>
                                 <div className="font-semibold">
                                     {t("scoreBreakdownHeader", {
-                                        score: r.score,
+                                        score: r.score.toFixed(1),
                                     })}
                                 </div>
                                 <div className="mt-1 text-muted">
                                     {t("scoreBreakdownDetails", {
-                                        info: r.cellInfoScore,
-                                        combos: r.caseFileOpennessScore,
-                                        refuters: r.refuterUncertaintyScore,
+                                        cells: Math.round(r.score),
                                     })}
                                 </div>
                                 {r.groupSize > 1 && (
@@ -456,7 +466,7 @@ function RecommendationsBody({
                                             })}
                                             <span className="ml-1 text-muted">
                                                 {t("score", {
-                                                    score: r.score,
+                                                    score: r.score.toFixed(1),
                                                 })}
                                             </span>
                                         </div>

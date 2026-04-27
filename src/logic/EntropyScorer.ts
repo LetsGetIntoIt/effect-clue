@@ -1,4 +1,5 @@
-import { Data, Effect, HashMap, Result } from "effect";
+import { HashMap, Result } from "effect";
+import type { Accusation } from "./Accusation";
 import { deduceSync } from "./Deducer";
 import {
     allCardEntries,
@@ -16,31 +17,17 @@ import {
     N,
     Y,
 } from "./Knowledge";
-import { caseFileCandidatesFor } from "./Recommender";
 import {
     Suggestion,
 } from "./Suggestion";
-import type { Accusation } from "./Accusation";
-import {
-    AccusationsService,
-    CardSetService,
-    KnowledgeService,
-    PlayerSetService,
-    SuggestionsService,
-    getAccusations,
-    getCardSet,
-    getKnowledge,
-    getPlayerSet,
-    getSuggestions,
-} from "./services";
 
 /**
- * Information-gain scoring for the recommender. Replaces the heuristic
- * three-factor score with an "expected reduction in unknown cells"
- * model: for each candidate triple the suggester could ask, enumerate
- * the plausible refuter responses, weight by per-outcome probability,
+ * Information-gain scoring helpers consumed by the recommender. For
+ * each candidate triple the suggester could ask, enumerate the
+ * plausible refuter responses, weight by per-outcome probability,
  * and average the per-outcome unknown-cell reduction the deducer
- * produces.
+ * produces — that's the score `Recommender.recommendSuggestions`
+ * ranks on.
  *
  * The probability model is per-row marginal — each unknown cell on a
  * player's row gets `(handSize − knownYs) / unknownCellCount` —
@@ -48,10 +35,10 @@ import {
  * Monte-Carlo sampling. If a future revisit needs sharper estimates,
  * `probPlayerOwnsCard` is the seam to swap.
  *
- * Production callers (the recommender) use the Effect-shaped
- * `recommendSuggestionsByInfoGain`. The pure helpers below are
- * exported so the perf-conscious entropy scorer test suite can
- * pin down each layer of the math separately.
+ * Pure helpers stay synchronous; the top-level `expectedInfoGain`
+ * runs `deduceSync` per outcome but takes positional inputs so it's
+ * trivially callable from `Recommender.recommendSuggestions` inside
+ * its own Effect.gen without a layer-rebuild dance.
  */
 
 /**
@@ -275,123 +262,3 @@ export const expectedInfoGain = (
     }
     return sumProb === 0 ? 0 : sumWeightedGain / sumProb;
 };
-
-/**
- * Output of the info-gain recommender. Mirrors the heuristic
- * recommender's shape so consumers can swap implementations behind
- * the same `Suggest` action branch.
- */
-class InfoGainRecommendationImpl extends Data.Class<{
-    readonly suggester: Player;
-    readonly cards: ReadonlyArray<Card>;
-    /** Expected reduction in unknown cells, in [0, owners×cards]. */
-    readonly expectedInfoGain: number;
-    /**
-     * How many outcomes contributed (post-renormalisation). Useful for
-     * tooltips ("evaluated 5 possible outcomes") and pruning.
-     */
-    readonly outcomeCount: number;
-}> {}
-type InfoGainRecommendation = InfoGainRecommendationImpl;
-
-/**
- * Produce ranked candidate triples scored by expected information
- * gain. Pulls setup / knowledge / suggestions / accusations from the
- * service layer to match `recommendSuggestions`'s call shape.
- *
- * Iteration: enumerate every (suspect × weapon × room ...) cartesian
- * product where each card is still a case-file candidate. Score each;
- * sort descending; return top-N.
- *
- * Performance: this is `~Π|caseFileCandidatesFor(c)| × ~5 outcomes ×
- * one deducer pass each`. For a fresh classic 3p game that's roughly
- * 6 × 6 × 9 × 5 = 1620 deducer calls — ~1s on a modern laptop. The
- * existing heuristic recommender stays in place as a fallback.
- */
-export const recommendSuggestionsByInfoGain = (
-    suggester: Player,
-    maxResults: number = 50,
-): Effect.Effect<
-    ReadonlyArray<InfoGainRecommendation>,
-    never,
-    | AccusationsService
-    | CardSetService
-    | KnowledgeService
-    | PlayerSetService
-    | SuggestionsService
-> =>
-    Effect.gen(function* () {
-        const cardSet = yield* getCardSet;
-        const playerSet = yield* getPlayerSet;
-        const knowledge = yield* getKnowledge;
-        const suggestions = yield* getSuggestions;
-        const accusations = yield* getAccusations;
-        const setup = GameSetup({ cardSet, playerSet });
-
-        // Per-category candidates — drawn from cards still possible
-        // for the case file. Same source as the heuristic recommender
-        // (cartesianCandidates in Recommender.ts).
-        const perCategory = setup.categories.map(c =>
-            caseFileCandidatesFor(setup, knowledge, c.id),
-        );
-
-        type ScoredCandidate = {
-            readonly cards: ReadonlyArray<Card>;
-            readonly score: number;
-            readonly outcomeCount: number;
-        };
-        const out: ScoredCandidate[] = [];
-        // Cartesian iteration over per-category candidates.
-        const idx = new Array<number>(perCategory.length).fill(0);
-        if (perCategory.some(list => list.length === 0)) {
-            return [];
-        }
-        while (true) {
-            const cards = perCategory.map((list, i) => list[idx[i] ?? 0] as Card);
-            const outcomes = enumerateOutcomes(
-                setup,
-                knowledge,
-                suggester,
-                cards,
-            );
-            const score = expectedInfoGain(
-                setup,
-                knowledge,
-                suggestions,
-                accusations,
-                suggester,
-                cards,
-            );
-            if (score > 0) {
-                out.push({ cards, score, outcomeCount: outcomes.length });
-            }
-
-            // Increment least-significant digit.
-            let i = perCategory.length - 1;
-            while (i >= 0) {
-                const current = idx[i] ?? 0;
-                const listLen = perCategory[i]?.length ?? 0;
-                if (current + 1 < listLen) {
-                    idx[i] = current + 1;
-                    break;
-                }
-                idx[i] = 0;
-                i--;
-            }
-            if (i < 0) break;
-        }
-
-        out.sort((a, b) => {
-            if (a.score !== b.score) return b.score - a.score;
-            return a.cards.join("|").localeCompare(b.cards.join("|"));
-        });
-
-        return out.slice(0, maxResults).map(r =>
-            new InfoGainRecommendationImpl({
-                suggester,
-                cards: r.cards,
-                expectedInfoGain: r.score,
-                outcomeCount: r.outcomeCount,
-            }),
-        );
-    });

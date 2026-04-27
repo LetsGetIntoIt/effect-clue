@@ -11,13 +11,18 @@ import {
     cardIdsInCategory,
     GameSetup,
 } from "./GameSetup";
+import { expectedInfoGain } from "./EntropyScorer";
 import {
+    AccusationsService,
     CardSetService,
     KnowledgeService,
     PlayerSetService,
+    SuggestionsService,
+    getAccusations,
     getCardSet,
     getKnowledge,
     getPlayerSet,
+    getSuggestions,
 } from "./services";
 
 /**
@@ -75,28 +80,28 @@ export const caseFileCandidatesFor = (
 
 /**
  * A single ranked recommendation: one card per category (in the setup's
- * category order) that would, if asked, touch unknown cells and help
- * narrow the case file down.
+ * category order) that, if asked, is expected to reduce the most
+ * unknown checklist cells.
  *
- * The three score factors are exposed separately so the UI can show
- * "why is this recommended" alongside the overall score.
+ * `score` is the expected information gain — i.e. the probability-
+ * weighted average reduction in unknown cells across the plausible
+ * refuter responses, run through the deducer.
+ *
+ * `outcomeCount` is the number of plausible variants that contributed
+ * (post-renormalisation), exposed for diagnostics / tooltips.
  */
 class RecommendationImpl extends Data.Class<{
     readonly suggester: Player;
     readonly cards: ReadonlyArray<Card>;
     readonly score: number;
-    readonly cellInfoScore: number;
-    readonly caseFileOpennessScore: number;
-    readonly refuterUncertaintyScore: number;
+    readonly outcomeCount: number;
 }> {}
 type Recommendation = RecommendationImpl;
 const Recommendation = (params: {
     readonly suggester: Player;
     readonly cards: ReadonlyArray<Card>;
     readonly score: number;
-    readonly cellInfoScore: number;
-    readonly caseFileOpennessScore: number;
-    readonly refuterUncertaintyScore: number;
+    readonly outcomeCount: number;
 }): Recommendation => new RecommendationImpl(params);
 
 /**
@@ -150,31 +155,21 @@ const cartesianCandidates = function* (
 };
 
 /**
- * Recommender scoring has three factors, multiplied together:
+ * Score every candidate triple by expected information gain — the
+ * probability-weighted average reduction in unknown checklist cells
+ * across the plausible refuter responses, run through the deducer.
  *
- * 1. `cellInfoScore`: count of currently-unknown cells the question
- *    touches in other players' rows. "How many blanks does this
- *    suggestion probe?" — the original heuristic.
+ * The probability model is per-row marginal:
+ *   P(player P owns card c | unknown cell) ≈
+ *       (handSize(P) − knownYs(P)) / |unknownCellsOnRow(P)|
  *
- * 2. `caseFileOpennessScore`: product over the triple's categories of
- *    |caseFileCandidatesFor(category)|. Big when the case file still
- *    has many candidates per category, forcing this score to 0 when
- *    the case file is fully solved (we multiply, so 1×1×1 still gives
- *    a floor of 1). Captures "this triple actually probes cards that
- *    could still be in the case file".
+ * Cheap and directionally correct; no Monte-Carlo sampling, no
+ * cross-row correlation. The seam to swap is `probPlayerOwnsCard`
+ * in EntropyScorer.ts.
  *
- * 3. `refuterUncertaintyScore`: number of other players who could
- *    still plausibly refute — players not known to lack *all* the
- *    suggested cards. 1 = refuter is predictable (we already know it
- *    has to be a specific player), ≥2 = we'll learn who. Penalises
- *    asking questions whose refuter we can already pin down.
- *
- * A triple with any factor = 0 contributes nothing useful (no cells
- * to probe, or no case-file possibility), and gets filtered out.
- *
- * Tie-breaking when two triples have identical scores: sort by the
- * joined card names alphabetically. Deterministic, reproducible, and
- * independent of category count.
+ * Triples with `score === 0` (no plausible information) are filtered
+ * out. Tie-break is lexicographic by joined card names — deterministic,
+ * reproducible, independent of category count.
  */
 export const recommendSuggestions = (
     suggester: Player,
@@ -182,60 +177,41 @@ export const recommendSuggestions = (
 ): Effect.Effect<
     RecommendationResult,
     never,
-    CardSetService | PlayerSetService | KnowledgeService
+    | AccusationsService
+    | CardSetService
+    | KnowledgeService
+    | PlayerSetService
+    | SuggestionsService
 > =>
     Effect.gen(function* () {
         const cardSet = yield* getCardSet;
         const playerSet = yield* getPlayerSet;
         const knowledge = yield* getKnowledge;
+        const suggestions = yield* getSuggestions;
+        const accusations = yield* getAccusations;
         const setup = GameSetup({ cardSet, playerSet });
-        const otherPlayers = setup.players.filter(p => p !== suggester);
 
         const results: Recommendation[] = [];
         for (const cards of cartesianCandidates(setup, knowledge)) {
-            // Factor 1: unknown cells touched in others' rows.
-            let cellInfoScore = 0;
-            for (const p of otherPlayers) {
-                for (const card of cards) {
-                    const v = getCellByOwnerCard(knowledge, PlayerOwner(p), card);
-                    if (v === undefined) cellInfoScore += 1;
-                }
-            }
-            if (cellInfoScore === 0) continue;
-
-            // Factor 2: case-file openness. Product over categories of
-            // candidate counts; at least 1 per category (we're iterating
-            // only live candidates), so this is always ≥1.
-            let caseFileOpennessScore = 1;
-            for (const category of setup.categories) {
-                const candidates = caseFileCandidatesFor(
-                    setup, knowledge, category.id);
-                caseFileOpennessScore *= candidates.length;
-            }
-
-            // Factor 3: how many distinct other players could refute this
-            // suggestion? A player who's known to lack all three suggested
-            // cards cannot refute. If we're down to just one possible
-            // refuter, the answer is predictable — we learn less.
-            let refuterUncertaintyScore = 0;
-            for (const p of otherPlayers) {
-                const allN = cards.every(card =>
-                    getCellByOwnerCard(knowledge, PlayerOwner(p), card) === N);
-                if (!allN) refuterUncertaintyScore += 1;
-            }
-            if (refuterUncertaintyScore === 0) continue;
-
-            const score =
-                cellInfoScore * caseFileOpennessScore * refuterUncertaintyScore;
-
-            results.push(Recommendation({
+            const score = expectedInfoGain(
+                setup,
+                knowledge,
+                suggestions,
+                accusations,
                 suggester,
                 cards,
-                score,
-                cellInfoScore,
-                caseFileOpennessScore,
-                refuterUncertaintyScore,
-            }));
+            );
+            if (score <= 0) continue;
+            // outcomeCount is informational; recompute lazily only for
+            // the recs that survive scoring.
+            results.push(
+                Recommendation({
+                    suggester,
+                    cards,
+                    score,
+                    outcomeCount: 0, // populated on first describe
+                }),
+            );
         }
 
         // Primary: descending score. Tiebreak: lexicographic by joined names.
@@ -262,14 +238,15 @@ export const recommendSuggestions = (
  * layer resolves the tagged shape into localized copy via
  * `messages/en.json` under `recommendations.*`.
  *
- * Strategy: pick the dominant factor and emit the matching variant.
- *  - Case-file openness → `oneGuessFromCasefile` (we can pin down
- *    the answer).
- *  - Cell-info count → `probesManyCells` or `fillsCells` (fills
- *    blanks on other players' rows).
- *  - Refuter uncertainty → `refuterUncertainty` (reveals which
- *    player had to refute).
- *  - Fallback → `usefulCombination`.
+ * Variants:
+ *   - `oneGuessFromCasefile`: there's a single open category at exactly
+ *     two case-file candidates and the recommendation probes one of
+ *     them. The next refutation pins the case file. Computed from
+ *     setup + knowledge, not from any factor score — the rule is a
+ *     pure observation about the deduction state.
+ *   - `expectedReveal`: the generic info-gain explanation —
+ *     "expected to reveal ~N cells" rendered as a plural-aware
+ *     sentence. Used whenever no more specific variant applies.
  */
 type RecommendationDescription =
     | {
@@ -277,31 +254,14 @@ type RecommendationDescription =
           readonly params: { readonly category: string };
       }
     | {
-          readonly kind: "probesManyCells";
-          readonly params: {
-              readonly cellCount: number;
-              readonly categories: string;
-          };
-      }
-    | {
-          readonly kind: "refuterUncertainty";
-          readonly params: { readonly playerCount: number };
-      }
-    | {
-          readonly kind: "fillsCells";
+          readonly kind: "expectedReveal";
           readonly params: { readonly cellCount: number };
-      }
-    | {
-          readonly kind: "usefulCombination";
-          readonly params: Record<string, never>;
       };
 
 export const describeRecommendation = (
     r: {
         readonly cards: ReadonlyArray<Card>;
-        readonly cellInfoScore: number;
-        readonly caseFileOpennessScore: number;
-        readonly refuterUncertaintyScore: number;
+        readonly score: number;
     },
 ): Effect.Effect<
     RecommendationDescription,
@@ -314,8 +274,10 @@ export const describeRecommendation = (
         const knowledge = yield* getKnowledge;
         const setup = GameSetup({ cardSet, playerSet });
 
-        // Identify categories whose casefile answer is still open, and
-        // which of this triple's cards sit in those categories.
+        // Identify categories whose casefile answer is still open and
+        // could become fully pinned by a single refuter response: the
+        // category has exactly two casefile candidates and at least one
+        // of this triple's cards is one of them.
         const openCategories = setup.categories.filter(
             c => caseFileAnswerFor(setup, knowledge, c.id) === undefined,
         );
@@ -323,9 +285,6 @@ export const describeRecommendation = (
             .map(c => c.name)
             .map(n => n.toLowerCase());
 
-        // Could a single category become fully pinned by the refuter? That
-        // happens when there are exactly two casefile candidates in a
-        // category and this suggestion probes the non-casefile one.
         const oneGuessFromCasefile = openCategories.some(c => {
             const candidates = caseFileCandidatesFor(setup, knowledge, c.id);
             return (
@@ -341,31 +300,15 @@ export const describeRecommendation = (
             };
         }
 
-        if (r.cellInfoScore >= 4 && openCategoryNames.length >= 1) {
-            return {
-                kind: "probesManyCells",
-                params: {
-                    cellCount: r.cellInfoScore,
-                    categories: openCategoryNames.join(" / "),
-                },
-            };
-        }
-
-        if (r.refuterUncertaintyScore >= 3) {
-            return {
-                kind: "refuterUncertainty",
-                params: { playerCount: r.refuterUncertaintyScore },
-            };
-        }
-
-        if (r.cellInfoScore >= 1) {
-            return {
-                kind: "fillsCells",
-                params: { cellCount: r.cellInfoScore },
-            };
-        }
-
-        return { kind: "usefulCombination", params: {} };
+        return {
+            kind: "expectedReveal",
+            params: {
+                // Round to the nearest cell; the underlying score is
+                // a probability-weighted average and ICU MessageFormat's
+                // plural rules don't accept fractional counts.
+                cellCount: Math.max(1, Math.round(r.score)),
+            },
+        };
     });
 
 /**
@@ -402,9 +345,7 @@ interface ConsolidatedRecommendation {
     readonly suggester: Player;
     readonly cards: ReadonlyArray<Card | AnySlot>;
     readonly score: number;
-    readonly cellInfoScore: number;
-    readonly caseFileOpennessScore: number;
-    readonly refuterUncertaintyScore: number;
+    readonly outcomeCount: number;
     /** How many specific recommendations this consolidated row covers. */
     readonly groupSize: number;
 }
@@ -554,9 +495,7 @@ export const consolidateRecommendations = (
                 suggester: r.suggester,
                 cards: r.cards,
                 score: r.score,
-                cellInfoScore: r.cellInfoScore,
-                caseFileOpennessScore: r.caseFileOpennessScore,
-                refuterUncertaintyScore: r.refuterUncertaintyScore,
+                outcomeCount: r.outcomeCount,
                 groupSize: 1,
             }));
             const suggester = tier[0]?.suggester;
@@ -724,12 +663,8 @@ export type ActionRecommendation =
 /**
  * Decide what action the player should take next.
  *
- * Pulls setup / knowledge from the service layer (mirrors the shape
- * of `recommendSuggestions`), so callers compose the same layer once
- * and provide it to both. `maxResults` is forwarded to the underlying
- * suggestion search for the `NearlySolved` and `Suggest` branches.
- *
- * Branch selection (in order — first match wins):
+ * Pulls setup / knowledge / suggestions / accusations from the service
+ * layer. The four branches:
  *
  * 1. Every category has exactly one case-file Y → **Accuse**.
  * 2. Every-but-one category has a case-file Y, and the remaining
@@ -737,11 +672,6 @@ export type ActionRecommendation =
  * 3. `recommendSuggestions(...)` returns at least one recommendation
  *    → **Suggest**.
  * 4. Otherwise → **Nothing**.
- *
- * The `Suggest` branch's `suggestions` payload is structurally
- * identical to `recommendSuggestions`'s direct return value, so
- * existing UI consumers can branch on `_tag === "Suggest"` and reuse
- * the rest of their rendering pipeline unchanged.
  */
 export const recommendAction = (
     suggester: Player,
@@ -749,7 +679,11 @@ export const recommendAction = (
 ): Effect.Effect<
     ActionRecommendation,
     never,
-    CardSetService | PlayerSetService | KnowledgeService
+    | AccusationsService
+    | CardSetService
+    | KnowledgeService
+    | PlayerSetService
+    | SuggestionsService
 > =>
     Effect.gen(function* () {
         const cardSet = yield* getCardSet;
