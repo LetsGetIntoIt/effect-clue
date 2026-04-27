@@ -6,7 +6,13 @@ import type { Card } from "../../logic/GameObjects";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { suggestionMade } from "../../analytics/events";
+import {
+    accusationFormOpened,
+    accusationLogged,
+    accusationRemoved,
+    priorAccusationEdited,
+    suggestionMade,
+} from "../../analytics/events";
 import { Player } from "../../logic/GameObjects";
 import { footnotesForCell } from "../../logic/Footnotes";
 import {
@@ -172,7 +178,10 @@ function AddSuggestion() {
                 })}{" "}
                 <button
                     type="button"
-                    onClick={() => setMode(ACCUSATION_MODE)}
+                    onClick={() => {
+                        setMode(ACCUSATION_MODE);
+                        accusationFormOpened({ source: "toggle_link" });
+                    }}
                     className="cursor-pointer border-none bg-transparent p-0 text-[12px] font-normal text-muted underline-offset-2 hover:text-accent hover:underline"
                 >
                     {t("addAccusationToggleLink")}
@@ -229,6 +238,12 @@ function AddSuggestion() {
                         dispatch({
                             type: "addAccusation",
                             accusation: draft,
+                        });
+                        accusationLogged({
+                            accusationCount:
+                                state.accusations.length + 1,
+                            accuser: String(draft.accuser),
+                            source: "manual",
                         });
                         // Submission flips back so the next thing the
                         // user types is a regular suggestion.
@@ -403,7 +418,7 @@ function LogAccusationButton({
     readonly cards: ReadonlyArray<Card>;
 }) {
     const tRecs = useTranslations("recommendations");
-    const { dispatch } = useClue();
+    const { dispatch, state } = useClue();
     return (
         <button
             type="button"
@@ -420,7 +435,19 @@ function LogAccusationButton({
                         id: newAccusationId(),
                         accuser,
                         cards: [...cards],
+                        loggedAt: Date.now(),
                     },
+                });
+                // Two events fire — `accusation_form_opened` so the
+                // banner-driven path counts in the same funnel as the
+                // toggle-link path, and `accusation_logged` for the
+                // actual write. `source: "deduced_triple"` distinguishes
+                // it from manual entries.
+                accusationFormOpened({ source: "accuse_now_banner" });
+                accusationLogged({
+                    accusationCount: state.accusations.length + 1,
+                    accuser: String(accuser),
+                    source: "deduced_triple",
                 });
             }}
         >
@@ -1393,6 +1420,9 @@ function PriorAccusationItem({
     const onRemove = async () => {
         if (await confirm({ message: t("removeConfirm") })) {
             dispatch({ type: "removeAccusation", id: a.id });
+            accusationRemoved({
+                accusationCount: state.accusations.length - 1,
+            });
         }
     };
 
@@ -1411,6 +1441,7 @@ function PriorAccusationItem({
     const onCommitEdit = (draft: DraftAccusation) => {
         exitEdit();
         dispatch({ type: "updateAccusation", accusation: draft });
+        priorAccusationEdited({ accusationNumber: idx + 1 });
     };
 
     const hasOpenPillPopover = (): boolean =>
