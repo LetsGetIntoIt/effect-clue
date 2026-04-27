@@ -147,6 +147,10 @@
         "refuter-owns-one-of": {
             "detailKnown": "{refuter} refuted {suggester}'s suggestion #{number} ({cardLabels}); the other two were ruled out, so {refuter} must own {cellCard}.",
             "detailUnknown": "The refuter of suggestion #{number} owned one of the three cards; the other two were ruled out, so it must be {cellCard}."
+        },
+        "disjoint-groups-hand-lock": {
+            "headline": "Disjoint groups",
+            "detail": "{player} refuted {groupCount} suggestions ({suggestionNumbers}) whose cards don't overlap, accounting for every remaining card in {player}'s hand. So {cellPlayer} can't hold {cellCard}."
         }
     },
     "recommendations": {

@@ -1408,6 +1408,17 @@ const resolveReasonCopy = (
                 }),
             };
         }
+        case "disjoint-groups-hand-lock":
+            return {
+                headline: tReasons("disjoint-groups-hand-lock.headline"),
+                detail: tReasons("disjoint-groups-hand-lock.detail", {
+                    cellPlayer: desc.params.cellPlayer,
+                    cellCard: desc.params.cellCard,
+                    player: desc.params.player,
+                    groupCount: desc.params.groupCount,
+                    suggestionNumbers: desc.params.suggestionNumbers,
+                }),
+            };
     }
 };
 

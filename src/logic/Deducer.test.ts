@@ -212,6 +212,57 @@ describe("deduce", () => {
         expect(getCellByOwnerCard(result.success, PlayerOwner(B), CONSERV)).toBe(Y);
     });
 
+    // disjointGroupsHandLock cascade: with two disjoint refuted
+    // suggestions and Bob's hand pinned to size 2, every card outside
+    // the union of those two triples must be N for Bob. The fixed-point
+    // loop then propagates those Ns through card-ownership and
+    // case-file-category slices.
+    test("disjoint groups force out-of-union cells N through fixed-point", () => {
+        let knowledge = emptyKnowledge;
+        knowledge = setHandSize(knowledge, PlayerOwner(B), 2);
+
+        const SCARLET = cardByName(setup, "Miss Scarlet");
+        const GREEN   = cardByName(setup, "Mr. Green");
+        const WHITE   = cardByName(setup, "Mrs. White");
+        const HALL    = cardByName(setup, "Hall");
+
+        const suggestions = [
+            // Two disjoint refuted triples — Bob owes ≥1 from each.
+            Suggestion({ suggester: A, cards: [PLUM, KNIFE, CONSERV],
+                nonRefuters: [], refuter: B }),
+            Suggestion({ suggester: A, cards: [SCARLET, ROPE, LIBRARY],
+                nonRefuters: [], refuter: B }),
+        ];
+
+        const result = runDeduce(setup, suggestions, knowledge);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+        const k = result.success;
+
+        // Out-of-union cells on Bob's row are forced N — Bob's two hand
+        // slots are accounted for by the disjoint groups.
+        expect(getCellByOwnerCard(k, PlayerOwner(B), GREEN)).toBe(N);
+        expect(getCellByOwnerCard(k, PlayerOwner(B), WHITE)).toBe(N);
+        expect(getCellByOwnerCard(k, PlayerOwner(B), HALL)).toBe(N);
+    });
+
+    test("disjoint groups: groupCount > handRemaining surfaces as failure", () => {
+        let knowledge = emptyKnowledge;
+        knowledge = setHandSize(knowledge, PlayerOwner(B), 1);
+        const suggestions = [
+            Suggestion({ suggester: A, cards: [PLUM, KNIFE, CONSERV],
+                nonRefuters: [], refuter: B }),
+            Suggestion({ suggester: A,
+                cards: [cardByName(setup, "Miss Scarlet"), ROPE, LIBRARY],
+                nonRefuters: [], refuter: B }),
+        ];
+        const result = runDeduce(setup, suggestions, knowledge);
+        expect(Result.isFailure(result)).toBe(true);
+        if (!Result.isFailure(result)) return;
+        expect(result.failure.contradictionKind?._tag)
+            .toBe("DisjointGroupsHandLock");
+    });
+
     test("contradiction is surfaced as a result", () => {
         let knowledge = emptyKnowledge;
         // Both Anisha and Bob have Knife? That's a contradiction once the

@@ -1,6 +1,8 @@
 import { Match, pipe } from "effect";
 import {
+    Card,
     CaseFileOwner,
+    Player,
     PlayerOwner,
 } from "./GameObjects";
 import {
@@ -24,6 +26,7 @@ import type { ReasonKind, Tracer } from "./Provenance";
 import {
     CardOwnership,
     CaseFileCategory,
+    DisjointGroupsHandLock,
     NonRefuters,
     PlayerHand,
     RefuterOwnsOneOf,
@@ -425,6 +428,162 @@ export const refuterOwnsOneOf = (
     return k;
 };
 
+/**
+ * Disjoint-groups hand lock. Runs across every player's refuted
+ * suggestions. If a single player P has refuted K suggestions whose
+ * (still-unknown-for-P) card sets are pairwise disjoint, P must own at
+ * least one card from each of those K disjoint sets. When K equals
+ * P's remaining unknown hand slots (`handSize − knownYs`), P's hand is
+ * exactly one card per set and every other card in P's row must be N.
+ *
+ * Strictly stronger than `refuterOwnsOneOf`: at K=1 it reduces to that
+ * rule, but it doesn't fire below K=2 — single-suggestion narrowing is
+ * left to `refuterOwnsOneOf` to keep the provenance story clean.
+ *
+ * Edge cases:
+ *   - We filter each suggestion's cards down to those still unknown for
+ *     P. A set already containing a Y is satisfied by that Y and is
+ *     dropped (its yCount counts via `knownYs`); a set whose unknowns
+ *     are all N is impossible — but `refuterOwnsOneOf` and the slice
+ *     combinator catch that case earlier, so we just skip it.
+ *   - K > handRemaining: P would owe at least K distinct cards but has
+ *     fewer slots. Throw a Contradiction tagged with all K
+ *     contributing suggestion indices.
+ *
+ * The rule sits before `refuterOwnsOneOf` in `applyDeductionRules` so
+ * any new Ns it discovers are visible to that rule in the same pass.
+ */
+export const disjointGroupsHandLock = (
+    setup: GameSetup,
+    suggestions: ReadonlyArray<Suggestion>,
+    tracer?: Tracer,
+) => (knowledge: Knowledge): Knowledge => {
+    // Bucket every "refuted but unseen" suggestion by its refuter.
+    const byRefuter = new Map<
+        Player,
+        Array<{ readonly index: number; readonly cards: ReadonlyArray<Card> }>
+    >();
+    suggestions.forEach((s, index) => {
+        if (s.refuter === undefined) return;
+        if (s.seenCard !== undefined) return;
+        const list = byRefuter.get(s.refuter) ?? [];
+        list.push({ index, cards: suggestionCards(s) });
+        byRefuter.set(s.refuter, list);
+    });
+
+    let k = knowledge;
+    for (const [player, entries] of byRefuter) {
+        if (entries.length < 2) continue; // single suggestion → refuterOwnsOneOf handles it
+        const owner = PlayerOwner(player);
+        const handSize = getHandSize(k, owner);
+        if (handSize === undefined) continue;
+
+        // Filter each set to cells still unknown for the refuter; drop
+        // already-Y sets entirely (satisfied) and skip already-impossible
+        // sets (refuterOwnsOneOf / slice will surface the contradiction
+        // separately).
+        const filtered: Array<{
+            readonly index: number;
+            readonly cards: ReadonlyArray<Card>;
+        }> = [];
+        for (const entry of entries) {
+            let containsY = false;
+            const stillUnknown: Card[] = [];
+            for (const card of entry.cards) {
+                const v = getCell(k, Cell(owner, card));
+                if (v === Y) { containsY = true; break; }
+                if (v === undefined) stillUnknown.push(card);
+            }
+            if (containsY) continue;
+            if (stillUnknown.length === 0) continue;
+            filtered.push({ index: entry.index, cards: stillUnknown });
+        }
+        if (filtered.length < 2) continue;
+
+        // Pairwise disjointness: a Set<Card> stays small (≤ 9 entries
+        // per filtered set) so this is O(Σ |filtered|).
+        const union = new Set<Card>();
+        let disjoint = true;
+        for (const f of filtered) {
+            for (const card of f.cards) {
+                if (union.has(card)) { disjoint = false; break; }
+                union.add(card);
+            }
+            if (!disjoint) break;
+        }
+        if (!disjoint) continue;
+
+        // Count Ys already known on P's row.
+        let ysInRow = 0;
+        for (const card of allCardIds(setup)) {
+            if (getCell(k, Cell(owner, card)) === Y) ysInRow++;
+        }
+        const handRemaining = handSize - ysInRow;
+        const groupCount = filtered.length;
+
+        if (groupCount > handRemaining) {
+            throw new Contradiction({
+                reason:
+                    `${String(player)} refuted ${groupCount} disjoint ` +
+                    `suggestion groups but has only ${handRemaining} ` +
+                    `unknown hand slot${handRemaining === 1 ? "" : "s"} left`,
+                offendingCells: filtered.flatMap(f =>
+                    f.cards.map(c => Cell(owner, c)),
+                ),
+                contradictionKind: {
+                    _tag: "DisjointGroupsHandLock",
+                    player,
+                    suggestionIndices: filtered.map(f => f.index),
+                },
+            });
+        }
+        if (groupCount !== handRemaining) continue;
+
+        // Fire: every unknown cell in P's row outside the union must be N.
+        const suggestionIndices = filtered.map(f => f.index);
+        const unionCells: Cell[] = filtered.flatMap(f =>
+            f.cards.map(c => Cell(owner, c)),
+        );
+        for (const card of allCardIds(setup)) {
+            if (union.has(card)) continue;
+            const cell = Cell(owner, card);
+            if (getCell(k, cell) !== undefined) continue;
+            const before = k;
+            try {
+                k = setCell(k, cell, N);
+            } catch (e) {
+                if (e instanceof Contradiction) {
+                    throw new Contradiction({
+                        reason: e.reason,
+                        offendingCells: e.offendingCells.length
+                            ? e.offendingCells
+                            : [cell, ...unionCells],
+                        sliceLabel: e.sliceLabel,
+                        contradictionKind: {
+                            _tag: "DisjointGroupsHandLock",
+                            player,
+                            suggestionIndices,
+                        },
+                    });
+                }
+                throw e;
+            }
+            if (k !== before && tracer) {
+                tracer({
+                    cell,
+                    value: N,
+                    kind: DisjointGroupsHandLock({
+                        player,
+                        suggestionIndices,
+                    }),
+                    dependsOn: unionCells,
+                });
+            }
+        }
+    }
+    return k;
+};
+
 // ---- Top-level rule application ----------------------------------------
 
 /**
@@ -446,14 +605,21 @@ export const applyConsistencyRules = (
 
 /**
  * Apply every suggestion-driven rule once.
+ *
+ * Order matters: `disjointGroupsHandLock` runs after the simpler
+ * suggestion rules (so any Ns those rules add are visible) and before
+ * `refuterOwnsOneOf` so its newly-set Ns can collapse single-suggestion
+ * uncertainty in the same pass.
  */
 export const applyDeductionRules = (
+    setup: GameSetup,
     suggestions: ReadonlyArray<Suggestion>,
     tracer?: Tracer,
 ) => (knowledge: Knowledge): Knowledge => pipe(
     knowledge,
     nonRefutersDontHaveSuggestedCards(suggestions, tracer),
     refuterShowedCard(suggestions, tracer),
+    disjointGroupsHandLock(setup, suggestions, tracer),
     refuterOwnsOneOf(suggestions, tracer),
 );
 
@@ -468,5 +634,5 @@ export const applyAllRules = (
 ) => (knowledge: Knowledge): Knowledge => pipe(
     knowledge,
     applyConsistencyRules(setup, tracer),
-    applyDeductionRules(suggestions, tracer),
+    applyDeductionRules(setup, suggestions, tracer),
 );

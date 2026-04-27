@@ -2,12 +2,13 @@ import { describe, expect, test } from "vitest";
 import { MutableHashMap, Result } from "effect";
 import { CLASSIC_SETUP_3P } from "./GameSetup";
 import { CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
-import { Cell, emptyKnowledge, N, setCell, Y } from "./Knowledge";
+import { Cell, emptyKnowledge, N, setCell, setHandSize, Y } from "./Knowledge";
 import {
     CardOwnership,
     CaseFileCategory,
     chainFor,
     describeReason,
+    DisjointGroupsHandLock,
     NonRefuters,
     PlayerHand,
     type Provenance,
@@ -74,6 +75,17 @@ describe("ReasonKind constructors", () => {
         expect(r._tag).toBe("RefuterOwnsOneOf");
         if (r._tag !== "RefuterOwnsOneOf") throw new Error("unreachable");
         expect(r.suggestionIndex).toBe(2);
+    });
+
+    test("DisjointGroupsHandLock tags itself and carries player + indices", () => {
+        const r = DisjointGroupsHandLock({
+            player: B,
+            suggestionIndices: [0, 3, 5],
+        });
+        expect(r._tag).toBe("DisjointGroupsHandLock");
+        if (r._tag !== "DisjointGroupsHandLock") throw new Error("unreachable");
+        expect(r.player).toBe(B);
+        expect(r.suggestionIndices).toEqual([0, 3, 5]);
     });
 });
 
@@ -413,5 +425,66 @@ describe("suggester-owned cascade provenance", () => {
         // Somewhere upstream the chain must include the card-ownership
         // cascade that turned A/Plum=Y into B/Plum=N.
         expect(tags).toContain("CardOwnership");
+    });
+});
+
+// -----------------------------------------------------------------------
+// disjointGroupsHandLock provenance — the rule fires the new
+// DisjointGroupsHandLock ReasonKind on every out-of-union N it forces.
+// describeReason should resolve the right kind / params.
+// -----------------------------------------------------------------------
+
+describe("disjoint-groups-hand-lock provenance", () => {
+    test("chainFor reports DisjointGroupsHandLock for forced out-of-union Ns", () => {
+        const SCARLET = cardByName(setup, "Miss Scarlet");
+        const ROPE    = cardByName(setup, "Rope");
+        const LIBRARY = cardByName(setup, "Library");
+        const GREEN   = cardByName(setup, "Mr. Green");
+
+        let knowledge = emptyKnowledge;
+        knowledge = setHandSize(knowledge, PlayerOwner(B), 2);
+        const suggestions = [
+            Suggestion({ suggester: A, cards: [PLUM, KNIFE, CONSERV],
+                nonRefuters: [], refuter: B }),
+            Suggestion({ suggester: A, cards: [SCARLET, ROPE, LIBRARY],
+                nonRefuters: [], refuter: B }),
+        ];
+
+        const result = runDeduceWithExplanations(setup, suggestions, knowledge);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+
+        const { provenance } = result.success;
+        const greenCell = Cell(PlayerOwner(B), GREEN);
+        const chain = chainFor(provenance, greenCell);
+        const last = chain.at(-1);
+        expect(last?.cell).toEqual(greenCell);
+        expect(last?.reason.kind._tag).toBe("DisjointGroupsHandLock");
+        if (last?.reason.kind._tag !== "DisjointGroupsHandLock") return;
+        expect(last.reason.kind.player).toBe(B);
+        expect(last.reason.kind.suggestionIndices).toEqual([0, 1]);
+    });
+
+    test("describeReason → disjoint-groups-hand-lock with formatted numbers", () => {
+        const cell = Cell(PlayerOwner(B), KNIFE);
+        const reason: Reason = {
+            iteration: 1,
+            kind: DisjointGroupsHandLock({
+                player: B,
+                suggestionIndices: [2, 4, 6],
+            }),
+            value: N,
+            dependsOn: [],
+        };
+        const desc = describeReason(reason, cell, setup, []);
+        expect(desc.kind).toBe("disjoint-groups-hand-lock");
+        if (desc.kind !== "disjoint-groups-hand-lock") return;
+        expect(desc.params.player).toBe("Bob");
+        expect(desc.params.groupCount).toBe(3);
+        expect(desc.params.suggestionIndices).toEqual([2, 4, 6]);
+        expect(desc.params.suggestionNumbers).toBe("#3, #5, #7");
+        expect(desc.params.cellPlayer).toBe("Bob");
+        expect(desc.params.cellCard).toBe("Knife");
+        expect(desc.params.value).toBe(N);
     });
 });

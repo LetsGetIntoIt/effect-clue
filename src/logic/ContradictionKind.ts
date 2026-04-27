@@ -27,6 +27,11 @@ export type ContradictionKind =
     | { readonly _tag: "RefuterShowed"; readonly suggestionIndex: number }
     | { readonly _tag: "RefuterOwnsOneOf"; readonly suggestionIndex: number }
     | {
+          readonly _tag: "DisjointGroupsHandLock";
+          readonly player: Player;
+          readonly suggestionIndices: ReadonlyArray<number>;
+      }
+    | {
           readonly _tag: "SliceCardOwnership";
           readonly card: Card;
           readonly direction: "over" | "under";
