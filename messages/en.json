@@ -168,7 +168,11 @@
         "probesManyCells": "Probes {cellCount} unknown cells across other players' {categories} rows.",
         "refuterUncertainty": "Any of {playerCount} players could refute — will reveal which one has a card.",
         "fillsCells": "Fills in {cellCount, plural, one {# unknown cell} other {# unknown cells}} on other players' rows.",
-        "usefulCombination": "Probes a useful combination."
+        "usefulCombination": "Probes a useful combination.",
+        "accuseNowTitle": "You've solved it — accuse now",
+        "accuseNowBody": "The case file is fully pinned: {cards}. Make the accusation to win the game.",
+        "nearlySolvedTitle": "One refutation away",
+        "nearlySolvedBody": "Every category but {category} is pinned. Two candidates remain in {category} — one well-chosen suggestion narrows it to one."
     },
     "suggestions": {
         "title": "Suggestion log",

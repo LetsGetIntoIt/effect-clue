@@ -6,12 +6,17 @@ import {
     emptyKnowledge,
     N,
     setCell,
+    Y,
 } from "./Knowledge";
 import { caseFileCandidatesFor, isAnySlot } from "./Recommender";
 import type { AnySlot } from "./Recommender";
 import { cardByName } from "./test-utils/CardByName";
 import { expectDefined } from "./test-utils/Expect";
-import { runConsolidate, runRecommend } from "./test-utils/RunRecommend";
+import {
+    runConsolidate,
+    runRecommend,
+    runRecommendAction,
+} from "./test-utils/RunRecommend";
 
 const setup = CLASSIC_SETUP_3P;
 const A = Player("Anisha");
@@ -262,6 +267,164 @@ describe("consolidateRecommendations", () => {
         // categories, so `any` matches.
         expect(slotAt(scarletRow!, 1)).toEqual({ kind: "any" });
         expect(slotAt(scarletRow!, 2)).toEqual({ kind: "any" });
+    });
+});
+
+describe("recommendAction", () => {
+    const weaponsCategory = expectDefined(
+        setup.categories.find(c => c.name === "Weapon"),
+        "Weapon category",
+    );
+    const roomsCategory = expectDefined(
+        setup.categories.find(c => c.name === "Room"),
+        "Room category",
+    );
+
+    const PLUM    = cardByName(setup, "Prof. Plum");
+    const KNIFE   = cardByName(setup, "Knife");
+    const KITCHEN = cardByName(setup, "Kitchen");
+
+    /**
+     * Pin every card in a category to N for the case file *except*
+     * the named card, which is set Y. Used to construct the
+     * "fully pinned" case file states the action recommender keys on.
+     */
+    const pinCategory = (
+        k: ReturnType<typeof setCell>,
+        category: typeof suspectsCategory,
+        keep: ReturnType<typeof cardByName>,
+    ) => {
+        let next = k;
+        for (const entry of category.cards) {
+            const cell = Cell(CaseFileOwner(), entry.id);
+            next = setCell(next, cell, entry.id === keep ? Y : N);
+        }
+        return next;
+    };
+
+    test("Accuse — fully solved case file returns the deduced triple", () => {
+        let k = emptyKnowledge;
+        k = pinCategory(k, suspectsCategory, PLUM);
+        k = pinCategory(k, weaponsCategory, KNIFE);
+        k = pinCategory(k, roomsCategory, KITCHEN);
+        const action = runRecommendAction(setup, k, A);
+        expect(action._tag).toBe("Accuse");
+        if (action._tag !== "Accuse") return;
+        expect(action.accuser).toBe(A);
+        expect(action.cards).toHaveLength(3);
+        // Cards come back in setup-category order (Suspect, Weapon, Room).
+        expect(action.cards[0]).toBe(PLUM);
+        expect(action.cards[1]).toBe(KNIFE);
+        expect(action.cards[2]).toBe(KITCHEN);
+    });
+
+    test("NearlySolved — two pinned + one open with exactly 2 candidates", () => {
+        let k = emptyKnowledge;
+        k = pinCategory(k, suspectsCategory, PLUM);
+        k = pinCategory(k, weaponsCategory, KNIFE);
+        // Rooms category: pin all but two (Kitchen + Conservatory) as N
+        // — neither is Y yet, so the category is still "open" with 2
+        // candidates.
+        for (const entry of roomsCategory.cards) {
+            if (entry.name === "Kitchen") continue;
+            if (entry.name === "Conservatory") continue;
+            k = setCell(k, Cell(CaseFileOwner(), entry.id), N);
+        }
+
+        const action = runRecommendAction(setup, k, A);
+        expect(action._tag).toBe("NearlySolved");
+        if (action._tag !== "NearlySolved") return;
+        expect(action.openCategory).toBe(roomsCategory.id);
+        expect(action.candidates).toHaveLength(2);
+        // Suggestions list is non-empty so the user can probe the
+        // remaining ambiguity.
+        expect(
+            action.suggestions.recommendations.length,
+        ).toBeGreaterThan(0);
+    });
+
+    test("Suggest — partial knowledge falls into the regular ranking", () => {
+        const action = runRecommendAction(setup, emptyKnowledge, A);
+        expect(action._tag).toBe("Suggest");
+        if (action._tag !== "Suggest") return;
+        expect(action.suggester).toBe(A);
+        expect(action.suggestions.recommendations.length).toBeGreaterThan(0);
+    });
+
+    test("Suggest — third category at 1 candidate is NOT NearlySolved (still open == not yet pinned to Y)", () => {
+        // Pin every weapon as N except KNIFE (still unknown for case
+        // file). Suspects category fully solved on PLUM. Rooms still
+        // wide open. The "open" set then is weapons+rooms — 2 open
+        // categories, so this is plain Suggest.
+        let k = emptyKnowledge;
+        k = pinCategory(k, suspectsCategory, PLUM);
+        for (const entry of weaponsCategory.cards) {
+            if (entry.id === KNIFE) continue;
+            k = setCell(k, Cell(CaseFileOwner(), entry.id), N);
+        }
+        const action = runRecommendAction(setup, k, A);
+        // openCategories.length === 2 (weapons + rooms) → falls into Suggest.
+        expect(action._tag).toBe("Suggest");
+    });
+
+    test("NearlySolved — open category at 1 candidate falls into Suggest, not NearlySolved", () => {
+        // 2 categories solved + the third has exactly 1 case-file
+        // candidate but no Y yet → openCategories.length === 1 with
+        // candidates.length === 1, not 2. The rule explicitly requires
+        // exactly 2.
+        let k = emptyKnowledge;
+        k = pinCategory(k, suspectsCategory, PLUM);
+        k = pinCategory(k, weaponsCategory, KNIFE);
+        // Rooms: pin every room as N except KITCHEN, which stays
+        // unknown.
+        for (const entry of roomsCategory.cards) {
+            if (entry.id === KITCHEN) continue;
+            k = setCell(k, Cell(CaseFileOwner(), entry.id), N);
+        }
+        // Now KITCHEN is the only candidate but not yet Y → open
+        // category has 1 candidate. recommendAction treats this as
+        // Suggest (the consistency slice will close it on the next
+        // deducer pass, but the action recommender doesn't peek
+        // forward).
+        const action = runRecommendAction(setup, k, A);
+        expect(action._tag).toBe("Suggest");
+    });
+
+    test("Nothing — no probes available falls into Nothing", () => {
+        // Construct a state where every other-player row is fully N
+        // for every card — `cellInfoScore` is 0 for every triple, so
+        // recommendSuggestions returns nothing and the action falls
+        // into Nothing.
+        let k = emptyKnowledge;
+        for (const entry of suspectsCategory.cards) {
+            k = setCell(k, Cell(PlayerOwner(B), entry.id), N);
+            k = setCell(k, Cell(PlayerOwner(C), entry.id), N);
+        }
+        for (const entry of weaponsCategory.cards) {
+            k = setCell(k, Cell(PlayerOwner(B), entry.id), N);
+            k = setCell(k, Cell(PlayerOwner(C), entry.id), N);
+        }
+        for (const entry of roomsCategory.cards) {
+            k = setCell(k, Cell(PlayerOwner(B), entry.id), N);
+            k = setCell(k, Cell(PlayerOwner(C), entry.id), N);
+        }
+        const action = runRecommendAction(setup, k, A);
+        expect(action._tag).toBe("Nothing");
+        if (action._tag !== "Nothing") return;
+        expect(action.suggester).toBe(A);
+    });
+
+    test("Empty knowledge — yields a non-empty Suggest result", () => {
+        const action = runRecommendAction(setup, emptyKnowledge, A);
+        expect(action._tag).toBe("Suggest");
+        if (action._tag !== "Suggest") return;
+        // Top recommendation has one card per category and non-zero scores.
+        const top = action.suggestions.recommendations[0];
+        expect(top).toBeDefined();
+        if (!top) return;
+        expect(top.cards).toHaveLength(setup.categories.length);
+        expect(top.score).toBeGreaterThan(0);
+        expect(top.suggester).toBe(A);
     });
 });
 

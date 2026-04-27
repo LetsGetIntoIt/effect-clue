@@ -7,15 +7,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { suggestionMade } from "../../analytics/events";
 import { Player } from "../../logic/GameObjects";
 import { footnotesForCell } from "../../logic/Footnotes";
-import { cardName } from "../../logic/GameSetup";
+import {
+    cardName,
+    categoryName as resolveCategoryName,
+} from "../../logic/GameSetup";
 import { chainFor } from "../../logic/Provenance";
 import {
     consolidateRecommendations,
     describeRecommendation,
     isAnySlot,
-    recommendSuggestions,
+    recommendAction,
 } from "../../logic/Recommender";
-import type { AnySlot } from "../../logic/Recommender";
+import type { ActionRecommendation, AnySlot } from "../../logic/Recommender";
 import {
     makeKnowledgeLayer,
     makeSetupLayer,
@@ -294,19 +297,71 @@ function RecommendationsBody({
         );
     }
 
-    const rec = Effect.runSync(
-        recommendSuggestions(Player(asPlayer), 50).pipe(
+    const action: ActionRecommendation = Effect.runSync(
+        recommendAction(Player(asPlayer), 50).pipe(
             Effect.provide(recommendLayer),
         ),
     );
-    const consolidated = Effect.runSync(
-        consolidateRecommendations(rec.recommendations).pipe(
-            Effect.provide(recommendLayer),
-        ),
-    ).slice(0, 5);
+
+    // The Accuse/Nothing branches don't have an underlying suggestion list;
+    // they short-circuit the rest of the body.
+    const suggestionResult =
+        action._tag === "Suggest" || action._tag === "NearlySolved"
+            ? action.suggestions
+            : null;
+
+    const consolidated =
+        suggestionResult === null
+            ? []
+            : Effect.runSync(
+                  consolidateRecommendations(
+                      suggestionResult.recommendations,
+                  ).pipe(Effect.provide(recommendLayer)),
+              ).slice(0, 5);
+
+    const accuseBanner =
+        action._tag === "Accuse" ? (
+            <div
+                className="mt-2 rounded border border-accent bg-panel p-3 text-[13px]"
+                role="status"
+            >
+                <div className="font-semibold text-accent">
+                    {tRecs("accuseNowTitle")}
+                </div>
+                <div className="mt-1">
+                    {tRecs("accuseNowBody", {
+                        cards: action.cards
+                            .map(c => cardName(setup, c))
+                            .join(" + "),
+                    })}
+                </div>
+            </div>
+        ) : null;
+
+    const nearlySolvedBanner =
+        action._tag === "NearlySolved" ? (
+            <div
+                className="mt-2 rounded border border-border bg-panel p-3 text-[13px]"
+                role="status"
+            >
+                <div className="font-semibold">
+                    {tRecs("nearlySolvedTitle")}
+                </div>
+                <div className="mt-1">
+                    {tRecs("nearlySolvedBody", {
+                        category: resolveCategoryName(
+                            setup,
+                            action.openCategory,
+                        ).toLowerCase(),
+                    })}
+                </div>
+            </div>
+        ) : null;
 
     return (
         <>
+            {accuseBanner}
+            {nearlySolvedBanner}
             <label className={`${LABEL_ROW} mt-2`}>
                 {t("suggestingAs")}
                 <select
@@ -323,7 +378,11 @@ function RecommendationsBody({
             </label>
             {consolidated.length === 0 ? (
                 <div className="mt-2 text-[13px] text-muted">
-                    {t("nothingUseful")}
+                    {action._tag === "Accuse"
+                        ? null
+                        : action._tag === "Nothing"
+                          ? t("nothingUseful")
+                          : t("nothingUseful")}
                 </div>
             ) : (
                 <ol className="mt-2 list-decimal pl-6 text-[13px]">

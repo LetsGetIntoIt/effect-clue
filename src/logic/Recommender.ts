@@ -665,3 +665,144 @@ export const consolidateRecommendations = (
         }
         return out;
     });
+
+// ---- recommendAction ---------------------------------------------------
+
+/**
+ * Tagged-union recommendation that surfaces *what to do next*, not
+ * just which suggestion to ask. The four variants:
+ *
+ * - `Accuse`: every category has exactly one case-file Y. The user
+ *   should accuse with this triple.
+ * - `NearlySolved`: every-but-one category is pinned, and the
+ *   remaining open category has exactly two candidates. We're one
+ *   refuter response away from a complete deduction. The
+ *   `suggestions` field still carries the next-best probes so the
+ *   user can narrow further before accusing.
+ * - `Suggest`: regular ranked-suggestion mode. The `suggestions`
+ *   field holds today's `recommendSuggestions` output verbatim so
+ *   the UI can render the existing list with no behavior change.
+ * - `Nothing`: no suggestion has any unknown cell to probe and no
+ *   accuse path is available — typically a contradicted state, or
+ *   a setup where every other-player row is fully resolved.
+ *
+ * Modelled with `Data.TaggedClass` so call sites pattern-match via
+ * `Match.tagsExhaustive` and HashMap keys carrying a recommendation
+ * get structural equality for free.
+ */
+class AccuseImpl extends Data.TaggedClass("Accuse")<{
+    readonly accuser: Player;
+    /** Cards in setup-category order — one per category. */
+    readonly cards: ReadonlyArray<Card>;
+}> {}
+
+class NearlySolvedImpl extends Data.TaggedClass("NearlySolved")<{
+    readonly accuser: Player;
+    /** The single category that hasn't been pinned yet. */
+    readonly openCategory: CardCategory;
+    /** The two remaining case-file candidates in that category. */
+    readonly candidates: ReadonlyArray<Card>;
+    /** Top-N normal suggestion recommendations to keep narrowing. */
+    readonly suggestions: RecommendationResult;
+}> {}
+
+class SuggestImpl extends Data.TaggedClass("Suggest")<{
+    readonly suggester: Player;
+    readonly suggestions: RecommendationResult;
+}> {}
+
+class NothingImpl extends Data.TaggedClass("Nothing")<{
+    readonly suggester: Player;
+}> {}
+
+export type ActionRecommendation =
+    | AccuseImpl
+    | NearlySolvedImpl
+    | SuggestImpl
+    | NothingImpl;
+
+/**
+ * Decide what action the player should take next.
+ *
+ * Pulls setup / knowledge from the service layer (mirrors the shape
+ * of `recommendSuggestions`), so callers compose the same layer once
+ * and provide it to both. `maxResults` is forwarded to the underlying
+ * suggestion search for the `NearlySolved` and `Suggest` branches.
+ *
+ * Branch selection (in order — first match wins):
+ *
+ * 1. Every category has exactly one case-file Y → **Accuse**.
+ * 2. Every-but-one category has a case-file Y, and the remaining
+ *    open category has exactly two case-file candidates → **NearlySolved**.
+ * 3. `recommendSuggestions(...)` returns at least one recommendation
+ *    → **Suggest**.
+ * 4. Otherwise → **Nothing**.
+ *
+ * The `Suggest` branch's `suggestions` payload is structurally
+ * identical to `recommendSuggestions`'s direct return value, so
+ * existing UI consumers can branch on `_tag === "Suggest"` and reuse
+ * the rest of their rendering pipeline unchanged.
+ */
+export const recommendAction = (
+    suggester: Player,
+    maxResults: number = 50,
+): Effect.Effect<
+    ActionRecommendation,
+    never,
+    CardSetService | PlayerSetService | KnowledgeService
+> =>
+    Effect.gen(function* () {
+        const cardSet = yield* getCardSet;
+        const playerSet = yield* getPlayerSet;
+        const knowledge = yield* getKnowledge;
+        const setup = GameSetup({ cardSet, playerSet });
+
+        // Branch 1: every category solved → accuse.
+        const answers: Card[] = [];
+        let allSolved = setup.categories.length > 0;
+        for (const category of setup.categories) {
+            const ans = caseFileAnswerFor(setup, knowledge, category.id);
+            if (ans === undefined) {
+                allSolved = false;
+                break;
+            }
+            answers.push(ans);
+        }
+        if (allSolved) {
+            return new AccuseImpl({ accuser: suggester, cards: answers });
+        }
+
+        // Branch 2: nearly solved — every-but-one solved, open one has 2 candidates.
+        const openCategories = setup.categories.filter(
+            c => caseFileAnswerFor(setup, knowledge, c.id) === undefined,
+        );
+        if (openCategories.length === 1) {
+            const open = openCategories[0]!;
+            const candidates = caseFileCandidatesFor(
+                setup,
+                knowledge,
+                open.id,
+            );
+            if (candidates.length === 2) {
+                const suggestions = yield* recommendSuggestions(
+                    suggester,
+                    maxResults,
+                );
+                return new NearlySolvedImpl({
+                    accuser: suggester,
+                    openCategory: open.id,
+                    candidates,
+                    suggestions,
+                });
+            }
+        }
+
+        // Branch 3: regular suggestions.
+        const suggestions = yield* recommendSuggestions(suggester, maxResults);
+        if (suggestions.recommendations.length > 0) {
+            return new SuggestImpl({ suggester, suggestions });
+        }
+
+        // Branch 4: nothing useful.
+        return new NothingImpl({ suggester });
+    });

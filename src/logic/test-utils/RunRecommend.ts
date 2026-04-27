@@ -5,6 +5,7 @@ import type { Player } from "../GameObjects";
 import {
     consolidateRecommendations,
     describeRecommendation,
+    recommendAction,
     recommendSuggestions,
 } from "../Recommender";
 import {
@@ -51,6 +52,18 @@ export const runDescribe = (
 ) =>
     Effect.runSync(
         describeRecommendation(r).pipe(
+            Effect.provide(recommendLayer(setup, knowledge)),
+        ),
+    );
+
+export const runRecommendAction = (
+    setup: GameSetup,
+    knowledge: Knowledge,
+    suggester: Player,
+    maxResults?: number,
+) =>
+    Effect.runSync(
+        recommendAction(suggester, maxResults).pipe(
             Effect.provide(recommendLayer(setup, knowledge)),
         ),
     );
