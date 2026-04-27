@@ -167,6 +167,7 @@ describe("Clue — URL-based view hydration", () => {
                     nonRefuters: [],
                 }),
             ],
+            accusations: [],
         });
         render(<Clue />);
         await waitFor(() => {

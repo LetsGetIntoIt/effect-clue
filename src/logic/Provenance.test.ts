@@ -9,6 +9,7 @@ import {
     chainFor,
     describeReason,
     DisjointGroupsHandLock,
+    FailedAccusation,
     NonRefuters,
     PlayerHand,
     type Provenance,
@@ -17,6 +18,7 @@ import {
     RefuterShowed,
 } from "./Provenance";
 import { cardByName } from "./test-utils/CardByName";
+import { Accusation, newAccusationId } from "./Accusation";
 import { newSuggestionId, Suggestion } from "./Suggestion";
 import { runDeduceWithExplanations } from "./test-utils/RunDeduce";
 
@@ -86,6 +88,13 @@ describe("ReasonKind constructors", () => {
         if (r._tag !== "DisjointGroupsHandLock") throw new Error("unreachable");
         expect(r.player).toBe(B);
         expect(r.suggestionIndices).toEqual([0, 3, 5]);
+    });
+
+    test("FailedAccusation tags itself and carries the accusationIndex", () => {
+        const r = FailedAccusation({ accusationIndex: 4 });
+        expect(r._tag).toBe("FailedAccusation");
+        if (r._tag !== "FailedAccusation") throw new Error("unreachable");
+        expect(r.accusationIndex).toBe(4);
     });
 });
 
@@ -486,5 +495,77 @@ describe("disjoint-groups-hand-lock provenance", () => {
         expect(desc.params.cellPlayer).toBe("Bob");
         expect(desc.params.cellCard).toBe("Knife");
         expect(desc.params.value).toBe(N);
+    });
+});
+
+describe("failed-accusation provenance", () => {
+    test("describeReason → failed-accusation with accuser and cardLabels resolved", () => {
+        const accusations = [
+            Accusation({
+                id: newAccusationId(),
+                accuser: A,
+                cards: [PLUM, KNIFE, CONSERV],
+            }),
+        ];
+        const cell = Cell(CaseFileOwner(), CONSERV);
+        const reason: Reason = {
+            iteration: 1,
+            kind: FailedAccusation({ accusationIndex: 0 }),
+            value: N,
+            dependsOn: [],
+        };
+        const desc = describeReason(reason, cell, setup, [], accusations);
+        expect(desc.kind).toBe("failed-accusation");
+        if (desc.kind !== "failed-accusation") return;
+        expect(desc.params.accusationIndex).toBe(0);
+        expect(desc.params.accuser).toBe("Anisha");
+        // Card labels are joined with ", " and resolved by name.
+        expect(desc.params.cardLabels).toContain("Prof. Plum");
+        expect(desc.params.cardLabels).toContain("Knife");
+        expect(desc.params.cardLabels).toContain("Conservatory");
+    });
+
+    test("describeReason → failed-accusation falls back gracefully when the index is stale", () => {
+        const cell = Cell(CaseFileOwner(), CONSERV);
+        const reason: Reason = {
+            iteration: 1,
+            kind: FailedAccusation({ accusationIndex: 99 }),
+            value: N,
+            dependsOn: [],
+        };
+        // Empty accusations array — index 99 is out of range.
+        const desc = describeReason(reason, cell, setup, []);
+        expect(desc.kind).toBe("failed-accusation");
+        if (desc.kind !== "failed-accusation") return;
+        expect(desc.params.accuser).toBeUndefined();
+        expect(desc.params.cardLabels).toBeUndefined();
+    });
+
+    test("chainFor walks back to a FailedAccusation reason on a forced N", () => {
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), PLUM), Y);
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), KNIFE), Y);
+        const accusations = [
+            Accusation({ accuser: A, cards: [PLUM, KNIFE, CONSERV] }),
+        ];
+        const result = runDeduceWithExplanations(
+            setup,
+            [],
+            knowledge,
+            accusations,
+        );
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+        const conservCell = Cell(CaseFileOwner(), CONSERV);
+        const chain = chainFor(result.success.provenance, conservCell);
+        const tags = chain.map(c => c.reason.kind._tag);
+        expect(tags).toContain("FailedAccusation");
+        // Last chain entry is the conservatory cell itself, set by
+        // FailedAccusation.
+        const last = chain[chain.length - 1];
+        expect(last?.cell).toEqual(conservCell);
+        expect(last?.reason.kind._tag).toBe("FailedAccusation");
+        if (last?.reason.kind._tag !== "FailedAccusation") return;
+        expect(last.reason.kind.accusationIndex).toBe(0);
     });
 });

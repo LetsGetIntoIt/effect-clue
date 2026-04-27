@@ -74,6 +74,7 @@ const trace = (
     reason: "fake reason",
     offendingCells: [Cell(PlayerOwner(B), MS_WHITE)],
     offendingSuggestionIndices: [0],
+    offendingAccusationIndices: [],
     sliceLabel: undefined,
     contradictionKind,
     ...overrides,

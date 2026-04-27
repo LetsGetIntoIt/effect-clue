@@ -1,4 +1,5 @@
 import { Effect, Layer, Result } from "effect";
+import type { Accusation } from "../Accusation";
 import type { GameSetup } from "../GameSetup";
 import type { Knowledge } from "../Knowledge";
 import type { Provenance } from "../Provenance";
@@ -9,6 +10,7 @@ import deduce, {
 } from "../Deducer";
 import { deduceWithExplanations } from "../Provenance";
 import {
+    makeAccusationsLayer,
     makeSetupLayer,
     makeSuggestionsLayer,
 } from "../services";
@@ -23,10 +25,12 @@ import {
 const deduceLayer = (
     setup: GameSetup,
     suggestions: ReadonlyArray<Suggestion>,
+    accusations: ReadonlyArray<Accusation>,
 ) =>
     Layer.mergeAll(
         makeSetupLayer(setup),
         makeSuggestionsLayer(suggestions),
+        makeAccusationsLayer(accusations),
     );
 
 /**
@@ -34,15 +38,19 @@ const deduceLayer = (
  * materialises the Effect failure channel back to a `Result`. Tests
  * keep their existing `Result.isSuccess` / `Result.isFailure`
  * assertion style; the channel switch happens at the boundary.
+ *
+ * The `accusations` parameter defaults to `[]` so all pre-Item-3 tests
+ * keep working unchanged.
  */
 export const runDeduce = (
     setup: GameSetup,
     suggestions: ReadonlyArray<Suggestion>,
     initial: Knowledge,
+    accusations: ReadonlyArray<Accusation> = [],
 ): DeductionResult =>
     Effect.runSync(
         Effect.result(deduce(initial)).pipe(
-            Effect.provide(deduceLayer(setup, suggestions)),
+            Effect.provide(deduceLayer(setup, suggestions, accusations)),
         ),
     );
 
@@ -50,12 +58,13 @@ export const runDeduceWithExplanations = (
     setup: GameSetup,
     suggestions: ReadonlyArray<Suggestion>,
     initial: Knowledge,
+    accusations: ReadonlyArray<Accusation> = [],
 ): Result.Result<
     { knowledge: Knowledge; provenance: Provenance },
     ContradictionTrace
 > =>
     Effect.runSync(
         Effect.result(deduceWithExplanations(initial)).pipe(
-            Effect.provide(deduceLayer(setup, suggestions)),
+            Effect.provide(deduceLayer(setup, suggestions, accusations)),
         ),
     );

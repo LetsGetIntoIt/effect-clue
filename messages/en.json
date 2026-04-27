@@ -70,7 +70,12 @@
             "updateSuggestion": "editing Suggestion #{number} by {player} ({cards})",
             "updateSuggestionUnknown": "editing a suggestion",
             "removeSuggestion": "removing Suggestion #{number} by {player} ({cards})",
-            "removeSuggestionUnknown": "removing a suggestion"
+            "removeSuggestionUnknown": "removing a suggestion",
+            "addAccusation": "logging {player}'s failed accusation of {cards}",
+            "updateAccusation": "editing Accusation #{number} by {player} ({cards})",
+            "updateAccusationUnknown": "editing an accusation",
+            "removeAccusation": "removing Accusation #{number} by {player} ({cards})",
+            "removeAccusationUnknown": "removing an accusation"
         }
     },
     "setup": {
@@ -151,6 +156,11 @@
         "disjoint-groups-hand-lock": {
             "headline": "Disjoint groups",
             "detail": "{player} refuted {groupCount} suggestions ({suggestionNumbers}) whose cards don't overlap, accounting for every remaining card in {player}'s hand. So {cellPlayer} can't hold {cellCard}."
+        },
+        "accusationHeadline": "Accusation #{number}",
+        "failed-accusation": {
+            "detailKnown": "{accuser}'s accusation #{number} ({cardLabels}) failed, so the case file isn't all three of those — and the other two are already pinned, so {cellCard} can't be in the case file either.",
+            "detailUnknown": "A failed accusation #{number} named {cellCard}; the other two cards in that accusation are already pinned to the case file, so {cellCard} can't be."
         }
     },
     "recommendations": {

@@ -3,7 +3,12 @@ import { Cell, Contradiction, Knowledge } from "./Knowledge";
 import { ContradictionKind } from "./ContradictionKind";
 import { GameSetup } from "./GameSetup";
 import { applyAllRules } from "./Rules";
-import { getCardSet, getPlayerSet, getSuggestions } from "./services";
+import {
+    getAccusations,
+    getCardSet,
+    getPlayerSet,
+    getSuggestions,
+} from "./services";
 
 /**
  * Structured contradiction information the UI can act on without
@@ -26,6 +31,12 @@ export interface ContradictionTrace {
     readonly reason: string;
     readonly offendingCells: ReadonlyArray<Cell>;
     readonly offendingSuggestionIndices: ReadonlyArray<number>;
+    /**
+     * Indices of any failed accusations whose `failedAccusationEliminate`
+     * call wrapped (or propagated) the conflict. Empty when the conflict
+     * came from a non-accusation rule.
+     */
+    readonly offendingAccusationIndices: ReadonlyArray<number>;
     readonly sliceLabel?: string | undefined;
     /**
      * Structured identity of the rule that raised the conflict — see
@@ -53,6 +64,10 @@ const traceOf = (error: Contradiction): ContradictionTrace => ({
         error.suggestionIndex !== undefined
             ? [error.suggestionIndex]
             : [],
+    offendingAccusationIndices:
+        error.accusationIndex !== undefined
+            ? [error.accusationIndex]
+            : [],
     sliceLabel: error.sliceLabel,
     contradictionKind: error.contradictionKind,
 });
@@ -78,8 +93,9 @@ const deduce = Effect.fn("deducer.evaluate")(function* (initial: Knowledge) {
     const cardSet = yield* getCardSet;
     const playerSet = yield* getPlayerSet;
     const suggestions = yield* getSuggestions;
+    const accusations = yield* getAccusations;
     const setup = GameSetup({ cardSet, playerSet });
-    const rule = applyAllRules(setup, suggestions);
+    const rule = applyAllRules(setup, suggestions, accusations);
     let current = initial;
     try {
         // Bound the loop defensively — one iteration per cell would be

@@ -21,12 +21,14 @@ import {
     allOwners,
     GameSetup,
 } from "./GameSetup";
+import { Accusation, accusationCards } from "./Accusation";
 import { Suggestion, suggestionCards, suggestionNonRefuters } from "./Suggestion";
 import type { ReasonKind, Tracer } from "./Provenance";
 import {
     CardOwnership,
     CaseFileCategory,
     DisjointGroupsHandLock,
+    FailedAccusation,
     NonRefuters,
     PlayerHand,
     RefuterOwnsOneOf,
@@ -584,6 +586,101 @@ export const disjointGroupsHandLock = (
     return k;
 };
 
+// ---- Accusation-driven rules -------------------------------------------
+
+/**
+ * Failed-accusation elimination. Every accusation that didn't end the
+ * game is now public information: the case file's suspect / weapon /
+ * room is *not* the named triple. So if two of the three are already
+ * pinned to Y in the case file row (their categories deduced), the
+ * remaining card must be N for the case file.
+ *
+ * Truth table (over the three case-file cells named by the accusation):
+ *   - any cell already N        → rule satisfied; no inference.
+ *   - 0 / 1 cells Y, no Ns      → not enough evidence; no inference.
+ *   - exactly 2 cells Y, 1 unknown → force the unknown to N.
+ *   - all 3 cells Y             → contradiction (the accusation would
+ *                                 have been correct, but it failed).
+ *
+ * Order in `applyAllRules`: we run accusation rules *after*
+ * `applyDeductionRules` so the suggestion-driven Ys / Ns it lands have
+ * already cascaded through. The rule only ever sets case-file N cells,
+ * which the consistency slices on the next iteration can use to force
+ * other Ys (e.g. "this category now has only one candidate left").
+ */
+export const failedAccusationEliminate = (
+    accusations: ReadonlyArray<Accusation>,
+    tracer?: Tracer,
+) => (knowledge: Knowledge): Knowledge => {
+    let k = knowledge;
+    accusations.forEach((accusation, accusationIndex) => {
+        const caseFile = CaseFileOwner();
+        const cards = accusationCards(accusation);
+        const yCells: Cell[] = [];
+        const unknowns: Cell[] = [];
+        let anyN = false;
+        for (const card of cards) {
+            const cell = Cell(caseFile, card);
+            const v = getCell(k, cell);
+            if      (v === Y) yCells.push(cell);
+            else if (v === N) { anyN = true; break; }
+            else              unknowns.push(cell);
+        }
+        if (anyN) return; // rule satisfied — case file definitely isn't this triple
+
+        // All three cells already Y means the failed accusation matched
+        // the case file, which can't happen in a well-formed game.
+        if (yCells.length === cards.length && unknowns.length === 0) {
+            throw new Contradiction({
+                reason:
+                    `accusation #${accusationIndex + 1} failed but every card ` +
+                    `it named is already known to be in the case file`,
+                offendingCells: yCells,
+                accusationIndex,
+                contradictionKind: {
+                    _tag: "FailedAccusation",
+                    accusationIndex,
+                },
+            });
+        }
+
+        // Exactly one unknown with the rest Y → force the unknown to N.
+        if (yCells.length === cards.length - 1 && unknowns.length === 1) {
+            const [cell] = unknowns;
+            if (cell === undefined) return;
+            const before = k;
+            try {
+                k = setCell(k, cell, N);
+            } catch (e) {
+                if (e instanceof Contradiction) {
+                    throw new Contradiction({
+                        reason: e.reason,
+                        offendingCells: e.offendingCells.length
+                            ? e.offendingCells
+                            : [cell, ...yCells],
+                        sliceLabel: e.sliceLabel,
+                        accusationIndex,
+                        contradictionKind: {
+                            _tag: "FailedAccusation",
+                            accusationIndex,
+                        },
+                    });
+                }
+                throw e;
+            }
+            if (k !== before && tracer) {
+                tracer({
+                    cell,
+                    value: N,
+                    kind: FailedAccusation({ accusationIndex }),
+                    dependsOn: yCells,
+                });
+            }
+        }
+    });
+    return k;
+};
+
 // ---- Top-level rule application ----------------------------------------
 
 /**
@@ -624,15 +721,33 @@ export const applyDeductionRules = (
 );
 
 /**
- * A single pass: apply every consistency and deduction rule once. The
- * deducer calls this in a fixed-point loop until nothing changes.
+ * Apply every accusation-driven rule once. Currently just
+ * `failedAccusationEliminate`, but kept as a layer of its own so the
+ * fixed-point loop in `applyAllRules` (and in `deduceWithExplanations`)
+ * can interleave accusation Ns with consistency-slice cascades the
+ * same way it interleaves suggestion Ns.
+ */
+export const applyAccusationRules = (
+    accusations: ReadonlyArray<Accusation>,
+    tracer?: Tracer,
+) => (knowledge: Knowledge): Knowledge => pipe(
+    knowledge,
+    failedAccusationEliminate(accusations, tracer),
+);
+
+/**
+ * A single pass: apply every consistency, deduction, and accusation
+ * rule once. The deducer calls this in a fixed-point loop until
+ * nothing changes.
  */
 export const applyAllRules = (
     setup: GameSetup,
     suggestions: ReadonlyArray<Suggestion>,
+    accusations: ReadonlyArray<Accusation>,
     tracer?: Tracer,
 ) => (knowledge: Knowledge): Knowledge => pipe(
     knowledge,
     applyConsistencyRules(setup, tracer),
     applyDeductionRules(setup, suggestions, tracer),
+    applyAccusationRules(accusations, tracer),
 );

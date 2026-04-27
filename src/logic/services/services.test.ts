@@ -3,8 +3,10 @@ import { Effect, HashMap } from "effect";
 import { CLASSIC_SETUP_3P } from "../GameSetup";
 import { emptyKnowledge } from "../Knowledge";
 import { Suggestion } from "../Suggestion";
+import { Accusation } from "../Accusation";
 import { Player } from "../GameObjects";
 import {
+    getAccusations,
     getCardSet,
     getKnowledge,
     getPlayerSet,
@@ -63,9 +65,14 @@ describe("full clue layer", () => {
         cards: [],
         nonRefuters: [],
     });
+    const accusation = Accusation({
+        accuser: Player("Bob"),
+        cards: [],
+    });
     const layer = makeClueLayer({
         setup: CLASSIC_SETUP_3P,
         suggestions: [suggestion],
+        accusations: [accusation],
         knowledge: emptyKnowledge,
     });
 
@@ -88,16 +95,27 @@ describe("full clue layer", () => {
         );
     });
 
-    test("all four services coexist in a single Effect.gen", () => {
+    test("AccusationsService exposes the provided accusation log", () => {
+        const program = Effect.gen(function* () {
+            return yield* getAccusations;
+        });
+        const out = Effect.runSync(program.pipe(Effect.provide(layer)));
+        expect(out).toHaveLength(1);
+        expect(String(out[0]!.accuser)).toBe("Bob");
+    });
+
+    test("all five services coexist in a single Effect.gen", () => {
         const program = Effect.gen(function* () {
             const cards = yield* getCardSet;
             const players = yield* getPlayerSet;
             const suggestions = yield* getSuggestions;
+            const accusations = yield* getAccusations;
             const knowledge = yield* getKnowledge;
             return {
                 categories: cards.categories.length,
                 players: players.players.length,
                 suggestions: suggestions.length,
+                accusations: accusations.length,
                 knowledgeBacked: knowledge === emptyKnowledge,
             };
         });
@@ -106,6 +124,7 @@ describe("full clue layer", () => {
             categories: CLASSIC_SETUP_3P.cardSet.categories.length,
             players: CLASSIC_SETUP_3P.playerSet.players.length,
             suggestions: 1,
+            accusations: 1,
             knowledgeBacked: true,
         });
     });

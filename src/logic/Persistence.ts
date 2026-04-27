@@ -1,9 +1,15 @@
 import { Result } from "effect";
+import {
+    Accusation,
+    AccusationId,
+    accusationCards,
+    newAccusationId,
+} from "./Accusation";
 import { Card, Player } from "./GameObjects";
 import { CardEntry, Category, GameSetup } from "./GameSetup";
 import {
-    decodeV4Unknown,
-    type PersistedSessionV4,
+    decodeV5Unknown,
+    type PersistedSessionV5,
 } from "./PersistenceSchema";
 import {
     newSuggestionId,
@@ -22,8 +28,8 @@ import {
  * older / malformed blob ever shows up, decode returns undefined
  * and the caller falls back to a fresh session.
  */
-interface PersistedGameV4 {
-    readonly version: 4;
+interface PersistedGameV5 {
+    readonly version: 5;
     readonly setup: {
         readonly players: ReadonlyArray<string>;
         readonly categories: ReadonlyArray<{
@@ -51,19 +57,25 @@ interface PersistedGameV4 {
         readonly refuter: string | null;
         readonly seenCard: string | null;
     }>;
+    readonly accusations: ReadonlyArray<{
+        readonly id?: string | undefined;
+        readonly accuser: string;
+        readonly cards: ReadonlyArray<string>;
+    }>;
 }
 
-type PersistedGame = PersistedGameV4;
+type PersistedGame = PersistedGameV5;
 
 export interface GameSession {
     setup: GameSetup;
     hands: ReadonlyArray<{ player: Player; cards: ReadonlyArray<Card> }>;
     handSizes: ReadonlyArray<{ player: Player; size: number }>;
     suggestions: ReadonlyArray<Suggestion>;
+    accusations: ReadonlyArray<Accusation>;
 }
 
 export const encodeSession = (session: GameSession): PersistedGame => ({
-    version: 4,
+    version: 5,
     setup: {
         players: session.setup.players.map(p => String(p)),
         categories: session.setup.categories.map(c => ({
@@ -91,20 +103,22 @@ export const encodeSession = (session: GameSession): PersistedGame => ({
         refuter: s.refuter === undefined ? null : String(s.refuter),
         seenCard: s.seenCard === undefined ? null : String(s.seenCard),
     })),
+    accusations: session.accusations.map(a => ({
+        id: String(a.id),
+        accuser: String(a.accuser),
+        cards: accusationCards(a).map(c => String(c)),
+    })),
 });
 
 /**
- * Convert a Schema-validated v4 payload into the domain GameSession.
+ * Convert a Schema-validated v5 payload into the domain GameSession.
  * Branded types already flow through the schema, so this is pure
  * construction — no Player(...) / Card(...) wrapping needed.
- *
- * Shared by every version branch: v4 direct, v3/v2/v1 via Schema
- * chain -> v4.
  */
-const buildSessionFromV4 = (v4: PersistedSessionV4): GameSession => ({
+const buildSessionFromV5 = (v5: PersistedSessionV5): GameSession => ({
     setup: GameSetup({
-        players: v4.setup.players,
-        categories: v4.setup.categories.map(c => Category({
+        players: v5.setup.players,
+        categories: v5.setup.categories.map(c => Category({
             id: c.id,
             name: c.name,
             cards: c.cards.map(card => CardEntry({
@@ -113,12 +127,12 @@ const buildSessionFromV4 = (v4: PersistedSessionV4): GameSession => ({
             })),
         })),
     }),
-    hands: v4.hands.map(h => ({ player: h.player, cards: h.cards })),
-    handSizes: v4.handSizes.map(h => ({
+    hands: v5.hands.map(h => ({ player: h.player, cards: h.cards })),
+    handSizes: v5.handSizes.map(h => ({
         player: h.player,
         size: h.size,
     })),
-    suggestions: v4.suggestions.map(s => Suggestion({
+    suggestions: v5.suggestions.map(s => Suggestion({
         id: s.id === undefined || s.id === SuggestionId("")
             ? newSuggestionId()
             : s.id,
@@ -128,15 +142,22 @@ const buildSessionFromV4 = (v4: PersistedSessionV4): GameSession => ({
         refuter: s.refuter === null ? undefined : s.refuter,
         seenCard: s.seenCard === null ? undefined : s.seenCard,
     })),
+    accusations: v5.accusations.map(a => Accusation({
+        id: a.id === undefined || a.id === AccusationId("")
+            ? newAccusationId()
+            : a.id,
+        accuser: a.accuser,
+        cards: a.cards,
+    })),
 });
 
 export const decodeSession = (data: unknown): GameSession | undefined => {
-    const decoded = decodeV4Unknown(data);
+    const decoded = decodeV5Unknown(data);
     if (Result.isFailure(decoded)) return undefined;
-    return buildSessionFromV4(decoded.success);
+    return buildSessionFromV5(decoded.success);
 };
 
-const STORAGE_KEY = "effect-clue.session.v4";
+const STORAGE_KEY = "effect-clue.session.v5";
 
 export const saveToLocalStorage = (session: GameSession): void => {
     try {

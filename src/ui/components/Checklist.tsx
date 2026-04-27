@@ -43,6 +43,7 @@ import {
     caseFileCandidatesFor,
     caseFileProgress,
 } from "../../logic/Recommender";
+import { Accusation } from "../../logic/Accusation";
 import { Suggestion } from "../../logic/Suggestion";
 import { useConfirm } from "../hooks/useConfirm";
 import { useSelection } from "../SelectionContext";
@@ -231,6 +232,7 @@ export function Checklist() {
     const footnotes = derived.footnotes;
     const provenance = derived.provenance;
     const suggestions = derived.suggestionsAsData;
+    const accusations = derived.accusationsAsData;
 
     // Fire `why_tooltip_opened` whenever the popover transitions from
     // closed (or another cell) to open on a new cell. Cells are fresh
@@ -795,6 +797,7 @@ export function Checklist() {
                                         const tooltipText = buildCellTitle({
                                             provenance,
                                             suggestions,
+                                            accusations,
                                             setup,
                                             owner,
                                             card: entry.id,
@@ -1419,12 +1422,41 @@ const resolveReasonCopy = (
                     suggestionNumbers: desc.params.suggestionNumbers,
                 }),
             };
+        case "failed-accusation": {
+            const headline = tReasons("accusationHeadline", {
+                number: desc.params.accusationIndex + 1,
+            });
+            if (
+                desc.params.accuser === undefined ||
+                desc.params.cardLabels === undefined
+            ) {
+                return {
+                    headline,
+                    detail: tReasons("failed-accusation.detailUnknown", {
+                        cellPlayer: desc.params.cellPlayer,
+                        cellCard: desc.params.cellCard,
+                        number: desc.params.accusationIndex + 1,
+                    }),
+                };
+            }
+            return {
+                headline,
+                detail: tReasons("failed-accusation.detailKnown", {
+                    cellPlayer: desc.params.cellPlayer,
+                    cellCard: desc.params.cellCard,
+                    accuser: desc.params.accuser,
+                    cardLabels: desc.params.cardLabels,
+                    number: desc.params.accusationIndex + 1,
+                }),
+            };
+        }
     }
 };
 
 const buildCellTitle = (args: {
     provenance: Provenance | undefined;
     suggestions: ReadonlyArray<Suggestion>;
+    accusations: ReadonlyArray<Accusation>;
     setup: ReturnType<typeof useClue>["state"]["setup"];
     owner: Owner;
     card: Card;
@@ -1435,6 +1467,7 @@ const buildCellTitle = (args: {
     const {
         provenance,
         suggestions,
+        accusations,
         setup,
         owner,
         card,
@@ -1454,7 +1487,13 @@ const buildCellTitle = (args: {
         ? chainFor(provenance, Cell(owner, card))
         : [];
     const chainLines: string[] = chain.map(({ cell: entryCell, reason }, i) => {
-        const desc = describeReason(reason, entryCell, setup, suggestions);
+        const desc = describeReason(
+            reason,
+            entryCell,
+            setup,
+            suggestions,
+            accusations,
+        );
         const { headline, detail } = resolveReasonCopy(desc, tReasons);
         return tDeduce("whyLine", {
             index: i + 1,

@@ -13,6 +13,7 @@ import {
     setHandSize,
     Y,
 } from "./Knowledge";
+import { Accusation } from "./Accusation";
 import { Suggestion } from "./Suggestion";
 import { runDeduce } from "./test-utils/RunDeduce";
 
@@ -307,5 +308,80 @@ describe("deduce", () => {
 
         expect(result.failure.offendingSuggestionIndices).toHaveLength(1);
         expect(result.failure.offendingSuggestionIndices[0]).toBe(0);
+    });
+});
+
+describe("deduce — failed accusations", () => {
+    test("a failed accusation forces the matching N when the other two are pinned", () => {
+        let knowledge = emptyKnowledge;
+        // Pin two of the three case-file slots via direct ownership cascades.
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), PLUM), Y);
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), KNIFE), Y);
+        const accusations = [
+            Accusation({ accuser: A, cards: [PLUM, KNIFE, CONSERV] }),
+        ];
+
+        const result = runDeduce(setup, [], knowledge, accusations);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+
+        expect(getCellByOwnerCard(result.success, CaseFileOwner(), CONSERV)).toBe(N);
+    });
+
+    test("backward compat: a runDeduce call without accusations matches one with []", () => {
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(PlayerOwner(A), MUSTARD), Y);
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [B, C],
+        })];
+
+        const noArg = runDeduce(setup, suggestions, knowledge);
+        const empty = runDeduce(setup, suggestions, knowledge, []);
+        expect(Result.isSuccess(noArg)).toBe(true);
+        expect(Result.isSuccess(empty)).toBe(true);
+        if (!Result.isSuccess(noArg) || !Result.isSuccess(empty)) return;
+        expect(HashMap.size(noArg.success.checklist)).toBe(
+            HashMap.size(empty.success.checklist),
+        );
+    });
+
+    test("contradictory accusation: all three Y → trace names the accusation", () => {
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), PLUM), Y);
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), KNIFE), Y);
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), CONSERV), Y);
+        const accusations = [
+            Accusation({ accuser: A, cards: [PLUM, KNIFE, CONSERV] }),
+        ];
+        const result = runDeduce(setup, [], knowledge, accusations);
+        expect(Result.isFailure(result)).toBe(true);
+        if (!Result.isFailure(result)) return;
+        expect(result.failure.offendingAccusationIndices).toEqual([0]);
+        expect(result.failure.contradictionKind?._tag).toBe("FailedAccusation");
+    });
+
+    test("cascade: failed accusation N + consistency slice → forces the right Y", () => {
+        let knowledge = emptyKnowledge;
+        // Knock the suspect category down to two candidates: PLUM + MUSTARD,
+        // by marking every other suspect as N for the case file.
+        for (const card of suspects) {
+            if (card === PLUM || card === MUSTARD) continue;
+            knowledge = setCell(knowledge, Cell(CaseFileOwner(), card), N);
+        }
+        // PLUM is pinned in the case file. KNIFE is pinned in the case file.
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), KNIFE), Y);
+        // Failed accusation says (PLUM, KNIFE, CONSERV) — the third card,
+        // CONSERV, must be N for the case file.
+        const accusations = [
+            Accusation({ accuser: A, cards: [PLUM, KNIFE, CONSERV] }),
+        ];
+        // Also pin PLUM=Y so the rule actually fires (needs 2 of 3 Y).
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), PLUM), Y);
+        const result = runDeduce(setup, [], knowledge, accusations);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+        expect(getCellByOwnerCard(result.success, CaseFileOwner(), CONSERV)).toBe(N);
     });
 });

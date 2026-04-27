@@ -532,6 +532,7 @@ describe("replaceSession", () => {
                     nonRefuters: [],
                 }),
             ],
+            accusations: [],
         };
         act(() => result.current.dispatch({ type: "replaceSession", session }));
         expect(result.current.state.setup).toBe(CLASSIC_SETUP_3P);
@@ -552,6 +553,7 @@ describe("replaceSession", () => {
                 hands: [],
                 handSizes: [],
                 suggestions: [],
+                accusations: [],
             },
         }));
         // Even though state changed, canUndo remains false for the

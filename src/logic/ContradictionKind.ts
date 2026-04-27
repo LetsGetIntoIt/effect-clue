@@ -32,6 +32,10 @@ export type ContradictionKind =
           readonly suggestionIndices: ReadonlyArray<number>;
       }
     | {
+          readonly _tag: "FailedAccusation";
+          readonly accusationIndex: number;
+      }
+    | {
           readonly _tag: "SliceCardOwnership";
           readonly card: Card;
           readonly direction: "over" | "under";

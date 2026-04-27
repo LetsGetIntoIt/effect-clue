@@ -1,3 +1,4 @@
+import type { AccusationId } from "./Accusation";
 import type { CardSet } from "./CardSet";
 import type { Card, CardCategory, Player } from "./GameObjects";
 import type { GameSetup } from "./GameSetup";
@@ -19,6 +20,18 @@ export interface DraftSuggestion {
     readonly nonRefuters: ReadonlyArray<Player>;
     readonly refuter?: Player | undefined;
     readonly seenCard?: Card | undefined;
+}
+
+/**
+ * UI-level shape of a failed accusation that hasn't been converted to a
+ * Data.Class record yet. Mirrors `DraftSuggestion` but carries only the
+ * accuser and the named triple — no refuter / seen card, since a failed
+ * accusation has neither.
+ */
+export interface DraftAccusation {
+    readonly id: AccusationId;
+    readonly accuser: Player;
+    readonly cards: ReadonlyArray<Card>;
 }
 
 /**
@@ -67,6 +80,9 @@ export type ClueAction =
     | { type: "addSuggestion"; suggestion: DraftSuggestion }
     | { type: "updateSuggestion"; suggestion: DraftSuggestion }
     | { type: "removeSuggestion"; id: SuggestionId }
+    | { type: "addAccusation"; accusation: DraftAccusation }
+    | { type: "updateAccusation"; accusation: DraftAccusation }
+    | { type: "removeAccusation"; id: AccusationId }
     | { type: "addPlayer" }
     | { type: "removePlayer"; player: Player }
     | { type: "renamePlayer"; oldName: Player; newName: Player }
@@ -78,5 +94,6 @@ export interface ClueState {
     readonly handSizes: ReadonlyArray<readonly [Player, number]>;
     readonly knownCards: ReadonlyArray<KnownCard>;
     readonly suggestions: ReadonlyArray<DraftSuggestion>;
+    readonly accusations: ReadonlyArray<DraftAccusation>;
     readonly uiMode: UiMode;
 }

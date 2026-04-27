@@ -56,6 +56,11 @@ import { Effect, Result } from "effect";
 import deduce, { type DeductionResult } from "../logic/Deducer";
 import { TelemetryRuntime } from "../observability/runtime";
 import {
+    Accusation,
+    AccusationId,
+    newAccusationId,
+} from "../logic/Accusation";
+import {
     newSuggestionId,
     Suggestion,
     SuggestionId,
@@ -77,9 +82,11 @@ import {
     refuterCandidateFootnotes,
 } from "../logic/Footnotes";
 import {
+    AccusationsService,
     CardSetService,
     PlayerSetService,
     SuggestionsService,
+    makeAccusationsLayer,
     makeSetupLayer,
     makeSuggestionsLayer,
 } from "../logic/services";
@@ -91,7 +98,10 @@ import { PANE_SETTLE_MS } from "./motion";
 import type { UiMode } from "../logic/ClueState";
 
 type DeduceLayer = Layer.Layer<
-    CardSetService | PlayerSetService | SuggestionsService
+    | AccusationsService
+    | CardSetService
+    | PlayerSetService
+    | SuggestionsService
 >;
 
 /**
@@ -119,6 +129,7 @@ const initialState: ClueState = {
     handSizes: [],
     knownCards: [],
     suggestions: [],
+    accusations: [],
     uiMode: "setup",
 };
 
@@ -135,8 +146,8 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
 
         case "loadCardSet":
             // Swap the deck; keep the current player roster. Hand
-            // sizes, known cards, and suggestions reference card ids
-            // from the old deck and are discarded.
+            // sizes, known cards, suggestions, and accusations
+            // reference card ids from the old deck and are discarded.
             return {
                 ...state,
                 setup: GameSetup({
@@ -146,6 +157,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 knownCards: [],
                 handSizes: [],
                 suggestions: [],
+                accusations: [],
             };
 
         case "setSetup":
@@ -335,6 +347,28 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 ),
             };
 
+        case "addAccusation":
+            return {
+                ...state,
+                accusations: [...state.accusations, action.accusation],
+            };
+
+        case "updateAccusation":
+            return {
+                ...state,
+                accusations: state.accusations.map(a =>
+                    a.id === action.accusation.id ? action.accusation : a,
+                ),
+            };
+
+        case "removeAccusation":
+            return {
+                ...state,
+                accusations: state.accusations.filter(
+                    a => a.id !== action.id,
+                ),
+            };
+
         case "addPlayer": {
             const existing = new Set(
                 state.setup.players.map(p => String(p)),
@@ -377,6 +411,9 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                                 ? undefined
                                 : s.refuter,
                     })),
+                accusations: state.accusations.filter(
+                    a => a.accuser !== action.player,
+                ),
             };
 
         case "renamePlayer": {
@@ -409,6 +446,10 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     refuter:
                         s.refuter === oldName ? newName : s.refuter,
                 })),
+                accusations: state.accusations.map(a => ({
+                    ...a,
+                    accuser: a.accuser === oldName ? newName : a.accuser,
+                })),
             };
         }
 
@@ -433,6 +474,13 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     refuter: s.refuter,
                     seenCard: s.seenCard,
                 })),
+                accusations: session.accusations.map(a => ({
+                    id: a.id === AccusationId("")
+                        ? newAccusationId()
+                        : a.id,
+                    accuser: a.accuser,
+                    cards: Array.from(a.cards),
+                })),
             };
         }
     }
@@ -448,6 +496,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
  */
 interface ClueDerived {
     readonly suggestionsAsData: ReadonlyArray<Suggestion>;
+    readonly accusationsAsData: ReadonlyArray<Accusation>;
     readonly initialKnowledge: Knowledge;
     readonly deductionResult: DeductionResult;
     readonly provenance: Provenance | undefined;
@@ -636,8 +685,10 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     const gameStartedRef = useRef(false);
     useEffect(() => {
         gameStartedRef.current =
-            state.knownCards.length > 0 || state.suggestions.length > 0;
-    }, [state.knownCards, state.suggestions]);
+            state.knownCards.length > 0
+            || state.suggestions.length > 0
+            || state.accusations.length > 0;
+    }, [state.knownCards, state.suggestions, state.accusations]);
 
     // Keyboard bindings wired via the central keyMap module. Each
     // useGlobalShortcut installs one window keydown listener that only
@@ -758,6 +809,18 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         [state.suggestions],
     );
 
+    const accusationsAsData = useMemo(
+        () =>
+            state.accusations.map(a =>
+                Accusation({
+                    id: a.id,
+                    accuser: a.accuser,
+                    cards: a.cards,
+                }),
+            ),
+        [state.accusations],
+    );
+
     const initialKnowledge = useMemo(
         () =>
             buildInitialKnowledge(
@@ -776,8 +839,9 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             Layer.mergeAll(
                 makeSetupLayer(state.setup),
                 makeSuggestionsLayer(suggestionsAsData),
+                makeAccusationsLayer(accusationsAsData),
             ),
-        [state.setup, suggestionsAsData],
+        [state.setup, suggestionsAsData, accusationsAsData],
     );
 
     const deductionResult = useMemo(
@@ -808,6 +872,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     const derived: ClueDerived = useMemo(
         () => ({
             suggestionsAsData,
+            accusationsAsData,
             initialKnowledge,
             deductionResult,
             provenance,
@@ -815,6 +880,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         }),
         [
             suggestionsAsData,
+            accusationsAsData,
             initialKnowledge,
             deductionResult,
             provenance,
@@ -896,9 +962,10 @@ export function ClueProvider({ children }: { children: ReactNode }) {
                 size,
             })),
             suggestions: suggestionsAsData,
+            accusations: accusationsAsData,
         };
         saveToLocalStorage(session);
-    }, [state, suggestionsAsData]);
+    }, [state, suggestionsAsData, accusationsAsData]);
 
     // ---- Analytics: state-driven funnel events ----------------------------
 
@@ -996,6 +1063,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         if (state.knownCards.length > 0) return true;
         if (state.handSizes.length > 0) return true;
         if (state.suggestions.length > 0) return true;
+        if (state.accusations.length > 0) return true;
         const players = state.setup.players;
         if (players.length !== DEFAULT_SETUP.players.length) return true;
         for (let i = 0; i < players.length; i++) {
@@ -1014,11 +1082,12 @@ export function ClueProvider({ children }: { children: ReactNode }) {
                 size,
             })),
             suggestions: suggestionsAsData,
+            accusations: accusationsAsData,
         };
         const encoded = encodeSessionToUrl(session);
         const base = `${window.location.origin}${window.location.pathname}`;
         return `${base}?state=${encoded}`;
-    }, [state, suggestionsAsData]);
+    }, [state, suggestionsAsData, accusationsAsData]);
 
     const value: ClueContextValue = useMemo(
         () => ({
@@ -1136,5 +1205,8 @@ const pruneSessionToSetup = (
                         ? s.seenCard
                         : undefined,
             })),
+        accusations: state.accusations
+            .filter(a => playerSet.has(String(a.accuser)))
+            .filter(a => a.cards.every(c => cardIdSet.has(String(c)))),
     };
 };

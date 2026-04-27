@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { CLASSIC_SETUP_3P } from "./GameSetup";
 import { Player } from "./GameObjects";
 import { cardByName } from "./test-utils/CardByName";
+import {
+    Accusation,
+    AccusationId,
+    newAccusationId,
+} from "./Accusation";
 import { newSuggestionId, Suggestion, SuggestionId } from "./Suggestion";
 import {
     decodeSession,
@@ -13,7 +18,7 @@ import {
     type GameSession,
 } from "./Persistence";
 
-const STORAGE_KEY = "effect-clue.session.v4";
+const STORAGE_KEY = "effect-clue.session.v5";
 
 const setup = CLASSIC_SETUP_3P;
 const A = Player("Anisha");
@@ -34,6 +39,7 @@ const minimalSession: GameSession = {
         { player: C, size: 6 },
     ],
     suggestions: [],
+    accusations: [],
 };
 
 const richSession = (): GameSession => ({
@@ -71,6 +77,18 @@ const richSession = (): GameSession => ({
             nonRefuters: [A],
             refuter: B,
             seenCard: KNIFE,
+        }),
+    ],
+    accusations: [
+        Accusation({
+            id: newAccusationId(),
+            accuser: A,
+            cards: [PLUM, ROPE, KITCHEN],
+        }),
+        Accusation({
+            id: newAccusationId(),
+            accuser: B,
+            cards: [MUSTARD, KNIFE, KITCHEN],
         }),
     ],
 });
@@ -117,6 +135,49 @@ describe("encode/decode — rich sessions", () => {
         // Fresh id gets the `suggestion-` prefix from `newSuggestionId`.
         expect(String(id)).toMatch(/^suggestion-/);
     });
+
+    test("round-trips accusations with accuser and cards intact", () => {
+        const s = richSession();
+        const decoded = decodeSession(encodeSession(s));
+        expect(decoded?.accusations).toHaveLength(2);
+        expect(decoded?.accusations[0]?.accuser).toBe(A);
+        expect(decoded?.accusations[1]?.accuser).toBe(B);
+    });
+
+    test("generates a fresh AccusationId when the persisted id is the empty sentinel", () => {
+        const encoded = encodeSession({
+            ...minimalSession,
+            accusations: [
+                Accusation({
+                    id: AccusationId(""),
+                    accuser: A,
+                    cards: [MUSTARD, KNIFE, KITCHEN],
+                }),
+            ],
+        });
+        const decoded = decodeSession(encoded);
+        const id = decoded?.accusations[0]?.id;
+        expect(id).toBeDefined();
+        expect(id).not.toBe(AccusationId(""));
+        expect(String(id)).toMatch(/^accusation-/);
+    });
+
+    test("decodeSession rejects a v4 payload (no migration chain)", () => {
+        // v5 schema requires `accusations: []`; a v4-shaped blob doesn't
+        // pass the schema and must return undefined so the caller falls
+        // back to a fresh session.
+        const v4Payload = {
+            version: 4,
+            setup: {
+                players: ["Anisha"],
+                categories: [],
+            },
+            hands: [],
+            handSizes: [],
+            suggestions: [],
+        };
+        expect(decodeSession(v4Payload)).toBeUndefined();
+    });
 });
 
 describe("saveToLocalStorage / loadFromLocalStorage", () => {
@@ -129,11 +190,11 @@ describe("saveToLocalStorage / loadFromLocalStorage", () => {
         expect(loaded?.handSizes).toHaveLength(3);
     });
 
-    test("save writes under the v4-scoped storage key", () => {
+    test("save writes under the v5-scoped storage key", () => {
         saveToLocalStorage(minimalSession);
         const raw = window.localStorage.getItem(STORAGE_KEY);
         expect(raw).not.toBeNull();
-        expect(JSON.parse(raw as string).version).toBe(4);
+        expect(JSON.parse(raw as string).version).toBe(5);
     });
 
     test("load returns undefined when the key is missing", () => {

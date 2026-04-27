@@ -163,6 +163,35 @@ export const describeAction = (
                 cards: joinCardNames(setup, prior.cards),
             });
         }
+        case "addAccusation":
+            return t("actions.addAccusation", {
+                player: String(action.accusation.accuser),
+                cards: joinCardNames(setup, action.accusation.cards),
+            });
+        case "updateAccusation": {
+            const idx = previousState.accusations.findIndex(
+                a => a.id === action.accusation.id,
+            );
+            if (idx < 0) return t("actions.updateAccusationUnknown");
+            const prior = previousState.accusations[idx]!;
+            return t("actions.updateAccusation", {
+                number: idx + 1,
+                player: String(prior.accuser),
+                cards: joinCardNames(setup, prior.cards),
+            });
+        }
+        case "removeAccusation": {
+            const idx = previousState.accusations.findIndex(
+                a => a.id === action.id,
+            );
+            if (idx < 0) return t("actions.removeAccusationUnknown");
+            const prior = previousState.accusations[idx]!;
+            return t("actions.removeAccusation", {
+                number: idx + 1,
+                player: String(prior.accuser),
+                cards: joinCardNames(setup, prior.cards),
+            });
+        }
         // Non-undoable actions — should never reach the describer
         // because the history reducer bypasses them.
         case "setSetup":
