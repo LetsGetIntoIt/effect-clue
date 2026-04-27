@@ -8,8 +8,8 @@ import {
 import { Card, Player } from "./GameObjects";
 import { CardEntry, Category, GameSetup } from "./GameSetup";
 import {
-    decodeV5Unknown,
-    type PersistedSessionV5,
+    decodeV6Unknown,
+    type PersistedSessionV6,
 } from "./PersistenceSchema";
 import {
     newSuggestionId,
@@ -28,8 +28,8 @@ import {
  * older / malformed blob ever shows up, decode returns undefined
  * and the caller falls back to a fresh session.
  */
-interface PersistedGameV5 {
-    readonly version: 5;
+interface PersistedGameV6 {
+    readonly version: 6;
     readonly setup: {
         readonly players: ReadonlyArray<string>;
         readonly categories: ReadonlyArray<{
@@ -56,15 +56,17 @@ interface PersistedGameV5 {
         readonly nonRefuters: ReadonlyArray<string>;
         readonly refuter: string | null;
         readonly seenCard: string | null;
+        readonly loggedAt: number;
     }>;
     readonly accusations: ReadonlyArray<{
         readonly id?: string | undefined;
         readonly accuser: string;
         readonly cards: ReadonlyArray<string>;
+        readonly loggedAt: number;
     }>;
 }
 
-type PersistedGame = PersistedGameV5;
+type PersistedGame = PersistedGameV6;
 
 export interface GameSession {
     setup: GameSetup;
@@ -75,7 +77,7 @@ export interface GameSession {
 }
 
 export const encodeSession = (session: GameSession): PersistedGame => ({
-    version: 5,
+    version: 6,
     setup: {
         players: session.setup.players.map(p => String(p)),
         categories: session.setup.categories.map(c => ({
@@ -102,23 +104,25 @@ export const encodeSession = (session: GameSession): PersistedGame => ({
         nonRefuters: suggestionNonRefuters(s).map(p => String(p)),
         refuter: s.refuter === undefined ? null : String(s.refuter),
         seenCard: s.seenCard === undefined ? null : String(s.seenCard),
+        loggedAt: s.loggedAt,
     })),
     accusations: session.accusations.map(a => ({
         id: String(a.id),
         accuser: String(a.accuser),
         cards: accusationCards(a).map(c => String(c)),
+        loggedAt: a.loggedAt,
     })),
 });
 
 /**
- * Convert a Schema-validated v5 payload into the domain GameSession.
+ * Convert a Schema-validated v6 payload into the domain GameSession.
  * Branded types already flow through the schema, so this is pure
  * construction — no Player(...) / Card(...) wrapping needed.
  */
-const buildSessionFromV5 = (v5: PersistedSessionV5): GameSession => ({
+const buildSessionFromV6 = (v6: PersistedSessionV6): GameSession => ({
     setup: GameSetup({
-        players: v5.setup.players,
-        categories: v5.setup.categories.map(c => Category({
+        players: v6.setup.players,
+        categories: v6.setup.categories.map(c => Category({
             id: c.id,
             name: c.name,
             cards: c.cards.map(card => CardEntry({
@@ -127,12 +131,12 @@ const buildSessionFromV5 = (v5: PersistedSessionV5): GameSession => ({
             })),
         })),
     }),
-    hands: v5.hands.map(h => ({ player: h.player, cards: h.cards })),
-    handSizes: v5.handSizes.map(h => ({
+    hands: v6.hands.map(h => ({ player: h.player, cards: h.cards })),
+    handSizes: v6.handSizes.map(h => ({
         player: h.player,
         size: h.size,
     })),
-    suggestions: v5.suggestions.map(s => Suggestion({
+    suggestions: v6.suggestions.map(s => Suggestion({
         id: s.id === undefined || s.id === SuggestionId("")
             ? newSuggestionId()
             : s.id,
@@ -141,23 +145,25 @@ const buildSessionFromV5 = (v5: PersistedSessionV5): GameSession => ({
         nonRefuters: s.nonRefuters,
         refuter: s.refuter === null ? undefined : s.refuter,
         seenCard: s.seenCard === null ? undefined : s.seenCard,
+        loggedAt: s.loggedAt,
     })),
-    accusations: v5.accusations.map(a => Accusation({
+    accusations: v6.accusations.map(a => Accusation({
         id: a.id === undefined || a.id === AccusationId("")
             ? newAccusationId()
             : a.id,
         accuser: a.accuser,
         cards: a.cards,
+        loggedAt: a.loggedAt,
     })),
 });
 
 export const decodeSession = (data: unknown): GameSession | undefined => {
-    const decoded = decodeV5Unknown(data);
+    const decoded = decodeV6Unknown(data);
     if (Result.isFailure(decoded)) return undefined;
-    return buildSessionFromV5(decoded.success);
+    return buildSessionFromV6(decoded.success);
 };
 
-const STORAGE_KEY = "effect-clue.session.v5";
+const STORAGE_KEY = "effect-clue.session.v6";
 
 export const saveToLocalStorage = (session: GameSession): void => {
     try {

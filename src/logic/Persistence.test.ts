@@ -18,7 +18,7 @@ import {
     type GameSession,
 } from "./Persistence";
 
-const STORAGE_KEY = "effect-clue.session.v5";
+const STORAGE_KEY = "effect-clue.session.v6";
 
 const setup = CLASSIC_SETUP_3P;
 const A = Player("Anisha");
@@ -162,21 +162,19 @@ describe("encode/decode — rich sessions", () => {
         expect(String(id)).toMatch(/^accusation-/);
     });
 
-    test("decodeSession rejects a v4 payload (no migration chain)", () => {
-        // v5 schema requires `accusations: []`; a v4-shaped blob doesn't
-        // pass the schema and must return undefined so the caller falls
-        // back to a fresh session.
-        const v4Payload = {
-            version: 4,
-            setup: {
-                players: ["Anisha"],
-                categories: [],
-            },
+    test("decodeSession rejects older payloads (no migration chain)", () => {
+        // Older session formats no longer parse — the v6 schema requires
+        // `loggedAt` on each suggestion + accusation. The caller falls
+        // back to a fresh session on any unrecognized input.
+        const olderPayload = {
+            version: 5,
+            setup: { players: ["Anisha"], categories: [] },
             hands: [],
             handSizes: [],
             suggestions: [],
+            accusations: [],
         };
-        expect(decodeSession(v4Payload)).toBeUndefined();
+        expect(decodeSession(olderPayload)).toBeUndefined();
     });
 });
 
@@ -190,11 +188,11 @@ describe("saveToLocalStorage / loadFromLocalStorage", () => {
         expect(loaded?.handSizes).toHaveLength(3);
     });
 
-    test("save writes under the v5-scoped storage key", () => {
+    test("save writes under the v6-scoped storage key", () => {
         saveToLocalStorage(minimalSession);
         const raw = window.localStorage.getItem(STORAGE_KEY);
         expect(raw).not.toBeNull();
-        expect(JSON.parse(raw as string).version).toBe(5);
+        expect(JSON.parse(raw as string).version).toBe(6);
     });
 
     test("load returns undefined when the key is missing", () => {

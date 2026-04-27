@@ -12,6 +12,12 @@ import type { SuggestionId } from "./Suggestion";
  * render these and the state layer converts them on submit. Lives in
  * the logic layer so pure-logic consumers (`describeAction`, future
  * rule helpers) can reference it without pulling in React.
+ *
+ * `loggedAt` is the millisecond timestamp recorded when the
+ * suggestion was added to the log. The combined prior-log UI in
+ * `SuggestionLogPanel` interleaves suggestions and accusations by
+ * `loggedAt`. Forms set it via `Date.now()` on submit; persistence
+ * round-trips it.
  */
 export interface DraftSuggestion {
     readonly id: SuggestionId;
@@ -20,18 +26,27 @@ export interface DraftSuggestion {
     readonly nonRefuters: ReadonlyArray<Player>;
     readonly refuter?: Player | undefined;
     readonly seenCard?: Card | undefined;
+    /**
+     * Optional in the type so test fixtures and ad-hoc construction
+     * sites don't have to thread it through; persistence and the
+     * domain `Suggestion` constructor default `undefined` to `0`.
+     */
+    readonly loggedAt?: number;
 }
 
 /**
  * UI-level shape of a failed accusation that hasn't been converted to a
  * Data.Class record yet. Mirrors `DraftSuggestion` but carries only the
  * accuser and the named triple — no refuter / seen card, since a failed
- * accusation has neither.
+ * accusation has neither. `loggedAt` follows the same convention as
+ * `DraftSuggestion.loggedAt`.
  */
 export interface DraftAccusation {
     readonly id: AccusationId;
     readonly accuser: Player;
     readonly cards: ReadonlyArray<Card>;
+    /** See `DraftSuggestion.loggedAt`. */
+    readonly loggedAt?: number;
 }
 
 /**

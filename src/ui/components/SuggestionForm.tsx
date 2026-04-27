@@ -387,7 +387,15 @@ export const SuggestionForm = forwardRef<
 
     const doSubmit = useCallback(() => {
         if (!canSubmit || draft === null) return;
-        onSubmit(draft);
+        // Stamp the draft with the right loggedAt before handing off:
+        // edit-mode preserves the original (so re-ordering doesn't
+        // happen on re-save), add-mode mints `Date.now()` so the
+        // combined prior-log sees this entry as the most recent.
+        const submittable: DraftSuggestion = {
+            ...draft,
+            loggedAt: suggestion?.loggedAt ?? Date.now(),
+        };
+        onSubmit(submittable);
         // Add-flow: reset and return to the first pill.
         // Edit-flow: the parent unmounts us via onCancel-equivalent
         // after it processes the update, so resetting is harmless.

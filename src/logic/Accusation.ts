@@ -56,6 +56,14 @@ class AccusationImpl extends Data.Class<{
     readonly id: AccusationId;
     readonly accuser: Player;
     readonly cards: HashSet.HashSet<Card>;
+    /**
+     * Millisecond timestamp recording when this accusation was logged.
+     * Mirrors `Suggestion.loggedAt` — powers the chronological prior-
+     * log UI. Defaults to `0` from the constructor when callers omit
+     * it; production paths (React reducer + `replaceSession`) always
+     * pass `Date.now()` or the persisted value.
+     */
+    readonly loggedAt: number;
 }> {}
 
 export type Accusation = AccusationImpl;
@@ -64,11 +72,13 @@ export const Accusation = (params: {
     id?: AccusationId;
     accuser: Player;
     cards: Iterable<Card>;
+    loggedAt?: number;
 }): Accusation =>
     new AccusationImpl({
         id: params.id ?? AccusationId(""),
         accuser: params.accuser,
         cards: HashSet.fromIterable(params.cards),
+        loggedAt: params.loggedAt ?? 0,
     });
 
 export const accusationCards = (a: Accusation): ReadonlyArray<Card> =>

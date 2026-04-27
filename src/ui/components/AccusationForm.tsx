@@ -154,7 +154,14 @@ export const AccusationForm = forwardRef<
 
     const onSubmitClick = useCallback(() => {
         if (draft === null) return;
-        onSubmit(draft);
+        // Edit-mode preserves the original `loggedAt` so re-saving
+        // doesn't re-order the entry in the prior log; add-mode mints
+        // `Date.now()` so the new entry lands at the bottom (most recent).
+        const submittable: DraftAccusation = {
+            ...draft,
+            loggedAt: accusation?.loggedAt ?? Date.now(),
+        };
+        onSubmit(submittable);
         if (accusation === undefined) {
             setForm(emptyFormState(setup));
             setOpenPillId(null);
