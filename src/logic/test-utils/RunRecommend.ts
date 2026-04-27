@@ -1,4 +1,6 @@
 import { Effect, Layer } from "effect";
+import type { Accusation } from "../Accusation";
+import { recommendSuggestionsByInfoGain } from "../EntropyScorer";
 import type { GameSetup } from "../GameSetup";
 import type { Knowledge } from "../Knowledge";
 import type { Player } from "../GameObjects";
@@ -8,9 +10,12 @@ import {
     recommendAction,
     recommendSuggestions,
 } from "../Recommender";
+import type { Suggestion } from "../Suggestion";
 import {
+    makeAccusationsLayer,
     makeKnowledgeLayer,
     makeSetupLayer,
+    makeSuggestionsLayer,
 } from "../services";
 
 /**
@@ -65,5 +70,37 @@ export const runRecommendAction = (
     Effect.runSync(
         recommendAction(suggester, maxResults).pipe(
             Effect.provide(recommendLayer(setup, knowledge)),
+        ),
+    );
+
+/**
+ * Test helper for the info-gain recommender. Pulls in the suggestions
+ * + accusations layers in addition to setup + knowledge so the
+ * Effect resolves cleanly. Both default to empty arrays for the
+ * common "fresh game" test path.
+ */
+export const runRecommendByInfoGain = (
+    setup: GameSetup,
+    knowledge: Knowledge,
+    suggester: Player,
+    options: {
+        readonly suggestions?: ReadonlyArray<Suggestion>;
+        readonly accusations?: ReadonlyArray<Accusation>;
+        readonly maxResults?: number;
+    } = {},
+) =>
+    Effect.runSync(
+        recommendSuggestionsByInfoGain(
+            suggester,
+            options.maxResults,
+        ).pipe(
+            Effect.provide(
+                Layer.mergeAll(
+                    makeSetupLayer(setup),
+                    makeKnowledgeLayer(knowledge),
+                    makeSuggestionsLayer(options.suggestions ?? []),
+                    makeAccusationsLayer(options.accusations ?? []),
+                ),
+            ),
         ),
     );

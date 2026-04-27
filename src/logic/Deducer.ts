@@ -1,13 +1,18 @@
-import { Effect, Equal, Result } from "effect";
+import { Effect, Equal, Layer, Result } from "effect";
+import type { Accusation } from "./Accusation";
 import { Cell, Contradiction, Knowledge } from "./Knowledge";
 import { ContradictionKind } from "./ContradictionKind";
 import { GameSetup } from "./GameSetup";
 import { applyAllRules } from "./Rules";
+import type { Suggestion } from "./Suggestion";
 import {
     getAccusations,
     getCardSet,
     getPlayerSet,
     getSuggestions,
+    makeAccusationsLayer,
+    makeSetupLayer,
+    makeSuggestionsLayer,
 } from "./services";
 
 /**
@@ -116,3 +121,32 @@ const deduce = Effect.fn("deducer.evaluate")(function* (initial: Knowledge) {
 });
 
 export default deduce;
+
+/**
+ * Synchronous wrapper around `deduce` for production callers that need
+ * to invoke the deducer ad-hoc (e.g. the entropy scorer running one
+ * deducer pass per hypothetical outcome). Builds an ephemeral layer
+ * from positional inputs and materialises the Effect failure channel
+ * back to a `DeductionResult` so consumers can branch on
+ * `Result.isSuccess` without juggling Effect.runSync themselves.
+ *
+ * Mirror of the test-utils helper of the same name; kept here so
+ * non-test consumers don't have to cross-import test code.
+ */
+export const deduceSync = (
+    setup: GameSetup,
+    suggestions: ReadonlyArray<Suggestion>,
+    accusations: ReadonlyArray<Accusation>,
+    initial: Knowledge,
+): DeductionResult =>
+    Effect.runSync(
+        Effect.result(deduce(initial)).pipe(
+            Effect.provide(
+                Layer.mergeAll(
+                    makeSetupLayer(setup),
+                    makeSuggestionsLayer(suggestions),
+                    makeAccusationsLayer(accusations),
+                ),
+            ),
+        ),
+    );

@@ -6,6 +6,7 @@ import {
     emptyKnowledge,
     N,
     setCell,
+    setHandSize,
     Y,
 } from "./Knowledge";
 import { caseFileCandidatesFor, isAnySlot } from "./Recommender";
@@ -16,6 +17,7 @@ import {
     runConsolidate,
     runRecommend,
     runRecommendAction,
+    runRecommendByInfoGain,
 } from "./test-utils/RunRecommend";
 
 const setup = CLASSIC_SETUP_3P;
@@ -425,6 +427,101 @@ describe("recommendAction", () => {
         expect(top.cards).toHaveLength(setup.categories.length);
         expect(top.score).toBeGreaterThan(0);
         expect(top.suggester).toBe(A);
+    });
+});
+
+describe("recommendSuggestionsByInfoGain", () => {
+    const PLUM    = cardByName(setup, "Prof. Plum");
+    const KNIFE   = cardByName(setup, "Knife");
+    const KITCHEN = cardByName(setup, "Kitchen");
+
+    test("ranking sanity: top recommendation is structurally valid", () => {
+        // Need handSize set so the marginal probability is non-zero;
+        // without that the scorer returns 0 for every triple.
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(PlayerOwner(A), PLUM), N); // arbitrary partial
+        const recs = runRecommendByInfoGain(setup, k, A, {
+            maxResults: 5,
+        });
+        // Without handSizes, expectedInfoGain is 0 → no recs.
+        // Test the with-handSizes path:
+        let kHand = emptyKnowledge;
+        kHand = setCell(kHand, Cell(PlayerOwner(A), PLUM), N);
+        // Add hand sizes via the Knowledge module's setHandSize.
+kHand = setHandSize(kHand, PlayerOwner(A), 6);
+        kHand = setHandSize(kHand, PlayerOwner(B), 6);
+        kHand = setHandSize(kHand, PlayerOwner(C), 6);
+        const recsWithHands = runRecommendByInfoGain(setup, kHand, A, {
+            maxResults: 5,
+        });
+        expect(recsWithHands.length).toBeGreaterThan(0);
+        const top = recsWithHands[0];
+        expect(top).toBeDefined();
+        if (!top) return;
+        expect(top.cards).toHaveLength(setup.categories.length);
+        expect(top.expectedInfoGain).toBeGreaterThan(0);
+        expect(top.outcomeCount).toBeGreaterThan(0);
+        expect(top.suggester).toBe(A);
+        // Suppress unused-var warning for the no-hands recs.
+        expect(Array.isArray(recs)).toBe(true);
+    });
+
+    test("empty input gracefulness — fresh game returns at least one rec", () => {
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(PlayerOwner(A), PLUM), Y);
+        // setHandSize for everyone so the marginal model is non-trivial.
+k = setHandSize(k, PlayerOwner(A), 6);
+        k = setHandSize(k, PlayerOwner(B), 6);
+        k = setHandSize(k, PlayerOwner(C), 6);
+        const recs = runRecommendByInfoGain(setup, k, A);
+        expect(recs.length).toBeGreaterThan(0);
+    });
+
+    test("fully-pinned case file returns no recs", () => {
+        // Mark every case-file cell as N → cartesianCandidates is empty.
+        let k = emptyKnowledge;
+        for (const c of setup.categories) {
+            for (const entry of c.cards) {
+                k = setCell(k, Cell(CaseFileOwner(), entry.id), N);
+            }
+        }
+        const recs = runRecommendByInfoGain(setup, k, A);
+        expect(recs.length).toBe(0);
+    });
+
+    test("heuristic vs info-gain — both produce orderings (existence proof)", () => {
+        // Construct a partial-knowledge state and assert both recommenders
+        // return *non-empty* recommendations whose top item is structurally
+        // valid. Their rankings can differ — that's the whole point of
+        // info-gain — but the precise divergence depends on probability
+        // estimates, which makes a strict-divergence assertion brittle.
+        // This test guards "info-gain returns something useful and is
+        // independent of the heuristic ranker".
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(PlayerOwner(A), KNIFE), Y);
+k = setHandSize(k, PlayerOwner(A), 6);
+        k = setHandSize(k, PlayerOwner(B), 6);
+        k = setHandSize(k, PlayerOwner(C), 6);
+
+        const heuristic = runRecommend(setup, k, A, 5);
+        const infoGain = runRecommendByInfoGain(setup, k, A, {
+            maxResults: 5,
+        });
+
+        expect(heuristic.recommendations.length).toBeGreaterThan(0);
+        expect(infoGain.length).toBeGreaterThan(0);
+
+        // Both returned the same cardinality of cards per recommendation.
+        for (const r of heuristic.recommendations) {
+            expect(r.cards).toHaveLength(setup.categories.length);
+        }
+        for (const r of infoGain) {
+            expect(r.cards).toHaveLength(setup.categories.length);
+        }
+
+        // Suppress unused-var for KITCHEN — kept in scope for future
+        // divergence tests.
+        expect(KITCHEN).toBeDefined();
     });
 });
 
