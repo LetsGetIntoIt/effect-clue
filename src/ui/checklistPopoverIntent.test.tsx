@@ -80,10 +80,10 @@ describe("useWhyHoverIntent — popovers mode: immediate swap on enter", () => {
     });
 });
 
-describe("useWhyHoverIntent — exit timer (settle to refresh)", () => {
-    test("entering a new cell within the budget AND settling for OPEN_DELAY_MS keeps the mode", () => {
+describe("useWhyHoverIntent — exit timer (any cell-enter cancels)", () => {
+    test("entering a new cell cancels the exit timer immediately — no settle required", () => {
         const { result } = renderHook(() => useHarness(), { wrapper: Wrapper });
-        // Enter popovers mode via initial settle.
+        // Enter popovers mode via initial open-delay.
         act(() => {
             result.current.intent.onCellPointerEnter(cellA);
             vi.advanceTimersByTime(OPEN_DELAY_MS);
@@ -92,61 +92,77 @@ describe("useWhyHoverIntent — exit timer (settle to refresh)", () => {
         act(() => {
             result.current.intent.onCellPointerLeave();
         });
-        // Enter B at t=200ms after leave (within the 600ms enter
-        // window). Settle on B for OPEN_DELAY_MS — total 500ms < 900ms.
+        // Enter B at t=200ms after leave (within the budget). No
+        // need to linger — entry alone cancels the exit.
         act(() => {
             vi.advanceTimersByTime(200);
             result.current.intent.onCellPointerEnter(cellB);
-            vi.advanceTimersByTime(OPEN_DELAY_MS);
         });
-        // Settle fired → exit timer canceled. Even past the 900ms
-        // boundary the popover stays open on B.
+        // Even past the original 900ms boundary the popover stays
+        // open on B because the exit timer is gone.
         act(() => {
-            vi.advanceTimersByTime(EXIT_TIMEOUT_MS);
+            vi.advanceTimersByTime(EXIT_TIMEOUT_MS * 2);
         });
         expect(result.current.popoverCell).toEqual(cellB);
     });
 
-    test("entering a new cell but leaving before settle → exit fires at 900ms after the original leave", () => {
+    test("rapid bouncing between cells stays in mode (each enter cancels the exit timer)", () => {
         const { result } = renderHook(() => useHarness(), { wrapper: Wrapper });
         act(() => {
             result.current.intent.onCellPointerEnter(cellA);
             vi.advanceTimersByTime(OPEN_DELAY_MS);
         });
+        // Bounce between A and B every 100ms; never staying long
+        // enough to "settle" under the old rules.
         act(() => {
             result.current.intent.onCellPointerLeave();
         });
-        // Enter B briefly (<OPEN_DELAY_MS), then leave again.
+        for (let i = 0; i < 8; i++) {
+            act(() => {
+                vi.advanceTimersByTime(100);
+                result.current.intent.onCellPointerEnter(
+                    i % 2 === 0 ? cellB : cellA,
+                );
+                vi.advanceTimersByTime(50);
+                result.current.intent.onCellPointerLeave();
+            });
+        }
+        // Final enter on a cell — popover should still be alive
+        // because every previous enter canceled the exit timer.
         act(() => {
-            vi.advanceTimersByTime(100);
-            result.current.intent.onCellPointerEnter(cellB);
-            vi.advanceTimersByTime(100);
-            result.current.intent.onCellPointerLeave();
+            vi.advanceTimersByTime(50);
+            result.current.intent.onCellPointerEnter(cellA);
         });
-        // 200ms elapsed since the original leave — exit timer still
-        // running. Now wait the rest of the 900ms.
-        act(() => {
-            vi.advanceTimersByTime(EXIT_TIMEOUT_MS - 200);
-        });
-        expect(result.current.popoverCell).toBeNull();
+        expect(result.current.popoverCell).toEqual(cellA);
     });
 
-    test("merely entering a new cell (without settling) does NOT cancel the exit timer", () => {
+    test("entering then leaving re-arms the exit timer from the most recent leave", () => {
         const { result } = renderHook(() => useHarness(), { wrapper: Wrapper });
         act(() => {
             result.current.intent.onCellPointerEnter(cellA);
             vi.advanceTimersByTime(OPEN_DELAY_MS);
         });
+        // Leave A at t=0 (relative).
         act(() => {
             result.current.intent.onCellPointerLeave();
         });
-        // Enter B at t=700ms; settle would complete at t=1000ms — past
-        // the 900ms exit boundary. Exit fires before settle, popovers
-        // mode exits.
+        // Enter B at t=200 (cancels exit), leave B at t=300.
         act(() => {
-            vi.advanceTimersByTime(700);
+            vi.advanceTimersByTime(200);
             result.current.intent.onCellPointerEnter(cellB);
-            vi.advanceTimersByTime(EXIT_TIMEOUT_MS - 700);
+            vi.advanceTimersByTime(100);
+            result.current.intent.onCellPointerLeave();
+        });
+        // From the second leave (t=300), exit fires at t=300+900=1200.
+        // Originally — under the old "exit fires from first leave"
+        // rule — it would have fired at t=900, before this point.
+        act(() => {
+            vi.advanceTimersByTime(EXIT_TIMEOUT_MS - 100);
+        });
+        expect(result.current.popoverCell).toEqual(cellB);
+        // Wait the rest of the new exit budget.
+        act(() => {
+            vi.advanceTimersByTime(100);
         });
         expect(result.current.popoverCell).toBeNull();
     });
@@ -161,32 +177,6 @@ describe("useWhyHoverIntent — exit timer (settle to refresh)", () => {
             result.current.intent.onCellPointerLeave();
             vi.advanceTimersByTime(EXIT_TIMEOUT_MS);
         });
-        expect(result.current.popoverCell).toBeNull();
-    });
-
-    test("rapid bouncing between cells (none long enough to settle) exits at 900ms", () => {
-        const { result } = renderHook(() => useHarness(), { wrapper: Wrapper });
-        act(() => {
-            result.current.intent.onCellPointerEnter(cellA);
-            vi.advanceTimersByTime(OPEN_DELAY_MS);
-        });
-        // Bounce between A and B every 100ms; never staying long
-        // enough to settle.
-        act(() => {
-            result.current.intent.onCellPointerLeave();
-        });
-        for (let i = 0; i < 8; i++) {
-            act(() => {
-                vi.advanceTimersByTime(100);
-                result.current.intent.onCellPointerEnter(
-                    i % 2 === 0 ? cellB : cellA,
-                );
-                vi.advanceTimersByTime(50);
-                result.current.intent.onCellPointerLeave();
-            });
-        }
-        // The exit timer was set at the very first leave; nothing has
-        // canceled it. By now we've well exceeded 900ms.
         expect(result.current.popoverCell).toBeNull();
     });
 });
