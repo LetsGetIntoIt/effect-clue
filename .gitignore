@@ -11,6 +11,16 @@ dist/
 dist-ssr
 *.local
 
+# Wrong package manager artefacts. This project uses pnpm (see
+# `packageManager` in package.json) — accidental yarn / npm runs leave
+# their state behind, but it must never land tracked. CI is pnpm-only,
+# so a stray lockfile or .yarn cache would be a silent footgun.
+/.yarn/
+/yarn.lock
+/.yarnrc
+/.yarnrc.yml
+/package-lock.json
+
 # Next.js
 .next/
 out/
