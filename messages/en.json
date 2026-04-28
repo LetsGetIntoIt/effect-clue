@@ -175,8 +175,7 @@
     },
     "suggestions": {
         "title": "Suggestion log",
-        "addTitle": "Add a suggestion <shortcut>({shortcutKey})</shortcut>",
-        "addAccusationToggleLink": "log failed accusation instead",
+        "addTitle": "Add a <suggestionTab>suggestion <kbd>({suggestionKey})</kbd></suggestionTab> <accusationTab>accusation <kbd>({accusationKey})</kbd></accusationTab>",
         "recommendationsTitle": "Next-suggestion recommendations",
         "suggestingAs": "Suggesting as: ",
         "resolveContradictionFirst": "Resolve the contradiction to see recommendations.",
@@ -235,7 +234,6 @@
     "accusations": {
         "addTitle": "Log a failed accusation",
         "editTitle": "Edit accusation",
-        "addSuggestionToggleLink": "back to suggestion",
         "accusedLine": "<strong>{accuser}</strong> accused {cards} (failed)",
         "pillAccuser": "Accuser",
         "submit": "Log",

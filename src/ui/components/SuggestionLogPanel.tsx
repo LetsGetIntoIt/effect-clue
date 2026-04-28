@@ -1,6 +1,6 @@
 "use client";
 
-import { Effect, Fiber, Layer, Result } from "effect";
+import { Duration, Effect, Fiber, Layer, Result } from "effect";
 import { newAccusationId } from "../../logic/Accusation";
 import type { Card } from "../../logic/GameObjects";
 import { AnimatePresence, motion } from "motion/react";
@@ -42,7 +42,7 @@ import { useIsDesktop } from "../hooks/useIsDesktop";
 import { useListFormatter } from "../hooks/useListFormatter";
 import { useSelection } from "../SelectionContext";
 import { InfoPopover } from "./InfoPopover";
-import { AccusationForm } from "./AccusationForm";
+import { AccusationForm, type AccusationFormHandle } from "./AccusationForm";
 import {
     SuggestionForm,
     type SuggestionFormHandle,
@@ -96,54 +96,93 @@ export function SuggestionLogPanel() {
 
 /**
  * Inactivity timeout that flips the accusation form back to the
- * suggestion form (1 minute, matching the user's mental model of
- * "I switched, then got distracted"). Reset on every interaction
- * inside the form.
+ * suggestion form. Matches the user's mental model of "I switched,
+ * then got distracted". Reset on every discrete user interaction
+ * inside the form (hover, click, focus change, keypress); explicitly
+ * NOT reset by mere focus residency, so leaving focus parked on a
+ * pill for longer than this window correctly reverts to suggestion
+ * mode.
  */
-const ACCUSATION_IDLE_TIMEOUT_MS = 60_000;
+const ACCUSATION_IDLE_TIMEOUT: Duration.Duration = Duration.seconds(15);
 
 // Module-level mode sentinels — kept as `as const` so the lint rule's
 // type-narrowing exemption applies and no inline literal warnings.
 const SUGGESTION_MODE = "suggestion" as const;
 const ACCUSATION_MODE = "accusation" as const;
 
+type Mode = typeof SUGGESTION_MODE | typeof ACCUSATION_MODE;
+
+// Stable Framer Motion `layoutId` for the active-tab indicator. The
+// indicator is rendered as a child of whichever tab is active; the
+// shared id makes Framer auto-FLIP its background between the two.
+const TAB_INDICATOR_LAYOUT_ID = "addForm-tab-indicator";
+
+// AnimatePresence presence-mode that defers the entering form's mount
+// until the exiting form's transition has completed. Constant kept at
+// module scope so the i18next/no-literal-string lint exemption applies.
+const PRESENCE_WAIT_MODE = "wait" as const;
+
 /**
  * Top of the log: the pill-driven form for composing a new
- * suggestion. Two modes share this slot:
+ * suggestion or a failed accusation. Two modes share this slot,
+ * presented as a tab-strip header (`Add a [suggestion (⌘K)]
+ * [accusation (⌘I)]`) above the active form. Switching tabs slides
+ * a sliding accent indicator between the two buttons; the form area
+ * cross-fades + slides on the same axis.
  *
- *   - `"suggestion"` (default) renders `<SuggestionForm>`. The
- *     header reads "Add a suggestion" with a `log failed accusation
- *     instead` link beside it.
- *   - `"accusation"` renders `<AccusationForm>`. The header reads
- *     "Log a failed accusation" with a `back to suggestion` link.
+ * Auto-revert: while in accusation mode, any 15-second window with
+ * no discrete interaction (hover, click, focus change, keypress)
+ * flips back to suggestion mode. Submitting an accusation also
+ * flips immediately.
  *
- * Auto-revert: while in accusation mode, any 60-second window of
- * inactivity (no pointer / key events inside the form) flips back
- * to suggestion mode. Submitting an accusation flips immediately.
+ * Programmatic mode entry (e.g. from the ⌘K / ⌘I keyboard shortcuts
+ * or the recommender's "log this accusation" banner) goes through
+ * the `addFormFocus` bus, which writes both `setMode(target)` and
+ * `setPendingFocus(...)` so the new form's first pill is auto-opened
+ * once it has finished mounting (AnimatePresence's mode="wait" can
+ * delay mount past a microtask).
  */
 function AddSuggestion() {
     const { dispatch, state } = useClue();
     const t = useTranslations("suggestions");
-    const tAcc = useTranslations("accusations");
     const suggestionFormRef = useRef<SuggestionFormHandle>(null);
+    const accusationFormRef = useRef<AccusationFormHandle>(null);
+
+    const [mode, setMode] = useState<Mode>(SUGGESTION_MODE);
+    const [pendingFocus, setPendingFocus] = useState<{
+        readonly target: Mode;
+        readonly clear: boolean;
+    } | null>(null);
+
     useEffect(
         () =>
             registerAddFormFocusHandler((target, { clear }) => {
-                // Accusation-target wiring lands with the tab UI in a
-                // follow-up commit. Until then, the bus is suggestion-only
-                // in practice; calls with `target === "accusation"` are
-                // no-ops.
-                if (target !== "suggestion") return;
-                suggestionFormRef.current?.focusFirstPill({ clear });
+                const targetMode: Mode =
+                    target === "accusation" ? ACCUSATION_MODE : SUGGESTION_MODE;
+                setMode(targetMode);
+                setPendingFocus({ target: targetMode, clear });
             }),
         [],
     );
 
-    type Mode = typeof SUGGESTION_MODE | typeof ACCUSATION_MODE;
-    const [mode, setMode] = useState<Mode>(SUGGESTION_MODE);
+    // Drive the deferred focus-first-pill once the new form has
+    // mounted. `AnimatePresence mode="wait"` can hold off the mount
+    // until the exiting form's transition completes, so a microtask
+    // alone isn't enough — we wait until both `mode` and the matching
+    // ref's `current` are populated.
+    useEffect(() => {
+        if (pendingFocus === null) return;
+        if (pendingFocus.target !== mode) return;
+        const ref =
+            mode === SUGGESTION_MODE ? suggestionFormRef : accusationFormRef;
+        if (ref.current === null) return;
+        ref.current.focusFirstPill({ clear: pendingFocus.clear });
+        setPendingFocus(null);
+    }, [pendingFocus, mode]);
 
-    // Idle-timer ref. Reset on every pointer / key event inside the
-    // wrapper while in accusation mode. Cleared when we flip back.
+    // Idle-timer ref. Reset on every pointer / key / focus event
+    // inside the wrapper while in accusation mode. Cleared when we
+    // flip back.
     const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const clearIdleTimer = () => {
         if (idleTimerRef.current !== null) {
@@ -153,9 +192,10 @@ function AddSuggestion() {
     };
     const armIdleTimer = () => {
         clearIdleTimer();
-        idleTimerRef.current = setTimeout(() => {
-            setMode(SUGGESTION_MODE);
-        }, ACCUSATION_IDLE_TIMEOUT_MS);
+        idleTimerRef.current = setTimeout(
+            () => setMode(SUGGESTION_MODE),
+            Duration.toMillis(ACCUSATION_IDLE_TIMEOUT),
+        );
     };
     useEffect(() => {
         if (mode === ACCUSATION_MODE) armIdleTimer();
@@ -170,93 +210,239 @@ function AddSuggestion() {
         if (mode === ACCUSATION_MODE) armIdleTimer();
     };
 
-    const headline =
-        mode === SUGGESTION_MODE ? (
-            <>
-                {t.rich("addTitle", {
-                    shortcutKey: label("global.gotoPlay"),
-                    shortcut: chunks => (
-                        <span className="font-normal text-muted">
-                            {chunks}
-                        </span>
-                    ),
-                })}{" "}
-                <button
-                    type="button"
-                    onClick={() => {
-                        setMode(ACCUSATION_MODE);
-                        accusationFormOpened({ source: "toggle_link" });
-                    }}
-                    className="cursor-pointer border-none bg-transparent p-0 text-[12px] font-normal text-muted underline-offset-2 hover:text-accent hover:underline"
-                >
-                    {t("addAccusationToggleLink")}
-                </button>
-            </>
-        ) : (
-            <>
-                {tAcc("addTitle")}{" "}
-                <button
-                    type="button"
-                    onClick={() => setMode(SUGGESTION_MODE)}
-                    className="cursor-pointer border-none bg-transparent p-0 text-[12px] font-normal text-muted underline-offset-2 hover:text-accent hover:underline"
-                >
-                    {tAcc("addSuggestionToggleLink")}
-                </button>
-            </>
-        );
-
     return (
         <div
             onPointerDown={onWrapperActivity}
-            onKeyDown={onWrapperActivity}
             onPointerMove={onWrapperActivity}
+            onKeyDown={onWrapperActivity}
+            onFocus={onWrapperActivity}
         >
-            <h3 className={`${SECTION_TITLE} flex items-baseline gap-2`}>
-                {headline}
+            <AddFormTabHeader mode={mode} setMode={setMode} />
+            <AnimatePresence mode={PRESENCE_WAIT_MODE} initial={false}>
+                {mode === SUGGESTION_MODE ? (
+                    <FormSlide key="suggestion" direction={-1}>
+                        <SuggestionForm
+                            ref={suggestionFormRef}
+                            setup={state.setup}
+                            showHeader={false}
+                            onSubmit={draft => {
+                                dispatch({
+                                    type: "addSuggestion",
+                                    suggestion: draft,
+                                });
+                                const setup = state.setup;
+                                const [c0, c1, c2] = draft.cards;
+                                suggestionMade({
+                                    turnNumber: state.suggestions.length + 1,
+                                    suspect: c0
+                                        ? cardName(setup.cardSet, c0)
+                                        : "",
+                                    weapon: c1
+                                        ? cardName(setup.cardSet, c1)
+                                        : "",
+                                    room: c2
+                                        ? cardName(setup.cardSet, c2)
+                                        : "",
+                                    suggestingPlayer: String(draft.suggester),
+                                });
+                            }}
+                        />
+                    </FormSlide>
+                ) : (
+                    <FormSlide key="accusation" direction={1}>
+                        <AccusationForm
+                            ref={accusationFormRef}
+                            setup={state.setup}
+                            showHeader={false}
+                            onSubmit={draft => {
+                                dispatch({
+                                    type: "addAccusation",
+                                    accusation: draft,
+                                });
+                                accusationLogged({
+                                    accusationCount:
+                                        state.accusations.length + 1,
+                                    accuser: String(draft.accuser),
+                                    source: "manual",
+                                });
+                                // Submission flips back so the next thing
+                                // the user types is a regular suggestion.
+                                setMode(SUGGESTION_MODE);
+                            }}
+                        />
+                    </FormSlide>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+
+    // ---- Inner components -----------------------------------------
+    //
+    // Defined inside `AddSuggestion` so they can close over `t` /
+    // `setMode` without prop-drilling. Re-mount cost is fine — these
+    // are tiny presentational shells; React's reconciler keeps the
+    // children steady because the JSX shape is stable.
+
+    function AddFormTabHeader({
+        mode,
+        setMode,
+    }: {
+        readonly mode: Mode;
+        readonly setMode: (m: Mode) => void;
+    }): React.ReactElement {
+        const tabIndicatorTransition = useReducedTransition({
+            ...T_STANDARD,
+            duration: 0.22,
+        });
+        const onTabKeyDown = (
+            e: React.KeyboardEvent<HTMLButtonElement>,
+        ): void => {
+            // Arrow-key navigation between the two tabs, scoped to the
+            // tab buttons themselves so the per-form pill arrow-keys
+            // are unaffected (those listeners scope to `[data-pill-id]`
+            // elements).
+            const native = e.nativeEvent;
+            const isLeft = matches("nav.left", native);
+            const isRight = matches("nav.right", native);
+            if (!isLeft && !isRight) return;
+            e.preventDefault();
+            const next: Mode =
+                mode === SUGGESTION_MODE ? ACCUSATION_MODE : SUGGESTION_MODE;
+            if (next === ACCUSATION_MODE) {
+                accusationFormOpened({ source: "toggle_link" });
+            }
+            setMode(next);
+        };
+
+        return (
+            <h3
+                className={`${SECTION_TITLE} flex flex-wrap items-center gap-1.5 leading-[1.4]`}
+            >
+                {t.rich("addTitle", {
+                    suggestionKey: label("global.gotoPlay"),
+                    accusationKey: label("global.gotoAccusation"),
+                    suggestionTab: chunks => (
+                        <TabButton
+                            isActive={mode === SUGGESTION_MODE}
+                            indicatorTransition={tabIndicatorTransition}
+                            onClick={() => setMode(SUGGESTION_MODE)}
+                            onKeyDown={onTabKeyDown}
+                        >
+                            {chunks}
+                        </TabButton>
+                    ),
+                    accusationTab: chunks => (
+                        <TabButton
+                            isActive={mode === ACCUSATION_MODE}
+                            indicatorTransition={tabIndicatorTransition}
+                            onClick={() => {
+                                setMode(ACCUSATION_MODE);
+                                accusationFormOpened({
+                                    source: "toggle_link",
+                                });
+                            }}
+                            onKeyDown={onTabKeyDown}
+                        >
+                            {chunks}
+                        </TabButton>
+                    ),
+                    // Shortcut hint inside each tab. Lives inside the
+                    // button's `.group`, so its color tracks the
+                    // tab's active state (white-tinted on the accent
+                    // fill, muted on the inactive button).
+                    kbd: chunks => (
+                        <span
+                            className={
+                                "ml-0.5 font-normal text-muted " +
+                                "group-aria-[selected=true]:text-white/80"
+                            }
+                        >
+                            {chunks}
+                        </span>
+                    ),
+                })}
             </h3>
-            {mode === SUGGESTION_MODE ? (
-                <SuggestionForm
-                    ref={suggestionFormRef}
-                    setup={state.setup}
-                    showHeader={false}
-                    onSubmit={draft => {
-                        dispatch({
-                            type: "addSuggestion",
-                            suggestion: draft,
-                        });
-                        const setup = state.setup;
-                        const [c0, c1, c2] = draft.cards;
-                        suggestionMade({
-                            turnNumber: state.suggestions.length + 1,
-                            suspect: c0 ? cardName(setup.cardSet, c0) : "",
-                            weapon: c1 ? cardName(setup.cardSet, c1) : "",
-                            room: c2 ? cardName(setup.cardSet, c2) : "",
-                            suggestingPlayer: String(draft.suggester),
-                        });
-                    }}
-                />
-            ) : (
-                <AccusationForm
-                    setup={state.setup}
-                    showHeader={false}
-                    onSubmit={draft => {
-                        dispatch({
-                            type: "addAccusation",
-                            accusation: draft,
-                        });
-                        accusationLogged({
-                            accusationCount:
-                                state.accusations.length + 1,
-                            accuser: String(draft.accuser),
-                            source: "manual",
-                        });
-                        // Submission flips back so the next thing the
-                        // user types is a regular suggestion.
-                        setMode(SUGGESTION_MODE);
-                    }}
+        );
+    }
+}
+
+/**
+ * Wrapper that maps the rich-text chunk into a single tab-button
+ * element. The active button hosts the shared sliding indicator
+ * (`layoutId={TAB_INDICATOR_LAYOUT_ID}`); inactive buttons retain
+ * their hover affordance so they always read as clickable.
+ */
+function TabButton({
+    isActive,
+    indicatorTransition,
+    onClick,
+    onKeyDown,
+    children,
+}: {
+    readonly isActive: boolean;
+    readonly indicatorTransition: import("motion/react").Transition;
+    readonly onClick: () => void;
+    readonly onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => void;
+    readonly children: React.ReactNode;
+}): React.ReactElement {
+    // `group` lets the nested kbd shortcut span react to this
+    // button's aria-selected state via `group-aria-[selected=true]:`.
+    // Both buttons always look interactive (cursor-pointer, hover
+    // bg, focus ring); active state adds the sliding indicator and
+    // white text on top of the accent fill.
+    return (
+        <button
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            tabIndex={isActive ? 0 : -1}
+            onClick={onClick}
+            onKeyDown={onKeyDown}
+            className={
+                "group relative cursor-pointer rounded-full border-none " +
+                "bg-transparent px-2.5 py-0.5 text-[14px] font-semibold " +
+                "transition-colors hover:bg-accent/10 " +
+                "focus-visible:outline-2 focus-visible:outline-accent " +
+                "focus-visible:outline-offset-1 " +
+                (isActive ? "text-white" : "text-text")
+            }
+        >
+            {isActive && (
+                <motion.span
+                    layoutId={TAB_INDICATOR_LAYOUT_ID}
+                    aria-hidden
+                    className="absolute inset-0 -z-0 rounded-full bg-accent"
+                    transition={indicatorTransition}
                 />
             )}
-        </div>
+            <span className="relative z-10">{children}</span>
+        </button>
+    );
+}
+
+/**
+ * Per-form slide-in / slide-out wrapper used inside AnimatePresence.
+ * `direction` is `-1` for the suggestion form (enters from the left)
+ * and `+1` for the accusation form (enters from the right) — same
+ * axis as the tab indicator's slide.
+ */
+function FormSlide({
+    direction,
+    children,
+}: {
+    readonly direction: -1 | 1;
+    readonly children: React.ReactNode;
+}): React.ReactElement {
+    const transition = useReducedTransition(T_FAST);
+    return (
+        <motion.div
+            initial={{ x: direction * 16, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -direction * 16, opacity: 0 }}
+            transition={transition}
+        >
+            {children}
+        </motion.div>
     );
 }
 

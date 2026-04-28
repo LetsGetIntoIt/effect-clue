@@ -36,10 +36,11 @@ import {
 /**
  * Imperative handle exposed via `ref` so callers can drive focus
  * without baking global keyboard bindings into the form. Mirrors
- * `SuggestionFormHandle`. Not exported by name today — callers reach
- * for it through the forwardRef return type.
+ * `SuggestionFormHandle`. Exported so the `AddSuggestion` host in
+ * `SuggestionLogPanel` can hold an `AccusationFormHandle`-typed ref
+ * for the ⌘I shortcut wiring.
  */
-interface AccusationFormHandle {
+export interface AccusationFormHandle {
     readonly focusFirstPill: (options?: { readonly clear?: boolean }) => void;
 }
 
