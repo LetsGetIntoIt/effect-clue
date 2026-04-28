@@ -356,4 +356,43 @@ describe("PriorSuggestionItem — entering edit mode (mobile two-tap)", () => {
         fireEvent.click(within(getRow()).getByText("editAction"));
         await waitPillsVisible();
     });
+
+    test("tapping outside while the Edit button is visible cancels pre-edit mode", async () => {
+        await seedOneSuggestionAndMount();
+        fireEvent.click(getRow());
+        await waitFor(() => {
+            expect(
+                within(getRow()).queryByText("editAction"),
+            ).toBeInTheDocument();
+        });
+        // Pre-edit, no pills yet.
+        expect(getRow().querySelector("[data-pill-id]")).toBeNull();
+        // Pointerdown outside the row → pre-edit dismisses, Edit
+        // button hides.
+        fireEvent.pointerDown(document.body);
+        await waitFor(() => {
+            expect(
+                within(getRow()).queryByText("editAction"),
+            ).not.toBeInTheDocument();
+        });
+    });
+
+    test("tapping inside the row while in pre-edit mode does NOT dismiss it", async () => {
+        await seedOneSuggestionAndMount();
+        fireEvent.click(getRow());
+        await waitFor(() => {
+            expect(
+                within(getRow()).queryByText("editAction"),
+            ).toBeInTheDocument();
+        });
+        // pointerdown on the row itself (e.g. user's finger glances
+        // back onto the row before tapping the Edit button) — must
+        // not collapse pre-edit.
+        fireEvent.pointerDown(getRow());
+        // Give the effect a tick.
+        await new Promise(r => setTimeout(r, 0));
+        expect(
+            within(getRow()).queryByText("editAction"),
+        ).toBeInTheDocument();
+    });
 });
