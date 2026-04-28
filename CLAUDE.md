@@ -6,22 +6,42 @@ Use `pnpm` for everything. Never `npm`, `yarn`, or `bun`.
 
 ## Use the right Node version
 
-Once per shell session, run `nvm use` from the repo root — it picks the version from `.nvmrc`. With `engine-strict=true` in `.npmrc`, every other script (`pnpm install`, `pnpm test`, etc.) will refuse to run on the wrong Node version, so getting this right once at the start of a session is what unblocks everything else. You don't need to re-run it before every command in the same shell.
+### TL;DR — the only rules you need
 
-**Once per session, not once per command.** Run `nvm use` (and the `source` fix below if it errors) once, then run every other `pnpm` / `node` / build command on its own. Don't keep prepending `export NVM_DIR=… && source … && nvm use && pnpm …` to every command — the active Node binary stays on PATH for subsequent commands in the same session, so re-running the env setup is just noise (and extra permission prompts).
+1. **Just run `pnpm <script>` directly.** No `nvm use`, no `export NVM_DIR`, no `source ~/.nvm/nvm.sh`, no chaining. The shell profile already loads a Node that `pnpm` tolerates.
+2. **Only if step 1 actually fails with an engine-version error** (the literal string `Unsupported engine` or `engine "node" is incompatible`), run `nvm use` as a *separate, standalone* Bash call. Then retry the original `pnpm` command, also as a standalone call.
+3. **Only if `nvm use` itself errors** with `nvm: command not found` or `version "vX.Y.Z" is not yet installed`, run `export NVM_DIR="$HOME/.nvm" && source "$HOME/.nvm/nvm.sh"` once, retry `nvm use`, then retry the `pnpm` command.
 
-**`source ~/.nvm/nvm.sh` whenever `nvm use` fails for any reason.** The two failure modes both point at the same fix:
+That's it. Three escalation levels, each one a *separate* Bash tool call. Never chain across levels.
 
-- `nvm: command not found` — nvm isn't on PATH at all.
-- `version "vX.Y.Z" is not yet installed` even though `~/.nvm/versions/node/vX.Y.Z` exists — `NVM_DIR` is unset, so nvm can't see the installed versions. This happens in sandboxed / non-interactive shells where `.zshrc` / `.bashrc` didn't run.
+### What you must NOT do
 
-In both cases run `export NVM_DIR="$HOME/.nvm" && source "$HOME/.nvm/nvm.sh"` and retry `nvm use`. Don't try to `nvm install` your way out of the second one — the version is already there, the env is just blind to it.
+This pattern is **forbidden**, even when each Bash tool call appears to spawn a fresh subshell:
 
-Most interactive shells load nvm through `.zshrc` / `.bashrc` already, so sourcing preemptively can trigger a permission prompt for no reason. Try `nvm use` first; source on any failure.
+```
+# WRONG — never do this
+export NVM_DIR="$HOME/.nvm" && source "$HOME/.nvm/nvm.sh" && nvm use && pnpm test
+```
+
+It is forbidden whether prepended once, prepended to every command, or "just to be safe." Reasons:
+
+- `pnpm` works without it the overwhelming majority of the time. The prepend is solving a problem that doesn't exist.
+- It triggers extra permission prompts and adds noise to the transcript.
+- It hides the actual failure mode if `pnpm` does fail — you can't tell what step broke.
+
+If you catch yourself reaching for `export NVM_DIR` or `source ~/.nvm/nvm.sh` *speculatively* (i.e. before `pnpm` has actually failed), stop. Run plain `pnpm <script>` first. Wait for the failure. Diagnose from the error message. Only escalate to the next level if the error message asks for it.
+
+### Why this rule exists
+
+Past behavior: assistant kept prepending the full `export NVM_DIR=… && source … && nvm use && pnpm …` chain to every single Bash call, even after being told not to, even after the previous call had already succeeded with plain `pnpm`. The user has had to correct this multiple times. Treat this rule as load-bearing.
+
+### About the Bash tool's "fresh subshells"
+
+You may notice that each Bash tool call appears to start a fresh subshell, so PATH changes from a previous `nvm use` don't visibly persist. That doesn't matter. The shell environment is initialized from the user's profile (`.zshrc` / `.bashrc`), which already loads a default Node. That default is sufficient for `pnpm` in this repo. Do not reason your way back into prepending nvm setup based on subshell semantics — empirically, plain `pnpm` works.
 
 ## Install dependencies
 
-Once per shell session — and after any `package.json` / `pnpm-lock.yaml` change — run `pnpm install` from the repo root (after `nvm use`). Every script in this repo reads from `node_modules` and will error out if it hasn't been populated.
+Once per shell session — and after any `package.json` / `pnpm-lock.yaml` change — run `pnpm install` from the repo root. Every script in this repo reads from `node_modules` and will error out if it hasn't been populated. Run it as a plain `pnpm install` call; do not prepend nvm setup (see the Node version section above).
 
 Scripts that require `pnpm install`:
 
