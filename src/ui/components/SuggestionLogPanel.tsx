@@ -166,18 +166,38 @@ function AddSuggestion() {
     );
 
     // Drive the deferred focus-first-pill once the new form has
-    // mounted. `AnimatePresence mode="wait"` can hold off the mount
+    // mounted. `AnimatePresence mode="wait"` holds off the mount
     // until the exiting form's transition completes, so a microtask
-    // alone isn't enough — we wait until both `mode` and the matching
-    // ref's `current` are populated.
+    // alone isn't enough — poll on requestAnimationFrame until the
+    // matching ref is populated (with an upper bound so we don't
+    // leak rAF callbacks if the form never mounts for some reason).
     useEffect(() => {
         if (pendingFocus === null) return;
         if (pendingFocus.target !== mode) return;
-        const ref =
-            mode === SUGGESTION_MODE ? suggestionFormRef : accusationFormRef;
-        if (ref.current === null) return;
-        ref.current.focusFirstPill({ clear: pendingFocus.clear });
-        setPendingFocus(null);
+        let rafId = 0;
+        let attempts = 0;
+        const tryFocus = (): void => {
+            const ref =
+                mode === SUGGESTION_MODE
+                    ? suggestionFormRef
+                    : accusationFormRef;
+            if (ref.current !== null) {
+                ref.current.focusFirstPill({ clear: pendingFocus.clear });
+                setPendingFocus(null);
+                return;
+            }
+            attempts += 1;
+            // ~30 frames @ 60fps ≈ 500ms — generous upper bound for
+            // AnimatePresence's mode="wait" exit-then-enter sequence
+            // (the actual transition is ~120ms).
+            if (attempts > 30) {
+                setPendingFocus(null);
+                return;
+            }
+            rafId = requestAnimationFrame(tryFocus);
+        };
+        rafId = requestAnimationFrame(tryFocus);
+        return () => cancelAnimationFrame(rafId);
     }, [pendingFocus, mode]);
 
     // Idle-timer ref. Reset on every pointer / key / focus event
