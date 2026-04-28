@@ -145,6 +145,7 @@ const PRESENCE_WAIT_MODE = "wait" as const;
 function AddSuggestion() {
     const { dispatch, state } = useClue();
     const t = useTranslations("suggestions");
+    const tAcc = useTranslations("accusations");
     const suggestionFormRef = useRef<SuggestionFormHandle>(null);
     const accusationFormRef = useRef<AccusationFormHandle>(null);
 
@@ -270,6 +271,9 @@ function AddSuggestion() {
                     </FormSlide>
                 ) : (
                     <FormSlide key="accusation" direction={1}>
+                        <p className="mt-0 mb-2 text-[12px] leading-snug text-muted">
+                            {tAcc("addHelpText")}
+                        </p>
                         <AccusationForm
                             ref={accusationFormRef}
                             setup={state.setup}

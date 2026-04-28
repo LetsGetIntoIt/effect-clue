@@ -234,6 +234,7 @@
     "accusations": {
         "addTitle": "Log a failed accusation",
         "editTitle": "Edit accusation",
+        "addHelpText": "Add a player's failed accusation. No point in logging successful accusations — they end the game!",
         "accusedLine": "<strong>{accuser}</strong> accused {cards} (failed)",
         "pillAccuser": "Accuser",
         "submit": "Add ({shortcut})",
