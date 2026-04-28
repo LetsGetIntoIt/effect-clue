@@ -9,20 +9,19 @@ import { useSelection } from "./SelectionContext";
  * its "why" popover. Long enough that a casual mouse-sweep across the
  * grid does not strobe popovers; short enough to feel snappy once the
  * user has committed to a target cell.
- *
- * Also doubles as the **settle window** inside popovers mode — a new
- * cell-hover only counts as engagement once the pointer has stayed on
- * that cell for this long.
  */
 export const OPEN_DELAY_MS = 300;
 
 /**
- * Exit-timeout (ms). Started on cell-leave while in popovers mode.
- * Canceled only when a subsequent settle (`OPEN_DELAY_MS` continuous
- * on a new cell) fires. So the user has `EXIT_TIMEOUT_MS -
- * OPEN_DELAY_MS = 600ms` to enter a new cell after leaving, and then
- * must remain on it for the full settle window to refresh engagement
- * — total budget `EXIT_TIMEOUT_MS`.
+ * Exit-timeout (ms) — grace window after the pointer leaves a cell
+ * while in popovers mode. If the pointer enters any cell within this
+ * window, the timer is canceled and the popover stays open. If it
+ * doesn't, the popover closes.
+ *
+ * The window is generous on purpose: any cell-enter cancels it, so a
+ * long timeout only matters when the user briefly leaves the grid (a
+ * gutter, a margin, the document edge) and returns. It doesn't slow
+ * down deliberate dismissal — `onGridLeave` closes immediately.
  */
 export const EXIT_TIMEOUT_MS = 900;
 
@@ -33,10 +32,10 @@ export const EXIT_TIMEOUT_MS = 900;
  *
  * `popoverCell` (on `SelectionContext`) is the currently-open cell, or
  * `null` when no popover is visible. "Popovers mode" is the condition
- * `popoverCell !== null`. While in popovers mode, hovering a new
- * deducible cell swaps the popover immediately (no settle delay between
- * cells) — once the user has committed to reading, the UI trusts them
- * with instant previews.
+ * `popoverCell !== null`. While in popovers mode, hovering any new
+ * cell swaps the popover immediately (no settle delay) — once the
+ * user has committed to reading, every cell-hover counts as continued
+ * engagement.
  *
  * ## Enter popovers mode (any one of)
  *
@@ -63,40 +62,27 @@ export const EXIT_TIMEOUT_MS = 900;
  *    dismiss path → `onOpenChange(false)` → parent calls
  *    `setPopoverCell(null)`. Immediate exit.
  * 4. **Exit timer fires.** Started on `onCellPointerLeave` while in
- *    popovers mode; `EXIT_TIMEOUT_MS` (900 ms). Canceled ONLY when a
- *    subsequent settle fires — the user must both enter a new cell
- *    *and* stay on it continuously for `OPEN_DELAY_MS` (300 ms) before
- *    the 900 ms budget runs out. Merely entering a new cell is not
- *    enough; the user has to linger on it.
- *
- * ## What does NOT exit popovers mode
- *
- * - Reading the open popover (not leaving the cell) — the exit timer
- *   doesn't start until the pointer leaves a cell.
- * - Entering a new cell within the budget (settle timer catches up
- *   and cancels the exit).
- *
- * ## What DOES exit popovers mode (subtle cases)
- *
- * - Rapid bouncing between cells where no single hover lasts long
- *   enough to settle — the exit timer fires 900 ms after the first
- *   leave, because no settle has cleared it.
- * - Hovering over grid gutters / empty cells long enough that no
- *   new settle completes within the budget.
+ *    popovers mode; `EXIT_TIMEOUT_MS` (900 ms). Canceled by ANY
+ *    cell-enter while in mode — the user just has to land on another
+ *    cell within the budget; they don't need to linger on it.
  *
  * ## Timers (private refs)
  *
  * - `openDelayTimer`: `OPEN_DELAY_MS`. Runs only while NOT in popovers
  *   mode. Started on cell-enter, canceled on cell-leave or grid-leave.
  *   Opens the popover (entering popovers mode) when it fires.
- * - `settleTimer`: `OPEN_DELAY_MS`. Runs only while IN popovers mode.
- *   Started on cell-enter, canceled on cell-leave or grid-leave. When
- *   it fires, cancels any pending `exitTimer` (the user has now
- *   confirmed engagement on this cell).
  * - `exitTimer`: `EXIT_TIMEOUT_MS`. Runs only while IN popovers mode.
- *   Started on cell-leave, canceled by `settleTimer` completion,
- *   explicit activation (via the exported `cancelExitTimer`), or
- *   grid-leave. Closes the popover when it fires.
+ *   Started on cell-leave (only if not already armed). Canceled by
+ *   any cell-enter while in mode, by explicit `cancelExitTimer`, or
+ *   by grid-leave. Closes the popover when it fires.
+ *
+ * The previous "settle" timer (a 300 ms continuous-hover requirement
+ * before a new cell counted as engagement) was removed: it caused a
+ * race where rapid lateral mouse movement across cells would never
+ * settle and the original exit timer would fire under the cursor,
+ * making the popover disappear mid-hover. Without settle, the rule
+ * becomes "while in mode, hovering any cell keeps the popover alive"
+ * — trivially correct.
  */
 interface WhyHoverIntent {
     readonly onCellPointerEnter: (cell: Cell) => void;
@@ -108,20 +94,12 @@ interface WhyHoverIntent {
 export function useWhyHoverIntent(): WhyHoverIntent {
     const { popoverCell, setPopoverCell } = useSelection();
     const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const clearOpen = useCallback(() => {
         if (openTimerRef.current !== null) {
             clearTimeout(openTimerRef.current);
             openTimerRef.current = null;
-        }
-    }, []);
-
-    const clearSettle = useCallback(() => {
-        if (settleTimerRef.current !== null) {
-            clearTimeout(settleTimerRef.current);
-            settleTimerRef.current = null;
         }
     }, []);
 
@@ -135,19 +113,12 @@ export function useWhyHoverIntent(): WhyHoverIntent {
     const onCellPointerEnter = useCallback(
         (cell: Cell) => {
             if (popoverCell !== null) {
-                // Already in popovers mode: swap the visible popover to
-                // the new cell immediately. Start the settle timer;
-                // when it fires it cancels the exit timer to confirm
-                // engagement on this new cell. Note we do NOT cancel
-                // the exit timer here — per the state machine, only a
-                // completed settle counts as "engaged".
+                // Already in popovers mode: swap the visible popover
+                // to the new cell immediately AND cancel any pending
+                // exit. Hovering any cell counts as engagement.
                 clearOpen();
-                clearSettle();
+                cancelExitTimer();
                 setPopoverCell(cell);
-                settleTimerRef.current = setTimeout(() => {
-                    settleTimerRef.current = null;
-                    cancelExitTimer();
-                }, OPEN_DELAY_MS);
             } else {
                 // Not in popovers mode: start the open-delay timer.
                 clearOpen();
@@ -157,37 +128,34 @@ export function useWhyHoverIntent(): WhyHoverIntent {
                 }, OPEN_DELAY_MS);
             }
         },
-        [popoverCell, setPopoverCell, clearOpen, clearSettle, cancelExitTimer],
+        [popoverCell, setPopoverCell, clearOpen, cancelExitTimer],
     );
 
     const onCellPointerLeave = useCallback(() => {
         // Cancel any pending open that was racing to fire. If we're
         // in popovers mode and no exit timer is already armed, start
-        // one now — settle timers (running or not) don't reset it.
+        // one now.
         clearOpen();
-        clearSettle();
         if (popoverCell !== null && exitTimerRef.current === null) {
             exitTimerRef.current = setTimeout(() => {
                 exitTimerRef.current = null;
                 setPopoverCell(null);
             }, EXIT_TIMEOUT_MS);
         }
-    }, [popoverCell, setPopoverCell, clearOpen, clearSettle]);
+    }, [popoverCell, setPopoverCell, clearOpen]);
 
     const onGridLeave = useCallback(() => {
         clearOpen();
-        clearSettle();
         cancelExitTimer();
         setPopoverCell(null);
-    }, [setPopoverCell, clearOpen, clearSettle, cancelExitTimer]);
+    }, [setPopoverCell, clearOpen, cancelExitTimer]);
 
     useEffect(
         () => () => {
             clearOpen();
-            clearSettle();
             cancelExitTimer();
         },
-        [clearOpen, clearSettle, cancelExitTimer],
+        [clearOpen, cancelExitTimer],
     );
 
     return {

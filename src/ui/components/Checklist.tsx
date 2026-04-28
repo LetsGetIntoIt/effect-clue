@@ -462,23 +462,34 @@ export function Checklist() {
             }}
         >
             {inSetup && (
-                <div className="mb-3 flex shrink-0 justify-end">
-                    <button
-                        type="button"
-                        data-setup-cta
-                        className="cursor-pointer rounded-[var(--radius)] border-none bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover"
-                        onClick={() =>
-                            dispatch({ type: "setUiMode", mode: "checklist" })
-                        }
-                    >
-                        {suggestions.length > 0
-                            ? tSetup("continuePlaying", {
-                                  shortcut: label("global.gotoPlay"),
-                              })
-                            : tSetup("startPlaying", {
-                                  shortcut: label("global.gotoPlay"),
-                              })}
-                    </button>
+                <div className="mb-4 shrink-0 rounded-[var(--radius)] border border-accent/40 bg-accent/5 px-4 py-3">
+                    <h2 className="m-0 font-display text-[20px] text-accent">
+                        {tSetup("title")}
+                    </h2>
+                    <p className="m-0 mt-1.5 text-[14px] leading-relaxed">
+                        {tSetup("description")}
+                    </p>
+                    <div className="mt-3 flex justify-end">
+                        <button
+                            type="button"
+                            data-setup-cta
+                            className="cursor-pointer rounded-[var(--radius)] border-none bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover"
+                            onClick={() =>
+                                dispatch({
+                                    type: "setUiMode",
+                                    mode: "checklist",
+                                })
+                            }
+                        >
+                            {suggestions.length > 0
+                                ? tSetup("continuePlaying", {
+                                      shortcut: label("global.gotoPlay"),
+                                  })
+                                : tSetup("startPlaying", {
+                                      shortcut: label("global.gotoPlay"),
+                                  })}
+                        </button>
+                    </div>
                 </div>
             )}
             <div className="shrink-0">

@@ -80,6 +80,7 @@
     },
     "setup": {
         "title": "Game setup",
+        "description": "Set up your game: the card pack, the player names, hand sizes, and mark the cards you were dealt. Once you are ready, start playing.",
         "cardPack": "Use card pack:",
         "loadCardSetConfirm": "Loading a card pack will discard your current hand sizes, known cards, and suggestions. Continue?",
         "loadCustomCardSetTitle": "Load card pack \"{label}\"",

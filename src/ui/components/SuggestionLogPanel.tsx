@@ -1314,12 +1314,16 @@ function PriorSuggestionItem({
         }
     };
 
-    // Outside-click cancel: while editing, any pointerdown outside
-    // this row and outside any Radix pill popover portal discards the
-    // buffered draft. Capture phase so we observe the pointerdown
-    // before other handlers react to it; we never stop propagation.
+    // Outside-click cancel: while the row is "armed" — either in edit
+    // mode (pills + Update + ×) OR in mobile pre-edit mode (Edit
+    // button visible after first tap) — any pointerdown outside this
+    // row and outside any Radix pill popover portal dismisses both
+    // states. Capture phase so we observe the pointerdown before
+    // other handlers react to it; we never stop propagation.
+    // `exitEdit()` clears both `isEditing` and `showMobileEditButton`,
+    // so a single dismiss path works for both cases.
     useEffect(() => {
-        if (!isEditing) return;
+        if (!isEditing && !showMobileEditButton) return;
         const onPointerDown = (e: PointerEvent) => {
             const target = e.target;
             if (!(target instanceof Node)) return;
@@ -1336,7 +1340,7 @@ function PriorSuggestionItem({
         document.addEventListener("pointerdown", onPointerDown, true);
         return () =>
             document.removeEventListener("pointerdown", onPointerDown, true);
-    }, [isEditing]);
+    }, [isEditing, showMobileEditButton]);
 
     const rowTransition = useReducedTransition(T_SPRING_SOFT);
     const pillStaggerTransition = useReducedTransition(T_FAST);
@@ -1669,8 +1673,10 @@ function PriorAccusationItem({
     };
 
     // Outside-click cancel — same pattern as `PriorSuggestionItem`.
+    // Armed while editing OR while the mobile pre-edit Edit button is
+    // visible; `exitEdit()` clears both flags.
     useEffect(() => {
-        if (!isEditing) return;
+        if (!isEditing && !showMobileEditButton) return;
         const onPointerDown = (e: PointerEvent) => {
             const target = e.target;
             if (!(target instanceof Node)) return;
@@ -1687,7 +1693,7 @@ function PriorAccusationItem({
         document.addEventListener("pointerdown", onPointerDown, true);
         return () =>
             document.removeEventListener("pointerdown", onPointerDown, true);
-    }, [isEditing]);
+    }, [isEditing, showMobileEditButton]);
 
     const rowTransition = useReducedTransition(T_SPRING_SOFT);
     const pillStaggerTransition = useReducedTransition(T_FAST);
