@@ -729,6 +729,23 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         }, []),
     );
 
+    // Cmd/Ctrl+I: switch to Play tab, flip the Add-form into
+    // accusation mode, and focus the accusation form's first pill.
+    // Mirrors ⌘K but lands on the accusation tab; no double-tap-to-
+    // clear semantics (the form is short, and partially-filled
+    // accusations should survive a re-press).
+    useGlobalShortcut(
+        "global.gotoAccusation",
+        useCallback(() => {
+            const needsDelay = needsPaneSettle(uiModeRef.current, "suggest");
+            dispatchRaw({ type: "setUiMode", mode: "suggest" });
+            requestFocusAddForm("accusation", {
+                clear: false,
+                settle: needsDelay ? PANE_SETTLE : Duration.zero,
+            });
+        }, []),
+    );
+
     // Cmd/Ctrl+H: switch to the Setup tab. (Overrides the Mac
     // "hide app" default.) Smart-landing:
     //   - game started → focus the last-focused checklist cell, else
