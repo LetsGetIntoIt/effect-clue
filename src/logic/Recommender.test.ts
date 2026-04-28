@@ -59,15 +59,34 @@ const withDefaultHands = (k: Knowledge): Knowledge => {
 };
 const freshKnowledge = withDefaultHands(emptyKnowledge);
 
+/**
+ * Per-test timeout (ms) for the fresh-game info-gain cases below.
+ *
+ * Each `runRecommend` call from a fresh-knowledge fixture enumerates
+ * ~324 candidate triples × ~5 outcome variants × one `runDeduce` per
+ * outcome ≈ 1600 deducer runs. On a fast laptop this takes ~3–4s,
+ * comfortably within vitest's 5s default; the GitHub Actions runner
+ * is slower and spikes past 5s. Bumping the per-test timeout — only
+ * for the heavy fresh-game cases, not the whole file — keeps them
+ * green on CI without giving unrelated future tests a free 30s of
+ * slack. Tests that operate on partial / pinned knowledge are fast
+ * (smaller search space) and stay at the default.
+ */
+const FRESH_GAME_TIMEOUT_MS = 30_000;
+
 describe("recommendSuggestions (info-gain)", () => {
-    test("fresh game returns 5 non-empty recommendations", () => {
-        const result = runRecommend(setup, freshKnowledge, A, 5);
-        expect(result.recommendations.length).toBe(5);
-        for (const rec of result.recommendations) {
-            expect(rec.score).toBeGreaterThan(0);
-            expect(rec.cards.length).toBe(3); // classic = 3 categories
-        }
-    });
+    test(
+        "fresh game returns 5 non-empty recommendations",
+        () => {
+            const result = runRecommend(setup, freshKnowledge, A, 5);
+            expect(result.recommendations.length).toBe(5);
+            for (const rec of result.recommendations) {
+                expect(rec.score).toBeGreaterThan(0);
+                expect(rec.cards.length).toBe(3); // classic = 3 categories
+            }
+        },
+        FRESH_GAME_TIMEOUT_MS,
+    );
 
     test("fully-pinned case file returns no recommendations", () => {
         // Mark every card of every category as N for the case file.
@@ -98,38 +117,48 @@ describe("recommendSuggestions (info-gain)", () => {
         expect(result.recommendations.length).toBe(0);
     });
 
-    test("tie-break is stable and deterministic by joined card ids", () => {
-        const result = runRecommend(setup, freshKnowledge, A, 5);
-        // Fresh board: every triple ties at the top by symmetry. The
-        // lexicographic tie-break by joined ids means the recommendations
-        // come out in alphabetically-earliest order.
-        const joined = result.recommendations.map(r => r.cards.join("|"));
-        const sorted = [...joined].sort();
-        expect(joined.length).toBe(sorted.length);
-        for (let i = 0; i < joined.length; i++) {
-            expect(joined[i]).toBe(sorted[i]);
-        }
-    });
+    test(
+        "tie-break is stable and deterministic by joined card ids",
+        () => {
+            const result = runRecommend(setup, freshKnowledge, A, 5);
+            // Fresh board: every triple ties at the top by symmetry.
+            // The lexicographic tie-break by joined ids means the
+            // recommendations come out in alphabetically-earliest order.
+            const joined = result.recommendations.map(r =>
+                r.cards.join("|"),
+            );
+            const sorted = [...joined].sort();
+            expect(joined.length).toBe(sorted.length);
+            for (let i = 0; i < joined.length; i++) {
+                expect(joined[i]).toBe(sorted[i]);
+            }
+        },
+        FRESH_GAME_TIMEOUT_MS,
+    );
 
-    test("score is the expected reduction in unknown cells (matches outcome math)", () => {
-        // Sanity: the score the recommender reports for a triple is
-        // identical (within float epsilon) to the value EntropyScorer's
-        // pure helper computes for the same triple. Locks the wiring
-        // — recommender vs scorer can't drift apart.
-        const result = runRecommend(setup, freshKnowledge, A, 1);
-        const top = result.recommendations[0];
-        expect(top).toBeDefined();
-        if (!top) return;
-        const directScore = expectedInfoGain(
-            setup,
-            freshKnowledge,
-            [],
-            [],
-            A,
-            top.cards,
-        );
-        expect(directScore).toBeCloseTo(top.score, 6);
-    });
+    test(
+        "score is the expected reduction in unknown cells (matches outcome math)",
+        () => {
+            // Sanity: the score the recommender reports for a triple is
+            // identical (within float epsilon) to the value EntropyScorer's
+            // pure helper computes for the same triple. Locks the wiring
+            // — recommender vs scorer can't drift apart.
+            const result = runRecommend(setup, freshKnowledge, A, 1);
+            const top = result.recommendations[0];
+            expect(top).toBeDefined();
+            if (!top) return;
+            const directScore = expectedInfoGain(
+                setup,
+                freshKnowledge,
+                [],
+                [],
+                A,
+                top.cards,
+            );
+            expect(directScore).toBeCloseTo(top.score, 6);
+        },
+        FRESH_GAME_TIMEOUT_MS,
+    );
 });
 
 describe("consolidateRecommendations", () => {
@@ -144,23 +173,27 @@ describe("consolidateRecommendations", () => {
             : undefined;
     };
 
-    test("fresh game collapses every category to {kind: 'any'}", () => {
-        // 6 × 6 × 9 = 324 tied triples (every score equal by symmetry).
-        // Iterative collapse produces a single row with all three slots
-        // as `any`.
-        const result = runRecommend(setup, freshKnowledge, A, 500);
-        const consolidated = runConsolidate(
-            setup,
-            freshKnowledge,
-            result.recommendations,
-        );
-        expect(consolidated.length).toBe(1);
-        const row = consolidated[0]!;
-        expect(slotAt(row, 0)).toEqual({ kind: "any" });
-        expect(slotAt(row, 1)).toEqual({ kind: "any" });
-        expect(slotAt(row, 2)).toEqual({ kind: "any" });
-        expect(row.groupSize).toBe(324);
-    });
+    test(
+        "fresh game collapses every category to {kind: 'any'}",
+        () => {
+            // 6 × 6 × 9 = 324 tied triples (every score equal by symmetry).
+            // Iterative collapse produces a single row with all three slots
+            // as `any`.
+            const result = runRecommend(setup, freshKnowledge, A, 500);
+            const consolidated = runConsolidate(
+                setup,
+                freshKnowledge,
+                result.recommendations,
+            );
+            expect(consolidated.length).toBe(1);
+            const row = consolidated[0]!;
+            expect(slotAt(row, 0)).toEqual({ kind: "any" });
+            expect(slotAt(row, 1)).toEqual({ kind: "any" });
+            expect(slotAt(row, 2)).toEqual({ kind: "any" });
+            expect(row.groupSize).toBe(324);
+        },
+        FRESH_GAME_TIMEOUT_MS,
+    );
 
     test("singleton tie-groups never collapse a category slot", () => {
         // Pin one suspect (Plum) as Y in the case file and others as N
@@ -188,18 +221,22 @@ describe("consolidateRecommendations", () => {
         expect(slotAt(row, 2)).toEqual({ kind: "any" });
     });
 
-    test("preserves the score on every consolidated row", () => {
-        const result = runRecommend(setup, freshKnowledge, A, 500);
-        const consolidated = runConsolidate(
-            setup,
-            freshKnowledge,
-            result.recommendations,
-        );
-        for (const row of consolidated) {
-            expect(row.score).toBeGreaterThan(0);
-            expect(typeof row.score).toBe("number");
-        }
-    });
+    test(
+        "preserves the score on every consolidated row",
+        () => {
+            const result = runRecommend(setup, freshKnowledge, A, 500);
+            const consolidated = runConsolidate(
+                setup,
+                freshKnowledge,
+                result.recommendations,
+            );
+            for (const row of consolidated) {
+                expect(row.score).toBeGreaterThan(0);
+                expect(typeof row.score).toBe("number");
+            }
+        },
+        FRESH_GAME_TIMEOUT_MS,
+    );
 });
 
 describe("recommendAction", () => {
@@ -265,13 +302,17 @@ describe("recommendAction", () => {
         ).toBeGreaterThan(0);
     });
 
-    test("Suggest — fresh game with hand sizes falls into the regular ranking", () => {
-        const action = runRecommendAction(setup, freshKnowledge, A);
-        expect(action._tag).toBe("Suggest");
-        if (action._tag !== "Suggest") return;
-        expect(action.suggester).toBe(A);
-        expect(action.suggestions.recommendations.length).toBeGreaterThan(0);
-    });
+    test(
+        "Suggest — fresh game with hand sizes falls into the regular ranking",
+        () => {
+            const action = runRecommendAction(setup, freshKnowledge, A);
+            expect(action._tag).toBe("Suggest");
+            if (action._tag !== "Suggest") return;
+            expect(action.suggester).toBe(A);
+            expect(action.suggestions.recommendations.length).toBeGreaterThan(0);
+        },
+        FRESH_GAME_TIMEOUT_MS,
+    );
 
     test("Suggest — third category at 1 candidate is NOT NearlySolved", () => {
         // Pin every weapon as N except KNIFE (still unknown for case
@@ -325,18 +366,23 @@ describe("recommendAction", () => {
         expect(action.suggester).toBe(A);
     });
 
-    test("Empty knowledge with handSizes set — non-empty Suggest result", () => {
-        const action = runRecommendAction(setup, freshKnowledge, A);
-        expect(action._tag).toBe("Suggest");
-        if (action._tag !== "Suggest") return;
-        // Top recommendation has one card per category and non-zero scores.
-        const top = action.suggestions.recommendations[0];
-        expect(top).toBeDefined();
-        if (!top) return;
-        expect(top.cards).toHaveLength(setup.categories.length);
-        expect(top.score).toBeGreaterThan(0);
-        expect(top.suggester).toBe(A);
-    });
+    test(
+        "Empty knowledge with handSizes set — non-empty Suggest result",
+        () => {
+            const action = runRecommendAction(setup, freshKnowledge, A);
+            expect(action._tag).toBe("Suggest");
+            if (action._tag !== "Suggest") return;
+            // Top recommendation has one card per category and non-zero
+            // scores.
+            const top = action.suggestions.recommendations[0];
+            expect(top).toBeDefined();
+            if (!top) return;
+            expect(top.cards).toHaveLength(setup.categories.length);
+            expect(top.score).toBeGreaterThan(0);
+            expect(top.suggester).toBe(A);
+        },
+        FRESH_GAME_TIMEOUT_MS,
+    );
 });
 
 describe("caseFileCandidatesFor", () => {
