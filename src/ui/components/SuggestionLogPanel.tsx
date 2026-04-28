@@ -53,7 +53,7 @@ import {
     DraftSuggestion,
     useClue,
 } from "../state";
-import { registerSuggestionFormFocusHandler } from "../suggestionFormFocus";
+import { registerAddFormFocusHandler } from "../addFormFocus";
 import {
     T_FAST,
     T_SPRING_SOFT,
@@ -128,9 +128,14 @@ function AddSuggestion() {
     const suggestionFormRef = useRef<SuggestionFormHandle>(null);
     useEffect(
         () =>
-            registerSuggestionFormFocusHandler(({ clear }) =>
-                suggestionFormRef.current?.focusFirstPill({ clear }),
-            ),
+            registerAddFormFocusHandler((target, { clear }) => {
+                // Accusation-target wiring lands with the tab UI in a
+                // follow-up commit. Until then, the bus is suggestion-only
+                // in practice; calls with `target === "accusation"` are
+                // no-ops.
+                if (target !== "suggestion") return;
+                suggestionFormRef.current?.focusFirstPill({ clear });
+            }),
         [],
     );
 

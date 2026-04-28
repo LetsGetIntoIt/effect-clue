@@ -90,11 +90,11 @@ import {
     makeSetupLayer,
     makeSuggestionsLayer,
 } from "../logic/services";
-import { Layer } from "effect";
-import { requestFocusSuggestionForm } from "./suggestionFormFocus";
+import { Duration, Layer } from "effect";
+import { requestFocusAddForm } from "./addFormFocus";
 import { requestFocusChecklistCell } from "./checklistFocus";
 import { useGlobalShortcut } from "./keyMap";
-import { PANE_SETTLE_MS } from "./motion";
+import { PANE_SETTLE } from "./motion";
 import type { UiMode } from "../logic/ClueState";
 
 type DeduceLayer = Layer.Layer<
@@ -103,6 +103,13 @@ type DeduceLayer = Layer.Layer<
     | PlayerSetService
     | SuggestionsService
 >;
+
+/**
+ * Window for the Cmd+K double-tap that clears the suggestion form.
+ * A second press within this window after the first signals "I want
+ * to start fresh"; outside it, the second press just refocuses.
+ */
+const DOUBLE_TAP: Duration.Duration = Duration.millis(400);
 
 /**
  * Whether a uiMode transition triggers a visible slide whose target
@@ -698,16 +705,16 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     useGlobalShortcut("global.redo", useCallback(() => redo(), [redo]));
 
     // Cmd/Ctrl+K: switch to Play tab and focus the suggestion form.
-    // Two presses within DOUBLE_TAP_MS also clear the form. The tab
+    // Two presses within DOUBLE_TAP also clear the form. The tab
     // switch goes through `dispatchRaw` so it stays out of the undo
     // history — matching how hydration flips the tab.
     const lastGotoPlayAtRef = useRef(0);
     useGlobalShortcut(
         "global.gotoPlay",
         useCallback(() => {
-            const DOUBLE_TAP_MS = 400;
             const now = Date.now();
-            const clear = now - lastGotoPlayAtRef.current < DOUBLE_TAP_MS;
+            const clear =
+                now - lastGotoPlayAtRef.current < Duration.toMillis(DOUBLE_TAP);
             lastGotoPlayAtRef.current = clear ? 0 : now;
             const needsDelay = needsPaneSettle(uiModeRef.current, "suggest");
             dispatchRaw({ type: "setUiMode", mode: "suggest" });
@@ -715,9 +722,9 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             // slide settles — Radix measures the trigger's rect at open
             // time, so opening mid-slide anchors the menu to a stale
             // position that doesn't follow the pill into place.
-            requestFocusSuggestionForm({
+            requestFocusAddForm("suggestion", {
                 clear,
-                settleMs: needsDelay ? PANE_SETTLE_MS : 0,
+                settle: needsDelay ? PANE_SETTLE : Duration.zero,
             });
         }, []),
     );
