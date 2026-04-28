@@ -117,7 +117,7 @@ describe("AccusationForm", () => {
             within(pop4).getByRole("option", { name: /^Kitchen$/ }),
         );
 
-        const submit = screen.getByRole("button", { name: /^submit$/ });
+        const submit = screen.getByRole("button", { name: /^submit/ });
         await user.click(submit);
 
         expect(onSubmit).toHaveBeenCalledTimes(1);
@@ -138,7 +138,7 @@ describe("AccusationForm", () => {
         const onSubmit = vi.fn();
         renderForm(<AccusationForm setup={setup} onSubmit={onSubmit} />);
 
-        const submit = screen.getByRole("button", { name: /^submit$/ });
+        const submit = screen.getByRole("button", { name: /^submit/ });
         expect(submit).toHaveAttribute("aria-disabled", "true");
 
         const pop1 = await openPopover(user, /pillAccuser/);
@@ -184,7 +184,7 @@ describe("AccusationForm", () => {
         // Submit reads "updateAction" in edit mode, and the form is
         // pre-populated so it's enabled immediately.
         const updateBtn = screen.getByRole("button", {
-            name: /^updateAction$/,
+            name: /^updateAction/,
         });
         expect(updateBtn).not.toHaveAttribute("aria-disabled", "true");
 

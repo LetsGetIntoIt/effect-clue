@@ -15,6 +15,7 @@ import type { DraftAccusation } from "../../logic/ClueState";
 import type { Card, Player } from "../../logic/GameObjects";
 import type { GameSetup } from "../../logic/GameSetup";
 import { categoryOfCard } from "../../logic/GameSetup";
+import { label } from "../keyMap";
 import {
     nextEnabledPill,
     type OpenTarget,
@@ -249,11 +250,10 @@ export const AccusationForm = forwardRef<
             openPillId={openPillId}
             onOpenPillIdChange={setOpenPillId}
             canSubmit={canSubmit}
-            submitLabel={
-                effectiveSubmitLabel === "update"
-                    ? t("updateAction")
-                    : t("submit")
-            }
+            submitLabel={t(
+                effectiveSubmitLabel === "update" ? "updateAction" : "submit",
+                { shortcut: label("action.submit") },
+            )}
             onSubmit={onSubmitClick}
             {...(onCancel !== undefined
                 ? { onCancel, cancelLabel: t("cancelAction") }

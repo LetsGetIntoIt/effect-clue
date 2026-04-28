@@ -336,7 +336,7 @@ function AddSuggestion() {
 
         return (
             <h3
-                className={`${SECTION_TITLE} flex flex-wrap items-center gap-1.5 leading-[1.4]`}
+                className={`${SECTION_TITLE} leading-[1.5]`}
             >
                 {t.rich("addTitle", {
                     suggestionKey: label("global.gotoPlay"),
@@ -366,17 +366,12 @@ function AddSuggestion() {
                             {chunks}
                         </TabButton>
                     ),
-                    // Shortcut hint inside each tab. Lives inside the
-                    // button's `.group`, so its color tracks the
-                    // tab's active state (white-tinted on the accent
-                    // fill, muted on the inactive button).
+                    // Shortcut hint inside each tab. Stays muted on
+                    // both active + inactive variants — text colour
+                    // doesn't change with state any more, only the
+                    // outline does.
                     kbd: chunks => (
-                        <span
-                            className={
-                                "ml-0.5 font-normal text-muted " +
-                                "group-aria-[selected=true]:text-white/80"
-                            }
-                        >
+                        <span className="ml-0.5 font-normal text-muted">
                             {chunks}
                         </span>
                     ),
@@ -405,11 +400,14 @@ function TabButton({
     readonly onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => void;
     readonly children: React.ReactNode;
 }): React.ReactElement {
-    // `group` lets the nested kbd shortcut span react to this
-    // button's aria-selected state via `group-aria-[selected=true]:`.
-    // Both buttons always look interactive (cursor-pointer, hover
-    // bg, focus ring); active state adds the sliding indicator and
-    // white text on top of the accent fill.
+    // Both tabs render with the same lightly-tinted accent fill +
+    // dark text, so the noun looks like part of the surrounding
+    // "Add a …" sentence. Active state adds an outlined ring (the
+    // shared sliding `motion.span layoutId`) on top — text colour
+    // doesn't change between states. Inline-flex + `align-baseline`
+    // keeps the button glued to the baseline of "Add a", and
+    // `mx-0.5` is the only inter-word margin (the natural
+    // whitespace between rich-text chunks already separates them).
     return (
         <button
             type="button"
@@ -419,19 +417,19 @@ function TabButton({
             onClick={onClick}
             onKeyDown={onKeyDown}
             className={
-                "group relative cursor-pointer rounded-full border-none " +
-                "bg-transparent px-2.5 py-0.5 text-[14px] font-semibold " +
-                "transition-colors hover:bg-accent/10 " +
+                "relative mx-px inline-flex cursor-pointer items-baseline " +
+                "rounded-[6px] border-none bg-accent/10 px-1.5 py-1 " +
+                "align-baseline text-[14px] font-semibold text-text " +
+                "transition-colors hover:bg-accent/20 " +
                 "focus-visible:outline-2 focus-visible:outline-accent " +
-                "focus-visible:outline-offset-1 " +
-                (isActive ? "text-white" : "text-text")
+                "focus-visible:outline-offset-1"
             }
         >
             {isActive && (
                 <motion.span
                     layoutId={TAB_INDICATOR_LAYOUT_ID}
                     aria-hidden
-                    className="absolute inset-0 -z-0 rounded-full bg-accent"
+                    className="pointer-events-none absolute inset-0 rounded-[6px] border-2 border-accent"
                     transition={indicatorTransition}
                 />
             )}
