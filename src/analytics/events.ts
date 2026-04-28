@@ -114,6 +114,45 @@ export const deductionRevealed = (props: {
 export const priorSuggestionEdited = (props: { turnNumber: number }): void =>
     capture("prior_suggestion_edited", props);
 
+// ── Accusation flow ──────────────────────────────────────────────────────
+//
+// The user logs failed accusations as a separate kind of game event
+// (parallel to suggestions). Each event matches a user-visible
+// transition in the SuggestionLogPanel: opening the form, submitting,
+// editing a prior accusation, or removing one.
+
+export const accusationFormOpened = (props: {
+    /**
+     * How the user reached the accusation form:
+     * - `"toggle_link"`: clicked the inline "log failed accusation
+     *   instead" link in the Add-a-suggestion header.
+     * - `"accuse_now_banner"`: clicked the "Log this accusation"
+     *   button inside the recommender's accuse-now banner (the
+     *   case-file is fully pinned).
+     */
+    source: "toggle_link" | "accuse_now_banner";
+}): void => capture("accusation_form_opened", props);
+
+export const accusationLogged = (props: {
+    accusationCount: number;
+    accuser: string;
+    /**
+     * `"manual"`: the user filled the form themselves (toggle link).
+     * `"deduced_triple"`: the form was prefilled from the recommender's
+     * accuse-now banner. Distinguishes intentional follow-ups on a
+     * solved case file from regular failed-accusation logging.
+     */
+    source: "manual" | "deduced_triple";
+}): void => capture("accusation_logged", props);
+
+export const priorAccusationEdited = (props: {
+    accusationNumber: number;
+}): void => capture("prior_accusation_edited", props);
+
+export const accusationRemoved = (props: {
+    accusationCount: number;
+}): void => capture("accusation_removed", props);
+
 // ── Solve outcome ─────────────────────────────────────────────────────────
 
 export const caseFileSolved = (props: {

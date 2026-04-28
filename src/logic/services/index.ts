@@ -1,7 +1,13 @@
 import { Layer } from "effect";
+import type { Accusation } from "../Accusation";
 import type { GameSetup } from "../GameSetup";
 import type { Knowledge } from "../Knowledge";
 import type { Suggestion } from "../Suggestion";
+import {
+    AccusationsService,
+    getAccusations,
+    makeAccusationsLayer,
+} from "./AccusationsService";
 import {
     CardSetService,
     getCardSet,
@@ -26,6 +32,7 @@ import {
 export { CardSetService, getCardSet };
 export { PlayerSetService, getPlayerSet };
 export { SuggestionsService, getSuggestions, makeSuggestionsLayer };
+export { AccusationsService, getAccusations, makeAccusationsLayer };
 export { KnowledgeService, getKnowledge, makeKnowledgeLayer };
 
 /**
@@ -42,9 +49,9 @@ export const makeSetupLayer = (setup: GameSetup) =>
 
 /**
  * Full layer for anything that needs to read ambient session state:
- * the deck, the roster, the suggestion log, and the current deduced
- * Knowledge. Used by the Recommender and by the traced deduction
- * path in ClueDerived.
+ * the deck, the roster, the suggestion log, the failed-accusation log,
+ * and the current deduced Knowledge. Used by the Recommender and by
+ * the traced deduction path in ClueDerived.
  *
  * Each field is a read-only snapshot; the layer is rebuilt every
  * time the reducer produces new state so consumers always see a
@@ -53,10 +60,12 @@ export const makeSetupLayer = (setup: GameSetup) =>
 export const makeClueLayer = (input: {
     readonly setup: GameSetup;
     readonly suggestions: ReadonlyArray<Suggestion>;
+    readonly accusations: ReadonlyArray<Accusation>;
     readonly knowledge: Knowledge;
 }) =>
     Layer.mergeAll(
         makeSetupLayer(input.setup),
         makeSuggestionsLayer(input.suggestions),
+        makeAccusationsLayer(input.accusations),
         makeKnowledgeLayer(input.knowledge),
     );

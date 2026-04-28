@@ -1,10 +1,16 @@
 import { describe, expect, test, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { AccusationId } from "../../logic/Accusation";
 import { Cell } from "../../logic/Knowledge";
-import { CardCategory, Player, PlayerOwner } from "../../logic/GameObjects";
+import {
+    CardCategory,
+    CaseFileOwner,
+    Player,
+    PlayerOwner,
+} from "../../logic/GameObjects";
 import { CLASSIC_SETUP_3P } from "../../logic/GameSetup";
 import { cardByName } from "../../logic/test-utils/CardByName";
-import type { DraftSuggestion } from "../../logic/ClueState";
+import type { DraftAccusation, DraftSuggestion } from "../../logic/ClueState";
 import { SuggestionId } from "../../logic/Suggestion";
 import type { ContradictionTrace } from "../../logic/Deducer";
 import type { ContradictionKind } from "../../logic/ContradictionKind";
@@ -43,18 +49,30 @@ const draft = (
     ...overrides,
 });
 
+const accusationDraft = (
+    overrides: Partial<DraftAccusation> = {},
+): DraftAccusation => ({
+    id: AccusationId("test-accusation"),
+    accuser: A,
+    cards: [PLUM, KNIFE, KITCHEN],
+    ...overrides,
+});
+
 const mockClueState = {
     setup,
     suggestions: [draft()] as ReadonlyArray<DraftSuggestion>,
+    accusations: [] as ReadonlyArray<DraftAccusation>,
     knownCards: [],
     handSizes: [],
     uiMode: "suggest" as const,
 };
 
+const mockDispatch = vi.fn();
+
 vi.mock("../state", () => ({
     useClue: () => ({
         state: mockClueState,
-        dispatch: vi.fn(),
+        dispatch: mockDispatch,
     }),
 }));
 
@@ -74,6 +92,7 @@ const trace = (
     reason: "fake reason",
     offendingCells: [Cell(PlayerOwner(B), MS_WHITE)],
     offendingSuggestionIndices: [0],
+    offendingAccusationIndices: [],
     sliceLabel: undefined,
     contradictionKind,
     ...overrides,
@@ -244,5 +263,80 @@ describe("ContradictionBanner — kind-driven explanations", () => {
         expect(
             screen.getByText("conflictAlreadyOwns"),
         ).toBeInTheDocument();
+    });
+});
+
+describe("ContradictionBanner — FailedAccusation rows", () => {
+    test("renders the accusation row with the failed-accusation copy and a remove button", async () => {
+        // Seed an accusation and target it via offendingAccusationIndices.
+        mockClueState.accusations = [accusationDraft()];
+        mockDispatch.mockReset();
+
+        const ContradictionBanner = await importBanner();
+        render(
+            <ContradictionBanner
+                trace={trace(
+                    { _tag: "FailedAccusation", accusationIndex: 0 },
+                    {
+                        offendingSuggestionIndices: [],
+                        offendingAccusationIndices: [0],
+                        offendingCells: [
+                            Cell(CaseFileOwner(), PLUM),
+                            Cell(CaseFileOwner(), KNIFE),
+                            Cell(CaseFileOwner(), KITCHEN),
+                        ],
+                    },
+                )}
+            />,
+        );
+
+        // The accusation row's heading uses the accusationLabel template.
+        expect(screen.getByText("accusationLabel")).toBeInTheDocument();
+        // The "what went wrong" sentence uses the new copy template.
+        expect(
+            screen.getByText("conflictFailedAccusationAllPinned"),
+        ).toBeInTheDocument();
+        // The cards line picks up the accusationCardsLine template.
+        expect(screen.getByText("accusationCardsLine")).toBeInTheDocument();
+        // The Remove button is present and dispatches removeAccusation
+        // when clicked.
+        const removeBtn = screen.getByRole("button", {
+            name: "removeAccusation",
+        });
+        fireEvent.click(removeBtn);
+        expect(mockDispatch).toHaveBeenCalledWith({
+            type: "removeAccusation",
+            id: accusationDraft().id,
+        });
+    });
+
+    test("missing accusation entry (stale index) renders the no-player heading and no remove button", async () => {
+        // Empty accusations array but non-empty offending indices —
+        // the row should fall back to the "no player" heading and
+        // omit the Remove button.
+        mockClueState.accusations = [];
+        mockDispatch.mockReset();
+
+        const ContradictionBanner = await importBanner();
+        render(
+            <ContradictionBanner
+                trace={trace(
+                    { _tag: "FailedAccusation", accusationIndex: 0 },
+                    {
+                        offendingSuggestionIndices: [],
+                        offendingAccusationIndices: [0],
+                        offendingCells: [],
+                    },
+                )}
+            />,
+        );
+
+        expect(
+            screen.getByText("accusationLabelNoPlayer"),
+        ).toBeInTheDocument();
+        // No remove button when the accusation isn't in the list.
+        expect(
+            screen.queryByRole("button", { name: "removeAccusation" }),
+        ).toBeNull();
     });
 });

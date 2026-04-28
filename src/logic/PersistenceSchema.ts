@@ -1,19 +1,25 @@
 import { Schema } from "effect";
+import { AccusationId } from "./Accusation";
 import { Card, CardCategory, Player } from "./GameObjects";
 import { SuggestionId } from "./Suggestion";
 
 /**
- * Effect Schema definitions for the persisted session shape (v4).
+ * Effect Schema definitions for the persisted session shape (v6).
  *
  * The app is pre-production, so there's a single on-disk format —
- * writes go to v4, reads only accept v4. If an older / malformed blob
+ * writes go to v6, reads only accept v6. If an older / malformed blob
  * shows up, decode returns `Result.Failure` and the caller falls back
  * to a fresh session. No migration chain, no legacy schemas.
  *
- * Branded strings (Player, Card, CardCategory, SuggestionId) are
- * decoded straight into their nominal types via `Schema.fromBrand`,
- * so downstream code receives properly-branded values without a
- * second wrapping pass.
+ * v6 adds the `loggedAt: number` field to each suggestion + accusation,
+ * recording the millisecond timestamp at which it was logged. Powers
+ * the combined chronological prior-log UI in `SuggestionLogPanel` —
+ * suggestions and accusations are interleaved by `loggedAt`.
+ *
+ * Branded strings (Player, Card, CardCategory, SuggestionId,
+ * AccusationId) are decoded straight into their nominal types via
+ * `Schema.fromBrand`, so downstream code receives properly-branded
+ * values without a second wrapping pass.
  */
 
 const PlayerSchema = Schema.String.pipe(Schema.fromBrand("Player", Player));
@@ -23,6 +29,9 @@ const CardCategorySchema = Schema.String.pipe(
 );
 const SuggestionIdSchema = Schema.String.pipe(
     Schema.fromBrand("SuggestionId", SuggestionId),
+);
+const AccusationIdSchema = Schema.String.pipe(
+    Schema.fromBrand("AccusationId", AccusationId),
 );
 
 const PersistedCardEntrySchema = Schema.Struct({
@@ -58,17 +67,26 @@ const PersistedSuggestionSchema = Schema.Struct({
     nonRefuters: Schema.Array(PlayerSchema),
     refuter: Schema.NullOr(PlayerSchema),
     seenCard: Schema.NullOr(CardSchema),
+    loggedAt: Schema.Number,
+});
+
+const PersistedAccusationSchema = Schema.Struct({
+    id: Schema.optional(AccusationIdSchema),
+    accuser: PlayerSchema,
+    cards: Schema.Array(CardSchema),
+    loggedAt: Schema.Number,
 });
 
 /**
- * Canonical v4 session shape. The only version the decoder accepts.
+ * Canonical v6 session shape. The only version the decoder accepts.
  */
-const PersistedSessionV4Schema = Schema.Struct({
-    version: Schema.Literal(4),
+const PersistedSessionV6Schema = Schema.Struct({
+    version: Schema.Literal(6),
     setup: PersistedGameSetupSchema,
     hands: Schema.Array(PersistedHandSchema),
     handSizes: Schema.Array(PersistedHandSizeSchema),
     suggestions: Schema.Array(PersistedSuggestionSchema),
+    accusations: Schema.Array(PersistedAccusationSchema),
 });
 
 /**
@@ -76,13 +94,13 @@ const PersistedSessionV4Schema = Schema.Struct({
  * callers decide whether to surface the error or fall back to a fresh
  * session.
  */
-export const decodeV4Unknown = Schema.decodeUnknownResult(
-    PersistedSessionV4Schema,
+export const decodeV6Unknown = Schema.decodeUnknownResult(
+    PersistedSessionV6Schema,
 );
 
 /**
- * Runtime type of a decoded v4 session — the branded, Schema-validated
- * payload `decodeV4Unknown` hands back. Callers construct the
+ * Runtime type of a decoded v6 session — the branded, Schema-validated
+ * payload `decodeV6Unknown` hands back. Callers construct the
  * GameSession domain value from this.
  */
-export type PersistedSessionV4 = Schema.Schema.Type<typeof PersistedSessionV4Schema>;
+export type PersistedSessionV6 = Schema.Schema.Type<typeof PersistedSessionV6Schema>;

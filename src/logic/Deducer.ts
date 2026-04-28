@@ -1,9 +1,19 @@
-import { Effect, Equal, Result } from "effect";
+import { Effect, Equal, Layer, Result } from "effect";
+import type { Accusation } from "./Accusation";
 import { Cell, Contradiction, Knowledge } from "./Knowledge";
 import { ContradictionKind } from "./ContradictionKind";
 import { GameSetup } from "./GameSetup";
 import { applyAllRules } from "./Rules";
-import { getCardSet, getPlayerSet, getSuggestions } from "./services";
+import type { Suggestion } from "./Suggestion";
+import {
+    getAccusations,
+    getCardSet,
+    getPlayerSet,
+    getSuggestions,
+    makeAccusationsLayer,
+    makeSetupLayer,
+    makeSuggestionsLayer,
+} from "./services";
 
 /**
  * Structured contradiction information the UI can act on without
@@ -26,6 +36,12 @@ export interface ContradictionTrace {
     readonly reason: string;
     readonly offendingCells: ReadonlyArray<Cell>;
     readonly offendingSuggestionIndices: ReadonlyArray<number>;
+    /**
+     * Indices of any failed accusations whose `failedAccusationEliminate`
+     * call wrapped (or propagated) the conflict. Empty when the conflict
+     * came from a non-accusation rule.
+     */
+    readonly offendingAccusationIndices: ReadonlyArray<number>;
     readonly sliceLabel?: string | undefined;
     /**
      * Structured identity of the rule that raised the conflict — see
@@ -53,6 +69,10 @@ const traceOf = (error: Contradiction): ContradictionTrace => ({
         error.suggestionIndex !== undefined
             ? [error.suggestionIndex]
             : [],
+    offendingAccusationIndices:
+        error.accusationIndex !== undefined
+            ? [error.accusationIndex]
+            : [],
     sliceLabel: error.sliceLabel,
     contradictionKind: error.contradictionKind,
 });
@@ -78,8 +98,9 @@ const deduce = Effect.fn("deducer.evaluate")(function* (initial: Knowledge) {
     const cardSet = yield* getCardSet;
     const playerSet = yield* getPlayerSet;
     const suggestions = yield* getSuggestions;
+    const accusations = yield* getAccusations;
     const setup = GameSetup({ cardSet, playerSet });
-    const rule = applyAllRules(setup, suggestions);
+    const rule = applyAllRules(setup, suggestions, accusations);
     let current = initial;
     try {
         // Bound the loop defensively — one iteration per cell would be
@@ -100,3 +121,32 @@ const deduce = Effect.fn("deducer.evaluate")(function* (initial: Knowledge) {
 });
 
 export default deduce;
+
+/**
+ * Synchronous wrapper around `deduce` for production callers that need
+ * to invoke the deducer ad-hoc (e.g. the entropy scorer running one
+ * deducer pass per hypothetical outcome). Builds an ephemeral layer
+ * from positional inputs and materialises the Effect failure channel
+ * back to a `DeductionResult` so consumers can branch on
+ * `Result.isSuccess` without juggling Effect.runSync themselves.
+ *
+ * Mirror of the test-utils helper of the same name; kept here so
+ * non-test consumers don't have to cross-import test code.
+ */
+export const deduceSync = (
+    setup: GameSetup,
+    suggestions: ReadonlyArray<Suggestion>,
+    accusations: ReadonlyArray<Accusation>,
+    initial: Knowledge,
+): DeductionResult =>
+    Effect.runSync(
+        Effect.result(deduce(initial)).pipe(
+            Effect.provide(
+                Layer.mergeAll(
+                    makeSetupLayer(setup),
+                    makeSuggestionsLayer(suggestions),
+                    makeAccusationsLayer(accusations),
+                ),
+            ),
+        ),
+    );

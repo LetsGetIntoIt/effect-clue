@@ -101,6 +101,7 @@ const seedOneSuggestionAndMount = async (): Promise<void> => {
                 nonRefuters: [],
             }),
         ],
+        accusations: [],
     });
     render(<Clue />);
     await waitFor(() => {

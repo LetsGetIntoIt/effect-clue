@@ -1,6 +1,8 @@
 import { Match, pipe } from "effect";
 import {
+    Card,
     CaseFileOwner,
+    Player,
     PlayerOwner,
 } from "./GameObjects";
 import {
@@ -19,11 +21,14 @@ import {
     allOwners,
     GameSetup,
 } from "./GameSetup";
+import { Accusation, accusationCards } from "./Accusation";
 import { Suggestion, suggestionCards, suggestionNonRefuters } from "./Suggestion";
 import type { ReasonKind, Tracer } from "./Provenance";
 import {
     CardOwnership,
     CaseFileCategory,
+    DisjointGroupsHandLock,
+    FailedAccusation,
     NonRefuters,
     PlayerHand,
     RefuterOwnsOneOf,
@@ -425,6 +430,257 @@ export const refuterOwnsOneOf = (
     return k;
 };
 
+/**
+ * Disjoint-groups hand lock. Runs across every player's refuted
+ * suggestions. If a single player P has refuted K suggestions whose
+ * (still-unknown-for-P) card sets are pairwise disjoint, P must own at
+ * least one card from each of those K disjoint sets. When K equals
+ * P's remaining unknown hand slots (`handSize − knownYs`), P's hand is
+ * exactly one card per set and every other card in P's row must be N.
+ *
+ * Strictly stronger than `refuterOwnsOneOf`: at K=1 it reduces to that
+ * rule, but it doesn't fire below K=2 — single-suggestion narrowing is
+ * left to `refuterOwnsOneOf` to keep the provenance story clean.
+ *
+ * Edge cases:
+ *   - We filter each suggestion's cards down to those still unknown for
+ *     P. A set already containing a Y is satisfied by that Y and is
+ *     dropped (its yCount counts via `knownYs`); a set whose unknowns
+ *     are all N is impossible — but `refuterOwnsOneOf` and the slice
+ *     combinator catch that case earlier, so we just skip it.
+ *   - K > handRemaining: P would owe at least K distinct cards but has
+ *     fewer slots. Throw a Contradiction tagged with all K
+ *     contributing suggestion indices.
+ *
+ * The rule sits before `refuterOwnsOneOf` in `applyDeductionRules` so
+ * any new Ns it discovers are visible to that rule in the same pass.
+ */
+export const disjointGroupsHandLock = (
+    setup: GameSetup,
+    suggestions: ReadonlyArray<Suggestion>,
+    tracer?: Tracer,
+) => (knowledge: Knowledge): Knowledge => {
+    // Bucket every "refuted but unseen" suggestion by its refuter.
+    const byRefuter = new Map<
+        Player,
+        Array<{ readonly index: number; readonly cards: ReadonlyArray<Card> }>
+    >();
+    suggestions.forEach((s, index) => {
+        if (s.refuter === undefined) return;
+        if (s.seenCard !== undefined) return;
+        const list = byRefuter.get(s.refuter) ?? [];
+        list.push({ index, cards: suggestionCards(s) });
+        byRefuter.set(s.refuter, list);
+    });
+
+    let k = knowledge;
+    for (const [player, entries] of byRefuter) {
+        if (entries.length < 2) continue; // single suggestion → refuterOwnsOneOf handles it
+        const owner = PlayerOwner(player);
+        const handSize = getHandSize(k, owner);
+        if (handSize === undefined) continue;
+
+        // Filter each set to cells still unknown for the refuter; drop
+        // already-Y sets entirely (satisfied) and skip already-impossible
+        // sets (refuterOwnsOneOf / slice will surface the contradiction
+        // separately).
+        const filtered: Array<{
+            readonly index: number;
+            readonly cards: ReadonlyArray<Card>;
+        }> = [];
+        for (const entry of entries) {
+            let containsY = false;
+            const stillUnknown: Card[] = [];
+            for (const card of entry.cards) {
+                const v = getCell(k, Cell(owner, card));
+                if (v === Y) { containsY = true; break; }
+                if (v === undefined) stillUnknown.push(card);
+            }
+            if (containsY) continue;
+            if (stillUnknown.length === 0) continue;
+            filtered.push({ index: entry.index, cards: stillUnknown });
+        }
+        if (filtered.length < 2) continue;
+
+        // Pairwise disjointness: a Set<Card> stays small (≤ 9 entries
+        // per filtered set) so this is O(Σ |filtered|).
+        const union = new Set<Card>();
+        let disjoint = true;
+        for (const f of filtered) {
+            for (const card of f.cards) {
+                if (union.has(card)) { disjoint = false; break; }
+                union.add(card);
+            }
+            if (!disjoint) break;
+        }
+        if (!disjoint) continue;
+
+        // Count Ys already known on P's row.
+        let ysInRow = 0;
+        for (const card of allCardIds(setup)) {
+            if (getCell(k, Cell(owner, card)) === Y) ysInRow++;
+        }
+        const handRemaining = handSize - ysInRow;
+        const groupCount = filtered.length;
+
+        if (groupCount > handRemaining) {
+            throw new Contradiction({
+                reason:
+                    `${String(player)} refuted ${groupCount} disjoint ` +
+                    `suggestion groups but has only ${handRemaining} ` +
+                    `unknown hand slot${handRemaining === 1 ? "" : "s"} left`,
+                offendingCells: filtered.flatMap(f =>
+                    f.cards.map(c => Cell(owner, c)),
+                ),
+                contradictionKind: {
+                    _tag: "DisjointGroupsHandLock",
+                    player,
+                    suggestionIndices: filtered.map(f => f.index),
+                },
+            });
+        }
+        if (groupCount !== handRemaining) continue;
+
+        // Fire: every unknown cell in P's row outside the union must be N.
+        const suggestionIndices = filtered.map(f => f.index);
+        const unionCells: Cell[] = filtered.flatMap(f =>
+            f.cards.map(c => Cell(owner, c)),
+        );
+        for (const card of allCardIds(setup)) {
+            if (union.has(card)) continue;
+            const cell = Cell(owner, card);
+            if (getCell(k, cell) !== undefined) continue;
+            const before = k;
+            try {
+                k = setCell(k, cell, N);
+            } catch (e) {
+                if (e instanceof Contradiction) {
+                    throw new Contradiction({
+                        reason: e.reason,
+                        offendingCells: e.offendingCells.length
+                            ? e.offendingCells
+                            : [cell, ...unionCells],
+                        sliceLabel: e.sliceLabel,
+                        contradictionKind: {
+                            _tag: "DisjointGroupsHandLock",
+                            player,
+                            suggestionIndices,
+                        },
+                    });
+                }
+                throw e;
+            }
+            if (k !== before && tracer) {
+                tracer({
+                    cell,
+                    value: N,
+                    kind: DisjointGroupsHandLock({
+                        player,
+                        suggestionIndices,
+                    }),
+                    dependsOn: unionCells,
+                });
+            }
+        }
+    }
+    return k;
+};
+
+// ---- Accusation-driven rules -------------------------------------------
+
+/**
+ * Failed-accusation elimination. Every accusation that didn't end the
+ * game is now public information: the case file's suspect / weapon /
+ * room is *not* the named triple. So if two of the three are already
+ * pinned to Y in the case file row (their categories deduced), the
+ * remaining card must be N for the case file.
+ *
+ * Truth table (over the three case-file cells named by the accusation):
+ *   - any cell already N        → rule satisfied; no inference.
+ *   - 0 / 1 cells Y, no Ns      → not enough evidence; no inference.
+ *   - exactly 2 cells Y, 1 unknown → force the unknown to N.
+ *   - all 3 cells Y             → contradiction (the accusation would
+ *                                 have been correct, but it failed).
+ *
+ * Order in `applyAllRules`: we run accusation rules *after*
+ * `applyDeductionRules` so the suggestion-driven Ys / Ns it lands have
+ * already cascaded through. The rule only ever sets case-file N cells,
+ * which the consistency slices on the next iteration can use to force
+ * other Ys (e.g. "this category now has only one candidate left").
+ */
+export const failedAccusationEliminate = (
+    accusations: ReadonlyArray<Accusation>,
+    tracer?: Tracer,
+) => (knowledge: Knowledge): Knowledge => {
+    let k = knowledge;
+    accusations.forEach((accusation, accusationIndex) => {
+        const caseFile = CaseFileOwner();
+        const cards = accusationCards(accusation);
+        const yCells: Cell[] = [];
+        const unknowns: Cell[] = [];
+        let anyN = false;
+        for (const card of cards) {
+            const cell = Cell(caseFile, card);
+            const v = getCell(k, cell);
+            if      (v === Y) yCells.push(cell);
+            else if (v === N) { anyN = true; break; }
+            else              unknowns.push(cell);
+        }
+        if (anyN) return; // rule satisfied — case file definitely isn't this triple
+
+        // All three cells already Y means the failed accusation matched
+        // the case file, which can't happen in a well-formed game.
+        if (yCells.length === cards.length && unknowns.length === 0) {
+            throw new Contradiction({
+                reason:
+                    `accusation #${accusationIndex + 1} failed but every card ` +
+                    `it named is already known to be in the case file`,
+                offendingCells: yCells,
+                accusationIndex,
+                contradictionKind: {
+                    _tag: "FailedAccusation",
+                    accusationIndex,
+                },
+            });
+        }
+
+        // Exactly one unknown with the rest Y → force the unknown to N.
+        if (yCells.length === cards.length - 1 && unknowns.length === 1) {
+            const [cell] = unknowns;
+            if (cell === undefined) return;
+            const before = k;
+            try {
+                k = setCell(k, cell, N);
+            } catch (e) {
+                if (e instanceof Contradiction) {
+                    throw new Contradiction({
+                        reason: e.reason,
+                        offendingCells: e.offendingCells.length
+                            ? e.offendingCells
+                            : [cell, ...yCells],
+                        sliceLabel: e.sliceLabel,
+                        accusationIndex,
+                        contradictionKind: {
+                            _tag: "FailedAccusation",
+                            accusationIndex,
+                        },
+                    });
+                }
+                throw e;
+            }
+            if (k !== before && tracer) {
+                tracer({
+                    cell,
+                    value: N,
+                    kind: FailedAccusation({ accusationIndex }),
+                    dependsOn: yCells,
+                });
+            }
+        }
+    });
+    return k;
+};
+
 // ---- Top-level rule application ----------------------------------------
 
 /**
@@ -446,27 +702,52 @@ export const applyConsistencyRules = (
 
 /**
  * Apply every suggestion-driven rule once.
+ *
+ * Order matters: `disjointGroupsHandLock` runs after the simpler
+ * suggestion rules (so any Ns those rules add are visible) and before
+ * `refuterOwnsOneOf` so its newly-set Ns can collapse single-suggestion
+ * uncertainty in the same pass.
  */
 export const applyDeductionRules = (
+    setup: GameSetup,
     suggestions: ReadonlyArray<Suggestion>,
     tracer?: Tracer,
 ) => (knowledge: Knowledge): Knowledge => pipe(
     knowledge,
     nonRefutersDontHaveSuggestedCards(suggestions, tracer),
     refuterShowedCard(suggestions, tracer),
+    disjointGroupsHandLock(setup, suggestions, tracer),
     refuterOwnsOneOf(suggestions, tracer),
 );
 
 /**
- * A single pass: apply every consistency and deduction rule once. The
- * deducer calls this in a fixed-point loop until nothing changes.
+ * Apply every accusation-driven rule once. Currently just
+ * `failedAccusationEliminate`, but kept as a layer of its own so the
+ * fixed-point loop in `applyAllRules` (and in `deduceWithExplanations`)
+ * can interleave accusation Ns with consistency-slice cascades the
+ * same way it interleaves suggestion Ns.
+ */
+export const applyAccusationRules = (
+    accusations: ReadonlyArray<Accusation>,
+    tracer?: Tracer,
+) => (knowledge: Knowledge): Knowledge => pipe(
+    knowledge,
+    failedAccusationEliminate(accusations, tracer),
+);
+
+/**
+ * A single pass: apply every consistency, deduction, and accusation
+ * rule once. The deducer calls this in a fixed-point loop until
+ * nothing changes.
  */
 export const applyAllRules = (
     setup: GameSetup,
     suggestions: ReadonlyArray<Suggestion>,
+    accusations: ReadonlyArray<Accusation>,
     tracer?: Tracer,
 ) => (knowledge: Knowledge): Knowledge => pipe(
     knowledge,
     applyConsistencyRules(setup, tracer),
-    applyDeductionRules(suggestions, tracer),
+    applyDeductionRules(setup, suggestions, tracer),
+    applyAccusationRules(accusations, tracer),
 );

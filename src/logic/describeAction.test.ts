@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { describeAction } from "./describeAction";
-import type { ClueAction, ClueState, DraftSuggestion } from "./ClueState";
+import type {
+    ClueAction,
+    ClueState,
+    DraftAccusation,
+    DraftSuggestion,
+} from "./ClueState";
+import { AccusationId } from "./Accusation";
 import { Card, CardCategory, Player } from "./GameObjects";
 import { GameSetup, CardEntry, Category } from "./GameSetup";
 import { KnownCard } from "./InitialKnowledge";
@@ -65,7 +71,14 @@ const baseState: ClueState = {
         KnownCard({ player: Player("Player 2"), card: Card("card-conservatory") }),
     ],
     suggestions: [],
+    accusations: [],
     uiMode: "checklist",
+};
+
+const accusationA: DraftAccusation = {
+    id: AccusationId("acc-a"),
+    accuser: Player("Player 2"),
+    cards: [Card("card-scarlet"), Card("card-conservatory")],
 };
 
 const suggestionA: DraftSuggestion = {
@@ -244,5 +257,58 @@ describe("describeAction — specific tooltips", () => {
 
     test("newGame", () => {
         expect(describe_({ type: "newGame" })).toBe("starting a new game");
+    });
+
+    test("addAccusation", () => {
+        expect(
+            describe_({ type: "addAccusation", accusation: accusationA }),
+        ).toBe(
+            "logging Player 2's failed accusation of Miss Scarlet + Conservatory",
+        );
+    });
+
+    test("updateAccusation resolves prior accuser/cards by id", () => {
+        const stateWithAccusation: ClueState = {
+            ...baseState,
+            accusations: [accusationA],
+        };
+        expect(
+            describe_(
+                { type: "updateAccusation", accusation: accusationA },
+                stateWithAccusation,
+            ),
+        ).toBe(
+            "editing Accusation #1 by Player 2 (Miss Scarlet + Conservatory)",
+        );
+    });
+
+    test("updateAccusation falls back when id not found", () => {
+        expect(
+            describe_({ type: "updateAccusation", accusation: accusationA }),
+        ).toBe("editing an accusation");
+    });
+
+    test("removeAccusation resolves prior accuser/cards by id", () => {
+        const stateWithAccusation: ClueState = {
+            ...baseState,
+            accusations: [accusationA],
+        };
+        expect(
+            describe_(
+                { type: "removeAccusation", id: accusationA.id },
+                stateWithAccusation,
+            ),
+        ).toBe(
+            "removing Accusation #1 by Player 2 (Miss Scarlet + Conservatory)",
+        );
+    });
+
+    test("removeAccusation falls back when id not found", () => {
+        expect(
+            describe_({
+                type: "removeAccusation",
+                id: AccusationId("gone"),
+            }),
+        ).toBe("removing an accusation");
     });
 });

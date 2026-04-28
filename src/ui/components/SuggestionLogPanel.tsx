@@ -1,40 +1,59 @@
 "use client";
 
-import { Effect, Layer, Result } from "effect";
+import { Duration, Effect, Fiber, Layer, Result } from "effect";
+import { newAccusationId } from "../../logic/Accusation";
+import type { Card } from "../../logic/GameObjects";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { suggestionMade } from "../../analytics/events";
+import {
+    accusationFormOpened,
+    accusationLogged,
+    accusationRemoved,
+    priorAccusationEdited,
+    suggestionMade,
+} from "../../analytics/events";
 import { Player } from "../../logic/GameObjects";
 import { footnotesForCell } from "../../logic/Footnotes";
-import { cardName } from "../../logic/GameSetup";
+import {
+    cardName,
+    categoryName as resolveCategoryName,
+} from "../../logic/GameSetup";
 import { chainFor } from "../../logic/Provenance";
 import {
     consolidateRecommendations,
     describeRecommendation,
     isAnySlot,
-    recommendSuggestions,
+    recommendAction,
 } from "../../logic/Recommender";
-import type { AnySlot } from "../../logic/Recommender";
+import type {
+    ActionRecommendation,
+    AnySlot,
+    RecommendationDescription,
+} from "../../logic/Recommender";
 import {
+    makeAccusationsLayer,
     makeKnowledgeLayer,
     makeSetupLayer,
+    makeSuggestionsLayer,
 } from "../../logic/services";
 import { useConfirm } from "../hooks/useConfirm";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { useListFormatter } from "../hooks/useListFormatter";
 import { useSelection } from "../SelectionContext";
 import { InfoPopover } from "./InfoPopover";
+import { AccusationForm, type AccusationFormHandle } from "./AccusationForm";
 import {
     SuggestionForm,
     type SuggestionFormHandle,
 } from "./SuggestionForm";
 import { isInsideSuggestionPopover } from "./SuggestionPills";
+import type { DraftAccusation } from "../../logic/ClueState";
 import {
     DraftSuggestion,
     useClue,
 } from "../state";
-import { registerSuggestionFormFocusHandler } from "../suggestionFormFocus";
+import { registerAddFormFocusHandler } from "../addFormFocus";
 import {
     T_FAST,
     T_SPRING_SOFT,
@@ -70,44 +89,382 @@ export function SuggestionLogPanel() {
                 <Recommendations />
             </div>
             <AddSuggestion />
-            <PriorSuggestions />
+            <PriorLog />
         </section>
     );
 }
 
 /**
+ * Inactivity timeout that flips the accusation form back to the
+ * suggestion form. Matches the user's mental model of "I switched,
+ * then got distracted". Reset on every discrete user interaction
+ * inside the form (hover, click, focus change, keypress); explicitly
+ * NOT reset by mere focus residency, so leaving focus parked on a
+ * pill for longer than this window correctly reverts to suggestion
+ * mode.
+ */
+const ACCUSATION_IDLE_TIMEOUT: Duration.Duration = Duration.seconds(15);
+
+// Module-level mode sentinels — kept as `as const` so the lint rule's
+// type-narrowing exemption applies and no inline literal warnings.
+const SUGGESTION_MODE = "suggestion" as const;
+const ACCUSATION_MODE = "accusation" as const;
+
+type Mode = typeof SUGGESTION_MODE | typeof ACCUSATION_MODE;
+
+// Stable Framer Motion `layoutId` for the active-tab indicator. The
+// indicator is rendered as a child of whichever tab is active; the
+// shared id makes Framer auto-FLIP its background between the two.
+const TAB_INDICATOR_LAYOUT_ID = "addForm-tab-indicator";
+
+// AnimatePresence presence-mode that defers the entering form's mount
+// until the exiting form's transition has completed. Constant kept at
+// module scope so the i18next/no-literal-string lint exemption applies.
+const PRESENCE_WAIT_MODE = "wait" as const;
+
+/**
  * Top of the log: the pill-driven form for composing a new
- * suggestion. Delegates the entire UI to `<SuggestionForm>` — the
- * panel only wires the reducer dispatch and the global Cmd+K shortcut
- * (the form itself is unaware of any global keybinding).
+ * suggestion or a failed accusation. Two modes share this slot,
+ * presented as a tab-strip header (`Add a [suggestion (⌘K)]
+ * [accusation (⌘I)]`) above the active form. Switching tabs slides
+ * a sliding accent indicator between the two buttons; the form area
+ * cross-fades + slides on the same axis.
+ *
+ * Auto-revert: while in accusation mode, any 15-second window with
+ * no discrete interaction (hover, click, focus change, keypress)
+ * flips back to suggestion mode. Submitting an accusation also
+ * flips immediately.
+ *
+ * Programmatic mode entry (e.g. from the ⌘K / ⌘I keyboard shortcuts
+ * or the recommender's "log this accusation" banner) goes through
+ * the `addFormFocus` bus, which writes both `setMode(target)` and
+ * `setPendingFocus(...)` so the new form's first pill is auto-opened
+ * once it has finished mounting (AnimatePresence's mode="wait" can
+ * delay mount past a microtask).
  */
 function AddSuggestion() {
     const { dispatch, state } = useClue();
-    const formRef = useRef<SuggestionFormHandle>(null);
+    const t = useTranslations("suggestions");
+    const tAcc = useTranslations("accusations");
+    const suggestionFormRef = useRef<SuggestionFormHandle>(null);
+    const accusationFormRef = useRef<AccusationFormHandle>(null);
+
+    const [mode, setMode] = useState<Mode>(SUGGESTION_MODE);
+    const [pendingFocus, setPendingFocus] = useState<{
+        readonly target: Mode;
+        readonly clear: boolean;
+    } | null>(null);
+
     useEffect(
         () =>
-            registerSuggestionFormFocusHandler(({ clear }) =>
-                formRef.current?.focusFirstPill({ clear }),
-            ),
+            registerAddFormFocusHandler((target, { clear }) => {
+                const targetMode: Mode =
+                    target === "accusation" ? ACCUSATION_MODE : SUGGESTION_MODE;
+                setMode(targetMode);
+                setPendingFocus({ target: targetMode, clear });
+            }),
         [],
     );
+
+    // Drive the deferred focus-first-pill once the new form has
+    // mounted. `AnimatePresence mode="wait"` holds off the mount
+    // until the exiting form's transition completes, so a microtask
+    // alone isn't enough — poll on requestAnimationFrame until the
+    // matching ref is populated (with an upper bound so we don't
+    // leak rAF callbacks if the form never mounts for some reason).
+    useEffect(() => {
+        if (pendingFocus === null) return;
+        if (pendingFocus.target !== mode) return;
+        let rafId = 0;
+        let attempts = 0;
+        const tryFocus = (): void => {
+            const ref =
+                mode === SUGGESTION_MODE
+                    ? suggestionFormRef
+                    : accusationFormRef;
+            if (ref.current !== null) {
+                ref.current.focusFirstPill({ clear: pendingFocus.clear });
+                setPendingFocus(null);
+                return;
+            }
+            attempts += 1;
+            // ~30 frames @ 60fps ≈ 500ms — generous upper bound for
+            // AnimatePresence's mode="wait" exit-then-enter sequence
+            // (the actual transition is ~120ms).
+            if (attempts > 30) {
+                setPendingFocus(null);
+                return;
+            }
+            rafId = requestAnimationFrame(tryFocus);
+        };
+        rafId = requestAnimationFrame(tryFocus);
+        return () => cancelAnimationFrame(rafId);
+    }, [pendingFocus, mode]);
+
+    // Idle-timer ref. Reset on every pointer / key / focus event
+    // inside the wrapper while in accusation mode. Cleared when we
+    // flip back.
+    const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const clearIdleTimer = () => {
+        if (idleTimerRef.current !== null) {
+            clearTimeout(idleTimerRef.current);
+            idleTimerRef.current = null;
+        }
+    };
+    const armIdleTimer = () => {
+        clearIdleTimer();
+        idleTimerRef.current = setTimeout(
+            () => setMode(SUGGESTION_MODE),
+            Duration.toMillis(ACCUSATION_IDLE_TIMEOUT),
+        );
+    };
+    useEffect(() => {
+        if (mode === ACCUSATION_MODE) armIdleTimer();
+        else clearIdleTimer();
+        return clearIdleTimer;
+        // armIdleTimer / clearIdleTimer are intentionally re-created on
+        // every render without joining the dep array — they only read
+        // refs and the stable setMode callback.
+    }, [mode]);
+
+    const onWrapperActivity = () => {
+        if (mode === ACCUSATION_MODE) armIdleTimer();
+    };
+
     return (
-        <SuggestionForm
-            ref={formRef}
-            setup={state.setup}
-            onSubmit={draft => {
-                dispatch({ type: "addSuggestion", suggestion: draft });
-                const setup = state.setup;
-                const [c0, c1, c2] = draft.cards;
-                suggestionMade({
-                    turnNumber: state.suggestions.length + 1,
-                    suspect: c0 ? cardName(setup.cardSet, c0) : "",
-                    weapon: c1 ? cardName(setup.cardSet, c1) : "",
-                    room: c2 ? cardName(setup.cardSet, c2) : "",
-                    suggestingPlayer: String(draft.suggester),
-                });
-            }}
-        />
+        <div
+            onPointerDown={onWrapperActivity}
+            onPointerMove={onWrapperActivity}
+            onKeyDown={onWrapperActivity}
+            onFocus={onWrapperActivity}
+        >
+            <AddFormTabHeader mode={mode} setMode={setMode} />
+            <AnimatePresence mode={PRESENCE_WAIT_MODE} initial={false}>
+                {mode === SUGGESTION_MODE ? (
+                    <FormSlide key="suggestion" direction={-1}>
+                        <SuggestionForm
+                            ref={suggestionFormRef}
+                            setup={state.setup}
+                            showHeader={false}
+                            onSubmit={draft => {
+                                dispatch({
+                                    type: "addSuggestion",
+                                    suggestion: draft,
+                                });
+                                const setup = state.setup;
+                                const [c0, c1, c2] = draft.cards;
+                                suggestionMade({
+                                    turnNumber: state.suggestions.length + 1,
+                                    suspect: c0
+                                        ? cardName(setup.cardSet, c0)
+                                        : "",
+                                    weapon: c1
+                                        ? cardName(setup.cardSet, c1)
+                                        : "",
+                                    room: c2
+                                        ? cardName(setup.cardSet, c2)
+                                        : "",
+                                    suggestingPlayer: String(draft.suggester),
+                                });
+                            }}
+                        />
+                    </FormSlide>
+                ) : (
+                    <FormSlide key="accusation" direction={1}>
+                        <p className="mt-0 mb-2 text-[12px] leading-snug text-muted">
+                            {tAcc("addHelpText")}
+                        </p>
+                        <AccusationForm
+                            ref={accusationFormRef}
+                            setup={state.setup}
+                            showHeader={false}
+                            onSubmit={draft => {
+                                dispatch({
+                                    type: "addAccusation",
+                                    accusation: draft,
+                                });
+                                accusationLogged({
+                                    accusationCount:
+                                        state.accusations.length + 1,
+                                    accuser: String(draft.accuser),
+                                    source: "manual",
+                                });
+                                // Submission flips back so the next thing
+                                // the user types is a regular suggestion.
+                                setMode(SUGGESTION_MODE);
+                            }}
+                        />
+                    </FormSlide>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+
+    // ---- Inner components -----------------------------------------
+    //
+    // Defined inside `AddSuggestion` so they can close over `t` /
+    // `setMode` without prop-drilling. Re-mount cost is fine — these
+    // are tiny presentational shells; React's reconciler keeps the
+    // children steady because the JSX shape is stable.
+
+    function AddFormTabHeader({
+        mode,
+        setMode,
+    }: {
+        readonly mode: Mode;
+        readonly setMode: (m: Mode) => void;
+    }): React.ReactElement {
+        const tabIndicatorTransition = useReducedTransition({
+            ...T_STANDARD,
+            duration: 0.22,
+        });
+        const onTabKeyDown = (
+            e: React.KeyboardEvent<HTMLButtonElement>,
+        ): void => {
+            // Arrow-key navigation between the two tabs, scoped to the
+            // tab buttons themselves so the per-form pill arrow-keys
+            // are unaffected (those listeners scope to `[data-pill-id]`
+            // elements).
+            const native = e.nativeEvent;
+            const isLeft = matches("nav.left", native);
+            const isRight = matches("nav.right", native);
+            if (!isLeft && !isRight) return;
+            e.preventDefault();
+            const next: Mode =
+                mode === SUGGESTION_MODE ? ACCUSATION_MODE : SUGGESTION_MODE;
+            if (next === ACCUSATION_MODE) {
+                accusationFormOpened({ source: "toggle_link" });
+            }
+            setMode(next);
+        };
+
+        return (
+            <h3
+                className={`${SECTION_TITLE} leading-[1.5]`}
+            >
+                {t.rich("addTitle", {
+                    suggestionKey: label("global.gotoPlay"),
+                    accusationKey: label("global.gotoAccusation"),
+                    suggestionTab: chunks => (
+                        <TabButton
+                            isActive={mode === SUGGESTION_MODE}
+                            indicatorTransition={tabIndicatorTransition}
+                            onClick={() => setMode(SUGGESTION_MODE)}
+                            onKeyDown={onTabKeyDown}
+                        >
+                            {chunks}
+                        </TabButton>
+                    ),
+                    accusationTab: chunks => (
+                        <TabButton
+                            isActive={mode === ACCUSATION_MODE}
+                            indicatorTransition={tabIndicatorTransition}
+                            onClick={() => {
+                                setMode(ACCUSATION_MODE);
+                                accusationFormOpened({
+                                    source: "toggle_link",
+                                });
+                            }}
+                            onKeyDown={onTabKeyDown}
+                        >
+                            {chunks}
+                        </TabButton>
+                    ),
+                    // Shortcut hint inside each tab. Stays muted on
+                    // both active + inactive variants — text colour
+                    // doesn't change with state any more, only the
+                    // outline does.
+                    kbd: chunks => (
+                        <span className="ml-0.5 font-normal text-muted">
+                            {chunks}
+                        </span>
+                    ),
+                })}
+            </h3>
+        );
+    }
+}
+
+/**
+ * Wrapper that maps the rich-text chunk into a single tab-button
+ * element. The active button hosts the shared sliding indicator
+ * (`layoutId={TAB_INDICATOR_LAYOUT_ID}`); inactive buttons retain
+ * their hover affordance so they always read as clickable.
+ */
+function TabButton({
+    isActive,
+    indicatorTransition,
+    onClick,
+    onKeyDown,
+    children,
+}: {
+    readonly isActive: boolean;
+    readonly indicatorTransition: import("motion/react").Transition;
+    readonly onClick: () => void;
+    readonly onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => void;
+    readonly children: React.ReactNode;
+}): React.ReactElement {
+    // Both tabs render with the same lightly-tinted accent fill +
+    // dark text, so the noun looks like part of the surrounding
+    // "Add a …" sentence. Active state adds an outlined ring (the
+    // shared sliding `motion.span layoutId`) on top — text colour
+    // doesn't change between states. Inline-flex + `align-baseline`
+    // keeps the button glued to the baseline of "Add a", and
+    // `mx-0.5` is the only inter-word margin (the natural
+    // whitespace between rich-text chunks already separates them).
+    return (
+        <button
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            tabIndex={isActive ? 0 : -1}
+            onClick={onClick}
+            onKeyDown={onKeyDown}
+            className={
+                "relative mx-px inline-flex cursor-pointer items-baseline " +
+                "rounded-[6px] border-none bg-accent/10 px-1.5 py-1 " +
+                "align-baseline text-[14px] font-semibold text-text " +
+                "transition-colors hover:bg-accent/20 " +
+                "focus-visible:outline-2 focus-visible:outline-accent " +
+                "focus-visible:outline-offset-1"
+            }
+        >
+            {isActive && (
+                <motion.span
+                    layoutId={TAB_INDICATOR_LAYOUT_ID}
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 rounded-[6px] border-2 border-accent"
+                    transition={indicatorTransition}
+                />
+            )}
+            <span className="relative z-10">{children}</span>
+        </button>
+    );
+}
+
+/**
+ * Per-form slide-in / slide-out wrapper used inside AnimatePresence.
+ * `direction` is `-1` for the suggestion form (enters from the left)
+ * and `+1` for the accusation form (enters from the right) — same
+ * axis as the tab indicator's slide.
+ */
+function FormSlide({
+    direction,
+    children,
+}: {
+    readonly direction: -1 | 1;
+    readonly children: React.ReactNode;
+}): React.ReactElement {
+    const transition = useReducedTransition(T_FAST);
+    return (
+        <motion.div
+            initial={{ x: direction * 16, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -direction * 16, opacity: 0 }}
+            transition={transition}
+        >
+            {children}
+        </motion.div>
     );
 }
 
@@ -208,8 +565,11 @@ function Recommendations() {
     // this pane starts at the same x.
     const caretTransition = useReducedTransition(T_STANDARD);
     const bodyTransition = useReducedTransition(T_STANDARD);
+    // Smaller / lighter than `SECTION_TITLE` so the recommendations
+    // heading reads as a secondary affordance — the primary heading
+    // is "Add a suggestion" right below.
     const header = (
-        <h3 className={SECTION_TITLE}>
+        <h3 className="mt-0 mb-1 text-[12px] font-normal text-muted">
             <button
                 type="button"
                 aria-expanded={expanded}
@@ -221,7 +581,7 @@ function Recommendations() {
                     aria-hidden
                     animate={{ rotate: expanded ? 90 : 0 }}
                     transition={caretTransition}
-                    className="inline-block text-[16px] leading-none text-muted"
+                    className="inline-block text-[12px] leading-none"
                 >
                     {CARET_GLYPH}
                 </motion.span>
@@ -255,6 +615,123 @@ function Recommendations() {
     );
 }
 
+/**
+ * "Log this accusation" button rendered inside the accuse-now banner.
+ * Dispatches `addAccusation` with the deduced triple + the player the
+ * recommender is targeting, then mints a fresh id via the reducer's
+ * standard path. If the accusation later turns out wrong, the
+ * `failedAccusationEliminate` rule + ContradictionBanner will
+ * surface the inconsistency.
+ */
+function LogAccusationButton({
+    accuser,
+    cards,
+}: {
+    readonly accuser: Player;
+    readonly cards: ReadonlyArray<Card>;
+}) {
+    const tRecs = useTranslations("recommendations");
+    const { dispatch, state } = useClue();
+    return (
+        <button
+            type="button"
+            title={tRecs("accuseNowLogTitle")}
+            className="cursor-pointer rounded border border-accent bg-transparent px-3 py-1 text-[13px] text-accent hover:bg-accent hover:text-white"
+            onClick={() => {
+                dispatch({
+                    type: "addAccusation",
+                    accusation: {
+                        // Reducer mints a stable id when this empty
+                        // sentinel comes through `replaceSession`-style
+                        // hydration; for direct dispatch we mint one
+                        // here instead.
+                        id: newAccusationId(),
+                        accuser,
+                        cards: [...cards],
+                        loggedAt: Date.now(),
+                    },
+                });
+                // Two events fire — `accusation_form_opened` so the
+                // banner-driven path counts in the same funnel as the
+                // toggle-link path, and `accusation_logged` for the
+                // actual write. `source: "deduced_triple"` distinguishes
+                // it from manual entries.
+                accusationFormOpened({ source: "accuse_now_banner" });
+                accusationLogged({
+                    accusationCount: state.accusations.length + 1,
+                    accuser: String(accuser),
+                    source: "deduced_triple",
+                });
+            }}
+        >
+            {tRecs("accuseNowLog")}
+        </button>
+    );
+}
+
+/**
+ * Inline 14×14 SVG spinner shown while the recommender is working.
+ * Tailwind's `animate-spin` powers the rotation; the colour follows
+ * the muted ink so it's unobtrusive next to the "Calculating…"
+ * caption. Marked aria-hidden because the surrounding role="status"
+ * + aria-live="polite" wrapper reads the caption to assistive
+ * technology.
+ */
+function Spinner() {
+    return (
+        <svg
+            className="h-3.5 w-3.5 animate-spin text-muted"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+        >
+            <circle
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeOpacity="0.25"
+                strokeWidth="3"
+            />
+            <path
+                fill="currentColor"
+                d="M4 12a8 8 0 0 1 8-8v3a5 5 0 0 0-5 5H4z"
+            />
+        </svg>
+    );
+}
+
+/**
+ * One row in the rendered recommendations list. Pre-computed in the
+ * async pipeline below so the render path is purely declarative — no
+ * Effect.runSync inside the JSX.
+ */
+interface RecommendationItem {
+    readonly cards: ReadonlyArray<Card | AnySlot>;
+    readonly score: number;
+    readonly groupSize: number;
+    readonly description: RecommendationDescription;
+}
+
+/**
+ * Async state machine driving the recommendations panel. The
+ * recommender's heavy work (info-gain scoring across ~324 candidate
+ * triples × ~5 outcomes each) runs off the React render path so a
+ * stale fiber can be interrupted when inputs change and React paints
+ * a loading state in between.
+ *
+ * `pending` is the bootstrap state and the state we revert to whenever
+ * inputs change. `ready` carries the resolved action + pre-described
+ * items so the JSX is purely declarative.
+ */
+type RecommendationsState =
+    | { readonly kind: "pending" }
+    | {
+          readonly kind: "ready";
+          readonly action: ActionRecommendation;
+          readonly items: ReadonlyArray<RecommendationItem>;
+      };
+
 function RecommendationsBody({
     setup,
     result,
@@ -268,11 +745,16 @@ function RecommendationsBody({
 }) {
     const t = useTranslations("suggestions");
     const tRecs = useTranslations("recommendations");
+    const { derived } = useClue();
+    const suggestionsAsData = derived.suggestionsAsData;
+    const accusationsAsData = derived.accusationsAsData;
 
     const knowledge = Result.getOrUndefined(result);
 
-    // Shared service layer for the three recommender Effect.gen
-    // paths below — built once per render, reused across all calls.
+    // Shared service layer for the recommender pipeline below. The
+    // info-gain scorer reads setup + knowledge + suggestions +
+    // accusations from services, so the full clue layer is plumbed
+    // in. Rebuilt only when one of the inputs changes (memoised).
     const recommendLayer = useMemo(
         () =>
             knowledge === undefined
@@ -280,9 +762,81 @@ function RecommendationsBody({
                 : Layer.mergeAll(
                       makeSetupLayer(setup),
                       makeKnowledgeLayer(knowledge),
+                      makeSuggestionsLayer(suggestionsAsData),
+                      makeAccusationsLayer(accusationsAsData),
                   ),
-        [setup, knowledge],
+        [setup, knowledge, suggestionsAsData, accusationsAsData],
     );
+
+    const [recState, setRecState] = useState<RecommendationsState>({
+        kind: "pending",
+    });
+
+    // Drive the async pipeline. Whenever the layer or asPlayer changes
+    // we kick off a new fiber via `Effect.runFork`; the cleanup
+    // callback interrupts the in-flight fiber so a stale calculation
+    // doesn't overwrite a fresher one.
+    useEffect(() => {
+        if (recommendLayer === null || !asPlayer) {
+            setRecState({ kind: "pending" });
+            return;
+        }
+        let cancelled = false;
+        setRecState({ kind: "pending" });
+
+        const program = Effect.gen(function* () {
+            const action = yield* recommendAction(Player(asPlayer), 50);
+            const recs =
+                action._tag === "Suggest" || action._tag === "NearlySolved"
+                    ? action.suggestions.recommendations
+                    : [];
+            const consolidated = (
+                yield* consolidateRecommendations(recs)
+            ).slice(0, 5);
+            const items = yield* Effect.forEach(consolidated, row =>
+                Effect.gen(function* () {
+                    const description = yield* describeRecommendation({
+                        cards: row.cards.flatMap(c =>
+                            isAnySlot(c) ? [] : [c],
+                        ),
+                        score: row.score,
+                    });
+                    return {
+                        cards: row.cards,
+                        score: row.score,
+                        groupSize: row.groupSize,
+                        description,
+                    };
+                }),
+            );
+            return { action, items };
+        });
+
+        const fiber = Effect.runFork(
+            program.pipe(
+                Effect.provide(recommendLayer),
+                Effect.tap(out =>
+                    Effect.sync(() => {
+                        if (cancelled) return;
+                        setRecState({
+                            kind: "ready",
+                            action: out.action,
+                            items: out.items,
+                        });
+                    }),
+                ),
+            ),
+        );
+
+        return () => {
+            cancelled = true;
+            // Fiber.interrupt is itself an Effect — fire-and-forget via
+            // runFork so stale fibers actually wind down. The fiber may
+            // have already completed; interrupting a finished fiber is
+            // a no-op.
+            Effect.runFork(Fiber.interrupt(fiber));
+        };
+    }, [recommendLayer, asPlayer]);
 
     if (knowledge === undefined || !asPlayer || recommendLayer === null) {
         return (
@@ -294,19 +848,92 @@ function RecommendationsBody({
         );
     }
 
-    const rec = Effect.runSync(
-        recommendSuggestions(Player(asPlayer), 50).pipe(
-            Effect.provide(recommendLayer),
-        ),
-    );
-    const consolidated = Effect.runSync(
-        consolidateRecommendations(rec.recommendations).pipe(
-            Effect.provide(recommendLayer),
-        ),
-    ).slice(0, 5);
+    if (recState.kind === "pending") {
+        return (
+            <>
+                <label className={`${LABEL_ROW} mt-2`}>
+                    {t("suggestingAs")}
+                    <select
+                        value={asPlayer}
+                        onChange={e => setAsPlayer(e.currentTarget.value)}
+                        className={SELECT_CLASS}
+                    >
+                        {setup.players.map(p => (
+                            <option key={p} value={p}>
+                                {p}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <div
+                    className="mt-2 flex items-center gap-2 text-[13px] text-muted"
+                    role="status"
+                    aria-live="polite"
+                >
+                    <Spinner />
+                    <span>{t("recommendationsCalculating")}</span>
+                </div>
+            </>
+        );
+    }
+
+    const { action, items } = recState;
+
+    const accuseBanner =
+        action._tag === "Accuse" ? (
+            <div
+                className="mt-2 rounded border border-accent bg-panel p-3 text-[13px]"
+                role="status"
+            >
+                <div className="font-semibold text-accent">
+                    {tRecs("accuseNowTitle")}
+                </div>
+                <div className="mt-1">
+                    {tRecs("accuseNowBody", {
+                        cards: action.cards
+                            .map(c => cardName(setup, c))
+                            .join(" + "),
+                    })}
+                </div>
+                {/* "Log this accusation" — drops the deduced triple
+                    into the failed-accusation log so the user can
+                    follow it up if the accusation turns out wrong.
+                    The banner only appears when the case file is
+                    fully pinned, so the cards are guaranteed
+                    one-per-category. */}
+                <div className="mt-2">
+                    <LogAccusationButton
+                        accuser={action.accuser}
+                        cards={action.cards}
+                    />
+                </div>
+            </div>
+        ) : null;
+
+    const nearlySolvedBanner =
+        action._tag === "NearlySolved" ? (
+            <div
+                className="mt-2 rounded border border-border bg-panel p-3 text-[13px]"
+                role="status"
+            >
+                <div className="font-semibold">
+                    {tRecs("nearlySolvedTitle")}
+                </div>
+                <div className="mt-1">
+                    {tRecs("nearlySolvedBody", {
+                        category: resolveCategoryName(
+                            setup,
+                            action.openCategory,
+                        ).toLowerCase(),
+                    })}
+                </div>
+            </div>
+        ) : null;
 
     return (
         <>
+            {accuseBanner}
+            {nearlySolvedBanner}
             <label className={`${LABEL_ROW} mt-2`}>
                 {t("suggestingAs")}
                 <select
@@ -321,36 +948,32 @@ function RecommendationsBody({
                     ))}
                 </select>
             </label>
-            {consolidated.length === 0 ? (
+            {items.length === 0 ? (
                 <div className="mt-2 text-[13px] text-muted">
-                    {t("nothingUseful")}
+                    {action._tag === "Accuse" ? null : t("nothingUseful")}
                 </div>
             ) : (
                 <ol className="mt-2 list-decimal pl-6 text-[13px]">
-                    {consolidated.map((r, i) => {
-                        const desc = Effect.runSync(
-                            describeRecommendation({
-                                cards: r.cards.flatMap(c =>
-                                    isAnySlot(c) ? [] : [c],
-                                ),
-                                cellInfoScore: r.cellInfoScore,
-                                caseFileOpennessScore: r.caseFileOpennessScore,
-                                refuterUncertaintyScore: r.refuterUncertaintyScore,
-                            }).pipe(Effect.provide(recommendLayer)),
+                    {items.map((r, i) => {
+                        const explanation = tRecs(
+                            r.description.kind,
+                            r.description.params,
                         );
-                        const explanation = tRecs(desc.kind, desc.params);
+                        // Score is the expected number of unknown cells
+                        // a refutation of this triple would reveal —
+                        // already a probability-weighted average. Show
+                        // it raw (one decimal) and, when consolidated,
+                        // how many specific triples the row covers.
                         const scoreBreakdown = (
                             <div>
                                 <div className="font-semibold">
                                     {t("scoreBreakdownHeader", {
-                                        score: r.score,
+                                        score: r.score.toFixed(1),
                                     })}
                                 </div>
                                 <div className="mt-1 text-muted">
                                     {t("scoreBreakdownDetails", {
-                                        info: r.cellInfoScore,
-                                        combos: r.caseFileOpennessScore,
-                                        refuters: r.refuterUncertaintyScore,
+                                        cells: Math.round(r.score),
                                     })}
                                 </div>
                                 {r.groupSize > 1 && (
@@ -397,7 +1020,7 @@ function RecommendationsBody({
                                             })}
                                             <span className="ml-1 text-muted">
                                                 {t("score", {
-                                                    score: r.score,
+                                                    score: r.score.toFixed(1),
                                                 })}
                                             </span>
                                         </div>
@@ -418,11 +1041,70 @@ function RecommendationsBody({
     );
 }
 
-function PriorSuggestions() {
+/**
+ * Combined chronological log of every suggestion + failed accusation
+ * the user has logged this game. Entries are interleaved in `loggedAt`
+ * order so users see the timeline in the order things actually
+ * happened, with the most recent at the top (matches the existing
+ * "newest first" reverse-render of the suggestion log).
+ *
+ * The heading still reads "Prior suggestions" because that's the bulk
+ * of what lands here — accusations are rare events.
+ */
+function PriorLog() {
     const t = useTranslations("suggestions");
     const { state } = useClue();
     const isDesktop = useIsDesktop();
-    const suggestions = state.suggestions;
+
+    // Merge suggestions + accusations by `loggedAt`. Domain indices
+    // (`suggestionIdx` / `accusationIdx`) are preserved so the row's
+    // dispatched action and the cross-references in tooltips
+    // ("Suggestion #5") all line up with `state.suggestions[5]` /
+    // `state.accusations[5]`.
+    type LogEntry =
+        | {
+              readonly kind: "suggestion";
+              readonly id: string;
+              readonly loggedAt: number;
+              readonly idx: number;
+              readonly suggestion: DraftSuggestion;
+          }
+        | {
+              readonly kind: "accusation";
+              readonly id: string;
+              readonly loggedAt: number;
+              readonly idx: number;
+              readonly accusation: DraftAccusation;
+          };
+
+    const entries: ReadonlyArray<LogEntry> = useMemo(() => {
+        const out: LogEntry[] = [
+            ...state.suggestions.map((s, idx) => ({
+                kind: "suggestion" as const,
+                id: String(s.id),
+                loggedAt: s.loggedAt ?? 0,
+                idx,
+                suggestion: s,
+            })),
+            ...state.accusations.map((a, idx) => ({
+                kind: "accusation" as const,
+                id: String(a.id),
+                loggedAt: a.loggedAt ?? 0,
+                idx,
+                accusation: a,
+            })),
+        ];
+        // Sort ascending by loggedAt; the renderer reverses for "newest
+        // first" display. Tie-break by entry kind + idx so the order
+        // is deterministic when two entries share a millisecond.
+        out.sort((a, b) => {
+            if (a.loggedAt !== b.loggedAt) return a.loggedAt - b.loggedAt;
+            if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
+            return a.idx - b.idx;
+        });
+        return out;
+    }, [state.suggestions, state.accusations]);
+
     return (
         <div className="mt-4 border-t border-border pt-4">
             <h3
@@ -431,11 +1113,11 @@ function PriorSuggestions() {
                 className={`${SECTION_TITLE} rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2`}
             >
                 {t("priorTitle", {
-                    count: suggestions.length,
+                    count: entries.length,
                     shortcut: label("global.gotoPriorLog"),
                 })}
             </h3>
-            {suggestions.length === 0 ? (
+            {entries.length === 0 ? (
                 <div className="text-[13px] text-muted">
                     {t("priorEmpty")}
                 </div>
@@ -448,17 +1130,24 @@ function PriorSuggestions() {
                     )}
                     <ol className="m-0 flex list-none flex-col gap-2 p-0">
                         <AnimatePresence initial={false}>
-                            {suggestions
-                                .map((s, idx) => ({ s, idx }))
+                            {entries
                                 .slice()
                                 .reverse()
-                                .map(({ s, idx }) => (
-                                    <PriorSuggestionItem
-                                        key={s.id}
-                                        suggestion={s}
-                                        idx={idx}
-                                    />
-                                ))}
+                                .map(entry =>
+                                    entry.kind === "suggestion" ? (
+                                        <PriorSuggestionItem
+                                            key={`s-${entry.id}`}
+                                            suggestion={entry.suggestion}
+                                            idx={entry.idx}
+                                        />
+                                    ) : (
+                                        <PriorAccusationItem
+                                            key={`a-${entry.id}`}
+                                            accusation={entry.accusation}
+                                            idx={entry.idx}
+                                        />
+                                    ),
+                                )}
                         </AnimatePresence>
                     </ol>
                 </>
@@ -859,6 +1548,301 @@ function PriorSuggestionItem({
                 <button
                     type="button"
                     aria-label={t("cancelEditAria")}
+                    onClick={e => {
+                        e.stopPropagation();
+                        exitEdit();
+                        refocusRow();
+                    }}
+                    className="absolute right-1 top-1 min-h-[44px] min-w-[44px] cursor-pointer rounded border-none bg-transparent px-2 py-1 text-[22px] leading-none text-muted hover:text-accent"
+                >
+                    ×
+                </button>
+            ) : (
+                <button
+                    type="button"
+                    aria-label={t("removeAction")}
+                    className={
+                        "absolute cursor-pointer rounded border-none bg-transparent leading-none text-muted hover:text-accent " +
+                        (isDesktop
+                            ? "right-1.5 top-1 px-1 text-[16px] "
+                            : "right-0.5 top-0.5 min-h-[32px] min-w-[32px] px-2 py-1 text-[22px] ")
+                    }
+                    onClick={e => {
+                        e.stopPropagation();
+                        void onRemove();
+                    }}
+                >
+                    ×
+                </button>
+            )}
+        </motion.li>
+    );
+}
+
+/**
+ * One row in the prior log for a failed accusation. Mirrors
+ * `PriorSuggestionItem` for keyboard / mouse / mobile interactions —
+ * Up/Down move between rows, Enter enters edit mode (renders an
+ * inline `<AccusationForm>`), Backspace removes (with confirmation),
+ * Esc exits edit. The body is a single line ("X accused Y + Z + W
+ * (failed)") since accusations have no refuter / seen card.
+ *
+ * Cell-cross-highlight is intentionally simpler than the suggestion
+ * row's: a `FailedAccusation` provenance reason that pinned a
+ * case-file cell back-references this accusation by index, so we
+ * surface the same outline ring when the user hovers / focuses such
+ * a cell. Footnotes don't apply (accusations don't generate them).
+ */
+function PriorAccusationItem({
+    accusation: a,
+    idx,
+}: {
+    readonly accusation: DraftAccusation;
+    readonly idx: number;
+}) {
+    const t = useTranslations("accusations");
+    const tSug = useTranslations("suggestions");
+    const { state, dispatch, derived } = useClue();
+    const { activeCell } = useSelection();
+    const confirm = useConfirm();
+    const isDesktop = useIsDesktop();
+    const setup = state.setup;
+
+    const [isEditing, setIsEditing] = useState(false);
+    const [showMobileEditButton, setShowMobileEditButton] = useState(false);
+    const [isRowFocused, setIsRowFocused] = useState(false);
+
+    // Cell → accusation cross-highlight: when the active checklist
+    // cell's provenance chain walks back to a `FailedAccusation`
+    // reason whose accusation index matches this row, light up the
+    // outline. Mirrors the suggestion-row pattern but only checks the
+    // FailedAccusation tag.
+    const isHighlightedByCell = useMemo(() => {
+        if (!activeCell || !derived.provenance) return false;
+        for (const { reason } of chainFor(derived.provenance, activeCell)) {
+            if (
+                reason.kind._tag === "FailedAccusation" &&
+                reason.kind.accusationIndex === idx
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }, [activeCell, derived.provenance, idx]);
+
+    const onRemove = async () => {
+        if (await confirm({ message: t("removeConfirm") })) {
+            dispatch({ type: "removeAccusation", id: a.id });
+            accusationRemoved({
+                accusationCount: state.accusations.length - 1,
+            });
+        }
+    };
+
+    const enterEdit = () => {
+        setIsEditing(true);
+        setShowMobileEditButton(false);
+    };
+    const exitEdit = () => {
+        setIsEditing(false);
+        setShowMobileEditButton(false);
+    };
+
+    const rowRef = useRef<HTMLLIElement>(null);
+    const refocusRow = () => setTimeout(() => rowRef.current?.focus(), 0);
+
+    const onCommitEdit = (draft: DraftAccusation) => {
+        exitEdit();
+        dispatch({ type: "updateAccusation", accusation: draft });
+        priorAccusationEdited({ accusationNumber: idx + 1 });
+    };
+
+    const hasOpenPillPopover = (): boolean =>
+        rowRef.current?.querySelector(
+            "[data-pill-id][data-state=\"open\"]",
+        ) !== null;
+
+    const onRowClick = () => {
+        if (isEditing) return;
+        if (isDesktop) enterEdit();
+        else if (!showMobileEditButton) setShowMobileEditButton(true);
+    };
+
+    // Outside-click cancel — same pattern as `PriorSuggestionItem`.
+    useEffect(() => {
+        if (!isEditing) return;
+        const onPointerDown = (e: PointerEvent) => {
+            const target = e.target;
+            if (!(target instanceof Node)) return;
+            const row = rowRef.current;
+            if (row && row.contains(target)) return;
+            if (
+                target instanceof Element &&
+                isInsideSuggestionPopover(target)
+            ) {
+                return;
+            }
+            exitEdit();
+        };
+        document.addEventListener("pointerdown", onPointerDown, true);
+        return () =>
+            document.removeEventListener("pointerdown", onPointerDown, true);
+    }, [isEditing]);
+
+    const rowTransition = useReducedTransition(T_SPRING_SOFT);
+    const pillStaggerTransition = useReducedTransition(T_FAST);
+
+    return (
+        <motion.li
+            ref={rowRef}
+            layout
+            initial={{ y: -80, opacity: 0, scale: 0.95 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{
+                opacity: 0,
+                height: 0,
+                paddingTop: 0,
+                paddingBottom: 0,
+                marginTop: 0,
+                marginBottom: 0,
+            }}
+            transition={rowTransition}
+            tabIndex={0}
+            role="button"
+            data-accusation-row={idx}
+            className={
+                "relative flex items-start gap-2 rounded-[var(--radius)] border border-border px-3 py-2 text-[13px] transition-colors cursor-pointer overflow-hidden " +
+                (isEditing || isHighlightedByCell
+                    ? "ring-2 ring-accent ring-offset-1 ring-offset-panel "
+                    : "hover:ring-2 hover:ring-accent hover:ring-offset-1 hover:ring-offset-panel ")
+            }
+            onClick={onRowClick}
+            onFocus={e => {
+                if (e.currentTarget === e.target) setIsRowFocused(true);
+            }}
+            onBlur={e => {
+                if (e.target === e.currentTarget) setIsRowFocused(false);
+            }}
+            onKeyDown={e => {
+                const native = e.nativeEvent;
+                if (e.currentTarget !== e.target) {
+                    if (
+                        matches("action.cancel", native) &&
+                        isEditing &&
+                        !hasOpenPillPopover()
+                    ) {
+                        e.preventDefault();
+                        const row = e.currentTarget;
+                        exitEdit();
+                        row.focus();
+                    }
+                    return;
+                }
+                if (
+                    matches("nav.down", native) ||
+                    matches("nav.up", native)
+                ) {
+                    e.preventDefault();
+                    const dir = matches("nav.down", native) ? 1 : -1;
+                    let sib =
+                        dir === 1
+                            ? e.currentTarget.nextElementSibling
+                            : e.currentTarget.previousElementSibling;
+                    while (sib && !(sib instanceof HTMLLIElement)) {
+                        sib =
+                            dir === 1
+                                ? sib.nextElementSibling
+                                : sib.previousElementSibling;
+                    }
+                    if (sib instanceof HTMLElement) sib.focus();
+                } else if (matches("action.toggle", native)) {
+                    e.preventDefault();
+                    const row = e.currentTarget;
+                    if (!isEditing) enterEdit();
+                    queueMicrotask(() => {
+                        const first = row.querySelector<HTMLElement>(
+                            "[data-pill-id]",
+                        );
+                        first?.focus();
+                    });
+                } else if (matches("action.remove", native)) {
+                    e.preventDefault();
+                    void onRemove();
+                } else if (
+                    matches("action.cancel", native) &&
+                    isEditing
+                ) {
+                    e.preventDefault();
+                    const row = e.currentTarget;
+                    exitEdit();
+                    row.focus();
+                }
+            }}
+        >
+            <span className="font-semibold">{idx + 1}.</span>
+            <div
+                className="min-w-0 flex-1 pr-5"
+                onClick={e => {
+                    if (isEditing) e.stopPropagation();
+                }}
+            >
+                {isEditing ? (
+                    <motion.div
+                        key="pill-mode"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={pillStaggerTransition}
+                    >
+                        <AccusationForm
+                            setup={setup}
+                            accusation={a}
+                            onSubmit={onCommitEdit}
+                            showHeader={false}
+                            keyboardScopeRef={rowRef}
+                        />
+                    </motion.div>
+                ) : (
+                    <>
+                        <div>
+                            {t.rich("accusedLine", {
+                                accuser: String(a.accuser),
+                                cards: a.cards
+                                    .map(id => cardName(setup, id))
+                                    .join(" + "),
+                                strong: chunks => <strong>{chunks}</strong>,
+                            })}
+                        </div>
+                        {!isDesktop && !showMobileEditButton && (
+                            <div className="mt-0.5 text-[11px] text-muted">
+                                {tSug("priorRowHintMobile")}
+                            </div>
+                        )}
+                        {!isDesktop && showMobileEditButton && (
+                            <div className="mt-2">
+                                <button
+                                    type="button"
+                                    onClick={e => {
+                                        e.stopPropagation();
+                                        enterEdit();
+                                    }}
+                                    className="min-h-[44px] cursor-pointer rounded-[var(--radius)] border border-accent bg-transparent px-4 py-2 text-[13px] font-semibold text-accent"
+                                >
+                                    {t("editAction")}
+                                </button>
+                            </div>
+                        )}
+                    </>
+                )}
+                {isDesktop && isRowFocused && !isEditing && (
+                    <div className="mt-0.5 text-[11px] text-muted">
+                        {tSug("priorRowHintDesktop")}
+                    </div>
+                )}
+            </div>
+            {isEditing ? (
+                <button
+                    type="button"
+                    aria-label={tSug("cancelEditAria")}
                     onClick={e => {
                         e.stopPropagation();
                         exitEdit();

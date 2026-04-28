@@ -56,6 +56,11 @@ import { Effect, Result } from "effect";
 import deduce, { type DeductionResult } from "../logic/Deducer";
 import { TelemetryRuntime } from "../observability/runtime";
 import {
+    Accusation,
+    AccusationId,
+    newAccusationId,
+} from "../logic/Accusation";
+import {
     newSuggestionId,
     Suggestion,
     SuggestionId,
@@ -77,22 +82,34 @@ import {
     refuterCandidateFootnotes,
 } from "../logic/Footnotes";
 import {
+    AccusationsService,
     CardSetService,
     PlayerSetService,
     SuggestionsService,
+    makeAccusationsLayer,
     makeSetupLayer,
     makeSuggestionsLayer,
 } from "../logic/services";
-import { Layer } from "effect";
-import { requestFocusSuggestionForm } from "./suggestionFormFocus";
+import { Duration, Layer } from "effect";
+import { requestFocusAddForm } from "./addFormFocus";
 import { requestFocusChecklistCell } from "./checklistFocus";
 import { useGlobalShortcut } from "./keyMap";
-import { PANE_SETTLE_MS } from "./motion";
+import { PANE_SETTLE } from "./motion";
 import type { UiMode } from "../logic/ClueState";
 
 type DeduceLayer = Layer.Layer<
-    CardSetService | PlayerSetService | SuggestionsService
+    | AccusationsService
+    | CardSetService
+    | PlayerSetService
+    | SuggestionsService
 >;
+
+/**
+ * Window for the Cmd+K double-tap that clears the suggestion form.
+ * A second press within this window after the first signals "I want
+ * to start fresh"; outside it, the second press just refocuses.
+ */
+const DOUBLE_TAP: Duration.Duration = Duration.millis(400);
 
 /**
  * Whether a uiMode transition triggers a visible slide whose target
@@ -119,6 +136,7 @@ const initialState: ClueState = {
     handSizes: [],
     knownCards: [],
     suggestions: [],
+    accusations: [],
     uiMode: "setup",
 };
 
@@ -135,8 +153,8 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
 
         case "loadCardSet":
             // Swap the deck; keep the current player roster. Hand
-            // sizes, known cards, and suggestions reference card ids
-            // from the old deck and are discarded.
+            // sizes, known cards, suggestions, and accusations
+            // reference card ids from the old deck and are discarded.
             return {
                 ...state,
                 setup: GameSetup({
@@ -146,6 +164,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 knownCards: [],
                 handSizes: [],
                 suggestions: [],
+                accusations: [],
             };
 
         case "setSetup":
@@ -335,6 +354,28 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 ),
             };
 
+        case "addAccusation":
+            return {
+                ...state,
+                accusations: [...state.accusations, action.accusation],
+            };
+
+        case "updateAccusation":
+            return {
+                ...state,
+                accusations: state.accusations.map(a =>
+                    a.id === action.accusation.id ? action.accusation : a,
+                ),
+            };
+
+        case "removeAccusation":
+            return {
+                ...state,
+                accusations: state.accusations.filter(
+                    a => a.id !== action.id,
+                ),
+            };
+
         case "addPlayer": {
             const existing = new Set(
                 state.setup.players.map(p => String(p)),
@@ -377,6 +418,9 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                                 ? undefined
                                 : s.refuter,
                     })),
+                accusations: state.accusations.filter(
+                    a => a.accuser !== action.player,
+                ),
             };
 
         case "renamePlayer": {
@@ -409,6 +453,10 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     refuter:
                         s.refuter === oldName ? newName : s.refuter,
                 })),
+                accusations: state.accusations.map(a => ({
+                    ...a,
+                    accuser: a.accuser === oldName ? newName : a.accuser,
+                })),
             };
         }
 
@@ -433,6 +481,13 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     refuter: s.refuter,
                     seenCard: s.seenCard,
                 })),
+                accusations: session.accusations.map(a => ({
+                    id: a.id === AccusationId("")
+                        ? newAccusationId()
+                        : a.id,
+                    accuser: a.accuser,
+                    cards: Array.from(a.cards),
+                })),
             };
         }
     }
@@ -448,6 +503,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
  */
 interface ClueDerived {
     readonly suggestionsAsData: ReadonlyArray<Suggestion>;
+    readonly accusationsAsData: ReadonlyArray<Accusation>;
     readonly initialKnowledge: Knowledge;
     readonly deductionResult: DeductionResult;
     readonly provenance: Provenance | undefined;
@@ -636,8 +692,10 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     const gameStartedRef = useRef(false);
     useEffect(() => {
         gameStartedRef.current =
-            state.knownCards.length > 0 || state.suggestions.length > 0;
-    }, [state.knownCards, state.suggestions]);
+            state.knownCards.length > 0
+            || state.suggestions.length > 0
+            || state.accusations.length > 0;
+    }, [state.knownCards, state.suggestions, state.accusations]);
 
     // Keyboard bindings wired via the central keyMap module. Each
     // useGlobalShortcut installs one window keydown listener that only
@@ -647,16 +705,16 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     useGlobalShortcut("global.redo", useCallback(() => redo(), [redo]));
 
     // Cmd/Ctrl+K: switch to Play tab and focus the suggestion form.
-    // Two presses within DOUBLE_TAP_MS also clear the form. The tab
+    // Two presses within DOUBLE_TAP also clear the form. The tab
     // switch goes through `dispatchRaw` so it stays out of the undo
     // history — matching how hydration flips the tab.
     const lastGotoPlayAtRef = useRef(0);
     useGlobalShortcut(
         "global.gotoPlay",
         useCallback(() => {
-            const DOUBLE_TAP_MS = 400;
             const now = Date.now();
-            const clear = now - lastGotoPlayAtRef.current < DOUBLE_TAP_MS;
+            const clear =
+                now - lastGotoPlayAtRef.current < Duration.toMillis(DOUBLE_TAP);
             lastGotoPlayAtRef.current = clear ? 0 : now;
             const needsDelay = needsPaneSettle(uiModeRef.current, "suggest");
             dispatchRaw({ type: "setUiMode", mode: "suggest" });
@@ -664,9 +722,26 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             // slide settles — Radix measures the trigger's rect at open
             // time, so opening mid-slide anchors the menu to a stale
             // position that doesn't follow the pill into place.
-            requestFocusSuggestionForm({
+            requestFocusAddForm("suggestion", {
                 clear,
-                settleMs: needsDelay ? PANE_SETTLE_MS : 0,
+                settle: needsDelay ? PANE_SETTLE : Duration.zero,
+            });
+        }, []),
+    );
+
+    // Cmd/Ctrl+I: switch to Play tab, flip the Add-form into
+    // accusation mode, and focus the accusation form's first pill.
+    // Mirrors ⌘K but lands on the accusation tab; no double-tap-to-
+    // clear semantics (the form is short, and partially-filled
+    // accusations should survive a re-press).
+    useGlobalShortcut(
+        "global.gotoAccusation",
+        useCallback(() => {
+            const needsDelay = needsPaneSettle(uiModeRef.current, "suggest");
+            dispatchRaw({ type: "setUiMode", mode: "suggest" });
+            requestFocusAddForm("accusation", {
+                clear: false,
+                settle: needsDelay ? PANE_SETTLE : Duration.zero,
             });
         }, []),
     );
@@ -753,9 +828,23 @@ export function ClueProvider({ children }: { children: ReactNode }) {
                     nonRefuters: s.nonRefuters,
                     refuter: s.refuter,
                     seenCard: s.seenCard,
+                    loggedAt: s.loggedAt ?? 0,
                 }),
             ),
         [state.suggestions],
+    );
+
+    const accusationsAsData = useMemo(
+        () =>
+            state.accusations.map(a =>
+                Accusation({
+                    id: a.id,
+                    accuser: a.accuser,
+                    cards: a.cards,
+                    loggedAt: a.loggedAt ?? 0,
+                }),
+            ),
+        [state.accusations],
     );
 
     const initialKnowledge = useMemo(
@@ -776,8 +865,9 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             Layer.mergeAll(
                 makeSetupLayer(state.setup),
                 makeSuggestionsLayer(suggestionsAsData),
+                makeAccusationsLayer(accusationsAsData),
             ),
-        [state.setup, suggestionsAsData],
+        [state.setup, suggestionsAsData, accusationsAsData],
     );
 
     const deductionResult = useMemo(
@@ -808,6 +898,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     const derived: ClueDerived = useMemo(
         () => ({
             suggestionsAsData,
+            accusationsAsData,
             initialKnowledge,
             deductionResult,
             provenance,
@@ -815,6 +906,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         }),
         [
             suggestionsAsData,
+            accusationsAsData,
             initialKnowledge,
             deductionResult,
             provenance,
@@ -896,9 +988,10 @@ export function ClueProvider({ children }: { children: ReactNode }) {
                 size,
             })),
             suggestions: suggestionsAsData,
+            accusations: accusationsAsData,
         };
         saveToLocalStorage(session);
-    }, [state, suggestionsAsData]);
+    }, [state, suggestionsAsData, accusationsAsData]);
 
     // ---- Analytics: state-driven funnel events ----------------------------
 
@@ -996,6 +1089,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         if (state.knownCards.length > 0) return true;
         if (state.handSizes.length > 0) return true;
         if (state.suggestions.length > 0) return true;
+        if (state.accusations.length > 0) return true;
         const players = state.setup.players;
         if (players.length !== DEFAULT_SETUP.players.length) return true;
         for (let i = 0; i < players.length; i++) {
@@ -1014,11 +1108,12 @@ export function ClueProvider({ children }: { children: ReactNode }) {
                 size,
             })),
             suggestions: suggestionsAsData,
+            accusations: accusationsAsData,
         };
         const encoded = encodeSessionToUrl(session);
         const base = `${window.location.origin}${window.location.pathname}`;
         return `${base}?state=${encoded}`;
-    }, [state, suggestionsAsData]);
+    }, [state, suggestionsAsData, accusationsAsData]);
 
     const value: ClueContextValue = useMemo(
         () => ({
@@ -1136,5 +1231,8 @@ const pruneSessionToSetup = (
                         ? s.seenCard
                         : undefined,
             })),
+        accusations: state.accusations
+            .filter(a => playerSet.has(String(a.accuser)))
+            .filter(a => a.cards.every(c => cardIdSet.has(String(c)))),
     };
 };

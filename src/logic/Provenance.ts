@@ -1,14 +1,20 @@
 import { Data, Effect, Equal, HashMap, Match, MutableHashMap, MutableHashSet, Option } from "effect";
 import { Card, CardCategory, Player, ownerLabel } from "./GameObjects";
 import { Cell, CellValue, Contradiction, Knowledge } from "./Knowledge";
-import { applyConsistencyRules, applyDeductionRules } from "./Rules";
+import {
+    applyAccusationRules,
+    applyConsistencyRules,
+    applyDeductionRules,
+} from "./Rules";
 import {
     cardName,
     categoryName,
     GameSetup,
 } from "./GameSetup";
+import { Accusation, accusationCards } from "./Accusation";
 import { Suggestion, suggestionCards } from "./Suggestion";
 import {
+    getAccusations,
     getCardSet,
     getPlayerSet,
     getSuggestions,
@@ -45,6 +51,15 @@ class RefuterShowedImpl extends Data.TaggedClass("RefuterShowed")<{
 class RefuterOwnsOneOfImpl extends Data.TaggedClass("RefuterOwnsOneOf")<{
     readonly suggestionIndex: number;
 }> {}
+class DisjointGroupsHandLockImpl extends Data.TaggedClass(
+    "DisjointGroupsHandLock",
+)<{
+    readonly player: Player;
+    readonly suggestionIndices: ReadonlyArray<number>;
+}> {}
+class FailedAccusationImpl extends Data.TaggedClass("FailedAccusation")<{
+    readonly accusationIndex: number;
+}> {}
 
 export type ReasonKind =
     | InitialKnownCardImpl
@@ -54,7 +69,9 @@ export type ReasonKind =
     | CaseFileCategoryImpl
     | NonRefutersImpl
     | RefuterShowedImpl
-    | RefuterOwnsOneOfImpl;
+    | RefuterOwnsOneOfImpl
+    | DisjointGroupsHandLockImpl
+    | FailedAccusationImpl;
 
 const InitialKnownCard = (): ReasonKind => new InitialKnownCardImpl();
 // InitialHandSize is declared in the ReasonKind union but not yet
@@ -75,6 +92,13 @@ export const RefuterShowed = (params: {
 export const RefuterOwnsOneOf = (params: {
     readonly suggestionIndex: number;
 }): ReasonKind => new RefuterOwnsOneOfImpl(params);
+export const DisjointGroupsHandLock = (params: {
+    readonly player: Player;
+    readonly suggestionIndices: ReadonlyArray<number>;
+}): ReasonKind => new DisjointGroupsHandLockImpl(params);
+export const FailedAccusation = (params: {
+    readonly accusationIndex: number;
+}): ReasonKind => new FailedAccusationImpl(params);
 
 /**
  * A short, human-readable reason for why a particular cell has the value
@@ -237,6 +261,29 @@ export type ReasonDescription =
               readonly refuter: string | undefined;
               readonly cardLabels: string | undefined;
           };
+      }
+    | {
+          readonly kind: "disjoint-groups-hand-lock";
+          readonly params: CellParams & {
+              readonly player: string;
+              readonly groupCount: number;
+              readonly suggestionIndices: ReadonlyArray<number>;
+              // 1-based, comma-separated for the i18n template; rendered
+              // as e.g. "#3, #5, #7" so users can find the contributing
+              // suggestions in the log.
+              readonly suggestionNumbers: string;
+          };
+      }
+    | {
+          readonly kind: "failed-accusation";
+          readonly params: CellParams & {
+              readonly accusationIndex: number;
+              readonly accuser: string | undefined;
+              // Comma-separated card names from the failed accusation.
+              // `undefined` when the accusation isn't in the input array
+              // (stale provenance entry — accusation removed).
+              readonly cardLabels: string | undefined;
+          };
       };
 
 export const describeReason = (
@@ -244,6 +291,7 @@ export const describeReason = (
     cell: Cell,
     setup: GameSetup,
     suggestions: ReadonlyArray<Suggestion>,
+    accusations: ReadonlyArray<Accusation> = [],
 ): ReasonDescription => {
     const base: CellParams = {
         cellPlayer: ownerLabel(cell.owner),
@@ -324,6 +372,40 @@ export const describeReason = (
                     },
                 };
             },
+            DisjointGroupsHandLock: ({
+                player,
+                suggestionIndices,
+            }): ReasonDescription => ({
+                kind: "disjoint-groups-hand-lock",
+                params: {
+                    ...base,
+                    player: String(player),
+                    groupCount: suggestionIndices.length,
+                    suggestionIndices,
+                    suggestionNumbers: suggestionIndices
+                        .map(i => `#${i + 1}`)
+                        .join(", "),
+                },
+            }),
+            FailedAccusation: ({ accusationIndex }): ReasonDescription => {
+                const a = accusations[accusationIndex];
+                return {
+                    kind: "failed-accusation",
+                    params: {
+                        ...base,
+                        accusationIndex,
+                        accuser:
+                            a?.accuser !== undefined
+                                ? String(a.accuser)
+                                : undefined,
+                        cardLabels: a
+                            ? accusationCards(a)
+                                  .map((id: Card) => cardName(setup, id))
+                                  .join(", ")
+                            : undefined,
+                    },
+                };
+            },
         }),
     );
 };
@@ -344,6 +426,7 @@ export const deduceWithExplanations = Effect.fn("deducer.evaluateWithProvenance"
         const cardSet = yield* getCardSet;
         const playerSet = yield* getPlayerSet;
         const suggestions = yield* getSuggestions;
+        const accusations = yield* getAccusations;
         const setup = GameSetup({ cardSet, playerSet });
         const provenance: Provenance = MutableHashMap.empty<Cell, Reason>();
         let current = initial;
@@ -376,7 +459,8 @@ export const deduceWithExplanations = Effect.fn("deducer.evaluateWithProvenance"
                 currentIteration = i + 1;
                 const before = current;
                 current = applyConsistencyRules(setup, tracer)(current);
-                current = applyDeductionRules(suggestions, tracer)(current);
+                current = applyDeductionRules(setup, suggestions, tracer)(current);
+                current = applyAccusationRules(accusations, tracer)(current);
                 if (Equal.equals(current, before)) break;
             }
         } catch (e) {
@@ -387,6 +471,10 @@ export const deduceWithExplanations = Effect.fn("deducer.evaluateWithProvenance"
                     offendingSuggestionIndices:
                         e.suggestionIndex !== undefined
                             ? [e.suggestionIndex]
+                            : [],
+                    offendingAccusationIndices:
+                        e.accusationIndex !== undefined
+                            ? [e.accusationIndex]
                             : [],
                     sliceLabel: e.sliceLabel,
                 });

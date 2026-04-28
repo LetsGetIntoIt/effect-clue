@@ -106,6 +106,7 @@ type BindingId =
     | "global.newGame"
     | "global.gotoSetup"
     | "global.gotoPlay"
+    | "global.gotoAccusation"
     | "global.gotoChecklist"
     | "global.gotoPriorLog"
     // Navigation primitives (scoped)
@@ -149,6 +150,11 @@ const DEFAULT_KEY_MAP: Record<BindingId, KeyBinding> = {
         id: "global.gotoPlay",
         description: "Jump to the suggestion form",
         combos: [combo.mod("k", "⌘K")],
+    },
+    "global.gotoAccusation": {
+        id: "global.gotoAccusation",
+        description: "Jump to the failed-accusation form",
+        combos: [combo.mod("i", "⌘I")],
     },
     "global.gotoChecklist": {
         id: "global.gotoChecklist",

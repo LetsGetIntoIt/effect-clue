@@ -121,6 +121,13 @@ export class Contradiction extends Data.TaggedError("Contradiction")<{
     readonly sliceLabel?: string | undefined;
     readonly suggestionIndex?: number | undefined;
     /**
+     * Index of the failed accusation that triggered the contradiction,
+     * if any. Mirrors `suggestionIndex` for accusation-driven rules so
+     * the UI can offer "remove this accusation" quick fixes the same
+     * way it offers "remove this suggestion" today.
+     */
+    readonly accusationIndex?: number | undefined;
+    /**
      * Structured identity of the rule that raised this contradiction.
      * Optional so the cell-conflict helper at `cellConflictContradiction`
      * can leave it `undefined` for the `DirectCell` fallback — every

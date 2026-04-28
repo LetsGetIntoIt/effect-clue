@@ -13,6 +13,7 @@ import {
     setHandSize,
     Y,
 } from "./Knowledge";
+import { Accusation } from "./Accusation";
 import { Suggestion } from "./Suggestion";
 import { runDeduce } from "./test-utils/RunDeduce";
 
@@ -182,6 +183,87 @@ describe("deduce", () => {
         expect(getCellByOwnerCard(k, PlayerOwner(B), KITCHEN)).toBe(N);
     });
 
+    // Regression: when the suggester owns one of the suggested cards,
+    // the card-ownership slice cascades that Y into N on every other
+    // owner's row, including the refuter's. refuterOwnsOneOf then has
+    // exactly one unknown across the three suggested cards and forces
+    // it to Y — all in one trip through the fixed-point loop.
+    test("suggester-owned card cascade narrows refuter to a single Y", () => {
+        let knowledge = emptyKnowledge;
+        // Anisha (the suggester) owns Plum.
+        knowledge = setCell(knowledge, Cell(PlayerOwner(A), PLUM),  Y);
+        // We've previously confirmed Bob doesn't own the Knife.
+        knowledge = setCell(knowledge, Cell(PlayerOwner(B), KNIFE), N);
+
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [],
+            refuter: B,
+        })];
+
+        const result = runDeduce(setup, suggestions, knowledge);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+
+        // Cascade: A/Plum=Y → B/Plum=N (and C/Plum=N, CF/Plum=N).
+        expect(getCellByOwnerCard(result.success, PlayerOwner(B), PLUM)).toBe(N);
+        // With B/Plum=N and B/Knife=N, Bob's refutation must have used
+        // Conservatory.
+        expect(getCellByOwnerCard(result.success, PlayerOwner(B), CONSERV)).toBe(Y);
+    });
+
+    // disjointGroupsHandLock cascade: with two disjoint refuted
+    // suggestions and Bob's hand pinned to size 2, every card outside
+    // the union of those two triples must be N for Bob. The fixed-point
+    // loop then propagates those Ns through card-ownership and
+    // case-file-category slices.
+    test("disjoint groups force out-of-union cells N through fixed-point", () => {
+        let knowledge = emptyKnowledge;
+        knowledge = setHandSize(knowledge, PlayerOwner(B), 2);
+
+        const SCARLET = cardByName(setup, "Miss Scarlet");
+        const GREEN   = cardByName(setup, "Mr. Green");
+        const WHITE   = cardByName(setup, "Mrs. White");
+        const HALL    = cardByName(setup, "Hall");
+
+        const suggestions = [
+            // Two disjoint refuted triples — Bob owes ≥1 from each.
+            Suggestion({ suggester: A, cards: [PLUM, KNIFE, CONSERV],
+                nonRefuters: [], refuter: B }),
+            Suggestion({ suggester: A, cards: [SCARLET, ROPE, LIBRARY],
+                nonRefuters: [], refuter: B }),
+        ];
+
+        const result = runDeduce(setup, suggestions, knowledge);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+        const k = result.success;
+
+        // Out-of-union cells on Bob's row are forced N — Bob's two hand
+        // slots are accounted for by the disjoint groups.
+        expect(getCellByOwnerCard(k, PlayerOwner(B), GREEN)).toBe(N);
+        expect(getCellByOwnerCard(k, PlayerOwner(B), WHITE)).toBe(N);
+        expect(getCellByOwnerCard(k, PlayerOwner(B), HALL)).toBe(N);
+    });
+
+    test("disjoint groups: groupCount > handRemaining surfaces as failure", () => {
+        let knowledge = emptyKnowledge;
+        knowledge = setHandSize(knowledge, PlayerOwner(B), 1);
+        const suggestions = [
+            Suggestion({ suggester: A, cards: [PLUM, KNIFE, CONSERV],
+                nonRefuters: [], refuter: B }),
+            Suggestion({ suggester: A,
+                cards: [cardByName(setup, "Miss Scarlet"), ROPE, LIBRARY],
+                nonRefuters: [], refuter: B }),
+        ];
+        const result = runDeduce(setup, suggestions, knowledge);
+        expect(Result.isFailure(result)).toBe(true);
+        if (!Result.isFailure(result)) return;
+        expect(result.failure.contradictionKind?._tag)
+            .toBe("DisjointGroupsHandLock");
+    });
+
     test("contradiction is surfaced as a result", () => {
         let knowledge = emptyKnowledge;
         // Both Anisha and Bob have Knife? That's a contradiction once the
@@ -226,5 +308,80 @@ describe("deduce", () => {
 
         expect(result.failure.offendingSuggestionIndices).toHaveLength(1);
         expect(result.failure.offendingSuggestionIndices[0]).toBe(0);
+    });
+});
+
+describe("deduce — failed accusations", () => {
+    test("a failed accusation forces the matching N when the other two are pinned", () => {
+        let knowledge = emptyKnowledge;
+        // Pin two of the three case-file slots via direct ownership cascades.
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), PLUM), Y);
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), KNIFE), Y);
+        const accusations = [
+            Accusation({ accuser: A, cards: [PLUM, KNIFE, CONSERV] }),
+        ];
+
+        const result = runDeduce(setup, [], knowledge, accusations);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+
+        expect(getCellByOwnerCard(result.success, CaseFileOwner(), CONSERV)).toBe(N);
+    });
+
+    test("backward compat: a runDeduce call without accusations matches one with []", () => {
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(PlayerOwner(A), MUSTARD), Y);
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [B, C],
+        })];
+
+        const noArg = runDeduce(setup, suggestions, knowledge);
+        const empty = runDeduce(setup, suggestions, knowledge, []);
+        expect(Result.isSuccess(noArg)).toBe(true);
+        expect(Result.isSuccess(empty)).toBe(true);
+        if (!Result.isSuccess(noArg) || !Result.isSuccess(empty)) return;
+        expect(HashMap.size(noArg.success.checklist)).toBe(
+            HashMap.size(empty.success.checklist),
+        );
+    });
+
+    test("contradictory accusation: all three Y → trace names the accusation", () => {
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), PLUM), Y);
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), KNIFE), Y);
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), CONSERV), Y);
+        const accusations = [
+            Accusation({ accuser: A, cards: [PLUM, KNIFE, CONSERV] }),
+        ];
+        const result = runDeduce(setup, [], knowledge, accusations);
+        expect(Result.isFailure(result)).toBe(true);
+        if (!Result.isFailure(result)) return;
+        expect(result.failure.offendingAccusationIndices).toEqual([0]);
+        expect(result.failure.contradictionKind?._tag).toBe("FailedAccusation");
+    });
+
+    test("cascade: failed accusation N + consistency slice → forces the right Y", () => {
+        let knowledge = emptyKnowledge;
+        // Knock the suspect category down to two candidates: PLUM + MUSTARD,
+        // by marking every other suspect as N for the case file.
+        for (const card of suspects) {
+            if (card === PLUM || card === MUSTARD) continue;
+            knowledge = setCell(knowledge, Cell(CaseFileOwner(), card), N);
+        }
+        // PLUM is pinned in the case file. KNIFE is pinned in the case file.
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), KNIFE), Y);
+        // Failed accusation says (PLUM, KNIFE, CONSERV) — the third card,
+        // CONSERV, must be N for the case file.
+        const accusations = [
+            Accusation({ accuser: A, cards: [PLUM, KNIFE, CONSERV] }),
+        ];
+        // Also pin PLUM=Y so the rule actually fires (needs 2 of 3 Y).
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), PLUM), Y);
+        const result = runDeduce(setup, [], knowledge, accusations);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+        expect(getCellByOwnerCard(result.success, CaseFileOwner(), CONSERV)).toBe(N);
     });
 });

@@ -70,7 +70,12 @@
             "updateSuggestion": "editing Suggestion #{number} by {player} ({cards})",
             "updateSuggestionUnknown": "editing a suggestion",
             "removeSuggestion": "removing Suggestion #{number} by {player} ({cards})",
-            "removeSuggestionUnknown": "removing a suggestion"
+            "removeSuggestionUnknown": "removing a suggestion",
+            "addAccusation": "logging {player}'s failed accusation of {cards}",
+            "updateAccusation": "editing Accusation #{number} by {player} ({cards})",
+            "updateAccusationUnknown": "editing an accusation",
+            "removeAccusation": "removing Accusation #{number} by {player} ({cards})",
+            "removeAccusationUnknown": "removing an accusation"
         }
     },
     "setup": {
@@ -147,23 +152,36 @@
         "refuter-owns-one-of": {
             "detailKnown": "{refuter} refuted {suggester}'s suggestion #{number} ({cardLabels}); the other two were ruled out, so {refuter} must own {cellCard}.",
             "detailUnknown": "The refuter of suggestion #{number} owned one of the three cards; the other two were ruled out, so it must be {cellCard}."
+        },
+        "disjoint-groups-hand-lock": {
+            "headline": "Disjoint groups",
+            "detail": "{player} refuted {groupCount} suggestions ({suggestionNumbers}) whose cards don't overlap, accounting for every remaining card in {player}'s hand. So {cellPlayer} can't hold {cellCard}."
+        },
+        "accusationHeadline": "Accusation #{number}",
+        "failed-accusation": {
+            "detailKnown": "{accuser}'s accusation #{number} ({cardLabels}) failed, so the case file isn't all three of those — and the other two are already pinned, so {cellCard} can't be in the case file either.",
+            "detailUnknown": "A failed accusation #{number} named {cellCard}; the other two cards in that accusation are already pinned to the case file, so {cellCard} can't be."
         }
     },
     "recommendations": {
         "oneGuessFromCasefile": "Could pin down the casefile {category} in one guess.",
-        "probesManyCells": "Probes {cellCount} unknown cells across other players' {categories} rows.",
-        "refuterUncertainty": "Any of {playerCount} players could refute — will reveal which one has a card.",
-        "fillsCells": "Fills in {cellCount, plural, one {# unknown cell} other {# unknown cells}} on other players' rows.",
-        "usefulCombination": "Probes a useful combination."
+        "expectedReveal": "Expected to reveal about {cellCount, plural, one {# checklist cell} other {# checklist cells}} on average.",
+        "accuseNowTitle": "You've solved it — accuse now",
+        "accuseNowBody": "The case file is fully pinned: {cards}. Make the accusation to win the game.",
+        "accuseNowLog": "Log this accusation",
+        "accuseNowLogTitle": "Add this accusation to the failed-accusation log (only if it turns out to be wrong)",
+        "nearlySolvedTitle": "One refutation away",
+        "nearlySolvedBody": "Every category but {category} is pinned. Two candidates remain in {category} — one well-chosen suggestion narrows it to one."
     },
     "suggestions": {
         "title": "Suggestion log",
-        "addTitle": "Add a suggestion <shortcut>({shortcutKey})</shortcut>",
+        "addTitle": "Add a <suggestionTab>suggestion <kbd>({suggestionKey})</kbd></suggestionTab> or <accusationTab>accusation <kbd>({accusationKey})</kbd></accusationTab>",
         "recommendationsTitle": "Next-suggestion recommendations",
         "suggestingAs": "Suggesting as: ",
         "resolveContradictionFirst": "Resolve the contradiction to see recommendations.",
         "addPlayersFirst": "Add players to see recommendations.",
         "nothingUseful": "Nothing useful to ask — you've already narrowed everything down.",
+        "recommendationsCalculating": "Calculating recommendations…",
         "priorTitle": "{count, plural, =0 {Prior suggestions ({shortcut})} other {Prior suggestions ({shortcut}) (#)}}",
         "priorKeyboardHint": "↑↓ navigate · Enter edit · ⌫ remove · Esc exit",
         "priorRowHintDesktop": "Press Enter to edit",
@@ -185,8 +203,8 @@
         "anyCategoryNotInCaseFile": "any {category} not in the case file",
         "anyCategoryOwnedBy": "any {category} owned by {player}",
         "anyCategoryNotOwnedBy": "any {category} not owned by {player}",
-        "scoreBreakdownHeader": "Raw score {score}",
-        "scoreBreakdownDetails": "{info, plural, one {# unknown cell} other {# unknown cells}} × {combos, plural, one {# case-file combination} other {# case-file combinations}} × {refuters, plural, one {# possible refuter} other {# possible refuters}}",
+        "scoreBreakdownHeader": "Expected info gain {score}",
+        "scoreBreakdownDetails": "{cells, plural, one {Roughly # checklist cell would be revealed by asking this.} other {Roughly # checklist cells would be revealed by asking this.}}",
         "scoreBreakdownCoverage": "Covers {count} tied triples.",
         "defaultCategorySingular": "card",
         "editTitle": "Edit suggestion",
@@ -213,6 +231,19 @@
         "pillValueNobody": "nobody",
         "pillValueUnknown": "unknown"
     },
+    "accusations": {
+        "addTitle": "Log a failed accusation",
+        "editTitle": "Edit accusation",
+        "addHelpText": "Add a player's failed accusation. No point in logging successful accusations — they end the game!",
+        "accusedLine": "<strong>{accuser}</strong> accused {cards} (failed)",
+        "pillAccuser": "Accuser",
+        "submit": "Add ({shortcut})",
+        "updateAction": "Update ({shortcut})",
+        "cancelAction": "Cancel",
+        "editAction": "Edit",
+        "removeAction": "Remove accusation",
+        "removeConfirm": "Remove this accusation?"
+    },
     "contradictions": {
         "bannerTitle": "Contradiction!",
         "bannerHelp": "Some of the information you provided doesn't add up",
@@ -229,6 +260,11 @@
         "conflictNonRefuterAlreadyOwns": "<strong>{player}</strong> passed on this suggestion, so they can't have <strong>{card}</strong> — but <strong>{player}</strong> is already known to have <strong>{card}</strong>.",
         "conflictRefuterShowedButCantOwn": "<strong>{refuter}</strong> showed <strong>{card}</strong> to refute this suggestion, but <strong>{refuter}</strong> is already known not to have <strong>{card}</strong>.",
         "conflictRefuterOwnsOneOfImpossible": "<strong>{refuter}</strong> refuted this suggestion without showing a card, so they must own one of {cards}. But <strong>{refuter}</strong> is already known not to have any of them.",
+        "conflictFailedAccusationAllPinned": "But the case file is already deduced to be <strong>{cards}</strong> — that accusation should have won.",
+        "accusationLabel": "Accusation #{index} by {player}",
+        "accusationLabelNoPlayer": "Accusation #{index}",
+        "accusationCardsLine": "<strong>{accuser}</strong> accused {cards} (failed).",
+        "removeAccusation": "Remove accusation",
         "conflictCardHasOtherOwner": "But <strong>{card}</strong> already has another owner.",
         "conflictCardNoPossibleOwner": "But <strong>{card}</strong> has been ruled out for every possible owner.",
         "conflictHandSizeOverflow": "But <strong>{player}</strong> would hold more than {handSize} cards.",

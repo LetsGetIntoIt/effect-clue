@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { Card, Player } from "../../logic/GameObjects";
 import { GameSetup, cardName, categoryName } from "../../logic/GameSetup";
 import { ContradictionTrace } from "../../logic/Deducer";
-import { DraftSuggestion } from "../../logic/ClueState";
+import { DraftAccusation, DraftSuggestion } from "../../logic/ClueState";
 import { useClue } from "../state";
 import { useSelection } from "../SelectionContext";
 
@@ -109,6 +109,8 @@ export function ContradictionBanner({
     };
 
     const hasOffendingSuggestions = trace.offendingSuggestionIndices.length > 0;
+    const hasOffendingAccusations =
+        trace.offendingAccusationIndices.length > 0;
 
     return (
         <div className="mb-3 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-3 text-[13px] text-danger">
@@ -116,12 +118,14 @@ export function ContradictionBanner({
                 <div className="font-semibold">{t("bannerTitle")}</div>
                 <div className="text-[12px] opacity-80">{t("bannerHelp")}</div>
             </div>
-            {!hasOffendingSuggestions && (
+            {!hasOffendingSuggestions && !hasOffendingAccusations && (
                 <div className="mb-2">
                     {prettifyReason(trace.reason)}
                 </div>
             )}
-            {(hasOffendingSuggestions || fixes.length > 0) && (
+            {(hasOffendingSuggestions ||
+                hasOffendingAccusations ||
+                fixes.length > 0) && (
                 <ul className="m-0 flex list-none flex-col gap-2 pl-0">
                     {trace.offendingSuggestionIndices.map(idx => {
                         const s = state.suggestions[idx];
@@ -145,6 +149,31 @@ export function ContradictionBanner({
                                               dispatch({
                                                   type: "removeSuggestion",
                                                   id: s.id,
+                                              })
+                                        : undefined
+                                }
+                            />
+                        );
+                    })}
+                    {trace.offendingAccusationIndices.map(idx => {
+                        const a = state.accusations[idx];
+                        return (
+                            <OffendingAccusationRow
+                                key={`acc-${idx}`}
+                                idx={idx}
+                                accusation={a}
+                                setup={setup}
+                                conflictNode={describeAccusationConflict(
+                                    setup,
+                                    a,
+                                    t,
+                                )}
+                                onRemove={
+                                    a
+                                        ? () =>
+                                              dispatch({
+                                                  type: "removeAccusation",
+                                                  id: a.id,
                                               })
                                         : undefined
                                 }
@@ -405,6 +434,14 @@ function describeSuggestionConflict(
                           strong,
                       });
             }
+            case "DisjointGroupsHandLock":
+            case "FailedAccusation":
+                // Both surface their own dedicated rows (the disjoint
+                // case via the hand-size slice that fires next; the
+                // failed-accusation case via `OffendingAccusationRow`).
+                // Fall through to the legacy parse if we're displaying
+                // a suggestion-row that lacks a dedicated kind branch.
+                break;
             case "DirectCell":
                 break; // fall through to legacy parse
         }
@@ -443,4 +480,81 @@ function lookupCardName(setup: GameSetup, idOrName: string): string | undefined 
         }
     }
     return undefined;
+}
+
+/**
+ * Render the "what went wrong" sentence for a failed accusation row.
+ * The deducer's other inputs concluded that all three accusation cards
+ * were in the case file — but a failed accusation contradicts that.
+ * The user's recourse is to remove either the accusation (if it was
+ * mis-logged) or one of the upstream inputs that drove the case-file
+ * Y cells.
+ */
+function describeAccusationConflict(
+    setup: GameSetup,
+    accusation: DraftAccusation | undefined,
+    t: ReturnType<typeof useTranslations<"contradictions">>,
+): ReactNode {
+    if (!accusation) return null;
+    const strong = (chunks: ReactNode) => <strong>{chunks}</strong>;
+    return t.rich("conflictFailedAccusationAllPinned", {
+        cards: joinCardNames(setup, accusation.cards),
+        strong,
+    });
+}
+
+/**
+ * Render one row in the contradiction banner for an offending failed
+ * accusation. Mirrors `OffendingSuggestionRow` but with the simpler
+ * Accusation shape (no refuter, no seen card) — and only a "Remove"
+ * action, since editing a failed accusation back to a different triple
+ * doesn't really fit the failed-accusation semantics (you should just
+ * log a new one).
+ */
+function OffendingAccusationRow({
+    idx,
+    accusation,
+    setup,
+    conflictNode,
+    onRemove,
+}: {
+    readonly idx: number;
+    readonly accusation: DraftAccusation | undefined;
+    readonly setup: GameSetup;
+    readonly conflictNode: ReactNode;
+    readonly onRemove: (() => void) | undefined;
+}) {
+    const t = useTranslations("contradictions");
+    const heading = accusation
+        ? t("accusationLabel", {
+              index: idx + 1,
+              player: String(accusation.accuser),
+          })
+        : t("accusationLabelNoPlayer", { index: idx + 1 });
+    return (
+        <li className="flex flex-col gap-1 rounded border border-danger-border bg-white/40 p-2">
+            <div className="font-semibold">{heading}</div>
+            {accusation && (
+                <div>
+                    {t.rich("accusationCardsLine", {
+                        accuser: String(accusation.accuser),
+                        cards: joinCardNames(setup, accusation.cards),
+                        strong: chunks => <strong>{chunks}</strong>,
+                    })}
+                </div>
+            )}
+            {conflictNode && <div>{conflictNode}</div>}
+            <div className="mt-1 flex justify-end gap-2">
+                {onRemove && (
+                    <button
+                        type="button"
+                        className="cursor-pointer rounded border border-danger-border bg-white px-2 py-0.5 text-[12px] text-danger hover:bg-danger-bg"
+                        onClick={onRemove}
+                    >
+                        {t("removeAccusation")}
+                    </button>
+                )}
+            </div>
+        </li>
+    );
 }

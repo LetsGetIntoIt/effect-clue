@@ -1,5 +1,6 @@
 "use client";
 
+import { Duration } from "effect";
 import { useReducedMotion, type Transition } from "motion/react";
 
 /**
@@ -31,7 +32,7 @@ export const T_STANDARD: Transition = {
  * `T_STANDARD.duration` plus a one-frame buffer so the target element
  * has settled into its final position before we measure or focus it.
  */
-export const PANE_SETTLE_MS = 210;
+export const PANE_SETTLE: Duration.Duration = Duration.millis(210);
 
 export const T_SPRING_SOFT: Transition = {
     type: "spring",

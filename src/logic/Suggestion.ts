@@ -57,6 +57,18 @@ class SuggestionImpl extends Data.Class<{
     readonly nonRefuters: HashSet.HashSet<Player>;
     readonly refuter: Player | undefined;
     readonly seenCard: Card | undefined;
+    /**
+     * Millisecond timestamp recording when this suggestion was logged.
+     * Powers the chronological prior-log UI in `SuggestionLogPanel`
+     * (suggestions and accusations are interleaved by `loggedAt`).
+     *
+     * Defaults to `0` from the constructor when callers don't supply
+     * one — production paths (the React reducer + `replaceSession`
+     * hydration) always pass `Date.now()` or the persisted value.
+     * The default keeps `Equal.equals` semantics intact for tests
+     * that build two suggestions with otherwise-identical fields.
+     */
+    readonly loggedAt: number;
 }> {}
 
 export type Suggestion = SuggestionImpl;
@@ -68,6 +80,7 @@ export const Suggestion = (params: {
     nonRefuters: Iterable<Player>;
     refuter?: Player | undefined;
     seenCard?: Card | undefined;
+    loggedAt?: number;
 }): Suggestion =>
     new SuggestionImpl({
         id: params.id ?? SuggestionId(""),
@@ -76,6 +89,7 @@ export const Suggestion = (params: {
         nonRefuters: HashSet.fromIterable(params.nonRefuters),
         refuter: params.refuter,
         seenCard: params.seenCard,
+        loggedAt: params.loggedAt ?? 0,
     });
 
 export const suggestionCards = (s: Suggestion): ReadonlyArray<Card> =>

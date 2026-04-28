@@ -1,13 +1,15 @@
 import { describe, expect, test } from "vitest";
-import { MutableHashMap } from "effect";
+import { MutableHashMap, Result } from "effect";
 import { CLASSIC_SETUP_3P } from "./GameSetup";
 import { CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
-import { Cell, N, Y } from "./Knowledge";
+import { Cell, emptyKnowledge, N, setCell, setHandSize, Y } from "./Knowledge";
 import {
     CardOwnership,
     CaseFileCategory,
     chainFor,
     describeReason,
+    DisjointGroupsHandLock,
+    FailedAccusation,
     NonRefuters,
     PlayerHand,
     type Provenance,
@@ -16,12 +18,15 @@ import {
     RefuterShowed,
 } from "./Provenance";
 import { cardByName } from "./test-utils/CardByName";
+import { Accusation, newAccusationId } from "./Accusation";
 import { newSuggestionId, Suggestion } from "./Suggestion";
+import { runDeduceWithExplanations } from "./test-utils/RunDeduce";
 
 const setup = CLASSIC_SETUP_3P;
 const KNIFE = cardByName(setup, "Knife");
 const PLUM = cardByName(setup, "Prof. Plum");
 const KITCHEN = cardByName(setup, "Kitchen");
+const CONSERV = cardByName(setup, "Conservatory");
 const A = Player("Anisha");
 const B = Player("Bob");
 const C = Player("Cho");
@@ -72,6 +77,24 @@ describe("ReasonKind constructors", () => {
         expect(r._tag).toBe("RefuterOwnsOneOf");
         if (r._tag !== "RefuterOwnsOneOf") throw new Error("unreachable");
         expect(r.suggestionIndex).toBe(2);
+    });
+
+    test("DisjointGroupsHandLock tags itself and carries player + indices", () => {
+        const r = DisjointGroupsHandLock({
+            player: B,
+            suggestionIndices: [0, 3, 5],
+        });
+        expect(r._tag).toBe("DisjointGroupsHandLock");
+        if (r._tag !== "DisjointGroupsHandLock") throw new Error("unreachable");
+        expect(r.player).toBe(B);
+        expect(r.suggestionIndices).toEqual([0, 3, 5]);
+    });
+
+    test("FailedAccusation tags itself and carries the accusationIndex", () => {
+        const r = FailedAccusation({ accusationIndex: 4 });
+        expect(r._tag).toBe("FailedAccusation");
+        if (r._tag !== "FailedAccusation") throw new Error("unreachable");
+        expect(r.accusationIndex).toBe(4);
     });
 });
 
@@ -371,5 +394,178 @@ describe("describeReason", () => {
         expect(desc.params.cellPlayer).toBe("Case file");
         expect(desc.params.cellCard).toBe("Prof. Plum");
         expect(desc.params.value).toBe(N);
+    });
+});
+
+// -----------------------------------------------------------------------
+// suggester-owned cascade chain (regression for Item 1 of the optimization
+// plan): asserts that when refuterOwnsOneOf forces a cell because the
+// suggester owns one of the suggested cards, the provenance chain walks
+// back through the card-ownership cascade so the UI tooltip can explain
+// the full derivation.
+// -----------------------------------------------------------------------
+
+describe("suggester-owned cascade provenance", () => {
+    test("chainFor walks RefuterOwnsOneOf → CardOwnership → initial input", () => {
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(PlayerOwner(A), PLUM),  Y);
+        knowledge = setCell(knowledge, Cell(PlayerOwner(B), KNIFE), N);
+
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [],
+            refuter: B,
+        })];
+
+        const result = runDeduceWithExplanations(setup, suggestions, knowledge);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+
+        const { provenance } = result.success;
+        const conservCell = Cell(PlayerOwner(B), CONSERV);
+        const chain = chainFor(provenance, conservCell);
+        const tags = chain.map(e => e.reason.kind._tag);
+
+        // The terminal entry is the cell we asked about — forced by
+        // refuterOwnsOneOf.
+        expect(chain.at(-1)?.cell).toEqual(conservCell);
+        expect(tags.at(-1)).toBe("RefuterOwnsOneOf");
+        // Somewhere upstream the chain must include the card-ownership
+        // cascade that turned A/Plum=Y into B/Plum=N.
+        expect(tags).toContain("CardOwnership");
+    });
+});
+
+// -----------------------------------------------------------------------
+// disjointGroupsHandLock provenance — the rule fires the new
+// DisjointGroupsHandLock ReasonKind on every out-of-union N it forces.
+// describeReason should resolve the right kind / params.
+// -----------------------------------------------------------------------
+
+describe("disjoint-groups-hand-lock provenance", () => {
+    test("chainFor reports DisjointGroupsHandLock for forced out-of-union Ns", () => {
+        const SCARLET = cardByName(setup, "Miss Scarlet");
+        const ROPE    = cardByName(setup, "Rope");
+        const LIBRARY = cardByName(setup, "Library");
+        const GREEN   = cardByName(setup, "Mr. Green");
+
+        let knowledge = emptyKnowledge;
+        knowledge = setHandSize(knowledge, PlayerOwner(B), 2);
+        const suggestions = [
+            Suggestion({ suggester: A, cards: [PLUM, KNIFE, CONSERV],
+                nonRefuters: [], refuter: B }),
+            Suggestion({ suggester: A, cards: [SCARLET, ROPE, LIBRARY],
+                nonRefuters: [], refuter: B }),
+        ];
+
+        const result = runDeduceWithExplanations(setup, suggestions, knowledge);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+
+        const { provenance } = result.success;
+        const greenCell = Cell(PlayerOwner(B), GREEN);
+        const chain = chainFor(provenance, greenCell);
+        const last = chain.at(-1);
+        expect(last?.cell).toEqual(greenCell);
+        expect(last?.reason.kind._tag).toBe("DisjointGroupsHandLock");
+        if (last?.reason.kind._tag !== "DisjointGroupsHandLock") return;
+        expect(last.reason.kind.player).toBe(B);
+        expect(last.reason.kind.suggestionIndices).toEqual([0, 1]);
+    });
+
+    test("describeReason → disjoint-groups-hand-lock with formatted numbers", () => {
+        const cell = Cell(PlayerOwner(B), KNIFE);
+        const reason: Reason = {
+            iteration: 1,
+            kind: DisjointGroupsHandLock({
+                player: B,
+                suggestionIndices: [2, 4, 6],
+            }),
+            value: N,
+            dependsOn: [],
+        };
+        const desc = describeReason(reason, cell, setup, []);
+        expect(desc.kind).toBe("disjoint-groups-hand-lock");
+        if (desc.kind !== "disjoint-groups-hand-lock") return;
+        expect(desc.params.player).toBe("Bob");
+        expect(desc.params.groupCount).toBe(3);
+        expect(desc.params.suggestionIndices).toEqual([2, 4, 6]);
+        expect(desc.params.suggestionNumbers).toBe("#3, #5, #7");
+        expect(desc.params.cellPlayer).toBe("Bob");
+        expect(desc.params.cellCard).toBe("Knife");
+        expect(desc.params.value).toBe(N);
+    });
+});
+
+describe("failed-accusation provenance", () => {
+    test("describeReason → failed-accusation with accuser and cardLabels resolved", () => {
+        const accusations = [
+            Accusation({
+                id: newAccusationId(),
+                accuser: A,
+                cards: [PLUM, KNIFE, CONSERV],
+            }),
+        ];
+        const cell = Cell(CaseFileOwner(), CONSERV);
+        const reason: Reason = {
+            iteration: 1,
+            kind: FailedAccusation({ accusationIndex: 0 }),
+            value: N,
+            dependsOn: [],
+        };
+        const desc = describeReason(reason, cell, setup, [], accusations);
+        expect(desc.kind).toBe("failed-accusation");
+        if (desc.kind !== "failed-accusation") return;
+        expect(desc.params.accusationIndex).toBe(0);
+        expect(desc.params.accuser).toBe("Anisha");
+        // Card labels are joined with ", " and resolved by name.
+        expect(desc.params.cardLabels).toContain("Prof. Plum");
+        expect(desc.params.cardLabels).toContain("Knife");
+        expect(desc.params.cardLabels).toContain("Conservatory");
+    });
+
+    test("describeReason → failed-accusation falls back gracefully when the index is stale", () => {
+        const cell = Cell(CaseFileOwner(), CONSERV);
+        const reason: Reason = {
+            iteration: 1,
+            kind: FailedAccusation({ accusationIndex: 99 }),
+            value: N,
+            dependsOn: [],
+        };
+        // Empty accusations array — index 99 is out of range.
+        const desc = describeReason(reason, cell, setup, []);
+        expect(desc.kind).toBe("failed-accusation");
+        if (desc.kind !== "failed-accusation") return;
+        expect(desc.params.accuser).toBeUndefined();
+        expect(desc.params.cardLabels).toBeUndefined();
+    });
+
+    test("chainFor walks back to a FailedAccusation reason on a forced N", () => {
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), PLUM), Y);
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), KNIFE), Y);
+        const accusations = [
+            Accusation({ accuser: A, cards: [PLUM, KNIFE, CONSERV] }),
+        ];
+        const result = runDeduceWithExplanations(
+            setup,
+            [],
+            knowledge,
+            accusations,
+        );
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+        const conservCell = Cell(CaseFileOwner(), CONSERV);
+        const chain = chainFor(result.success.provenance, conservCell);
+        const tags = chain.map(c => c.reason.kind._tag);
+        expect(tags).toContain("FailedAccusation");
+        // Last chain entry is the conservatory cell itself, set by
+        // FailedAccusation.
+        const last = chain[chain.length - 1];
+        expect(last?.cell).toEqual(conservCell);
+        expect(last?.reason.kind._tag).toBe("FailedAccusation");
+        if (last?.reason.kind._tag !== "FailedAccusation") return;
+        expect(last.reason.kind.accusationIndex).toBe(0);
     });
 });

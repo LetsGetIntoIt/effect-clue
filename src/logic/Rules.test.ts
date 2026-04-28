@@ -16,16 +16,20 @@ import {
 import { CardOwnership } from "./Provenance";
 import type { SetCellRecord, Tracer } from "./Provenance";
 import {
+    applyAllRules,
     applyConsistencyRules,
     applySlice,
     cardOwnershipSlices,
     caseFileCategorySlices,
+    disjointGroupsHandLock,
+    failedAccusationEliminate,
     nonRefutersDontHaveSuggestedCards,
     playerHandSlices,
     refuterOwnsOneOf,
     refuterShowedCard,
     Slice,
 } from "./Rules";
+import { Accusation } from "./Accusation";
 import { Suggestion } from "./Suggestion";
 
 const setup = CLASSIC_SETUP_3P;
@@ -210,6 +214,240 @@ describe("deduction rules", () => {
         })];
         k = refuterOwnsOneOf(suggestions)(k);
         expect(getCellByOwnerCard(k, PlayerOwner(B), KNIFE)).toBeUndefined();
+    });
+
+    // Regression: when the suggester owns one of the named cards, the
+    // card-ownership consistency slice cascades that Y into N on the
+    // refuter's row in the same iteration of applyAllRules. That extra N
+    // is exactly what refuterOwnsOneOf needs to narrow the remaining two
+    // cards to one. This test guards the cascade — a future reorder of
+    // the rule pipeline (e.g. moving applyDeductionRules ahead of
+    // applyConsistencyRules) would silently regress it without this
+    // assertion. The behaviour itself is implicit; no rule code change
+    // is required.
+    test("applyAllRules: suggester-owned card cascades through card-ownership "
+        + "so refuterOwnsOneOf narrows on a single explicit N", () => {
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(PlayerOwner(A), PLUM),  Y);
+        k = setCell(k, Cell(PlayerOwner(B), KNIFE), N);
+
+        const suggestions = [Suggestion({
+            suggester: A,
+            cards: [PLUM, KNIFE, CONSERV],
+            nonRefuters: [],
+            refuter: B,
+        })];
+
+        k = applyAllRules(setup, suggestions, [])(k);
+
+        // Cascade: A/Plum=Y forces B/Plum=N via card-ownership slice.
+        expect(getCellByOwnerCard(k, PlayerOwner(B), PLUM)).toBe(N);
+        // refuterOwnsOneOf then sees two Ns on B's row for the suggested
+        // cards and forces the remaining one (Conservatory) to Y.
+        expect(getCellByOwnerCard(k, PlayerOwner(B), CONSERV)).toBe(Y);
+    });
+});
+
+// -----------------------------------------------------------------------
+// disjointGroupsHandLock
+// -----------------------------------------------------------------------
+
+describe("disjointGroupsHandLock", () => {
+    // Three pairwise-disjoint suggestion triples — each touches a
+    // distinct suspect/weapon/room combo.
+    const SCARLET   = cardByName(setup, "Miss Scarlet");
+    const ROPE      = cardByName(setup, "Rope");
+    const LIBRARY   = cardByName(setup, "Library");
+    const GREEN     = cardByName(setup, "Mr. Green");
+    const WRENCH    = cardByName(setup, "Wrench");
+    const HALL      = cardByName(setup, "Hall");
+    const MUSTARD   = cardByName(setup, "Col. Mustard");
+
+    const refutedBy = (
+        suggester: Player,
+        refuter: Player,
+        cards: ReadonlyArray<Card>,
+    ) =>
+        Suggestion({
+            suggester,
+            cards,
+            nonRefuters: [],
+            refuter,
+        });
+
+    test("two disjoint sets + handRemaining=2 → out-of-union cells go N", () => {
+        let k = emptyKnowledge;
+        k = setHandSize(k, PlayerOwner(B), 2);
+        const suggestions = [
+            refutedBy(A, B, [PLUM, KNIFE, CONSERV]),
+            refutedBy(A, B, [SCARLET, ROPE, LIBRARY]),
+        ];
+
+        k = disjointGroupsHandLock(setup, suggestions)(k);
+
+        // In-union cells stay unknown — we know one is Y per set, but not which.
+        expect(getCellByOwnerCard(k, PlayerOwner(B), PLUM)).toBeUndefined();
+        expect(getCellByOwnerCard(k, PlayerOwner(B), SCARLET)).toBeUndefined();
+        // Out-of-union cell forced N — Bob's two hand slots are spoken for.
+        expect(getCellByOwnerCard(k, PlayerOwner(B), GREEN)).toBe(N);
+        expect(getCellByOwnerCard(k, PlayerOwner(B), MUSTARD)).toBe(N);
+        expect(getCellByOwnerCard(k, PlayerOwner(B), WRENCH)).toBe(N);
+        expect(getCellByOwnerCard(k, PlayerOwner(B), HALL)).toBe(N);
+        // Other players' rows untouched.
+        expect(getCellByOwnerCard(k, PlayerOwner(A), GREEN)).toBeUndefined();
+    });
+
+    test("three disjoint sets + handRemaining=3 → out-of-union cells go N", () => {
+        let k = emptyKnowledge;
+        k = setHandSize(k, PlayerOwner(B), 3);
+        const suggestions = [
+            refutedBy(A, B, [PLUM, KNIFE, CONSERV]),
+            refutedBy(A, B, [SCARLET, ROPE, LIBRARY]),
+            refutedBy(A, B, [GREEN, WRENCH, HALL]),
+        ];
+        k = disjointGroupsHandLock(setup, suggestions)(k);
+        expect(getCellByOwnerCard(k, PlayerOwner(B), MUSTARD)).toBe(N);
+    });
+
+    test("overlap between sets → rule does not fire", () => {
+        let k = emptyKnowledge;
+        k = setHandSize(k, PlayerOwner(B), 2);
+        // PLUM appears in both — sets overlap, disjointness fails.
+        const suggestions = [
+            refutedBy(A, B, [PLUM, KNIFE, CONSERV]),
+            refutedBy(A, B, [PLUM, ROPE, LIBRARY]),
+        ];
+        k = disjointGroupsHandLock(setup, suggestions)(k);
+        expect(getCellByOwnerCard(k, PlayerOwner(B), GREEN)).toBeUndefined();
+    });
+
+    test("only one qualifying suggestion → rule does not fire", () => {
+        let k = emptyKnowledge;
+        k = setHandSize(k, PlayerOwner(B), 2);
+        const suggestions = [
+            refutedBy(A, B, [PLUM, KNIFE, CONSERV]),
+        ];
+        k = disjointGroupsHandLock(setup, suggestions)(k);
+        expect(getCellByOwnerCard(k, PlayerOwner(B), GREEN)).toBeUndefined();
+    });
+
+    test("K < handRemaining → rule does not fire", () => {
+        let k = emptyKnowledge;
+        k = setHandSize(k, PlayerOwner(B), 5);
+        const suggestions = [
+            refutedBy(A, B, [PLUM, KNIFE, CONSERV]),
+            refutedBy(A, B, [SCARLET, ROPE, LIBRARY]),
+        ];
+        // K=2 disjoint sets but Bob still has 5 unknown hand slots.
+        k = disjointGroupsHandLock(setup, suggestions)(k);
+        expect(getCellByOwnerCard(k, PlayerOwner(B), GREEN)).toBeUndefined();
+    });
+
+    test("handSize unknown → rule skipped", () => {
+        let k = emptyKnowledge;
+        // No setHandSize for B.
+        const suggestions = [
+            refutedBy(A, B, [PLUM, KNIFE, CONSERV]),
+            refutedBy(A, B, [SCARLET, ROPE, LIBRARY]),
+        ];
+        k = disjointGroupsHandLock(setup, suggestions)(k);
+        expect(getCellByOwnerCard(k, PlayerOwner(B), GREEN)).toBeUndefined();
+    });
+
+    test("seenCard defined → suggestion ignored by the rule", () => {
+        let k = emptyKnowledge;
+        k = setHandSize(k, PlayerOwner(B), 2);
+        const suggestions = [
+            // refuterShowedCard handles this one — exclude from disjoint logic.
+            Suggestion({
+                suggester: A,
+                cards: [PLUM, KNIFE, CONSERV],
+                nonRefuters: [],
+                refuter: B,
+                seenCard: PLUM,
+            }),
+            refutedBy(A, B, [SCARLET, ROPE, LIBRARY]),
+        ];
+        k = disjointGroupsHandLock(setup, suggestions)(k);
+        // Only one qualifying set survives → rule doesn't fire.
+        expect(getCellByOwnerCard(k, PlayerOwner(B), GREEN)).toBeUndefined();
+    });
+
+    test("a set already containing a Y is dropped, K shrinks accordingly", () => {
+        let k = emptyKnowledge;
+        k = setHandSize(k, PlayerOwner(B), 2);
+        // Bob already known to own Plum, so the first set is satisfied
+        // and effectively contributes nothing more — we'd need 2 more
+        // disjoint sets for K=handRemaining-1=1 to fire, but K=1 isn't
+        // enough (rule requires ≥2 surviving sets).
+        k = setCell(k, Cell(PlayerOwner(B), PLUM), Y);
+        const suggestions = [
+            refutedBy(A, B, [PLUM, KNIFE, CONSERV]),
+            refutedBy(A, B, [SCARLET, ROPE, LIBRARY]),
+        ];
+        k = disjointGroupsHandLock(setup, suggestions)(k);
+        expect(getCellByOwnerCard(k, PlayerOwner(B), GREEN)).toBeUndefined();
+    });
+
+    test("known-N cells inside a set shrink it but rule still fires", () => {
+        let k = emptyKnowledge;
+        k = setHandSize(k, PlayerOwner(B), 2);
+        // Two Ns inside the first set — the unknown remainder still
+        // pairs disjointly with the second set's cards.
+        k = setCell(k, Cell(PlayerOwner(B), KNIFE),    N);
+        k = setCell(k, Cell(PlayerOwner(B), CONSERV),  N);
+        const suggestions = [
+            refutedBy(A, B, [PLUM, KNIFE, CONSERV]),
+            refutedBy(A, B, [SCARLET, ROPE, LIBRARY]),
+        ];
+        k = disjointGroupsHandLock(setup, suggestions)(k);
+        // Out-of-union cells still N.
+        expect(getCellByOwnerCard(k, PlayerOwner(B), GREEN)).toBe(N);
+    });
+
+    test("groupCount > handRemaining throws DisjointGroupsHandLock contradiction", () => {
+        let k = emptyKnowledge;
+        k = setHandSize(k, PlayerOwner(B), 1);
+        const suggestions = [
+            refutedBy(A, B, [PLUM, KNIFE, CONSERV]),
+            refutedBy(A, B, [SCARLET, ROPE, LIBRARY]),
+        ];
+        try {
+            disjointGroupsHandLock(setup, suggestions)(k);
+            // Vitest: must throw.
+            expect.fail("expected Contradiction");
+        } catch (e) {
+            expect(e).toBeInstanceOf(Contradiction);
+            const c = e as Contradiction;
+            expect(c.contradictionKind?._tag).toBe("DisjointGroupsHandLock");
+            if (c.contradictionKind?._tag !== "DisjointGroupsHandLock") return;
+            expect(c.contradictionKind.player).toBe(B);
+            expect(c.contradictionKind.suggestionIndices).toEqual([0, 1]);
+            // Offending cells span both sets' unknown cards.
+            expect(c.offendingCells.length).toBeGreaterThan(0);
+        }
+    });
+
+    test("tracer records DisjointGroupsHandLock kind with both indices", () => {
+        let k = emptyKnowledge;
+        k = setHandSize(k, PlayerOwner(B), 2);
+        const suggestions = [
+            refutedBy(A, B, [PLUM, KNIFE, CONSERV]),
+            refutedBy(A, B, [SCARLET, ROPE, LIBRARY]),
+        ];
+        const records: SetCellRecord[] = [];
+        const tracer: Tracer = r => records.push(r);
+        disjointGroupsHandLock(setup, suggestions, tracer)(k);
+
+        expect(records.length).toBeGreaterThan(0);
+        for (const rec of records) {
+            expect(rec.value).toBe(N);
+            expect(rec.kind._tag).toBe("DisjointGroupsHandLock");
+            if (rec.kind._tag !== "DisjointGroupsHandLock") continue;
+            expect(rec.kind.player).toBe(B);
+            expect(rec.kind.suggestionIndices).toEqual([0, 1]);
+            expect(rec.dependsOn.length).toBe(6); // both sets' three cells each
+        }
     });
 });
 
@@ -543,4 +781,134 @@ describe("structured Contradiction info", () => {
     // surface via a downstream consistency slice (`SliceCardOwnership`
     // or `SlicePlayerHand`) on a later iteration of the deducer's
     // fixed-point loop. The slice test cases above cover that path.
+});
+
+// -----------------------------------------------------------------------
+// failedAccusationEliminate
+// -----------------------------------------------------------------------
+
+describe("failedAccusationEliminate", () => {
+    const SCARLET = cardByName(setup, "Miss Scarlet");
+    const ROPE    = cardByName(setup, "Rope");
+    const HALL    = cardByName(setup, "Hall");
+
+    const failed = (accuser: Player, cards: ReadonlyArray<Card>) =>
+        Accusation({ accuser, cards });
+
+    test("no-op when all three cells are unknown", () => {
+        const accusations = [failed(A, [PLUM, KNIFE, CONSERV])];
+        const k = failedAccusationEliminate(accusations)(emptyKnowledge);
+        expect(getCellByOwnerCard(k, CaseFileOwner(), PLUM)).toBeUndefined();
+        expect(getCellByOwnerCard(k, CaseFileOwner(), KNIFE)).toBeUndefined();
+        expect(getCellByOwnerCard(k, CaseFileOwner(), CONSERV)).toBeUndefined();
+    });
+
+    test("no-op when only one of the three is Y (insufficient evidence)", () => {
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(CaseFileOwner(), PLUM), Y);
+        const accusations = [failed(A, [PLUM, KNIFE, CONSERV])];
+        k = failedAccusationEliminate(accusations)(k);
+        expect(getCellByOwnerCard(k, CaseFileOwner(), KNIFE)).toBeUndefined();
+        expect(getCellByOwnerCard(k, CaseFileOwner(), CONSERV)).toBeUndefined();
+    });
+
+    test("forces N on the third cell when the other two case-file cells are Y", () => {
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(CaseFileOwner(), PLUM), Y);
+        k = setCell(k, Cell(CaseFileOwner(), KNIFE), Y);
+        const accusations = [failed(A, [PLUM, KNIFE, CONSERV])];
+        k = failedAccusationEliminate(accusations)(k);
+        expect(getCellByOwnerCard(k, CaseFileOwner(), CONSERV)).toBe(N);
+    });
+
+    test("rule satisfied — any cell already N short-circuits the rule", () => {
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(CaseFileOwner(), PLUM), Y);
+        k = setCell(k, Cell(CaseFileOwner(), KNIFE), Y);
+        // The third one is N already; no inference needed.
+        k = setCell(k, Cell(CaseFileOwner(), CONSERV), N);
+        const accusations = [failed(A, [PLUM, KNIFE, CONSERV])];
+        // Should NOT throw and should NOT change anything.
+        const next = failedAccusationEliminate(accusations)(k);
+        expect(next).toEqual(k);
+    });
+
+    test("rule satisfied with two known Ns and one Y → no inference", () => {
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(CaseFileOwner(), PLUM), N);
+        k = setCell(k, Cell(CaseFileOwner(), KNIFE), N);
+        k = setCell(k, Cell(CaseFileOwner(), CONSERV), Y);
+        const accusations = [failed(A, [PLUM, KNIFE, CONSERV])];
+        const next = failedAccusationEliminate(accusations)(k);
+        expect(next).toEqual(k);
+    });
+
+    test("all three Y → contradiction with FailedAccusation kind", () => {
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(CaseFileOwner(), PLUM), Y);
+        k = setCell(k, Cell(CaseFileOwner(), KNIFE), Y);
+        k = setCell(k, Cell(CaseFileOwner(), CONSERV), Y);
+        const accusations = [failed(A, [PLUM, KNIFE, CONSERV])];
+        try {
+            failedAccusationEliminate(accusations)(k);
+            expect.fail("expected Contradiction");
+        } catch (e) {
+            expect(e).toBeInstanceOf(Contradiction);
+            const c = e as Contradiction;
+            expect(c.contradictionKind?._tag).toBe("FailedAccusation");
+            if (c.contradictionKind?._tag !== "FailedAccusation") return;
+            expect(c.contradictionKind.accusationIndex).toBe(0);
+            expect(c.accusationIndex).toBe(0);
+            // All three Ys are listed as offending cells.
+            expect(c.offendingCells).toHaveLength(3);
+        }
+    });
+
+    test("multi-accusation: two failed accusations both fire on disjoint cells", () => {
+        let k = emptyKnowledge;
+        // First accusation already pinned: PLUM=Y, KNIFE=Y → forces CONSERV=N.
+        k = setCell(k, Cell(CaseFileOwner(), PLUM),  Y);
+        k = setCell(k, Cell(CaseFileOwner(), KNIFE), Y);
+        // Second accusation pins SCARLET=Y, ROPE=Y → forces HALL=N.
+        k = setCell(k, Cell(CaseFileOwner(), SCARLET), Y);
+        k = setCell(k, Cell(CaseFileOwner(), ROPE),    Y);
+        const accusations = [
+            failed(A, [PLUM, KNIFE, CONSERV]),
+            failed(B, [SCARLET, ROPE, HALL]),
+        ];
+        k = failedAccusationEliminate(accusations)(k);
+        expect(getCellByOwnerCard(k, CaseFileOwner(), CONSERV)).toBe(N);
+        expect(getCellByOwnerCard(k, CaseFileOwner(), HALL)).toBe(N);
+    });
+
+    test("tracer records FailedAccusation kind with the right accusationIndex", () => {
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(CaseFileOwner(), PLUM), Y);
+        k = setCell(k, Cell(CaseFileOwner(), KNIFE), Y);
+        const accusations = [
+            // Index 0 — doesn't match the case file shape
+            failed(A, [SCARLET, ROPE, HALL]),
+            // Index 1 — the one we expect to fire
+            failed(B, [PLUM, KNIFE, CONSERV]),
+        ];
+        const records: SetCellRecord[] = [];
+        const tracer: Tracer = r => records.push(r);
+        failedAccusationEliminate(accusations, tracer)(k);
+        expect(records).toHaveLength(1);
+        const rec = expectAt(records, 0);
+        expect(rec.value).toBe(N);
+        expect(rec.cell).toEqual(Cell(CaseFileOwner(), CONSERV));
+        expect(rec.kind._tag).toBe("FailedAccusation");
+        if (rec.kind._tag !== "FailedAccusation") return;
+        expect(rec.kind.accusationIndex).toBe(1);
+        expect(rec.dependsOn).toHaveLength(2);
+    });
+
+    test("backward-compat: passing an empty accusations array is a no-op", () => {
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(CaseFileOwner(), PLUM), Y);
+        k = setCell(k, Cell(CaseFileOwner(), KNIFE), Y);
+        const next = failedAccusationEliminate([])(k);
+        expect(next).toEqual(k);
+    });
 });
