@@ -1607,7 +1607,7 @@ function PriorAccusationItem({
     const t = useTranslations("accusations");
     const tSug = useTranslations("suggestions");
     const { state, dispatch, derived } = useClue();
-    const { activeCell } = useSelection();
+    const { activeCell, setHoveredAccusation } = useSelection();
     const confirm = useConfirm();
     const isDesktop = useIsDesktop();
     const setup = state.setup;
@@ -1672,6 +1672,22 @@ function PriorAccusationItem({
         else if (!showMobileEditButton) setShowMobileEditButton(true);
     };
 
+    // Desktop hover preview, mirrors PriorSuggestionItem. Touch is
+    // filtered out (pointerType !== "mouse") so iOS Safari's tap-as-
+    // pointerenter doesn't ghost-highlight after every row tap. Feeds
+    // the accusation → cell cross-highlight via `activeAccusationIndex`.
+    const onPointerEnter = (e: React.PointerEvent) => {
+        if (e.pointerType !== "mouse") return;
+        setHoveredAccusation(idx);
+    };
+    const onPointerLeave = (e: React.PointerEvent) => {
+        if (e.pointerType !== "mouse") return;
+        // Keep the highlight while a pill popover (portalled outside
+        // the row) is open — the user is mid-edit and the mouse may
+        // be travelling through the portal back into the row.
+        if (!hasOpenPillPopover()) setHoveredAccusation(null);
+    };
+
     // Outside-click cancel — same pattern as `PriorSuggestionItem`.
     // Armed while editing OR while the mobile pre-edit Edit button is
     // visible; `exitEdit()` clears both flags.
@@ -1722,12 +1738,25 @@ function PriorAccusationItem({
                     ? "ring-2 ring-accent ring-offset-1 ring-offset-panel "
                     : "hover:ring-2 hover:ring-accent hover:ring-offset-1 hover:ring-offset-panel ")
             }
+            onPointerEnter={onPointerEnter}
+            onPointerLeave={onPointerLeave}
             onClick={onRowClick}
             onFocus={e => {
-                if (e.currentTarget === e.target) setIsRowFocused(true);
+                // Row itself gained focus (not a descendant) — feed
+                // the cross-highlight so keyboard nav also lights up
+                // the related cells.
+                if (e.currentTarget === e.target) {
+                    setHoveredAccusation(idx);
+                    setIsRowFocused(true);
+                }
             }}
             onBlur={e => {
                 if (e.target === e.currentTarget) setIsRowFocused(false);
+                // Keep the cross-panel highlight while focus stays
+                // anywhere inside the row (pills / popovers / ×).
+                const next = e.relatedTarget as Node | null;
+                if (next && e.currentTarget.contains(next)) return;
+                setHoveredAccusation(null);
             }}
             onKeyDown={e => {
                 const native = e.nativeEvent;

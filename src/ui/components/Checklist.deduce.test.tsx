@@ -286,6 +286,18 @@ describe("Checklist — case-file deduction popover", () => {
         // Asserting the absence of `aria-pressed` (which is set on
         // setup-mode toggleable cells) is a stable proxy.
         expect(caseFileCell.getAttribute("aria-pressed")).toBeNull();
+
+        // The focus indicator uses `ring-*` (box-shadow) instead of
+        // `outline-*`. Outlines on `<td>` cells in
+        // border-collapse:separate tables get sheared off at the left
+        // column boundary; box-shadow doesn't. Pinned via classes so
+        // a future regression to outline-* trips the test.
+        expect(caseFileCell.className).toMatch(/focus-visible:ring-1/);
+        expect(caseFileCell.className).toMatch(/focus-visible:ring-accent/);
+        expect(caseFileCell.className).toMatch(/focus-visible:outline-none/);
+        expect(caseFileCell.className).not.toMatch(
+            /focus-visible:outline-1\b/,
+        );
     });
 
     test("an undeduced case-file cell stays non-interactive (no popover affordance)", async () => {

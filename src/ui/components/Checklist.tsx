@@ -215,6 +215,7 @@ export function Checklist() {
     const { state, dispatch, derived } = useClue();
     const {
         activeSuggestionIndex,
+        activeAccusationIndex,
         popoverCell,
         setPopoverCell,
     } = useSelection();
@@ -396,23 +397,45 @@ export function Checklist() {
     };
 
     /**
-     * Cross-highlight: when the user hovers a suggestion row in
-     * PriorSuggestions, highlight every cell whose provenance chain
-     * referenced that suggestion's index.
+     * Cross-highlight: when the user hovers a row in the prior
+     * suggestion or accusation log, highlight every cell whose
+     * provenance chain references that row's index. Suggestions can
+     * additionally be pinned via tap/click; accusations are
+     * hover-only today.
      */
     const cellIsHighlighted = (owner: Owner, card: Card): boolean => {
-        if (activeSuggestionIndex === null) return false;
+        if (activeSuggestionIndex === null && activeAccusationIndex === null) {
+            return false;
+        }
         if (!provenance) return false;
         const chain = chainFor(provenance, Cell(owner, card));
         for (const { reason } of chain) {
             const tag = reason.kind._tag;
-            const idx =
-                tag === "NonRefuters"
-                || tag === "RefuterShowed"
-                || tag === "RefuterOwnsOneOf"
-                    ? reason.kind.suggestionIndex
-                    : undefined;
-            if (idx === activeSuggestionIndex) return true;
+            if (activeSuggestionIndex !== null) {
+                const idx =
+                    tag === "NonRefuters"
+                    || tag === "RefuterShowed"
+                    || tag === "RefuterOwnsOneOf"
+                        ? reason.kind.suggestionIndex
+                        : undefined;
+                if (idx === activeSuggestionIndex) return true;
+            }
+            if (activeAccusationIndex !== null) {
+                if (
+                    tag === "FailedAccusation"
+                    && reason.kind.accusationIndex === activeAccusationIndex
+                ) {
+                    return true;
+                }
+                if (
+                    tag === "FailedAccusationPairwiseNarrowing"
+                    && reason.kind.accusationIndices.includes(
+                        activeAccusationIndex,
+                    )
+                ) {
+                    return true;
+                }
+            }
         }
         return false;
     };
@@ -843,9 +866,27 @@ export function Checklist() {
                                                     )}
                                             </>
                                         );
+                                        // A cell needs the interactive
+                                        // ring style when the user can
+                                        // focus or hover it: Setup-mode
+                                        // toggleable cells, Play-mode
+                                        // player cells with a deduction,
+                                        // and Play-mode case-file cells
+                                        // with a deduction. Setup mode
+                                        // intentionally gives case-file
+                                        // cells NO popover affordance —
+                                        // setup is for entering inputs,
+                                        // not exploring the deduction
+                                        // chain.
+                                        const popoverInteractive =
+                                            tooltipContent !== undefined
+                                            && !inSetup
+                                            && (playInteractive || !isPlayerCell);
                                         const tdClassName = cellClass(
                                             value,
-                                            setupInteractive || playInteractive,
+                                            setupInteractive
+                                                || playInteractive
+                                                || popoverInteractive,
                                             isHighlighted,
                                         );
                                         const thisCellForHover = Cell(
@@ -946,19 +987,22 @@ export function Checklist() {
                                                     {cellContent}
                                                 </td>
                                             );
-                                        } else if (
-                                            tooltipContent &&
-                                            (playInteractive || !isPlayerCell)
-                                        ) {
+                                        } else if (popoverInteractive) {
                                             // Either:
                                             //   - Play-mode player cell with
                                             //     a deduction (the original
                                             //     case), OR
-                                            //   - Case-file cell with a
-                                            //     deduction (in either Setup
-                                            //     or Play mode — the case
-                                            //     file is read-only and
-                                            //     value is always derived).
+                                            //   - Play-mode case-file cell
+                                            //     with a deduction (the
+                                            //     case file is read-only
+                                            //     and the value is always
+                                            //     derived).
+                                            //
+                                            // Setup mode intentionally
+                                            // skips this branch: the
+                                            // checklist there is for
+                                            // entering inputs, not
+                                            // exploring deductions.
                                             //
                                             // Both render the same
                                             // InfoPopover wrapper so the
@@ -1813,8 +1857,16 @@ const CELL_BASE =
 // outline was painted over by its neighbors (each cell has
 // position:relative, so without z-index escape they stack in DOM
 // order and the right neighbour wins).
+//
+// Focus indicator: `ring-1 ring-offset-2` (box-shadow) instead of
+// `outline-1 outline-offset-2`. Outlines on `<td>` cells in
+// `border-collapse: separate` get clipped at the cell's left edge —
+// reproducible on the case-file column whose left neighbour ends at
+// the column boundary. Box-shadow paints with the element's own
+// stacking context and respects z-index escape, so the ring renders
+// on all four sides regardless of which cell its neighbour is.
 const CELL_INTERACTIVE =
-    " cursor-pointer hover:z-30 hover:rounded-[2px] hover:ring-2 hover:ring-accent/30 focus-visible:z-40 focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:rounded-[2px]";
+    " cursor-pointer hover:z-30 hover:rounded-[2px] hover:ring-2 hover:ring-accent/30 focus-visible:z-40 focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel focus-visible:rounded-[2px] focus-visible:outline-none";
 
 const CELL_HIGHLIGHTED =
     " z-30 ring-2 ring-accent ring-offset-1 ring-offset-panel";

@@ -111,11 +111,21 @@ h3 {
 /* Global focus-visible outline: a high-contrast oxblood ring so
    keyboard users always know where they are. Applied via the
    :focus-visible pseudo-class so mouse clicks don't trigger it.
-   Components that already use `focus-visible:ring-*` classes
-   compose with this outline — both show together. */
-*:focus-visible {
-    outline: 3px solid var(--color-accent);
-    outline-offset: 2px;
-    border-radius: 3px;
+
+   Wrapped in `@layer base` so Tailwind's utility classes (which
+   live in `@layer utilities`) can opt out per-element with
+   `focus-visible:outline-none focus-visible:ring-1 …`. Components
+   that don't override compose with this outline — both show
+   together. The opt-out matters for `<td>` cells, where outlines
+   on `border-collapse: separate` tables get sheared off at the
+   left column boundary; those cells switch to a `ring` (box-
+   shadow) which respects z-index escape and renders cleanly on
+   all four sides. */
+@layer base {
+    *:focus-visible {
+        outline: 3px solid var(--color-accent);
+        outline-offset: 2px;
+        border-radius: 3px;
+    }
 }
 
