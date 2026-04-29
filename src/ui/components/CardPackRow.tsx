@@ -246,8 +246,15 @@ export function CardPackRow() {
     const onSaveCardSet = () => {
         const label = window.prompt(t("saveAsCardPackPrompt"));
         if (!label || !label.trim()) return;
-        saveCustomCardSet(label.trim(), setup.cardSet);
+        const newPack = saveCustomCardSet(label.trim(), setup.cardSet);
+        // Stamp the new pack as the most-recently-used pack so the
+        // active-match resolver picks it up: with cardSetEquals(setup,
+        // newPack.cardSet) trivially true (we just snapshotted setup),
+        // the new pack becomes the active pill — and the Save pill
+        // un-activates because the live deck now matches a saved pack.
+        recordCardPackUse(newPack.id);
         setCustomPacks(loadCustomCardSets());
+        setUsage(loadCardPackUsage());
     };
 
     const onDeleteCustomPack = async (pack: DisplayPack) => {

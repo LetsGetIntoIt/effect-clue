@@ -589,6 +589,141 @@ describe("CardPackRow custom-pack delete also forgets usage", () => {
     });
 });
 
+describe("CardPackRow save-as-pack activates the new pack", () => {
+    test("after saving, the new pack becomes the active pill and Save un-activates", async () => {
+        const user = userEvent.setup();
+        // Force a deck mutation first so Save is the active pill before save.
+        renderRowWithMutate();
+        await user.click(screen.getByTestId("mutate"));
+        // Pre-condition: Save pill is active, no pack pill is active.
+        expect(
+            document.querySelector("[data-card-pack-save-active='true']"),
+        ).not.toBeNull();
+        expect(
+            document.querySelectorAll("[data-card-pack-active='true']"),
+        ).toHaveLength(0);
+        // Save the current configuration.
+        const promptSpy = vi
+            .spyOn(window, "prompt")
+            .mockReturnValue("My New Pack");
+        await user.click(
+            screen.getByRole("button", { name: "saveAsCardPack" }),
+        );
+        promptSpy.mockRestore();
+        // Save should no longer be active.
+        expect(
+            document.querySelector("[data-card-pack-save-active='true']"),
+        ).toBeNull();
+        // Exactly one pack pill is now marked active.
+        const actives = document.querySelectorAll(
+            "[data-card-pack-active='true']",
+        );
+        expect(actives).toHaveLength(1);
+        expect(actives[0]?.textContent).toContain("My New Pack");
+    });
+
+    test("the saved pack appears on the surface row immediately", async () => {
+        const user = userEvent.setup();
+        renderRow(); // 2 packs to start (Classic + Master)
+        const promptSpy = vi
+            .spyOn(window, "prompt")
+            .mockReturnValue("Brand New");
+        await user.click(
+            screen.getByRole("button", { name: "saveAsCardPack" }),
+        );
+        promptSpy.mockRestore();
+        const labels = surfaceLabels();
+        expect(labels).toContain("Brand New");
+    });
+
+    test("saving records a usage entry for the new pack", async () => {
+        const user = userEvent.setup();
+        renderRow();
+        const promptSpy = vi
+            .spyOn(window, "prompt")
+            .mockReturnValue("Recorded");
+        await user.click(
+            screen.getByRole("button", { name: "saveAsCardPack" }),
+        );
+        promptSpy.mockRestore();
+        const usage = JSON.parse(
+            window.localStorage.getItem(
+                "effect-clue.card-pack-usage.v1",
+            ) ?? "null",
+        );
+        // Find the saved pack's id in the presets blob.
+        const presets = JSON.parse(
+            window.localStorage.getItem(
+                "effect-clue.custom-presets.v1",
+            ) ?? "null",
+        );
+        const saved = (presets?.presets ?? []).find(
+            (p: { label: string }) => p.label === "Recorded",
+        );
+        expect(saved).toBeDefined();
+        const recorded = (usage?.entries ?? []).some(
+            (e: { id: string }) => e.id === saved.id,
+        );
+        expect(recorded).toBe(true);
+    });
+
+    test("saving does not fire cards_dealt or card_pack_selected", async () => {
+        // Saving doesn't change the active deck (it only snapshots it),
+        // so it shouldn't pollute the deck-swap analytics funnel.
+        const user = userEvent.setup();
+        renderRow();
+        const promptSpy = vi
+            .spyOn(window, "prompt")
+            .mockReturnValue("No Analytics");
+        await user.click(
+            screen.getByRole("button", { name: "saveAsCardPack" }),
+        );
+        promptSpy.mockRestore();
+        const events = captureCalls.map(c => c.event);
+        expect(events).not.toContain("cards_dealt");
+        expect(events).not.toContain("card_pack_selected");
+    });
+
+    test("cancelling the save prompt leaves activation untouched", async () => {
+        const user = userEvent.setup();
+        renderRowWithMutate();
+        await user.click(screen.getByTestId("mutate")); // Save now active
+        const promptSpy = vi.spyOn(window, "prompt").mockReturnValue(null);
+        await user.click(
+            screen.getByRole("button", { name: "saveAsCardPack" }),
+        );
+        promptSpy.mockRestore();
+        // Save still active; no pack-pill activation.
+        expect(
+            document.querySelector("[data-card-pack-save-active='true']"),
+        ).not.toBeNull();
+        expect(
+            document.querySelectorAll("[data-card-pack-active='true']"),
+        ).toHaveLength(0);
+    });
+
+    test("an empty / whitespace-only label is treated as cancel", async () => {
+        const user = userEvent.setup();
+        renderRowWithMutate();
+        await user.click(screen.getByTestId("mutate"));
+        const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("   ");
+        await user.click(
+            screen.getByRole("button", { name: "saveAsCardPack" }),
+        );
+        promptSpy.mockRestore();
+        // Nothing was saved; Save pill stays active.
+        const presets = JSON.parse(
+            window.localStorage.getItem(
+                "effect-clue.custom-presets.v1",
+            ) ?? "null",
+        );
+        expect(presets).toBeNull();
+        expect(
+            document.querySelector("[data-card-pack-save-active='true']"),
+        ).not.toBeNull();
+    });
+});
+
 describe("CardPackRow surface-pill ordering edge cases", () => {
     test("with 5 packs and recent usage, the most-recent non-Classic packs occupy the recent slots", async () => {
         const user = userEvent.setup();
