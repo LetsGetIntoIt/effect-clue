@@ -2,7 +2,7 @@
 
 A solver for the board game **Clue** (a.k.a. *Cluedo*) — a single-page web app that tracks suggestions and disproofs as you play and deduces what each player must, might, or cannot hold.
 
-The app is a client-only static SPA. There is no server, no API, and no account: state lives in `localStorage` and the deducer runs in your browser.
+The app is offline-first: the deducer runs entirely in your browser and game state lives in `localStorage`. The `/play` page server-renders an empty skeleton on each request and hydrates from your local data on the client — there's no server-side game state. Server-backed features (custom card packs, accounts, shareable game links) layer on top in later milestones.
 
 > **Production:** <https://winclue.vercel.app/>
 
@@ -22,7 +22,7 @@ The app is a client-only static SPA. There is no server, no API, and no account:
 
 | Area | Choice |
 | --- | --- |
-| Framework | [Next.js 16](https://nextjs.org/) with `output: "export"` (static SPA, no SSR, no API routes) |
+| Framework | [Next.js 16](https://nextjs.org/) App Router on Vercel (Fluid Compute). The `/play` page server-renders a skeleton; client hydrates from `localStorage`. |
 | UI | React 19 + React Compiler, [Radix Primitives](https://www.radix-ui.com/), [Motion](https://motion.dev/), Tailwind CSS v4 |
 | Logic | [Effect 4 (beta)](https://effect.website/) — the deducer, services, persistence schema, and rules are all Effect programs |
 | i18n | [`next-intl`](https://next-intl.dev/) — single English locale today, structured for adding more |
@@ -30,17 +30,23 @@ The app is a client-only static SPA. There is no server, no API, and no account:
 | Errors | [Sentry](https://sentry.io/) (`@sentry/nextjs`) — JS errors, Web Vitals, Session Replay |
 | Tracing | [Honeycomb](https://honeycomb.io/) via `@effect/opentelemetry` — Effect spans, metrics, logs |
 | Analytics | [PostHog](https://posthog.com/) — typed event emitters in [`src/analytics/events.ts`](src/analytics/events.ts) |
-| Hosting | Static export — deployable to Vercel or any static host |
+| Hosting | Vercel (Fluid Compute). Server-side errors flow through `instrumentation.ts` → Sentry. |
 
 ---
 
 ## Repository layout
 
 ```
-app/                    Next.js App Router entry — layout, providers, three routes.
-  page.tsx              Server component; redirects / → /play (build-time meta refresh).
-  play/page.tsx         Renders <Clue/> + <SplashModal/>; the main game UI.
+app/                    Next.js App Router entry — layout, providers, four routes.
+  page.tsx              Server component; redirects / → /play.
+  play/page.tsx         Renders <Clue/> + <SplashModal/>; the main game UI. SSR
+                        emits a skeleton; the client hydrates from localStorage.
   about/page.tsx        Renders shared <AboutContent/> (motivation copy + YouTube embed).
+  share/[id]/page.tsx   Reserved for the M9 server-stored share flow; 404 today.
+
+instrumentation.ts      Next.js instrumentation hook — wires Sentry server SDK on cold-start.
+instrumentation-client.ts  Next.js client instrumentation — wires Sentry browser SDK.
+sentry.server.config.ts Server-side Sentry init pulled in by instrumentation.ts.
 
 src/
   routes.ts             Single source of truth for in-app paths.
@@ -102,8 +108,8 @@ The third-party SDKs (Sentry, Honeycomb, PostHog) all no-op when their env vars 
 | Command | What it does |
 | --- | --- |
 | `pnpm dev` | Next dev server (Turbopack). |
-| `pnpm build` | Static export (`next build` with `output: "export"`). |
-| `pnpm start` | Serve the built static export. |
+| `pnpm build` | Production build (SSR, `next build`). |
+| `pnpm start` | Serve the production build (`next start`). |
 | `pnpm test` | Vitest, run mode. |
 | `pnpm test:watch` | Vitest, watch mode. |
 | `pnpm test:ui` | Vitest UI in the browser. |

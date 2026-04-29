@@ -69,8 +69,16 @@ const HONEYCOMB_BASE_URL = "https://api.honeycomb.io";
  * Returns `Layer.empty` when there's no Honeycomb ingest key in the
  * environment — a safe no-op so local dev without telemetry secrets
  * still runs the app.
+ *
+ * Also returns `Layer.empty` during SSR (`typeof window === "undefined"`).
+ * The `WebSdk` and the `@opentelemetry/sdk-trace-web` packages it pulls
+ * in assume a browser global; instantiating them on the Node server
+ * during SSR-render of the client component tree would crash. The
+ * client re-evaluates this module on first paint with `window`
+ * defined, materialising the real layer at that point.
  */
 export const TelemetryLayer: Layer.Layer<never> = (() => {
+    if (typeof window === "undefined") return Layer.empty;
     const apiKey = process.env["NEXT_PUBLIC_HONEYCOMB_API_KEY"];
     if (!apiKey) return Layer.empty;
 
