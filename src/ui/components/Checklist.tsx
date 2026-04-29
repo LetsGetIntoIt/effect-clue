@@ -947,9 +947,25 @@ export function Checklist() {
                                                 </td>
                                             );
                                         } else if (
-                                            playInteractive &&
-                                            tooltipContent
+                                            tooltipContent &&
+                                            (playInteractive || !isPlayerCell)
                                         ) {
+                                            // Either:
+                                            //   - Play-mode player cell with
+                                            //     a deduction (the original
+                                            //     case), OR
+                                            //   - Case-file cell with a
+                                            //     deduction (in either Setup
+                                            //     or Play mode — the case
+                                            //     file is read-only and
+                                            //     value is always derived).
+                                            //
+                                            // Both render the same
+                                            // InfoPopover wrapper so the
+                                            // deduction chain is reachable
+                                            // by hover, click, tap, and
+                                            // keyboard (Enter / Space) with
+                                            // arrow-key grid navigation.
                                             const thisCell = Cell(
                                                 owner,
                                                 entry.id,
@@ -1782,11 +1798,26 @@ function AnimatedCellGlyph({ value }: { readonly value: CellValue | undefined })
 const CELL_BASE =
     "w-9 min-w-9 border-r border-b border-border px-2 py-1 text-center font-semibold relative";
 
+// Z-index ladder for the checklist:
+//   - sticky <thead>            : z-20 (anchored at top during scroll)
+//   - body cell hover ring      : z-30 (above thead so the hover ring
+//                                 doesn't get clipped when the cell is
+//                                 near the top of the viewport)
+//   - cross-pane highlight ring : z-30 (same reason)
+//   - body cell focus-visible   : z-40 (above hover so a hovered ring
+//                                 doesn't obscure the focused outline,
+//                                 and well above any neighboring cell
+//                                 painted in document order)
+// Without these bumps, a hovered cell sitting under the sticky thead
+// got its top ring sheared off, and a focused cell's right/bottom
+// outline was painted over by its neighbors (each cell has
+// position:relative, so without z-index escape they stack in DOM
+// order and the right neighbour wins).
 const CELL_INTERACTIVE =
-    " cursor-pointer hover:z-10 hover:rounded-[2px] hover:ring-2 hover:ring-accent/30 focus-visible:z-20 focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:rounded-[2px]";
+    " cursor-pointer hover:z-30 hover:rounded-[2px] hover:ring-2 hover:ring-accent/30 focus-visible:z-40 focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:rounded-[2px]";
 
 const CELL_HIGHLIGHTED =
-    " z-10 ring-2 ring-accent ring-offset-1 ring-offset-panel";
+    " z-30 ring-2 ring-accent ring-offset-1 ring-offset-panel";
 
 const cellClass = (
     value: CellValue | undefined,
