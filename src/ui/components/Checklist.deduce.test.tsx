@@ -290,9 +290,12 @@ describe("Checklist — case-file deduction popover", () => {
         // The focus indicator uses `ring-*` (box-shadow) instead of
         // `outline-*`. Outlines on `<td>` cells in
         // border-collapse:separate tables get sheared off at the left
-        // column boundary; box-shadow doesn't. Pinned via classes so
-        // a future regression to outline-* trips the test.
-        expect(caseFileCell.className).toMatch(/focus-visible:ring-1/);
+        // column boundary; box-shadow doesn't. 3px width matches the
+        // global *:focus-visible outline so it reads at the same
+        // weight as every other focusable element on the page.
+        // Pinned via classes so a future regression to outline-* (or
+        // a thinner ring) trips the test.
+        expect(caseFileCell.className).toMatch(/focus-visible:ring-\[3px\]/);
         expect(caseFileCell.className).toMatch(/focus-visible:ring-accent/);
         expect(caseFileCell.className).toMatch(/focus-visible:outline-none/);
         expect(caseFileCell.className).not.toMatch(
