@@ -253,4 +253,120 @@ describe("Checklist — setup mode — scope of rendered controls", () => {
         // Silence unused-import TS warning for `within`.
         expect(within).toBeDefined();
     });
+
+    test("case-file body cells are NOT popover triggers in setup mode (even when deduced)", async () => {
+        // Setup mode is for entering inputs, not exploring the
+        // deduction chain. Even when the card-ownership slice has
+        // already pinned a case-file value, the cell should remain
+        // a plain non-interactive `<td>` — no role=button, no
+        // aria-haspopup, no data-cell-col, no focus ring.
+        const session = {
+            version: 6,
+            setup: {
+                players: ["Player 1", "Player 2", "Player 3", "Player 4"],
+                categories: [
+                    {
+                        id: "category-suspects",
+                        name: "Suspect",
+                        cards: [
+                            { id: "card-miss-scarlet", name: "Miss Scarlet" },
+                            { id: "card-col-mustard", name: "Col. Mustard" },
+                            { id: "card-mrs-white", name: "Mrs. White" },
+                            { id: "card-mr-green", name: "Mr. Green" },
+                            { id: "card-mrs-peacock", name: "Mrs. Peacock" },
+                            { id: "card-prof-plum", name: "Prof. Plum" },
+                        ],
+                    },
+                    {
+                        id: "category-weapons",
+                        name: "Weapon",
+                        cards: [
+                            { id: "card-candlestick", name: "Candlestick" },
+                            { id: "card-knife", name: "Knife" },
+                            { id: "card-lead-pipe", name: "Lead pipe" },
+                            { id: "card-revolver", name: "Revolver" },
+                            { id: "card-rope", name: "Rope" },
+                            { id: "card-wrench", name: "Wrench" },
+                        ],
+                    },
+                    {
+                        id: "category-rooms",
+                        name: "Room",
+                        cards: [
+                            { id: "card-kitchen", name: "Kitchen" },
+                            { id: "card-ball-room", name: "Ball room" },
+                            { id: "card-conservatory", name: "Conservatory" },
+                            { id: "card-dining-room", name: "Dining room" },
+                            { id: "card-billiard-room", name: "Billiard room" },
+                            { id: "card-library", name: "Library" },
+                            { id: "card-lounge", name: "Lounge" },
+                            { id: "card-hall", name: "Hall" },
+                            { id: "card-study", name: "Study" },
+                        ],
+                    },
+                ],
+            },
+            // Player 1 holds every non-Plum suspect → slice forces
+            // case_Plum=Y. We're in setup mode so the cell should
+            // STILL render the deduced value but without any popover
+            // affordance.
+            hands: [
+                {
+                    player: "Player 1",
+                    cards: [
+                        "card-miss-scarlet",
+                        "card-col-mustard",
+                        "card-mrs-white",
+                        "card-mr-green",
+                        "card-mrs-peacock",
+                    ],
+                },
+            ],
+            handSizes: [
+                { player: "Player 1", size: 5 },
+                { player: "Player 2", size: 5 },
+                { player: "Player 3", size: 4 },
+                { player: "Player 4", size: 4 },
+            ],
+            suggestions: [],
+            accusations: [],
+        };
+        window.localStorage.setItem(
+            "effect-clue.session.v6",
+            JSON.stringify(session),
+        );
+        // Ensure URL doesn't push us into deduce mode.
+        window.history.replaceState(null, "", "/");
+
+        render(<Clue />);
+        await waitForSetupChecklist();
+
+        // Sanity: deduce wired up — the Plum suspect row's case-file
+        // cell should display the deduced ✓ glyph. In setup mode the
+        // card name is an InlineTextEdit input; we find the row by
+        // its initial value.
+        const plumInput = Array.from(
+            document.querySelectorAll<HTMLInputElement>("input"),
+        ).find(i => i.value === "Prof. Plum");
+        expect(plumInput).toBeDefined();
+        if (!plumInput) return;
+        const plumRow = plumInput.closest("tr");
+        expect(plumRow).toBeDefined();
+        if (!plumRow) return;
+        const tds = Array.from(plumRow.querySelectorAll("td"));
+        const caseFileCell = tds[tds.length - 1];
+        expect(caseFileCell).toBeDefined();
+        if (!caseFileCell) return;
+        // The deduced value renders…
+        expect(caseFileCell.textContent?.trim()).toBe("✓");
+        // …but the cell stays non-interactive (no popover affordance).
+        expect(caseFileCell.getAttribute("role")).toBeNull();
+        expect(caseFileCell.getAttribute("aria-haspopup")).toBeNull();
+        expect(caseFileCell.getAttribute("tabindex")).toBeNull();
+        expect(caseFileCell.getAttribute("data-cell-col")).toBeNull();
+        // No focus-visible ring class either — the styling for
+        // interactive cells comes via CELL_INTERACTIVE which the gate
+        // skips for setup-mode case-file cells.
+        expect(caseFileCell.className).not.toMatch(/focus-visible:ring-1/);
+    });
 });
