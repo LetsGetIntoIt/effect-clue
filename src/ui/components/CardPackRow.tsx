@@ -1,9 +1,24 @@
 "use client";
 
+import { DateTime } from "effect";
+import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
-import { cardsDealt } from "../../analytics/events";
-import type { CardSet } from "../../logic/CardSet";
+import { useEffect, useMemo, useState } from "react";
+import { T_STANDARD, useReducedTransition } from "../motion";
+import {
+    cardPackPickerOpened,
+    cardPackSelected,
+    cardsDealt,
+} from "../../analytics/events";
+import { cardSetEquals, type CardSet } from "../../logic/CardSet";
+import {
+    compareCardPackLabels,
+    forgetCardPackUse,
+    loadCardPackUsage,
+    recordCardPackUse,
+    topRecentPacks,
+    type CardPackUsage,
+} from "../../logic/CardPackUsage";
 import { CARD_SETS } from "../../logic/GameSetup";
 import {
     CustomCardSet,
@@ -13,13 +28,66 @@ import {
 } from "../../logic/CustomCardSets";
 import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
+import { CardPackPicker, type PickerPack } from "./CardPackPicker";
+import { SearchIcon } from "./Icons";
+
+const RECENT_LIMIT = 3;
+const SURFACE_BUDGET = 1 + RECENT_LIMIT; // Classic + 3 recents = 4 pills before the dropdown.
+
+// Module-scope discriminators kept exempt from the i18next/no-literal-string
+// lint rule (it ignores literals declared outside component bodies). These
+// are wire-format strings that flow into PostHog as event-property values,
+// not user-visible copy.
+const PACK_TYPE_BUILT_IN = "built-in" as const;
+const PACK_TYPE_CUSTOM = "custom" as const;
+const SOURCE_PINNED = "pinned" as const;
+const SOURCE_RECENT = "recent" as const;
+const SOURCE_SEARCH = "search" as const;
+
+// Module-scope literals: hooked in via `data-*` attributes so styled-pill
+// integration tests and CSS selectors can target the active pack pill
+// and the activated Save pill without depending on class-name internals.
+const TRUE_LITERAL = "true" as const;
+
+interface DisplayPack {
+    readonly id: string;
+    readonly label: string;
+    readonly cardSet: CardSet;
+    readonly isCustom: boolean;
+}
+
+const toDisplayPack = (
+    pack: CustomCardSet | (typeof CARD_SETS)[number],
+    isCustom: boolean,
+): DisplayPack => ({
+    id: pack.id,
+    label: pack.label,
+    cardSet: pack.cardSet,
+    isCustom,
+});
+
+const toPickerPack = (pack: DisplayPack): PickerPack => ({
+    id: pack.id,
+    label: pack.label,
+    isCustom: pack.isCustom,
+});
+
+const totalCardsIn = (cardSet: CardSet): number =>
+    cardSet.categories.reduce((n, c) => n + c.cards.length, 0);
 
 /**
  * Card-pack picker row: swap the active deck without touching the
  * player roster. Only rendered while the UI is in Setup mode — in
- * Play mode the deck is locked and the buttons disappear. The custom
- * packs come from localStorage via loadCustomCardSets; save / delete
- * re-reads so the row reflects the latest state without a reload.
+ * Play mode the deck is locked and the buttons disappear.
+ *
+ * Surface layout scales with the user's library:
+ *   - Classic is always pinned as the first pill.
+ *   - The next up to 3 pills are the most-recently-used non-Classic
+ *     packs (recency tracked per pack id, see CardPackUsage).
+ *   - When the user has more than 4 total packs, a 5th "All card
+ *     packs" pill opens a typeahead dropdown listing every pack
+ *     alphabetically.
+ *   - "+ Save as card pack" stays as the trailing dashed pill.
  */
 export function CardPackRow() {
     const t = useTranslations("setup");
@@ -29,37 +97,119 @@ export function CardPackRow() {
     const hasDestructiveData =
         state.knownCards.length > 0 || state.suggestions.length > 0;
     // Initialise empty so server HTML and client's first render agree; the
-    // real list loads in a mount effect. Reading localStorage in the
+    // real lists load in mount effects. Reading localStorage in the
     // useState initialiser would produce 0 packs on SSR and N packs on
     // the client's first render — a hydration mismatch.
     const [customPacks, setCustomPacks] = useState<ReadonlyArray<CustomCardSet>>(
         [],
     );
+    const [usage, setUsage] = useState<CardPackUsage>(new Map());
+    const [pickerOpen, setPickerOpen] = useState(false);
+
     useEffect(() => {
         setCustomPacks(loadCustomCardSets());
+        setUsage(loadCardPackUsage());
     }, []);
 
-    const totalCardsIn = (cardSet: CardSet): number =>
-        cardSet.categories.reduce((n, c) => n + c.cards.length, 0);
+    // The Classic id is the first entry in CARD_SETS and is the
+    // single always-pinned pill. Master Detective participates in
+    // the recency pool like any other pack.
+    const classic = CARD_SETS[0]!;
+    const classicDisplay = useMemo<DisplayPack>(
+        () => toDisplayPack(classic, false),
+        [classic],
+    );
 
-    const onCardSet = async (choice: (typeof CARD_SETS)[number]) => {
-        if (
-            hasDestructiveData &&
-            !(await confirm({ message: t("loadCardSetConfirm") }))
-        )
-            return;
-        dispatch({
-            type: "loadCardSet",
-            cardSet: choice.cardSet,
-            label: choice.label,
-        });
-        cardsDealt({
-            playerCount: state.setup.players.length,
-            totalCards: totalCardsIn(choice.cardSet),
-        });
-    };
+    const otherPacks = useMemo<ReadonlyArray<DisplayPack>>(() => {
+        const otherBuiltIns = CARD_SETS.slice(1).map(p =>
+            toDisplayPack(p, false),
+        );
+        const customs = customPacks.map(p => toDisplayPack(p, true));
+        return [...otherBuiltIns, ...customs];
+    }, [customPacks]);
 
-    const onCustomPack = async (pack: CustomCardSet) => {
+    const allPacks = useMemo<ReadonlyArray<DisplayPack>>(
+        () => [classicDisplay, ...otherPacks],
+        [classicDisplay, otherPacks],
+    );
+
+    /**
+     * The pack the user last loaded, *if* the live deck still matches
+     * its contents by user-visible name. Tracked by pack id (via the
+     * recency map's most-recent entry) so duplicate-contents packs
+     * stay distinguishable: only the pack the user actually clicked
+     * is active. Falls back to Classic on first run before any pack
+     * has been recorded.
+     *
+     * The cardSet equality check is what handles mutation: as soon
+     * as the user renames / adds / removes anything, the live deck
+     * diverges from the candidate pack and `activeMatch` flips to
+     * `undefined` — which then lights up "Save as card pack".
+     */
+    const activeMatch = useMemo<DisplayPack | undefined>(() => {
+        let candidateId: string | undefined;
+        let mostRecent: DateTime.Utc | undefined;
+        for (const [id, at] of usage.entries()) {
+            if (
+                !mostRecent ||
+                DateTime.toEpochMillis(at) > DateTime.toEpochMillis(mostRecent)
+            ) {
+                mostRecent = at;
+                candidateId = id;
+            }
+        }
+        // First-run fallback: Classic is the implicit "loaded" pack
+        // before the user clicks anything.
+        if (!candidateId) candidateId = classic.id;
+        const candidate = allPacks.find(p => p.id === candidateId);
+        if (!candidate) return undefined;
+        return cardSetEquals(setup.cardSet, candidate.cardSet)
+            ? candidate
+            : undefined;
+    }, [allPacks, setup.cardSet, usage, classic.id]);
+
+    const recents = useMemo<ReadonlyArray<DisplayPack>>(() => {
+        const baseRecents = topRecentPacks(otherPacks, usage, RECENT_LIMIT);
+        // Promote the active match (if it's a non-Classic pack) to the
+        // top of the recents — even if it isn't otherwise in the top
+        // RECENT_LIMIT by usage. This keeps the active pill anchored
+        // immediately after Classic.
+        if (!activeMatch || activeMatch.id === classic.id) return baseRecents;
+        const withoutMatch = baseRecents.filter(p => p.id !== activeMatch.id);
+        return [activeMatch, ...withoutMatch].slice(0, RECENT_LIMIT);
+    }, [otherPacks, usage, activeMatch, classic.id]);
+
+    const surfacePacks = useMemo<ReadonlyArray<DisplayPack>>(
+        () => [classicDisplay, ...recents],
+        [classicDisplay, recents],
+    );
+
+    const showAllCardPacksPill = allPacks.length > SURFACE_BUDGET;
+    const showSaveAsActive = activeMatch === undefined;
+
+    /**
+     * Sorted alphabetically with Classic pinned first; this is what
+     * the typeahead dropdown displays before any filtering.
+     */
+    const dropdownOrder = useMemo<ReadonlyArray<DisplayPack>>(() => {
+        const sorted = [...otherPacks].sort((a, b) =>
+            compareCardPackLabels(a.label, b.label),
+        );
+        return [classicDisplay, ...sorted];
+    }, [classicDisplay, otherPacks]);
+
+    const pickerPacks = useMemo<ReadonlyArray<PickerPack>>(
+        () => dropdownOrder.map(toPickerPack),
+        [dropdownOrder],
+    );
+
+    const findDisplayPack = (id: string): DisplayPack | undefined =>
+        allPacks.find(p => p.id === id);
+
+    const performLoad = async (
+        pack: DisplayPack,
+        source: typeof SOURCE_PINNED | typeof SOURCE_RECENT | typeof SOURCE_SEARCH,
+    ): Promise<void> => {
         if (
             hasDestructiveData &&
             !(await confirm({ message: t("loadCardSetConfirm") }))
@@ -74,16 +224,40 @@ export function CardPackRow() {
             playerCount: state.setup.players.length,
             totalCards: totalCardsIn(pack.cardSet),
         });
+        cardPackSelected({
+            packType: pack.isCustom ? PACK_TYPE_CUSTOM : PACK_TYPE_BUILT_IN,
+            source,
+        });
+        recordCardPackUse(pack.id);
+        setUsage(loadCardPackUsage());
+    };
+
+    const onSelectFromSurface = (pack: DisplayPack) => {
+        const source = pack.id === classic.id ? SOURCE_PINNED : SOURCE_RECENT;
+        void performLoad(pack, source);
+    };
+
+    const onSelectFromPicker = (picked: PickerPack) => {
+        const pack = findDisplayPack(picked.id);
+        if (!pack) return;
+        void performLoad(pack, SOURCE_SEARCH);
     };
 
     const onSaveCardSet = () => {
         const label = window.prompt(t("saveAsCardPackPrompt"));
         if (!label || !label.trim()) return;
-        saveCustomCardSet(label.trim(), setup.cardSet);
+        const newPack = saveCustomCardSet(label.trim(), setup.cardSet);
+        // Stamp the new pack as the most-recently-used pack so the
+        // active-match resolver picks it up: with cardSetEquals(setup,
+        // newPack.cardSet) trivially true (we just snapshotted setup),
+        // the new pack becomes the active pill — and the Save pill
+        // un-activates because the live deck now matches a saved pack.
+        recordCardPackUse(newPack.id);
         setCustomPacks(loadCustomCardSets());
+        setUsage(loadCardPackUsage());
     };
 
-    const onDeleteCustomPack = async (pack: CustomCardSet) => {
+    const onDeleteCustomPack = async (pack: DisplayPack) => {
         if (
             !(await confirm({
                 message: t("deleteCustomCardSetConfirm", {
@@ -93,8 +267,27 @@ export function CardPackRow() {
         )
             return;
         deleteCustomCardSet(pack.id);
+        forgetCardPackUse(pack.id);
         setCustomPacks(loadCustomCardSets());
+        setUsage(loadCardPackUsage());
     };
+
+    const onDeleteFromPicker = (picked: PickerPack) => {
+        const pack = findDisplayPack(picked.id);
+        if (!pack || !pack.isCustom) return;
+        void onDeleteCustomPack(pack);
+    };
+
+    const onPickerOpenChange = (next: boolean) => {
+        setPickerOpen(next);
+        if (next) cardPackPickerOpened();
+    };
+
+    // Single transition routed through useReducedTransition so the
+    // pill reposition (Framer Motion FLIP) collapses to instant when
+    // the user has prefers-reduced-motion. The color fade rides on
+    // CSS `transition-colors` and is gentle enough to keep on.
+    const pillLayoutTransition = useReducedTransition(T_STANDARD);
 
     return (
         <div className="mb-4 rounded-[var(--radius)] border border-border bg-case-file-bg p-3">
@@ -102,46 +295,137 @@ export function CardPackRow() {
                 {t("cardPack")}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-                {CARD_SETS.map((choice, i) => (
-                    <button
-                        key={choice.id}
-                        type="button"
-                        className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-hover"
-                        onClick={() => onCardSet(choice)}
-                        {...(i === 0 ? { "data-setup-first-target": "card-pack" } : {})}
-                    >
-                        {choice.label}
-                    </button>
-                ))}
-                {customPacks.map(pack => (
-                    <span
-                        key={pack.id}
-                        className="inline-flex items-center overflow-hidden rounded border border-border bg-white text-[13px]"
-                    >
-                        <button
+                <LayoutGroup id="card-pack-surface">
+                {surfacePacks.map((pack, i) => {
+                    const isFirst = i === 0;
+                    const isActive = pack.id === activeMatch?.id;
+                    const dataAttr: Record<string, string> = {};
+                    if (isFirst)
+                        dataAttr["data-setup-first-target"] = "card-pack";
+                    if (isActive)
+                        dataAttr["data-card-pack-active"] = TRUE_LITERAL;
+                    // Tailwind `transition-colors` gives the gentle color fade
+                    // between active and inactive states; Framer Motion's
+                    // `layout` prop drives the FLIP-style reposition when
+                    // pack ordering changes.
+                    const wrapperBase =
+                        "inline-flex items-center overflow-hidden rounded border text-[13px] transition-colors duration-200 ease-out";
+                    const wrapperTone = isActive
+                        ? "border-accent bg-accent text-white"
+                        : "border-border bg-white";
+                    const loadBase =
+                        "cursor-pointer px-3 py-1 transition-colors duration-200 ease-out";
+                    const loadTone = isActive
+                        ? "font-semibold"
+                        : "hover:bg-hover";
+                    if (pack.isCustom) {
+                        return (
+                            <motion.span
+                                key={pack.id}
+                                layout
+                                transition={pillLayoutTransition}
+                                className={`${wrapperBase} ${wrapperTone}`}
+                            >
+                                <button
+                                    type="button"
+                                    className={`${loadBase} ${loadTone}`}
+                                    onClick={() => onSelectFromSurface(pack)}
+                                    title={t("loadCustomCardSetTitle", {
+                                        label: pack.label,
+                                    })}
+                                    aria-pressed={isActive}
+                                    {...dataAttr}
+                                >
+                                    {pack.label}
+                                </button>
+                                <button
+                                    type="button"
+                                    className={
+                                        "cursor-pointer border-l px-2 py-1 transition-colors duration-200 ease-out " +
+                                        (isActive
+                                            ? "border-white/40 text-white/80 hover:bg-white/15"
+                                            : "border-border text-muted hover:bg-hover hover:text-danger")
+                                    }
+                                    onClick={() => void onDeleteCustomPack(pack)}
+                                    title={t("deleteCustomCardSetTitle", {
+                                        label: pack.label,
+                                    })}
+                                    aria-label={t("deleteCustomCardSetAria", {
+                                        label: pack.label,
+                                    })}
+                                >
+                                    ×
+                                </button>
+                            </motion.span>
+                        );
+                    }
+                    return (
+                        <motion.button
+                            key={pack.id}
+                            layout
+                            transition={pillLayoutTransition}
                             type="button"
-                            className="cursor-pointer px-3 py-1 hover:bg-hover"
-                            onClick={() => onCustomPack(pack)}
-                            title={t("loadCustomCardSetTitle", { label: pack.label })}
+                            className={
+                                "cursor-pointer rounded border px-3 py-1 text-[13px] transition-colors duration-200 ease-out " +
+                                (isActive
+                                    ? "border-accent bg-accent font-semibold text-white"
+                                    : "border-border bg-white hover:bg-hover")
+                            }
+                            onClick={() => onSelectFromSurface(pack)}
+                            aria-pressed={isActive}
+                            {...dataAttr}
                         >
                             {pack.label}
-                        </button>
+                        </motion.button>
+                    );
+                })}
+                <AnimatePresence initial={false}>
+                {showAllCardPacksPill ? (
+                    <motion.span
+                        key="all-card-packs-pill"
+                        layout
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={pillLayoutTransition}
+                        className="inline-flex"
+                    >
+                    <CardPackPicker
+                        open={pickerOpen}
+                        onOpenChange={onPickerOpenChange}
+                        packs={pickerPacks}
+                        onSelect={onSelectFromPicker}
+                        onDeleteCustomPack={onDeleteFromPicker}
+                        activeMatchId={activeMatch?.id}
+                    >
                         <button
                             type="button"
-                            className="cursor-pointer border-l border-border px-2 py-1 text-muted hover:bg-hover hover:text-danger"
-                            onClick={() => onDeleteCustomPack(pack)}
-                            title={t("deleteCustomCardSetTitle", { label: pack.label })}
-                            aria-label={t("deleteCustomCardSetAria", { label: pack.label })}
+                            className="inline-flex cursor-pointer items-center gap-1 rounded border border-border bg-white px-3 py-1 text-[13px] transition-colors duration-200 ease-out hover:bg-hover"
+                            title={t("allCardPacksPillTitle")}
+                            aria-haspopup="listbox"
+                            aria-expanded={pickerOpen}
                         >
-                            ×
+                            <SearchIcon className="text-muted" size={14} />
+                            {t("allCardPacksPill")}
                         </button>
-                    </span>
-                ))}
+                    </CardPackPicker>
+                    </motion.span>
+                ) : null}
+                </AnimatePresence>
+                </LayoutGroup>
                 <button
                     type="button"
-                    className="cursor-pointer rounded border border-dashed border-border bg-white px-3 py-1 text-[13px] text-muted hover:bg-hover hover:text-accent"
+                    className={
+                        "cursor-pointer rounded border border-dashed px-3 py-1 text-[13px] transition-colors duration-200 ease-out " +
+                        (showSaveAsActive
+                            ? "border-accent bg-accent font-semibold text-white"
+                            : "border-border bg-white text-muted hover:bg-hover hover:text-accent")
+                    }
                     onClick={onSaveCardSet}
                     title={t("saveAsCardPackTitle")}
+                    {...(showSaveAsActive
+                        ? { "data-card-pack-save-active": TRUE_LITERAL }
+                        : {})}
                 >
                     {t("saveAsCardPack")}
                 </button>
