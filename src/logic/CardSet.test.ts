@@ -8,6 +8,7 @@ import {
     Category,
     cardIdsInCategory,
     cardName,
+    cardSetEquals,
     caseFileSize,
     categoryName,
     categoryOfCard,
@@ -169,5 +170,234 @@ describe("caseFileSize", () => {
 
     test("returns 0 for an empty CardSet", () => {
         expect(caseFileSize(CardSet({ categories: [] }))).toBe(0);
+    });
+});
+
+describe("cardSetEquals", () => {
+    // Helper: build a set with arbitrary ids but the given names so we
+    // can prove equality is name-based, not id-based.
+    const make = (
+        cats: ReadonlyArray<{
+            readonly id: string;
+            readonly name: string;
+            readonly cards: ReadonlyArray<{ id: string; name: string }>;
+        }>,
+    ): CardSet =>
+        CardSet({
+            categories: cats.map(c =>
+                Category({
+                    id: CardCategory(c.id),
+                    name: c.name,
+                    cards: c.cards.map(card =>
+                        CardEntry({ id: Card(card.id), name: card.name }),
+                    ),
+                }),
+            ),
+        });
+
+    test("identical sets are equal", () => {
+        expect(cardSetEquals(set, set)).toBe(true);
+    });
+
+    test("two structurally identical sets with different ids are equal", () => {
+        const a = make([
+            {
+                id: "id-w-1",
+                name: "Weapon",
+                cards: [
+                    { id: "k-1", name: "Knife" },
+                    { id: "r-1", name: "Rope" },
+                ],
+            },
+        ]);
+        const b = make([
+            {
+                id: "id-w-2",
+                name: "Weapon",
+                cards: [
+                    { id: "k-2", name: "Knife" },
+                    { id: "r-2", name: "Rope" },
+                ],
+            },
+        ]);
+        expect(cardSetEquals(a, b)).toBe(true);
+    });
+
+    test("renaming a card breaks equality", () => {
+        const a = make([
+            {
+                id: "w",
+                name: "Weapon",
+                cards: [{ id: "k", name: "Knife" }],
+            },
+        ]);
+        const b = make([
+            {
+                id: "w",
+                name: "Weapon",
+                cards: [{ id: "k", name: "Dagger" }],
+            },
+        ]);
+        expect(cardSetEquals(a, b)).toBe(false);
+    });
+
+    test("renaming a category breaks equality", () => {
+        const a = make([
+            {
+                id: "w",
+                name: "Weapon",
+                cards: [{ id: "k", name: "Knife" }],
+            },
+        ]);
+        const b = make([
+            {
+                id: "w",
+                name: "Tool",
+                cards: [{ id: "k", name: "Knife" }],
+            },
+        ]);
+        expect(cardSetEquals(a, b)).toBe(false);
+    });
+
+    test("adding a card breaks equality", () => {
+        const a = make([
+            {
+                id: "w",
+                name: "Weapon",
+                cards: [{ id: "k", name: "Knife" }],
+            },
+        ]);
+        const b = make([
+            {
+                id: "w",
+                name: "Weapon",
+                cards: [
+                    { id: "k", name: "Knife" },
+                    { id: "r", name: "Rope" },
+                ],
+            },
+        ]);
+        expect(cardSetEquals(a, b)).toBe(false);
+    });
+
+    test("removing a card breaks equality", () => {
+        const a = make([
+            {
+                id: "w",
+                name: "Weapon",
+                cards: [
+                    { id: "k", name: "Knife" },
+                    { id: "r", name: "Rope" },
+                ],
+            },
+        ]);
+        const b = make([
+            {
+                id: "w",
+                name: "Weapon",
+                cards: [{ id: "k", name: "Knife" }],
+            },
+        ]);
+        expect(cardSetEquals(a, b)).toBe(false);
+    });
+
+    test("reordering cards within a category breaks equality", () => {
+        const a = make([
+            {
+                id: "w",
+                name: "Weapon",
+                cards: [
+                    { id: "k", name: "Knife" },
+                    { id: "r", name: "Rope" },
+                ],
+            },
+        ]);
+        const b = make([
+            {
+                id: "w",
+                name: "Weapon",
+                cards: [
+                    { id: "r", name: "Rope" },
+                    { id: "k", name: "Knife" },
+                ],
+            },
+        ]);
+        expect(cardSetEquals(a, b)).toBe(false);
+    });
+
+    test("reordering categories breaks equality", () => {
+        const a = make([
+            {
+                id: "w",
+                name: "Weapon",
+                cards: [{ id: "k", name: "Knife" }],
+            },
+            {
+                id: "r",
+                name: "Room",
+                cards: [{ id: "kt", name: "Kitchen" }],
+            },
+        ]);
+        const b = make([
+            {
+                id: "r",
+                name: "Room",
+                cards: [{ id: "kt", name: "Kitchen" }],
+            },
+            {
+                id: "w",
+                name: "Weapon",
+                cards: [{ id: "k", name: "Knife" }],
+            },
+        ]);
+        expect(cardSetEquals(a, b)).toBe(false);
+    });
+
+    test("two empty card sets are equal", () => {
+        const a = CardSet({ categories: [] });
+        const b = CardSet({ categories: [] });
+        expect(cardSetEquals(a, b)).toBe(true);
+    });
+
+    test("an empty set is not equal to a non-empty set", () => {
+        const a = CardSet({ categories: [] });
+        const b = make([
+            {
+                id: "w",
+                name: "Weapon",
+                cards: [{ id: "k", name: "Knife" }],
+            },
+        ]);
+        expect(cardSetEquals(a, b)).toBe(false);
+        expect(cardSetEquals(b, a)).toBe(false);
+    });
+
+    test("two sets with the same category but no cards are equal", () => {
+        const a = make([{ id: "w", name: "Weapon", cards: [] }]);
+        const b = make([{ id: "w-other", name: "Weapon", cards: [] }]);
+        expect(cardSetEquals(a, b)).toBe(true);
+    });
+
+    test("differing category counts are not equal", () => {
+        const a = make([
+            {
+                id: "w",
+                name: "Weapon",
+                cards: [{ id: "k", name: "Knife" }],
+            },
+        ]);
+        const b = make([
+            {
+                id: "w",
+                name: "Weapon",
+                cards: [{ id: "k", name: "Knife" }],
+            },
+            {
+                id: "r",
+                name: "Room",
+                cards: [{ id: "kt", name: "Kitchen" }],
+            },
+        ]);
+        expect(cardSetEquals(a, b)).toBe(false);
     });
 });

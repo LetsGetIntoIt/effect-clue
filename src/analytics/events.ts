@@ -67,6 +67,27 @@ export const cardsDealt = (props: {
     totalCards: number;
 }): void => capture("cards_dealt", props);
 
+/**
+ * Fired when the user opens the "All card packs" typeahead dropdown.
+ * Pairs with `cardPackSelected({ source: "search" })` to gauge how
+ * often users reach for the dropdown vs. the surface pills — informs
+ * whether the pinned-recents limit (currently 3) is right.
+ */
+export const cardPackPickerOpened = (): void =>
+    capture("card_pack_picker_opened");
+
+/**
+ * Fired alongside `cardsDealt` whenever a pack is loaded. Distinguishes
+ * built-in packs (Classic, Master Detective) from user-saved custom
+ * packs, and records which surface the click came from. The canonical
+ * funnel step stays `cardsDealt`; this is an additive feature-usage
+ * signal.
+ */
+export const cardPackSelected = (props: {
+    packType: "built-in" | "custom";
+    source: "pinned" | "recent" | "search";
+}): void => capture("card_pack_selected", props);
+
 export const gameStarted = (props: {
     playerCount: number;
     setupDurationMs: number;

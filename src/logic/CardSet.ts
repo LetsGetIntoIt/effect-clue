@@ -108,3 +108,31 @@ export const categoryOfCard = (
  */
 export const caseFileSize = (cardSet: CardSet): number =>
     cardSet.categories.length;
+
+/**
+ * Structural equality between two `CardSet`s by user-visible *name*
+ * — ids are deliberately ignored. Same category names in the same
+ * order, each with the same card names in the same order, returns
+ * `true`. Renaming a card or category, adding/removing/reordering
+ * either, all return `false`.
+ *
+ * The name-based comparison is what drives the "active pack" pill
+ * highlight: as long as the user's table looks like a saved pack to
+ * them, that pack is the active one. The moment they edit anything,
+ * the match drops and "Save as card pack" becomes the active call to
+ * action.
+ */
+export const cardSetEquals = (a: CardSet, b: CardSet): boolean => {
+    if (a === b) return true;
+    if (a.categories.length !== b.categories.length) return false;
+    for (let i = 0; i < a.categories.length; i += 1) {
+        const ca = a.categories[i]!;
+        const cb = b.categories[i]!;
+        if (ca.name !== cb.name) return false;
+        if (ca.cards.length !== cb.cards.length) return false;
+        for (let j = 0; j < ca.cards.length; j += 1) {
+            if (ca.cards[j]!.name !== cb.cards[j]!.name) return false;
+        }
+    }
+    return true;
+};
