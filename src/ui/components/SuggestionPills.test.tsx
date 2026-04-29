@@ -1,10 +1,10 @@
-import { describe, expect, test, vi, type Mock } from "vitest";
+import { afterEach, describe, expect, test, vi, type Mock } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect, useState } from "react";
 import { Player } from "../../logic/GameObjects";
 import type { Option } from "./SuggestionPills";
-import { MultiSelectList, NOBODY } from "./SuggestionPills";
+import { MultiSelectList, NOBODY, SingleSelectList } from "./SuggestionPills";
 
 const A = Player("Anisha");
 const B = Player("Bob");
@@ -163,6 +163,33 @@ describe("MultiSelectList — onCommit identity stability", () => {
         expect(onCommit).toHaveBeenCalledWith([A]);
     });
 
+    test("ArrowDown scrolls newly-highlighted row into view", async () => {
+        // Arrow-key navigation must scroll the focused row into view so it
+        // stays visible past the popover's `max-h-[240px]` cutoff. jsdom
+        // doesn't define `scrollIntoView`, so install a stub on the
+        // prototype before spying on it.
+        const user = userEvent.setup();
+        const spy = vi.spyOn(Element.prototype, "scrollIntoView");
+        render(
+            <MultiSelectList
+                options={playerOpts}
+                selected={[]}
+                nobodyChosen={false}
+                nobodyLabel="Nobody"
+                commitHint="Press Enter"
+                onCommit={vi.fn()}
+            />,
+        );
+        // Mount fires once for the initial focused row (Nobody at idx 0).
+        const baseline = spy.mock.calls.length;
+        screen.getByRole("listbox").focus();
+        await user.keyboard("{ArrowDown}");
+        await user.keyboard("{ArrowDown}");
+        expect(spy.mock.calls.length).toBeGreaterThan(baseline);
+        expect(spy).toHaveBeenLastCalledWith({ block: "nearest" });
+        spy.mockRestore();
+    });
+
     test("selecting Nobody commits NOBODY and advances", async () => {
         const user = userEvent.setup();
         const onCommit = vi.fn();
@@ -179,5 +206,52 @@ describe("MultiSelectList — onCommit identity stability", () => {
         await user.click(screen.getByRole("option", { name: /Nobody passed/ }));
         expect(onCommit).toHaveBeenCalledTimes(1);
         expect(onCommit).toHaveBeenCalledWith(NOBODY);
+    });
+});
+
+describe("SingleSelectList — keyboard scroll-into-view", () => {
+    const longOpts: ReadonlyArray<Option<string>> = Array.from(
+        { length: 12 },
+        (_, i) => ({ value: `v${i}`, label: `Option ${i}` }),
+    );
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    test("ArrowDown scrolls the newly-highlighted row into view", async () => {
+        const user = userEvent.setup();
+        const spy = vi.spyOn(Element.prototype, "scrollIntoView");
+        render(
+            <SingleSelectList
+                options={longOpts}
+                selected={null}
+                onCommit={vi.fn()}
+                nobodyLabel={null}
+                nobodyValue={null}
+            />,
+        );
+        const baseline = spy.mock.calls.length;
+        screen.getByRole("listbox").focus();
+        await user.keyboard("{ArrowDown}");
+        await user.keyboard("{ArrowDown}");
+        expect(spy.mock.calls.length).toBeGreaterThan(baseline);
+        expect(spy).toHaveBeenLastCalledWith({ block: "nearest" });
+    });
+
+    test("scrolls pre-selected option into view on mount", () => {
+        const spy = vi.spyOn(Element.prototype, "scrollIntoView");
+        render(
+            <SingleSelectList
+                options={longOpts}
+                selected="v9"
+                onCommit={vi.fn()}
+                nobodyLabel={null}
+                nobodyValue={null}
+            />,
+        );
+        // Mount-time effect fires for the initial focusedIdx, which lands
+        // on the pre-selected row (index 9 in the 12-option list).
+        expect(spy).toHaveBeenCalledWith({ block: "nearest" });
     });
 });
