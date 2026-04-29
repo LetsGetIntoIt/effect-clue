@@ -23,6 +23,7 @@ import {
     caseFileCategorySlices,
     disjointGroupsHandLock,
     failedAccusationEliminate,
+    failedAccusationPairwiseNarrow,
     nonRefutersDontHaveSuggestedCards,
     playerHandSlices,
     refuterOwnsOneOf,
@@ -910,5 +911,123 @@ describe("failedAccusationEliminate", () => {
         k = setCell(k, Cell(CaseFileOwner(), KNIFE), Y);
         const next = failedAccusationEliminate([])(k);
         expect(next).toEqual(k);
+    });
+});
+
+// -----------------------------------------------------------------------
+// failedAccusationPairwiseNarrow (Tier 2)
+// -----------------------------------------------------------------------
+
+describe("failedAccusationPairwiseNarrow", () => {
+    const SCARLET = cardByName(setup, "Miss Scarlet");
+    const ROPE    = cardByName(setup, "Rope");
+    const LIBRARY = cardByName(setup, "Library");
+    const failed = (accuser: Player, cards: ReadonlyArray<Card>) =>
+        Accusation({ accuser, cards });
+
+    test("no-op when accusations is empty", () => {
+        const k = failedAccusationPairwiseNarrow([], setup)(emptyKnowledge);
+        expect(k).toEqual(emptyKnowledge);
+    });
+
+    test("no-op when no card is pinned to Y in the case file", () => {
+        // One accusation but no pinned card — Tier 2 has nothing to
+        // build on.
+        const accusations = [failed(A, [PLUM, KNIFE, CONSERV])];
+        const k = failedAccusationPairwiseNarrow(accusations, setup)(emptyKnowledge);
+        expect(k).toEqual(emptyKnowledge);
+    });
+
+    test("forces partner=N when pinned=Y and every candidate-z is covered", () => {
+        // Pin PLUM=Y. File (PLUM, KNIFE, R) for every room. Tier 2
+        // should force case_KNIFE=N.
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(CaseFileOwner(), PLUM), Y);
+        const accusations = rooms.map(r => failed(A, [PLUM, KNIFE, r]));
+        k = failedAccusationPairwiseNarrow(accusations, setup)(k);
+        expect(getCellByOwnerCard(k, CaseFileOwner(), KNIFE)).toBe(N);
+    });
+
+    test("doesn't fire if any candidate room is uncovered", () => {
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(CaseFileOwner(), PLUM), Y);
+        // File for every room except CONSERV — leaves CONSERV
+        // uncovered, so case file might still be (PLUM, KNIFE, CONSERV).
+        const accusations = rooms
+            .filter(r => r !== CONSERV)
+            .map(r => failed(A, [PLUM, KNIFE, r]));
+        const next = failedAccusationPairwiseNarrow(accusations, setup)(k);
+        expect(getCellByOwnerCard(next, CaseFileOwner(), KNIFE)).toBeUndefined();
+    });
+
+    test("uses already-N cells to shrink the candidate set", () => {
+        // Pin PLUM=Y. Every room except CONSERV and LIBRARY is N (so
+        // candidates = {CONSERV, LIBRARY}). File only two accusations
+        // matching those two rooms — Tier 2 should force case_KNIFE=N
+        // even though most rooms aren't covered (they're already N).
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(CaseFileOwner(), PLUM), Y);
+        for (const r of rooms) {
+            if (r === CONSERV || r === LIBRARY) continue;
+            k = setCell(k, Cell(CaseFileOwner(), r), N);
+        }
+        const accusations = [
+            failed(A, [PLUM, KNIFE, CONSERV]),
+            failed(A, [PLUM, KNIFE, LIBRARY]),
+        ];
+        k = failedAccusationPairwiseNarrow(accusations, setup)(k);
+        expect(getCellByOwnerCard(k, CaseFileOwner(), KNIFE)).toBe(N);
+    });
+
+    test("doesn't fire when partner is already known (Y or N)", () => {
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(CaseFileOwner(), PLUM), Y);
+        k = setCell(k, Cell(CaseFileOwner(), KNIFE), N);
+        const accusations = rooms.map(r => failed(A, [PLUM, KNIFE, r]));
+        // Already-N partner: skipped (no change).
+        const next = failedAccusationPairwiseNarrow(accusations, setup)(k);
+        expect(next).toEqual(k);
+    });
+
+    test("works with the symmetric ordering (case_R=Y, partner=W)", () => {
+        // Pin CONSERV=Y. File (S, KNIFE, CONSERV) for every suspect
+        // S. Tier 2's "pinned=CONSERV, partner=KNIFE, z-category=
+        // suspects" ordering should force case_KNIFE=N.
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(CaseFileOwner(), CONSERV), Y);
+        const accusations = suspects.map(s => failed(A, [s, KNIFE, CONSERV]));
+        k = failedAccusationPairwiseNarrow(accusations, setup)(k);
+        expect(getCellByOwnerCard(k, CaseFileOwner(), KNIFE)).toBe(N);
+    });
+
+    test("tracer records FailedAccusationPairwiseNarrowing kind with pinnedCard + accusationIndices", () => {
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(CaseFileOwner(), PLUM), Y);
+        const accusations = rooms.map(r => failed(A, [PLUM, KNIFE, r]));
+        const records: SetCellRecord[] = [];
+        const tracer: Tracer = r => records.push(r);
+        failedAccusationPairwiseNarrow(accusations, setup, tracer)(k);
+        expect(records).toHaveLength(1);
+        const rec = expectAt(records, 0);
+        expect(rec.value).toBe(N);
+        expect(rec.cell).toEqual(Cell(CaseFileOwner(), KNIFE));
+        expect(rec.kind._tag).toBe("FailedAccusationPairwiseNarrowing");
+        if (rec.kind._tag !== "FailedAccusationPairwiseNarrowing") return;
+        expect(rec.kind.pinnedCard).toBe(PLUM);
+        expect(rec.kind.accusationIndices).toHaveLength(rooms.length);
+        // dependsOn includes pinned cell + every case-file room cell.
+        expect(rec.dependsOn).toHaveLength(1 + rooms.length);
+    });
+
+    test("does NOT fire when partner is unknown but covered set is empty", () => {
+        // PLUM pinned but no accusations name (PLUM, KNIFE, *) — so
+        // for the (PLUM, KNIFE) ordering coveredZ is empty and the
+        // rule sees no support.
+        let k = emptyKnowledge;
+        k = setCell(k, Cell(CaseFileOwner(), PLUM), Y);
+        const accusations = [failed(A, [SCARLET, ROPE, CONSERV])];
+        const next = failedAccusationPairwiseNarrow(accusations, setup)(k);
+        // Nothing was forced.
+        expect(getCellByOwnerCard(next, CaseFileOwner(), KNIFE)).toBeUndefined();
     });
 });

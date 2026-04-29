@@ -36,6 +36,10 @@ export type ContradictionKind =
           readonly accusationIndex: number;
       }
     | {
+          readonly _tag: "FailedAccusationPairwiseNarrowing";
+          readonly accusationIndices: ReadonlyArray<number>;
+      }
+    | {
           readonly _tag: "SliceCardOwnership";
           readonly card: Card;
           readonly direction: "over" | "under";

@@ -167,6 +167,10 @@
         "failed-accusation": {
             "detailKnown": "{accuser}'s accusation #{number} ({cardLabels}) failed, so the case file isn't all three of those — and the other two are already pinned, so {cellCard} can't be in the case file either.",
             "detailUnknown": "A failed accusation #{number} named {cellCard}; the other two cards in that accusation are already pinned to the case file, so {cellCard} can't be."
+        },
+        "failed-accusation-pairwise": {
+            "headline": "Failed accusations",
+            "detail": "{pinnedCardLabel} is in the case file, and accusations {accusationNumbers} together rule out every still-possible third card paired with {cellCard}. So {cellCard} can't be in the case file."
         }
     },
     "recommendations": {

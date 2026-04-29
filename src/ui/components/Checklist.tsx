@@ -1461,6 +1461,17 @@ const resolveReasonCopy = (
                 }),
             };
         }
+        case "failed-accusation-pairwise":
+            return {
+                headline: tReasons("failed-accusation-pairwise.headline"),
+                detail: tReasons("failed-accusation-pairwise.detail", {
+                    cellPlayer: desc.params.cellPlayer,
+                    cellCard: desc.params.cellCard,
+                    pinnedCardLabel: desc.params.pinnedCardLabel,
+                    accusationCount: desc.params.accusationIndices.length,
+                    accusationNumbers: desc.params.accusationNumbers,
+                }),
+            };
     }
 };
 

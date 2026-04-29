@@ -802,4 +802,95 @@ describe("accusations end-to-end", () => {
             getCell(ded2.success, Cell(CaseFileOwner(), CONSERV)),
         ).toBe(N_VAL);
     });
+
+    test("Tier 2: failed accusations covering every room force the partner weapon to N (case_S=Y, no case_W=Y yet)", () => {
+        // The user's reported flow but stripped to the Tier-2-only
+        // case: pin PLUM=Y in case file by assigning every other
+        // suspect to a player; do NOT narrow weapons. Then file
+        // failed accusations (PLUM, KNIFE, R) for every room.
+        // Tier 1 alone can't fire — only one case-file Y per
+        // accusation. Tier 2's pigeonhole-over-rooms must force
+        // case_KNIFE = N.
+        const { result } = renderClue();
+        const setup = CLASSIC_SETUP_3P;
+        const A = Player("Anisha");
+        const B = Player("Bob");
+        const C = Player("Cho");
+        const PLUM = cardByName(setup, "Prof. Plum");
+        const KNIFE = cardByName(setup, "Knife");
+
+        const otherSuspects = setup.categories
+            .find(c => c.name === "Suspect")!
+            .cards.filter(e => e.id !== PLUM)
+            .map(e => e.id);
+        const rooms = setup.categories.find(c => c.name === "Room")!.cards.map(
+            c => c.id,
+        );
+
+        act(() =>
+            result.current.dispatch({
+                type: "replaceSession",
+                session: {
+                    setup,
+                    // Only suspects-other-than-Plum are dealt to A. No
+                    // weapon assignments — case_KNIFE is genuinely
+                    // unknown going in.
+                    hands: [
+                        {
+                            player: A,
+                            cards: otherSuspects,
+                        },
+                    ],
+                    handSizes: [
+                        // 5 suspects to A, rest of the deck (6 weapons
+                        // - 1 case-file weapon = 5; 9 rooms - 1
+                        // case-file room = 8) split across B+C+A.
+                        // 21 total - 3 case file = 18 dealt; A has 5
+                        // already; B+C carry 13 between them. Use 7+6.
+                        { player: A, size: 5 },
+                        { player: B, size: 7 },
+                        { player: C, size: 6 },
+                    ],
+                    suggestions: [],
+                    accusations: [],
+                },
+            }),
+        );
+
+        // Sanity: PLUM should now be pinned Y; KNIFE should still be
+        // unknown in the case file.
+        const ded1 = result.current.derived.deductionResult;
+        if (!Result.isSuccess(ded1)) {
+            throw new Error(
+                `expected initial deduction to succeed, got: ${JSON.stringify(ded1)}`,
+            );
+        }
+        expect(getCell(ded1.success, Cell(CaseFileOwner(), PLUM))).toBe(Y_VAL);
+        expect(
+            getCell(ded1.success, Cell(CaseFileOwner(), KNIFE)),
+        ).toBeUndefined();
+
+        // Log a failed accusation (PLUM, KNIFE, R) for every room.
+        for (const roomId of rooms) {
+            act(() =>
+                result.current.dispatch({
+                    type: "addAccusation",
+                    accusation: {
+                        id: AccusationId(""),
+                        accuser: A,
+                        cards: [PLUM, KNIFE, roomId],
+                    },
+                }),
+            );
+        }
+
+        // Tier 2 should now force case_KNIFE = N.
+        const ded2 = result.current.derived.deductionResult;
+        if (!Result.isSuccess(ded2)) {
+            throw new Error(
+                `expected deduction to remain successful, got: ${JSON.stringify(ded2)}`,
+            );
+        }
+        expect(getCell(ded2.success, Cell(CaseFileOwner(), KNIFE))).toBe(N_VAL);
+    });
 });

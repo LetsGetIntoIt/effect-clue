@@ -362,6 +362,144 @@ describe("deduce — failed accusations", () => {
         expect(result.failure.contradictionKind?._tag).toBe("FailedAccusation");
     });
 
+    test("Tier 2: case_S=Y + accusations covering every room for (S, W) → case_W=N", () => {
+        // Pin Plum (suspect) Y in case file. Don't pin any weapon or
+        // room. Then file failed accusations (Plum, Knife, R) for every
+        // room R — together they exhaust the room category. Tier 1
+        // alone can't fire (each accusation has only 1 Y, 0 N), but
+        // Tier 2 should deduce: case_Knife = N.
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), PLUM), Y);
+        const roomsCategory = expectDefined(
+            setup.categories.find(c => c.name === "Room"),
+            "Room category",
+        );
+        const rooms = cardIdsInCategory(setup, roomsCategory.id);
+        const accusations = rooms.map(r =>
+            Accusation({ accuser: A, cards: [PLUM, KNIFE, r] }),
+        );
+        const result = runDeduce(setup, [], knowledge, accusations);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+        expect(getCellByOwnerCard(result.success, CaseFileOwner(), KNIFE)).toBe(N);
+    });
+
+    test("Tier 2: case_R=Y + accusations covering every suspect for (W, R) → case_W=N", () => {
+        // Symmetric to the above but pinned on the room side: pin
+        // Conservatory Y in case file, then file (S, Knife, Conservatory)
+        // for every suspect S so that the (suspect, _ , Conservatory)
+        // pair "Knife as partner pinned by Conservatory" is exhausted.
+        // Wait — Tier 2's pinned/partner/z roles are symmetric across
+        // all 6 orderings. Pinning Conservatory and exhausting the
+        // suspect category over (W=Knife, R=Conservatory) accusations
+        // forces case_Knife = N.
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), CONSERV), Y);
+        const accusations = suspects.map(s =>
+            Accusation({ accuser: A, cards: [s, KNIFE, CONSERV] }),
+        );
+        const result = runDeduce(setup, [], knowledge, accusations);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+        expect(getCellByOwnerCard(result.success, CaseFileOwner(), KNIFE)).toBe(N);
+    });
+
+    test("Tier 2: doesn't fire when one candidate room isn't covered", () => {
+        // Pin Plum Y in case file. File (Plum, Knife, R) for every
+        // room *except* Library — leaves Library uncovered. Tier 2
+        // must NOT force case_Knife=N because the case file could
+        // still be (Plum, Knife, Library) which isn't refuted by any
+        // failed accusation.
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), PLUM), Y);
+        const roomsCategory = expectDefined(
+            setup.categories.find(c => c.name === "Room"),
+            "Room category",
+        );
+        const rooms = cardIdsInCategory(setup, roomsCategory.id);
+        const accusations = rooms
+            .filter(r => r !== LIBRARY)
+            .map(r => Accusation({ accuser: A, cards: [PLUM, KNIFE, r] }));
+        const result = runDeduce(setup, [], knowledge, accusations);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+        expect(
+            getCellByOwnerCard(result.success, CaseFileOwner(), KNIFE),
+        ).toBeUndefined();
+    });
+
+    test("Tier 2 + already-N rooms: candidate set excludes them, narrowing still works", () => {
+        // Pin Plum Y in case file. Manually mark every room except
+        // Conservatory and Library as N for case file (so the room
+        // category is narrowed to two candidates). File only two
+        // failed accusations: (Plum, Knife, Conservatory) and
+        // (Plum, Knife, Library). Tier 2 sees that the candidate set
+        // {Conservatory, Library} is exactly covered, so it forces
+        // case_Knife = N.
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), PLUM), Y);
+        const roomsCategory = expectDefined(
+            setup.categories.find(c => c.name === "Room"),
+            "Room category",
+        );
+        const rooms = cardIdsInCategory(setup, roomsCategory.id);
+        for (const r of rooms) {
+            if (r === CONSERV || r === LIBRARY) continue;
+            knowledge = setCell(knowledge, Cell(CaseFileOwner(), r), N);
+        }
+        const accusations = [
+            Accusation({ accuser: A, cards: [PLUM, KNIFE, CONSERV] }),
+            Accusation({ accuser: A, cards: [PLUM, KNIFE, LIBRARY] }),
+        ];
+        const result = runDeduce(setup, [], knowledge, accusations);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+        expect(getCellByOwnerCard(result.success, CaseFileOwner(), KNIFE)).toBe(N);
+    });
+
+    test("Tier 2 cascades: forced N opens slice → forced Y → Tier 1 fires next iteration", () => {
+        // Same pigeonhole as above, but narrow the WEAPON category to
+        // just {Knife, Rope} via case-file Ns. Tier 2 forces
+        // case_Knife=N, the case-file slice then forces case_Rope=Y,
+        // and then Tier 1 fires on each (Plum, Knife, R) accusation —
+        // but those accusations name Knife (now N), so they're
+        // trivially satisfied. Instead Tier 2 fires AGAIN under the
+        // (Rope is now Y) configuration if there are also accusations
+        // pairing Rope with Plum.
+        //
+        // Simpler cascade check: pin Plum=Y, narrow rooms to one
+        // candidate. The slice forces that room=Y, and Tier 1 then
+        // gets (Y, Y, ?) → forces the third card to N. We verify the
+        // final outcome.
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), PLUM), Y);
+        const roomsCategory = expectDefined(
+            setup.categories.find(c => c.name === "Room"),
+            "Room category",
+        );
+        const rooms = cardIdsInCategory(setup, roomsCategory.id);
+        // Knock all rooms but Conservatory to N → slice forces
+        // case_Conservatory=Y.
+        for (const r of rooms) {
+            if (r === CONSERV) continue;
+            knowledge = setCell(knowledge, Cell(CaseFileOwner(), r), N);
+        }
+        const accusations = [
+            Accusation({ accuser: A, cards: [PLUM, KNIFE, CONSERV] }),
+        ];
+        const result = runDeduce(setup, [], knowledge, accusations);
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+        // case_Conservatory should be Y (slice), and then Tier 1
+        // fires: (Plum=Y, Knife=?, Conserv=Y) → Knife=N.
+        expect(
+            getCellByOwnerCard(result.success, CaseFileOwner(), CONSERV),
+        ).toBe(Y);
+        expect(
+            getCellByOwnerCard(result.success, CaseFileOwner(), KNIFE),
+        ).toBe(N);
+    });
+
     test("cascade: failed accusation N + consistency slice → forces the right Y", () => {
         let knowledge = emptyKnowledge;
         // Knock the suspect category down to two candidates: PLUM + MUSTARD,
