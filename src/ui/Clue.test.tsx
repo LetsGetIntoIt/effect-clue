@@ -63,6 +63,7 @@ vi.mock("motion/react", () => {
 
 import { render, screen, waitFor } from "@testing-library/react";
 import { Clue } from "./Clue";
+import { TestQueryClientProvider } from "../test-utils/queryClient";
 
 beforeEach(() => {
     window.localStorage.clear();
@@ -74,7 +75,7 @@ beforeEach(() => {
 
 describe("Clue — top-level structure", () => {
     test("renders the app title via next-intl", () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         // The mock returns the i18n key verbatim. `app.title` → `title`.
         expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
             "title",
@@ -86,11 +87,11 @@ describe("Clue — top-level structure", () => {
         // SelectionProvider together. If any of them had a missing peer
         // or threw on mount, render() would propagate the error — this
         // test pins that green path.
-        expect(() => render(<Clue />)).not.toThrow();
+        expect(() => render(<Clue />, { wrapper: TestQueryClientProvider })).not.toThrow();
     });
 
     test("after the initial mount, hydration completes and the view skeleton is removed", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         // The view skeleton is aria-hidden with a tailwind pulse class;
         // it goes away once `hydrated` flips true. `waitFor` retries
         // until React's post-commit hydration effect has flushed.
@@ -105,7 +106,7 @@ describe("Clue — top-level structure", () => {
 
 describe("Clue — URL-based view hydration", () => {
     test("no view param → default setup view; URL gets `?view=setup` after hydration", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         // With no `?view=`, no localStorage, and no suggestions,
         // the hydration path leaves uiMode at its default ("setup").
         // The URL-sync effect then writes `?view=setup` into the URL
@@ -121,7 +122,7 @@ describe("Clue — URL-based view hydration", () => {
 
     test("`?view=checklist` → URL preserved through hydration", async () => {
         window.history.replaceState(null, "", "/?view=checklist");
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(window.location.search).toContain("view=checklist");
         });
@@ -129,7 +130,7 @@ describe("Clue — URL-based view hydration", () => {
 
     test("`?view=suggest` → URL preserved through hydration", async () => {
         window.history.replaceState(null, "", "/?view=suggest");
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(window.location.search).toContain("view=suggest");
         });
@@ -169,7 +170,7 @@ describe("Clue — URL-based view hydration", () => {
             ],
             accusations: [],
         });
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(window.location.search).toContain("view=checklist");
         });

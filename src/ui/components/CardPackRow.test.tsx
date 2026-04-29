@@ -34,6 +34,7 @@ import {
 import { CardSet, CardEntry, Category } from "../../logic/CardSet";
 import { KnownCard } from "../../logic/InitialKnowledge";
 import { Card, CardCategory } from "../../logic/GameObjects";
+import { TestQueryClientProvider } from "../../test-utils/queryClient";
 
 const makeCardSet = (id: string) =>
     CardSet({
@@ -59,6 +60,7 @@ const renderRow = () =>
                 <CardPackRow />
             </ClueProvider>
         </ConfirmProvider>,
+        { wrapper: TestQueryClientProvider },
     );
 
 /** Test harness — exposes a "Mutate" button that renames the first
@@ -95,6 +97,7 @@ const renderRowWithMutate = () =>
                 <MutateButton />
             </ClueProvider>
         </ConfirmProvider>,
+        { wrapper: TestQueryClientProvider },
     );
 
 beforeEach(() => {
@@ -378,6 +381,7 @@ describe("CardPackRow dropdown reflects active pack", () => {
                     <MutateButton />
                 </ClueProvider>
             </ConfirmProvider>,
+            { wrapper: TestQueryClientProvider },
         );
         // Mutate the active deck (currently Classic on first mount).
         await user.click(screen.getByTestId("mutate"));
@@ -434,6 +438,7 @@ describe("CardPackRow destructive-data confirmation", () => {
                     <SeedKnownCardButton />
                 </ClueProvider>
             </ConfirmProvider>,
+            { wrapper: TestQueryClientProvider },
         );
         // Seed a known card to flip hasDestructiveData on.
         await user.click(screen.getByTestId("seed-known"));
@@ -464,6 +469,7 @@ describe("CardPackRow destructive-data confirmation", () => {
                     <SeedKnownCardButton />
                 </ClueProvider>
             </ConfirmProvider>,
+            { wrapper: TestQueryClientProvider },
         );
         await user.click(screen.getByTestId("seed-known"));
         await user.click(
@@ -489,6 +495,7 @@ describe("CardPackRow destructive-data confirmation", () => {
                     <SeedKnownCardButton />
                 </ClueProvider>
             </ConfirmProvider>,
+            { wrapper: TestQueryClientProvider },
         );
         await user.click(screen.getByTestId("seed-known"));
         await user.click(

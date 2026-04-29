@@ -3,7 +3,7 @@
 import { DateTime } from "effect";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { T_STANDARD, useReducedTransition } from "../motion";
 import {
     cardPackPickerOpened,
@@ -13,19 +13,20 @@ import {
 import { cardSetEquals, type CardSet } from "../../logic/CardSet";
 import {
     compareCardPackLabels,
-    forgetCardPackUse,
-    loadCardPackUsage,
-    recordCardPackUse,
     topRecentPacks,
-    type CardPackUsage,
 } from "../../logic/CardPackUsage";
-import { CARD_SETS } from "../../logic/GameSetup";
 import {
-    CustomCardSet,
-    deleteCustomCardSet,
-    loadCustomCardSets,
-    saveCustomCardSet,
-} from "../../logic/CustomCardSets";
+    useCardPackUsage,
+    useForgetCardPackUse,
+    useRecordCardPackUse,
+} from "../../data/cardPackUsage";
+import { CARD_SETS } from "../../logic/GameSetup";
+import { CustomCardSet } from "../../logic/CustomCardSets";
+import {
+    useCustomCardPacks,
+    useDeleteCardPack,
+    useSaveCardPack,
+} from "../../data/customCardPacks";
 import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 import { CardPackPicker, type PickerPack } from "./CardPackPicker";
@@ -96,20 +97,20 @@ export function CardPackRow() {
     const setup = state.setup;
     const hasDestructiveData =
         state.knownCards.length > 0 || state.suggestions.length > 0;
-    // Initialise empty so server HTML and client's first render agree; the
-    // real lists load in mount effects. Reading localStorage in the
-    // useState initialiser would produce 0 packs on SSR and N packs on
-    // the client's first render — a hydration mismatch.
-    const [customPacks, setCustomPacks] = useState<ReadonlyArray<CustomCardSet>>(
-        [],
-    );
-    const [usage, setUsage] = useState<CardPackUsage>(new Map());
+    // RQ-backed reads. Both queries are SSR-gated and fall back to
+    // empty (`[]` / `new Map()`) until the client fetches — so the
+    // server HTML and client's first render agree. After mutations,
+    // each hook's `setQueryData` keeps the cache up to date without a
+    // refetch.
+    const customPacksQuery = useCustomCardPacks();
+    const usageQuery = useCardPackUsage();
+    const customPacks = customPacksQuery.data ?? [];
+    const usage = usageQuery.data ?? new Map();
+    const savePackMutation = useSaveCardPack();
+    const deletePackMutation = useDeleteCardPack();
+    const recordUseMutation = useRecordCardPackUse();
+    const forgetUseMutation = useForgetCardPackUse();
     const [pickerOpen, setPickerOpen] = useState(false);
-
-    useEffect(() => {
-        setCustomPacks(loadCustomCardSets());
-        setUsage(loadCardPackUsage());
-    }, []);
 
     // The Classic id is the first entry in CARD_SETS and is the
     // single always-pinned pill. Master Detective participates in
@@ -228,8 +229,7 @@ export function CardPackRow() {
             packType: pack.isCustom ? PACK_TYPE_CUSTOM : PACK_TYPE_BUILT_IN,
             source,
         });
-        recordCardPackUse(pack.id);
-        setUsage(loadCardPackUsage());
+        recordUseMutation.mutate(pack.id);
     };
 
     const onSelectFromSurface = (pack: DisplayPack) => {
@@ -243,18 +243,19 @@ export function CardPackRow() {
         void performLoad(pack, SOURCE_SEARCH);
     };
 
-    const onSaveCardSet = () => {
+    const onSaveCardSet = async () => {
         const label = window.prompt(t("saveAsCardPackPrompt"));
         if (!label || !label.trim()) return;
-        const newPack = saveCustomCardSet(label.trim(), setup.cardSet);
+        const newPack = await savePackMutation.mutateAsync({
+            label: label.trim(),
+            cardSet: setup.cardSet,
+        });
         // Stamp the new pack as the most-recently-used pack so the
         // active-match resolver picks it up: with cardSetEquals(setup,
         // newPack.cardSet) trivially true (we just snapshotted setup),
         // the new pack becomes the active pill — and the Save pill
         // un-activates because the live deck now matches a saved pack.
-        recordCardPackUse(newPack.id);
-        setCustomPacks(loadCustomCardSets());
-        setUsage(loadCardPackUsage());
+        recordUseMutation.mutate(newPack.id);
     };
 
     const onDeleteCustomPack = async (pack: DisplayPack) => {
@@ -266,10 +267,8 @@ export function CardPackRow() {
             }))
         )
             return;
-        deleteCustomCardSet(pack.id);
-        forgetCardPackUse(pack.id);
-        setCustomPacks(loadCustomCardSets());
-        setUsage(loadCardPackUsage());
+        deletePackMutation.mutate(pack.id);
+        forgetUseMutation.mutate(pack.id);
     };
 
     const onDeleteFromPicker = (picked: PickerPack) => {
