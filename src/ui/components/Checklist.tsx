@@ -1865,8 +1865,15 @@ const CELL_BASE =
 // the column boundary. Box-shadow paints with the element's own
 // stacking context and respects z-index escape, so the ring renders
 // on all four sides regardless of which cell its neighbour is.
+//
+// The ring-offset color is set per-cell to match the cell's own
+// background (`ring-offset-yes-bg`, `ring-offset-no-bg`, or
+// `ring-offset-white`) so the 2px offset blends into the cell —
+// visually equivalent to the transparent offset CSS outlines have.
+// Without that match the offset would render as a solid panel band
+// and the focus indicator would look like a thick double-ring.
 const CELL_INTERACTIVE =
-    " cursor-pointer hover:z-30 hover:rounded-[2px] hover:ring-2 hover:ring-accent/30 focus-visible:z-40 focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-panel focus-visible:rounded-[2px] focus-visible:outline-none";
+    " cursor-pointer hover:z-30 hover:rounded-[2px] hover:ring-2 hover:ring-accent/30 focus-visible:z-40 focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:rounded-[2px] focus-visible:outline-none";
 
 const CELL_HIGHLIGHTED =
     " z-30 ring-2 ring-accent ring-offset-1 ring-offset-panel";
@@ -1878,7 +1885,10 @@ const cellClass = (
 ): string => {
     let base = interactive ? `${CELL_BASE}${CELL_INTERACTIVE}` : CELL_BASE;
     if (highlighted) base += CELL_HIGHLIGHTED;
-    if (value === Y) return `${base} bg-yes-bg text-yes`;
-    if (value === N) return `${base} bg-no-bg text-no`;
-    return `${base} bg-white`;
+    // Bg + matching ring-offset color so the focus ring's offset
+    // blends into the cell's own background (mimics the transparent
+    // gap of the outline-based indicator we replaced).
+    if (value === Y) return `${base} bg-yes-bg text-yes focus-visible:ring-offset-yes-bg`;
+    if (value === N) return `${base} bg-no-bg text-no focus-visible:ring-offset-no-bg`;
+    return `${base} bg-white focus-visible:ring-offset-white`;
 };
