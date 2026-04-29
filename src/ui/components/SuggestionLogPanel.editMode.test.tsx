@@ -84,7 +84,9 @@ const getRow = (): HTMLElement => {
     return el;
 };
 
-const seedOneSuggestionAndMount = async (): Promise<void> => {
+const seedOneSuggestionAndMount = async (
+    view: "checklist" | "suggest" = "checklist",
+): Promise<void> => {
     const setup = CLASSIC_SETUP_3P;
     const mustard = cardByName(setup, "Col. Mustard");
     const knife = cardByName(setup, "Knife");
@@ -103,9 +105,17 @@ const seedOneSuggestionAndMount = async (): Promise<void> => {
         ],
         accusations: [],
     });
+    if (view === "suggest") {
+        // The mobile play layout only mounts the active pane, so
+        // exercising PriorSuggestionItem on mobile requires landing
+        // on the suggest pane explicitly. Desktop renders both panes
+        // side-by-side regardless, so the default
+        // (`view: "checklist"`) is fine for desktop tests.
+        window.history.replaceState(null, "", "/?view=suggest");
+    }
     render(<Clue />);
     await waitFor(() => {
-        expect(window.location.search).toContain("view=checklist");
+        expect(window.location.search).toContain(`view=${view}`);
     });
     await waitFor(() => {
         expect(
@@ -335,7 +345,7 @@ describe("PriorSuggestionItem — entering edit mode (mobile two-tap)", () => {
     });
 
     test("first tap reveals the Edit button without entering edit mode", async () => {
-        await seedOneSuggestionAndMount();
+        await seedOneSuggestionAndMount("suggest");
         fireEvent.click(getRow());
         await waitFor(() => {
             expect(
@@ -346,7 +356,7 @@ describe("PriorSuggestionItem — entering edit mode (mobile two-tap)", () => {
     });
 
     test("tapping the Edit button enters edit mode", async () => {
-        await seedOneSuggestionAndMount();
+        await seedOneSuggestionAndMount("suggest");
         fireEvent.click(getRow());
         await waitFor(() => {
             expect(
@@ -358,7 +368,7 @@ describe("PriorSuggestionItem — entering edit mode (mobile two-tap)", () => {
     });
 
     test("tapping outside while the Edit button is visible cancels pre-edit mode", async () => {
-        await seedOneSuggestionAndMount();
+        await seedOneSuggestionAndMount("suggest");
         fireEvent.click(getRow());
         await waitFor(() => {
             expect(
@@ -378,7 +388,7 @@ describe("PriorSuggestionItem — entering edit mode (mobile two-tap)", () => {
     });
 
     test("tapping inside the row while in pre-edit mode does NOT dismiss it", async () => {
-        await seedOneSuggestionAndMount();
+        await seedOneSuggestionAndMount("suggest");
         fireEvent.click(getRow());
         await waitFor(() => {
             expect(

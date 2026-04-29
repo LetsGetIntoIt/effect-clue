@@ -72,6 +72,52 @@ If you amend or update a commit, re-run the full set — a previously-green comm
 
 For any change that's observable in the browser, use the `next-dev` preview (configured in `.claude/launch.json`) to exercise the change yourself before reporting the task done. Follow the `<verification_workflow>` from the system prompt: start/reload the preview, check console/network/logs, take a screenshot or snapshot as proof. Don't ask the user to verify manually.
 
+### Layout, scroll, and animation behaviors
+
+The structural pieces below are pinned by `src/ui/components/PlayLayout.test.tsx` (mobile mounts only the active pane; desktop mounts both side-by-side). The visual / animated / sticky-positioning pieces below **cannot** be tested in jsdom — `getBoundingClientRect` returns zeroes, `position: sticky` doesn't actually pin, `min-w-max-content` doesn't actually grow, transforms don't extend `body.scrollWidth`, and animations don't run. So when a change touches **page structure (`src/ui/Clue.tsx`, `src/ui/components/PlayLayout.tsx`), overall layout CSS (`<main>`, sticky positioning, `min-w-max`, `contain-paint`, `contain-inline-size`, the `--header-offset` variable), or slide animations (`slideVariants`, `AnimatePresence`)**, walk this list in the `next-dev` preview before reporting done.
+
+Resize the preview between viewports as you go — many of these regress on one breakpoint without affecting the other.
+
+**Vertical page scroll (test at any viewport):**
+
+- Wheel anywhere on the page advances the Checklist table — not just over the table itself. Wheeling over the header, the blank parchment around the section, the `+ add card` row, etc., all scroll the document. (The fix that this codifies — `Move scroll to the page, not an internal viewport` — relies on no ancestor having `overflow-y: auto/scroll/hidden/clip`.)
+- The sticky `<thead>` stays at the viewport top once the table's natural top has scrolled past. Column labels remain aligned with their columns.
+- Force a contradiction (e.g. mark the same suspect "yes" for two players) — `GlobalContradictionBanner` slides in at the top. The sticky `<thead>` sits **below** the banner (its `top:` resolves to `var(--contradiction-banner-offset, 0px) + var(--header-offset, 0px)`), not behind it. On desktop the sticky `<header>` also tucks under the banner.
+
+**Horizontal page scroll (Setup mode, viewport ≤ ~1200 px so the wide setup table doesn't fit naturally):**
+
+- `<main>` grows (`min-w-max`) past the viewport so the body picks up a horizontal scrollbar — that's how the user reaches the rightmost columns.
+- As you scroll horizontally:
+  - The page title `CLUE SOLVER` stays anchored to the viewport's left edge with normal padding (it doesn't butt against `x: 0`).
+  - The `Game setup` intro card, the card-pack row, and the hand-size warning each stay anchored at the section's natural left padding (~36 px from viewport-left, matching their resting position before the scroll).
+  - On desktop the Toolbar (Undo / Redo / `⋯`) stays in the visible top region.
+  - The sticky thead horizontally scrolls **with** the table so column headers stay aligned with the columns underneath them. (Don't add `sticky left-…` to the thead — it must move with horizontal scroll.)
+- Dropping back to scroll-x = 0 places everything in its natural rest position with no jump.
+
+**Mobile Suggest pane fits the viewport (Suggest mobile, viewport ≤ 800 px):**
+
+- Page does NOT have a horizontal scrollbar on this view — `body.scrollWidth === clientWidth`.
+- The `Add a [suggestion (⌘K)] [accusation (⌘I)]` text wraps. The `+ Suggester / + Suspect / + Weapon / + Room / + Passed by / + Refuted by / + Shown card` pill row wraps over multiple rows. Nothing extends past the right edge. (`SuggestionLogPanel`'s section uses `contain-inline-size` to stop its pill row's no-wrap intrinsic size from propagating into `<main>`'s `min-w-max` calculation. If you remove that class, mobile Suggest will spill horizontally.)
+
+**Setup ↔ Play slide animation (both desktop and mobile):**
+
+- Trigger the slide both directions — overflow menu → "Game setup" and back, or `⌘H` / `⌘K`.
+- Both panes overlap mid-flight (sync mode + opacity in `slideVariants`). There's no page-sized gap between when one pane finishes leaving and the other starts arriving — the entering pane is already moving in while the exiting pane is moving out.
+- The browser's horizontal scrollbar does NOT flash during the slide. (The off-screen pane's `translateX(±100%)` would otherwise extend `body.scrollWidth` mid-animation; `contain-paint` on the slide container clips that.)
+- After the slide completes, `window.scrollY` is back to 0 — switching tabs doesn't leave you mid-page.
+- Setup → Checklist on a wide setup table has a small known regression: the exiting `<Checklist>` re-renders with `inSetup: false` the moment `state.uiMode` flips, so its table layout shrinks while sliding out and `<main>` resizes accordingly. This isn't fixable without changing `<Checklist>`'s API to accept `inSetup` as a prop instead of reading from state. Verify it still feels acceptable; if the user complains, the refactor is the next step.
+
+**Mobile Checklist ↔ Suggest slide (`MobilePlayLayout`'s own `AnimatePresence`):**
+
+- Slide runs in both directions (Checklist → Suggest goes right, Suggest → Checklist goes left — `getDirection` based on `PLAY_POSITIONS`).
+- The inactive pane is **not** in the DOM after the slide — no off-screen suggestion log to find by horizontal-scrolling on mobile, no off-screen Checklist to find from Suggest. (Pinned by `PlayLayout.test.tsx` — but if you change the rendering pattern, eyeball it too because the test only checks one frame.)
+
+**Desktop side-by-side (viewport ≥ 800 px):**
+
+- The Checklist and the SuggestionLogPanel sit in a 2-column grid (`minmax(0,1fr) / minmax(320px,420px)` with `gap-5`).
+- The SuggestionLog column is sticky-top with a bounded `max-height` and its own internal `overflow-y-auto`. As the page scrolls vertically, the log pane stays in view; as the log's *internal* content overflows, the log scrolls inside its own frame.
+- Banner appearing / disappearing doesn't cause a layout jump in the table or the log — the banner publishes its height as `--contradiction-banner-offset`, which `<main>`'s padding-top consumes.
+
 ## Tests
 
 Write exhaustive tests for any code you add or modify.

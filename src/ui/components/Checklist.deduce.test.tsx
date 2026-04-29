@@ -16,6 +16,14 @@ vi.mock("next-intl", () => {
     };
 });
 
+// Pin desktop layout so the SuggestionLogPanel pairing tests below see
+// the side-by-side two-pane structure. On mobile only the active pane
+// is mounted, so a checklist-mode mobile render wouldn't include the
+// SuggestionLogPanel — that's the point of the breakpoint split.
+vi.mock("../hooks/useIsDesktop", () => ({
+    useIsDesktop: () => true,
+}));
+
 vi.mock("motion/react", () => {
     const motion = new Proxy(
         {},
@@ -159,8 +167,8 @@ describe("Checklist — deduce mode — body layout", () => {
     });
 });
 
-describe("Checklist — deduce mode — SuggestionLogPanel pairing", () => {
-    test("the PlayGrid also mounts SuggestionLogPanel alongside the Checklist", async () => {
+describe("Checklist — deduce mode — SuggestionLogPanel pairing (desktop)", () => {
+    test("the desktop play layout mounts SuggestionLogPanel alongside the Checklist", async () => {
         render(<Clue />);
         await waitForDeduceChecklist();
         // SuggestionLogPanel renders a section with header id
