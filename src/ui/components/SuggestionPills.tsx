@@ -458,6 +458,14 @@ export function SingleSelectList<T>({
         listRef.current?.focus();
     }, []);
 
+    const focusedRowRef = useRef<HTMLLIElement | null>(null);
+    useEffect(() => {
+        focusedRowRef.current?.scrollIntoView(
+            // eslint-disable-next-line i18next/no-literal-string -- DOM enum values
+            { block: "nearest" },
+        );
+    }, [focusedIdx]);
+
     const commitAt = useCallback(
         (i: number) => {
             const row = rows[i];
@@ -516,6 +524,7 @@ export function SingleSelectList<T>({
                 return (
                     <li
                         key={i}
+                        ref={highlighted ? focusedRowRef : null}
                         role="option"
                         aria-selected={isSelected}
                         className={
@@ -583,6 +592,14 @@ export function MultiSelectList({
     useEffect(() => {
         listRef.current?.focus();
     }, []);
+
+    const focusedRowRef = useRef<HTMLLIElement | null>(null);
+    useEffect(() => {
+        focusedRowRef.current?.scrollIntoView(
+            // eslint-disable-next-line i18next/no-literal-string -- DOM enum values
+            { block: "nearest" },
+        );
+    }, [focusedIdx]);
 
     // On unmount, persist the toggled set without advancing. Covers
     // Esc, outside-click, and clicking another pill. `committedRef`
@@ -683,6 +700,7 @@ export function MultiSelectList({
                 className="m-0 max-h-[240px] list-none overflow-y-auto p-0 outline-none"
             >
                 <li
+                    ref={focusedIdx === 0 ? focusedRowRef : null}
                     role="option"
                     aria-selected={nobodyChosen}
                     className={
@@ -704,6 +722,7 @@ export function MultiSelectList({
                     return (
                         <li
                             key={String(opt.value)}
+                            ref={highlighted ? focusedRowRef : null}
                             role="option"
                             aria-selected={checked}
                             className={

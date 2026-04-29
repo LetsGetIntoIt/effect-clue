@@ -64,6 +64,16 @@ if (typeof window !== "undefined") {
     window.scrollTo = (() => {}) as typeof window.scrollTo;
 }
 
+// jsdom doesn't define `Element.prototype.scrollIntoView`. The dropdown
+// list components call it to keep the arrow-key-highlighted row visible;
+// without a stub any test that mounts those popovers would crash.
+if (
+    typeof Element !== "undefined" &&
+    typeof Element.prototype.scrollIntoView !== "function"
+) {
+    Element.prototype.scrollIntoView = function () {};
+}
+
 // jsdom ships without `TextEncoder` / `TextDecoder` on the global.
 // Some dependencies (effect's `Encoding` module) reference them at
 // module-load time, so polyfill before any test imports them.
