@@ -226,8 +226,9 @@ function NavIconItem({
  * with mobile-specific trigger styling (icon slot, ~12 tall/wide) and
  * `side="top"` so the popover opens upward above the fixed nav. The
  * menu items mirror the desktop Toolbar: Game setup (switches to Setup
- * mode), Share link, and New game. Share + New game reuse
- * `useToolbarActions` so the mobile flow is identical to the desktop.
+ * mode) and New game. New game reuses `useToolbarActions` so the
+ * mobile flow is identical to the desktop. The Share item was dropped
+ * in M3 and M9 will reintroduce it.
  */
 function BottomOverflowMenu({
     setupActive,
@@ -239,7 +240,7 @@ function BottomOverflowMenu({
     const t = useTranslations("bottomNav");
     const tToolbar = useTranslations("toolbar");
     const hasKeyboard = useHasKeyboard();
-    const { onShare, onNewGame, copied } = useToolbarActions();
+    const { onNewGame } = useToolbarActions();
     return (
         <li>
             <OverflowMenu
@@ -254,12 +255,6 @@ function BottomOverflowMenu({
                         }),
                         active: setupActive,
                         onClick: onSetup,
-                    },
-                    {
-                        label: copied
-                            ? tToolbar("shareCopied")
-                            : tToolbar("share"),
-                        onClick: onShare,
                     },
                     {
                         label: tToolbar("newGame", {

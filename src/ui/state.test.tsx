@@ -21,6 +21,7 @@ import {
 } from "../logic/Suggestion";
 import { cardByName } from "../logic/test-utils/CardByName";
 import { ClueProvider, useClue } from "./state";
+import { TestQueryClientProvider } from "../test-utils/queryClient";
 
 // -----------------------------------------------------------------------
 // The `reducer` and `initialState` are module-private in state.tsx — the
@@ -31,7 +32,9 @@ import { ClueProvider, useClue } from "./state";
 // -----------------------------------------------------------------------
 
 const wrapper = ({ children }: { children: ReactNode }) => (
-    <ClueProvider>{children}</ClueProvider>
+    <TestQueryClientProvider>
+        <ClueProvider>{children}</ClueProvider>
+    </TestQueryClientProvider>
 );
 
 const renderClue = () => renderHook(() => useClue(), { wrapper });

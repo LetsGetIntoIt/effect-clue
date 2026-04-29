@@ -63,6 +63,7 @@ vi.mock("../hooks/useIsDesktop", () => ({
 
 import { render, waitFor } from "@testing-library/react";
 import { Clue } from "../Clue";
+import { TestQueryClientProvider } from "../../test-utils/queryClient";
 
 const setIsDesktop = async (value: boolean): Promise<void> => {
     const mod = await import("../hooks/useIsDesktop");
@@ -89,7 +90,7 @@ describe("PlayLayout — desktop renders both panes side-by-side", () => {
 
     test("checklist mode mounts the Checklist AND the SuggestionLogPanel", async () => {
         window.history.replaceState(null, "", "/?view=checklist");
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(findChecklist()).toBeInTheDocument();
         });
@@ -102,7 +103,7 @@ describe("PlayLayout — desktop renders both panes side-by-side", () => {
 
     test("suggest mode also mounts both panes (no breakpoint-level slide)", async () => {
         window.history.replaceState(null, "", "/?view=suggest");
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(findSuggestionLog()).toBeInTheDocument();
         });
@@ -117,7 +118,7 @@ describe("PlayLayout — mobile mounts only the active pane", () => {
 
     test("checklist mode: Checklist is mounted, SuggestionLogPanel is NOT", async () => {
         window.history.replaceState(null, "", "/?view=checklist");
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(findChecklist()).toBeInTheDocument();
         });
@@ -131,7 +132,7 @@ describe("PlayLayout — mobile mounts only the active pane", () => {
 
     test("suggest mode: SuggestionLogPanel is mounted, Checklist is NOT", async () => {
         window.history.replaceState(null, "", "/?view=suggest");
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(findSuggestionLog()).toBeInTheDocument();
         });

@@ -184,22 +184,9 @@ export const loadFromLocalStorage = (): GameSession | undefined => {
     }
 };
 
-// Compact URL-safe base64 encoding for shareable links. Clue card names
-// are ASCII so plain btoa is safe; if we ever need to support unicode
-// player names we'll need a TextEncoder-based path.
-export const encodeSessionToUrl = (session: GameSession): string => {
-    const json = JSON.stringify(encodeSession(session));
-    const b64 = window.btoa(json);
-    return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-};
-
-export const decodeSessionFromUrl = (encoded: string): GameSession | undefined => {
-    try {
-        const b64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
-        const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
-        const json = window.atob(padded);
-        return decodeSession(JSON.parse(json));
-    } catch {
-        return undefined;
-    }
-};
+// The base64 `?state=...` URL share path that previously lived here was
+// dropped during the M3 SSR + RQ refactor — its replacement is the
+// server-stored `/share/[id]` route, which lands in M9 with a richer
+// sender-controlled snapshot UI. Old base64 share links no longer
+// hydrate the app on landing; the per-user direction was that nobody
+// is using them, so no back-compat layer was added.

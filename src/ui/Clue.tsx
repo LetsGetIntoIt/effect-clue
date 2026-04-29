@@ -59,9 +59,9 @@ const slideVariants: Variants = {
  * **Desktop (≥ 800px)** shows the `Checklist` and `SuggestionLogPanel`
  * side-by-side in a 2-column grid. A top-right `Toolbar` holds Undo
  * and Redo as top-level buttons plus a `⋯` overflow menu for Game
- * setup, Share link, and New game. Setup mode (entered via ⌘H or the
- * overflow menu) swaps the grid for a full-width Checklist that
- * unlocks inline-edit affordances.
+ * setup and New game. Setup mode (entered via ⌘H or the overflow
+ * menu) swaps the grid for a full-width Checklist that unlocks
+ * inline-edit affordances.
  *
  * **Mobile (< 800px)** hides the desktop Toolbar entirely. A fixed
  * `BottomNav` takes its place, with Checklist / Suggest tabs that

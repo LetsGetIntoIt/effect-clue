@@ -39,9 +39,6 @@
         "redo": "Redo{shortcut}",
         "redoAria": "Redo",
         "redoTitle": "Redo (⌘⇧Z / Ctrl+Shift+Z)",
-        "share": "Share link",
-        "shareCopied": "Copied!",
-        "copyFallback": "Copy this URL:",
         "newGame": "New game{shortcut}",
         "newGameConfirm": "Start a new game? This will clear all players, cards, known hands, and suggestions."
     },

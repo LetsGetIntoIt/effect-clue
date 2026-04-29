@@ -62,6 +62,7 @@ vi.mock("motion/react", () => {
 
 import { render, screen, waitFor } from "@testing-library/react";
 import { Clue } from "../Clue";
+import { TestQueryClientProvider } from "../../test-utils/queryClient";
 
 beforeEach(() => {
     window.localStorage.clear();
@@ -90,18 +91,18 @@ const waitForDeduceChecklist = async () => {
 
 describe("Checklist — deduce mode — top-level structure", () => {
     test("renders with the URL-hydrated `?view=checklist`", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForDeduceChecklist();
     });
 
     test("does NOT render the Start Playing CTA (that's setup-only)", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForDeduceChecklist();
         expect(document.querySelector("[data-setup-cta]")).toBeNull();
     });
 
     test("does NOT render the add-player column header", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForDeduceChecklist();
         expect(screen.queryByText("addPlayerLabel")).toBeNull();
     });
@@ -109,7 +110,7 @@ describe("Checklist — deduce mode — top-level structure", () => {
 
 describe("Checklist — deduce mode — cell affordances", () => {
     test("body cells are popover triggers (no native checkboxes in the Checklist)", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForDeduceChecklist();
         // Checklist has no native-checkbox cells in deduce mode. (The
         // SuggestionForm and other parts of the shell can still have
@@ -130,7 +131,7 @@ describe("Checklist — deduce mode — cell affordances", () => {
 
 describe("Checklist — deduce mode — scope of rendered controls", () => {
     test("no hand-size `<input type=number>` appears in the Checklist body", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForDeduceChecklist();
         // The hand-size row sits at `data-cell-row="-1"`, which is
         // hidden in deduce mode. Assert no row -1 cells.
@@ -138,13 +139,13 @@ describe("Checklist — deduce mode — scope of rendered controls", () => {
     });
 
     test("no player-name row cells (`data-cell-row=\"-2\"`) in deduce mode", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForDeduceChecklist();
         expect(document.querySelectorAll("[data-cell-row='-2']").length).toBe(0);
     });
 
     test("no `data-cell-col=\"-1\"` card-name edit column in deduce mode", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForDeduceChecklist();
         expect(document.querySelectorAll("[data-cell-col='-1']").length).toBe(0);
     });
@@ -152,7 +153,7 @@ describe("Checklist — deduce mode — scope of rendered controls", () => {
 
 describe("Checklist — deduce mode — body layout", () => {
     test("body cells render across multiple player columns", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForDeduceChecklist();
         // DEFAULT_SETUP has 4 players, and `data-cell-col="0"` through
         // `"3"` map to the player body cells regardless of whether the
@@ -252,7 +253,7 @@ describe("Checklist — case-file deduction popover", () => {
             JSON.stringify(session),
         );
 
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForDeduceChecklist();
 
         // Find the case-file body cell on the Plum row. The case-file
@@ -309,7 +310,7 @@ describe("Checklist — case-file deduction popover", () => {
         // a row whose case-file cell has no value: it should NOT
         // expose role=button or aria-haspopup.
         // Reuse the empty fresh state by doing nothing extra.
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForDeduceChecklist();
         const allBodyCells = Array.from(
             document.querySelectorAll<HTMLElement>("[data-cell-row][data-cell-col]"),
@@ -340,7 +341,7 @@ describe("Checklist — case-file deduction popover", () => {
 
 describe("Checklist — deduce mode — SuggestionLogPanel pairing (desktop)", () => {
     test("the desktop play layout mounts SuggestionLogPanel alongside the Checklist", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForDeduceChecklist();
         // SuggestionLogPanel renders a section with header id
         // `prior-suggestions` — the ⌘L shortcut scrolls to it.
@@ -349,7 +350,7 @@ describe("Checklist — deduce mode — SuggestionLogPanel pairing (desktop)", (
     });
 
     test("the Checklist and the SuggestionLogPanel are both in the DOM simultaneously", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForDeduceChecklist();
         // Sanity: body cell count > 0 (Checklist) and the suggestions
         // header is present (SuggestionLogPanel).

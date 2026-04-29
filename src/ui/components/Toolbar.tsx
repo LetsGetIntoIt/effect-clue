@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState } from "react";
 import { aboutLinkClicked, gameSetupStarted } from "../../analytics/events";
 import { startSetup } from "../../analytics/gameSession";
 import { describeAction } from "../../logic/describeAction";
@@ -21,32 +20,19 @@ const buttonClass =
     "focus-visible:ring-offset-1 focus-visible:ring-offset-bg";
 
 /**
- * Shared handlers for the Share-link and New-game actions. Keeps the
- * clipboard fallback + transient "Copied!" state + confirm-and-dispatch
- * flow in one place so both the desktop Toolbar and the mobile
- * BottomNav overflow menu behave identically.
+ * Shared handlers for the New-game action used by both the desktop
+ * Toolbar overflow menu and the mobile BottomNav overflow menu.
+ *
+ * The Share-link action that used to live here was dropped during M3
+ * — the base64 `?state=...` URL flow was removed entirely, and the
+ * server-stored `/share/[id]` flow that replaces it lands in M9 with
+ * its own creation modal. There is no Share menu item between M3 and
+ * M9.
  */
 export function useToolbarActions() {
     const t = useTranslations("toolbar");
-    const { dispatch, currentShareUrl } = useClue();
+    const { dispatch } = useClue();
     const confirm = useConfirm();
-    const [copied, setCopied] = useState(false);
-
-    const onShare = async () => {
-        const url = currentShareUrl();
-        if (!url) return;
-        try {
-            if (navigator?.clipboard) {
-                await navigator.clipboard.writeText(url);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-            } else {
-                window.prompt(t("copyFallback"), url);
-            }
-        } catch {
-            window.prompt(t("copyFallback"), url);
-        }
-    };
 
     const onNewGame = async () => {
         if (await confirm({ message: t("newGameConfirm") })) {
@@ -56,14 +42,15 @@ export function useToolbarActions() {
         }
     };
 
-    return { onShare, onNewGame, copied };
+    return { onNewGame };
 }
 
 /**
  * Top-of-page controls (desktop only): undo/redo as top-level buttons,
- * plus a ⋯ overflow menu that hosts Game setup, Share link, and New
- * game. Mirrors the mobile `BottomNav` overflow so both breakpoints
- * share the same menu structure.
+ * plus a ⋯ overflow menu that hosts Game setup and New game. Mirrors
+ * the mobile `BottomNav` overflow so both breakpoints share the same
+ * menu structure. The Share item that used to live here was dropped
+ * in M3; M9 reintroduces it pointing at the server-stored share flow.
  */
 export function Toolbar() {
     const t = useTranslations("toolbar");
@@ -80,7 +67,7 @@ export function Toolbar() {
         nextUndo,
         nextRedo,
     } = useClue();
-    const { onShare, onNewGame, copied } = useToolbarActions();
+    const { onNewGame } = useToolbarActions();
 
     const undoTooltip = nextUndo
         ? tHistory("undoTooltip", {
@@ -142,10 +129,6 @@ export function Toolbar() {
                         active: state.uiMode === "setup",
                         onClick: () =>
                             dispatch({ type: "setUiMode", mode: "setup" }),
-                    },
-                    {
-                        label: copied ? t("shareCopied") : t("share"),
-                        onClick: onShare,
                     },
                     {
                         label: t("newGame", {
