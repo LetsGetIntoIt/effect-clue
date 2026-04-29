@@ -9,6 +9,8 @@ import { useConfirm } from "../hooks/useConfirm";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useClue } from "../state";
 import { shortcutSuffix } from "../keyMap";
+import { useTour } from "../tour/TourProvider";
+import { screenKeyForUiMode } from "../tour/screenKey";
 import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
 import { OverflowMenu } from "./OverflowMenu";
 import { Tooltip } from "./Tooltip";
@@ -56,6 +58,7 @@ export function Toolbar() {
     const t = useTranslations("toolbar");
     const tNav = useTranslations("bottomNav");
     const tHistory = useTranslations("history");
+    const tOnboarding = useTranslations("onboarding");
     const hasKeyboard = useHasKeyboard();
     const {
         state,
@@ -68,6 +71,7 @@ export function Toolbar() {
         nextRedo,
     } = useClue();
     const { onNewGame } = useToolbarActions();
+    const { restartTourForScreen } = useTour();
 
     const undoTooltip = nextUndo
         ? tHistory("undoTooltip", {
@@ -135,6 +139,13 @@ export function Toolbar() {
                             shortcut: shortcutSuffix("global.newGame", hasKeyboard),
                         }),
                         onClick: onNewGame,
+                    },
+                    {
+                        label: tOnboarding("restart"),
+                        onClick: () =>
+                            restartTourForScreen(
+                                screenKeyForUiMode(state.uiMode),
+                            ),
                     },
                     {
                         label: tNav("about"),

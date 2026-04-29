@@ -17,6 +17,10 @@ import { useGlobalShortcut } from "./keyMap";
 import { T_STANDARD, useReducedTransition } from "./motion";
 import type { UiMode } from "../logic/ClueState";
 import { ClueProvider, useClue } from "./state";
+import { TourProvider, useTour } from "./tour/TourProvider";
+import { TourPopover } from "./tour/TourPopover";
+import { useTourGate } from "./tour/useTourGate";
+import { screenKeyForUiMode } from "./tour/screenKey";
 
 // Non user-facing literals.
 const VARIANT_INITIAL = "initial";
@@ -113,6 +117,7 @@ export function Clue() {
           <ClueProvider>
            <ConfirmProvider>
            <SelectionProvider>
+            <TourProvider>
             <main className="mx-auto flex min-w-max max-w-[1400px] flex-col gap-5 px-5 pb-24 [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+1.5rem)]">
                 <header
                     ref={headerRef}
@@ -132,13 +137,62 @@ export function Clue() {
                     <TabContent />
                 </div>
                 <NewGameShortcut />
+                <TourScreenGate />
+                <TourPopover />
             </main>
             <BottomNav />
+            </TourProvider>
            </SelectionProvider>
            </ConfirmProvider>
           </ClueProvider>
         </TooltipProvider>
     );
+}
+
+/**
+ * Reads `state.uiMode` and the per-screen tour gate to fire whichever
+ * screen-specific tour applies. Mounts once inside the provider stack
+ * so `useTourGate` (per-screen storage) and `useTour` (start tour)
+ * are both available.
+ *
+ * The gate only checks first-visit + 4-week dormancy — it does NOT
+ * fire mid-game when the user toggles between Setup / Checklist /
+ * Suggest. We track the screen-key the gate fired against; once a
+ * tour fires for that key, the same key won't re-fire in the same
+ * mount even if the user revisits it.
+ */
+function TourScreenGate() {
+    const { state, hydrated } = useClue();
+    const { startTour, activeScreen } = useTour();
+    const screenKey = screenKeyForUiMode(state.uiMode);
+    const { shouldShow, dismiss } = useTourGate(screenKey, {
+        enabled: hydrated,
+    });
+
+    // Track which screen key we've already fired in this mount so we
+    // don't re-fire a tour the user already saw mid-session (the gate
+    // localStorage write happens AFTER the read; without this guard a
+    // splash flash + uiMode flip during hydration could stack two
+    // start calls).
+    const firedRef = useRef<Set<string>>(new Set());
+
+    useEffect(() => {
+        if (!hydrated) return;
+        if (!shouldShow) return;
+        if (activeScreen) return; // a tour is already running.
+        if (firedRef.current.has(screenKey)) return;
+        firedRef.current.add(screenKey);
+        startTour(screenKey);
+        // The gate's `dismiss` flips its own internal state and persists
+        // `lastDismissedAt`. We pair tour completion / dismiss with
+        // gate dismiss so subsequent visits respect the 4-week cadence.
+        // The actual flag is set in the per-tour finish path; for now
+        // just mark "we showed the tour" so a refresh in this session
+        // won't re-fire.
+        dismiss();
+    }, [hydrated, shouldShow, screenKey, activeScreen, startTour, dismiss]);
+
+    return null;
 }
 
 /**

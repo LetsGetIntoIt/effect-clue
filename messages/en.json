@@ -8,7 +8,8 @@
         "cancel": "Cancel",
         "confirmTitle": "Please confirm",
         "info": "More info",
-        "infoGlyph": "ⓘ"
+        "infoGlyph": "ⓘ",
+        "close": "Close"
     },
     "bottomNav": {
         "ariaLabel": "Primary navigation",
@@ -284,5 +285,59 @@
         "knownCardUnset": "Unset",
         "handSizeFix": "Hand size: <strong>{player}</strong> = {size}",
         "handSizeReset": "Reset"
+    },
+    "onboarding": {
+        "stepLabel": "Tour · Step {step} of {total}",
+        "next": "Next",
+        "back": "Back",
+        "skip": "Skip tour",
+        "finish": "Finish",
+        "restart": "Restart tour",
+        "setup": {
+            "cardPack": {
+                "title": "Pick a card pack",
+                "body": "Start with the Classic deck, swap to Master Detective, or roll your own and save it as a custom pack."
+            },
+            "players": {
+                "title": "Add the players",
+                "body": "Type each player's name. Use + Player for as many as you need — Clue traditionally has 3-6, but the solver scales to any size."
+            },
+            "handSize": {
+                "title": "Set hand sizes",
+                "body": "How many cards each player was dealt. The solver uses this to deduce who can't be holding which card."
+            },
+            "knownCard": {
+                "title": "Mark cards you've seen",
+                "body": "Click a cell to record what you know about each (player, card) pair: Y if they hold it, N if you know they don't, blank if unknown."
+            },
+            "overflow": {
+                "title": "Everything else lives here",
+                "body": "The ⋯ menu has Game setup, Restart tour, New game, About, and (after sign-in) your account."
+            },
+            "start": {
+                "title": "Ready to play",
+                "body": "Click Start playing to flip into Play mode. The deducer keeps running in the background as you log suggestions and disproofs."
+            }
+        },
+        "checklist": {
+            "cell": {
+                "title": "Each cell is a deduction",
+                "body": "Y means a player holds that card; N means they don't. The solver runs after every change and fills in everything it can derive."
+            },
+            "caseFile": {
+                "title": "The case file",
+                "body": "When the solver narrows a category to a single suspect / weapon / room, the case-file column shows it — that's your accusation."
+            }
+        },
+        "suggest": {
+            "addForm": {
+                "title": "Log a suggestion",
+                "body": "Pick a suspect / weapon / room, then add who tried to refute and which card was shown to you (if any). Press ⌘K to focus this form anytime."
+            },
+            "priorLog": {
+                "title": "Edit prior suggestions",
+                "body": "Click a row to edit a logged suggestion. The solver re-runs against the new inputs and updates the checklist live."
+            }
+        }
     }
 }

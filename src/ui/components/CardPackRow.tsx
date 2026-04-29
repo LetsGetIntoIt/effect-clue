@@ -289,7 +289,10 @@ export function CardPackRow() {
     const pillLayoutTransition = useReducedTransition(T_STANDARD);
 
     return (
-        <div className="mb-4 rounded-[var(--radius)] border border-border bg-case-file-bg p-3">
+        <div
+            className="mb-4 rounded-[var(--radius)] border border-border bg-case-file-bg p-3"
+            data-tour-anchor="setup-card-pack"
+        >
             <div className="mb-2.5 text-[12px] font-semibold uppercase tracking-[0.05em] text-accent">
                 {t("cardPack")}
             </div>

@@ -231,6 +231,59 @@ export const aboutLinkClicked = (props: {
     source: "overflow_menu";
 }): void => capture("about_link_clicked", props);
 
+// ── Onboarding tour ───────────────────────────────────────────────────────
+//
+// Per-screen walkthrough (M4). Each event carries `screenKey` so a
+// PostHog funnel can break the data out one tour at a time. The
+// existing onboarding funnel (game_setup_started → cards_dealt →
+// game_started) is wrapped by the setup tour — verify in PostHog that
+// completion rate doesn't regress when the tour goes live.
+
+export type TourScreenKey =
+    | "setup"
+    | "checklist"
+    | "suggest"
+    | "account"
+    | "shareImport";
+
+/** All the ways a tour can be dismissed before completion. */
+export type TourDismissVia =
+    | "skip"
+    | "esc"
+    | "backdrop"
+    | "close"
+    | "anchor_missing";
+
+export const tourStarted = (props: {
+    screenKey: TourScreenKey;
+    stepCount: number;
+}): void => capture("tour_started", props);
+
+export const tourStepAdvanced = (props: {
+    screenKey: TourScreenKey;
+    fromStep: number;
+    toStep: number;
+    totalSteps: number;
+    direction: "forward" | "back";
+}): void => capture("tour_step_advanced", props);
+
+export const tourCompleted = (props: {
+    screenKey: TourScreenKey;
+    totalSteps: number;
+}): void => capture("tour_completed", props);
+
+export const tourDismissed = (props: {
+    screenKey: TourScreenKey;
+    stepIndex: number;
+    totalSteps: number;
+    via: TourDismissVia;
+}): void => capture("tour_dismissed", props);
+
+/** Fires on "Restart tour" overflow-menu click before `tourStarted`. */
+export const tourRestarted = (props: {
+    screenKey: TourScreenKey;
+}): void => capture("tour_restarted", props);
+
 // ── Performance signals ───────────────────────────────────────────────────
 
 export const webVital = (props: {

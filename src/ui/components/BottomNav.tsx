@@ -12,6 +12,8 @@ import { useLongPress } from "../hooks/useLongPress";
 import { useClue } from "../state";
 import { shortcutSuffix } from "../keyMap";
 import { T_SPRING_SOFT, T_STANDARD, useReducedTransition } from "../motion";
+import { useTour } from "../tour/TourProvider";
+import { screenKeyForUiMode } from "../tour/screenKey";
 import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
 import { OverflowMenu } from "./OverflowMenu";
 import { useToolbarActions } from "./Toolbar";
@@ -239,8 +241,11 @@ function BottomOverflowMenu({
 }) {
     const t = useTranslations("bottomNav");
     const tToolbar = useTranslations("toolbar");
+    const tOnboarding = useTranslations("onboarding");
     const hasKeyboard = useHasKeyboard();
+    const { state } = useClue();
     const { onNewGame } = useToolbarActions();
+    const { restartTourForScreen } = useTour();
     return (
         <li>
             <OverflowMenu
@@ -261,6 +266,13 @@ function BottomOverflowMenu({
                             shortcut: shortcutSuffix("global.newGame", hasKeyboard),
                         }),
                         onClick: onNewGame,
+                    },
+                    {
+                        label: tOnboarding("restart"),
+                        onClick: () =>
+                            restartTourForScreen(
+                                screenKeyForUiMode(state.uiMode),
+                            ),
                     },
                     {
                         label: t("about"),

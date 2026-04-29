@@ -498,6 +498,7 @@ export function Checklist() {
                         <button
                             type="button"
                             data-setup-cta
+                            data-tour-anchor="setup-start-playing"
                             className="cursor-pointer rounded-[var(--radius)] border-none bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover"
                             onClick={() =>
                                 dispatch({

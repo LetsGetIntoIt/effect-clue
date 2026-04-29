@@ -43,6 +43,7 @@ export function OverflowMenu({
                 aria-label={triggerLabel}
                 title={triggerLabel}
                 className={triggerClassName}
+                data-tour-anchor="overflow-menu"
             >
                 ⋯
             </RadixPopover.Trigger>
