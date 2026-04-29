@@ -1,18 +1,17 @@
 "use client";
 
 import { AnimatePresence, motion, type Variants } from "motion/react";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { gameSetupStarted } from "../analytics/events";
 import { startSetup } from "../analytics/gameSession";
 import { BottomNav } from "./components/BottomNav";
 import { Checklist } from "./components/Checklist";
 import { GlobalContradictionBanner } from "./components/GlobalContradictionBanner";
-import { SuggestionLogPanel } from "./components/SuggestionLogPanel";
+import { PlayLayout } from "./components/PlayLayout";
 import { Toolbar } from "./components/Toolbar";
 import { TooltipProvider } from "./components/Tooltip";
 import { ConfirmProvider, useConfirm } from "./hooks/useConfirm";
-import { useIsDesktop } from "./hooks/useIsDesktop";
 import { SelectionProvider } from "./SelectionContext";
 import { useGlobalShortcut } from "./keyMap";
 import { T_STANDARD, useReducedTransition } from "./motion";
@@ -49,9 +48,9 @@ function getDirection(prev: UiMode, next: UiMode): Direction {
 }
 
 const slideVariants: Variants = {
-    initial: (dir: Direction) => ({ x: dir === 1 ? "100%" : "-100%" }),
-    animate: { x: 0 },
-    exit: (dir: Direction) => ({ x: dir === 1 ? "-100%" : "100%" }),
+    initial: (dir: Direction) => ({ x: dir === 1 ? "100%" : "-100%", opacity: 0 }),
+    animate: { x: 0, opacity: 1 },
+    exit: (dir: Direction) => ({ x: dir === 1 ? "-100%" : "100%", opacity: 0 }),
 };
 
 /**
@@ -89,13 +88,36 @@ const slideVariants: Variants = {
  */
 export function Clue() {
     const t = useTranslations("app");
+    const headerRef = useRef<HTMLElement>(null);
+    useLayoutEffect(() => {
+        const el = headerRef.current;
+        if (!el) return;
+        const root = document.documentElement;
+        const mq = window.matchMedia("(min-width: 800px)");
+        const write = () =>
+            root.style.setProperty(
+                "--header-offset",
+                mq.matches ? `${el.offsetHeight}px` : "0px",
+            );
+        write();
+        const ro = new ResizeObserver(write);
+        ro.observe(el);
+        mq.addEventListener("change", write);
+        return () => {
+            ro.disconnect();
+            mq.removeEventListener("change", write);
+        };
+    }, []);
     return (
         <TooltipProvider delayDuration={150} skipDelayDuration={50}>
           <ClueProvider>
            <ConfirmProvider>
            <SelectionProvider>
-            <main className="mx-auto flex h-[100dvh] max-w-[1400px] flex-col gap-5 px-5 pb-24 [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+1.5rem)]">
-                <header className="flex shrink-0 flex-wrap items-center justify-between gap-4">
+            <main className="mx-auto flex min-w-max max-w-[1400px] flex-col gap-5 px-5 pb-24 [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+1.5rem)]">
+                <header
+                    ref={headerRef}
+                    className="sticky left-5 flex max-w-[calc(100vw-2.5rem)] flex-wrap items-center justify-between gap-4 [@media(min-width:800px)]:top-[var(--contradiction-banner-offset,0px)] [@media(min-width:800px)]:z-30 [@media(min-width:800px)]:bg-bg [@media(min-width:800px)]:py-2"
+                >
                     <h1 className="m-0 text-[36px] uppercase tracking-[0.08em] text-accent drop-shadow-sm">
                         {t("title")}
                     </h1>
@@ -106,7 +128,7 @@ export function Clue() {
 
                 <GlobalContradictionBanner />
 
-                <div className="flex min-h-0 flex-1 flex-col">
+                <div className="flex flex-col">
                     <TabContent />
                 </div>
                 <NewGameShortcut />
@@ -150,13 +172,11 @@ function NewGameShortcut() {
  * new page in from the RIGHT (positions increasing), and the reverse
  * slides it in from the LEFT.
  *
- * On desktop, `checklist` and `suggest` collapse into a single play
- * grid (both panes visible side-by-side). The top-level
- * AnimatePresence keys on `"setup" | "play"` so switching between
- * checklist and suggest while on desktop does NOT trigger a slide —
- * both are already on screen. On mobile, within the play grid, each
- * pane is absolutely positioned and animates its `x` based on
- * `mode`, so the slide happens at the pane level there instead.
+ * `topLevelKey` is `"setup" | "play"` — checklist and suggest both
+ * map to `"play"` so switching between them at this layer does NOT
+ * trigger a slide. The Play view's internal layout (single active
+ * pane on mobile vs side-by-side on desktop, plus the Checklist ↔
+ * Suggest sub-tab transition) is `PlayLayout`'s job.
  */
 function TabContent() {
     const { state, hydrated } = useClue();
@@ -175,6 +195,22 @@ function TabContent() {
     const topLevelKey: "setup" | "play" =
         mode === UI_SETUP ? UI_SETUP : TOP_LEVEL_PLAY;
 
+    // With document-level scroll, the page doesn't reset when the
+    // top-level view changes — a deep scroll into the Checklist
+    // would otherwise leave the user mid-page after switching to
+    // Setup. Reset to the top on top-level toggles, skipping the
+    // initial mount so we don't override hydration's restored view.
+    const prevTopLevelKey = useRef(topLevelKey);
+    useEffect(() => {
+        if (prevTopLevelKey.current === topLevelKey) return;
+        prevTopLevelKey.current = topLevelKey;
+        const reduced =
+            typeof window !== "undefined" &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        // eslint-disable-next-line i18next/no-literal-string -- ScrollBehavior enum
+        window.scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" });
+    }, [topLevelKey]);
+
     // Until URL/localStorage hydration resolves the real view, render
     // a view-agnostic skeleton so the default `"setup"` pane doesn't
     // flash between initial mount and the hydrated dispatch. Gating
@@ -183,7 +219,7 @@ function TabContent() {
     // `hydrated` is true, so `initial={false}` correctly skips the
     // entry animation on whichever hydrated view wins.
     return (
-        <div className="relative h-full min-h-0 overflow-hidden">
+        <div className="relative grid grid-cols-[minmax(0,1fr)] [grid-template-areas:'stack'] contain-paint">
             {!hydrated ? (
                 <ViewSkeleton />
             ) : (
@@ -197,7 +233,7 @@ function TabContent() {
                         animate={VARIANT_ANIMATE}
                         exit={VARIANT_EXIT}
                         transition={transition}
-                        className="absolute inset-0 min-h-0"
+                        className="[grid-area:stack] min-w-0"
                     >
                         <Checklist />
                     </motion.div>
@@ -210,9 +246,9 @@ function TabContent() {
                         animate={VARIANT_ANIMATE}
                         exit={VARIANT_EXIT}
                         transition={transition}
-                        className="absolute inset-0 min-h-0"
+                        className="[grid-area:stack] min-w-0"
                     >
-                        <PlayGrid
+                        <PlayLayout
                             mode={mode === UI_SUGGEST ? UI_SUGGEST : UI_CHECKLIST}
                         />
                     </motion.div>
@@ -236,7 +272,7 @@ function TabContent() {
  */
 function ViewSkeleton() {
     const pane = (
-        <div className="flex h-full min-h-0 flex-col gap-3 rounded-[var(--radius)] border border-border/40 bg-panel/40 p-4">
+        <div className="flex min-h-[60vh] flex-col gap-3 rounded-[var(--radius)] border border-border/40 bg-panel/40 p-4">
             <div className="h-5 w-1/3 rounded bg-border/40" />
             <div className="h-3 w-2/3 rounded bg-border/30" />
             <div className="mt-1 min-h-20 flex-1 rounded bg-border/20" />
@@ -245,84 +281,13 @@ function ViewSkeleton() {
     return (
         <div
             aria-hidden
-            className="relative h-full min-h-0 motion-safe:animate-pulse [@media(min-width:800px)]:grid [@media(min-width:800px)]:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] [@media(min-width:800px)]:gap-5"
+            className="relative min-h-[60vh] motion-safe:animate-pulse [@media(min-width:800px)]:grid [@media(min-width:800px)]:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] [@media(min-width:800px)]:gap-5"
         >
             {pane}
-            <div className="hidden h-full min-h-0 [@media(min-width:800px)]:block">
+            <div className="hidden [@media(min-width:800px)]:block">
                 {pane}
             </div>
         </div>
     );
 }
 
-/**
- * Inside the play view. On desktop, a two-column grid with both
- * panes statically visible. On mobile, a relative container with
- * both panes absolutely positioned; each pane's `x` is driven by
- * its distance from the active mode, so switching checklist↔suggest
- * animates both panes sliding in sync.
- */
-function PlayGrid({ mode }: { readonly mode: "checklist" | "suggest" }) {
-    return (
-        <div className="relative h-full min-h-0 overflow-hidden [@media(min-width:800px)]:overflow-visible [@media(min-width:800px)]:grid [@media(min-width:800px)]:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] [@media(min-width:800px)]:gap-5">
-            <PlayPane paneMode={UI_CHECKLIST} currentMode={mode}>
-                <Checklist />
-            </PlayPane>
-            <PlayPane
-                paneMode={UI_SUGGEST}
-                currentMode={mode}
-                className="overflow-y-auto"
-            >
-                <SuggestionLogPanel />
-            </PlayPane>
-        </div>
-    );
-}
-
-/**
- * A single Play pane that adapts to the breakpoint:
- *
- * - Desktop (≥800px): static grid member, no transform. Both panes
- *   always visible.
- * - Mobile (<800px): absolutely positioned inside `PlayGrid`. Its
- *   `x` animates based on `POSITIONS[paneMode] - POSITIONS[currentMode]`
- *   — so when the active pane is the Checklist, the Suggest pane
- *   sits at `x: 100%` (off to the right); when active flips to
- *   Suggest, both panes animate their x simultaneously.
- *
- * Inactive mobile panes are marked `aria-hidden` and `inert` so
- * keyboard focus doesn't land inside an off-screen pane.
- */
-function PlayPane({
-    paneMode,
-    currentMode,
-    className = "",
-    children,
-}: {
-    readonly paneMode: "checklist" | "suggest";
-    readonly currentMode: "checklist" | "suggest";
-    readonly className?: string;
-    readonly children: React.ReactNode;
-}) {
-    const isDesktop = useIsDesktop();
-    const transition = useReducedTransition(T_STANDARD, { fadeMs: 120 });
-    const offset = POSITIONS[paneMode] - POSITIONS[currentMode];
-    const isActive = offset === 0;
-    const mobileInactive = !isDesktop && !isActive;
-
-    return (
-        <motion.div
-            className={
-                "min-h-0 min-w-0 " +
-                className +
-                (isDesktop ? "" : " absolute inset-0")
-            }
-            animate={{ x: isDesktop ? 0 : `${offset * 100}%` }}
-            transition={transition}
-            aria-hidden={mobileInactive || undefined}
-            inert={mobileInactive}
-        >
-            {children}
-        </motion.div>
-    );
-}

@@ -449,7 +449,7 @@ export function Checklist() {
         <section
             ref={rootRef}
             id="checklist"
-            className="flex h-full min-w-0 flex-col rounded-[var(--radius)] border border-border bg-panel p-4"
+            className="min-w-max rounded-[var(--radius)] border border-border bg-panel p-4"
             onMouseLeave={onGridLeave}
             onBlur={e => {
                 // Focus left the checklist root entirely (relatedTarget
@@ -462,7 +462,7 @@ export function Checklist() {
             }}
         >
             {inSetup && (
-                <div className="mb-4 shrink-0 rounded-[var(--radius)] border border-accent/40 bg-accent/5 px-4 py-3">
+                <div className="sticky left-9 mb-4 max-w-[calc(100vw-4.5rem)] shrink-0 rounded-[var(--radius)] border border-accent/40 bg-accent/5 px-4 py-3">
                     <h2 className="m-0 font-display text-[20px] text-accent">
                         {tSetup("title")}
                     </h2>
@@ -492,11 +492,11 @@ export function Checklist() {
                     </div>
                 </div>
             )}
-            <div className="shrink-0">
+            <div className="sticky left-9 max-w-[calc(100vw-4.5rem)] shrink-0">
                 {inSetup ? <CardPackRow /> : <CaseFileHeader knowledge={knowledge} />}
             </div>
             {inSetup && handSizeMismatch && (
-                <div className="mb-3 shrink-0 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning">
+                <div className="sticky left-9 mb-3 max-w-[calc(100vw-4.5rem)] shrink-0 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning">
                     {tSetup("handSizeMismatch", {
                         total: handSizesTotal,
                         expected: totalDealt,
@@ -504,9 +504,9 @@ export function Checklist() {
                     })}
                 </div>
             )}
-            <div className="-mx-4 min-h-0 flex-1 overflow-auto px-4">
+            <div className="-mx-4 px-4">
             <table className="w-full border-separate border-spacing-0 border-t border-l border-border text-[13px]">
-                <thead className="sticky top-0 z-20 bg-row-header">
+                <thead className="sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))] z-20 bg-row-header">
                     <tr>
                         <th className="border-r border-b border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted">
                             {inSetup ? null : label("global.gotoChecklist")}

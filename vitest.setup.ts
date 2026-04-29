@@ -44,6 +44,26 @@ if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
     });
 }
 
+// jsdom doesn't ship `ResizeObserver` either. The Clue layout uses one
+// to publish the header height into a CSS variable; without a stub the
+// `useLayoutEffect` would crash on mount.
+if (typeof globalThis.ResizeObserver === "undefined") {
+    class ResizeObserverStub {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+    }
+    (globalThis as unknown as { ResizeObserver: typeof ResizeObserver }).ResizeObserver =
+        ResizeObserverStub as unknown as typeof ResizeObserver;
+}
+
+// jsdom logs `Not implemented: Window's scrollTo() method` for any
+// `window.scrollTo` call. The Clue layout calls it on Setup ↔ Play
+// switches to reset page scroll; stub it so tests stay quiet.
+if (typeof window !== "undefined") {
+    window.scrollTo = (() => {}) as typeof window.scrollTo;
+}
+
 // jsdom ships without `TextEncoder` / `TextDecoder` on the global.
 // Some dependencies (effect's `Encoding` module) reference them at
 // module-load time, so polyfill before any test imports them.
