@@ -23,12 +23,14 @@ import {
 } from "./GameSetup";
 import { Accusation, accusationCards } from "./Accusation";
 import { Suggestion, suggestionCards, suggestionNonRefuters } from "./Suggestion";
+import { cardIdsInCategory, categoryOfCard } from "./CardSet";
 import type { ReasonKind, Tracer } from "./Provenance";
 import {
     CardOwnership,
     CaseFileCategory,
     DisjointGroupsHandLock,
     FailedAccusation,
+    FailedAccusationPairwiseNarrowing,
     NonRefuters,
     PlayerHand,
     RefuterOwnsOneOf,
@@ -681,6 +683,204 @@ export const failedAccusationEliminate = (
     return k;
 };
 
+/**
+ * Multi-accusation pairwise narrowing.
+ *
+ * Tier-1 (`failedAccusationEliminate`) only sees one accusation at a
+ * time. This rule combines failed accusations that share two of three
+ * cards to extract deductions Tier 1 can't reach on its own.
+ *
+ * The constraint a failed accusation imposes is
+ *   ¬(case_S ∧ case_W ∧ case_R).
+ * Combined with category exclusivity (each category contributes exactly
+ * one Y to the case-file row), the following extra rule holds:
+ *
+ *   For an ordered pair (X, Y) of cards from different categories, let
+ *     ZCoverage(X, Y) = { z : (X, Y, z) is a failed accusation, z in
+ *                        the third category }.
+ *   If case_X = Y AND every still-candidate z (i.e. case_z ≠ N) is in
+ *   ZCoverage(X, Y), then case_Y = N.
+ *
+ * Sketch of why: assume case_Y = Y as well. Then for every accusation
+ * (X, Y, z) in the index, Tier 1 forces case_z = N. But category
+ * exclusivity demands at least one z in the third category be Y, and
+ * the still-candidate z's are exactly the ones Tier 1 would force to
+ * N. Contradiction → case_Y must be N.
+ *
+ * The rule walks all 6 directed (pinned, partner, z-category) shapes —
+ * suspects pinned + weapons partner, suspects pinned + rooms partner,
+ * weapons pinned + suspects partner, etc. — so any failed-accusation
+ * pattern that fits the criterion fires regardless of which category
+ * the user happened to deduce first.
+ *
+ * Complexity: O(|accusations| + |categories|² × max-cards-per-category)
+ * per pass. Trivial at Clue's scale (~6 suspects × 6 weapons × 9 rooms,
+ * a handful of accusations).
+ */
+export const failedAccusationPairwiseNarrow = (
+    accusations: ReadonlyArray<Accusation>,
+    setup: GameSetup,
+    tracer?: Tracer,
+) => (knowledge: Knowledge): Knowledge => {
+    if (accusations.length === 0) return knowledge;
+    let k = knowledge;
+    const caseFile = CaseFileOwner();
+
+    // Index every accusation under all 6 ordered (pinned, partner)
+    // pairs. The map's value is a list of (z-card, accusation index)
+    // entries — z-card is the third card of the triple, the one the
+    // partner would force to N if both pinned and partner were Y.
+    type Entry = { readonly z: Card; readonly accusationIndex: number };
+    type Key = string;
+    const keyOf = (pinned: Card, partner: Card): Key =>
+        `${String(pinned)}|${String(partner)}`;
+    const index = new Map<Key, Entry[]>();
+    const partners = new Map<Key, { readonly pinned: Card; readonly partner: Card }>();
+
+    accusations.forEach((accusation, accusationIndex) => {
+        const cards = accusationCards(accusation);
+        if (cards.length !== 3) return; // Clue invariant; defensive
+        for (let a = 0; a < 3; a++) {
+            for (let b = 0; b < 3; b++) {
+                if (a === b) continue;
+                const c = 3 - a - b;
+                const pinned = cards[a]!;
+                const partner = cards[b]!;
+                const z = cards[c]!;
+                const key = keyOf(pinned, partner);
+                const entries = index.get(key);
+                if (entries === undefined) {
+                    index.set(key, [{ z, accusationIndex }]);
+                    partners.set(key, { pinned, partner });
+                } else {
+                    entries.push({ z, accusationIndex });
+                }
+            }
+        }
+    });
+
+    for (const [key, entries] of index) {
+        const meta = partners.get(key)!;
+        const { pinned, partner } = meta;
+
+        // Skip unless the pinned card is Y and the partner is unknown.
+        // If partner is already N nothing to add; if partner is Y,
+        // Tier 1 + slices will surface the contradiction (or the
+        // user's input is over-constrained and they need to resolve
+        // it themselves).
+        const pinnedCell = Cell(caseFile, pinned);
+        const partnerCell = Cell(caseFile, partner);
+        if (getCell(k, pinnedCell) !== Y) continue;
+        if (getCell(k, partnerCell) !== undefined) continue;
+
+        // Determine the third category from any of the entries' z's
+        // (every z in this index entry shares a category by Clue's
+        // one-card-per-category-per-accusation invariant).
+        const zCategoryId = categoryOfCard(setup.cardSet, entries[0]!.z);
+        if (zCategoryId === undefined) continue;
+        const zCategoryCards = cardIdsInCategory(setup.cardSet, zCategoryId);
+        if (zCategoryCards.length === 0) continue;
+
+        // Build the candidate-z set (cards in the third category whose
+        // case-file cell is not yet N) and the covered-z set (the
+        // accusation-witnessed z cards).
+        const candidates: Card[] = [];
+        for (const z of zCategoryCards) {
+            if (getCell(k, Cell(caseFile, z)) !== N) candidates.push(z);
+        }
+        if (candidates.length === 0) {
+            // Category exclusivity has already collapsed — let the
+            // case-file slice surface the contradiction on its next
+            // pass. Don't emit a silent N here.
+            continue;
+        }
+        const covered = new Set<string>();
+        const contributingAccusationIndices: number[] = [];
+        const seenAccusations = new Set<number>();
+        for (const entry of entries) {
+            covered.add(String(entry.z));
+            if (!seenAccusations.has(entry.accusationIndex)) {
+                seenAccusations.add(entry.accusationIndex);
+                contributingAccusationIndices.push(entry.accusationIndex);
+            }
+        }
+
+        // Every candidate must be in the covered set for the rule to
+        // fire. (If any candidate isn't covered, the case file might
+        // still resolve to that uncovered z, leaving the partner free
+        // to be Y.)
+        let allCovered = true;
+        for (const z of candidates) {
+            if (!covered.has(String(z))) {
+                allCovered = false;
+                break;
+            }
+        }
+        if (!allCovered) continue;
+
+        // Trim the contributing-accusation list to only the ones whose
+        // z lies in the candidate set — accusations whose z is already
+        // known N didn't actually do work in this firing.
+        const candidateSet = new Set<string>(candidates.map(String));
+        const usefulAccusations: number[] = [];
+        const seenUseful = new Set<number>();
+        for (const entry of entries) {
+            if (
+                candidateSet.has(String(entry.z))
+                && !seenUseful.has(entry.accusationIndex)
+            ) {
+                seenUseful.add(entry.accusationIndex);
+                usefulAccusations.push(entry.accusationIndex);
+            }
+        }
+        const accusationIndices = usefulAccusations.length > 0
+            ? usefulAccusations
+            : contributingAccusationIndices;
+
+        const before = k;
+        try {
+            k = setCell(k, partnerCell, N);
+        } catch (e) {
+            if (e instanceof Contradiction) {
+                throw new Contradiction({
+                    reason: e.reason,
+                    offendingCells: e.offendingCells.length
+                        ? e.offendingCells
+                        : [partnerCell, pinnedCell],
+                    sliceLabel: e.sliceLabel,
+                    accusationIndex: accusationIndices[0],
+                    contradictionKind: {
+                        _tag: "FailedAccusationPairwiseNarrowing",
+                        accusationIndices,
+                    },
+                });
+            }
+            throw e;
+        }
+        if (k !== before && tracer) {
+            // dependsOn is the pinned cell plus every case-file cell in
+            // the third category — both the candidate cells (which the
+            // rule would have forced to N if partner were Y) and the
+            // already-N cells (which is why the candidate set is what
+            // it is).
+            const dependsOn: Cell[] = [pinnedCell];
+            for (const z of zCategoryCards) {
+                dependsOn.push(Cell(caseFile, z));
+            }
+            tracer({
+                cell: partnerCell,
+                value: N,
+                kind: FailedAccusationPairwiseNarrowing({
+                    pinnedCard: pinned,
+                    accusationIndices,
+                }),
+                dependsOn,
+            });
+        }
+    }
+    return k;
+};
+
 // ---- Top-level rule application ----------------------------------------
 
 /**
@@ -721,18 +921,23 @@ export const applyDeductionRules = (
 );
 
 /**
- * Apply every accusation-driven rule once. Currently just
- * `failedAccusationEliminate`, but kept as a layer of its own so the
- * fixed-point loop in `applyAllRules` (and in `deduceWithExplanations`)
- * can interleave accusation Ns with consistency-slice cascades the
- * same way it interleaves suggestion Ns.
+ * Apply every accusation-driven rule once. The fixed-point loop in
+ * `applyAllRules` (and in `deduceWithExplanations`) interleaves these
+ * with the slice combinator and suggestion rules so each rule can
+ * consume the others' Ys / Ns on the next pass.
+ *
+ * Order: Tier-1 unit propagation runs first so any (Y, Y, ?) the slice
+ * combinator just produced lands a forced N; Tier-2 pairwise narrowing
+ * then handles the multi-accusation pigeonhole patterns Tier 1 misses.
  */
 export const applyAccusationRules = (
     accusations: ReadonlyArray<Accusation>,
+    setup: GameSetup,
     tracer?: Tracer,
 ) => (knowledge: Knowledge): Knowledge => pipe(
     knowledge,
     failedAccusationEliminate(accusations, tracer),
+    failedAccusationPairwiseNarrow(accusations, setup, tracer),
 );
 
 /**
@@ -749,5 +954,5 @@ export const applyAllRules = (
     knowledge,
     applyConsistencyRules(setup, tracer),
     applyDeductionRules(setup, suggestions, tracer),
-    applyAccusationRules(accusations, tracer),
+    applyAccusationRules(accusations, setup, tracer),
 );

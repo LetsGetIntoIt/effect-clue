@@ -10,6 +10,7 @@ import {
     describeReason,
     DisjointGroupsHandLock,
     FailedAccusation,
+    FailedAccusationPairwiseNarrowing,
     NonRefuters,
     PlayerHand,
     type Provenance,
@@ -95,6 +96,19 @@ describe("ReasonKind constructors", () => {
         expect(r._tag).toBe("FailedAccusation");
         if (r._tag !== "FailedAccusation") throw new Error("unreachable");
         expect(r.accusationIndex).toBe(4);
+    });
+
+    test("FailedAccusationPairwiseNarrowing tags itself and carries pinnedCard + indices", () => {
+        const r = FailedAccusationPairwiseNarrowing({
+            pinnedCard: PLUM,
+            accusationIndices: [0, 2, 5],
+        });
+        expect(r._tag).toBe("FailedAccusationPairwiseNarrowing");
+        if (r._tag !== "FailedAccusationPairwiseNarrowing") {
+            throw new Error("unreachable");
+        }
+        expect(r.pinnedCard).toBe(PLUM);
+        expect(r.accusationIndices).toEqual([0, 2, 5]);
     });
 });
 
@@ -567,5 +581,70 @@ describe("failed-accusation provenance", () => {
         expect(last?.reason.kind._tag).toBe("FailedAccusation");
         if (last?.reason.kind._tag !== "FailedAccusation") return;
         expect(last.reason.kind.accusationIndex).toBe(0);
+    });
+});
+
+describe("failed-accusation-pairwise (Tier 2) provenance", () => {
+    test("describeReason → failed-accusation-pairwise with pinned card + numbers", () => {
+        const cell = Cell(CaseFileOwner(), KNIFE);
+        const reason: Reason = {
+            iteration: 1,
+            kind: FailedAccusationPairwiseNarrowing({
+                pinnedCard: PLUM,
+                accusationIndices: [0, 2, 4],
+            }),
+            value: N,
+            dependsOn: [],
+        };
+        const desc = describeReason(reason, cell, setup, [], []);
+        expect(desc.kind).toBe("failed-accusation-pairwise");
+        if (desc.kind !== "failed-accusation-pairwise") return;
+        expect(desc.params.pinnedCardLabel).toBe("Prof. Plum");
+        expect(desc.params.accusationIndices).toEqual([0, 2, 4]);
+        expect(desc.params.accusationNumbers).toBe("#1, #3, #5");
+        expect(desc.params.value).toBe(N);
+        expect(desc.params.cellCard).toBe("Knife");
+        expect(desc.params.cellPlayer).toBe("Case file");
+    });
+
+    test("chainFor walks back to a FailedAccusationPairwiseNarrowing reason", () => {
+        // Pin PLUM=Y, file (PLUM, KNIFE, R) for every room — Tier 2
+        // forces case_KNIFE=N and the provenance entry should reference
+        // the new ReasonKind.
+        let knowledge = emptyKnowledge;
+        knowledge = setCell(knowledge, Cell(CaseFileOwner(), PLUM), Y);
+        const roomsCategory = setup.categories.find(c => c.name === "Room")!;
+        const accusations = roomsCategory.cards.map(r =>
+            Accusation({ accuser: A, cards: [PLUM, KNIFE, r.id] }),
+        );
+        const result = runDeduceWithExplanations(
+            setup,
+            [],
+            knowledge,
+            accusations,
+        );
+        expect(Result.isSuccess(result)).toBe(true);
+        if (!Result.isSuccess(result)) return;
+        const knifeCell = Cell(CaseFileOwner(), KNIFE);
+        const chain = chainFor(result.success.provenance, knifeCell);
+        const last = chain[chain.length - 1];
+        expect(last?.cell).toEqual(knifeCell);
+        expect(last?.reason.kind._tag).toBe("FailedAccusationPairwiseNarrowing");
+        if (last?.reason.kind._tag !== "FailedAccusationPairwiseNarrowing") {
+            return;
+        }
+        expect(last.reason.kind.pinnedCard).toBe(PLUM);
+        expect(last.reason.kind.accusationIndices.length).toBe(
+            accusations.length,
+        );
+        // dependsOn includes the pinned PLUM cell + every case-file
+        // room cell so the tooltip can walk back to "we knew PLUM was
+        // in the case file" and "rooms X, Y, Z were the candidates".
+        expect(last.reason.dependsOn.length).toBeGreaterThan(1);
+        expect(
+            last.reason.dependsOn.some(c =>
+                c.owner._tag === "CaseFile" && c.card === PLUM,
+            ),
+        ).toBe(true);
     });
 });

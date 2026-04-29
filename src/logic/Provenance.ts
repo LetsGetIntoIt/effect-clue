@@ -60,6 +60,23 @@ class DisjointGroupsHandLockImpl extends Data.TaggedClass(
 class FailedAccusationImpl extends Data.TaggedClass("FailedAccusation")<{
     readonly accusationIndex: number;
 }> {}
+class FailedAccusationPairwiseNarrowingImpl extends Data.TaggedClass(
+    "FailedAccusationPairwiseNarrowing",
+)<{
+    /**
+     * The case-file Y card that activated the narrowing — knowing this
+     * card is in the case file is what reduces every accusation in
+     * `accusationIndices` to a 2-card constraint over the partner +
+     * third-category cards.
+     */
+    readonly pinnedCard: Card;
+    /**
+     * The accusations (by index in the input array) whose third-category
+     * cards collectively cover every still-candidate card in that
+     * category, forcing the partner card to N.
+     */
+    readonly accusationIndices: ReadonlyArray<number>;
+}> {}
 
 export type ReasonKind =
     | InitialKnownCardImpl
@@ -71,7 +88,8 @@ export type ReasonKind =
     | RefuterShowedImpl
     | RefuterOwnsOneOfImpl
     | DisjointGroupsHandLockImpl
-    | FailedAccusationImpl;
+    | FailedAccusationImpl
+    | FailedAccusationPairwiseNarrowingImpl;
 
 const InitialKnownCard = (): ReasonKind => new InitialKnownCardImpl();
 // InitialHandSize is declared in the ReasonKind union but not yet
@@ -99,6 +117,10 @@ export const DisjointGroupsHandLock = (params: {
 export const FailedAccusation = (params: {
     readonly accusationIndex: number;
 }): ReasonKind => new FailedAccusationImpl(params);
+export const FailedAccusationPairwiseNarrowing = (params: {
+    readonly pinnedCard: Card;
+    readonly accusationIndices: ReadonlyArray<number>;
+}): ReasonKind => new FailedAccusationPairwiseNarrowingImpl(params);
 
 /**
  * A short, human-readable reason for why a particular cell has the value
@@ -284,6 +306,17 @@ export type ReasonDescription =
               // (stale provenance entry — accusation removed).
               readonly cardLabels: string | undefined;
           };
+      }
+    | {
+          readonly kind: "failed-accusation-pairwise";
+          readonly params: CellParams & {
+              readonly pinnedCardLabel: string;
+              readonly accusationIndices: ReadonlyArray<number>;
+              // 1-based, comma-separated for the i18n template; rendered
+              // as e.g. "#3, #5, #7" so users can find the contributing
+              // accusations in the log.
+              readonly accusationNumbers: string;
+          };
       };
 
 export const describeReason = (
@@ -406,6 +439,20 @@ export const describeReason = (
                     },
                 };
             },
+            FailedAccusationPairwiseNarrowing: ({
+                pinnedCard,
+                accusationIndices,
+            }): ReasonDescription => ({
+                kind: "failed-accusation-pairwise",
+                params: {
+                    ...base,
+                    pinnedCardLabel: cardName(setup, pinnedCard),
+                    accusationIndices,
+                    accusationNumbers: accusationIndices
+                        .map(i => `#${i + 1}`)
+                        .join(", "),
+                },
+            }),
         }),
     );
 };
@@ -460,7 +507,7 @@ export const deduceWithExplanations = Effect.fn("deducer.evaluateWithProvenance"
                 const before = current;
                 current = applyConsistencyRules(setup, tracer)(current);
                 current = applyDeductionRules(setup, suggestions, tracer)(current);
-                current = applyAccusationRules(accusations, tracer)(current);
+                current = applyAccusationRules(accusations, setup, tracer)(current);
                 if (Equal.equals(current, before)) break;
             }
         } catch (e) {

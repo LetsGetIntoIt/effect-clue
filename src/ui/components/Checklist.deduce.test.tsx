@@ -167,6 +167,162 @@ describe("Checklist — deduce mode — body layout", () => {
     });
 });
 
+// -----------------------------------------------------------------------
+// Case-file body cells expose the same popover affordance as
+// play-mode player cells when there's a deduction to explain — the
+// case file's value is always derived (the column is read-only), so
+// tooltipContent is the only thing the user sees, and they need a
+// hover/click/keyboard path to it.
+// -----------------------------------------------------------------------
+
+describe("Checklist — case-file deduction popover", () => {
+    test("a deduced case-file cell exposes role=button + aria-haspopup + data-cell-col, with no toggle handler", async () => {
+        // Seed a session where the card-ownership slice can pin the
+        // case file: every non-Plum suspect is dealt to Player 1, so
+        // case_Plum gets deduced=Y and the popover should attach.
+        const session = {
+            version: 6,
+            setup: {
+                players: ["Player 1", "Player 2", "Player 3", "Player 4"],
+                categories: [
+                    {
+                        id: "category-suspects",
+                        name: "Suspect",
+                        cards: [
+                            { id: "card-miss-scarlet", name: "Miss Scarlet" },
+                            { id: "card-col-mustard", name: "Col. Mustard" },
+                            { id: "card-mrs-white", name: "Mrs. White" },
+                            { id: "card-mr-green", name: "Mr. Green" },
+                            { id: "card-mrs-peacock", name: "Mrs. Peacock" },
+                            { id: "card-prof-plum", name: "Prof. Plum" },
+                        ],
+                    },
+                    {
+                        id: "category-weapons",
+                        name: "Weapon",
+                        cards: [
+                            { id: "card-candlestick", name: "Candlestick" },
+                            { id: "card-knife", name: "Knife" },
+                            { id: "card-lead-pipe", name: "Lead pipe" },
+                            { id: "card-revolver", name: "Revolver" },
+                            { id: "card-rope", name: "Rope" },
+                            { id: "card-wrench", name: "Wrench" },
+                        ],
+                    },
+                    {
+                        id: "category-rooms",
+                        name: "Room",
+                        cards: [
+                            { id: "card-kitchen", name: "Kitchen" },
+                            { id: "card-ball-room", name: "Ball room" },
+                            { id: "card-conservatory", name: "Conservatory" },
+                            { id: "card-dining-room", name: "Dining room" },
+                            { id: "card-billiard-room", name: "Billiard room" },
+                            { id: "card-library", name: "Library" },
+                            { id: "card-lounge", name: "Lounge" },
+                            { id: "card-hall", name: "Hall" },
+                            { id: "card-study", name: "Study" },
+                        ],
+                    },
+                ],
+            },
+            hands: [
+                {
+                    player: "Player 1",
+                    cards: [
+                        "card-miss-scarlet",
+                        "card-col-mustard",
+                        "card-mrs-white",
+                        "card-mr-green",
+                        "card-mrs-peacock",
+                    ],
+                },
+            ],
+            handSizes: [
+                { player: "Player 1", size: 5 },
+                { player: "Player 2", size: 5 },
+                { player: "Player 3", size: 4 },
+                { player: "Player 4", size: 4 },
+            ],
+            suggestions: [],
+            accusations: [],
+        };
+        window.localStorage.setItem(
+            "effect-clue.session.v6",
+            JSON.stringify(session),
+        );
+
+        render(<Clue />);
+        await waitForDeduceChecklist();
+
+        // Find the case-file body cell on the Plum row. The case-file
+        // column is the rightmost data-cell-col on each row.
+        const allBodyCells = Array.from(
+            document.querySelectorAll<HTMLElement>("[data-cell-row][data-cell-col]"),
+        );
+        const colNumbers = allBodyCells
+            .map(c => Number(c.getAttribute("data-cell-col")))
+            .filter(n => !Number.isNaN(n) && n >= 0);
+        const maxCol = Math.max(...colNumbers);
+        // 4 players + 1 case-file = 5 columns (cols 0..4). Without my
+        // change case-file wouldn't advertise data-cell-col at all.
+        expect(maxCol).toBeGreaterThanOrEqual(4);
+
+        // Pick a row where the case-file is deduced. Plum (index 5 in
+        // suspects) is the only suspect not dealt — case_Plum=Y.
+        const plumCells = allBodyCells.filter(c => c.getAttribute("data-cell-row") === "5");
+        const caseFileCell = plumCells.find(
+            c => c.getAttribute("data-cell-col") === String(maxCol),
+        );
+        expect(caseFileCell).toBeDefined();
+        if (!caseFileCell) return;
+        expect(caseFileCell.getAttribute("role")).toBe("button");
+        expect(caseFileCell.getAttribute("aria-haspopup")).toBe("dialog");
+        expect(caseFileCell.getAttribute("tabindex")).toBe("0");
+        // Crucially: clicking a case-file cell must NOT toggle a
+        // known-card entry — the column is read-only. The click /
+        // toggle wiring lives on player cells only; for case-file we
+        // mount InfoPopover but no onClick that mutates state.
+        // Asserting the absence of `aria-pressed` (which is set on
+        // setup-mode toggleable cells) is a stable proxy.
+        expect(caseFileCell.getAttribute("aria-pressed")).toBeNull();
+    });
+
+    test("an undeduced case-file cell stays non-interactive (no popover affordance)", async () => {
+        // Same session as above, but deuce-mode renders just the
+        // empty checklist by default — no deductions firing. Look at
+        // a row whose case-file cell has no value: it should NOT
+        // expose role=button or aria-haspopup.
+        // Reuse the empty fresh state by doing nothing extra.
+        render(<Clue />);
+        await waitForDeduceChecklist();
+        const allBodyCells = Array.from(
+            document.querySelectorAll<HTMLElement>("[data-cell-row][data-cell-col]"),
+        );
+        // The case-file column won't advertise data-cell-col when
+        // there's no deduction (it falls back to the plain-td path).
+        // Check: at least one row exists with NO data-cell-col on its
+        // last cell — i.e. the case-file column for an empty state.
+        const lastTrs = Array.from(document.querySelectorAll<HTMLElement>("tr"));
+        const anyRowWithUndeducedCaseFile = lastTrs.some(tr => {
+            const tds = Array.from(tr.querySelectorAll("td"));
+            const last = tds[tds.length - 1];
+            // Plain td case-file cell — no data-cell-col set, no
+            // role attribute.
+            return (
+                last !== undefined
+                && last.getAttribute("data-cell-col") === null
+                && last.getAttribute("role") === null
+            );
+        });
+        expect(anyRowWithUndeducedCaseFile).toBe(true);
+        // Sanity: the body cells we DID find still cover the player
+        // columns (so the assertion above isn't accidentally passing
+        // because of a totally empty grid).
+        expect(allBodyCells.length).toBeGreaterThan(0);
+    });
+});
+
 describe("Checklist — deduce mode — SuggestionLogPanel pairing (desktop)", () => {
     test("the desktop play layout mounts SuggestionLogPanel alongside the Checklist", async () => {
         render(<Clue />);
