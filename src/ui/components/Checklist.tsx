@@ -1858,13 +1858,18 @@ const CELL_BASE =
 // position:relative, so without z-index escape they stack in DOM
 // order and the right neighbour wins).
 //
-// Focus indicator: `ring-1 ring-offset-2` (box-shadow) instead of
-// `outline-1 outline-offset-2`. Outlines on `<td>` cells in
+// Focus indicator: `ring-[3px] ring-offset-2` (box-shadow) instead of
+// `outline-3 outline-offset-2`. Outlines on `<td>` cells in
 // `border-collapse: separate` get clipped at the cell's left edge —
 // reproducible on the case-file column whose left neighbour ends at
 // the column boundary. Box-shadow paints with the element's own
 // stacking context and respects z-index escape, so the ring renders
 // on all four sides regardless of which cell its neighbour is.
+//
+// 3px ring matches the global `*:focus-visible` outline width set
+// in `app/globals.css` so checklist cells read at the same weight
+// as every other focusable element on the page (inputs, buttons,
+// etc.).
 //
 // The ring-offset color is set per-cell to match the cell's own
 // background (`ring-offset-yes-bg`, `ring-offset-no-bg`, or
@@ -1873,7 +1878,7 @@ const CELL_BASE =
 // Without that match the offset would render as a solid panel band
 // and the focus indicator would look like a thick double-ring.
 const CELL_INTERACTIVE =
-    " cursor-pointer hover:z-30 hover:rounded-[2px] hover:ring-2 hover:ring-accent/30 focus-visible:z-40 focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:rounded-[2px] focus-visible:outline-none";
+    " cursor-pointer hover:z-30 hover:rounded-[2px] hover:ring-2 hover:ring-accent/30 focus-visible:z-40 focus-visible:ring-[3px] focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:rounded-[2px] focus-visible:outline-none";
 
 const CELL_HIGHLIGHTED =
     " z-30 ring-2 ring-accent ring-offset-1 ring-offset-panel";
