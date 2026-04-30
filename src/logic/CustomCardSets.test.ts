@@ -106,6 +106,42 @@ describe("saveCustomCardSet + loadCustomCardSets", () => {
         expect(() => saveCustomCardSet("Label", makePack())).not.toThrow();
         spy.mockRestore();
     });
+
+    test("with an existingId, updates the pack in place and preserves id", () => {
+        const original = saveCustomCardSet("First", makePack());
+        // Simulate the "loaded but edited" flow: snapshot a different
+        // CardSet but pass the original's id back in.
+        const editedPack = makePack();
+        const updated = saveCustomCardSet(
+            "First — edited",
+            editedPack,
+            original.id,
+        );
+        expect(updated.id).toBe(original.id);
+        expect(updated.label).toBe("First — edited");
+        const all = loadCustomCardSets();
+        // No new pack was inserted — same length, same id, new label.
+        expect(all).toHaveLength(1);
+        expect(all[0]!.id).toBe(original.id);
+        expect(all[0]!.label).toBe("First — edited");
+    });
+
+    test("with a stale existingId, falls back to insert", () => {
+        const before = saveCustomCardSet("Real", makePack());
+        const ghost = saveCustomCardSet(
+            "Ghost",
+            makePack(),
+            "custom-not-in-storage",
+        );
+        // The ghost id was not present, so a new pack was inserted
+        // with a freshly-minted id (NOT the stale id we passed in).
+        expect(ghost.id).not.toBe("custom-not-in-storage");
+        expect(ghost.id).not.toBe(before.id);
+        const all = loadCustomCardSets();
+        expect(all.map(p => p.id).sort()).toEqual(
+            [before.id, ghost.id].sort(),
+        );
+    });
 });
 
 describe("deleteCustomCardSet", () => {

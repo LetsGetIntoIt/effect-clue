@@ -127,15 +127,30 @@ const writeAll = (packs: ReadonlyArray<CustomCardSet>): void => {
 };
 
 /**
- * Snapshot a `CardSet` as a new user card pack. Generates a random
- * id so renames of the active setup's category/card ids don't
- * collide with pack ids across sessions.
+ * Snapshot a `CardSet` as a user card pack. With no `existingId`,
+ * generates a fresh random id and inserts a new pack. With
+ * `existingId` matching a saved pack, replaces that pack's `cardSet`
+ * (and optionally its `label`) in place — id is preserved so the
+ * recency map and any other id-based references stay valid. If
+ * `existingId` doesn't match any saved pack, falls back to insert
+ * (so a stale id from an evicted pack still produces a save).
  */
 export const saveCustomCardSet = (
     label: string,
     cardSet: CardSet,
+    existingId?: string,
 ): CustomCardSet => {
     const packs = loadCustomCardSets();
+    if (existingId !== undefined) {
+        const matchIdx = packs.findIndex(p => p.id === existingId);
+        if (matchIdx !== -1) {
+            const updated: CustomCardSet = { id: existingId, label, cardSet };
+            const next = [...packs];
+            next[matchIdx] = updated;
+            writeAll(next);
+            return updated;
+        }
+    }
     const id = `custom-${Date.now().toString(36)}-${Math.random()
         .toString(36)
         .slice(2, 7)}`;

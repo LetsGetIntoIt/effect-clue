@@ -52,8 +52,9 @@ const loadEffect = Effect.fn("rq.customPacks.load")(function* () {
 const saveEffect = Effect.fn("rq.customPacks.save")(function* (
     label: string,
     cardSet: CardSet,
+    existingId: string | undefined,
 ) {
-    return saveCustomCardSet(label, cardSet);
+    return saveCustomCardSet(label, cardSet, existingId);
 });
 
 const deleteEffect = Effect.fn("rq.customPacks.delete")(function* (id: string) {
@@ -88,12 +89,19 @@ export function useCustomCardPacks(): UseQueryResult<
 interface SaveCardPackInput {
     readonly label: string;
     readonly cardSet: CardSet;
+    /**
+     * When provided and the id matches an existing pack, the
+     * mutation updates that pack in place (id preserved). When
+     * absent, a new pack is created.
+     */
+    readonly existingId?: string;
 }
 
 /**
- * Write-side hook: snapshot the current `CardSet` as a new custom
- * card pack. Returns the persisted pack (with a server-shaped id) so
- * callers can immediately reference it (e.g. record-as-recently-used).
+ * Write-side hook: snapshot the current `CardSet` as a custom card
+ * pack. Defaults to inserting a new pack; pass `existingId` to update
+ * an existing pack in place. Returns the persisted pack so callers
+ * can immediately reference it (e.g. record-as-recently-used).
  *
  * On success the query cache is updated optimistically — no refetch.
  */
@@ -104,12 +112,19 @@ export function useSaveCardPack(): UseMutationResult<
 > {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: ({ label, cardSet }: SaveCardPackInput) =>
-            TelemetryRuntime.runPromise(saveEffect(label, cardSet)),
-        onSuccess: (newPack) => {
+        mutationFn: ({ label, cardSet, existingId }: SaveCardPackInput) =>
+            TelemetryRuntime.runPromise(saveEffect(label, cardSet, existingId)),
+        onSuccess: (savedPack) => {
             queryClient.setQueryData<ReadonlyArray<CustomCardSet>>(
                 customCardPacksQueryKey,
-                (old) => (old ? [...old, newPack] : [newPack]),
+                (old) => {
+                    if (!old) return [savedPack];
+                    const idx = old.findIndex(p => p.id === savedPack.id);
+                    if (idx === -1) return [...old, savedPack];
+                    const next = [...old];
+                    next[idx] = savedPack;
+                    return next;
+                },
             );
         },
     });

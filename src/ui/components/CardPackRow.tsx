@@ -189,6 +189,37 @@ export function CardPackRow() {
     const showSaveAsActive = activeMatch === undefined;
 
     /**
+     * The custom pack the user most-recently loaded, regardless of
+     * whether the live deck still matches its contents. This is the
+     * pack the user is conceptually "editing" — when `activeMatch`
+     * is undefined but `loadedCustomPack` is defined, the deck has
+     * diverged from the loaded pack and the save action should
+     * default to "Update [pack name]" instead of creating a new pack.
+     *
+     * Classic doesn't qualify: it's a built-in, not user-owned, so
+     * editing the Classic deck always produces a new custom pack.
+     */
+    const loadedCustomPack = useMemo<DisplayPack | undefined>(() => {
+        let candidateId: string | undefined;
+        let mostRecent: DateTime.Utc | undefined;
+        for (const [id, at] of usage.entries()) {
+            if (id === classic.id) continue;
+            if (
+                !mostRecent ||
+                DateTime.toEpochMillis(at) > DateTime.toEpochMillis(mostRecent)
+            ) {
+                mostRecent = at;
+                candidateId = id;
+            }
+        }
+        if (!candidateId) return undefined;
+        return otherPacks.find(p => p.id === candidateId);
+    }, [otherPacks, usage, classic.id]);
+
+    const canUpdateLoadedPack =
+        showSaveAsActive && loadedCustomPack !== undefined;
+
+    /**
      * Sorted alphabetically with Classic pinned first; this is what
      * the typeahead dropdown displays before any filtering.
      */
@@ -244,6 +275,20 @@ export function CardPackRow() {
     };
 
     const onSaveCardSet = async () => {
+        // When the user has a custom pack loaded and has edited the
+        // deck since loading, the save button updates that pack in
+        // place rather than minting a new id. The label stays the
+        // same as the loaded pack (no prompt) so "Update MyDeck"
+        // doesn't surprise the user with a label-rename dialog.
+        if (canUpdateLoadedPack && loadedCustomPack !== undefined) {
+            const updated = await savePackMutation.mutateAsync({
+                label: loadedCustomPack.label,
+                cardSet: setup.cardSet,
+                existingId: loadedCustomPack.id,
+            });
+            recordUseMutation.mutate(updated.id);
+            return;
+        }
         const label = window.prompt(t("saveAsCardPackPrompt"));
         if (!label || !label.trim()) return;
         const newPack = await savePackMutation.mutateAsync({
@@ -255,6 +300,22 @@ export function CardPackRow() {
         // newPack.cardSet) trivially true (we just snapshotted setup),
         // the new pack becomes the active pill — and the Save pill
         // un-activates because the live deck now matches a saved pack.
+        recordUseMutation.mutate(newPack.id);
+    };
+
+    /**
+     * "Save as new pack…" — secondary action when a loaded custom
+     * pack is being edited but the user wants to fork rather than
+     * overwrite. Prompts for a new label and inserts (no
+     * `existingId`).
+     */
+    const onSaveAsNewCardSet = async () => {
+        const label = window.prompt(t("saveAsCardPackPrompt"));
+        if (!label || !label.trim()) return;
+        const newPack = await savePackMutation.mutateAsync({
+            label: label.trim(),
+            cardSet: setup.cardSet,
+        });
         recordUseMutation.mutate(newPack.id);
     };
 
@@ -424,13 +485,33 @@ export function CardPackRow() {
                             : "border-border bg-white text-muted hover:bg-hover hover:text-accent")
                     }
                     onClick={onSaveCardSet}
-                    title={t("saveAsCardPackTitle")}
+                    title={
+                        canUpdateLoadedPack && loadedCustomPack !== undefined
+                            ? t("updateCardPackTitle", {
+                                  label: loadedCustomPack.label,
+                              })
+                            : t("saveAsCardPackTitle")
+                    }
                     {...(showSaveAsActive
                         ? { "data-card-pack-save-active": TRUE_LITERAL }
                         : {})}
                 >
-                    {t("saveAsCardPack")}
+                    {canUpdateLoadedPack && loadedCustomPack !== undefined
+                        ? t("updateCardPack", {
+                              label: loadedCustomPack.label,
+                          })
+                        : t("saveAsCardPack")}
                 </button>
+                {canUpdateLoadedPack ? (
+                    <button
+                        type="button"
+                        className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent"
+                        onClick={onSaveAsNewCardSet}
+                        title={t("saveAsCardPackTitle")}
+                    >
+                        {t("saveAsNewCardPack")}
+                    </button>
+                ) : null}
             </div>
         </div>
     );
