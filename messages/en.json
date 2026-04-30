@@ -318,7 +318,8 @@
         "signInWithGoogle": "Sign in with Google",
         "signOut": "Sign out",
         "menuItemSignedOut": "Sign in",
-        "menuItemSignedIn": "Account · {name}"
+        "menuItemSignedIn": "Account · {name}",
+        "menuItemMyCardPacks": "My card packs"
     },
     "installPrompt": {
         "title": "Install Clue Solver",
@@ -336,7 +337,7 @@
         "back": "Back",
         "skip": "Skip tour",
         "finish": "Finish",
-        "restart": "Restart tour",
+        "takeTour": "Take tour",
         "setup": {
             "cardPack": {
                 "title": "Pick a card pack",

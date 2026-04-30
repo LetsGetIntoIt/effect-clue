@@ -275,6 +275,7 @@ function BottomOverflowMenu({
                 side="top"
                 align="end"
                 items={[
+                    // Group 1: Game
                     {
                         label: t("gameSetup", {
                             shortcut: shortcutSuffix("global.gotoSetup", hasKeyboard),
@@ -283,33 +284,41 @@ function BottomOverflowMenu({
                         onClick: onSetup,
                     },
                     {
-                        label: accountLabel,
-                        onClick: () => openAccountModal(),
-                    },
-                    {
-                        label: tShare("menuItem"),
-                        onClick: () => openShareModal(),
-                    },
-                    {
                         label: tToolbar("newGame", {
                             shortcut: shortcutSuffix("global.newGame", hasKeyboard),
                         }),
                         onClick: onNewGame,
                     },
                     {
-                        label: tOnboarding("restart"),
+                        label: tShare("menuItem"),
+                        onClick: () => openShareModal(),
+                    },
+                    { type: "divider" },
+                    // Group 2: Account & content
+                    {
+                        label: accountLabel,
+                        onClick: () => openAccountModal(),
+                    },
+                    {
+                        label: tAccount("menuItemMyCardPacks"),
+                        onClick: () => openAccountModal(),
+                    },
+                    {
+                        label: tOnboarding("takeTour"),
                         onClick: () =>
                             restartTourForScreen(
                                 screenKeyForUiMode(state.uiMode),
                             ),
                     },
+                    { type: "divider" },
+                    // Group 3: Help / system
                     ...(installable
                         ? [
                               {
                                   label: tInstall("menuItem"),
                                   onClick: () =>
                                       openInstallModal(TRIGGER_MENU),
-                              },
+                              } as const,
                           ]
                         : []),
                     {

@@ -5,7 +5,7 @@ import { motion } from "motion/react";
 import { type ReactNode, useState } from "react";
 import { T_FAST, useReducedTransition } from "../motion";
 
-interface OverflowMenuItem {
+interface OverflowMenuButton {
     readonly label: string;
     readonly active?: boolean;
     readonly trailingIcon?: ReactNode;
@@ -13,10 +13,27 @@ interface OverflowMenuItem {
 }
 
 /**
+ * Section divider between groups of menu items. Renders as a
+ * 1px hairline; carries no interaction. Pass between two
+ * `OverflowMenuButton`s in the `items` array.
+ */
+interface OverflowMenuDivider {
+    readonly type: "divider";
+}
+
+type OverflowMenuItem = OverflowMenuButton | OverflowMenuDivider;
+
+const isDivider = (item: OverflowMenuItem): item is OverflowMenuDivider =>
+    "type" in item && item.type === "divider";
+
+/**
  * Shared `⋯` overflow menu. Used by the desktop header Toolbar and the
  * mobile BottomNav. Internally a Radix Popover — each menu item closes
  * the popover before firing its handler so confirms/dialogs don't fight
  * with the open menu.
+ *
+ * Items can be either buttons or `{ type: "divider" }` sentinels for
+ * separating logical groups (e.g. Game / Account & content / Help).
  */
 export function OverflowMenu({
     triggerClassName,
@@ -56,6 +73,16 @@ export function OverflowMenu({
                     className="z-50 min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[13px] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
                 >
                     {items.map((item, i) => {
+                        if (isDivider(item)) {
+                            return (
+                                <div
+                                    key={i}
+                                    role="separator"
+                                    aria-orientation="horizontal"
+                                    className="my-1 h-px bg-border"
+                                />
+                            );
+                        }
                         const handleClick = closeThen(item.onClick);
                         const content = (
                             <MenuItem

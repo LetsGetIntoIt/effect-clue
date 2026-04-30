@@ -149,6 +149,7 @@ export function Toolbar() {
                 side="bottom"
                 align="end"
                 items={[
+                    // Group 1: Game
                     {
                         label: tNav("gameSetup", {
                             shortcut: shortcutSuffix("global.gotoSetup", hasKeyboard),
@@ -158,38 +159,46 @@ export function Toolbar() {
                             dispatch({ type: "setUiMode", mode: "setup" }),
                     },
                     {
-                        label: accountLabel,
-                        onClick: () => openAccountModal(),
-                    },
-                    {
-                        label: tShare("menuItem"),
-                        onClick: () => openShareModal(),
-                    },
-                    {
                         label: t("newGame", {
                             shortcut: shortcutSuffix("global.newGame", hasKeyboard),
                         }),
                         onClick: onNewGame,
                     },
                     {
-                        label: tOnboarding("restart"),
+                        label: tShare("menuItem"),
+                        onClick: () => openShareModal(),
+                    },
+                    { type: "divider" },
+                    // Group 2: Account & content
+                    {
+                        label: accountLabel,
+                        onClick: () => openAccountModal(),
+                    },
+                    {
+                        label: tAccount("menuItemMyCardPacks"),
+                        onClick: () => openAccountModal(),
+                    },
+                    {
+                        label: tOnboarding("takeTour"),
                         onClick: () =>
                             restartTourForScreen(
                                 screenKeyForUiMode(state.uiMode),
                             ),
                     },
-                    // Show "Install app" only when the browser
-                    // confirmed installability via
-                    // `beforeinstallprompt`. On Safari / iOS the
-                    // event never fires, so the item never renders
-                    // — those users install via the share sheet.
+                    { type: "divider" },
+                    // Group 3: Help / system. "Install app" only
+                    // appears when the browser confirmed
+                    // installability via `beforeinstallprompt`.
+                    // On Safari / iOS the event never fires, so the
+                    // item never renders — those users install via
+                    // the share sheet.
                     ...(installable
                         ? [
                               {
                                   label: tInstall("menuItem"),
                                   onClick: () =>
                                       openInstallModal(TRIGGER_MENU),
-                              },
+                              } as const,
                           ]
                         : []),
                     {
