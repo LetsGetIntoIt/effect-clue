@@ -494,7 +494,7 @@ export function Checklist() {
                     <p className="m-0 mt-1.5 text-[14px] leading-relaxed">
                         {tSetup("description")}
                     </p>
-                    <div className="mt-3 flex justify-end">
+                    <div className="mt-3 flex justify-start [@media(min-width:800px)]:justify-end">
                         <button
                             type="button"
                             data-setup-cta
