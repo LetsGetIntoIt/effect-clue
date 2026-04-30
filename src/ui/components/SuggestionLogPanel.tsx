@@ -41,6 +41,7 @@ import { useConfirm } from "../hooks/useConfirm";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { useListFormatter } from "../hooks/useListFormatter";
 import { useSelection } from "../SelectionContext";
+import { TrashIcon, XIcon } from "./Icons";
 import { InfoPopover } from "./InfoPopover";
 import { AccusationForm, type AccusationFormHandle } from "./AccusationForm";
 import {
@@ -1205,6 +1206,10 @@ function PriorSuggestionItem({
     // the <li> itself (not descendant pills / ×) — drives the
     // "Press Enter to edit" cue on desktop.
     const [isRowFocused, setIsRowFocused] = useState(false);
+    // Mouse hover (desktop only — touch is filtered out below). Drives
+    // the visibility of the trash button so idle rows aren't crowded
+    // with a delete affordance.
+    const [isHovered, setIsHovered] = useState(false);
 
     const isSelected = selectedSuggestionIndex === idx;
 
@@ -1293,6 +1298,7 @@ function PriorSuggestionItem({
     const onPointerEnter = (e: React.PointerEvent) => {
         if (e.pointerType !== "mouse") return;
         setHoveredSuggestion(idx);
+        setIsHovered(true);
     };
     const onPointerLeave = (e: React.PointerEvent) => {
         if (e.pointerType !== "mouse") return;
@@ -1300,6 +1306,7 @@ function PriorSuggestionItem({
         // row) is open — the user is mid-edit and the mouse may be
         // travelling through the portal back into the row.
         if (!hasOpenPillPopover()) setHoveredSuggestion(null);
+        setIsHovered(false);
     };
 
     // Click / tap on the row itself. Desktop: one click → edit.
@@ -1557,27 +1564,24 @@ function PriorSuggestionItem({
                         exitEdit();
                         refocusRow();
                     }}
-                    className="absolute right-1 top-1 min-h-[44px] min-w-[44px] cursor-pointer rounded border-none bg-transparent px-2 py-1 text-[22px] leading-none text-muted hover:text-accent"
+                    className="absolute right-1 top-1 inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-accent"
                 >
-                    ×
+                    <XIcon size={18} />
                 </button>
             ) : (
-                <button
-                    type="button"
-                    aria-label={t("removeAction")}
-                    className={
-                        "absolute cursor-pointer rounded border-none bg-transparent leading-none text-muted hover:text-accent " +
-                        (isDesktop
-                            ? "right-1.5 top-1 px-1 text-[16px] "
-                            : "right-0.5 top-0.5 min-h-[32px] min-w-[32px] px-2 py-1 text-[22px] ")
-                    }
-                    onClick={e => {
-                        e.stopPropagation();
-                        void onRemove();
-                    }}
-                >
-                    ×
-                </button>
+                (isDesktop ? isHovered || isRowFocused : showMobileEditButton) && (
+                    <button
+                        type="button"
+                        aria-label={t("removeAction")}
+                        className="absolute right-1 top-1 inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-accent"
+                        onClick={e => {
+                            e.stopPropagation();
+                            void onRemove();
+                        }}
+                    >
+                        <TrashIcon size={18} />
+                    </button>
+                )
             )}
         </motion.li>
     );
@@ -1615,6 +1619,10 @@ function PriorAccusationItem({
     const [isEditing, setIsEditing] = useState(false);
     const [showMobileEditButton, setShowMobileEditButton] = useState(false);
     const [isRowFocused, setIsRowFocused] = useState(false);
+    // Mouse hover (desktop only — touch is filtered out below). Drives
+    // the visibility of the trash button so idle rows aren't crowded
+    // with a delete affordance.
+    const [isHovered, setIsHovered] = useState(false);
 
     // Cell → accusation cross-highlight: when the active checklist
     // cell's provenance chain walks back to a `FailedAccusation`
@@ -1679,6 +1687,7 @@ function PriorAccusationItem({
     const onPointerEnter = (e: React.PointerEvent) => {
         if (e.pointerType !== "mouse") return;
         setHoveredAccusation(idx);
+        setIsHovered(true);
     };
     const onPointerLeave = (e: React.PointerEvent) => {
         if (e.pointerType !== "mouse") return;
@@ -1686,6 +1695,7 @@ function PriorAccusationItem({
         // the row) is open — the user is mid-edit and the mouse may
         // be travelling through the portal back into the row.
         if (!hasOpenPillPopover()) setHoveredAccusation(null);
+        setIsHovered(false);
     };
 
     // Outside-click cancel — same pattern as `PriorSuggestionItem`.
@@ -1883,27 +1893,24 @@ function PriorAccusationItem({
                         exitEdit();
                         refocusRow();
                     }}
-                    className="absolute right-1 top-1 min-h-[44px] min-w-[44px] cursor-pointer rounded border-none bg-transparent px-2 py-1 text-[22px] leading-none text-muted hover:text-accent"
+                    className="absolute right-1 top-1 inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-accent"
                 >
-                    ×
+                    <XIcon size={18} />
                 </button>
             ) : (
-                <button
-                    type="button"
-                    aria-label={t("removeAction")}
-                    className={
-                        "absolute cursor-pointer rounded border-none bg-transparent leading-none text-muted hover:text-accent " +
-                        (isDesktop
-                            ? "right-1.5 top-1 px-1 text-[16px] "
-                            : "right-0.5 top-0.5 min-h-[32px] min-w-[32px] px-2 py-1 text-[22px] ")
-                    }
-                    onClick={e => {
-                        e.stopPropagation();
-                        void onRemove();
-                    }}
-                >
-                    ×
-                </button>
+                (isDesktop ? isHovered || isRowFocused : showMobileEditButton) && (
+                    <button
+                        type="button"
+                        aria-label={t("removeAction")}
+                        className="absolute right-1 top-1 inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-accent"
+                        onClick={e => {
+                            e.stopPropagation();
+                            void onRemove();
+                        }}
+                    >
+                        <TrashIcon size={18} />
+                    </button>
+                )
             )}
         </motion.li>
     );

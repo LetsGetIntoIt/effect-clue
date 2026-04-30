@@ -151,11 +151,11 @@ describe("PriorSuggestionItem — idle state (no interaction)", () => {
         ).toBeNull();
     });
 
-    test("remove button (×) is rendered for idle rows", async () => {
+    test("remove button is hidden on idle rows (no hover, no focus)", async () => {
         await seedOneSuggestionAndMount();
         expect(
-            within(getRow()).getByRole("button", { name: "removeAction" }),
-        ).toBeInTheDocument();
+            within(getRow()).queryByRole("button", { name: "removeAction" }),
+        ).toBeNull();
     });
 });
 
@@ -169,6 +169,16 @@ describe("PriorSuggestionItem — keyboard focus (Tab)", () => {
             ).toBeInTheDocument();
         });
         expect(getRow().querySelector("[data-pill-id]")).toBeNull();
+    });
+
+    test("focusing the row reveals the remove button", async () => {
+        await seedOneSuggestionAndMount();
+        getRow().focus();
+        await waitFor(() => {
+            expect(
+                within(getRow()).getByRole("button", { name: "removeAction" }),
+            ).toBeInTheDocument();
+        });
     });
 });
 
@@ -353,6 +363,19 @@ describe("PriorSuggestionItem — entering edit mode (mobile two-tap)", () => {
             ).toBeInTheDocument();
         });
         expect(getRow().querySelector("[data-pill-id]")).toBeNull();
+    });
+
+    test("remove button is hidden before first tap, visible after", async () => {
+        await seedOneSuggestionAndMount("suggest");
+        expect(
+            within(getRow()).queryByRole("button", { name: "removeAction" }),
+        ).toBeNull();
+        fireEvent.click(getRow());
+        await waitFor(() => {
+            expect(
+                within(getRow()).getByRole("button", { name: "removeAction" }),
+            ).toBeInTheDocument();
+        });
     });
 
     test("tapping the Edit button enters edit mode", async () => {
