@@ -99,6 +99,57 @@ body {
     background-size: 18px 18px;
 }
 
+/*
+ * Horizontal-scroll ownership.
+ *
+ * The Setup-mode wide checklist forces `<main>` past viewport-width via
+ * `min-w-max`. If horizontal overflow propagated up to <html>, mobile
+ * Chrome would inflate its layout viewport to match content width —
+ * making `position: fixed; right: 0` and `100vw` resolve to body-edge
+ * (offscreen) instead of screen-edge. The BottomNav and centred modals
+ * would land in the wrong place.
+ *
+ * Pin horizontal-scroll ownership to <body>: <html> clips so the
+ * layout viewport stays at device-width, and <body> handles the
+ * horizontal scroll for the page. Vertical scroll stays where it was
+ * (on the viewport via the default html/body overflow-y:visible) so
+ * the wheel-anywhere-scrolls invariant is preserved.
+ */
+@layer base {
+    /*
+     * Page-level scroll lives on `<body>`, not `<html>`. We need this
+     * because the Setup-mode wide checklist forces `<main>` past
+     * viewport-width via `min-w-max`, and if horizontal overflow
+     * propagated to `<html>`, mobile Chrome would inflate its layout
+     * viewport to match content width — `position: fixed; right: 0`
+     * and `100vw` would resolve to body-edge instead of screen-edge,
+     * stretching the BottomNav off the screen and decentring modals.
+     *
+     * `<html>` clips so the layout viewport stays at device-width.
+     * `<body>` fills the viewport (`height: 100dvh; width: 100dvw`)
+     * and owns scroll for both axes. Sticky-top elements (page
+     * header, table thead) stick to body's top, which equals the
+     * viewport's top because body fills it. `position: fixed` resolves
+     * to the viewport (=html=device-width) and works as the spec
+     * intends. From the user's perspective body IS the page — wheel
+     * and touch scroll anywhere route to body's scroll container.
+     *
+     * `100dvh` / `100dvw` (dynamic viewport units) adjust as mobile
+     * browser chrome shows/hides, avoiding the iOS-Safari
+     * `100vh != visible-height` issue.
+     */
+    html {
+        overflow: clip;
+        height: 100dvh;
+        width: 100dvw;
+    }
+    body {
+        overflow: auto;
+        height: 100dvh;
+        width: 100dvw;
+    }
+}
+
 /* Headings default to the display stack. Components apply Tailwind font-
    weight/size utilities on top, so this only changes the family. */
 h1,

@@ -9,7 +9,6 @@ import { describeAction } from "../../logic/describeAction";
 import { routes } from "../../routes";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useLongPress } from "../hooks/useLongPress";
-import { useVisualViewportBottomBarStyle } from "../hooks/useVisualViewportBottomBarStyle";
 import { useClue } from "../state";
 import { shortcutSuffix } from "../keyMap";
 import { T_SPRING_SOFT, T_STANDARD, useReducedTransition } from "../motion";
@@ -36,7 +35,6 @@ export function BottomNav() {
     const tToolbar = useTranslations("toolbar");
     const tHistory = useTranslations("history");
     const hasKeyboard = useHasKeyboard();
-    const bottomBarStyle = useVisualViewportBottomBarStyle();
     const mode = state.uiMode;
 
     const undoPreview = nextUndo
@@ -61,18 +59,8 @@ export function BottomNav() {
     return (
         <nav
             aria-label={t("ariaLabel")}
-            // CSS-only positioning (`fixed inset-x-0 bottom-0`) breaks
-            // on mobile Chrome when the body is wider than the visible
-            // viewport (the wide setup checklist forces `<main>` past
-            // 100vw): `right: 0` and `100vw` both resolve against the
-            // *layout* viewport / body, so the nav stretches off the
-            // side and slides to the bottom of the document. We pin
-            // it to `window.visualViewport` instead via inline style.
-            // Tailwind classes here cover the visual chrome only; the
-            // hook owns left/top/width/transform.
-            style={bottomBarStyle}
             className={
-                "z-40 border-t border-border bg-panel " +
+                "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-panel " +
                 "[padding-bottom:env(safe-area-inset-bottom,0px)] " +
                 "[@media(min-width:800px)]:hidden"
             }

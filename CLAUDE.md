@@ -74,7 +74,7 @@ For any change that's observable in the browser, use the `next-dev` preview (con
 
 ### Layout, scroll, and animation behaviors
 
-The structural pieces below are pinned by `src/ui/components/PlayLayout.test.tsx` (mobile mounts only the active pane; desktop mounts both side-by-side). The visual / animated / sticky-positioning pieces below **cannot** be tested in jsdom — `getBoundingClientRect` returns zeroes, `position: sticky` doesn't actually pin, `min-w-max-content` doesn't actually grow, transforms don't extend `body.scrollWidth`, and animations don't run. So when a change touches **page structure (`src/ui/Clue.tsx`, `src/ui/components/PlayLayout.tsx`), overall layout CSS (`<main>`, sticky positioning, `min-w-max`, `contain-paint`, `contain-inline-size`, the `--header-offset` variable), or slide animations (`slideVariants`, `AnimatePresence`)**, walk this list in the `next-dev` preview before reporting done.
+The structural pieces below are pinned by `src/ui/components/PlayLayout.test.tsx` (mobile mounts only the active pane; desktop mounts both side-by-side). The visual / animated / sticky-positioning pieces below **cannot** be tested in jsdom — `getBoundingClientRect` returns zeroes, `position: sticky` doesn't actually pin, `min-w-max-content` doesn't actually grow, transforms don't extend `body.scrollWidth`, and animations don't run. So when a change touches **page structure (`src/ui/Clue.tsx`, `src/ui/components/PlayLayout.tsx`), overall layout CSS (`<main>`, sticky positioning, `min-w-max`, `contain-paint`, `contain-inline-size`, the `--header-offset` variable, the `html { overflow-x: clip } body { overflow-x: auto }` rules in `app/globals.css`), or slide animations (`slideVariants`, `AnimatePresence`)**, walk this list in the `next-dev` preview before reporting done.
 
 Resize the preview between viewports as you go — many of these regress on one breakpoint without affecting the other.
 
@@ -86,13 +86,15 @@ Resize the preview between viewports as you go — many of these regress on one 
 
 **Horizontal page scroll (Setup mode, viewport ≤ ~1200 px so the wide setup table doesn't fit naturally):**
 
-- `<main>` grows (`min-w-max`) past the viewport so the body picks up a horizontal scrollbar — that's how the user reaches the rightmost columns.
+- `<main>` grows (`min-w-max`) past the viewport so the body picks up a horizontal scrollbar — that's how the user reaches the rightmost columns. Horizontal scroll is owned by **`<body>`**, not `<html>` (`globals.css` sets `html { overflow-x: clip }` and `body { overflow-x: auto }`). This is load-bearing: if `<html>` ever gains horizontal scroll, mobile Chrome inflates its layout viewport to match content width, and `position: fixed; right: 0` and `100vw` start resolving to body-edge instead of screen-edge — the BottomNav lands offscreen and the centred modals stop centring on the visible viewport. Keep horizontal scroll on body. Don't introduce per-table `overflow-x: auto` containers either; that would move horizontal scroll into an internal viewport and break the `Move scroll to the page, not an internal viewport` invariant.
 - As you scroll horizontally:
-  - The page title `CLUE SOLVER` stays anchored to the viewport's left edge with normal padding (it doesn't butt against `x: 0`).
-  - The `Game setup` intro card, the card-pack row, and the hand-size warning each stay anchored at the section's natural left padding (~36 px from viewport-left, matching their resting position before the scroll).
-  - On desktop the Toolbar (Undo / Redo / `⋯`) stays in the visible top region.
+  - **Desktop (≥ 800 px):** the page title `CLUE SOLVER`, the `Game setup` intro card, the card-pack row, and the hand-size warning each stay anchored to the visible left edge via `[@media(min-width:800px)]:sticky [@media(min-width:800px)]:left-{N}`. The Toolbar (Undo / Redo / `⋯`) stays in the visible top region.
+  - **Mobile (< 800 px):** those same four elements scroll naturally with the page (no `sticky left-…`). Mobile Chrome's visual-viewport scrolling during a touch swipe doesn't repaint sticky-x in lockstep, so the elements would visibly trail the swipe. Letting them scroll with the page is the correct mobile UX.
   - The sticky thead horizontally scrolls **with** the table so column headers stay aligned with the columns underneath them. (Don't add `sticky left-…` to the thead — it must move with horizontal scroll.)
+- The page header is vertically sticky on **both** breakpoints (`top: var(--contradiction-banner-offset, 0px); z-30; bg-bg`) so it stays pinned during downward scroll on mobile too. The `--header-offset` ResizeObserver in `Clue.tsx` publishes the header's height at every breakpoint so the sticky `<thead>`'s `top:` formula resolves correctly underneath.
 - Dropping back to scroll-x = 0 places everything in its natural rest position with no jump.
+- The BottomNav (`src/ui/components/BottomNav.tsx`) is `position: fixed; inset-x-0; bottom-0` — pure CSS. It must read as exactly viewport-width and pinned to the visible bottom on mobile Chrome with the wide checklist scrolled. If you ever see it stretch wider than the screen, the html/body overflow rules above have likely been broken.
+- Modals (`useConfirm`, `SplashModal`) are `position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%)` — also pure CSS. Same invariant: they must centre on the visible viewport, not the document. Same root cause if they ever drift.
 
 **Mobile Suggest pane fits the viewport (Suggest mobile, viewport ≤ 800 px):**
 

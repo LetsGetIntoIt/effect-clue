@@ -20,7 +20,6 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { splashScreenDismissed } from "../../analytics/events";
-import { useViewportCenteredModalStyle } from "../hooks/useViewportCenteredModalStyle";
 import { AboutContent } from "./AboutContent";
 import { ArrowRightIcon, XIcon } from "./Icons";
 
@@ -34,7 +33,6 @@ export function SplashModal({
 }) {
     const t = useTranslations("splash");
     const [dontShowAgain, setDontShowAgain] = useState(false);
-    const centerStyle = useViewportCenteredModalStyle();
 
     const handleDismiss = (method: "start_playing" | "x_button") => {
         splashScreenDismissed({
@@ -55,10 +53,9 @@ export function SplashModal({
             <Dialog.Portal>
                 <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
                 <Dialog.Content
-                    style={centerStyle}
                     className={
-                        "z-50 flex w-[min(92vw,640px)] max-h-[90vh] flex-col " +
-                        "rounded-[var(--radius)] border border-border " +
+                        "fixed left-1/2 top-1/2 z-50 flex w-[min(92vw,640px)] max-h-[90vh] flex-col " +
+                        "-translate-x-1/2 -translate-y-1/2 rounded-[var(--radius)] border border-border " +
                         "bg-panel shadow-[0_10px_28px_rgba(0,0,0,0.28)] focus:outline-none"
                     }
                 >
