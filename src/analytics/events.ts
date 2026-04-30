@@ -378,6 +378,65 @@ export const cardPackRenamed = (props: {
     wasServerBacked: boolean;
 }): void => capture("card_pack_renamed", props);
 
+// ── Sharing flow (M9) ─────────────────────────────────────────────────────
+//
+// Sender + receiver halves of the server-stored share flow. The
+// raw share id (a cuid2) never goes to PostHog — every event
+// includes a `shareIdHash` (FNV-1a 32-bit, hex-padded) so funnels
+// can correlate a sender's `share_created` to a receiver's
+// `share_opened` / `share_imported` without leaking the URL.
+
+export type ShareDismissVia =
+    | "x_button"
+    | "backdrop"
+    | "navigated_away";
+
+export const shareCreateStarted = (): void =>
+    capture("share_create_started");
+
+export const shareCreated = (props: {
+    includedPack: boolean;
+    includedPlayers: boolean;
+    includedKnownCards: boolean;
+    includedSuggestions: boolean;
+    packIsCustom: boolean;
+    requiresAuth: boolean;
+}): void => capture("share_created", props);
+
+export const shareLinkCopied = (): void => capture("share_link_copied");
+
+export const shareOpened = (props: {
+    shareIdHash: string;
+}): void => capture("share_opened", props);
+
+export const shareImportStarted = (props: {
+    shareIdHash: string;
+}): void => capture("share_import_started", props);
+
+export const shareImported = (props: {
+    shareIdHash: string;
+    includedPack: boolean;
+    includedPlayers: boolean;
+    includedKnownCards: boolean;
+    includedSuggestions: boolean;
+    triggeredNewGame: boolean;
+    savedPackToAccount: boolean;
+}): void => capture("share_imported", props);
+
+export const shareImportDismissed = (props: {
+    shareIdHash: string;
+    via: ShareDismissVia;
+}): void => capture("share_import_dismissed", props);
+
+export const shareSignInRedirect = (props: {
+    shareIdHash: string;
+}): void => capture("share_sign_in_redirect", props);
+
+export const shareSignInResumed = (props: {
+    shareIdHash: string;
+    restoredChoices: boolean;
+}): void => capture("share_sign_in_resumed", props);
+
 // ── Performance signals ───────────────────────────────────────────────────
 
 export const webVital = (props: {

@@ -15,6 +15,7 @@ import { T_SPRING_SOFT, T_STANDARD, useReducedTransition } from "../motion";
 import { useTour } from "../tour/TourProvider";
 import { screenKeyForUiMode } from "../tour/screenKey";
 import { useAccountContext } from "../account/AccountProvider";
+import { useShareContext } from "../share/ShareProvider";
 import { useSession } from "../hooks/useSession";
 import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
 import { useInstallPromptContext } from "./InstallPromptProvider";
@@ -250,6 +251,7 @@ function BottomOverflowMenu({
     const tOnboarding = useTranslations("onboarding");
     const tInstall = useTranslations("installPrompt");
     const tAccount = useTranslations("account");
+    const tShare = useTranslations("share");
     const hasKeyboard = useHasKeyboard();
     const { state } = useClue();
     const { onNewGame } = useToolbarActions();
@@ -257,6 +259,7 @@ function BottomOverflowMenu({
     const { installable, openModal: openInstallModal } =
         useInstallPromptContext();
     const { openModal: openAccountModal } = useAccountContext();
+    const { openModal: openShareModal } = useShareContext();
     const session = useSession();
     const accountLabel =
         session.data?.user && !session.data.user.isAnonymous
@@ -282,6 +285,10 @@ function BottomOverflowMenu({
                     {
                         label: accountLabel,
                         onClick: () => openAccountModal(),
+                    },
+                    {
+                        label: tShare("menuItem"),
+                        onClick: () => openShareModal(),
                     },
                     {
                         label: tToolbar("newGame", {

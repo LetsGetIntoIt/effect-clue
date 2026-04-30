@@ -286,6 +286,28 @@
         "handSizeFix": "Hand size: <strong>{player}</strong> = {size}",
         "handSizeReset": "Reset"
     },
+    "share": {
+        "menuItem": "Share game",
+        "createTitle": "Share this game",
+        "createDescription": "Pick which parts to include. Friends with the link can import only the pieces you choose.",
+        "toggleCardPack": "Card pack",
+        "togglePlayers": "Players + hand sizes",
+        "toggleKnownCards": "Known cards",
+        "toggleSuggestions": "Suggestions + accusations",
+        "requiresPlayers": "Requires players + hand sizes",
+        "createAndCopy": "Create + copy link",
+        "creating": "Creating…",
+        "copied": "Link copied!",
+        "copyFallback": "Copy this URL:",
+        "errorGeneric": "Couldn't create the share. Try again in a moment.",
+        "errorSignInRequired": "Sign in to share a custom card pack so the receiver can save it to their library.",
+        "importTitle": "A friend shared a Clue Solver game",
+        "importDescription": "Pick which parts of the share to import into your local game.",
+        "importModalTitle": "Import a shared game",
+        "importModalDescription": "Tick the sections you want. Anything left off won't touch your current game.",
+        "importAction": "Import",
+        "importing": "Importing…"
+    },
     "account": {
         "titleSignedOut": "Sign in to Clue Solver",
         "titleSignedIn": "Your account",
