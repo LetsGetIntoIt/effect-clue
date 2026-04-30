@@ -32,6 +32,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { XIcon } from "../components/Icons";
+import { useClue } from "../state";
 import { useTour } from "./TourProvider";
 
 /**
@@ -43,10 +44,22 @@ type VirtualElement = {
     readonly getBoundingClientRect: () => DOMRect;
 };
 
+/**
+ * Find the on-page element a tour step targets.
+ *
+ * Uses the `~=` attribute selector so a single DOM element can carry
+ * multiple anchor names (space-separated), e.g. the first cell of the
+ * checklist grid is both `setup-known-cell` and `checklist-cell`. The
+ * fallback to the exact-match selector keeps simple single-token
+ * anchors working unchanged.
+ */
 const findAnchorElement = (anchor: string): HTMLElement | null => {
     if (typeof document === "undefined") return null;
-    return document.querySelector<HTMLElement>(
-        `[data-tour-anchor="${anchor}"]`,
+    return (
+        document.querySelector<HTMLElement>(
+            `[data-tour-anchor~="${anchor}"]`,
+        ) ??
+        document.querySelector<HTMLElement>(`[data-tour-anchor="${anchor}"]`)
     );
 };
 
@@ -76,6 +89,7 @@ export function TourPopover() {
         prevStep,
         dismissTour,
     } = useTour();
+    const { state, dispatch } = useClue();
 
     // The virtualRef passed into Radix Popover. Each step recomputes
     // it via the effect below.
@@ -87,6 +101,19 @@ export function TourPopover() {
     // recomputes the popover's position.
     const [anchorTick, setAnchorTick] = useState(0);
 
+    // Step-driven uiMode dispatch. On mobile the checklist and suggest
+    // panes don't co-exist, so a step that anchors inside the suggest
+    // pane needs uiMode flipped before its anchor resolves. Desktop
+    // renders both panes simultaneously so the dispatch is harmless.
+    useEffect(() => {
+        if (!currentStep?.requiredUiMode) return;
+        if (state.uiMode === currentStep.requiredUiMode) return;
+        dispatch({ type: "setUiMode", mode: currentStep.requiredUiMode });
+    }, [currentStep, state.uiMode, dispatch]);
+
+    // Anchor resolution. Runs after every step change AND every
+    // uiMode change so the suggest-pane anchors resolve after the
+    // dispatch above has flipped the rendered tree.
     useEffect(() => {
         if (!activeScreen || !currentStep) {
             virtualElementRef.current = {
@@ -105,29 +132,87 @@ export function TourPopover() {
             };
         }
         setAnchorTick(n => n + 1);
-    }, [activeScreen, stepIndex, currentStep]);
+    }, [activeScreen, stepIndex, currentStep, state.uiMode]);
+
+    // Spotlight rect — refreshed alongside the anchor effect so the
+    // dim cutout follows the active step.
+    const [spotlight, setSpotlight] = useState<DOMRect | null>(null);
+    useEffect(() => {
+        if (!activeScreen || !currentStep) {
+            setSpotlight(null);
+            return;
+        }
+        const el = findAnchorElement(currentStep.anchor);
+        setSpotlight(el ? el.getBoundingClientRect() : null);
+    }, [activeScreen, stepIndex, currentStep, state.uiMode]);
+
+    // Esc dismisses the active tour. Wired at the document level
+    // rather than via Radix's `onOpenChange` because the controlled
+    // `open` Popover would otherwise also fire `onOpenChange(false)`
+    // for outside clicks AND for any sibling modal's interactions —
+    // letting the tour dismiss itself the moment the splash modal
+    // dispatched its own outside-click guard.
+    useEffect(() => {
+        if (!activeScreen) return;
+        const onKey = (e: KeyboardEvent): void => {
+            if (e.key === "Escape") {
+                e.stopPropagation();
+                // eslint-disable-next-line i18next/no-literal-string -- analytics discriminator
+                dismissTour("esc");
+            }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [activeScreen, dismissTour]);
 
     if (!activeScreen || !steps || !currentStep) return null;
 
     const totalSteps = steps.length;
     const stepNumber = stepIndex + 1;
+    const tourTitle = t(`tourTitle.${activeScreen}`);
+    // Pad the spotlight by a few pixels so the highlight comfortably
+    // surrounds the target rather than hugging its edges.
+    const SPOTLIGHT_PAD = 6;
 
     return (
         <>
-            {/* Dim backdrop so the popover stands out. Click-through
-                dismisses the tour with `via: "backdrop"`. */}
+            {/* Click-everywhere dismiss layer. Lives BENEATH the
+                spotlight so clicks anywhere outside the highlighted
+                anchor still dismiss the tour. */}
             <div
                 aria-hidden
                 onClick={() => dismissTour("backdrop")}
-                className="fixed inset-0 z-40 bg-black/30"
+                className="fixed inset-0 z-40"
             />
-            <Popover.Root
-                open
-                onOpenChange={next => {
-                    // eslint-disable-next-line i18next/no-literal-string -- discriminator value, not user copy.
-                    if (!next) dismissTour("esc");
-                }}
-            >
+            {/* Spotlight: a transparent box sized to the anchor with
+                a giant `box-shadow` painting darkness OUTSIDE the box.
+                Visually highlights the anchor area without needing a
+                clip-path or SVG mask. `pointer-events-none` so the
+                click goes through to the backdrop above. */}
+            {spotlight ? (
+                <div
+                    aria-hidden
+                    style={{
+                        position: "fixed",
+                        top: spotlight.top - SPOTLIGHT_PAD,
+                        left: spotlight.left - SPOTLIGHT_PAD,
+                        width: spotlight.width + SPOTLIGHT_PAD * 2,
+                        height: spotlight.height + SPOTLIGHT_PAD * 2,
+                        boxShadow:
+                            "0 0 0 9999px rgba(0,0,0,0.45), 0 0 0 2px var(--color-tour-accent)",
+                        borderRadius: "var(--tour-radius)",
+                        pointerEvents: "none",
+                        zIndex: 41,
+                    }}
+                    className="tour-spotlight transition-all"
+                />
+            ) : (
+                <div
+                    aria-hidden
+                    className="fixed inset-0 z-40 bg-black/45"
+                />
+            )}
+            <Popover.Root open>
                 <Popover.Anchor virtualRef={virtualElementRef} />
                 <Popover.Portal>
                     <Popover.Content
@@ -152,21 +237,32 @@ export function TourPopover() {
                         // virtualElementRef.current swapped.
                         key={anchorTick}
                     >
-                        <div className="flex items-start justify-between gap-3 border-b border-[var(--color-tour-border)] px-4 pt-3 pb-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--color-tour-accent)]">
-                            <span>
+                        <Popover.Arrow
+                            width={14}
+                            height={8}
+                            className="fill-[var(--color-tour-bg)] stroke-[var(--color-tour-border)]"
+                            strokeWidth={2}
+                        />
+                        <div className="flex flex-col gap-0.5 border-b border-[var(--color-tour-border)] px-4 pt-3 pb-2">
+                            <div className="flex items-start justify-between gap-3">
+                                <span className="font-semibold text-[13px] text-[var(--color-tour-accent)]">
+                                    {tourTitle}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => dismissTour("close")}
+                                    aria-label={tCommon("close")}
+                                    className="-mt-0.5 cursor-pointer rounded-full border-none bg-transparent p-1 text-[var(--color-tour-accent)] hover:bg-[var(--color-tour-bg-hover)]"
+                                >
+                                    <XIcon size={16} />
+                                </button>
+                            </div>
+                            <span className="text-[11px] text-[var(--color-tour-accent)] opacity-70">
                                 {t("stepLabel", {
                                     step: stepNumber,
                                     total: totalSteps,
                                 })}
                             </span>
-                            <button
-                                type="button"
-                                onClick={() => dismissTour("close")}
-                                aria-label={tCommon("close")}
-                                className="-mt-0.5 cursor-pointer rounded-full border-none bg-transparent p-1 text-[var(--color-tour-accent)] hover:bg-[var(--color-tour-bg-hover)]"
-                            >
-                                <XIcon size={16} />
-                            </button>
                         </div>
                         <div className="px-4 py-3">
                             <div

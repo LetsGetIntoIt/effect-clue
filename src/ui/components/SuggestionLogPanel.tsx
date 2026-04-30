@@ -235,6 +235,7 @@ function AddSuggestion() {
 
     return (
         <div
+            data-tour-anchor="suggest-add-form"
             onPointerDown={onWrapperActivity}
             onPointerMove={onWrapperActivity}
             onKeyDown={onWrapperActivity}
@@ -1112,7 +1113,10 @@ function PriorLog() {
     }, [state.suggestions, state.accusations]);
 
     return (
-        <div className="mt-4 border-t border-border pt-4">
+        <div
+            className="mt-4 border-t border-border pt-4"
+            data-tour-anchor="suggest-prior-log"
+        >
             <h3
                 id="prior-suggestions"
                 tabIndex={-1}

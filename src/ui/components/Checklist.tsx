@@ -577,10 +577,19 @@ export function Checklist() {
                                 } else {
                                     const current = handSizeMap.get(owner.player);
                                     const def = defaults.get(owner.player);
+                                    // Anchor the setup tour's hand-size step to
+                                    // the first player's hand-size cell.
+                                    const isFirstPlayer = ownerIdx === 0;
                                     cell = (
                                         <td
                                             key={ownerKey(owner)}
                                             className="border-r border-b border-border px-1.5 py-1 text-center"
+                                            {...(isFirstPlayer
+                                                ? {
+                                                      "data-tour-anchor":
+                                                          "setup-hand-size",
+                                                  }
+                                                : {})}
                                         >
                                             <input
                                                 type="number"
@@ -939,6 +948,24 @@ export function Checklist() {
                                                 rowIdx,
                                                 colIdx,
                                             );
+                                        // Anchor the tours' "mark cards
+                                        // you've seen" / "the checklist"
+                                        // step to the first body cell —
+                                        // it's the same DOM node in setup
+                                        // mode (setup-known-cell) and play
+                                        // mode (checklist-cell). The
+                                        // multi-token attribute lets one
+                                        // element answer to either anchor
+                                        // name via `[data-tour-anchor~=...]`.
+                                        const firstCellAnchorAttr:
+                                            | Record<string, string>
+                                            | undefined =
+                                            rowIdx === 0 && colIdx === 0
+                                                ? {
+                                                      "data-tour-anchor":
+                                                          "setup-known-cell checklist-cell",
+                                                  }
+                                                : undefined;
                                         let cell: ReactNode;
                                         if (setupInteractive) {
                                             const ariaLabel = tSetup(
@@ -962,6 +989,7 @@ export function Checklist() {
                                                     aria-label={ariaLabel}
                                                     data-cell-row={rowIdx}
                                                     data-cell-col={colIdx}
+                                                    {...firstCellAnchorAttr}
                                                     onFocus={onCellFocus}
                                                     onClick={() =>
                                                         toggleKnownCard(
@@ -1057,6 +1085,7 @@ export function Checklist() {
                                                         aria-haspopup="dialog"
                                                         data-cell-row={rowIdx}
                                                         data-cell-col={colIdx}
+                                                        {...firstCellAnchorAttr}
                                                         onFocus={onCellFocus}
                                                         onKeyDown={e => {
                                                             // Enter/Space should open the
@@ -1094,6 +1123,7 @@ export function Checklist() {
                                                     tabIndex={0}
                                                     data-cell-row={rowIdx}
                                                     data-cell-col={colIdx}
+                                                    {...firstCellAnchorAttr}
                                                     onFocus={onCellFocus}
                                                     onKeyDown={onGridArrowKey}
                                                     {...hoverHandlers}
@@ -1106,6 +1136,7 @@ export function Checklist() {
                                                 <td
                                                     key={`${ownerKey(owner)}-${String(entry.id)}`}
                                                     className={tdClassName}
+                                                    {...firstCellAnchorAttr}
                                                     {...hoverHandlers}
                                                 >
                                                     {cellContent}
@@ -1338,6 +1369,9 @@ function PlayerNameInput({
         dispatch({ type: "removePlayer", player });
     };
 
+    // Anchor the setup tour's "add players" step to the first
+    // player-name input.
+    const isFirstPlayer = colIdx === 0;
     return (
         <div className="flex flex-col items-stretch gap-0.5">
             <div className="flex items-center gap-1">
@@ -1347,6 +1381,9 @@ function PlayerNameInput({
                     value={editing}
                     data-cell-row={-2}
                     data-cell-col={colIdx}
+                    {...(isFirstPlayer
+                        ? { "data-tour-anchor": "setup-player-column" }
+                        : {})}
                     onFocus={() => rememberChecklistCell(-2, colIdx)}
                     onChange={e => {
                         setEditing(e.currentTarget.value);
@@ -1691,6 +1728,7 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
         <motion.div
             ref={headerRef}
             className="mb-4 rounded-[var(--radius)] border border-border bg-case-file-bg p-3"
+            data-tour-anchor="checklist-case-file"
             animate={headerAnimate}
             transition={isCelebrating ? wiggleTransition : celebrateTransition}
         >

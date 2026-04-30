@@ -11,11 +11,12 @@
  * `TourPopover` at render time. Author the copy and add new steps
  * here; the wiring picks up new steps for free.
  */
+import type { UiMode } from "../../logic/ClueState";
 import type { ScreenKey } from "./TourState";
 
 /**
  * A single step in a tour. The `anchor` resolves to
- * `document.querySelector(`[data-tour-anchor="${anchor}"]`)` at the
+ * `document.querySelector(`[data-tour-anchor~="${anchor}"]`)` at the
  * moment the step becomes active. Missing anchors auto-skip — the
  * tour advances to the next step or dismisses if there's no next.
  *
@@ -23,6 +24,12 @@ import type { ScreenKey } from "./TourState";
  * `onboarding` namespace. They're allowed to be missing in
  * messages — that surfaces a hard error in i18n:check, which is the
  * right discipline.
+ *
+ * `requiredUiMode` is consulted by the tour driver before rendering
+ * a step: on mobile, `checklist` and `suggest` modes route to
+ * different panes, so a step targeting the prior-log needs the
+ * `suggest` pane mounted. Desktop renders both panes simultaneously
+ * so the dispatch is a no-op.
  */
 export interface TourStep {
     /**
@@ -42,11 +49,21 @@ export interface TourStep {
     readonly side?: "top" | "right" | "bottom" | "left";
     /** Defaults to `"center"`. */
     readonly align?: "start" | "center" | "end";
+    /**
+     * If set, the driver dispatches `setUiMode` to this mode before
+     * the step renders so the anchor is mounted in the visible pane.
+     */
+    readonly requiredUiMode?: UiMode;
 }
 
 /**
- * Tour registry. Five screens defined; the `account` and
- * `shareImport` arrays are placeholder entries reserved for M7 / M9.
+ * Tour registry. Four screens — `setup`, `checklistSuggest`, and
+ * placeholder entries `account` / `shareImport` reserved for M7 / M9.
+ *
+ * The combined `checklistSuggest` tour walks first across the
+ * checklist (2 steps) then across the suggest pane (2 steps).
+ * `requiredUiMode` flags the suggest-pane steps so the mobile
+ * driver flips to the right pane before each.
  */
 export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
     setup: [
@@ -93,13 +110,14 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             align: "end",
         },
     ],
-    checklist: [
+    checklistSuggest: [
         {
             anchor: "checklist-cell",
             titleKey: "checklist.cell.title",
             bodyKey: "checklist.cell.body",
             side: "bottom",
             align: "start",
+            requiredUiMode: "checklist",
         },
         {
             anchor: "checklist-case-file",
@@ -107,15 +125,15 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             bodyKey: "checklist.caseFile.body",
             side: "bottom",
             align: "end",
+            requiredUiMode: "checklist",
         },
-    ],
-    suggest: [
         {
             anchor: "suggest-add-form",
             titleKey: "suggest.addForm.title",
             bodyKey: "suggest.addForm.body",
             side: "bottom",
             align: "start",
+            requiredUiMode: "suggest",
         },
         {
             anchor: "suggest-prior-log",
@@ -123,6 +141,7 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             bodyKey: "suggest.priorLog.body",
             side: "top",
             align: "start",
+            requiredUiMode: "suggest",
         },
     ],
     // Reserved for M7 / M9 — no content yet.

@@ -241,8 +241,7 @@ export const aboutLinkClicked = (props: {
 
 export type TourScreenKey =
     | "setup"
-    | "checklist"
-    | "suggest"
+    | "checklistSuggest"
     | "account"
     | "shareImport";
 

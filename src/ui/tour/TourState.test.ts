@@ -15,7 +15,7 @@ import {
     type ScreenKey,
 } from "./TourState";
 
-const screens: ReadonlyArray<ScreenKey> = ["setup", "checklist", "suggest"];
+const screens: ReadonlyArray<ScreenKey> = ["setup", "checklistSuggest"];
 
 const now = (iso = "2026-04-29T00:00:00Z"): DateTime.Utc =>
     DateTime.makeUnsafe(new Date(iso));
@@ -83,24 +83,24 @@ describe("saveTourVisited / saveTourDismissed round-trip", () => {
 });
 
 describe("per-screen storage isolation", () => {
-    test("dismissing setup does not affect checklist's state", () => {
+    test("dismissing setup does not affect checklistSuggest's state", () => {
         const t = now();
         saveTourDismissed("setup", t);
         expect(loadTourState("setup").lastDismissedAt).toBeDefined();
-        expect(loadTourState("checklist").lastDismissedAt).toBeUndefined();
+        expect(loadTourState("checklistSuggest").lastDismissedAt).toBeUndefined();
     });
 
     test("each screen writes under its own storage key", () => {
         saveTourVisited("setup", now());
-        saveTourVisited("checklist", now());
+        saveTourVisited("checklistSuggest", now());
         expect(
             window.localStorage.getItem("effect-clue.tour.setup.v1"),
         ).not.toBeNull();
         expect(
-            window.localStorage.getItem("effect-clue.tour.checklist.v1"),
+            window.localStorage.getItem("effect-clue.tour.checklistSuggest.v1"),
         ).not.toBeNull();
         expect(
-            window.localStorage.getItem("effect-clue.tour.suggest.v1"),
+            window.localStorage.getItem("effect-clue.tour.account.v1"),
         ).toBeNull();
     });
 });

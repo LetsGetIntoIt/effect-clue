@@ -13,11 +13,15 @@ import type { UiMode } from "../../logic/ClueState";
 import type { ScreenKey } from "./TourState";
 
 const SETUP: ScreenKey = "setup";
-const SUGGEST: ScreenKey = "suggest";
-const CHECKLIST: ScreenKey = "checklist";
+const CHECKLIST_SUGGEST: ScreenKey = "checklistSuggest";
 
+/**
+ * Map the live `uiMode` to its corresponding tour `ScreenKey`. Both
+ * `checklist` and `suggest` modes share the combined
+ * `checklistSuggest` tour — the tour driver dispatches between
+ * panes on mobile when individual steps require it.
+ */
 export const screenKeyForUiMode = (mode: UiMode): ScreenKey => {
     if (mode === "setup") return SETUP;
-    if (mode === "suggest") return SUGGEST;
-    return CHECKLIST;
+    return CHECKLIST_SUGGEST;
 };

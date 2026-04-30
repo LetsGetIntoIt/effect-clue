@@ -332,12 +332,18 @@
         "menuItem": "Install app"
     },
     "onboarding": {
-        "stepLabel": "Tour · Step {step} of {total}",
+        "stepLabel": "Step {step} of {total}",
         "next": "Next",
         "back": "Back",
         "skip": "Skip tour",
         "finish": "Finish",
         "takeTour": "Take tour",
+        "tourTitle": {
+            "setup": "Setup tour",
+            "checklistSuggest": "Checklist & Suggest tour",
+            "account": "Account tour",
+            "shareImport": "Shared game tour"
+        },
         "setup": {
             "cardPack": {
                 "title": "Pick a card pack",
@@ -357,7 +363,7 @@
             },
             "overflow": {
                 "title": "Everything else lives here",
-                "body": "The ⋯ menu has Game setup, Restart tour, New game, About, and (after sign-in) your account."
+                "body": "The ⋯ menu has Game setup, Take tour, New game, About, and (after sign-in) your account."
             },
             "start": {
                 "title": "Ready to play",

@@ -33,14 +33,21 @@ const encode = Schema.encodeSync(PersistedTourStateSchema);
  * Identifier for the screen a tour belongs to. Each value gets its
  * own storage key, its own gate, and its own analytics events.
  *
+ * `checklistSuggest` covers BOTH the Checklist and Suggest panes —
+ * they're side-by-side on desktop and the tour walks across them in
+ * one pass on mobile (the driver dispatches `setUiMode` between
+ * steps that need a different pane mounted). The legacy `checklist`
+ * and `suggest` keys are gone; `resetAllTourState` wipes their
+ * orphaned localStorage entries automatically since it scans by
+ * prefix.
+ *
  * `account` and `shareImport` are reserved for M7 / M9 — `tours.ts`
  * doesn't define content for them yet, but the storage key pattern
  * is shared so the helper functions work uniformly.
  */
 export type ScreenKey =
     | "setup"
-    | "checklist"
-    | "suggest"
+    | "checklistSuggest"
     | "account"
     | "shareImport";
 

@@ -71,6 +71,24 @@ beforeEach(() => {
     // `ClueProvider` mutates `?view=` on every uiMode change, so
     // a stale param from a prior test would leak into hydration.
     window.history.replaceState(null, "", "/");
+    // Pre-dismiss the tour gates so the auto-fire combined tour
+    // doesn't dispatch `setUiMode` mid-render (M13 added a
+    // `requiredUiMode` step driver that would otherwise flip
+    // uiMode away from whatever `?view=` the test seeded).
+    const isoNow = new Date().toISOString();
+    const dismissed = JSON.stringify({
+        version: 1,
+        // The gate considers a tour dormant only when BOTH timestamps
+        // are present and the visit happened recently. Seed both so
+        // the gate's "first visit" branch doesn't fire.
+        lastVisitedAt: isoNow,
+        lastDismissedAt: isoNow,
+    });
+    window.localStorage.setItem("effect-clue.tour.setup.v1", dismissed);
+    window.localStorage.setItem(
+        "effect-clue.tour.checklistSuggest.v1",
+        dismissed,
+    );
 });
 
 describe("Clue — top-level structure", () => {
