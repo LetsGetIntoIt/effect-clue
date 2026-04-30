@@ -16,10 +16,12 @@
 import type { Effect } from "effect";
 import type { SqlClient } from "effect/unstable/sql";
 import migration0001 from "./0001_init";
+import migration0002 from "./0002_better_auth";
 
 export const migrations: Record<
     string,
     Effect.Effect<unknown, unknown, SqlClient.SqlClient>
 > = {
     "0001_init": migration0001,
+    "0002_better_auth": migration0002,
 };

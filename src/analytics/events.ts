@@ -322,6 +322,39 @@ export const installCompleted = (): void =>
 export const appLaunchedStandalone = (): void =>
     capture("app_launched_standalone");
 
+// ── Auth (M7) ─────────────────────────────────────────────────────────────
+//
+// better-auth + Google OAuth + anonymous plugin. The dev-only
+// email/password sign-in does NOT emit any of these events (it's a
+// local-only convenience and would skew funnels).
+
+export type AccountModalSource = "menu" | "tour" | "share_import";
+export type AuthProvider = "google";
+export type SignInFromContext = "menu" | "share_import" | "save_pack";
+
+export const accountModalOpened = (props: {
+    state: "anon" | "signedIn";
+    via: AccountModalSource;
+}): void => capture("account_modal_opened", props);
+
+export const signInStarted = (props: {
+    provider: AuthProvider;
+    from: SignInFromContext;
+}): void => capture("sign_in_started", props);
+
+export const signInCompleted = (props: {
+    provider: AuthProvider;
+    isFirstTime: boolean;
+    wasAnonymous: boolean;
+}): void => capture("sign_in_completed", props);
+
+export const signInFailed = (props: {
+    provider: AuthProvider;
+    reason: string;
+}): void => capture("sign_in_failed", props);
+
+export const signOut = (): void => capture("sign_out");
+
 // ── Performance signals ───────────────────────────────────────────────────
 
 export const webVital = (props: {

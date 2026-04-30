@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { gameSetupStarted } from "../analytics/events";
 import { startSetup } from "../analytics/gameSession";
+import { AccountProvider } from "./account/AccountProvider";
 import { BottomNav } from "./components/BottomNav";
 import { Checklist } from "./components/Checklist";
 import { GlobalContradictionBanner } from "./components/GlobalContradictionBanner";
@@ -142,6 +143,7 @@ function ClueShell({
     const { hydrated } = useClue();
     return (
         <InstallPromptProvider hydrated={hydrated}>
+        <AccountProvider>
             <main className="mx-auto flex min-w-max max-w-[1400px] flex-col gap-5 px-5 pb-24 [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+1.5rem)]">
                 <header
                     ref={headerRef}
@@ -165,6 +167,7 @@ function ClueShell({
                 <TourPopover />
             </main>
             <BottomNav />
+        </AccountProvider>
         </InstallPromptProvider>
     );
 }

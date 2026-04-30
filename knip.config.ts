@@ -19,6 +19,10 @@ const config: KnipConfig = {
 		"src/**/*.test.{ts,tsx}",
 		"src/analytics/events.ts",
 		"app/sw.ts",
+		// Dev-only sign-in defence layer 3 (`Effect.die` if reached
+		// in production). Referenced from the production-bundle grep
+		// in `scripts/assert-no-dev-auth.mjs`, which knip can't see.
+		"src/server/actions/dev-auth.ts",
 	],
 	project: ["app/**/*.{ts,tsx}", "src/**/*.{ts,tsx}"],
 	ignore: ["src/logic/test-utils/**"],

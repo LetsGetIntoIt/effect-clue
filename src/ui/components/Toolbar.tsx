@@ -11,6 +11,8 @@ import { useClue } from "../state";
 import { shortcutSuffix } from "../keyMap";
 import { useTour } from "../tour/TourProvider";
 import { screenKeyForUiMode } from "../tour/screenKey";
+import { useAccountContext } from "../account/AccountProvider";
+import { useSession } from "../hooks/useSession";
 import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
 import { useInstallPromptContext } from "./InstallPromptProvider";
 import type { InstallPromptTrigger } from "../../analytics/events";
@@ -66,6 +68,7 @@ export function Toolbar() {
     const tHistory = useTranslations("history");
     const tOnboarding = useTranslations("onboarding");
     const tInstall = useTranslations("installPrompt");
+    const tAccount = useTranslations("account");
     const hasKeyboard = useHasKeyboard();
     const {
         state,
@@ -81,6 +84,14 @@ export function Toolbar() {
     const { restartTourForScreen } = useTour();
     const { installable, openModal: openInstallModal } =
         useInstallPromptContext();
+    const { openModal: openAccountModal } = useAccountContext();
+    const session = useSession();
+    const accountLabel =
+        session.data?.user && !session.data.user.isAnonymous
+            ? tAccount("menuItemSignedIn", {
+                  name: session.data.user.name ?? session.data.user.email,
+              })
+            : tAccount("menuItemSignedOut");
 
     const undoTooltip = nextUndo
         ? tHistory("undoTooltip", {
@@ -142,6 +153,10 @@ export function Toolbar() {
                         active: state.uiMode === "setup",
                         onClick: () =>
                             dispatch({ type: "setUiMode", mode: "setup" }),
+                    },
+                    {
+                        label: accountLabel,
+                        onClick: () => openAccountModal(),
                     },
                     {
                         label: t("newGame", {

@@ -286,6 +286,18 @@
         "handSizeFix": "Hand size: <strong>{player}</strong> = {size}",
         "handSizeReset": "Reset"
     },
+    "account": {
+        "titleSignedOut": "Sign in to Clue Solver",
+        "titleSignedIn": "Your account",
+        "descriptionSignedOut": "Sign in to sync your custom card packs across devices and keep games you've shared with friends.",
+        "descriptionSignedIn": "Signed in. Your custom card packs sync to this account.",
+        "benefitSyncPacks": "Custom card packs sync across every device you use.",
+        "benefitSharedGames": "Game shares stay tied to your account so you can find them later.",
+        "signInWithGoogle": "Sign in with Google",
+        "signOut": "Sign out",
+        "menuItemSignedOut": "Sign in",
+        "menuItemSignedIn": "Account · {name}"
+    },
     "installPrompt": {
         "title": "Install Clue Solver",
         "description": "Add Clue Solver to your home screen for a faster, fuller experience.",
