@@ -65,6 +65,14 @@ vi.mock("../hooks/useIsDesktop", () => ({
     useIsDesktop: () => true,
 }));
 
+// Force keyboard-bearing device. Hover-focus hint visibility on the
+// prior log rows now follows this signal rather than viewport size,
+// so the desktop-flavoured tests below need it pinned to true. The
+// mobile describe block flips it to false to lock in the touch UX.
+vi.mock("../hooks/useHasKeyboard", () => ({
+    useHasKeyboard: () => true,
+}));
+
 import { fireEvent, render, waitFor, within } from "@testing-library/react";
 import { saveToLocalStorage } from "../../logic/Persistence";
 import { Player } from "../../logic/GameObjects";
@@ -151,11 +159,11 @@ describe("PriorSuggestionItem — idle state (no interaction)", () => {
         ).toBeNull();
     });
 
-    test("remove button (×) is rendered for idle rows", async () => {
+    test("remove button is hidden on idle rows (no hover, no focus)", async () => {
         await seedOneSuggestionAndMount();
         expect(
-            within(getRow()).getByRole("button", { name: "removeAction" }),
-        ).toBeInTheDocument();
+            within(getRow()).queryByRole("button", { name: "removeAction" }),
+        ).toBeNull();
     });
 });
 
@@ -169,6 +177,16 @@ describe("PriorSuggestionItem — keyboard focus (Tab)", () => {
             ).toBeInTheDocument();
         });
         expect(getRow().querySelector("[data-pill-id]")).toBeNull();
+    });
+
+    test("focusing the row reveals the remove button", async () => {
+        await seedOneSuggestionAndMount();
+        getRow().focus();
+        await waitFor(() => {
+            expect(
+                within(getRow()).getByRole("button", { name: "removeAction" }),
+            ).toBeInTheDocument();
+        });
     });
 });
 
@@ -342,6 +360,8 @@ describe("PriorSuggestionItem — entering edit mode (mobile two-tap)", () => {
     beforeEach(async () => {
         const mod = await import("../hooks/useIsDesktop");
         (mod as { useIsDesktop: () => boolean }).useIsDesktop = () => false;
+        const kbd = await import("../hooks/useHasKeyboard");
+        (kbd as { useHasKeyboard: () => boolean }).useHasKeyboard = () => false;
     });
 
     test("first tap reveals the Edit button without entering edit mode", async () => {
@@ -353,6 +373,19 @@ describe("PriorSuggestionItem — entering edit mode (mobile two-tap)", () => {
             ).toBeInTheDocument();
         });
         expect(getRow().querySelector("[data-pill-id]")).toBeNull();
+    });
+
+    test("remove button is hidden before first tap, visible after", async () => {
+        await seedOneSuggestionAndMount("suggest");
+        expect(
+            within(getRow()).queryByRole("button", { name: "removeAction" }),
+        ).toBeNull();
+        fireEvent.click(getRow());
+        await waitFor(() => {
+            expect(
+                within(getRow()).getByRole("button", { name: "removeAction" }),
+            ).toBeInTheDocument();
+        });
     });
 
     test("tapping the Edit button enters edit mode", async () => {

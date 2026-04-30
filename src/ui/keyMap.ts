@@ -254,6 +254,19 @@ export function label(id: BindingId, index = 0): string {
     return activeKeyMap[id].combos[index]?.label ?? "";
 }
 
+/**
+ * Returns " ({label})" when the device has a keyboard, otherwise "".
+ * Lets i18n templates carry a `{shortcut}` placeholder that's a
+ * complete trailing fragment — including its leading space and parens
+ * — so a touch-only device renders the bare label without dangling
+ * empty parens.
+ *
+ * Pair with the `useHasKeyboard()` hook at the call site.
+ */
+export function shortcutSuffix(id: BindingId, hasKeyboard: boolean): string {
+    return hasKeyboard ? ` (${label(id)})` : "";
+}
+
 // ---- React hook --------------------------------------------------------
 
 /**

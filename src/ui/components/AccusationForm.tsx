@@ -15,7 +15,8 @@ import type { DraftAccusation } from "../../logic/ClueState";
 import type { Card, Player } from "../../logic/GameObjects";
 import type { GameSetup } from "../../logic/GameSetup";
 import { categoryOfCard } from "../../logic/GameSetup";
-import { label } from "../keyMap";
+import { useHasKeyboard } from "../hooks/useHasKeyboard";
+import { shortcutSuffix } from "../keyMap";
 import {
     nextEnabledPill,
     type OpenTarget,
@@ -99,6 +100,7 @@ export const AccusationForm = forwardRef<
         // eslint-disable-next-line i18next/no-literal-string -- internal mode discriminator
         submitLabel ?? (accusation !== undefined ? "update" : "add");
     const t = useTranslations("accusations");
+    const hasKeyboard = useHasKeyboard();
 
     const [form, setForm] = useState<FormState>(() =>
         accusation !== undefined
@@ -252,7 +254,7 @@ export const AccusationForm = forwardRef<
             canSubmit={canSubmit}
             submitLabel={t(
                 effectiveSubmitLabel === "update" ? "updateAction" : "submit",
-                { shortcut: label("action.submit") },
+                { shortcut: shortcutSuffix("action.submit", hasKeyboard) },
             )}
             onSubmit={onSubmitClick}
             {...(onCancel !== undefined

@@ -7,8 +7,9 @@ import { startSetup } from "../../analytics/gameSession";
 import { describeAction } from "../../logic/describeAction";
 import { routes } from "../../routes";
 import { useConfirm } from "../hooks/useConfirm";
+import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useClue } from "../state";
-import { label } from "../keyMap";
+import { shortcutSuffix } from "../keyMap";
 import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
 import { OverflowMenu } from "./OverflowMenu";
 import { Tooltip } from "./Tooltip";
@@ -68,6 +69,7 @@ export function Toolbar() {
     const t = useTranslations("toolbar");
     const tNav = useTranslations("bottomNav");
     const tHistory = useTranslations("history");
+    const hasKeyboard = useHasKeyboard();
     const {
         state,
         dispatch,
@@ -111,7 +113,7 @@ export function Toolbar() {
                     aria-label={t("undoAria")}
                 >
                     <UndoIcon size={15} className="shrink-0" />
-                    {t("undo", { shortcut: label("global.undo") })}
+                    {t("undo", { shortcut: shortcutSuffix("global.undo", hasKeyboard) })}
                 </button>
             </Tooltip>
             <Tooltip content={redoTooltip}>
@@ -124,7 +126,7 @@ export function Toolbar() {
                     aria-label={t("redoAria")}
                 >
                     <RedoIcon size={15} className="shrink-0" />
-                    {t("redo", { shortcut: label("global.redo") })}
+                    {t("redo", { shortcut: shortcutSuffix("global.redo", hasKeyboard) })}
                 </button>
             </Tooltip>
             <OverflowMenu
@@ -135,7 +137,7 @@ export function Toolbar() {
                 items={[
                     {
                         label: tNav("gameSetup", {
-                            shortcut: label("global.gotoSetup"),
+                            shortcut: shortcutSuffix("global.gotoSetup", hasKeyboard),
                         }),
                         active: state.uiMode === "setup",
                         onClick: () =>
@@ -147,7 +149,7 @@ export function Toolbar() {
                     },
                     {
                         label: t("newGame", {
-                            shortcut: label("global.newGame"),
+                            shortcut: shortcutSuffix("global.newGame", hasKeyboard),
                         }),
                         onClick: onNewGame,
                     },

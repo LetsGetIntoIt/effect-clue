@@ -46,6 +46,7 @@ import {
 import { Accusation } from "../../logic/Accusation";
 import { Suggestion } from "../../logic/Suggestion";
 import { useConfirm } from "../hooks/useConfirm";
+import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useSelection } from "../SelectionContext";
 import { useClue } from "../state";
 import { useWhyHoverIntent } from "../checklistPopoverIntent";
@@ -53,7 +54,7 @@ import {
     registerChecklistFocusHandler,
     rememberChecklistCell,
 } from "../checklistFocus";
-import { label, matches } from "../keyMap";
+import { label, matches, shortcutSuffix } from "../keyMap";
 import { AnimatePresence, motion } from "motion/react";
 import {
     T_CELEBRATE,
@@ -212,6 +213,7 @@ export function Checklist() {
     const t = useTranslations("deduce");
     const tSetup = useTranslations("setup");
     const tReasons = useTranslations("reasons");
+    const hasKeyboard = useHasKeyboard();
     const { state, dispatch, derived } = useClue();
     const {
         activeSuggestionIndex,
@@ -485,14 +487,14 @@ export function Checklist() {
             }}
         >
             {inSetup && (
-                <div className="sticky left-9 mb-4 max-w-[calc(100vw-4.5rem)] shrink-0 rounded-[var(--radius)] border border-accent/40 bg-accent/5 px-4 py-3">
+                <div className="mb-4 shrink-0 rounded-[var(--radius)] border border-accent/40 bg-accent/5 px-4 py-3 [@media(min-width:800px)]:sticky [@media(min-width:800px)]:left-9 [@media(min-width:800px)]:max-w-[calc(100vw-4.5rem)]">
                     <h2 className="m-0 font-display text-[20px] text-accent">
                         {tSetup("title")}
                     </h2>
                     <p className="m-0 mt-1.5 text-[14px] leading-relaxed">
                         {tSetup("description")}
                     </p>
-                    <div className="mt-3 flex justify-end">
+                    <div className="mt-3 flex justify-start [@media(min-width:800px)]:justify-end">
                         <button
                             type="button"
                             data-setup-cta
@@ -506,20 +508,20 @@ export function Checklist() {
                         >
                             {suggestions.length > 0
                                 ? tSetup("continuePlaying", {
-                                      shortcut: label("global.gotoPlay"),
+                                      shortcut: shortcutSuffix("global.gotoPlay", hasKeyboard),
                                   })
                                 : tSetup("startPlaying", {
-                                      shortcut: label("global.gotoPlay"),
+                                      shortcut: shortcutSuffix("global.gotoPlay", hasKeyboard),
                                   })}
                         </button>
                     </div>
                 </div>
             )}
-            <div className="sticky left-9 max-w-[calc(100vw-4.5rem)] shrink-0">
+            <div className="shrink-0 [@media(min-width:800px)]:sticky [@media(min-width:800px)]:left-9 [@media(min-width:800px)]:max-w-[calc(100vw-4.5rem)]">
                 {inSetup ? <CardPackRow /> : <CaseFileHeader knowledge={knowledge} />}
             </div>
             {inSetup && handSizeMismatch && (
-                <div className="sticky left-9 mb-3 max-w-[calc(100vw-4.5rem)] shrink-0 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning">
+                <div className="mb-3 shrink-0 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning [@media(min-width:800px)]:sticky [@media(min-width:800px)]:left-9 [@media(min-width:800px)]:max-w-[calc(100vw-4.5rem)]">
                     {tSetup("handSizeMismatch", {
                         total: handSizesTotal,
                         expected: totalDealt,
@@ -532,7 +534,7 @@ export function Checklist() {
                 <thead className="sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))] z-20 bg-row-header">
                     <tr>
                         <th className="border-r border-b border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted">
-                            {inSetup ? null : label("global.gotoChecklist")}
+                            {inSetup || !hasKeyboard ? null : label("global.gotoChecklist")}
                         </th>
                         {owners.flatMap((owner, ownerIdx) => {
                             const cell = (

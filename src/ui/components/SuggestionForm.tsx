@@ -15,7 +15,8 @@ import type { GameSetup } from "../../logic/GameSetup";
 import { categoryOfCard } from "../../logic/GameSetup";
 import type { Card, Player } from "../../logic/GameObjects";
 import { newSuggestionId } from "../../logic/Suggestion";
-import { label } from "../keyMap";
+import { useHasKeyboard } from "../hooks/useHasKeyboard";
+import { label, shortcutSuffix } from "../keyMap";
 import {
     nextEnabledPill,
     type OpenTarget,
@@ -149,6 +150,7 @@ export const SuggestionForm = forwardRef<
         // eslint-disable-next-line i18next/no-literal-string -- internal mode discriminator
         submitLabel ?? (suggestion !== undefined ? "update" : "add");
     const t = useTranslations("suggestions");
+    const hasKeyboard = useHasKeyboard();
 
     // --- Form state ----------------------------------------------------
     const [form, setForm] = useState<FormState>(() =>
@@ -648,7 +650,7 @@ export const SuggestionForm = forwardRef<
             canSubmit={canSubmit}
             submitLabel={t(
                 effectiveSubmitLabel === "update" ? "updateAction" : "submit",
-                { shortcut: label("action.submit") },
+                { shortcut: shortcutSuffix("action.submit", hasKeyboard) },
             )}
             {...(submitBlockReason !== undefined ? { submitBlockReason } : {})}
             onSubmit={doSubmit}

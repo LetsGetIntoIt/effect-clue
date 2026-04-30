@@ -12,10 +12,10 @@
     },
     "bottomNav": {
         "ariaLabel": "Primary navigation",
-        "checklist": "Checklist ({shortcut})",
-        "suggest": "Suggest ({shortcut})",
+        "checklist": "Checklist{shortcut}",
+        "suggest": "Suggest{shortcut}",
         "more": "More",
-        "gameSetup": "Game setup ({shortcut})",
+        "gameSetup": "Game setup{shortcut}",
         "about": "About"
     },
     "splash": {
@@ -33,16 +33,16 @@
         "pageHeading": "About the Clue solver"
     },
     "toolbar": {
-        "undo": "Undo ({shortcut})",
+        "undo": "Undo{shortcut}",
         "undoAria": "Undo",
         "undoTitle": "Undo (⌘Z / Ctrl+Z)",
-        "redo": "Redo ({shortcut})",
+        "redo": "Redo{shortcut}",
         "redoAria": "Redo",
         "redoTitle": "Redo (⌘⇧Z / Ctrl+Shift+Z)",
         "share": "Share link",
         "shareCopied": "Copied!",
         "copyFallback": "Copy this URL:",
-        "newGame": "New game ({shortcut})",
+        "newGame": "New game{shortcut}",
         "newGameConfirm": "Start a new game? This will clear all players, cards, known hands, and suggestions."
     },
     "history": {
@@ -113,8 +113,8 @@
         "addCard": "+ add card",
         "addCategory": "+ add category",
         "knownCardCheckboxAria": "{player} owns {card}",
-        "startPlaying": "Start playing → ({shortcut})",
-        "continuePlaying": "Continue playing → ({shortcut})"
+        "startPlaying": "Start playing →{shortcut}",
+        "continuePlaying": "Continue playing →{shortcut}"
     },
     "deduce": {
         "title": "Deduction grid",
@@ -185,19 +185,20 @@
     },
     "suggestions": {
         "title": "Suggestion log",
-        "addTitle": "Add a <suggestionTab>suggestion <kbd>({suggestionKey})</kbd></suggestionTab> or <accusationTab>accusation <kbd>({accusationKey})</kbd></accusationTab>",
+        "addTitle": "Add a <suggestionTab>suggestion<kbd> ({suggestionKey})</kbd></suggestionTab> or <accusationTab>accusation<kbd> ({accusationKey})</kbd></accusationTab>",
         "recommendationsTitle": "Next-suggestion recommendations",
         "suggestingAs": "Suggesting as: ",
         "resolveContradictionFirst": "Resolve the contradiction to see recommendations.",
         "addPlayersFirst": "Add players to see recommendations.",
         "nothingUseful": "Nothing useful to ask — you've already narrowed everything down.",
         "recommendationsCalculating": "Calculating recommendations…",
-        "priorTitle": "{count, plural, =0 {Prior suggestions ({shortcut})} other {Prior suggestions ({shortcut}) (#)}}",
+        "priorTitle": "{count, plural, =0 {Prior suggestions{shortcut}} other {Prior suggestions{shortcut} (#)}}",
+        "numberPrefix": "S{n}.",
         "priorKeyboardHint": "↑↓ navigate · Enter edit · ⌫ remove · Esc exit",
         "priorRowHintDesktop": "Press Enter to edit",
         "priorRowHintMobile": "Tap to edit",
         "editAction": "Edit",
-        "updateAction": "Update ({shortcut})",
+        "updateAction": "Update{shortcut}",
         "cancelEditAria": "Cancel edit",
         "priorEmpty": "No suggestions yet. Add one above.",
         "suggestedLine": "<strong>{suggester}</strong> suggested {cards}",
@@ -236,7 +237,7 @@
         "popoverNobodyRefuted": "Nobody refuted",
         "popoverNoShownCard": "Unknown / unseen",
         "popoverCommitHint": "Space toggles · Enter confirms",
-        "submit": "Add ({shortcut})",
+        "submit": "Add{shortcut}",
         "clearInputs": "Clear inputs",
         "pillValueNobody": "nobody",
         "pillValueUnknown": "unknown"
@@ -247,12 +248,13 @@
         "addHelpText": "Add a player's failed accusation. No point in logging successful accusations — they end the game!",
         "accusedLine": "<strong>{accuser}</strong> accused {cards} (failed)",
         "pillAccuser": "Accuser",
-        "submit": "Add ({shortcut})",
-        "updateAction": "Update ({shortcut})",
+        "submit": "Add{shortcut}",
+        "updateAction": "Update{shortcut}",
         "cancelAction": "Cancel",
         "editAction": "Edit",
         "removeAction": "Remove accusation",
-        "removeConfirm": "Remove this accusation?"
+        "removeConfirm": "Remove this accusation?",
+        "numberPrefix": "A{n}."
     },
     "contradictions": {
         "bannerTitle": "Contradiction!",
