@@ -3,17 +3,24 @@
  * `/manifest.webmanifest` at request time.
  *
  * Browsers read this to determine PWA installability. Together with
- * a registered service worker (see `app/sw.ts`), at least one icon
- * ≥192px, and HTTPS, this lets Chrome / Edge / Android Chrome fire
- * `beforeinstallprompt`, which our `useInstallPrompt` hook captures
- * and replays through `<InstallPromptModal />` on the user's second
- * visit.
+ * a registered service worker (see `app/sw.ts`), at least one
+ * referenced icon, and HTTPS, this lets Chrome / Edge / Android
+ * Chrome fire `beforeinstallprompt`, which our `useInstallPrompt`
+ * hook captures and replays through `<InstallPromptModal />` on
+ * the user's second visit.
  *
- * Icons referenced here live in `public/icons/`. Until real artwork
- * lands, those are placeholders — the install prompt will not fire
- * because browsers reject the installable check on solid-colour
- * placeholders. Replace the icons before depending on the prompt;
- * see the M5 PR description for the manual artwork-generation step.
+ * Icons are SVG so the same source serves every device DPI. The
+ * manifest declares `sizes: "any"` for the SVG variants — Chrome's
+ * documented behaviour is to accept SVG as the primary
+ * install-icon source, downsampling to whatever size the OS
+ * requests. The maskable variant uses an 80% safe zone so circular
+ * masks don't clip the magnifying glass.
+ *
+ * Upgrade path to PNGs (recommended once a designer-built source
+ * exists): drop 192/512/maskable-512 PNGs in `public/icons/`,
+ * swap the entries below, and verify the install icon stays sharp
+ * on Android Chrome (which sometimes prefers PNG for the home-
+ * screen tile).
  */
 import type { MetadataRoute } from "next";
 
@@ -30,12 +37,10 @@ const DISPLAY: "standalone" = "standalone";
 const ORIENTATION: "any" = "any";
 const BG_COLOR = "#efe6d3";
 const THEME_COLOR = "#7a1c1c";
-const ICON_192 = "/icons/icon-192.png";
-const ICON_512 = "/icons/icon-512.png";
-const ICON_MASKABLE = "/icons/icon-maskable-512.png";
-const SIZE_192 = "192x192";
-const SIZE_512 = "512x512";
-const TYPE_PNG = "image/png";
+const ICON_SVG = "/icons/icon.svg";
+const ICON_MASKABLE_SVG = "/icons/icon-maskable.svg";
+const SIZE_ANY = "any";
+const TYPE_SVG = "image/svg+xml";
 const PURPOSE_MASKABLE: "maskable" = "maskable";
 const DIR: "ltr" = "ltr";
 const LANG = "en";
@@ -51,12 +56,11 @@ export default function manifest(): MetadataRoute.Manifest {
         theme_color: THEME_COLOR,
         orientation: ORIENTATION,
         icons: [
-            { src: ICON_192, sizes: SIZE_192, type: TYPE_PNG },
-            { src: ICON_512, sizes: SIZE_512, type: TYPE_PNG },
+            { src: ICON_SVG, sizes: SIZE_ANY, type: TYPE_SVG },
             {
-                src: ICON_MASKABLE,
-                sizes: SIZE_512,
-                type: TYPE_PNG,
+                src: ICON_MASKABLE_SVG,
+                sizes: SIZE_ANY,
+                type: TYPE_SVG,
                 purpose: PURPOSE_MASKABLE,
             },
         ],
