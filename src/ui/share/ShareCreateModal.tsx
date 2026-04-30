@@ -22,13 +22,14 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     shareCreateStarted,
     shareCreated,
     shareLinkCopied,
 } from "../../analytics/events";
-import { CARD_SETS } from "../../logic/GameSetup";
+import type { CardSet } from "../../logic/CardSet";
+import { CARD_SETS, GameSetup } from "../../logic/GameSetup";
 import type { GameSession } from "../../logic/Persistence";
 import { createShare } from "../../server/actions/shares";
 import { useClue } from "../state";
@@ -37,12 +38,21 @@ import { XIcon } from "../components/Icons";
 
 const SHARE_BASE_PATH = "/share/";
 
-interface ToggleState {
+export interface ShareToggleState {
     cardPack: boolean;
     players: boolean;
     knownCards: boolean;
     suggestions: boolean;
 }
+
+type ToggleState = ShareToggleState;
+
+const DEFAULT_TOGGLES: ToggleState = {
+    cardPack: true,
+    players: true,
+    knownCards: false,
+    suggestions: false,
+};
 
 const sessionToShareInputs = (
     session: GameSession,
@@ -90,20 +100,46 @@ const sessionToShareInputs = (
 export function ShareCreateModal({
     open,
     onClose,
+    initialToggles,
+    forcedCardPack,
 }: {
     readonly open: boolean;
     readonly onClose: () => void;
+    /**
+     * Partial override of the default toggle state — useful when
+     * the modal is opened from a context that wants to prefill
+     * a subset (e.g. "Share this setup" prefills cardPack + players).
+     */
+    readonly initialToggles?: Partial<ShareToggleState>;
+    /**
+     * If provided, the share's `cardPackData` snapshot uses THIS
+     * card set rather than the live `state.setup.cardSet`. Used by
+     * per-pack share buttons so the share contains the picked pack
+     * regardless of what's currently loaded in setup.
+     */
+    readonly forcedCardPack?: CardSet;
 }) {
     const t = useTranslations("share");
     const tCommon = useTranslations("common");
     const { state, derived } = useClue();
     const { openModal: openAccountModal } = useAccountContext();
-    const [toggles, setToggles] = useState<ToggleState>({
-        cardPack: true,
-        players: true,
-        knownCards: false,
-        suggestions: false,
-    });
+    // Re-seed toggles every time the modal opens so a per-pack
+    // entry doesn't carry over its prefill into a later
+    // generic "Share game" click. The parent updates
+    // `initialToggles` synchronously with `setOpen(true)`, so the
+    // first render where `open === true` already has the right
+    // value to read.
+    const [toggles, setToggles] = useState<ToggleState>(() => ({
+        ...DEFAULT_TOGGLES,
+        ...initialToggles,
+    }));
+    const prevOpenRef = useRef(open);
+    useEffect(() => {
+        if (open && !prevOpenRef.current) {
+            setToggles({ ...DEFAULT_TOGGLES, ...initialToggles });
+        }
+        prevOpenRef.current = open;
+    }, [open, initialToggles]);
     const [submitting, setSubmitting] = useState(false);
     const [copied, setCopied] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -112,7 +148,20 @@ export function ShareCreateModal({
         setSubmitting(true);
         setError(null);
         const session: GameSession = {
-            setup: state.setup,
+            // When `forcedCardPack` is provided, the share contains
+            // that specific pack — used by per-pack share buttons.
+            // The rest of the session (players, hands, suggestions)
+            // still comes from the live state because pack-only
+            // shares typically have `players: false` in their
+            // toggles anyway. `GameSetup({...})` rebuilds the impl
+            // (which derives `players` and `categories` from the
+            // split inputs), so type-shape stays right.
+            setup: forcedCardPack
+                ? GameSetup({
+                      cardSet: forcedCardPack,
+                      playerSet: state.setup.playerSet,
+                  })
+                : state.setup,
             hands: state.knownCards.reduce<
                 Array<{ player: string; cards: ReadonlyArray<string> }>
             >((acc, kc) => {

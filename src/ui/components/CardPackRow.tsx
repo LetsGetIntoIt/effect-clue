@@ -30,7 +30,8 @@ import {
 import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 import { CardPackPicker, type PickerPack } from "./CardPackPicker";
-import { SearchIcon } from "./Icons";
+import { SearchIcon, ShareIcon } from "./Icons";
+import { useShareContext } from "../share/ShareProvider";
 
 const RECENT_LIMIT = 3;
 const SURFACE_BUDGET = 1 + RECENT_LIMIT; // Classic + 3 recents = 4 pills before the dropdown.
@@ -110,6 +111,7 @@ export function CardPackRow() {
     const deletePackMutation = useDeleteCardPack();
     const recordUseMutation = useRecordCardPackUse();
     const forgetUseMutation = useForgetCardPackUse();
+    const { openModalWith: openShareModalWith } = useShareContext();
     const [pickerOpen, setPickerOpen] = useState(false);
 
     // The Classic id is the first entry in CARD_SETS and is the
@@ -338,6 +340,25 @@ export function CardPackRow() {
         void onDeleteCustomPack(pack);
     };
 
+    const onSharePackFromPicker = (picked: PickerPack) => {
+        const pack = findDisplayPack(picked.id);
+        if (!pack) return;
+        // Per-pack share defaults to "card pack only" — players /
+        // hand sizes / suggestions are state of the live game and
+        // don't belong in a from-picker share. The receiver still
+        // sees toggles in the modal and can change them before
+        // submitting.
+        openShareModalWith({
+            initialToggles: {
+                cardPack: true,
+                players: false,
+                knownCards: false,
+                suggestions: false,
+            },
+            forcedCardPack: pack.cardSet,
+        });
+    };
+
     const onPickerOpenChange = (next: boolean) => {
         setPickerOpen(next);
         if (next) cardPackPickerOpened();
@@ -459,6 +480,7 @@ export function CardPackRow() {
                         packs={pickerPacks}
                         onSelect={onSelectFromPicker}
                         onDeleteCustomPack={onDeleteFromPicker}
+                        onSharePack={onSharePackFromPicker}
                         activeMatchId={activeMatch?.id}
                     >
                         <button
@@ -512,6 +534,24 @@ export function CardPackRow() {
                         {t("saveAsNewCardPack")}
                     </button>
                 ) : null}
+                <button
+                    type="button"
+                    className="ml-auto inline-flex cursor-pointer items-center gap-1 rounded border border-border bg-white px-3 py-1 text-[13px] text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent"
+                    onClick={() =>
+                        openShareModalWith({
+                            initialToggles: {
+                                cardPack: true,
+                                players: true,
+                                knownCards: false,
+                                suggestions: false,
+                            },
+                        })
+                    }
+                    title={t("shareSetupTitle")}
+                >
+                    <ShareIcon size={14} />
+                    {t("shareSetup")}
+                </button>
             </div>
         </div>
     );

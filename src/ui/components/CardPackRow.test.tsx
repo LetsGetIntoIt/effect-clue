@@ -126,7 +126,10 @@ const surfaceLabels = (): ReadonlyArray<string> => {
         const text = btn.textContent?.trim() ?? "";
         if (!text) continue;
         if (text.startsWith("saveAsCardPack")) continue;
+        if (text.startsWith("saveAsNewCardPack")) continue;
+        if (text.startsWith("updateCardPack")) continue;
         if (text.startsWith("allCardPacksPill")) continue;
+        if (text.startsWith("shareSetup")) continue;
         if (btn.getAttribute("aria-label")?.startsWith("deleteCustomCardSetAria"))
             continue;
         if (seen.has(text)) continue;

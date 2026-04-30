@@ -10,6 +10,7 @@ import {
     useRef,
     useState,
 } from "react";
+import { ShareIcon } from "./Icons";
 
 /**
  * Pack-shaped record consumed by the picker. Custom packs carry
@@ -30,6 +31,14 @@ interface CardPackPickerProps {
     readonly packs: ReadonlyArray<PickerPack>;
     readonly onSelect: (pack: PickerPack) => void;
     readonly onDeleteCustomPack: (pack: PickerPack) => void;
+    /**
+     * Optional per-row "Share this pack" handler. When provided, every
+     * pack row gets a small share-icon button alongside the delete one.
+     * Custom packs and built-ins both surface the affordance — sharing
+     * a built-in is still a valid use case (a friend without the same
+     * default lineup can import the deck).
+     */
+    readonly onSharePack?: (pack: PickerPack) => void;
     /**
      * Id of the pack whose contents match the active deck. Rendered with
      * a subtle accent treatment so the user can see which pack the
@@ -67,6 +76,7 @@ export function CardPackPicker({
     packs,
     onSelect,
     onDeleteCustomPack,
+    onSharePack,
     activeMatchId,
     children,
 }: CardPackPickerProps) {
@@ -239,10 +249,29 @@ export function CardPackPicker({
                                             >
                                                 {pack.label}
                                             </button>
+                                            {onSharePack ? (
+                                                <button
+                                                    type="button"
+                                                    className="ml-1 cursor-pointer rounded px-2 py-0.5 text-muted hover:bg-white hover:text-accent"
+                                                    onClick={() =>
+                                                        onSharePack(pack)
+                                                    }
+                                                    title={t(
+                                                        "sharePackTitle",
+                                                        { label: pack.label },
+                                                    )}
+                                                    aria-label={t(
+                                                        "sharePackAria",
+                                                        { label: pack.label },
+                                                    )}
+                                                >
+                                                    <ShareIcon size={13} />
+                                                </button>
+                                            ) : null}
                                             {pack.isCustom ? (
                                                 <button
                                                     type="button"
-                                                    className="ml-2 cursor-pointer rounded px-2 py-0.5 text-muted hover:bg-white hover:text-danger"
+                                                    className="ml-1 cursor-pointer rounded px-2 py-0.5 text-muted hover:bg-white hover:text-danger"
                                                     onClick={() =>
                                                         onDeleteCustomPack(pack)
                                                     }
