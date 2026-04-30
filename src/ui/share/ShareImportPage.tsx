@@ -149,7 +149,18 @@ export function ShareImportPage({
                             <Toggle
                                 label={t("toggleCardPack")}
                                 checked={includePack}
-                                disabled={!hasPack}
+                                // Mirror of the create-side rule:
+                                // when players is on, card pack is
+                                // required so the imported player
+                                // identity stays tied to its deck.
+                                disabled={!hasPack || includePlayers}
+                                {...(includePlayers
+                                    ? {
+                                          disabledHint: t(
+                                              "requiresCardPackForPlayers",
+                                          ),
+                                      }
+                                    : {})}
                                 onChange={setIncludePack}
                             />
                             <Toggle
@@ -158,6 +169,12 @@ export function ShareImportPage({
                                 disabled={!hasPlayers}
                                 onChange={(v) => {
                                     setIncludePlayers(v);
+                                    // Players-on forces cardPack-on
+                                    // (when the share contains a
+                                    // pack). Without a pack in the
+                                    // share, the disabled state
+                                    // already prevents this.
+                                    if (v && hasPack) setIncludePack(true);
                                     if (!v) {
                                         setIncludeKnown(false);
                                         setIncludeSugg(false);
@@ -205,11 +222,13 @@ function Toggle({
     label,
     checked,
     disabled,
+    disabledHint,
     onChange,
 }: {
     readonly label: string;
     readonly checked: boolean;
     readonly disabled?: boolean;
+    readonly disabledHint?: string;
     readonly onChange: (next: boolean) => void;
 }) {
     return (
@@ -218,10 +237,16 @@ function Toggle({
                 "flex cursor-pointer items-center gap-2 " +
                 (disabled === true ? "cursor-not-allowed opacity-50" : "")
             }
+            title={disabled === true ? disabledHint : undefined}
         >
             <input
                 type="checkbox"
-                checked={disabled === true ? false : checked}
+                // Show the actual `checked` value even when
+                // disabled. Mirrors the create-side modal: a
+                // "required-on" toggle (cardPack when players is on)
+                // needs to read as checked-and-locked rather than as
+                // phantom-unchecked.
+                checked={checked}
                 onChange={(e) => onChange(e.target.checked)}
                 disabled={disabled === true}
                 className="h-4 w-4 cursor-pointer accent-accent disabled:cursor-not-allowed"

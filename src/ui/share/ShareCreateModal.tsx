@@ -21,7 +21,9 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import {
     shareCreateStarted,
@@ -33,8 +35,25 @@ import { CARD_SETS, GameSetup } from "../../logic/GameSetup";
 import type { GameSession } from "../../logic/Persistence";
 import { createShare } from "../../server/actions/shares";
 import { useClue } from "../state";
-import { useAccountContext } from "../account/AccountProvider";
+import { sessionQueryKey, useSession } from "../hooks/useSession";
+import { DevSignInForm } from "../account/DevSignInForm";
+import { T_STANDARD, useReducedTransition } from "../motion";
 import { XIcon } from "../components/Icons";
+
+const isDev = process.env.NODE_ENV === "development";
+
+// Wire-format constants — exempt from i18next/no-literal-string.
+const SOCIAL_SIGN_IN_PROVIDER = "google";
+const SOCIAL_SIGN_IN_PATH = "/api/auth/sign-in/social";
+
+// Module-scope step discriminators — exempt from
+// `i18next/no-literal-string` because they're flow-control values,
+// not user-facing copy.
+const STEP_TOGGLES = "toggles" as const;
+const STEP_SIGN_IN = "signIn" as const;
+type Step = typeof STEP_TOGGLES | typeof STEP_SIGN_IN;
+// Framer presence-mode literal needed by the wizard's slide.
+const PRESENCE_WAIT_MODE = "wait" as const;
 
 const SHARE_BASE_PATH = "/share/";
 
@@ -121,8 +140,20 @@ export function ShareCreateModal({
 }) {
     const t = useTranslations("share");
     const tCommon = useTranslations("common");
+    const tAccount = useTranslations("account");
     const { state, derived } = useClue();
-    const { openModal: openAccountModal } = useAccountContext();
+    const queryClient = useQueryClient();
+    const session = useSession();
+    const transition = useReducedTransition(T_STANDARD);
+    const [step, setStep] = useState<Step>(STEP_TOGGLES);
+    // The wizard direction picks the slide axis: forward goes
+    // right→left, back goes the other way. Tracked separately
+    // from `step` so the same Framer variants work both ways.
+    const [direction, setDirection] = useState<1 | -1>(1);
+    // Captures whether the user's last attempt was blocked by
+    // sign-in-required so we can auto-retry create after they sign
+    // in, without forcing them to click "Create" again.
+    const pendingRetryRef = useRef(false);
     // Re-seed toggles every time the modal opens so a per-pack
     // entry doesn't carry over its prefill into a later
     // generic "Share game" click. The parent updates
@@ -224,8 +255,15 @@ export function ShareCreateModal({
         } catch (e) {
             const msg = String(e);
             if (msg.includes("sign_in_required_for_custom_pack_share")) {
-                setError(t("errorSignInRequired"));
-                openAccountModal();
+                // Slide to the inline sign-in step instead of stacking
+                // an Account modal on top of this one. After the user
+                // signs in, we auto-retry createShare from where they
+                // left off — pendingRetryRef carries the intent across
+                // the step transition.
+                pendingRetryRef.current = true;
+                setError(null);
+                setDirection(1);
+                setStep(STEP_SIGN_IN);
             } else {
                 setError(t("errorGeneric"));
             }
@@ -234,9 +272,63 @@ export function ShareCreateModal({
         }
     };
 
+    /**
+     * Called once the user has successfully completed the inline
+     * sign-in step. Slides back to step 1 and, if a retry is pending
+     * (i.e. they got bumped here by a sign-in-required error), re-runs
+     * the create flow with the same toggles.
+     */
+    const onSignedIn = async (): Promise<void> => {
+        await queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+        setDirection(-1);
+        setStep(STEP_TOGGLES);
+        if (pendingRetryRef.current) {
+            pendingRetryRef.current = false;
+            await onCreate();
+        }
+    };
+
+    const onGoogleSignIn = (): void => {
+        if (typeof window !== "undefined") {
+            const url =
+                `${SOCIAL_SIGN_IN_PATH}?provider=${SOCIAL_SIGN_IN_PROVIDER}` +
+                `&callbackURL=${encodeURIComponent(
+                    window.location.pathname + window.location.search,
+                )}`;
+            window.location.href = url;
+        }
+    };
+
+    const goBackToToggles = (): void => {
+        pendingRetryRef.current = false;
+        setDirection(-1);
+        setStep(STEP_TOGGLES);
+    };
+
+    /**
+     * Whether the create button should advertise that sign-in is
+     * required up front. Lazy heuristic: any non-built-in cardSet
+     * counts as custom; if the user is anonymous, the create attempt
+     * will need a sign-in first. We surface that in the CTA copy so
+     * users aren't surprised by the slide.
+     */
+    const builtInIds = new Set(CARD_SETS.map(s => s.id));
+    const activeCardSet =
+        forcedCardPack ?? state.setup.cardSet;
+    const cardSetIsCustom = !builtInIds.has(
+        (activeCardSet as { id?: string }).id ?? "",
+    );
+    const needsSignIn =
+        toggles.cardPack &&
+        cardSetIsCustom &&
+        (!session.data?.user || session.data.user.isAnonymous);
+
     const close = (): void => {
         setCopied(false);
         setError(null);
+        setStep(STEP_TOGGLES);
+        setDirection(1);
+        pendingRetryRef.current = false;
         onClose();
     };
 
@@ -253,7 +345,9 @@ export function ShareCreateModal({
                 >
                     <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
                         <Dialog.Title className="m-0 font-display text-[20px] text-accent">
-                            {t("createTitle")}
+                            {step === STEP_TOGGLES
+                                ? t("createTitle")
+                                : t("signInTitle")}
                         </Dialog.Title>
                         <Dialog.Close
                             aria-label={tCommon("close")}
@@ -262,54 +356,124 @@ export function ShareCreateModal({
                             <XIcon size={18} />
                         </Dialog.Close>
                     </div>
-                    <Dialog.Description className="px-5 pt-3 text-[14px] leading-relaxed">
-                        {t("createDescription")}
-                    </Dialog.Description>
-                    <div className="flex flex-col gap-2 px-5 pt-3 text-[14px]">
-                        <Toggle
-                            label={t("toggleCardPack")}
-                            checked={toggles.cardPack}
-                            onChange={(v) =>
-                                setToggles((t) => ({ ...t, cardPack: v }))
-                            }
-                        />
-                        <Toggle
-                            label={t("togglePlayers")}
-                            checked={toggles.players}
-                            onChange={(v) =>
-                                setToggles((t) => ({
-                                    ...t,
-                                    players: v,
-                                    knownCards: v ? t.knownCards : false,
-                                    suggestions: v ? t.suggestions : false,
-                                }))
-                            }
-                        />
-                        <Toggle
-                            label={t("toggleKnownCards")}
-                            checked={toggles.knownCards}
-                            disabled={!toggles.players}
-                            disabledHint={t("requiresPlayers")}
-                            onChange={(v) =>
-                                setToggles((t) => ({ ...t, knownCards: v }))
-                            }
-                        />
-                        <Toggle
-                            label={t("toggleSuggestions")}
-                            checked={toggles.suggestions}
-                            disabled={!toggles.players}
-                            disabledHint={t("requiresPlayers")}
-                            onChange={(v) =>
-                                setToggles((t) => ({ ...t, suggestions: v }))
-                            }
-                        />
+                    <div className="relative grid grid-cols-[minmax(0,1fr)] [grid-template-areas:'stack'] overflow-hidden">
+                        <AnimatePresence custom={direction} initial={false} mode={PRESENCE_WAIT_MODE}>
+                            {step === STEP_TOGGLES ? (
+                                <motion.div
+                                    key="toggles"
+                                    custom={direction}
+                                    initial={{ x: direction * 40, opacity: 0 }}
+                                    animate={{ x: 0, opacity: 1 }}
+                                    exit={{ x: -direction * 40, opacity: 0 }}
+                                    transition={transition}
+                                    className="[grid-area:stack] min-w-0"
+                                >
+                                    <Dialog.Description className="px-5 pt-3 text-[14px] leading-relaxed">
+                                        {t("createDescriptionLead")}
+                                    </Dialog.Description>
+                                    <ul className="m-0 list-disc px-5 pt-1 pl-9 text-[13px] text-muted">
+                                        <li>{t("archetypePack")}</li>
+                                        <li>{t("archetypeInProgress")}</li>
+                                        <li>{t("archetypeSolved")}</li>
+                                    </ul>
+                                    <div className="flex flex-col gap-2 px-5 pt-3 text-[14px]">
+                                        <Toggle
+                                            label={t("toggleCardPack")}
+                                            checked={toggles.cardPack}
+                                            disabled={toggles.players}
+                                            disabledHint={t("requiresCardPackForPlayers")}
+                                            onChange={v =>
+                                                setToggles(prev => ({ ...prev, cardPack: v }))
+                                            }
+                                        />
+                                        <Toggle
+                                            label={t("togglePlayers")}
+                                            checked={toggles.players}
+                                            onChange={v =>
+                                                setToggles(prev => ({
+                                                    ...prev,
+                                                    players: v,
+                                                    cardPack: v ? true : prev.cardPack,
+                                                    knownCards: v ? prev.knownCards : false,
+                                                    suggestions: v ? prev.suggestions : false,
+                                                }))
+                                            }
+                                        />
+                                        <Toggle
+                                            label={t("toggleKnownCards")}
+                                            checked={toggles.knownCards}
+                                            disabled={!toggles.players}
+                                            disabledHint={t("requiresPlayers")}
+                                            onChange={v =>
+                                                setToggles(prev => ({
+                                                    ...prev,
+                                                    knownCards: v,
+                                                }))
+                                            }
+                                        />
+                                        <Toggle
+                                            label={t("toggleSuggestions")}
+                                            checked={toggles.suggestions}
+                                            disabled={!toggles.players}
+                                            disabledHint={t("requiresPlayers")}
+                                            onChange={v =>
+                                                setToggles(prev => ({
+                                                    ...prev,
+                                                    suggestions: v,
+                                                }))
+                                            }
+                                        />
+                                    </div>
+                                    {error !== null ? (
+                                        <div className="px-5 pt-3 text-[13px] text-danger">
+                                            {error}
+                                        </div>
+                                    ) : null}
+                                    {copied ? (
+                                        <div className="px-5 pt-3 text-[12px] text-muted">
+                                            {t("linkExpiresIn", { duration: t("ttl") })}
+                                        </div>
+                                    ) : null}
+                                </motion.div>
+                            ) : (
+                                <motion.div
+                                    key="signIn"
+                                    custom={direction}
+                                    initial={{ x: direction * 40, opacity: 0 }}
+                                    animate={{ x: 0, opacity: 1 }}
+                                    exit={{ x: -direction * 40, opacity: 0 }}
+                                    transition={transition}
+                                    className="[grid-area:stack] min-w-0"
+                                >
+                                    <Dialog.Description className="px-5 pt-3 text-[14px] leading-relaxed">
+                                        {t("signInDescription")}
+                                    </Dialog.Description>
+                                    <div className="flex flex-col gap-2 px-5 pt-4 pb-2">
+                                        <button
+                                            type="button"
+                                            onClick={onGoogleSignIn}
+                                            className="cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover"
+                                        >
+                                            {tAccount("signInWithGoogle")}
+                                        </button>
+                                        {isDev ? (
+                                            <DevSignInForm onSignedIn={() => void onSignedIn()} />
+                                        ) : null}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
-                    {error !== null ? (
-                        <div className="px-5 pt-3 text-[13px] text-danger">
-                            {error}
-                        </div>
-                    ) : null}
                     <div className="mt-4 flex items-center justify-end gap-2 border-t border-border bg-panel px-5 pt-4 pb-5">
+                        {step === STEP_SIGN_IN ? (
+                            <button
+                                type="button"
+                                onClick={goBackToToggles}
+                                className="mr-auto cursor-pointer rounded-[var(--radius)] border border-border bg-white px-4 py-2 text-[14px] hover:bg-hover"
+                            >
+                                {tCommon("back")}
+                            </button>
+                        ) : null}
                         <button
                             type="button"
                             onClick={close}
@@ -317,18 +481,22 @@ export function ShareCreateModal({
                         >
                             {tCommon("cancel")}
                         </button>
-                        <button
-                            type="button"
-                            onClick={() => void onCreate()}
-                            disabled={submitting}
-                            className="cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                            {copied
-                                ? t("copied")
-                                : submitting
-                                    ? t("creating")
-                                    : t("createAndCopy")}
-                        </button>
+                        {step === STEP_TOGGLES ? (
+                            <button
+                                type="button"
+                                onClick={() => void onCreate()}
+                                disabled={submitting}
+                                className="cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                {copied
+                                    ? t("copied")
+                                    : submitting
+                                        ? t("creating")
+                                        : needsSignIn
+                                            ? t("signInToShare")
+                                            : t("createAndCopy")}
+                            </button>
+                        ) : null}
                     </div>
                 </Dialog.Content>
             </Dialog.Portal>
@@ -359,7 +527,11 @@ function Toggle({
         >
             <input
                 type="checkbox"
-                checked={disabled === true ? false : checked}
+                // Show the actual `checked` value even when
+                // disabled — a "required-on" toggle (cardPack when
+                // players is on) needs to read as checked-and-locked,
+                // not as a phantom unchecked box.
+                checked={checked}
                 onChange={(e) => onChange(e.target.checked)}
                 disabled={disabled === true}
                 className="h-4 w-4 cursor-pointer accent-accent disabled:cursor-not-allowed"
