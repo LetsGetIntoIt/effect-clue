@@ -27,10 +27,11 @@
 "use server";
 
 import { createId } from "@paralleldrive/cuid2";
-import { Effect } from "effect";
+import { Duration, Effect } from "effect";
 import { PgClient } from "@effect/sql-pg";
 import { headers } from "next/headers";
 import { auth } from "../auth";
+import { SHARE_TTL } from "../shares/constants";
 import { withServerAction } from "../withServerAction";
 
 interface CreateShareInput {
@@ -84,6 +85,12 @@ export async function createShare(
         throw new Error(ERR_SIGN_IN_REQUIRED);
     }
     const id = createId();
+    // Pass the TTL as a number of hours and let Postgres compute
+    // `NOW() + INTERVAL ... HOUR` so we don't have to pre-format a
+    // TIMESTAMPTZ on the client. `Duration.toHours` returns a
+    // floating-point number; floor it before binding so the
+    // INTERVAL receives a clean integer.
+    const ttlHours = Math.floor(Duration.toHours(SHARE_TTL));
     return withServerAction(
         Effect.gen(function* () {
             const sql = yield* PgClient.PgClient;
@@ -95,7 +102,8 @@ export async function createShare(
                     snapshot_hand_sizes_data,
                     snapshot_known_cards_data,
                     snapshot_suggestions_data,
-                    snapshot_accusations_data
+                    snapshot_accusations_data,
+                    expires_at
                 ) VALUES (
                     ${id}, ${ownerId},
                     ${input.cardPackData},
@@ -103,7 +111,8 @@ export async function createShare(
                     ${input.handSizesData},
                     ${input.knownCardsData},
                     ${input.suggestionsData},
-                    ${input.accusationsData}
+                    ${input.accusationsData},
+                    NOW() + (${ttlHours} || ' hours')::INTERVAL
                 )
             `;
             return { id };
