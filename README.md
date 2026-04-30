@@ -89,19 +89,37 @@ Tests live next to source as `Foo.test.ts(x)` beside `Foo.ts(x)`.
 
 - **Node** — version pinned in [.nvmrc](.nvmrc) (currently `22.22.2`). `engine-strict=true` in [.npmrc](.npmrc) means scripts will refuse to run on the wrong version.
 - **pnpm** — `>= 10.32.0`. Required; `npm` / `yarn` / `bun` are not supported.
+- **Docker** — only required if you want to exercise the server-backed features (custom card packs, accounts, sharing). The pure-client deducer doesn't need it.
 
 ### First-time setup
 
 ```bash
 nvm use            # picks the version from .nvmrc
 pnpm install
-cp .env.example .env.local   # only needed if you want Sentry/Honeycomb/PostHog locally
+cp .env.example .env.local
+pnpm db:up         # Postgres in Docker; safe to skip if you don't need server features
 pnpm dev
 ```
 
 Then open <http://localhost:3000>.
 
 The third-party SDKs (Sentry, Honeycomb, PostHog) all no-op when their env vars are unset, so the app runs end-to-end with an empty `.env.local`.
+
+### Local Postgres via Docker
+
+`docker-compose.yml` at the repo root spins up a single `postgres:16-alpine` service on `localhost:5432`. The default `DATABASE_URL` to drop into `.env.local` is committed in [.env.example](.env.example) — copy the local-Docker block.
+
+| Command | What it does |
+| --- | --- |
+| `pnpm db:up` | Start Postgres in the background. |
+| `pnpm db:down` | Stop the container; data persists in the named volume. |
+| `pnpm db:reset` | Stop + wipe the volume. Migrations re-run on next request. |
+| `pnpm db:logs` | Tail the Postgres logs. |
+| `pnpm db:psql` | Open a `psql` shell against the running container. |
+
+Migrations apply automatically on the first server-side request after each cold start — the same code path runs in production against Neon and locally against Docker.
+
+To deploy these features to a Vercel preview / production, see [docs/setup-vercel-neon-google.md](docs/setup-vercel-neon-google.md) for the Neon, better-auth, and Google OAuth wiring.
 
 ### Common scripts
 
@@ -117,6 +135,7 @@ The third-party SDKs (Sentry, Honeycomb, PostHog) all no-op when their env vars 
 | `pnpm lint` | ESLint (with `eslint-plugin-i18next` to catch hard-coded UI strings). |
 | `pnpm knip` | Unused-exports / unused-deps audit. |
 | `pnpm i18n:check` | Orphan-key audit against `messages/en.json`. |
+| `pnpm db:up` / `db:down` / `db:reset` / `db:logs` / `db:psql` | Manage the local Docker Postgres for server features. |
 
 ### Pre-commit green-check set
 
@@ -130,7 +149,9 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm knip && pnpm i18n:check
 
 ## Environment variables
 
-Copy [.env.example](.env.example) to `.env.local`. All three integrations are optional in development.
+Copy [.env.example](.env.example) to `.env.local`. All third-party integrations are optional in local development.
+
+### Observability (browser, optional)
 
 | Variable | Used for |
 | --- | --- |
@@ -139,7 +160,17 @@ Copy [.env.example](.env.example) to `.env.local`. All three integrations are op
 | `NEXT_PUBLIC_HONEYCOMB_API_KEY` | Honeycomb ingest key (write-only, browser-safe). |
 | `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST` | PostHog project key + region host. |
 
-In CI/production, the build job needs `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` to upload source maps; everything else is read at runtime in the browser.
+### Server features (DB + auth)
+
+| Variable | Used for |
+| --- | --- |
+| `DATABASE_URL` | Postgres connection string. Local Docker default committed in [.env.example](.env.example); Neon URL for previews/production. |
+| `DATABASE_URL_UNPOOLED` | Direct (non-pooler) Postgres URL. Reserved for migration runs that need a stable session. |
+| `BETTER_AUTH_SECRET` | Server-only secret for session JWT signing. Generate with `openssl rand -hex 32`. |
+| `BETTER_AUTH_URL` | Public URL of the deployed app — `http://localhost:3000` in dev. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth client. Optional in local dev (the dev-only username/password flow covers it); required for previews/production. |
+
+In CI/production, the build job needs `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` to upload source maps. Production also needs the DB and auth vars wired in Vercel — see [docs/setup-vercel-neon-google.md](docs/setup-vercel-neon-google.md).
 
 ---
 

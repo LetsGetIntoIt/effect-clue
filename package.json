@@ -20,7 +20,12 @@
 		"assert:no-dev-auth": "node scripts/assert-no-dev-auth.mjs",
 		"dev": "next dev",
 		"build": "next build",
-		"start": "next start"
+		"start": "next start",
+		"db:up": "docker compose up -d postgres",
+		"db:down": "docker compose down",
+		"db:reset": "docker compose down -v && docker compose up -d postgres",
+		"db:logs": "docker compose logs -f postgres",
+		"db:psql": "docker compose exec postgres psql -U effect_clue -d effect_clue"
 	},
 	"repository": {
 		"type": "git",
