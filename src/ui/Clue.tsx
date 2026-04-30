@@ -93,19 +93,19 @@ export function Clue() {
         const el = headerRef.current;
         if (!el) return;
         const root = document.documentElement;
-        const mq = window.matchMedia("(min-width: 800px)");
+        // Header is vertically sticky at every breakpoint, so the
+        // sticky thead in the Checklist always needs to know how
+        // tall it is to anchor `top: calc(...)` below it.
         const write = () =>
             root.style.setProperty(
                 "--header-offset",
-                mq.matches ? `${el.offsetHeight}px` : "0px",
+                `${el.offsetHeight}px`,
             );
         write();
         const ro = new ResizeObserver(write);
         ro.observe(el);
-        mq.addEventListener("change", write);
         return () => {
             ro.disconnect();
-            mq.removeEventListener("change", write);
         };
     }, []);
     return (
@@ -116,7 +116,7 @@ export function Clue() {
             <main className="mx-auto flex min-w-max max-w-[1400px] flex-col gap-5 px-5 pb-24 [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+1.5rem)]">
                 <header
                     ref={headerRef}
-                    className="sticky left-5 flex max-w-[calc(100vw-2.5rem)] flex-wrap items-center justify-between gap-4 [@media(min-width:800px)]:top-[var(--contradiction-banner-offset,0px)] [@media(min-width:800px)]:z-30 [@media(min-width:800px)]:bg-bg [@media(min-width:800px)]:py-2"
+                    className="sticky top-[var(--contradiction-banner-offset,0px)] z-30 flex flex-wrap items-center justify-between gap-4 bg-bg py-2 [@media(min-width:800px)]:left-5 [@media(min-width:800px)]:max-w-[calc(100vw-2.5rem)]"
                 >
                     <h1 className="m-0 text-[36px] uppercase tracking-[0.08em] text-accent drop-shadow-sm">
                         {t("title")}

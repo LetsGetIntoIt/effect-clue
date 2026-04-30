@@ -487,7 +487,7 @@ export function Checklist() {
             }}
         >
             {inSetup && (
-                <div className="sticky left-9 mb-4 max-w-[calc(100vw-4.5rem)] shrink-0 rounded-[var(--radius)] border border-accent/40 bg-accent/5 px-4 py-3">
+                <div className="mb-4 shrink-0 rounded-[var(--radius)] border border-accent/40 bg-accent/5 px-4 py-3 [@media(min-width:800px)]:sticky [@media(min-width:800px)]:left-9 [@media(min-width:800px)]:max-w-[calc(100vw-4.5rem)]">
                     <h2 className="m-0 font-display text-[20px] text-accent">
                         {tSetup("title")}
                     </h2>
@@ -517,11 +517,11 @@ export function Checklist() {
                     </div>
                 </div>
             )}
-            <div className="sticky left-9 max-w-[calc(100vw-4.5rem)] shrink-0">
+            <div className="shrink-0 [@media(min-width:800px)]:sticky [@media(min-width:800px)]:left-9 [@media(min-width:800px)]:max-w-[calc(100vw-4.5rem)]">
                 {inSetup ? <CardPackRow /> : <CaseFileHeader knowledge={knowledge} />}
             </div>
             {inSetup && handSizeMismatch && (
-                <div className="sticky left-9 mb-3 max-w-[calc(100vw-4.5rem)] shrink-0 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning">
+                <div className="mb-3 shrink-0 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning [@media(min-width:800px)]:sticky [@media(min-width:800px)]:left-9 [@media(min-width:800px)]:max-w-[calc(100vw-4.5rem)]">
                     {tSetup("handSizeMismatch", {
                         total: handSizesTotal,
                         expected: totalDealt,
