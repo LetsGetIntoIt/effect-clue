@@ -86,7 +86,7 @@
 		"babel-plugin-react-compiler": "1.0.0",
 		"eslint": "10.2.1",
 		"eslint-plugin-i18next": "6.1.4",
-		"jsdom": "29.1.0",
+		"jsdom": "29.1.1",
 		"knip": "6.7.0",
 		"postcss": "8.5.12",
 		"tailwindcss": "4.2.4",
