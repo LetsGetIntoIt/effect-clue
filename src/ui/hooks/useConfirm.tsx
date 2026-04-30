@@ -9,6 +9,7 @@ import {
     useContext,
     useState,
 } from "react";
+import { useViewportCenteredModalStyle } from "./useViewportCenteredModalStyle";
 
 interface ConfirmOptions {
     readonly title?: string;
@@ -58,6 +59,7 @@ export function ConfirmProvider({ children }: { readonly children: ReactNode }) 
         pending?.confirmLabel ?? tCommon("confirm");
     const cancelLabel = pending?.cancelLabel ?? tCommon("cancel");
     const destructive = pending?.destructive ?? true;
+    const centerStyle = useViewportCenteredModalStyle();
 
     return (
         <ConfirmContext.Provider value={confirm}>
@@ -73,8 +75,9 @@ export function ConfirmProvider({ children }: { readonly children: ReactNode }) 
                         className="fixed inset-0 z-50 bg-black/30"
                     />
                     <AlertDialog.Content
+                        style={centerStyle}
                         className={
-                            "fixed left-1/2 top-1/2 z-50 w-[min(90vw,420px)] -translate-x-1/2 -translate-y-1/2 " +
+                            "z-50 w-[min(90vw,420px)] " +
                             "rounded-[var(--radius)] border border-border bg-panel p-5 shadow-[0_10px_28px_rgba(0,0,0,0.28)] " +
                             "focus:outline-none"
                         }
