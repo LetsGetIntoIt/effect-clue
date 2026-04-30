@@ -59,6 +59,15 @@ const readUsage = (): CardPackUsage =>
  * reads localStorage synchronously on first render via `initialData`
  * so consumers don't see an empty placeholder before the queryFn
  * fires.
+ *
+ * `meta: { persist: false }` opts this query out of the React Query
+ * persister: the cached `data` is a `ReadonlyMap`, which JSON-stringifies
+ * to `{}` and can't be reconstructed without a custom hydrator. Since
+ * `initialData` already reads from `loadCardPackUsage()` synchronously
+ * on every client render, the persister entry is redundant anyway —
+ * skipping it sidesteps the Map-as-empty-object hydration crash that
+ * would otherwise blow up `usage.entries()` in `CardPackRow` after a
+ * reload.
  */
 export function useCardPackUsage(): UseQueryResult<CardPackUsage, Error> {
     return useQuery({
@@ -66,6 +75,7 @@ export function useCardPackUsage(): UseQueryResult<CardPackUsage, Error> {
         queryFn: readUsage,
         initialData: readUsage,
         staleTime: Number.POSITIVE_INFINITY,
+        meta: { persist: false },
     });
 }
 

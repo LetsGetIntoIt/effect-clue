@@ -6,19 +6,21 @@
  * `localStorage` so a reloading user sees the same data without
  * waiting on a refetch.
  *
- * ─── Why split SSR vs CSR? ──────────────────────────────────────────
- * On the server (Next.js SSR / RSC pre-render) `window` is undefined,
- * so we can't construct an `AsyncStoragePersister` over
- * `window.localStorage`. We render a vanilla `QueryClientProvider`
- * during SSR so context is available; the client re-mounts under
- * `PersistQueryClientProvider`, which restores the cached state from
- * localStorage. Both providers expose the same context, so consumers
- * (`useQuery` / `useMutation`) work uniformly across the boundary.
+ * ─── Why one provider component (no SSR/CSR branch)? ────────────────
+ * Earlier versions of this file branched on `typeof window`:
+ * `QueryClientProvider` on the server, `PersistQueryClientProvider`
+ * on the client. That was a hydration trap — the two components have
+ * different React types and different child shapes (the client added
+ * a sibling `<ReactQueryDevtools>`), so every `useId()` further down
+ * the tree resolved differently between server and client. Radix
+ * Dialog / Popover use `useId()` extensively, so the mismatch
+ * cascaded into every modal in the app.
  *
- * Hydration is safe: neither provider component renders DOM of its
- * own, so the server and client trees match. The persister rehydrates
- * cache entries asynchronously after mount, before any consumer runs
- * a network query against the same key.
+ * The fix: always render the same tree. We compose a single
+ * `<TanstackQueryClientProvider>` and register the persister and
+ * devtools as side effects after mount, gated behind a `mounted`
+ * state. The first server-rendered HTML and the first client-side
+ * paint are byte-for-byte identical.
  *
  * ─── Defaults ───────────────────────────────────────────────────────
  * - `networkMode: "offlineFirst"` — queries return cached data while
@@ -41,14 +43,15 @@
 "use client";
 
 import {
+    defaultShouldDehydrateQuery,
     QueryClient,
     QueryClientProvider as TanstackQueryClientProvider,
 } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
-import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
+import { persistQueryClient } from "@tanstack/react-query-persist-client";
 import { Duration } from "effect";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 /**
  * Top-level localStorage key for the React Query persister. Bump the
@@ -82,12 +85,10 @@ const buildClient = (): QueryClient =>
 /**
  * Wrap the app in a React Query provider.
  *
- * On SSR / pre-render: a vanilla `QueryClientProvider` so context is
- * available but no localStorage hydration is attempted.
- *
- * On the client: `PersistQueryClientProvider` rehydrates from
- * localStorage and persists changes back. Devtools mount only in
- * development.
+ * Always renders `<TanstackQueryClientProvider>` so the SSR tree and
+ * the first client-render tree match exactly. The localStorage
+ * persister and the devtools are post-mount side effects guarded by
+ * `mounted`, so they can't perturb hydration.
  */
 export function QueryClientProvider({
     children,
@@ -98,36 +99,46 @@ export function QueryClientProvider({
     // cache and re-hit every query. `useState` initializer pattern is
     // the canonical RQ + Next 13+ recipe.
     const [queryClient] = useState(buildClient);
+    const [mounted, setMounted] = useState(false);
 
-    if (typeof window === "undefined") {
-        return (
-            <TanstackQueryClientProvider client={queryClient}>
-                {children}
-            </TanstackQueryClientProvider>
-        );
-    }
-
-    const persister = createAsyncStoragePersister({
-        storage: window.localStorage,
-        key: PERSISTER_KEY,
-    });
+    useEffect(() => {
+        // SSR path: useEffect doesn't run, so `mounted` stays false
+        // and the persister is never wired — exactly what we want
+        // when there's no localStorage to talk to.
+        const persister = createAsyncStoragePersister({
+            storage: window.localStorage,
+            key: PERSISTER_KEY,
+        });
+        const [unsubscribe] = persistQueryClient({
+            queryClient,
+            persister,
+            // Match the QueryClient's gcTime so the persister doesn't
+            // drop entries the in-memory cache still wants. Both
+            // default to 24h; Duration keeps the unit visible at the
+            // call site.
+            maxAge: Duration.toMillis(DEFAULT_GC_TIME),
+            // Honour `meta: { persist: false }` on individual queries
+            // — useful for cached values whose shape doesn't survive
+            // a JSON round-trip (e.g. `Map` instances, see
+            // `cardPackUsage.ts`). Queries that don't set the flag
+            // dehydrate by RQ's default rule (only successful
+            // queries).
+            dehydrateOptions: {
+                shouldDehydrateQuery: (query) =>
+                    query.meta?.["persist"] !== false &&
+                    defaultShouldDehydrateQuery(query),
+            },
+        });
+        setMounted(true);
+        return unsubscribe;
+    }, [queryClient]);
 
     return (
-        <PersistQueryClientProvider
-            client={queryClient}
-            persistOptions={{
-                persister,
-                // Match the QueryClient's gcTime so the persister
-                // doesn't drop entries the in-memory cache still
-                // wants. Both default to 24h; Duration keeps the unit
-                // visible at the call site.
-                maxAge: Duration.toMillis(DEFAULT_GC_TIME),
-            }}
-        >
+        <TanstackQueryClientProvider client={queryClient}>
             {children}
-            {process.env.NODE_ENV === "development" ? (
+            {mounted && process.env.NODE_ENV === "development" ? (
                 <ReactQueryDevtools initialIsOpen={false} />
             ) : null}
-        </PersistQueryClientProvider>
+        </TanstackQueryClientProvider>
     );
 }

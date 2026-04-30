@@ -136,6 +136,45 @@ describe("Clue — URL-based view hydration", () => {
         });
     });
 
+    test("clicking the overflow menu's Game setup item from Suggest flips uiMode back to setup", async () => {
+        // Regression: when CardPackUsage's RQ-cache entry was rehydrated
+        // from the persister into a plain object, `usage.entries()` in
+        // CardPackRow threw on the next render — which manifested as
+        // "can't go back to Game setup" because the Setup screen
+        // crashed on mount. Even without the persister, the dispatch
+        // path itself must reliably flip `?view=setup`.
+        const { default: userEvent } = await import("@testing-library/user-event");
+        window.history.replaceState(null, "", "/?view=suggest");
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        // Wait for hydration so the Setup ↔ Play split has settled.
+        await waitFor(() => {
+            expect(window.location.search).toContain("view=suggest");
+        });
+        const user = userEvent.setup();
+        // jsdom doesn't run a layout engine, so `offsetParent`
+        // can't distinguish between the desktop Toolbar trigger and
+        // the mobile BottomNav trigger. Both wire the same dispatch
+        // callback, so clicking the first one is sufficient for the
+        // regression — what matters is that the menu item's onClick
+        // actually flips `uiMode` and doesn't crash on the way.
+        const triggers = document.querySelectorAll<HTMLElement>(
+            "[data-tour-anchor='overflow-menu']",
+        );
+        expect(triggers.length).toBeGreaterThan(0);
+        await user.click(triggers[0]!);
+        // The next-intl mock at the top of this file returns the
+        // i18n key verbatim (with values JSON-appended), so the menu
+        // label renders as `gameSetup:{"shortcut":...}` rather than
+        // the production "Game setup (⌘H)" text. Match the prefix.
+        const item = await screen.findByRole("button", {
+            name: /^gameSetup/,
+        });
+        await user.click(item);
+        await waitFor(() => {
+            expect(window.location.search).toContain("view=setup");
+        });
+    });
+
     test("a hydrated session with saved suggestions lands on checklist when no view is specified", async () => {
         // Pre-seed localStorage with a session containing one suggestion
         // — the smart-default path in `ClueProvider` flips uiMode to
