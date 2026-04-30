@@ -58,7 +58,7 @@
 		"@radix-ui/react-dialog": "1.1.15",
 		"@radix-ui/react-popover": "1.1.15",
 		"@radix-ui/react-tooltip": "1.2.8",
-		"@sentry/nextjs": "10.50.0",
+		"@sentry/nextjs": "10.51.0",
 		"canvas-confetti": "1.9.4",
 		"effect": "4.0.0-beta.59",
 		"motion": "12.38.0",
