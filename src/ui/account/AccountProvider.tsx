@@ -17,6 +17,7 @@ import {
     useState,
     type ReactNode,
 } from "react";
+import { CardPacksSyncOnSignIn } from "../../data/cardPacksSync";
 import { AccountModal } from "./AccountModal";
 
 interface AccountContextValue {
@@ -55,6 +56,14 @@ export function AccountProvider({
         <AccountContext.Provider value={value}>
             {children}
             <AccountModal open={open} onClose={closeModal} />
+            {/*
+              Sign-in side-effect: the moment the user transitions
+              from anon to signed-in, push their localStorage card
+              packs to the server (M8). The component renders
+              nothing; it's a behaviour mounted inside the
+              provider stack so it has the session in scope.
+            */}
+            <CardPacksSyncOnSignIn />
         </AccountContext.Provider>
     );
 }

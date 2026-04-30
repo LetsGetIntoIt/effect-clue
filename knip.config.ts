@@ -23,6 +23,15 @@ const config: KnipConfig = {
 		// in production). Referenced from the production-bundle grep
 		// in `scripts/assert-no-dev-auth.mjs`, which knip can't see.
 		"src/server/actions/dev-auth.ts",
+		// Server actions consumed via Next.js's "use server" boundary
+		// — the M8 card-pack actions are imported by upcoming UI
+		// surfaces (the Account modal's "My card packs" section) +
+		// the M8b session-aware reads. Keeping them as entry points
+		// while the read path is still in flight.
+		"src/server/actions/packs.ts",
+		// vitest alias target — referenced from `vitest.config.ts`'s
+		// `resolve.alias`, which knip can't crawl.
+		"src/test-utils/server-only-stub.ts",
 	],
 	project: ["app/**/*.{ts,tsx}", "src/**/*.{ts,tsx}"],
 	ignore: ["src/logic/test-utils/**"],
@@ -32,11 +41,6 @@ const config: KnipConfig = {
 		// the top level keeps CSS tooling and editor integrations happy,
 		// even though nothing imports it directly.
 		"tailwindcss",
-		// cuid2 is the ID generator used by the server-mints-IDs path
-		// (M8 card_packs, M9 shares). Until those tables ship there's no
-		// production caller, but bundling the dependency now keeps the
-		// `withServerAction` infrastructure ready to use it.
-		"@paralleldrive/cuid2",
 	],
 };
 

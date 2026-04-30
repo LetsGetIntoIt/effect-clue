@@ -355,6 +355,29 @@ export const signInFailed = (props: {
 
 export const signOut = (): void => capture("sign_out");
 
+// ── Server-side card packs (M8) ───────────────────────────────────────────
+
+export const localPacksPushedOnSignIn = (props: {
+    countPushed: number;
+    countAlreadySynced: number;
+    countRenamed: number;
+    countFailed: number;
+}): void => capture("local_packs_pushed_on_sign_in", props);
+
+export const cardPackSaved = (props: {
+    isFirstTime: boolean;
+    source: "local" | "share_import";
+    syncedToServer: boolean;
+}): void => capture("card_pack_saved", props);
+
+export const cardPackDeleted = (props: {
+    wasServerBacked: boolean;
+}): void => capture("card_pack_deleted", props);
+
+export const cardPackRenamed = (props: {
+    wasServerBacked: boolean;
+}): void => capture("card_pack_renamed", props);
+
 // ── Performance signals ───────────────────────────────────────────────────
 
 export const webVital = (props: {

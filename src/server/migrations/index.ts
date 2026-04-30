@@ -17,6 +17,7 @@ import type { Effect } from "effect";
 import type { SqlClient } from "effect/unstable/sql";
 import migration0001 from "./0001_init";
 import migration0002 from "./0002_better_auth";
+import migration0003 from "./0003_card_packs";
 
 export const migrations: Record<
     string,
@@ -24,4 +25,5 @@ export const migrations: Record<
 > = {
     "0001_init": migration0001,
     "0002_better_auth": migration0002,
+    "0003_card_packs": migration0003,
 };
