@@ -284,6 +284,44 @@ export const tourRestarted = (props: {
     screenKey: TourScreenKey;
 }): void => capture("tour_restarted", props);
 
+// ── PWA install prompt (M5) ───────────────────────────────────────────────
+//
+// Browser-driven flow. `installPrompted` fires when our in-app modal
+// is shown to the user (auto-gate, menu click, or tour). The OS-native
+// "Install / Cancel" dialog that comes after is mediated by the browser
+// — we don't see its outcome until it resolves; `installAccepted` /
+// `installDismissed` cover both branches.
+
+export type InstallPromptTrigger = "auto" | "menu" | "tour";
+
+/** Reasons the user closed the install modal without installing. */
+export type InstallDismissVia =
+    | "x_button"
+    | "snooze"
+    | "native_decline";
+
+export const installPrompted = (props: {
+    trigger: InstallPromptTrigger;
+}): void => capture("install_prompted", props);
+
+export const installAccepted = (props: {
+    trigger: InstallPromptTrigger;
+}): void => capture("install_accepted", props);
+
+export const installDismissed = (props: {
+    trigger: InstallPromptTrigger;
+    via: InstallDismissVia;
+}): void => capture("install_dismissed", props);
+
+/** Fires when the browser confirms a successful install (`appinstalled` event). */
+export const installCompleted = (): void =>
+    capture("install_completed");
+
+/** Fires on every load when `display-mode: standalone` matches — the user
+ *  has installed and is launching from the home screen / dock. */
+export const appLaunchedStandalone = (): void =>
+    capture("app_launched_standalone");
+
 // ── Performance signals ───────────────────────────────────────────────────
 
 export const webVital = (props: {

@@ -12,8 +12,14 @@ import { shortcutSuffix } from "../keyMap";
 import { useTour } from "../tour/TourProvider";
 import { screenKeyForUiMode } from "../tour/screenKey";
 import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
+import { useInstallPromptContext } from "./InstallPromptProvider";
+import type { InstallPromptTrigger } from "../../analytics/events";
 import { OverflowMenu } from "./OverflowMenu";
 import { Tooltip } from "./Tooltip";
+
+// Module-scope discriminator values, exempt from the i18next literal
+// lint rule.
+const TRIGGER_MENU: InstallPromptTrigger = "menu";
 
 const buttonClass =
     "rounded-[var(--radius)] border border-border bg-white px-3.5 py-1.5 " +
@@ -59,6 +65,7 @@ export function Toolbar() {
     const tNav = useTranslations("bottomNav");
     const tHistory = useTranslations("history");
     const tOnboarding = useTranslations("onboarding");
+    const tInstall = useTranslations("installPrompt");
     const hasKeyboard = useHasKeyboard();
     const {
         state,
@@ -72,6 +79,8 @@ export function Toolbar() {
     } = useClue();
     const { onNewGame } = useToolbarActions();
     const { restartTourForScreen } = useTour();
+    const { installable, openModal: openInstallModal } =
+        useInstallPromptContext();
 
     const undoTooltip = nextUndo
         ? tHistory("undoTooltip", {
@@ -147,6 +156,20 @@ export function Toolbar() {
                                 screenKeyForUiMode(state.uiMode),
                             ),
                     },
+                    // Show "Install app" only when the browser
+                    // confirmed installability via
+                    // `beforeinstallprompt`. On Safari / iOS the
+                    // event never fires, so the item never renders
+                    // — those users install via the share sheet.
+                    ...(installable
+                        ? [
+                              {
+                                  label: tInstall("menuItem"),
+                                  onClick: () =>
+                                      openInstallModal(TRIGGER_MENU),
+                              },
+                          ]
+                        : []),
                     {
                         label: tNav("about"),
                         trailingIcon: <ExternalLinkIcon size={14} />,

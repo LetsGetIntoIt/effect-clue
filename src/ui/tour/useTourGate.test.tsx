@@ -11,7 +11,6 @@
  */
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { DateTime, Duration } from "effect";
-import { Effect } from "effect";
 import { TelemetryRuntime } from "../../observability/runtime";
 import {
     computeShouldShowTour,
@@ -21,20 +20,6 @@ import {
 const now = DateTime.makeUnsafe(new Date("2026-04-29T00:00:00Z"));
 const FIVE_MIN = Duration.minutes(5);
 const SIX_WEEKS = Duration.weeks(6);
-
-const computeGate = (
-    state: { lastVisitedAt?: DateTime.Utc; lastDismissedAt?: DateTime.Utc },
-    duration: Duration.Duration = TOUR_RE_ENGAGE_DURATION,
-): boolean =>
-    TelemetryRuntime.runSync(
-        Effect.result(computeShouldShowTour(state, now, duration)),
-    ).pipe ?
-        // The Effect's success branch is the boolean we care about.
-        // `Effect.result` lifts failures to `Result.failure(...)`; the
-        // gate effect is total so we cast through the success path.
-        // eslint-disable-next-line i18next/no-literal-string -- assertion message
-        (() => { throw new Error("unreachable"); })() :
-        false;
 
 describe("computeShouldShowTour", () => {
     test("first visit (no timestamps) shows", () => {
@@ -102,10 +87,6 @@ describe("computeShouldShowTour", () => {
         expect(result).toBe(true);
     });
 });
-
-// Suppress unused-helper warning — the helper above is kept for
-// future test cases that compose multiple gate decisions.
-void computeGate;
 
 describe("TOUR_RE_ENGAGE_DURATION", () => {
     test("defaults to 4 weeks", () => {

@@ -1,4 +1,5 @@
 import { withSentryConfig } from "@sentry/nextjs";
+import withSerwistInit from "@serwist/next";
 import type { NextConfig } from "next";
 
 /**
@@ -41,6 +42,19 @@ const nextConfig: NextConfig = {
 };
 
 /**
+ * Serwist plugin — generates `public/sw.js` from `app/sw.ts` at
+ * build time and registers the service worker on the client.
+ * Auto-disabled in development so the dev loop isn't fighting a
+ * cached SW; production builds always emit the worker.
+ */
+const withSerwist = withSerwistInit({
+    swSrc: "app/sw.ts",
+    swDest: "public/sw.js",
+    cacheOnNavigation: true,
+    disable: process.env["NODE_ENV"] === "development",
+});
+
+/**
  * `withSentryConfig` only does work at build time — it injects a
  * webpack plugin that uploads source maps to Sentry. When
  * `SENTRY_AUTH_TOKEN` is unset (local dev) the plugin no-ops and
@@ -50,7 +64,7 @@ const sentryOrg = process.env["SENTRY_ORG"];
 const sentryProject = process.env["SENTRY_PROJECT"];
 const sentryAuthToken = process.env["SENTRY_AUTH_TOKEN"];
 
-export default withSentryConfig(nextConfig, {
+export default withSentryConfig(withSerwist(nextConfig), {
     silent: true,
     widenClientFileUpload: true,
     ...(sentryOrg !== undefined && { org: sentryOrg }),

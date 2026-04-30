@@ -15,8 +15,12 @@ import { T_SPRING_SOFT, T_STANDARD, useReducedTransition } from "../motion";
 import { useTour } from "../tour/TourProvider";
 import { screenKeyForUiMode } from "../tour/screenKey";
 import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
+import { useInstallPromptContext } from "./InstallPromptProvider";
+import type { InstallPromptTrigger } from "../../analytics/events";
 import { OverflowMenu } from "./OverflowMenu";
 import { useToolbarActions } from "./Toolbar";
+
+const TRIGGER_MENU: InstallPromptTrigger = "menu";
 
 /**
  * Mobile-only fixed-bottom navigation. Shown only under 800px — the
@@ -242,10 +246,13 @@ function BottomOverflowMenu({
     const t = useTranslations("bottomNav");
     const tToolbar = useTranslations("toolbar");
     const tOnboarding = useTranslations("onboarding");
+    const tInstall = useTranslations("installPrompt");
     const hasKeyboard = useHasKeyboard();
     const { state } = useClue();
     const { onNewGame } = useToolbarActions();
     const { restartTourForScreen } = useTour();
+    const { installable, openModal: openInstallModal } =
+        useInstallPromptContext();
     return (
         <li>
             <OverflowMenu
@@ -274,6 +281,15 @@ function BottomOverflowMenu({
                                 screenKeyForUiMode(state.uiMode),
                             ),
                     },
+                    ...(installable
+                        ? [
+                              {
+                                  label: tInstall("menuItem"),
+                                  onClick: () =>
+                                      openInstallModal(TRIGGER_MENU),
+                              },
+                          ]
+                        : []),
                     {
                         label: t("about"),
                         trailingIcon: <ExternalLinkIcon size={14} />,

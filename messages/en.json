@@ -286,6 +286,16 @@
         "handSizeFix": "Hand size: <strong>{player}</strong> = {size}",
         "handSizeReset": "Reset"
     },
+    "installPrompt": {
+        "title": "Install Clue Solver",
+        "description": "Add Clue Solver to your home screen for a faster, fuller experience.",
+        "benefitOffline": "Works offline once installed — same deducer, no network needed.",
+        "benefitHomeScreen": "Launches from your home screen with its own icon, no browser bar.",
+        "benefitFastLaunch": "Cold-starts faster than a fresh tab.",
+        "install": "Install",
+        "notNow": "Not now",
+        "menuItem": "Install app"
+    },
     "onboarding": {
         "stepLabel": "Tour · Step {step} of {total}",
         "next": "Next",

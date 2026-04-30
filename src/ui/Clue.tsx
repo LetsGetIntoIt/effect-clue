@@ -8,6 +8,7 @@ import { startSetup } from "../analytics/gameSession";
 import { BottomNav } from "./components/BottomNav";
 import { Checklist } from "./components/Checklist";
 import { GlobalContradictionBanner } from "./components/GlobalContradictionBanner";
+import { InstallPromptProvider } from "./components/InstallPromptProvider";
 import { PlayLayout } from "./components/PlayLayout";
 import { Toolbar } from "./components/Toolbar";
 import { TooltipProvider } from "./components/Tooltip";
@@ -91,7 +92,6 @@ const slideVariants: Variants = {
  * (`?view=…`) stays coherent on both sides.
  */
 export function Clue() {
-    const t = useTranslations("app");
     const headerRef = useRef<HTMLElement>(null);
     useLayoutEffect(() => {
         const el = headerRef.current;
@@ -118,6 +118,30 @@ export function Clue() {
            <ConfirmProvider>
            <SelectionProvider>
             <TourProvider>
+            <ClueShell headerRef={headerRef} />
+            </TourProvider>
+           </SelectionProvider>
+           </ConfirmProvider>
+          </ClueProvider>
+        </TooltipProvider>
+    );
+}
+
+/**
+ * Inner shell that reads `useClue().hydrated` so we can pass it to
+ * the install-prompt provider. Splitting this out keeps `Clue`
+ * itself out of `useClue`, which would crash if we ever rendered
+ * the shell before `<ClueProvider>` mounted.
+ */
+function ClueShell({
+    headerRef,
+}: {
+    readonly headerRef: React.RefObject<HTMLElement | null>;
+}) {
+    const t = useTranslations("app");
+    const { hydrated } = useClue();
+    return (
+        <InstallPromptProvider hydrated={hydrated}>
             <main className="mx-auto flex min-w-max max-w-[1400px] flex-col gap-5 px-5 pb-24 [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+1.5rem)]">
                 <header
                     ref={headerRef}
@@ -141,11 +165,7 @@ export function Clue() {
                 <TourPopover />
             </main>
             <BottomNav />
-            </TourProvider>
-           </SelectionProvider>
-           </ConfirmProvider>
-          </ClueProvider>
-        </TooltipProvider>
+        </InstallPromptProvider>
     );
 }
 
@@ -161,6 +181,7 @@ export function Clue() {
  * tour fires for that key, the same key won't re-fire in the same
  * mount even if the user revisits it.
  */
+
 function TourScreenGate() {
     const { state, hydrated } = useClue();
     const { startTour, activeScreen } = useTour();

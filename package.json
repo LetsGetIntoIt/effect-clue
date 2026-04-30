@@ -76,6 +76,7 @@
 	"devDependencies": {
 		"@effect/language-service": "0.85.1",
 		"@effect/vitest": "4.0.0-beta.59",
+		"@serwist/next": "9.5.8",
 		"@tailwindcss/postcss": "4.2.4",
 		"@tanstack/react-query-devtools": "^5.100.6",
 		"@testing-library/jest-dom": "6.9.1",
@@ -93,6 +94,7 @@
 		"jsdom": "29.1.1",
 		"knip": "6.9.0",
 		"postcss": "8.5.13",
+		"serwist": "9.5.8",
 		"tailwindcss": "4.2.4",
 		"typescript": "6.0.3",
 		"vitest": "4.1.5"

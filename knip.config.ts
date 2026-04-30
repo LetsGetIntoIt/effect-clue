@@ -9,7 +9,17 @@ const config: KnipConfig = {
 	// plan as part of the target event taxonomy and gets wired into call
 	// sites incrementally as features land. Treating it as an entry point
 	// keeps knip from flagging the not-yet-wired emitters as unused.
-	entry: ["src/**/*.test.{ts,tsx}", "src/analytics/events.ts"],
+	//
+	// `app/sw.ts` is the Serwist service-worker source. It's compiled to
+	// `public/sw.js` at build time by the `@serwist/next` plugin (wired
+	// up in `next.config.ts`); no consumer file imports it directly, so
+	// without an explicit entry-points line knip flags both the file and
+	// its sibling `serwist` runtime as unused.
+	entry: [
+		"src/**/*.test.{ts,tsx}",
+		"src/analytics/events.ts",
+		"app/sw.ts",
+	],
 	project: ["app/**/*.{ts,tsx}", "src/**/*.{ts,tsx}"],
 	ignore: ["src/logic/test-utils/**"],
 	ignoreDependencies: [
