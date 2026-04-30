@@ -28,6 +28,11 @@ const config: KnipConfig = {
 		// the top level keeps CSS tooling and editor integrations happy,
 		// even though nothing imports it directly.
 		"tailwindcss",
+		// cuid2 is the ID generator used by the server-mints-IDs path
+		// (M8 card_packs, M9 shares). Until those tables ship there's no
+		// production caller, but bundling the dependency now keeps the
+		// `withServerAction` infrastructure ready to use it.
+		"@paralleldrive/cuid2",
 	],
 };
 
