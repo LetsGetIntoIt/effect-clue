@@ -7,9 +7,10 @@ import { ReactNode, useState } from "react";
 import { aboutLinkClicked } from "../../analytics/events";
 import { describeAction } from "../../logic/describeAction";
 import { routes } from "../../routes";
+import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useLongPress } from "../hooks/useLongPress";
 import { useClue } from "../state";
-import { label } from "../keyMap";
+import { shortcutSuffix } from "../keyMap";
 import { T_SPRING_SOFT, T_STANDARD, useReducedTransition } from "../motion";
 import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
 import { OverflowMenu } from "./OverflowMenu";
@@ -33,6 +34,7 @@ export function BottomNav() {
     const t = useTranslations("bottomNav");
     const tToolbar = useTranslations("toolbar");
     const tHistory = useTranslations("history");
+    const hasKeyboard = useHasKeyboard();
     const mode = state.uiMode;
 
     const undoPreview = nextUndo
@@ -67,7 +69,7 @@ export function BottomNav() {
                 <LayoutGroup id="bottomnav-underline">
                 <NavTabItem
                     label={t("checklist", {
-                        shortcut: label("global.gotoChecklist"),
+                        shortcut: shortcutSuffix("global.gotoChecklist", hasKeyboard),
                     })}
                     active={mode === "checklist"}
                     onClick={() =>
@@ -76,7 +78,7 @@ export function BottomNav() {
                 />
                 <NavTabItem
                     label={t("suggest", {
-                        shortcut: label("global.gotoPlay"),
+                        shortcut: shortcutSuffix("global.gotoPlay", hasKeyboard),
                     })}
                     active={mode === "suggest"}
                     onClick={() =>
@@ -236,6 +238,7 @@ function BottomOverflowMenu({
 }) {
     const t = useTranslations("bottomNav");
     const tToolbar = useTranslations("toolbar");
+    const hasKeyboard = useHasKeyboard();
     const { onShare, onNewGame, copied } = useToolbarActions();
     return (
         <li>
@@ -247,7 +250,7 @@ function BottomOverflowMenu({
                 items={[
                     {
                         label: t("gameSetup", {
-                            shortcut: label("global.gotoSetup"),
+                            shortcut: shortcutSuffix("global.gotoSetup", hasKeyboard),
                         }),
                         active: setupActive,
                         onClick: onSetup,
@@ -260,7 +263,7 @@ function BottomOverflowMenu({
                     },
                     {
                         label: tToolbar("newGame", {
-                            shortcut: label("global.newGame"),
+                            shortcut: shortcutSuffix("global.newGame", hasKeyboard),
                         }),
                         onClick: onNewGame,
                     },

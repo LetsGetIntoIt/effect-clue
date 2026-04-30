@@ -65,6 +65,14 @@ vi.mock("../hooks/useIsDesktop", () => ({
     useIsDesktop: () => true,
 }));
 
+// Force keyboard-bearing device. Hover-focus hint visibility on the
+// prior log rows now follows this signal rather than viewport size,
+// so the desktop-flavoured tests below need it pinned to true. The
+// mobile describe block flips it to false to lock in the touch UX.
+vi.mock("../hooks/useHasKeyboard", () => ({
+    useHasKeyboard: () => true,
+}));
+
 import { fireEvent, render, waitFor, within } from "@testing-library/react";
 import { saveToLocalStorage } from "../../logic/Persistence";
 import { Player } from "../../logic/GameObjects";
@@ -352,6 +360,8 @@ describe("PriorSuggestionItem — entering edit mode (mobile two-tap)", () => {
     beforeEach(async () => {
         const mod = await import("../hooks/useIsDesktop");
         (mod as { useIsDesktop: () => boolean }).useIsDesktop = () => false;
+        const kbd = await import("../hooks/useHasKeyboard");
+        (kbd as { useHasKeyboard: () => boolean }).useHasKeyboard = () => false;
     });
 
     test("first tap reveals the Edit button without entering edit mode", async () => {

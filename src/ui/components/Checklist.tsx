@@ -46,6 +46,7 @@ import {
 import { Accusation } from "../../logic/Accusation";
 import { Suggestion } from "../../logic/Suggestion";
 import { useConfirm } from "../hooks/useConfirm";
+import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useSelection } from "../SelectionContext";
 import { useClue } from "../state";
 import { useWhyHoverIntent } from "../checklistPopoverIntent";
@@ -53,7 +54,7 @@ import {
     registerChecklistFocusHandler,
     rememberChecklistCell,
 } from "../checklistFocus";
-import { label, matches } from "../keyMap";
+import { label, matches, shortcutSuffix } from "../keyMap";
 import { AnimatePresence, motion } from "motion/react";
 import {
     T_CELEBRATE,
@@ -212,6 +213,7 @@ export function Checklist() {
     const t = useTranslations("deduce");
     const tSetup = useTranslations("setup");
     const tReasons = useTranslations("reasons");
+    const hasKeyboard = useHasKeyboard();
     const { state, dispatch, derived } = useClue();
     const {
         activeSuggestionIndex,
@@ -506,10 +508,10 @@ export function Checklist() {
                         >
                             {suggestions.length > 0
                                 ? tSetup("continuePlaying", {
-                                      shortcut: label("global.gotoPlay"),
+                                      shortcut: shortcutSuffix("global.gotoPlay", hasKeyboard),
                                   })
                                 : tSetup("startPlaying", {
-                                      shortcut: label("global.gotoPlay"),
+                                      shortcut: shortcutSuffix("global.gotoPlay", hasKeyboard),
                                   })}
                         </button>
                     </div>
@@ -532,7 +534,7 @@ export function Checklist() {
                 <thead className="sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))] z-20 bg-row-header">
                     <tr>
                         <th className="border-r border-b border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted">
-                            {inSetup ? null : label("global.gotoChecklist")}
+                            {inSetup || !hasKeyboard ? null : label("global.gotoChecklist")}
                         </th>
                         {owners.flatMap((owner, ownerIdx) => {
                             const cell = (

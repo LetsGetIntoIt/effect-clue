@@ -38,6 +38,7 @@ import {
     makeSuggestionsLayer,
 } from "../../logic/services";
 import { useConfirm } from "../hooks/useConfirm";
+import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { useListFormatter } from "../hooks/useListFormatter";
 import { useSelection } from "../SelectionContext";
@@ -61,7 +62,7 @@ import {
     T_STANDARD,
     useReducedTransition,
 } from "../motion";
-import { label, matches } from "../keyMap";
+import { label, matches, shortcutSuffix } from "../keyMap";
 
 const SECTION_TITLE = "mt-0 mb-2 text-[14px] font-semibold";
 // Non user-facing glyph rendered as the rotating caret on
@@ -315,6 +316,7 @@ function AddSuggestion() {
         readonly mode: Mode;
         readonly setMode: (m: Mode) => void;
     }): React.ReactElement {
+        const hasKeyboard = useHasKeyboard();
         const tabIndicatorTransition = useReducedTransition({
             ...T_STANDARD,
             duration: 0.22,
@@ -374,12 +376,15 @@ function AddSuggestion() {
                     // Shortcut hint inside each tab. Stays muted on
                     // both active + inactive variants — text colour
                     // doesn't change with state any more, only the
-                    // outline does.
-                    kbd: chunks => (
-                        <span className="ml-0.5 font-normal text-muted">
-                            {chunks}
-                        </span>
-                    ),
+                    // outline does. Hidden entirely on touch-only
+                    // devices where the user can't act on it.
+                    kbd: hasKeyboard
+                        ? chunks => (
+                              <span className="ml-0.5 font-normal text-muted">
+                                  {chunks}
+                              </span>
+                          )
+                        : () => null,
                 })}
             </h3>
         );
@@ -1055,7 +1060,7 @@ function RecommendationsBody({
 function PriorLog() {
     const t = useTranslations("suggestions");
     const { state } = useClue();
-    const isDesktop = useIsDesktop();
+    const hasKeyboard = useHasKeyboard();
 
     // Merge suggestions + accusations by `loggedAt`. Domain indices
     // (`suggestionIdx` / `accusationIdx`) are preserved so the row's
@@ -1115,7 +1120,7 @@ function PriorLog() {
             >
                 {t("priorTitle", {
                     count: entries.length,
-                    shortcut: label("global.gotoPriorLog"),
+                    shortcut: shortcutSuffix("global.gotoPriorLog", hasKeyboard),
                 })}
             </h3>
             {entries.length === 0 ? (
@@ -1124,7 +1129,7 @@ function PriorLog() {
                 </div>
             ) : (
                 <>
-                    {isDesktop && (
+                    {hasKeyboard && (
                         <div className="mb-1 text-[11px] text-muted">
                             {t("priorKeyboardHint")}
                         </div>
@@ -1189,6 +1194,7 @@ function PriorSuggestionItem({
     } = useSelection();
     const confirm = useConfirm();
     const isDesktop = useIsDesktop();
+    const hasKeyboard = useHasKeyboard();
     const setup = state.setup;
     const listFormatter = useListFormatter();
 
@@ -1528,7 +1534,7 @@ function PriorSuggestionItem({
                                 ),
                             })}
                         </div>
-                        {!isDesktop && !showMobileEditButton && (
+                        {!hasKeyboard && !showMobileEditButton && (
                             <div className="mt-0.5 text-[11px] text-muted">
                                 {t("priorRowHintMobile")}
                             </div>
@@ -1549,7 +1555,7 @@ function PriorSuggestionItem({
                         )}
                     </>
                 )}
-                {isDesktop && isRowFocused && !isEditing && (
+                {hasKeyboard && isRowFocused && !isEditing && (
                     <div className="mt-0.5 text-[11px] text-muted">
                         {t("priorRowHintDesktop")}
                     </div>
@@ -1614,6 +1620,7 @@ function PriorAccusationItem({
     const { activeCell, setHoveredAccusation } = useSelection();
     const confirm = useConfirm();
     const isDesktop = useIsDesktop();
+    const hasKeyboard = useHasKeyboard();
     const setup = state.setup;
 
     const [isEditing, setIsEditing] = useState(false);
@@ -1857,7 +1864,7 @@ function PriorAccusationItem({
                                 strong: chunks => <strong>{chunks}</strong>,
                             })}
                         </div>
-                        {!isDesktop && !showMobileEditButton && (
+                        {!hasKeyboard && !showMobileEditButton && (
                             <div className="mt-0.5 text-[11px] text-muted">
                                 {tSug("priorRowHintMobile")}
                             </div>
@@ -1878,7 +1885,7 @@ function PriorAccusationItem({
                         )}
                     </>
                 )}
-                {isDesktop && isRowFocused && !isEditing && (
+                {hasKeyboard && isRowFocused && !isEditing && (
                     <div className="mt-0.5 text-[11px] text-muted">
                         {tSug("priorRowHintDesktop")}
                     </div>

@@ -97,6 +97,10 @@ vi.mock("../hooks/useIsDesktop", () => ({
     useIsDesktop: () => true,
 }));
 
+vi.mock("../hooks/useHasKeyboard", () => ({
+    useHasKeyboard: () => true,
+}));
+
 // Spy on analytics emitters so we can assert the tab-click side
 // effect without sending real PostHog events.
 vi.mock("../../analytics/events", async () => {
