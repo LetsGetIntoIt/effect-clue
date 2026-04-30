@@ -1462,7 +1462,7 @@ function PriorSuggestionItem({
                 }
             }}
         >
-            <span className="font-semibold">{idx + 1}.</span>
+            <span className="font-semibold">{t("numberPrefix", { n: idx + 1 })}</span>
             <div
                 className="min-w-0 flex-1 pr-5"
                 onClick={e => {
@@ -1814,7 +1814,7 @@ function PriorAccusationItem({
                 }
             }}
         >
-            <span className="font-semibold">{idx + 1}.</span>
+            <span className="font-semibold">{t("numberPrefix", { n: idx + 1 })}</span>
             <div
                 className="min-w-0 flex-1 pr-5"
                 onClick={e => {

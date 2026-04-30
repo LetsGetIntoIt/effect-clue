@@ -193,6 +193,7 @@
         "nothingUseful": "Nothing useful to ask — you've already narrowed everything down.",
         "recommendationsCalculating": "Calculating recommendations…",
         "priorTitle": "{count, plural, =0 {Prior suggestions ({shortcut})} other {Prior suggestions ({shortcut}) (#)}}",
+        "numberPrefix": "S{n}.",
         "priorKeyboardHint": "↑↓ navigate · Enter edit · ⌫ remove · Esc exit",
         "priorRowHintDesktop": "Press Enter to edit",
         "priorRowHintMobile": "Tap to edit",
@@ -252,7 +253,8 @@
         "cancelAction": "Cancel",
         "editAction": "Edit",
         "removeAction": "Remove accusation",
-        "removeConfirm": "Remove this accusation?"
+        "removeConfirm": "Remove this accusation?",
+        "numberPrefix": "A{n}."
     },
     "contradictions": {
         "bannerTitle": "Contradiction!",
