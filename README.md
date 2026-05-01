@@ -96,7 +96,7 @@ Tests live next to source as `Foo.test.ts(x)` beside `Foo.ts(x)`.
 ```bash
 nvm use            # picks the version from .nvmrc
 pnpm install
-cp .env.example .env.local
+cp env.example .env.local
 pnpm db:up         # Postgres in Docker; safe to skip if you don't need server features
 pnpm dev
 ```
@@ -107,7 +107,7 @@ The third-party SDKs (Sentry, Honeycomb, PostHog) all no-op when their env vars 
 
 ### Local Postgres via Docker
 
-`docker-compose.yml` at the repo root spins up a single `postgres:16-alpine` service on `localhost:5432`. The default `DATABASE_URL` to drop into `.env.local` is committed in [.env.example](.env.example) — copy the local-Docker block.
+`docker-compose.yml` at the repo root spins up a single `postgres:16-alpine` service on `localhost:5432`. The default `DATABASE_URL` to drop into `.env.local` is committed in [env.example](env.example) — copy the local-Docker block.
 
 | Command | What it does |
 | --- | --- |
@@ -149,7 +149,7 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm knip && pnpm i18n:check
 
 ## Environment variables
 
-Copy [.env.example](.env.example) to `.env.local`. All third-party integrations are optional in local development.
+Copy [env.example](env.example) to `.env.local`. All third-party integrations are optional in local development.
 
 ### Observability (browser, optional)
 
@@ -164,7 +164,7 @@ Copy [.env.example](.env.example) to `.env.local`. All third-party integrations 
 
 | Variable | Used for |
 | --- | --- |
-| `DATABASE_URL` | Postgres connection string. Local Docker default committed in [.env.example](.env.example); Neon URL for previews/production. |
+| `DATABASE_URL` | Postgres connection string. Local Docker default committed in [env.example](env.example); Neon URL for previews/production. |
 | `DATABASE_URL_UNPOOLED` | Direct (non-pooler) Postgres URL. Reserved for migration runs that need a stable session. |
 | `BETTER_AUTH_SECRET` | Server-only secret for session JWT signing. Generate with `openssl rand -hex 32`. |
 | `BETTER_AUTH_URL` | Public URL of the deployed app — `http://localhost:3000` in dev. |

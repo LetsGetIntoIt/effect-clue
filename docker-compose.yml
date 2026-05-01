@@ -5,7 +5,7 @@
 # Reset:     pnpm db:reset    (wipes the volume — re-runs all migrations)
 # psql:      pnpm db:psql
 #
-# The matching DATABASE_URL is committed in .env.example as a copy-paste
+# The matching DATABASE_URL is committed in env.example as a copy-paste
 # block. The same migrator code path runs against this Docker container
 # AND Neon — "works locally" => "works on Vercel".
 

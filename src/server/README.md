@@ -85,7 +85,7 @@ pnpm db:reset      # wipe the volume; migrations re-run on next request
 ```
 
 Drop the local `DATABASE_URL` from
-[`.env.example`](../../.env.example) into your `.env.local` —
+[`env.example`](../../env.example) into your `.env.local` —
 nothing else needs to change to switch between Docker and Neon.
 
 ## Env vars
@@ -93,7 +93,7 @@ nothing else needs to change to switch between Docker and Neon.
 `runtime.ts` reads `DATABASE_URL` via `Config.redacted` so the value
 never accidentally lands in a log. Pull the production-shaped vars
 locally with `vercel env pull .env.development.local`, or use the
-local Docker block in [`.env.example`](../../.env.example) and skip
+local Docker block in [`env.example`](../../env.example) and skip
 Vercel entirely for local work.
 
 | Variable | Owner | Used for |

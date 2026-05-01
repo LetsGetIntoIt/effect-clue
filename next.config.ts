@@ -1,5 +1,4 @@
 import { withSentryConfig } from "@sentry/nextjs";
-import withSerwistInit from "@serwist/next";
 import type { NextConfig } from "next";
 
 /**
@@ -7,18 +6,24 @@ import type { NextConfig } from "next";
  * (Fluid Compute). The `/play` page is a client component that
  * server-renders an empty skeleton on each request and hydrates from
  * localStorage on the client — there is no server-side game state.
- * Server runtime + API routes will be wired in later milestones
- * (M6+).
  *
  * Historical: this app previously shipped as a static export
  * (`output: "export"`). That mode is incompatible with the API
- * routes, server actions, and dynamic share routes (`/share/[id]`)
- * that the upcoming milestones depend on, so the static export was
- * dropped in favour of SSR.
+ * routes, server actions, and dynamic share routes (`/share/[id]`),
+ * so the static export was dropped in favour of SSR.
  *
  * React Compiler is enabled so the component tree is auto-memoized;
  * we only need to hand-roll useMemo for the heavy deducer at the
  * state root.
+ *
+ * **Service worker** — the PWA worker is built by `@serwist/cli` as
+ * a post-step on `next build` (configurator mode). Config lives in
+ * `serwist.config.ts` at the repo root. We used to wrap this config
+ * with `withSerwistInit` from `@serwist/next` (the webpack plugin),
+ * but Next 16 builds with Turbopack by default and the plugin
+ * mode never ran — leaving installed PWAs broken offline.
+ * Configurator mode is bundler-agnostic and lets `next build` keep
+ * running on Turbopack while still emitting `public/sw.js`.
  */
 const nextConfig: NextConfig = {
     // Pin Turbopack's workspace root to this directory. Without it,
@@ -42,19 +47,6 @@ const nextConfig: NextConfig = {
 };
 
 /**
- * Serwist plugin — generates `public/sw.js` from `app/sw.ts` at
- * build time and registers the service worker on the client.
- * Auto-disabled in development so the dev loop isn't fighting a
- * cached SW; production builds always emit the worker.
- */
-const withSerwist = withSerwistInit({
-    swSrc: "app/sw.ts",
-    swDest: "public/sw.js",
-    cacheOnNavigation: true,
-    disable: process.env["NODE_ENV"] === "development",
-});
-
-/**
  * `withSentryConfig` only does work at build time — it injects a
  * webpack plugin that uploads source maps to Sentry. When
  * `SENTRY_AUTH_TOKEN` is unset (local dev) the plugin no-ops and
@@ -64,7 +56,7 @@ const sentryOrg = process.env["SENTRY_ORG"];
 const sentryProject = process.env["SENTRY_PROJECT"];
 const sentryAuthToken = process.env["SENTRY_AUTH_TOKEN"];
 
-export default withSentryConfig(withSerwist(nextConfig), {
+export default withSentryConfig(nextConfig, {
     silent: true,
     widenClientFileUpload: true,
     ...(sentryOrg !== undefined && { org: sentryOrg }),
