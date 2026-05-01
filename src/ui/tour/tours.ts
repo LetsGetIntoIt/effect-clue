@@ -40,8 +40,12 @@ export interface TourStep {
     readonly anchor: string;
     /** next-intl key under `onboarding.<screenKey>`. */
     readonly titleKey: string;
-    /** next-intl key under `onboarding.<screenKey>`. */
-    readonly bodyKey: string;
+    /**
+     * Optional next-intl key under `onboarding.<screenKey>`. When
+     * omitted, the popover renders just the title — useful for
+     * short call-to-action steps where no extra body copy is needed.
+     */
+    readonly bodyKey?: string;
     /**
      * Preferred side relative to the anchor. Radix may flip this if
      * there's not enough room. Defaults to `"bottom"`.
@@ -54,6 +58,14 @@ export interface TourStep {
      * the step renders so the anchor is mounted in the visible pane.
      */
     readonly requiredUiMode?: UiMode;
+    /**
+     * Optional next-intl key (under the `onboarding` namespace) used
+     * for the "next" button on the LAST step. Defaults to
+     * `onboarding.finish` ("Finish"). Use this on a closing step to
+     * customize the call-to-action — e.g. "Start playing" for the
+     * Checklist & Suggest tour's wrap-up step.
+     */
+    readonly finishLabelKey?: string;
 }
 
 /**
@@ -92,15 +104,25 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             anchor: "setup-known-cell",
             titleKey: "setup.knownCard.title",
             bodyKey: "setup.knownCard.body",
-            side: "bottom",
-            align: "center",
+            // The first-player column extends from the top to the
+            // bottom of the table. Putting the popover to the right
+            // keeps the column itself unobscured so the user can
+            // see the cells they're being introduced to.
+            side: "right",
+            align: "start",
         },
         {
             anchor: "overflow-menu",
             titleKey: "setup.overflow.title",
             bodyKey: "setup.overflow.body",
-            side: "bottom",
-            align: "end",
+            // The overflow menu opens vertically from the trigger
+            // (downward on desktop, upward on mobile). Anchoring the
+            // popover to the LEFT of the trigger keeps the menu
+            // contents visible — Radix's collision detection will
+            // flip to bottom/top if the left edge runs out of room
+            // on a small viewport.
+            side: "left",
+            align: "start",
         },
         {
             anchor: "setup-start-playing",
@@ -142,6 +164,18 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             side: "top",
             align: "start",
             requiredUiMode: "suggest",
+        },
+        {
+            // Wrap-up step. Anchors to the same add-form so the
+            // user lands on the input box; the step's CTA renames
+            // the "Finish" button to "Start playing" so the close
+            // action reads as a continuation, not a chore.
+            anchor: "suggest-add-form",
+            titleKey: "suggest.ready.title",
+            side: "bottom",
+            align: "start",
+            requiredUiMode: "suggest",
+            finishLabelKey: "startPlaying",
         },
     ],
     // Reserved for M7 / M9 — no content yet.

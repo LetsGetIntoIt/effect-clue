@@ -348,18 +348,14 @@
         "menuItem": "Install app"
     },
     "onboarding": {
-        "stepLabel": "Step {step} of {total}",
         "next": "Next",
         "back": "Back",
         "skip": "Skip tour",
+        "skipParens": "(Skip tour)",
+        "stepCounter": "{step} of {total}",
         "finish": "Finish",
+        "startPlaying": "Start playing",
         "takeTour": "Take tour",
-        "tourTitle": {
-            "setup": "Setup tour",
-            "checklistSuggest": "Checklist & Suggest tour",
-            "account": "Account tour",
-            "shareImport": "Shared game tour"
-        },
         "setup": {
             "cardPack": {
                 "title": "Pick a card pack",
@@ -398,12 +394,16 @@
         },
         "suggest": {
             "addForm": {
-                "title": "Log a suggestion",
+                "title": "Log a suggestion or failed accusation",
                 "body": "Pick a suspect / weapon / room, then add who tried to refute and which card was shown to you (if any). Press ⌘K to focus this form anytime."
             },
             "priorLog": {
                 "title": "Edit prior suggestions",
-                "body": "Click a row to edit a logged suggestion. The solver re-runs against the new inputs and updates the checklist live."
+                "body": "All suggestions made in the game will show up here. Click to edit any suggestion, if you need to correct what was logged."
+            },
+            "ready": {
+                "title": "Get started by logging the first suggestion!",
+                "body": ""
             }
         }
     }

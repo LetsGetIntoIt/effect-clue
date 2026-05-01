@@ -454,7 +454,16 @@ export function TourPopover() {
 
     const totalSteps = steps.length;
     const stepNumber = stepIndex + 1;
-    const tourTitle = t(`tourTitle.${activeScreen}`);
+    // Body copy is optional — short call-to-action steps (e.g. the
+    // "Get started by logging the first suggestion!" wrap-up) only
+    // need the title.
+    const bodyText =
+        currentStep.bodyKey !== undefined ? t(currentStep.bodyKey) : "";
+    // The "Next" button on the last step uses `currentStep.finishLabelKey`
+    // when present (e.g. "Start playing" for the Checklist & Suggest
+    // wrap-up); otherwise it falls back to a generic "Finish".
+    // eslint-disable-next-line i18next/no-literal-string -- default i18n key under the `onboarding` namespace
+    const finishKey = currentStep.finishLabelKey ?? "finish";
     // Pad the spotlight by a few pixels so the highlight comfortably
     // surrounds the target rather than hugging its edges.
     const SPOTLIGHT_PAD = 6;
@@ -543,31 +552,19 @@ export function TourPopover() {
                             className="fill-[var(--color-tour-bg)] stroke-[var(--color-tour-border)]"
                             strokeWidth={2}
                         />
-                        <div className="flex flex-col gap-0.5 border-b border-[var(--color-tour-border)] px-4 pt-3 pb-2">
-                            <div className="flex items-start justify-between gap-3">
-                                <span className="font-semibold text-[13px] text-[var(--color-tour-accent)]">
-                                    {tourTitle}
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => dismissTour("close")}
-                                    aria-label={tCommon("close")}
-                                    className="-mt-0.5 cursor-pointer rounded-full border-none bg-transparent p-1 text-[var(--color-tour-accent)] hover:bg-[var(--color-tour-bg-hover)]"
-                                >
-                                    <XIcon size={16} />
-                                </button>
-                            </div>
-                            <span className="text-[11px] text-[var(--color-tour-accent)] opacity-70">
-                                {t("stepLabel", {
-                                    step: stepNumber,
-                                    total: totalSteps,
-                                })}
-                            </span>
-                        </div>
-                        <div className="px-4 py-3">
+                        {/* Header: just the step's own title + the
+                            close X. The cross-tour label ("Setup
+                            tour" / "Checklist & Suggest tour") was
+                            removed — each step is recognizable from
+                            its title and the body, and stripping
+                            the meta header lets the popover stay
+                            tight around its content. The step
+                            counter moved to the bottom-left of the
+                            footer so it sits next to the Skip link. */}
+                        <div className="flex items-start justify-between gap-3 px-4 pt-3 pb-2">
                             <div
                                 id="tour-step-title"
-                                className="font-semibold text-[15px] text-[var(--color-tour-text)]"
+                                className="font-semibold text-[15px] leading-snug text-[var(--color-tour-text)]"
                             >
                                 {/* `currentStep.titleKey` is a full
                                     next-intl key under the
@@ -575,21 +572,38 @@ export function TourPopover() {
                                     (e.g. `setup.cardPack.title`). */}
                                 {t(currentStep.titleKey)}
                             </div>
-                            <div
-                                id="tour-step-body"
-                                className="mt-1 text-[13px] leading-snug text-[var(--color-tour-text)]"
-                            >
-                                {t(currentStep.bodyKey)}
-                            </div>
-                        </div>
-                        <div className="flex items-center justify-between gap-2 border-t border-[var(--color-tour-border)] px-4 py-2.5">
                             <button
                                 type="button"
-                                onClick={() => dismissTour("skip")}
-                                className="cursor-pointer rounded-[var(--tour-radius)] border-none bg-transparent px-2 py-1 text-[12px] text-[var(--color-tour-accent)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-tour-accent-hover)]"
+                                onClick={() => dismissTour("close")}
+                                aria-label={tCommon("close")}
+                                className="-mt-0.5 shrink-0 cursor-pointer rounded-full border-none bg-transparent p-1 text-[var(--color-tour-accent)] hover:bg-[var(--color-tour-bg-hover)]"
                             >
-                                {t("skip")}
+                                <XIcon size={16} />
                             </button>
+                        </div>
+                        {bodyText !== "" && (
+                            <div
+                                id="tour-step-body"
+                                className="px-4 pb-3 text-[13px] leading-snug text-[var(--color-tour-text)]"
+                            >
+                                {bodyText}
+                            </div>
+                        )}
+                        <div className="flex items-center justify-between gap-3 border-t border-[var(--color-tour-border)] px-4 py-2.5">
+                            <span className="text-[12px] text-[var(--color-tour-accent)]">
+                                {t("stepCounter", {
+                                    step: stepNumber,
+                                    total: totalSteps,
+                                })}
+                                {" "}
+                                <button
+                                    type="button"
+                                    onClick={() => dismissTour("skip")}
+                                    className="cursor-pointer border-none bg-transparent p-0 text-[12px] text-[var(--color-tour-accent)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-tour-accent-hover)]"
+                                >
+                                    {t("skipParens")}
+                                </button>
+                            </span>
                             <div className="flex items-center gap-2">
                                 <button
                                     type="button"
@@ -604,7 +618,7 @@ export function TourPopover() {
                                     onClick={() => nextStep()}
                                     className="cursor-pointer rounded-[var(--tour-radius)] border-2 border-[var(--color-tour-accent)] bg-[var(--color-tour-accent)] px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--color-tour-accent-hover)]"
                                 >
-                                    {isLastStep ? t("finish") : t("next")}
+                                    {isLastStep ? t(finishKey) : t("next")}
                                 </button>
                             </div>
                         </div>

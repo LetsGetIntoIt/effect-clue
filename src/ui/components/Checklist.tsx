@@ -352,6 +352,11 @@ export function Checklist() {
         <th
             key="add-player-col"
             className="w-px whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-center"
+            // The setup tour's "Add players" step highlights the
+            // entire header row of player cells, including the
+            // "+ Player" affordance, so the user can see all the
+            // ways they manage the player set in one spotlight.
+            data-tour-anchor="setup-player-column"
         >
             <button
                 type="button"
@@ -538,10 +543,23 @@ export function Checklist() {
                             {inSetup || !hasKeyboard ? null : label("global.gotoChecklist")}
                         </th>
                         {owners.flatMap((owner, ownerIdx) => {
+                            // Setup-tour anchor: every player's header
+                            // cell carries `setup-player-column` so the
+                            // spotlight highlights the entire row of
+                            // player names. The Case File header skips
+                            // this anchor since it's not a player.
+                            const playerHeaderAnchor =
+                                inSetup && owner._tag === "Player"
+                                    ? {
+                                          "data-tour-anchor":
+                                              "setup-player-column",
+                                      }
+                                    : {};
                             const cell = (
                                 <th
                                     key={ownerKey(owner)}
                                     className="border-r border-b border-border bg-row-header px-2 py-1 text-center align-top font-semibold"
+                                    {...playerHeaderAnchor}
                                 >
                                     {inSetup && owner._tag === "Player" ? (
                                         <PlayerNameInput
@@ -562,7 +580,14 @@ export function Checklist() {
                     </tr>
                     {inSetup && (
                         <tr>
-                            <th className="whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-left font-semibold">
+                            <th
+                                className="whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-left font-semibold"
+                                // The setup tour's "Set hand sizes"
+                                // step highlights the row label cell
+                                // alongside every player's input so
+                                // the spotlight covers the whole row.
+                                data-tour-anchor="setup-hand-size"
+                            >
                                 {tSetup("handSize")}
                             </th>
                             {owners.flatMap((owner, ownerIdx) => {
@@ -1388,9 +1413,6 @@ function PlayerNameInput({
         dispatch({ type: "removePlayer", player });
     };
 
-    // Anchor the setup tour's "add players" step to the first
-    // player-name input.
-    const isFirstPlayer = colIdx === 0;
     return (
         <div className="flex flex-col items-stretch gap-0.5">
             <div className="flex items-center gap-1">
@@ -1400,9 +1422,6 @@ function PlayerNameInput({
                     value={editing}
                     data-cell-row={-2}
                     data-cell-col={colIdx}
-                    {...(isFirstPlayer
-                        ? { "data-tour-anchor": "setup-player-column" }
-                        : {})}
                     onFocus={() => rememberChecklistCell(-2, colIdx)}
                     onChange={e => {
                         setEditing(e.currentTarget.value);

@@ -239,9 +239,20 @@ function TourScreenGate() {
     useEffect(() => {
         if (!hydrated) return;
         if (!shouldShow) return;
-        if (phase !== "tour") return; // wait for the coordinator's turn.
         if (activeScreen) return; // a tour is already running.
         if (firedRef.current.has(screenKey)) return;
+        // The coordinator's phase blocks tour firing while
+        // `splash`, `install`, or `boot` own the slot — they're the
+        // states where firing would stack modals on top of each
+        // other. Phase `tour` is the explicit go-ahead from the
+        // coordinator at boot. Phase `done` covers post-boot
+        // client-side navigation: by the time the user clicks
+        // "Start playing" (setup → checklistSuggest), splash and
+        // install have already had their chance, so a fresh per-
+        // screen tour can fire without coordinator intervention.
+        if (phase === "boot" || phase === "splash" || phase === "install") {
+            return;
+        }
         firedRef.current.add(screenKey);
         startTour(screenKey);
         // The gate's `dismiss` flips its own internal state and persists

@@ -66,7 +66,12 @@ export function useTourGate(
         const should = TelemetryRuntime.runSync(
             computeShouldShowTour(state, now, TOUR_RE_ENGAGE_DURATION),
         );
-        if (should) setShouldShow(true);
+        // Always reflect the current screen's gate decision. Earlier
+        // versions only set on `should=true` — that left stale `true`
+        // state from a previous screen visible to the firing
+        // effect when the user navigated to a screen whose tour was
+        // already dismissed.
+        setShouldShow(should);
         // Order is critical: read state and decide BEFORE we overwrite
         // the visit timestamp, otherwise the gap is always 0.
         saveTourVisited(screen, now);
