@@ -1,9 +1,16 @@
 /**
- * Hourly cron — purge expired shares from the database.
+ * Daily cron — purge expired shares from the database.
+ *
+ * Schedule is daily (`0 7 * * *` UTC) rather than hourly because
+ * Vercel's Hobby plan caps cron frequency at "daily or less". The
+ * SHARE_TTL is still 24 hours; the cron's job is just to clean up
+ * after expiry, not to enforce it. `getShare` filters out expired
+ * rows via `expires_at > NOW()`, so the worst-case latency between
+ * "share expired" and "row removed" is up to 24 hours — acceptable
+ * because expired rows are already invisible to the application.
  *
  * The `expires_at` column is set on every `createShare` call (M17)
- * to `NOW() + SHARE_TTL`. `getShare` already filters out expired
- * rows via `expires_at > NOW()`, so this cron is a maintenance
+ * to `NOW() + SHARE_TTL`, so this cron is purely a maintenance
  * step: keep the table small, free disk on the Postgres free-tier,
  * and keep the indexes performant.
  *

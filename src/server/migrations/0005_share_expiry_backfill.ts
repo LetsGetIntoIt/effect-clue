@@ -11,8 +11,8 @@
  * Idempotent — re-running is a no-op once every row has a value.
  * Safe to run multiple times during cold-start migration cycles.
  *
- * Adding an index on `expires_at` here keeps the hourly cron's
- * `WHERE expires_at < NOW()` cheap as the table grows.
+ * Adding an index on `expires_at` here keeps the daily cleanup
+ * cron's `WHERE expires_at < NOW()` cheap as the table grows.
  */
 import { Effect } from "effect";
 import { SqlClient } from "effect/unstable/sql";

@@ -3,8 +3,11 @@
  *
  * `SHARE_TTL` is the lifetime of a freshly-created share. The
  * `createShare` action stamps `expires_at = NOW() + SHARE_TTL` on
- * insert; `getShare` filters out expired rows; the hourly cron at
- * `app/api/crons/cleanup-shares` deletes them outright.
+ * insert; `getShare` filters out expired rows; the daily cron at
+ * `app/api/crons/cleanup-shares` deletes them outright. (Daily,
+ * not hourly — Vercel's Hobby plan caps cron frequency at one run
+ * per day. `getShare`'s expired-row filter is what enforces the
+ * TTL from the application's perspective.)
  *
  * The display string is sourced from `share.ttl` in `messages/en.json`
  * — keeping the i18n key in lockstep with this constant means
