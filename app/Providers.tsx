@@ -1,5 +1,5 @@
 /**
- * Top-level client providers. Two responsibilities:
+ * Top-level client providers. Three responsibilities:
  *
  *   1. Browser-side observability bootstrap — initialise PostHog +
  *      Web Vitals listener on first mount. Sentry init runs out-of-
@@ -12,6 +12,11 @@
  *      [src/data/QueryClientProvider.tsx](../src/data/QueryClientProvider.tsx)),
  *      so every query / mutation across the tree shares one cache and
  *      one localStorage-backed persister.
+ *
+ *   3. Service worker registration (M23) — `<ServiceWorkerRegistration />`
+ *      registers the Serwist-emitted `/sw.js` on first client render
+ *      so installed PWA users actually get offline support. Skipped
+ *      in development.
  */
 "use client";
 
@@ -20,6 +25,7 @@ import { appLoaded } from "../src/analytics/events";
 import { initPosthog } from "../src/analytics/posthog";
 import { initWebVitals } from "../src/analytics/webVitals";
 import { QueryClientProvider } from "../src/data/QueryClientProvider";
+import { ServiceWorkerRegistration } from "../src/pwa/ServiceWorkerRegistration";
 
 export const Providers = ({
     children,
@@ -36,5 +42,10 @@ export const Providers = ({
                 process.env["NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA"] ?? "dev",
         });
     }, []);
-    return <QueryClientProvider>{children}</QueryClientProvider>;
+    return (
+        <QueryClientProvider>
+            <ServiceWorkerRegistration />
+            {children}
+        </QueryClientProvider>
+    );
 };

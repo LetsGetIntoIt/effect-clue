@@ -26,6 +26,14 @@ dist-ssr
 out/
 next-env.d.ts
 
+# Serwist-emitted service worker artifacts (M23) — `public/sw.js` is
+# regenerated on every production build by `@serwist/next`. Source
+# lives in `app/sw.ts`. Don't track the build output.
+/public/sw.js
+/public/sw.js.map
+/public/swe-worker-*.js
+/public/swe-worker-*.js.map
+
 # VSCode
 .vscode/*
 !.vscode/extensions.json

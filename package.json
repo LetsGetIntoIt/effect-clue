@@ -19,7 +19,7 @@
 		"i18n:check": "node scripts/check-i18n-keys.mjs",
 		"assert:no-dev-auth": "node scripts/assert-no-dev-auth.mjs",
 		"dev": "next dev",
-		"build": "next build",
+		"build": "next build --webpack",
 		"start": "next start",
 		"db:up": "docker compose up -d postgres",
 		"db:down": "docker compose down",
