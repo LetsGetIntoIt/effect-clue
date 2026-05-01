@@ -57,9 +57,11 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Clue } from "../Clue";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
+import { seedOnboardingDismissed } from "../../test-utils/onboardingSeed";
 
 beforeEach(() => {
     window.localStorage.clear();
+    seedOnboardingDismissed();
     window.history.replaceState(null, "", "/");
 });
 

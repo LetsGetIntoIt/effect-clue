@@ -80,7 +80,12 @@ export function InstallPromptModal({
             open={open}
             onOpenChange={(next) => {
                 if (!next) {
+                    // X / Esc / outside-click all snooze for 4 weeks,
+                    // matching the "Not now" button. The user already
+                    // declined to install — re-asking them on the next
+                    // page load would be hostile.
                     installDismissed({ trigger, via: VIA_X_BUTTON });
+                    onSnooze();
                     onClose();
                 }
             }}

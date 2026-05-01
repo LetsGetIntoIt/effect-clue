@@ -63,9 +63,13 @@ vi.mock("motion/react", () => {
 import { render, screen, waitFor } from "@testing-library/react";
 import { Clue } from "../Clue";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
+import { seedOnboardingDismissed } from "../../test-utils/onboardingSeed";
 
 beforeEach(() => {
     window.localStorage.clear();
+    // Suppress splash / tour / install auto-fires so they don't
+    // block click events on the deduce-mode UI under test.
+    seedOnboardingDismissed();
     // Enter deduce mode via the hydration URL param — matches how
     // real users would land here (via ⌘J or a shared `?view=…` link).
     window.history.replaceState(null, "", "/?view=checklist");

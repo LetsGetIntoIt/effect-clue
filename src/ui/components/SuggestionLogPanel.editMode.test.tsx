@@ -84,6 +84,7 @@ import {
 import { cardByName } from "../../logic/test-utils/CardByName";
 import { Clue } from "../Clue";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
+import { seedOnboardingDismissed } from "../../test-utils/onboardingSeed";
 
 const getRow = (): HTMLElement => {
     const el = document.querySelector<HTMLElement>(
@@ -136,22 +137,9 @@ const seedOneSuggestionAndMount = async (
 beforeEach(() => {
     window.localStorage.clear();
     window.history.replaceState(null, "", "/");
-    // Pre-dismiss the tour gates so the auto-fire combined tour
-    // doesn't dispatch `setUiMode` mid-render (M13).
-    const isoNow = new Date().toISOString();
-    const dismissed = JSON.stringify({
-        version: 1,
-        // The gate considers a tour dormant only when BOTH timestamps
-        // are present and the visit happened recently. Seed both so
-        // the gate's "first visit" branch doesn't fire.
-        lastVisitedAt: isoNow,
-        lastDismissedAt: isoNow,
-    });
-    window.localStorage.setItem("effect-clue.tour.setup.v1", dismissed);
-    window.localStorage.setItem(
-        "effect-clue.tour.checklistSuggest.v1",
-        dismissed,
-    );
+    // Suppress splash, tour, and install-prompt auto-fires so they
+    // don't dispatch `setUiMode` mid-render or block click events.
+    seedOnboardingDismissed();
 });
 
 const waitPillsVisible = async (): Promise<void> => {

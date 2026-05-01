@@ -64,6 +64,7 @@ vi.mock("../hooks/useIsDesktop", () => ({
 import { render, waitFor } from "@testing-library/react";
 import { Clue } from "../Clue";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
+import { seedOnboardingDismissed } from "../../test-utils/onboardingSeed";
 
 const setIsDesktop = async (value: boolean): Promise<void> => {
     const mod = await import("../hooks/useIsDesktop");
@@ -81,26 +82,11 @@ const findSuggestionLog = (): HTMLElement | null =>
 beforeEach(() => {
     window.localStorage.clear();
     window.history.replaceState(null, "", "/");
-    // Pre-dismiss the tour gates so PlayLayout tests aren't perturbed
-    // by the auto-fire onboarding tour. The combined `checklistSuggest`
-    // tour now dispatches `setUiMode` between steps that need a
-    // different pane mounted — without this stub, the gate-driven
-    // start-tour would flip uiMode to "checklist" before the test's
-    // `?view=suggest` assertion ran.
-    const isoNow = new Date().toISOString();
-    const dismissed = JSON.stringify({
-        version: 1,
-        // The gate considers a tour dormant only when BOTH timestamps
-        // are present and the visit happened recently. Seed both so
-        // the gate's "first visit" branch doesn't fire.
-        lastVisitedAt: isoNow,
-        lastDismissedAt: isoNow,
-    });
-    window.localStorage.setItem("effect-clue.tour.setup.v1", dismissed);
-    window.localStorage.setItem(
-        "effect-clue.tour.checklistSuggest.v1",
-        dismissed,
-    );
+    // Suppress the splash, tour, and install-prompt auto-fires so
+    // they don't stack on top of the underlying PlayLayout under test.
+    // (Without this, the combined `checklistSuggest` tour would
+    // dispatch `setUiMode` mid-render and clobber the `?view=` param.)
+    seedOnboardingDismissed();
 });
 
 describe("PlayLayout — desktop renders both panes side-by-side", () => {

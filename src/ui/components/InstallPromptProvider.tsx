@@ -8,9 +8,12 @@
  * menu item, the setup tour's install step) replay it through
  * `openModal(trigger)`.
  *
- * The auto-gate lives inside this provider too: on hydrated mount,
- * if the visit-count + snooze gate clears AND the deferred prompt
- * exists, we open the modal with `trigger: TRIGGER_AUTO`.
+ * Auto-gate is delegated to `<StartupCoordinatorProvider>`. This
+ * provider only auto-opens the modal when the coordinator's phase is
+ * `"install"` AND the browser has fired `beforeinstallprompt`. If
+ * the deferred event hasn't fired by the time the coordinator
+ * advances to install, we wait a short window (3s) for it before
+ * giving up — the user can still install manually from the ⋯ menu.
  */
 "use client";
 
@@ -24,18 +27,34 @@ import {
     useState,
     type ReactNode,
 } from "react";
+import { Duration } from "effect";
 import {
     appLaunchedStandalone,
     installCompleted,
     type InstallPromptTrigger,
 } from "../../analytics/events";
 import { useInstallPrompt } from "../hooks/useInstallPrompt";
+import { useStartupCoordinator } from "../onboarding/StartupCoordinator";
 import { InstallPromptModal } from "./InstallPromptModal";
 
 // Discriminator values for the analytics `trigger` payload — kept at
 // module scope so the i18next/no-literal-string lint rule treats them
 // as wire-format strings rather than user copy.
 const TRIGGER_AUTO = "auto" satisfies InstallPromptTrigger;
+// Coordinator slot discriminator. Same name as `StartupSlot` but
+// extracted as a constant so the lint rule treats it as a wire-format
+// identifier rather than user copy.
+const SLOT_INSTALL = "install" as const;
+
+/**
+ * How long to wait for `beforeinstallprompt` to fire after the
+ * coordinator advances to the install phase. If the browser hasn't
+ * fired it within this window, we advance to "done" — the visit
+ * gate said the user is eligible, but the OS isn't offering install
+ * right now (already installed, unsupported browser, criteria not
+ * met). The user can still trigger install from the ⋯ menu later.
+ */
+const INSTALL_WAIT_FOR_DEFERRED_PROMPT = Duration.seconds(3);
 
 interface InstallPromptContextValue {
     /**
@@ -64,16 +83,13 @@ export const useInstallPromptContext = (): InstallPromptContextValue => {
 
 export function InstallPromptProvider({
     children,
-    hydrated,
 }: {
     readonly children: ReactNode;
-    /** Gate effect waits for `<ClueProvider>` to finish hydrating. */
-    readonly hydrated: boolean;
 }) {
+    const { phase, reportClosed } = useStartupCoordinator();
     const {
         installable,
         installed,
-        shouldAutoShow,
         install,
         snooze,
         markShown,
@@ -107,16 +123,45 @@ export function InstallPromptProvider({
         }
     }, [installed]);
 
-    // Auto-fire the modal when the gate decided to and we're past
-    // ClueProvider's localStorage hydration (otherwise we could race
-    // with the splash modal).
+    // Auto-fire when the coordinator says it's our turn AND the
+    // deferred prompt is available. If the prompt hasn't fired by the
+    // time the phase advances, wait a short window before giving up
+    // — `beforeinstallprompt` typically fires within a few hundred
+    // ms after the page becomes interactive.
+    const autoFiredRef = useRef(false);
     useEffect(() => {
-        if (!hydrated) return;
-        if (!shouldAutoShow) return;
-        if (openTrigger !== undefined) return;
-        setOpenTrigger(TRIGGER_AUTO);
-        markShown();
-    }, [hydrated, shouldAutoShow, openTrigger, markShown]);
+        if (phase !== "install") return;
+        if (autoFiredRef.current) return;
+
+        if (installable) {
+            autoFiredRef.current = true;
+            setOpenTrigger(TRIGGER_AUTO);
+            markShown();
+            return;
+        }
+
+        // No deferred prompt yet. Wait, then either fire or advance.
+        const timer = window.setTimeout(() => {
+            if (autoFiredRef.current) return;
+            autoFiredRef.current = true;
+            // Browser never offered install — nothing to show. Advance
+            // the coordinator so the page-load sequence settles.
+            reportClosed(SLOT_INSTALL);
+        }, Duration.toMillis(INSTALL_WAIT_FOR_DEFERRED_PROMPT));
+        return () => {
+            window.clearTimeout(timer);
+        };
+    }, [phase, installable, markShown, reportClosed]);
+
+    const handleAutoClose = useCallback(() => {
+        setOpenTrigger(undefined);
+        // Auto-fired modal closing → coordinator advances. Manual
+        // opens from the menu come through openModal() with a non-
+        // auto trigger and don't touch the coordinator.
+        if (openTrigger === TRIGGER_AUTO) {
+            reportClosed(SLOT_INSTALL);
+        }
+    }, [openTrigger, reportClosed]);
 
     const openModal = useCallback(
         (trigger: InstallPromptTrigger) => {
@@ -139,7 +184,7 @@ export function InstallPromptProvider({
                 trigger={openTrigger ?? TRIGGER_AUTO}
                 onInstall={install}
                 onSnooze={snooze}
-                onClose={() => setOpenTrigger(undefined)}
+                onClose={handleAutoClose}
             />
         </InstallPromptContext.Provider>
     );

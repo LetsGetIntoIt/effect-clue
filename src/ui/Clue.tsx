@@ -15,10 +15,13 @@ import { PlayLayout } from "./components/PlayLayout";
 import { Toolbar } from "./components/Toolbar";
 import { TooltipProvider } from "./components/Tooltip";
 import { ConfirmProvider, useConfirm } from "./hooks/useConfirm";
+import { useSplashGate } from "./hooks/useSplashGate";
 import { SelectionProvider } from "./SelectionContext";
 import { useGlobalShortcut } from "./keyMap";
 import { T_STANDARD, useReducedTransition } from "./motion";
 import type { UiMode } from "../logic/ClueState";
+import { StartupCoordinatorProvider, useStartupCoordinator } from "./onboarding/StartupCoordinator";
+import { SplashModal } from "./components/SplashModal";
 import { ClueProvider, useClue } from "./state";
 import { TourProvider, useTour } from "./tour/TourProvider";
 import { TourPopover } from "./tour/TourPopover";
@@ -33,6 +36,10 @@ const UI_SETUP: "setup" = "setup";
 const UI_CHECKLIST: "checklist" = "checklist";
 const UI_SUGGEST: "suggest" = "suggest";
 const TOP_LEVEL_PLAY = "play";
+// Coordinator slot discriminators — same shape as `StartupSlot` but
+// pulled out as constants so the i18next/no-literal-string lint rule
+// treats them as wire-format identifiers, not user copy.
+const COORDINATOR_PHASE_TOUR = "tour" as const;
 
 /**
  * Horizontal mental-model of the three views. Setup sits to the
@@ -119,13 +126,37 @@ export function Clue() {
           <ClueProvider>
            <ConfirmProvider>
            <SelectionProvider>
-            <TourProvider>
-            <ClueShell headerRef={headerRef} />
-            </TourProvider>
+            <CoordinatedShell headerRef={headerRef} />
            </SelectionProvider>
            </ConfirmProvider>
           </ClueProvider>
         </TooltipProvider>
+    );
+}
+
+/**
+ * Mounts the startup coordinator + tour provider with values pulled
+ * from `useClue()`. The coordinator needs `hydrated` (so it doesn't
+ * decide based on default state) and the active screen key (so per-
+ * screen tour eligibility is computed against the screen the user
+ * actually landed on).
+ */
+function CoordinatedShell({
+    headerRef,
+}: {
+    readonly headerRef: React.RefObject<HTMLElement | null>;
+}) {
+    const { hydrated, state } = useClue();
+    const activeScreen = screenKeyForUiMode(state.uiMode);
+    return (
+        <StartupCoordinatorProvider
+            hydrated={hydrated}
+            activeScreen={activeScreen}
+        >
+            <TourProvider>
+                <ClueShell headerRef={headerRef} />
+            </TourProvider>
+        </StartupCoordinatorProvider>
     );
 }
 
@@ -141,9 +172,9 @@ function ClueShell({
     readonly headerRef: React.RefObject<HTMLElement | null>;
 }) {
     const t = useTranslations("app");
-    const { hydrated } = useClue();
+    const { showSplash, dismiss: dismissSplash } = useSplashGate();
     return (
-        <InstallPromptProvider hydrated={hydrated}>
+        <InstallPromptProvider>
         <AccountProvider>
         <ShareProvider>
             <main className="mx-auto flex min-w-max max-w-[1400px] flex-col gap-5 px-5 pb-24 [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+1.5rem)]">
@@ -169,6 +200,7 @@ function ClueShell({
                 <TourPopover />
             </main>
             <BottomNav />
+            <SplashModal open={showSplash} onDismiss={dismissSplash} />
         </ShareProvider>
         </AccountProvider>
         </InstallPromptProvider>
@@ -191,6 +223,7 @@ function ClueShell({
 function TourScreenGate() {
     const { state, hydrated } = useClue();
     const { startTour, activeScreen } = useTour();
+    const { phase, reportClosed } = useStartupCoordinator();
     const screenKey = screenKeyForUiMode(state.uiMode);
     const { shouldShow, dismiss } = useTourGate(screenKey, {
         enabled: hydrated,
@@ -206,6 +239,7 @@ function TourScreenGate() {
     useEffect(() => {
         if (!hydrated) return;
         if (!shouldShow) return;
+        if (phase !== "tour") return; // wait for the coordinator's turn.
         if (activeScreen) return; // a tour is already running.
         if (firedRef.current.has(screenKey)) return;
         firedRef.current.add(screenKey);
@@ -217,7 +251,20 @@ function TourScreenGate() {
         // just mark "we showed the tour" so a refresh in this session
         // won't re-fire.
         dismiss();
-    }, [hydrated, shouldShow, screenKey, activeScreen, startTour, dismiss]);
+    }, [hydrated, shouldShow, phase, screenKey, activeScreen, startTour, dismiss]);
+
+    // Whenever the tour transitions from active → not active AND we
+    // were in the coordinator's "tour" phase, advance the coordinator.
+    // This catches every dismiss path (skip / esc / backdrop / X /
+    // complete) without each path having to remember.
+    const wasActiveRef = useRef(false);
+    useEffect(() => {
+        const isActive = activeScreen !== undefined;
+        if (wasActiveRef.current && !isActive && phase === COORDINATOR_PHASE_TOUR) {
+            reportClosed(COORDINATOR_PHASE_TOUR);
+        }
+        wasActiveRef.current = isActive;
+    }, [activeScreen, phase, reportClosed]);
 
     return null;
 }

@@ -11,10 +11,18 @@
  * visiting; users who've been away ≥ DURATION see the splash again
  * as a re-engagement nudge. The DURATION lives in code so we can tune
  * it without a migration.
+ *
+ * As of the startup coordinator (M20+), the gate's "should I show"
+ * decision is delegated to `<StartupCoordinatorProvider>` so the
+ * splash plays nicely with the tour and install prompt instead of
+ * stacking on top of them. The coordinator's `phase === "splash"`
+ * is the canonical source of truth; this hook just bumps
+ * `lastVisitedAt`, fires telemetry once when the splash actually
+ * opens, and persists `lastDismissedAt` on dismiss.
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DateTime, Duration, Effect } from "effect";
 import { TelemetryRuntime } from "../../observability/runtime";
 import { splashScreenViewed } from "../../analytics/events";
@@ -24,8 +32,14 @@ import {
     saveLastVisited,
     type SplashState,
 } from "../../logic/SplashState";
+import { useStartupCoordinator } from "../onboarding/StartupCoordinator";
 
 export const ABOUT_APP_SPLASH_SCREEN_DISMISSAL_DURATION = Duration.weeks(4);
+
+// Coordinator slot discriminator. Pulled out as a constant so the
+// `i18next/no-literal-string` lint rule treats it as a wire-format
+// identifier rather than user copy.
+const SLOT_SPLASH = "splash" as const;
 
 export const computeShouldShowSplash = Effect.fn("splash.computeGate")(
     function* (
@@ -46,50 +60,72 @@ const daysBetween = (from: DateTime.Utc, to: DateTime.Utc): number => {
 };
 
 export function useSplashGate(): {
-    /** True after mount when the gate decided to show. */
+    /** True when the coordinator says the splash slot is active. */
     readonly showSplash: boolean;
     /** Whether the user has previously checked "don't show again". */
     readonly dismissedBefore: boolean;
     /** Hides the splash; persists `lastDismissedAt` if `dontShowAgain`. */
     readonly dismiss: (dontShowAgain: boolean) => void;
 } {
-    const [showSplash, setShowSplash] = useState(false);
+    const { phase, reportClosed } = useStartupCoordinator();
     const [dismissedBefore, setDismissedBefore] = useState(false);
 
+    // Side effects on mount: bump `lastVisitedAt` and snapshot
+    // `dismissedBefore` for the modal copy. Order is critical — the
+    // coordinator reads `lastVisitedAt` BEFORE this hook bumps it, so
+    // both agree on the gate decision. (Coordinator runs its
+    // eligibility effect on hydration; this hook also gates on a
+    // mount-only effect, so React schedules them in the same flush.)
     useEffect(() => {
         const state = loadSplashState();
+        setDismissedBefore(state.lastDismissedAt !== undefined);
+        saveLastVisited(DateTime.nowUnsafe());
+    }, []);
+
+    // Fire `splash_screen_viewed` exactly once when the coordinator
+    // actually opens the splash (`phase === "splash"`). Previously
+    // the event fired alongside the gate decision, but with the
+    // coordinator we only want it tied to actual visibility.
+    const viewedFired = useRef(false);
+    useEffect(() => {
+        if (phase !== "splash") return;
+        if (viewedFired.current) return;
+        viewedFired.current = true;
+        const state = loadSplashState();
         const now = DateTime.nowUnsafe();
-        const should = TelemetryRuntime.runSync(
+        // We still run the pure gate through the telemetry runtime so
+        // the `splash.computeGate` span keeps appearing on Honeycomb
+        // — even though the coordinator already decided.
+        TelemetryRuntime.runSync(
             computeShouldShowSplash(
                 state,
                 now,
                 ABOUT_APP_SPLASH_SCREEN_DISMISSAL_DURATION,
             ),
         );
-        const wasDismissedBefore = state.lastDismissedAt !== undefined;
-        setDismissedBefore(wasDismissedBefore);
-        if (should) {
-            setShowSplash(true);
-            splashScreenViewed({
-                dismissedBefore: wasDismissedBefore,
-                daysSinceLastVisit:
-                    state.lastVisitedAt !== undefined
-                        ? daysBetween(state.lastVisitedAt, now)
-                        : null,
-            });
-        }
-        // Order is critical: read state and decide BEFORE we overwrite
-        // the visit timestamp, otherwise the gap is always 0.
-        saveLastVisited(now);
-    }, []);
+        splashScreenViewed({
+            dismissedBefore: state.lastDismissedAt !== undefined,
+            daysSinceLastVisit:
+                state.lastVisitedAt !== undefined
+                    ? daysBetween(state.lastVisitedAt, now)
+                    : null,
+        });
+    }, [phase]);
 
-    const dismiss = (dontShowAgain: boolean) => {
-        if (dontShowAgain) {
-            saveDismissed(DateTime.nowUnsafe());
-            setDismissedBefore(true);
-        }
-        setShowSplash(false);
+    const dismiss = useCallback(
+        (dontShowAgain: boolean) => {
+            if (dontShowAgain) {
+                saveDismissed(DateTime.nowUnsafe());
+                setDismissedBefore(true);
+            }
+            reportClosed(SLOT_SPLASH);
+        },
+        [reportClosed],
+    );
+
+    return {
+        showSplash: phase === SLOT_SPLASH,
+        dismissedBefore,
+        dismiss,
     };
-
-    return { showSplash, dismissedBefore, dismiss };
 }

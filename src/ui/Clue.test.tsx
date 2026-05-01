@@ -64,6 +64,7 @@ vi.mock("motion/react", () => {
 import { render, screen, waitFor } from "@testing-library/react";
 import { Clue } from "./Clue";
 import { TestQueryClientProvider } from "../test-utils/queryClient";
+import { seedOnboardingDismissed } from "../test-utils/onboardingSeed";
 
 beforeEach(() => {
     window.localStorage.clear();
@@ -71,24 +72,9 @@ beforeEach(() => {
     // `ClueProvider` mutates `?view=` on every uiMode change, so
     // a stale param from a prior test would leak into hydration.
     window.history.replaceState(null, "", "/");
-    // Pre-dismiss the tour gates so the auto-fire combined tour
-    // doesn't dispatch `setUiMode` mid-render (M13 added a
-    // `requiredUiMode` step driver that would otherwise flip
-    // uiMode away from whatever `?view=` the test seeded).
-    const isoNow = new Date().toISOString();
-    const dismissed = JSON.stringify({
-        version: 1,
-        // The gate considers a tour dormant only when BOTH timestamps
-        // are present and the visit happened recently. Seed both so
-        // the gate's "first visit" branch doesn't fire.
-        lastVisitedAt: isoNow,
-        lastDismissedAt: isoNow,
-    });
-    window.localStorage.setItem("effect-clue.tour.setup.v1", dismissed);
-    window.localStorage.setItem(
-        "effect-clue.tour.checklistSuggest.v1",
-        dismissed,
-    );
+    // Suppress the splash, tour, and install-prompt auto-fires so
+    // they don't stack on top of the underlying app under test.
+    seedOnboardingDismissed();
 });
 
 describe("Clue — top-level structure", () => {

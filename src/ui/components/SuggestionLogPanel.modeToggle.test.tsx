@@ -117,6 +117,7 @@ import { fireEvent, render, waitFor } from "@testing-library/react";
 import { Clue } from "../Clue";
 import { accusationFormOpened } from "../../analytics/events";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
+import { seedOnboardingDismissed } from "../../test-utils/onboardingSeed";
 
 const findActiveTab = (): HTMLElement => {
     const el = document.querySelector<HTMLElement>(
@@ -160,6 +161,7 @@ const mountClue = async (): Promise<void> => {
 
 beforeEach(() => {
     window.localStorage.clear();
+    seedOnboardingDismissed();
     window.history.replaceState(null, "", "/?view=suggest");
     vi.mocked(accusationFormOpened).mockClear();
 });

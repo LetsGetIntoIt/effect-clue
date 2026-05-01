@@ -15,6 +15,14 @@ afterEach(() => {
     cleanup();
 });
 
+// Note on onboarding-gate state in tests: any test that mounts
+// <Clue/> needs to suppress the splash + tour + install auto-fires
+// or they stack on top of the underlying UI. Use the
+// `seedOnboardingDismissed()` helper from `src/test-utils/onboardingSeed.ts`
+// in the test file's own `beforeEach`, after `localStorage.clear()`.
+// We don't seed globally because most test files clear localStorage
+// themselves, which would wipe a global seed before each test starts.
+
 // Registers Effect's `Equal.equals` as a Vitest equality tester, so
 // `toEqual` / `toStrictEqual` / structural matchers on Data classes,
 // HashMap, HashSet, etc. compare by Effect's notion of equality
