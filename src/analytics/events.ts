@@ -242,14 +242,17 @@ export const aboutLinkClicked = (props: {
 export type TourScreenKey =
     | "setup"
     | "checklistSuggest"
+    | "firstSuggestion"
     | "account"
     | "shareImport";
 
-/** All the ways a tour can be dismissed before completion. */
+/** All the ways a tour can be dismissed before completion.
+ * `"backdrop"` was removed in M20 — clicking outside the popover no
+ * longer dismisses; users have to explicitly click X / Skip tour /
+ * press Esc to bail. */
 export type TourDismissVia =
     | "skip"
     | "esc"
-    | "backdrop"
     | "close"
     | "anchor_missing";
 

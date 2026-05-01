@@ -246,3 +246,120 @@ describe("TourPopover — anchor lookup", () => {
         ).toBeInTheDocument();
     });
 });
+
+// -----------------------------------------------------------------------
+// M20: Tour interaction rules. The tour must be dismissed only via X /
+// Skip tour / Esc — clicking outside the popover (the dim backdrop) or
+// inside the spotlit area should NOT close the tour, and the spotlight
+// itself must absorb clicks so the user can't interact with the
+// underlying anchor mid-tour.
+// -----------------------------------------------------------------------
+
+describe("TourPopover — M20 interaction rules", () => {
+    test("clicking the dim backdrop does NOT dismiss the tour", () => {
+        let api!: ReturnType<typeof useTour>;
+        render(
+            <Harness
+                anchors={[
+                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                ]}
+            >
+                {c => {
+                    api = c;
+                    return null;
+                }}
+            </Harness>,
+            { wrapper: TestQueryClientProvider },
+        );
+        act(() => api.startTour("setup"));
+        expect(api.activeScreen).toBe("setup");
+        // The backdrop is the fixed-inset div with z-40 that has no
+        // `aria-hidden` siblings carrying the tour content. Find it
+        // by its class signature.
+        const backdrop = document.querySelector<HTMLDivElement>(
+            "div.fixed.inset-0.z-40",
+        );
+        expect(backdrop).not.toBeNull();
+        fireEvent.click(backdrop!);
+        // Tour stays active.
+        expect(api.activeScreen).toBe("setup");
+    });
+
+    test("clicking the spotlight does NOT trigger the underlying anchor's click", () => {
+        let api!: ReturnType<typeof useTour>;
+        const onAnchorClick = vi.fn();
+        // Mount an anchor with an `onClick` handler so we can detect
+        // whether the click reached it through the spotlight.
+        function HarnessWithClickAnchor({
+            children,
+        }: {
+            readonly children: (
+                controls: ReturnType<typeof useTour>,
+            ) => ReactNode;
+        }) {
+            return (
+                <ClueProvider>
+                    <TourProvider>
+                        <Probe controls={children} />
+                        <button
+                            type="button"
+                            data-testid="anchor"
+                            data-tour-anchor="setup-card-pack"
+                            onClick={onAnchorClick}
+                        >
+                            click me
+                        </button>
+                        <TourPopover />
+                    </TourProvider>
+                </ClueProvider>
+            );
+        }
+        render(
+            <HarnessWithClickAnchor>
+                {c => {
+                    api = c;
+                    return null;
+                }}
+            </HarnessWithClickAnchor>,
+            { wrapper: TestQueryClientProvider },
+        );
+        act(() => api.startTour("setup"));
+        // The spotlight overlay sits on top of the anchor. Clicking
+        // it should not bubble to the anchor's onClick.
+        const spotlight = document.querySelector<HTMLDivElement>(
+            ".tour-spotlight",
+        );
+        expect(spotlight).not.toBeNull();
+        fireEvent.click(spotlight!);
+        expect(onAnchorClick).not.toHaveBeenCalled();
+        // Tour also stays active (spotlight click isn't a dismiss path).
+        expect(api.activeScreen).toBe("setup");
+    });
+
+    test("Skip tour explicitly dismisses", () => {
+        let api!: ReturnType<typeof useTour>;
+        render(
+            <Harness
+                anchors={[
+                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                ]}
+            >
+                {c => {
+                    api = c;
+                    return null;
+                }}
+            </Harness>,
+            { wrapper: TestQueryClientProvider },
+        );
+        act(() => api.startTour("setup"));
+        expect(api.activeScreen).toBe("setup");
+        // Skip tour link sits in the footer; the next-intl mock
+        // returns the i18n key "skipParens" verbatim.
+        const skipBtn = Array.from(
+            document.querySelectorAll<HTMLButtonElement>("button"),
+        ).find(b => b.textContent === "skipParens");
+        expect(skipBtn).toBeDefined();
+        fireEvent.click(skipBtn!);
+        expect(api.activeScreen).toBeUndefined();
+    });
+});

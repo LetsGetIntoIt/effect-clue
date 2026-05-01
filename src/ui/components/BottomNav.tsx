@@ -81,6 +81,7 @@ export function BottomNav() {
                         shortcut: shortcutSuffix("global.gotoChecklist", hasKeyboard),
                     })}
                     active={mode === "checklist"}
+                    tourAnchor="bottom-nav-checklist"
                     onClick={() =>
                         dispatch({ type: "setUiMode", mode: "checklist" })
                     }
@@ -130,10 +131,15 @@ function NavTabItem({
     label,
     active,
     onClick,
+    tourAnchor,
 }: {
     readonly label: string;
     readonly active: boolean;
     readonly onClick: () => void;
+    /** Optional `data-tour-anchor` attached to the underlying button.
+     * Used by the M22 firstSuggestion tour to point at the Checklist
+     * tab on mobile. */
+    readonly tourAnchor?: string;
 }) {
     const underlineTransition = useReducedTransition(T_SPRING_SOFT);
     const colorTransition = useReducedTransition(T_STANDARD);
@@ -144,6 +150,9 @@ function NavTabItem({
                 role="tab"
                 aria-selected={active}
                 onClick={onClick}
+                {...(tourAnchor !== undefined
+                    ? { "data-tour-anchor": tourAnchor }
+                    : {})}
                 className={
                     "relative flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--radius)] border-0 bg-transparent px-2 text-[13px] font-semibold"
                 }

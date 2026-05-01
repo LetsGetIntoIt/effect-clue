@@ -36,8 +36,24 @@ export interface TourStep {
      * Identifier matching a `data-tour-anchor="..."` attribute on the
      * target element. Module-internal — choose a stable name and use
      * the same string everywhere.
+     *
+     * For viewport-conditional anchors (e.g. "the Checklist tab" lands
+     * on the BottomNav on mobile and on the desktop deduction grid on
+     * desktop), use `anchorByViewport` instead and leave `anchor` as
+     * a fallback used by the SSR / test paths.
      */
     readonly anchor: string;
+    /**
+     * When set, takes precedence over `anchor` once the client knows
+     * which breakpoint is active. The TourPopover resolves to the
+     * `mobile` or `desktop` token based on `window.matchMedia`. Both
+     * tokens still need a `data-tour-anchor` attribute mounted in the
+     * DOM at the time of step display.
+     */
+    readonly anchorByViewport?: {
+        readonly mobile: string;
+        readonly desktop: string;
+    };
     /** next-intl key under `onboarding.<screenKey>`. */
     readonly titleKey: string;
     /**
@@ -150,14 +166,11 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             requiredUiMode: "checklist",
         },
         {
-            anchor: "suggest-add-form",
-            titleKey: "suggest.addForm.title",
-            bodyKey: "suggest.addForm.body",
-            side: "bottom",
-            align: "start",
-            requiredUiMode: "suggest",
-        },
-        {
+            // The user sees the suggestion log BEFORE we point at
+            // the form to add the first one. Order matters —
+            // landing on the form last lets the wrap-up step's
+            // "Add the first suggestion of the game" CTA dovetail
+            // straight into doing it.
             anchor: "suggest-prior-log",
             titleKey: "suggest.priorLog.title",
             bodyKey: "suggest.priorLog.body",
@@ -166,16 +179,44 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             requiredUiMode: "suggest",
         },
         {
-            // Wrap-up step. Anchors to the same add-form so the
-            // user lands on the input box; the step's CTA renames
-            // the "Finish" button to "Start playing" so the close
-            // action reads as a continuation, not a chore.
+            // Wrap-up step doubles as the call-to-action: "add the
+            // first suggestion of the game". The `finishLabelKey`
+            // override flips the next-button copy from generic
+            // "Finish" to "Start playing" so the user reads it as
+            // a continuation, not a chore.
             anchor: "suggest-add-form",
-            titleKey: "suggest.ready.title",
+            titleKey: "suggest.addForm.title",
+            bodyKey: "suggest.addForm.body",
             side: "bottom",
             align: "start",
             requiredUiMode: "suggest",
             finishLabelKey: "startPlaying",
+        },
+    ],
+    /**
+     * One-step popover that fires the first time the user logs a
+     * suggestion in any game. The anchor is viewport-conditional:
+     * mobile points at the BottomNav's Checklist tab; desktop points
+     * at the wrapping section of the deduction grid (where the
+     * solver's updates show up). Same 4-week re-engage cadence as
+     * the other tours via `useTourGate`.
+     */
+    firstSuggestion: [
+        {
+            // `anchor` is a fallback for SSR + tests where matchMedia
+            // hasn't run yet; `anchorByViewport` wins on the client.
+            anchor: "first-suggestion-checklist",
+            anchorByViewport: {
+                mobile: "bottom-nav-checklist",
+                desktop: "desktop-checklist-area",
+            },
+            titleKey: "firstSuggestion.checklist.title",
+            bodyKey: "firstSuggestion.checklist.body",
+            side: "top",
+            align: "center",
+            // Single-step tour ends with a "Got it" CTA — no
+            // back-button context, just an acknowledgement.
+            finishLabelKey: "gotIt",
         },
     ],
     // Reserved for M7 / M9 — no content yet.

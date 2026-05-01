@@ -355,6 +355,7 @@
         "stepCounter": "{step} of {total}",
         "finish": "Finish",
         "startPlaying": "Start playing",
+        "gotIt": "Got it",
         "takeTour": "Take tour",
         "setup": {
             "cardPack": {
@@ -394,16 +395,18 @@
         },
         "suggest": {
             "addForm": {
-                "title": "Log a suggestion or failed accusation",
-                "body": "Pick a suspect / weapon / room, then add who tried to refute and which card was shown to you (if any). Press ⌘K to focus this form anytime."
+                "title": "Add the first suggestion of the game to get started!",
+                "body": "After adding, switch to the checklist to see updated deductions."
             },
             "priorLog": {
-                "title": "Edit prior suggestions",
-                "body": "All suggestions made in the game will show up here. Click to edit any suggestion, if you need to correct what was logged."
-            },
-            "ready": {
-                "title": "Get started by logging the first suggestion!",
-                "body": ""
+                "title": "All suggestions are logged here",
+                "body": "Every suggestion you log shows up here. Click any row to edit it later if you mis-typed something."
+            }
+        },
+        "firstSuggestion": {
+            "checklist": {
+                "title": "See updated deductions on the checklist",
+                "body": "The solver re-runs after every suggestion — your next deduction may already be on the board."
             }
         }
     }

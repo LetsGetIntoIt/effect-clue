@@ -47,6 +47,7 @@ import { useEffect, useRef, useState } from "react";
 import { XIcon } from "../components/Icons";
 import { useClue } from "../state";
 import { useTour } from "./TourProvider";
+import type { TourStep } from "./tours";
 
 /**
  * Wrapper around `getBoundingClientRect()` that satisfies the shape
@@ -73,6 +74,23 @@ const findAnchorElements = (anchor: string): HTMLElement[] => {
             `[data-tour-anchor~="${anchor}"]`,
         ),
     );
+};
+
+/**
+ * Resolve a step's anchor token, picking the right one for the
+ * current viewport when `anchorByViewport` is set. The mobile
+ * breakpoint matches the layout boundary used everywhere else
+ * (BottomNav vs desktop Toolbar; PlayLayout's single-pane vs
+ * side-by-side render). Falls back to `step.anchor` for SSR / tests
+ * where matchMedia hasn't run yet.
+ */
+const resolveAnchorToken = (step: TourStep): string => {
+    if (!step.anchorByViewport) return step.anchor;
+    if (typeof window === "undefined") return step.anchor;
+    const isDesktop = window.matchMedia("(min-width: 800px)").matches;
+    return isDesktop
+        ? step.anchorByViewport.desktop
+        : step.anchorByViewport.mobile;
 };
 
 /**
@@ -270,7 +288,7 @@ export function TourPopover() {
         };
 
         const recompute = (): void => {
-            const els = findAnchorElements(currentStep.anchor);
+            const els = findAnchorElements(resolveAnchorToken(currentStep));
             if (els.length === 0) {
                 virtualElementRef.current = {
                     getBoundingClientRect: fallbackVirtualRect,
@@ -384,7 +402,7 @@ export function TourPopover() {
         // ResizeObserver per matched element so we follow internal
         // resizes (e.g. the user typing in a hand-size input that
         // grows the cell).
-        const els = findAnchorElements(currentStep.anchor);
+        const els = findAnchorElements(resolveAnchorToken(currentStep));
         let observer: ResizeObserver | null = null;
         if (typeof ResizeObserver !== "undefined" && els.length > 0) {
             observer = new ResizeObserver(() => recompute());
@@ -470,19 +488,33 @@ export function TourPopover() {
 
     return (
         <>
-            {/* Click-everywhere dismiss layer. Lives BENEATH the
-                spotlight so clicks anywhere outside the highlighted
-                anchor still dismiss the tour. */}
+            {/* Backdrop: a transparent fixed-inset layer that absorbs
+                clicks landing OUTSIDE the spotlight + popover. Clicks
+                on this layer are intentionally dropped — earlier
+                versions dismissed the tour on backdrop click, but
+                that made it too easy to accidentally bail mid-tour.
+                The user must explicitly click X / Skip tour / press
+                Esc to exit. `touch-action` is left at its default
+                `auto` so vertical/horizontal scroll passes through —
+                the user can pan the page to find anchors that scroll
+                with content. */}
             <div
                 aria-hidden
-                onClick={() => dismissTour("backdrop")}
                 className="fixed inset-0 z-40"
             />
             {/* Spotlight: a transparent box sized to the anchor with
                 a giant `box-shadow` painting darkness OUTSIDE the box.
-                Visually highlights the anchor area without needing a
-                clip-path or SVG mask. `pointer-events-none` so the
-                click goes through to the backdrop above. */}
+                `pointer-events: auto` so clicks that LAND ON the
+                spotlit area are absorbed (not passed through to the
+                underlying anchor). Without this, the user could
+                click an overflow-menu item mid-tour during step 5,
+                or toggle a checklist cell during step 4 — both
+                states the tour is trying to teach, not let the user
+                interact with yet.
+
+                When no anchor is on the page (fallback), render a
+                plain dark overlay instead so the user still sees
+                they're in tour mode. */}
             {spotlight ? (
                 <div
                     aria-hidden
@@ -495,7 +527,7 @@ export function TourPopover() {
                         boxShadow:
                             "0 0 0 9999px rgba(0,0,0,0.45), 0 0 0 2px var(--color-tour-accent)",
                         borderRadius: "var(--tour-radius)",
-                        pointerEvents: "none",
+                        pointerEvents: "auto",
                         zIndex: 41,
                     }}
                     className="tour-spotlight transition-all"
@@ -524,14 +556,22 @@ export function TourPopover() {
                         side={currentStep.side ?? "bottom"}
                         align={currentStep.align ?? "center"}
                         sideOffset={14}
-                        collisionPadding={16}
+                        collisionPadding={24}
                         // The tour floats above the backdrop (z-40)
                         // AND above any popover/menu the active step
                         // might trigger to open (the overflow menu
                         // content uses z-50). Bumped to z-60 so the
-                        // tour copy stays visible.
+                        // tour copy stays visible. The
+                        // `max-h-[calc(100vh-32px)] overflow-y-auto`
+                        // pair caps the popover at viewport height
+                        // so a tall popover (long body copy + 4-line
+                        // step list) scrolls internally rather than
+                        // overflowing the viewport — fixing the
+                        // mobile-Safari case where Radix could
+                        // resolve the popper to a y-coord with the
+                        // bottom edge below the viewport.
                         className={
-                            "z-[60] w-[min(92vw,360px)] rounded-[var(--tour-radius)] " +
+                            "z-[60] w-[min(92vw,360px)] max-h-[calc(100vh-32px)] overflow-y-auto rounded-[var(--tour-radius)] " +
                             "border-2 border-[var(--color-tour-border)] " +
                             "bg-[var(--color-tour-bg)] text-[var(--color-tour-text)] " +
                             "shadow-[0_10px_28px_rgba(30,64,175,0.28)] focus:outline-none"

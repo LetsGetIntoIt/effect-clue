@@ -40,6 +40,9 @@ const TOP_LEVEL_PLAY = "play";
 // pulled out as constants so the i18next/no-literal-string lint rule
 // treats them as wire-format identifiers, not user copy.
 const COORDINATOR_PHASE_TOUR = "tour" as const;
+// ScreenKey discriminator for the M22 first-suggestion tour. Pulled
+// to module scope for the same i18next-lint reason.
+const FIRST_SUGGESTION_SCREEN_KEY = "firstSuggestion" as const;
 
 /**
  * Horizontal mental-model of the three views. Setup sits to the
@@ -197,6 +200,7 @@ function ClueShell({
                 </div>
                 <NewGameShortcut />
                 <TourScreenGate />
+                <FirstSuggestionTourGate />
                 <TourPopover />
             </main>
             <BottomNav />
@@ -276,6 +280,71 @@ function TourScreenGate() {
         }
         wasActiveRef.current = isActive;
     }, [activeScreen, phase, reportClosed]);
+
+    return null;
+}
+
+/**
+ * Mid-game tour: when the user logs their first suggestion of a
+ * game, point at the deduction grid (desktop) or the Checklist
+ * BottomNav tab (mobile) and explain that the solver re-runs with
+ * each addition. Same 4-week dormancy gate as the other tours via
+ * `useTourGate("firstSuggestion")`. Fires at most once per user per
+ * 4-week window — explicitly NOT once-per-game; if the user solves
+ * a case, starts a new one, and logs the first suggestion of THAT
+ * game, the gate's dismissal timestamp suppresses a re-fire.
+ *
+ * Trigger: a 0 → 1 transition on `state.suggestions.length`.
+ * Detected by tracking the last seen length in a ref so the
+ * comparison is "actually went from empty to non-empty in this
+ * mount", not "currently has > 0 suggestions" (which would re-fire
+ * on every mount of a hydrated session).
+ */
+function FirstSuggestionTourGate() {
+    const { state, hydrated } = useClue();
+    const { startTour, activeScreen } = useTour();
+    const { phase } = useStartupCoordinator();
+    const { shouldShow, dismiss } = useTourGate(
+        FIRST_SUGGESTION_SCREEN_KEY,
+        { enabled: hydrated },
+    );
+    const lastSeenLengthRef = useRef<number | null>(null);
+    const firedRef = useRef(false);
+
+    useEffect(() => {
+        const currentLength = state.suggestions.length;
+        // First mount: just snapshot, don't fire.
+        if (lastSeenLengthRef.current === null) {
+            lastSeenLengthRef.current = currentLength;
+            return;
+        }
+        // Detect 0 → 1+ transition (the user just logged their
+        // first suggestion of this mount). `>` rather than `=== 1`
+        // so multi-suggestion-add edge cases (unlikely, but possible
+        // via `loadSession` if we ever build one) still trigger.
+        const isFirstAddition =
+            lastSeenLengthRef.current === 0 && currentLength > 0;
+        lastSeenLengthRef.current = currentLength;
+        if (!isFirstAddition) return;
+        if (!hydrated) return;
+        if (!shouldShow) return;
+        if (activeScreen) return;
+        if (firedRef.current) return;
+        if (phase === "boot" || phase === "splash" || phase === "install") {
+            return;
+        }
+        firedRef.current = true;
+        startTour(FIRST_SUGGESTION_SCREEN_KEY);
+        dismiss();
+    }, [
+        state.suggestions.length,
+        hydrated,
+        shouldShow,
+        activeScreen,
+        phase,
+        startTour,
+        dismiss,
+    ]);
 
     return null;
 }

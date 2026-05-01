@@ -479,6 +479,14 @@ export function Checklist() {
         <section
             ref={rootRef}
             id="checklist"
+            // M22 firstSuggestion tour anchor (desktop variant). On
+            // mobile the same step instead points at the BottomNav's
+            // Checklist tab; the `anchorByViewport` resolver on
+            // `TourStep` picks the right token at popover-render
+            // time. Both anchors live in the DOM unconditionally;
+            // the resolver simply queries for whichever side of the
+            // breakpoint is active.
+            data-tour-anchor="desktop-checklist-area"
             className="min-w-max rounded-[var(--radius)] border border-border bg-panel p-4"
             onMouseLeave={onGridLeave}
             onBlur={e => {
