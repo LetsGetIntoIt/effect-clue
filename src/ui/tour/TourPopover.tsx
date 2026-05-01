@@ -1,6 +1,6 @@
 /**
  * Renders the active onboarding tour step as a Radix Popover anchored
- * to the DOM node carrying `data-tour-anchor="<step.anchor>"`.
+ * to the DOM node(s) carrying `data-tour-anchor="<step.anchor>"`.
  *
  * The popover lives in a portal at the document root and is
  * positioned via `Popover.Anchor virtualRef={...}` — meaning we don't
@@ -9,22 +9,35 @@
  * `data-tour-anchor="..."` to a stable DOM node and the tour finds
  * it on its own.
  *
+ * **Multi-element anchors.** A step can target multiple elements:
+ * `findAnchorElements` returns every node in the page carrying the
+ * step's anchor token (via the CSS `~=` whitespace-list selector).
+ * The popover's bounding rect and the spotlight rect are both the
+ * UNION of all matched elements, so highlighting "the whole hand-size
+ * row" is a matter of putting `data-tour-anchor="setup-hand-size"`
+ * on every cell in the row.
+ *
+ * **Resize / scroll tracking.** The popover and spotlight follow the
+ * anchor element(s) when the page scrolls, the window resizes, or
+ * any anchor element resizes (via `ResizeObserver`). Without this,
+ * a window resize would leave the popover floating where it started
+ * while the page reflowed underneath it.
+ *
  * Visual identity is intentionally distinct from the in-game UI —
  * the parchment/oxblood `InfoPopover` and `SplashModal` palette is
  * for game state; this is meta UI guiding the user through the app.
  * Blue accent + "Tour · Step N of M" header signal "this is a
  * walkthrough, not part of your game".
  *
- * Lookup runs on mount and on every step change. If the anchor node
- * isn't on the page (the user navigated away mid-tour, or the step
+ * Lookup runs on mount and on every step change. If no anchor node
+ * is on the page (the user navigated away mid-tour, or the step
  * targets an element that hasn't mounted yet), we fall back to a
  * fixed position in the bottom-right of the viewport so the user
  * still sees the tour copy.
  *
- * Spotlight / backdrop is a `fixed` `<div>` with low-alpha black so
- * the user's eye is drawn to the popover. We don't punch a hole
- * around the anchor — the bounding-rect-based mask was enough work
- * that it'd inflate this PR; a future polish pass can add it.
+ * Spotlight is a `fixed` `<div>` with a giant `box-shadow` painting
+ * darkness OUTSIDE the box — punches a "hole" of sorts around the
+ * anchor without needing an SVG mask or clip-path.
  */
 "use client";
 
@@ -45,22 +58,49 @@ type VirtualElement = {
 };
 
 /**
- * Find the on-page element a tour step targets.
+ * Find every on-page element a tour step targets.
  *
  * Uses the `~=` attribute selector so a single DOM element can carry
  * multiple anchor names (space-separated), e.g. the first cell of the
- * checklist grid is both `setup-known-cell` and `checklist-cell`. The
- * fallback to the exact-match selector keeps simple single-token
- * anchors working unchanged.
+ * checklist grid is both `setup-known-cell` and `checklist-cell`.
+ * Returns the empty array when no element matches; the caller falls
+ * back to a fixed viewport position.
  */
-const findAnchorElement = (anchor: string): HTMLElement | null => {
-    if (typeof document === "undefined") return null;
-    return (
-        document.querySelector<HTMLElement>(
+const findAnchorElements = (anchor: string): HTMLElement[] => {
+    if (typeof document === "undefined") return [];
+    return Array.from(
+        document.querySelectorAll<HTMLElement>(
             `[data-tour-anchor~="${anchor}"]`,
-        ) ??
-        document.querySelector<HTMLElement>(`[data-tour-anchor="${anchor}"]`)
+        ),
     );
+};
+
+/**
+ * The smallest axis-aligned rect that contains every input rect.
+ * Used to highlight a row, a column, or any group of elements as a
+ * single spotlight without rendering one per element.
+ *
+ * Zero-area rects (typically `display: none` siblings — e.g. the
+ * Toolbar's ⋯ trigger that's hidden on mobile while the BottomNav's
+ * ⋯ trigger carries the same anchor) are filtered out before
+ * unioning. Including them would extend the union all the way to
+ * the document origin (0,0), making the spotlight cover huge swaths
+ * of the page.
+ */
+const unionRect = (rects: ReadonlyArray<DOMRect>): DOMRect | null => {
+    const visible = rects.filter(r => r.width > 0 && r.height > 0);
+    if (visible.length === 0) return null;
+    let left = Infinity;
+    let top = Infinity;
+    let right = -Infinity;
+    let bottom = -Infinity;
+    for (const r of visible) {
+        if (r.left < left) left = r.left;
+        if (r.top < top) top = r.top;
+        if (r.right > right) right = r.right;
+        if (r.bottom > bottom) bottom = r.bottom;
+    }
+    return new DOMRect(left, top, right - left, bottom - top);
 };
 
 const fallbackVirtualRect = (): DOMRect => {
@@ -97,9 +137,14 @@ export function TourPopover() {
         getBoundingClientRect: fallbackVirtualRect,
     });
 
-    // Re-render whenever the anchor element changes so Radix
-    // recomputes the popover's position.
+    // Re-render whenever the anchor element changes (or repositions
+    // due to a scroll / resize / DOM mutation) so Radix recomputes
+    // the popover's position. We only bump the tick when the union
+    // rect actually changed — bumping on every recompute makes Radix
+    // remount the Content faster than Floating UI can settle a
+    // measurement, which leaves the popper at a stale position.
     const [anchorTick, setAnchorTick] = useState(0);
+    const lastUnionKeyRef = useRef("");
 
     // Step-driven uiMode dispatch. On mobile the checklist and suggest
     // panes don't co-exist, so a step that anchors inside the suggest
@@ -111,39 +156,279 @@ export function TourPopover() {
         dispatch({ type: "setUiMode", mode: currentStep.requiredUiMode });
     }, [currentStep, state.uiMode, dispatch]);
 
-    // Anchor resolution. Runs after every step change AND every
-    // uiMode change so the suggest-pane anchors resolve after the
-    // dispatch above has flipped the rendered tree.
-    useEffect(() => {
-        if (!activeScreen || !currentStep) {
-            virtualElementRef.current = {
-                getBoundingClientRect: fallbackVirtualRect,
-            };
-            return;
-        }
-        const el = findAnchorElement(currentStep.anchor);
-        if (el) {
-            virtualElementRef.current = {
-                getBoundingClientRect: () => el.getBoundingClientRect(),
-            };
-        } else {
-            virtualElementRef.current = {
-                getBoundingClientRect: fallbackVirtualRect,
-            };
-        }
-        setAnchorTick(n => n + 1);
-    }, [activeScreen, stepIndex, currentStep, state.uiMode]);
-
-    // Spotlight rect — refreshed alongside the anchor effect so the
-    // dim cutout follows the active step.
+    // Spotlight rect — set to the union of all anchor element rects,
+    // or null when no anchor matches. Refreshed alongside the
+    // popover position via the tracking effect below so the dim
+    // cutout follows the active step.
     const [spotlight, setSpotlight] = useState<DOMRect | null>(null);
+
+    // We auto-scroll the page once per step to bring the anchor into
+    // view — anchors that live below the fold (like the hand-size
+    // row when the table is tall) wouldn't otherwise be visible. The
+    // ref tracks which step we've scrolled for so subsequent
+    // recomputes (from the user scrolling, resizing, etc.) DON'T
+    // re-scroll and fight with manual interaction.
+    const scrolledForStepRef = useRef<{
+        screen: string | undefined;
+        step: number;
+    }>({ screen: undefined, step: -1 });
+
+    // Anchor resolution + reposition tracking. One effect handles all
+    // four signals that should re-measure the anchor:
+    //
+    //   1. The step changed (different anchor name).
+    //   2. The window scrolled (anchor moved relative to viewport).
+    //   3. The window resized (anchor reflowed).
+    //   4. The anchor element itself resized (e.g. a row gained a
+    //      cell because the user added a player).
+    //
+    // Each signal triggers `recompute()` which:
+    //   - Looks up matching elements
+    //   - Builds the union rect
+    //   - Updates the virtualRef + spotlight state
+    //   - Bumps `anchorTick` so Radix re-runs Floating UI's positioning
     useEffect(() => {
         if (!activeScreen || !currentStep) {
+            virtualElementRef.current = {
+                getBoundingClientRect: fallbackVirtualRect,
+            };
             setSpotlight(null);
             return;
         }
-        const el = findAnchorElement(currentStep.anchor);
-        setSpotlight(el ? el.getBoundingClientRect() : null);
+
+        const scrollSpotlightIntoView = (rect: DOMRect): void => {
+            if (typeof window === "undefined") return;
+            const margin = 48;
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            const inViewVertical =
+                rect.top >= margin && rect.bottom <= vh - margin;
+            const inViewHorizontal =
+                rect.left >= margin && rect.right <= vw - margin;
+            if (inViewVertical && inViewHorizontal) return;
+            // The page splits scroll: vertical scroll lives on the
+            // body when content overflows (the `min-w-max` <main> +
+            // tall checklist make body's scrollHeight > clientHeight);
+            // horizontal scroll also lives on body (per globals.css's
+            // `html { overflow-x: clip } body { overflow-x: auto }`).
+            // We compute the delta in viewport coords and apply it
+            // directly to body's scroll, plus a window.scrollTo
+            // fallback when the document itself is the scroller.
+            //
+            // For each axis: prefer to bring the rect's NEAR edge
+            // into view with a margin. For unions wider/taller than
+            // the viewport (e.g. a whole row of cells stretching
+            // beyond the viewport), centering would push half the
+            // union off the opposite edge. Aligning to the start
+            // shows the leftmost / topmost cells with the rest
+            // trailing off-screen — the user can still see what's
+            // highlighted starts here.
+            const dy = inViewVertical
+                ? 0
+                : rect.height + margin * 2 < vh
+                    ? rect.top + rect.height / 2 - vh / 2
+                    : rect.top - margin;
+            const dx = inViewHorizontal
+                ? 0
+                : rect.width + margin * 2 < vw
+                    ? rect.left + rect.width / 2 - vw / 2
+                    : rect.left - margin;
+            // Use `auto` (instantaneous) rather than `smooth`. The
+            // recompute fires multiple times per step (mutation
+            // observer + step-change effect + React re-renders all
+            // re-trigger it), and back-to-back smooth-scroll calls
+            // cancel each other before the animation can commit any
+            // movement — leaving body.scrollTop stuck at 0. Instant
+            // scroll matches the user's mental model anyway: the
+            // tour jumped to a new step, the page should already be
+            // showing what the step is about.
+            // eslint-disable-next-line i18next/no-literal-string -- ScrollBehavior enum
+            const behavior: ScrollBehavior = "auto";
+            const body = document.body;
+            const html = document.documentElement;
+            // Pick whichever element is actually scrollable for each
+            // axis — checking `scrollHeight > clientHeight` or
+            // `scrollWidth > clientWidth`. Falling through to window
+            // for either axis covers the no-overflow case where no
+            // scrolling is needed.
+            const verticalEl =
+                body.scrollHeight > body.clientHeight ? body : html;
+            const horizontalEl =
+                body.scrollWidth > body.clientWidth ? body : html;
+            if (dy !== 0) {
+                verticalEl.scrollTo({
+                    top: verticalEl.scrollTop + dy,
+                    behavior,
+                });
+            }
+            if (dx !== 0) {
+                horizontalEl.scrollTo({
+                    left: horizontalEl.scrollLeft + dx,
+                    behavior,
+                });
+            }
+        };
+
+        const recompute = (): void => {
+            const els = findAnchorElements(currentStep.anchor);
+            if (els.length === 0) {
+                virtualElementRef.current = {
+                    getBoundingClientRect: fallbackVirtualRect,
+                };
+                setSpotlight(null);
+                if (lastUnionKeyRef.current !== "") {
+                    lastUnionKeyRef.current = "";
+                    setAnchorTick(n => n + 1);
+                }
+                return;
+            }
+            // Capture the elements in a closure so subsequent calls
+            // re-measure the same nodes — avoids re-running the
+            // querySelectorAll on every frame.
+            //
+            // Spotlight uses the UNION of all matched rects so it
+            // can highlight a row/column/group as one cohesive
+            // shape. Popover positioning anchors to JUST THE FIRST
+            // matched element, not the union. Reasoning: for big
+            // unions (e.g. trigger + open menu, or a column tall
+            // enough to fill the viewport), there's nowhere for the
+            // popover to fit if Radix tries to position it against
+            // the whole union — collision detection ends up shoving
+            // the popper off-screen. Anchoring to the first
+            // element keeps the popover near a natural visual hook
+            // while the spotlight communicates the full extent of
+            // the highlighted region.
+            const spotlightMeasure = (): DOMRect => {
+                const rects = els.map(el => el.getBoundingClientRect());
+                return unionRect(rects) ?? fallbackVirtualRect();
+            };
+            const popoverMeasure = (): DOMRect => {
+                // Pick the first VISIBLE element. The Toolbar +
+                // BottomNav both render an OverflowMenu trigger
+                // with the same anchor name; one is hidden via CSS
+                // on the other's breakpoint and reports a 0x0 rect.
+                // Skip the zero-area one so the popover anchors to
+                // the visible trigger.
+                for (const el of els) {
+                    const r = el.getBoundingClientRect();
+                    if (r.width > 0 && r.height > 0) return r;
+                }
+                return fallbackVirtualRect();
+            };
+            virtualElementRef.current = {
+                getBoundingClientRect: popoverMeasure,
+            };
+            const measured = spotlightMeasure();
+            setSpotlight(measured);
+            // Bump the Radix-remount key only when the union rect
+            // changed enough to matter (sub-pixel jitter doesn't
+            // count). Bumping on every recompute would remount
+            // Radix's Content faster than Floating UI's measurement
+            // pipeline can settle a position, leaving the popper at
+            // stale coords.
+            const unionKey = `${Math.round(measured.x)},${Math.round(measured.y)},${Math.round(measured.width)},${Math.round(measured.height)}`;
+            if (unionKey !== lastUnionKeyRef.current) {
+                lastUnionKeyRef.current = unionKey;
+                setAnchorTick(n => n + 1);
+            }
+            // Auto-scroll once per step so anchors below the fold
+            // (or off to the side on a horizontally-scrolling page)
+            // come into view. Subsequent recomputes don't re-scroll;
+            // the user is in control once they start interacting.
+            const scrollTracker = scrolledForStepRef.current;
+            if (
+                scrollTracker.screen !== activeScreen ||
+                scrollTracker.step !== stepIndex
+            ) {
+                scrolledForStepRef.current = {
+                    screen: activeScreen,
+                    step: stepIndex,
+                };
+            }
+            // Always re-check whether the spotlight is in view: the
+            // page may have reflowed (e.g. menu opened, image
+            // loaded) since we last checked. The fn no-ops when the
+            // rect is comfortably inside the viewport, and `auto`
+            // scroll is idempotent at the same target.
+            scrollSpotlightIntoView(measured);
+        };
+
+        recompute();
+        // Re-run after the next two animation frames + a short
+        // timeout to catch anchors that appear via React portals
+        // mounted by the active step (e.g. the overflow menu opens
+        // when its tour step is reached). The MutationObserver on
+        // body subtree catches childList changes, but it sometimes
+        // fires before the new anchor's `getBoundingClientRect`
+        // returns its final size — these scheduled recomputes pick
+        // up the settled rect.
+        const settleTimers = [
+            requestAnimationFrame(() => requestAnimationFrame(recompute)),
+            window.setTimeout(recompute, 150) as unknown as number,
+            window.setTimeout(recompute, 350) as unknown as number,
+        ];
+
+        // Wire the four reposition signals. Vertical scroll lives on
+        // the document; horizontal scroll lives on `<body>` (per
+        // `globals.css`'s split overflow rules). We listen on
+        // `document` with `capture: true` so we catch scroll events
+        // from either element AND from any nested overflow:auto
+        // container the user has scrolled. Resize fires on window.
+        const onScrollOrResize = (): void => recompute();
+        document.addEventListener("scroll", onScrollOrResize, {
+            passive: true,
+            capture: true,
+        });
+        window.addEventListener("resize", onScrollOrResize);
+
+        // ResizeObserver per matched element so we follow internal
+        // resizes (e.g. the user typing in a hand-size input that
+        // grows the cell).
+        const els = findAnchorElements(currentStep.anchor);
+        let observer: ResizeObserver | null = null;
+        if (typeof ResizeObserver !== "undefined" && els.length > 0) {
+            observer = new ResizeObserver(() => recompute());
+            for (const el of els) observer.observe(el);
+        }
+
+        // MutationObserver on the body to catch anchors that
+        // appear / disappear AFTER the step changes (e.g. the
+        // overflow menu's content portal mounts when the menu
+        // opens). Cheap because we only react to subtree changes
+        // — and we throttle via rAF so a flurry of mutations
+        // collapses into one recompute.
+        let rafId = 0;
+        const scheduleRecompute = (): void => {
+            if (rafId !== 0) return;
+            rafId = requestAnimationFrame(() => {
+                rafId = 0;
+                recompute();
+            });
+        };
+        const mutationObserver = new MutationObserver(scheduleRecompute);
+        mutationObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+        });
+
+        return () => {
+            document.removeEventListener(
+                "scroll",
+                onScrollOrResize,
+                { capture: true } as EventListenerOptions,
+            );
+            window.removeEventListener("resize", onScrollOrResize);
+            if (observer) observer.disconnect();
+            mutationObserver.disconnect();
+            if (rafId !== 0) cancelAnimationFrame(rafId);
+            // Cancel the settle-recomputes scheduled at step start.
+            // First entry is a rAF id; the rest are setTimeout ids.
+            const [rafTimer, ...timeoutTimers] = settleTimers;
+            if (rafTimer !== undefined) cancelAnimationFrame(rafTimer);
+            for (const t of timeoutTimers) {
+                if (t !== undefined) window.clearTimeout(t);
+            }
+        };
     }, [activeScreen, stepIndex, currentStep, state.uiMode]);
 
     // Esc dismisses the active tour. Wired at the document level
@@ -212,17 +497,32 @@ export function TourPopover() {
                     className="fixed inset-0 z-40 bg-black/45"
                 />
             )}
-            <Popover.Root open>
+            {/* Key the entire Popover.Root tree on the active step
+                AND the union-rect signature. Radix Popper's
+                content-wrapper element is created once per Popover
+                lifecycle and caches `--radix-popper-anchor-*` CSS
+                variables that drive positioning. Re-keying on each
+                anchor change forces the wrapper to remount with
+                fresh measurements — without this, switching to a
+                step whose anchor has different dimensions leaves
+                the popover positioned against the previous step's
+                rect (visible in step 5 where the open menu's union
+                differed from earlier table-row steps). */}
+            <Popover.Root key={`${activeScreen}-${stepIndex}-${anchorTick}`} open>
                 <Popover.Anchor virtualRef={virtualElementRef} />
                 <Popover.Portal>
                     <Popover.Content
                         side={currentStep.side ?? "bottom"}
                         align={currentStep.align ?? "center"}
-                        sideOffset={10}
+                        sideOffset={14}
                         collisionPadding={16}
-                        // The tour floats above the backdrop (z-40).
+                        // The tour floats above the backdrop (z-40)
+                        // AND above any popover/menu the active step
+                        // might trigger to open (the overflow menu
+                        // content uses z-50). Bumped to z-60 so the
+                        // tour copy stays visible.
                         className={
-                            "z-50 w-[min(92vw,360px)] rounded-[var(--tour-radius)] " +
+                            "z-[60] w-[min(92vw,360px)] rounded-[var(--tour-radius)] " +
                             "border-2 border-[var(--color-tour-border)] " +
                             "bg-[var(--color-tour-bg)] text-[var(--color-tour-text)] " +
                             "shadow-[0_10px_28px_rgba(30,64,175,0.28)] focus:outline-none"

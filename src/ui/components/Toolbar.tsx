@@ -83,7 +83,11 @@ export function Toolbar() {
         nextRedo,
     } = useClue();
     const { onNewGame } = useToolbarActions();
-    const { restartTourForScreen } = useTour();
+    const { restartTourForScreen, currentStep } = useTour();
+    // The "Everything else lives here" tour step points at this menu.
+    // Force it open while that step is active so the user can see
+    // what's inside without having to click ⋯ themselves.
+    const tourForcesMenuOpen = currentStep?.anchor === "overflow-menu";
     const { installable, openModal: openInstallModal } =
         useInstallPromptContext();
     const { openModal: openAccountModal } = useAccountContext();
@@ -148,6 +152,13 @@ export function Toolbar() {
                 triggerLabel={tNav("more")}
                 side="bottom"
                 align="end"
+                forceOpen={tourForcesMenuOpen}
+                // The Toolbar is hidden via CSS on mobile, but the
+                // portaled menu content is rendered to body and
+                // wouldn't inherit that. Hide it here when below the
+                // 800px breakpoint so the desktop menu doesn't ghost
+                // on mobile when forceOpen flips it on for the tour.
+                contentClassName="[@media(max-width:799px)]:hidden"
                 items={[
                     // Group 1: Game
                     {

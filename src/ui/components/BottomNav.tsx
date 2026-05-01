@@ -255,7 +255,10 @@ function BottomOverflowMenu({
     const hasKeyboard = useHasKeyboard();
     const { state } = useClue();
     const { onNewGame } = useToolbarActions();
-    const { restartTourForScreen } = useTour();
+    const { restartTourForScreen, currentStep } = useTour();
+    // Force this menu open while the "Everything else lives here" tour
+    // step is active so the user can see the items without clicking ⋯.
+    const tourForcesMenuOpen = currentStep?.anchor === "overflow-menu";
     const { installable, openModal: openInstallModal } =
         useInstallPromptContext();
     const { openModal: openAccountModal } = useAccountContext();
@@ -274,6 +277,12 @@ function BottomOverflowMenu({
                 triggerLabel={t("more")}
                 side="top"
                 align="end"
+                forceOpen={tourForcesMenuOpen}
+                // BottomNav itself is hidden on desktop via CSS, but
+                // the portaled menu content lives on body and would
+                // otherwise ghost on desktop when forceOpen flips it
+                // on for the tour. Hide above the 800px breakpoint.
+                contentClassName="[@media(min-width:800px)]:hidden"
                 items={[
                     // Group 1: Game
                     {

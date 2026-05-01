@@ -577,19 +577,16 @@ export function Checklist() {
                                 } else {
                                     const current = handSizeMap.get(owner.player);
                                     const def = defaults.get(owner.player);
-                                    // Anchor the setup tour's hand-size step to
-                                    // the first player's hand-size cell.
-                                    const isFirstPlayer = ownerIdx === 0;
+                                    // Anchor the setup tour's hand-size step
+                                    // to EVERY player's hand-size cell so the
+                                    // spotlight highlights the whole row, not
+                                    // just one cell. The TourPopover unions
+                                    // the matched rects.
                                     cell = (
                                         <td
                                             key={ownerKey(owner)}
                                             className="border-r border-b border-border px-1.5 py-1 text-center"
-                                            {...(isFirstPlayer
-                                                ? {
-                                                      "data-tour-anchor":
-                                                          "setup-hand-size",
-                                                  }
-                                                : {})}
+                                            data-tour-anchor="setup-hand-size"
                                         >
                                             <input
                                                 type="number"
@@ -948,22 +945,44 @@ export function Checklist() {
                                                 rowIdx,
                                                 colIdx,
                                             );
-                                        // Anchor the tours' "mark cards
-                                        // you've seen" / "the checklist"
-                                        // step to the first body cell —
-                                        // it's the same DOM node in setup
-                                        // mode (setup-known-cell) and play
-                                        // mode (checklist-cell). The
-                                        // multi-token attribute lets one
-                                        // element answer to either anchor
-                                        // name via `[data-tour-anchor~=...]`.
+                                        // Tour anchors:
+                                        //   - `setup-known-cell` ("Mark
+                                        //     the cards you were dealt")
+                                        //     applies to every cell in
+                                        //     the first player column so
+                                        //     the spotlight highlights the
+                                        //     whole column the user fills
+                                        //     in.
+                                        //   - `checklist-cell` ("Click a
+                                        //     cell to record what you
+                                        //     know") applies only to the
+                                        //     top-left cell — a
+                                        //     teach-the-click anchor for
+                                        //     the play-mode tour.
+                                        // The TourPopover unions all
+                                        // matched rects via the `~=`
+                                        // attribute selector.
+                                        const firstColAnchor =
+                                            colIdx === 0
+                                                ? "setup-known-cell"
+                                                : undefined;
+                                        const firstCellAnchor =
+                                            rowIdx === 0 && colIdx === 0
+                                                ? "checklist-cell"
+                                                : undefined;
+                                        const anchorTokens = [
+                                            firstColAnchor,
+                                            firstCellAnchor,
+                                        ].filter(
+                                            (t): t is string => t !== undefined,
+                                        );
                                         const firstCellAnchorAttr:
                                             | Record<string, string>
                                             | undefined =
-                                            rowIdx === 0 && colIdx === 0
+                                            anchorTokens.length > 0
                                                 ? {
                                                       "data-tour-anchor":
-                                                          "setup-known-cell checklist-cell",
+                                                          anchorTokens.join(" "),
                                                   }
                                                 : undefined;
                                         let cell: ReactNode;
