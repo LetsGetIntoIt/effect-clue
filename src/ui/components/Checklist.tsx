@@ -286,6 +286,61 @@ export function Checklist() {
         maxCol: totalCols - 1,
     };
 
+    // Expand-in animation for newly added Checklist rows (cards,
+    // categories) and columns (players). Each cell content is
+    // wrapped in a `<motion.div>` keyed by entry id inside its own
+    // per-cell `<AnimatePresence>`. The motion.div animates
+    // `maxHeight` / `maxWidth` from 0 to a generous cap (plus
+    // opacity) so the row visually grows into place rather than
+    // blinking in.
+    //
+    // Notes on the design:
+    //
+    //  - **`cellAnimateInitial` flag**: defaults `false` and flips
+    //    `true` a tick after mount. With `initial={false}` on first
+    //    paint, the post-hydration state from localStorage doesn't
+    //    shimmer in. Once the flag flips, AnimatePresence instances
+    //    created *after* mount (inside a brand-new card / category
+    //    / player row) mount with `initial=true` and run the entry
+    //    animation.
+    //
+    //  - **No `<motion.tr>` / `<motion.th>`**: those components,
+    //    when placed inside `<AnimatePresence>`, wrap the row/cell
+    //    in `<PopChild>` / `<PopChildMeasure>` helpers that
+    //    swallowed click events on the row's own buttons in this
+    //    codebase (e.g. `Remove Miss Scarlet` × stopped firing).
+    //    Animating cell content via `<motion.div>` inside the cell
+    //    avoids that.
+    //
+    //  - **`maxHeight` / `maxWidth` rather than `height/width:
+    //    auto`**: Framer Motion v12's `auto` keyword measurement
+    //    is unreliable inside table cells — newly-mounted rows
+    //    would stay stuck at `height: 0`. `max-*` doesn't need
+    //    measurement: the cell takes its natural size up to the
+    //    cap, so a generous cap (200px) gives a real expand-in.
+    //
+    //  - **No exit animation**: the `<AnimatePresence>` lives
+    //    *inside* each row's `<th>` cell, so when dispatch removes
+    //    the row the `<tr>` and its descendants (including the
+    //    AnimatePresence) all unmount synchronously. Framer's exit
+    //    lifecycle needs the AnimatePresence to stay in the DOM
+    //    during the exit, which would require `<motion.tr>` direct
+    //    children of an outer AnimatePresence — and that breaks
+    //    click dispatch in this codebase. Removes therefore snap
+    //    cleanly; we accept the trade-off for reliable dispatches.
+    //
+    // Honors `prefers-reduced-motion` via `useReducedTransition`.
+    // Use 220ms (slower than the 120ms `T_FAST` we use for value
+    // glyph swaps) so the expand reads as deliberate motion. At
+    // 120ms the change scans as a flicker rather than an animation.
+    const cellEntryTransition = useReducedTransition({ duration: 0.22 });
+    const [cellAnimateInitial, setCellAnimateInitial] = useState(false);
+    useEffect(() => {
+        const id = window.setTimeout(() => {
+            setCellAnimateInitial(true);
+        }, 0);
+        return () => window.clearTimeout(id);
+    }, []);
 
     // Handle ⌘J / ⌘H focus requests: locate a cell by (row,col) and
     // focus it. "first" falls back to the first interactive cell.
@@ -594,16 +649,26 @@ export function Checklist() {
                                     className="border-r border-b border-border bg-row-header px-2 py-1 text-center align-top font-semibold"
                                     {...playerHeaderAnchor}
                                 >
-                                    {inSetup && owner._tag === "Player" ? (
-                                        <PlayerNameInput
-                                            player={owner.player}
-                                            allPlayers={setup.players}
-                                            colIdx={ownerIdx}
-                                            bounds={bounds}
-                                        />
-                                    ) : (
-                                        ownerLabel(owner)
-                                    )}
+                                    <AnimatePresence>
+                                        <motion.div
+                                            key={ownerKey(owner)}
+                                            initial={cellAnimateInitial ? ANIM_HIDDEN_COL : false}
+                                            animate={ANIM_VISIBLE_COL}
+                                            transition={cellEntryTransition}
+                                            style={STYLE_OVERFLOW_HIDDEN}
+                                        >
+                                            {inSetup && owner._tag === "Player" ? (
+                                                <PlayerNameInput
+                                                    player={owner.player}
+                                                    allPlayers={setup.players}
+                                                    colIdx={ownerIdx}
+                                                    bounds={bounds}
+                                                />
+                                            ) : (
+                                                ownerLabel(owner)
+                                            )}
+                                        </motion.div>
+                                    </AnimatePresence>
                                 </th>
                             );
                             return inSetup && owner._tag === "CaseFile"
@@ -708,7 +773,15 @@ export function Checklist() {
                                     className="border-r border-b border-border bg-category-header px-2 py-1.5 text-left text-[11px] uppercase tracking-[0.05em] text-white"
                                 >
                                     {inSetup ? (
-                                        <div className="flex items-center justify-between gap-2">
+                                        <AnimatePresence>
+                                        <motion.div
+                                            key={`cat-${String(category.id)}`}
+                                            className="flex items-center justify-between gap-2"
+                                            initial={cellAnimateInitial ? ANIM_HIDDEN_ROW : false}
+                                            animate={ANIM_VISIBLE_ROW}
+                                            transition={cellEntryTransition}
+                                            style={STYLE_OVERFLOW_HIDDEN}
+                                            >
                                             <InlineTextEdit
                                                 value={category.name}
                                                 className="min-w-0 flex-1 rounded border border-white/30 bg-transparent px-1 py-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-white focus:bg-white/10 focus:outline-none"
@@ -770,7 +843,8 @@ export function Checklist() {
                                             >
                                                 &times;
                                             </button>
-                                        </div>
+                                        </motion.div>
+                                        </AnimatePresence>
                                     ) : (
                                         category.name
                                     )}
@@ -782,10 +856,18 @@ export function Checklist() {
                                 return (
                                 <tr
                                     key={String(entry.id)}
-                                                                    >
+                                >
                                     <th className="w-px whitespace-nowrap border-r border-b border-border px-2 py-1 text-left font-normal">
                                         {inSetup ? (
-                                            <div className="flex items-center justify-between gap-2">
+                                            <AnimatePresence>
+                                            <motion.div
+                                                key={String(entry.id)}
+                                                className="flex items-center justify-between gap-2"
+                                                initial={cellAnimateInitial ? ANIM_HIDDEN_ROW : false}
+                                                animate={ANIM_VISIBLE_ROW}
+                                                transition={cellEntryTransition}
+                                                style={STYLE_OVERFLOW_HIDDEN}
+                                                >
                                                 <InlineTextEdit
                                                     value={entry.name}
                                                     className="min-w-0 flex-1 rounded border border-border/60 bg-transparent px-1 py-0.5 text-[12px] focus:border-accent focus:outline-none"
@@ -846,7 +928,8 @@ export function Checklist() {
                                                 >
                                                     &times;
                                                 </button>
-                                            </div>
+                                            </motion.div>
+                                            </AnimatePresence>
                                         ) : (
                                             entry.name
                                         )}
@@ -1721,6 +1804,23 @@ const CSS_WHITE = "#ffffff";
 const CSS_INK = "#2a1f12";
 const MOTION_WAIT: "wait" = "wait";
 const MOTION_POP_LAYOUT: "popLayout" = "popLayout";
+// Animation target values for the cell-content expand/collapse. Pulled
+// out so the i18next/no-literal-string rule treats them as wire-format
+// CSS keywords rather than user-facing copy.
+// Animate `maxHeight` / `maxWidth` from 0 to a generous cap rather
+// than `height/width: auto`. Framer Motion v12's `auto` keyword
+// measurement is unreliable inside table cells — newly-mounted
+// rows would stay stuck at `height: 0`. `max-height` / `max-width`
+// don't have that measurement step: the cell takes its natural
+// size up to the cap, so the cap just needs to be larger than any
+// row / column will ever be. Combined with `overflow: hidden` on
+// the wrapper this gives a clean expand-in.
+const CELL_EXPAND_CAP_PX = 200;
+const ANIM_HIDDEN_ROW = { maxHeight: 0, opacity: 0 } as const;
+const ANIM_VISIBLE_ROW = { maxHeight: CELL_EXPAND_CAP_PX, opacity: 1 } as const;
+const ANIM_HIDDEN_COL = { maxWidth: 0, opacity: 0 } as const;
+const ANIM_VISIBLE_COL = { maxWidth: CELL_EXPAND_CAP_PX, opacity: 1 } as const;
+const STYLE_OVERFLOW_HIDDEN = { overflow: "hidden" } as const;
 
 function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
     const t = useTranslations("deduce");
