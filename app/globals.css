@@ -82,6 +82,38 @@
         serif;
 }
 
+/*
+ * Onboarding tour palette (M4) — kept in a plain `:root` block instead
+ * of inside `@theme {}`.
+ *
+ * Tailwind v4's `@theme` directive only emits a custom property to
+ * `:root` when something in the build references it via a generated
+ * utility class (e.g. `bg-tour-bg`). The tour popover consumes these
+ * tokens via arbitrary-value classes (`bg-[var(--color-tour-bg)]` /
+ * `text-[var(--color-tour-text)]`), which the v4 scanner does NOT
+ * count as utility usage — so the vars were getting tree-shaken out
+ * of the emitted CSS, and the popover rendered transparent.
+ *
+ * A plain `:root` declaration is always emitted regardless of
+ * scanning. Visual identity is intentionally distinct from the
+ * parchment palette above — onboarding is meta UI, not a part of
+ * the in-game state, so the tour popover should not be visually
+ * mistakable for an `InfoPopover` or a `SplashModal`.
+ *
+ * Used only by `src/ui/tour/TourPopover.tsx`. New components should
+ * not reach for these tokens — they're scoped to the walkthrough
+ * surface.
+ */
+:root {
+    --color-tour-accent: #1d4ed8;
+    --color-tour-accent-hover: #1e40af;
+    --color-tour-border: #93c5fd;
+    --color-tour-bg: #eff6ff;
+    --color-tour-bg-hover: #dbeafe;
+    --color-tour-text: #1e3a8a;
+    --tour-radius: 8px;
+}
+
 html,
 body {
     background: var(--color-bg);

@@ -231,6 +231,214 @@ export const aboutLinkClicked = (props: {
     source: "overflow_menu";
 }): void => capture("about_link_clicked", props);
 
+// ── Onboarding tour ───────────────────────────────────────────────────────
+//
+// Per-screen walkthrough (M4). Each event carries `screenKey` so a
+// PostHog funnel can break the data out one tour at a time. The
+// existing onboarding funnel (game_setup_started → cards_dealt →
+// game_started) is wrapped by the setup tour — verify in PostHog that
+// completion rate doesn't regress when the tour goes live.
+
+export type TourScreenKey =
+    | "setup"
+    | "checklistSuggest"
+    | "firstSuggestion"
+    | "account"
+    | "shareImport";
+
+/** All the ways a tour can be dismissed before completion.
+ * `"backdrop"` was removed in M20 — clicking outside the popover no
+ * longer dismisses; users have to explicitly click X / Skip tour /
+ * press Esc to bail. */
+export type TourDismissVia =
+    | "skip"
+    | "esc"
+    | "close"
+    | "anchor_missing";
+
+export const tourStarted = (props: {
+    screenKey: TourScreenKey;
+    stepCount: number;
+}): void => capture("tour_started", props);
+
+export const tourStepAdvanced = (props: {
+    screenKey: TourScreenKey;
+    fromStep: number;
+    toStep: number;
+    totalSteps: number;
+    direction: "forward" | "back";
+}): void => capture("tour_step_advanced", props);
+
+export const tourCompleted = (props: {
+    screenKey: TourScreenKey;
+    totalSteps: number;
+}): void => capture("tour_completed", props);
+
+export const tourDismissed = (props: {
+    screenKey: TourScreenKey;
+    stepIndex: number;
+    totalSteps: number;
+    via: TourDismissVia;
+}): void => capture("tour_dismissed", props);
+
+/** Fires on "Restart tour" overflow-menu click before `tourStarted`. */
+export const tourRestarted = (props: {
+    screenKey: TourScreenKey;
+}): void => capture("tour_restarted", props);
+
+// ── PWA install prompt (M5) ───────────────────────────────────────────────
+//
+// Browser-driven flow. `installPrompted` fires when our in-app modal
+// is shown to the user (auto-gate, menu click, or tour). The OS-native
+// "Install / Cancel" dialog that comes after is mediated by the browser
+// — we don't see its outcome until it resolves; `installAccepted` /
+// `installDismissed` cover both branches.
+
+export type InstallPromptTrigger = "auto" | "menu" | "tour";
+
+/** Reasons the user closed the install modal without installing. */
+export type InstallDismissVia =
+    | "x_button"
+    | "snooze"
+    | "native_decline";
+
+export const installPrompted = (props: {
+    trigger: InstallPromptTrigger;
+}): void => capture("install_prompted", props);
+
+export const installAccepted = (props: {
+    trigger: InstallPromptTrigger;
+}): void => capture("install_accepted", props);
+
+export const installDismissed = (props: {
+    trigger: InstallPromptTrigger;
+    via: InstallDismissVia;
+}): void => capture("install_dismissed", props);
+
+/** Fires when the browser confirms a successful install (`appinstalled` event). */
+export const installCompleted = (): void =>
+    capture("install_completed");
+
+/** Fires on every load when `display-mode: standalone` matches — the user
+ *  has installed and is launching from the home screen / dock. */
+export const appLaunchedStandalone = (): void =>
+    capture("app_launched_standalone");
+
+// ── Auth (M7) ─────────────────────────────────────────────────────────────
+//
+// better-auth + Google OAuth + anonymous plugin. The dev-only
+// email/password sign-in does NOT emit any of these events (it's a
+// local-only convenience and would skew funnels).
+
+export type AccountModalSource = "menu" | "tour" | "share_import";
+export type AuthProvider = "google";
+export type SignInFromContext = "menu" | "share_import" | "save_pack";
+
+export const accountModalOpened = (props: {
+    state: "anon" | "signedIn";
+    via: AccountModalSource;
+}): void => capture("account_modal_opened", props);
+
+export const signInStarted = (props: {
+    provider: AuthProvider;
+    from: SignInFromContext;
+}): void => capture("sign_in_started", props);
+
+export const signInCompleted = (props: {
+    provider: AuthProvider;
+    isFirstTime: boolean;
+    wasAnonymous: boolean;
+}): void => capture("sign_in_completed", props);
+
+export const signInFailed = (props: {
+    provider: AuthProvider;
+    reason: string;
+}): void => capture("sign_in_failed", props);
+
+export const signOut = (): void => capture("sign_out");
+
+// ── Server-side card packs (M8) ───────────────────────────────────────────
+
+export const localPacksPushedOnSignIn = (props: {
+    countPushed: number;
+    countAlreadySynced: number;
+    countRenamed: number;
+    countFailed: number;
+}): void => capture("local_packs_pushed_on_sign_in", props);
+
+export const cardPackSaved = (props: {
+    isFirstTime: boolean;
+    source: "local" | "share_import";
+    syncedToServer: boolean;
+}): void => capture("card_pack_saved", props);
+
+export const cardPackDeleted = (props: {
+    wasServerBacked: boolean;
+}): void => capture("card_pack_deleted", props);
+
+export const cardPackRenamed = (props: {
+    wasServerBacked: boolean;
+}): void => capture("card_pack_renamed", props);
+
+// ── Sharing flow (M9) ─────────────────────────────────────────────────────
+//
+// Sender + receiver halves of the server-stored share flow. The
+// raw share id (a cuid2) never goes to PostHog — every event
+// includes a `shareIdHash` (FNV-1a 32-bit, hex-padded) so funnels
+// can correlate a sender's `share_created` to a receiver's
+// `share_opened` / `share_imported` without leaking the URL.
+
+export type ShareDismissVia =
+    | "x_button"
+    | "backdrop"
+    | "navigated_away";
+
+export const shareCreateStarted = (): void =>
+    capture("share_create_started");
+
+export const shareCreated = (props: {
+    includedPack: boolean;
+    includedPlayers: boolean;
+    includedKnownCards: boolean;
+    includedSuggestions: boolean;
+    packIsCustom: boolean;
+    requiresAuth: boolean;
+}): void => capture("share_created", props);
+
+export const shareLinkCopied = (): void => capture("share_link_copied");
+
+export const shareOpened = (props: {
+    shareIdHash: string;
+}): void => capture("share_opened", props);
+
+export const shareImportStarted = (props: {
+    shareIdHash: string;
+}): void => capture("share_import_started", props);
+
+export const shareImported = (props: {
+    shareIdHash: string;
+    includedPack: boolean;
+    includedPlayers: boolean;
+    includedKnownCards: boolean;
+    includedSuggestions: boolean;
+    triggeredNewGame: boolean;
+    savedPackToAccount: boolean;
+}): void => capture("share_imported", props);
+
+export const shareImportDismissed = (props: {
+    shareIdHash: string;
+    via: ShareDismissVia;
+}): void => capture("share_import_dismissed", props);
+
+export const shareSignInRedirect = (props: {
+    shareIdHash: string;
+}): void => capture("share_sign_in_redirect", props);
+
+export const shareSignInResumed = (props: {
+    shareIdHash: string;
+    restoredChoices: boolean;
+}): void => capture("share_sign_in_resumed", props);
+
 // ── Performance signals ───────────────────────────────────────────────────
 
 export const webVital = (props: {

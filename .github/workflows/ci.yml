@@ -92,3 +92,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      # Catch a future Serwist / Next.js update that silently breaks
+      # SW emission. Without `public/sw.js`, installed PWAs hit
+      # Chrome's "you are offline" page on offline use even though
+      # nothing visibly fails at build time.
+      - run: pnpm assert:sw-emitted

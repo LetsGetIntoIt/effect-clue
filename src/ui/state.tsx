@@ -66,12 +66,11 @@ import {
     SuggestionId,
 } from "../logic/Suggestion";
 import {
-    decodeSessionFromUrl,
-    encodeSessionToUrl,
     type GameSession,
     loadFromLocalStorage,
     saveToLocalStorage,
 } from "../logic/Persistence";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     deduceWithExplanations,
     type Provenance,
@@ -543,7 +542,6 @@ interface ClueContextValue {
     readonly dispatch: React.Dispatch<ClueAction>;
     readonly derived: ClueDerived;
     readonly hasGameData: () => boolean;
-    readonly currentShareUrl: () => string;
     readonly canUndo: boolean;
     readonly canRedo: boolean;
     readonly undo: () => void;
@@ -656,7 +654,37 @@ export const useClue = (): ClueContextValue => {
 
 // ---- Provider -----------------------------------------------------------
 
+/**
+ * React Query cache key for the persisted game session. The shape
+ * mirrors what `loadFromLocalStorage` returns from the v6 storage
+ * key — a `GameSession` (or `null` before localStorage has been
+ * read).
+ *
+ * Today the in-memory `historyReducer` is the source of truth for
+ * the live game state; the RQ cache is a downstream mirror updated
+ * after every dispatch so RQ DevTools can show the current session
+ * and the persister can write it to `effect-clue.rq-cache.v1`. M8
+ * extends this hook to swap in server-backed state for signed-in
+ * users; the cache shape stays the same.
+ */
+const gameSessionQueryKey = ["game-session"] as const;
+
+const readGameSession = (): GameSession | null =>
+    typeof window === "undefined" ? null : loadFromLocalStorage() ?? null;
+
 export function ClueProvider({ children }: { children: ReactNode }) {
+    const queryClient = useQueryClient();
+    // The RQ-backed mirror of the persisted session. The live game
+    // state still flows through `historyReducer` below — this query
+    // exists for cross-cutting concerns: persister, DevTools, and the
+    // cache-shape contract that M8 will swap from localStorage to a
+    // server action without touching consumer code.
+    useQuery({
+        queryKey: gameSessionQueryKey,
+        queryFn: readGameSession,
+        initialData: readGameSession,
+        staleTime: Number.POSITIVE_INFINITY,
+    });
     const [history, dispatchRaw] = useReducer(historyReducer, {
         past: [],
         pastActions: [],
@@ -665,7 +693,25 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         futureActions: [],
     });
     const state = history.current;
-    const dispatch = dispatchRaw as React.Dispatch<ClueAction>;
+    /**
+     * Telemetry-instrumented dispatch. Every action becomes a
+     * `rq.gameState.<action.type>` span under `TelemetryRuntime`,
+     * so Honeycomb sees the per-action call counts and timings; the
+     * underlying reducer step still runs synchronously inside the
+     * span so React's batching is unaffected. With no Honeycomb key
+     * configured, `TelemetryRuntime` is `Layer.empty` and the wrap
+     * collapses to a plain function call.
+     */
+    const dispatch = useCallback(
+        (action: ClueAction) => {
+            TelemetryRuntime.runSync(
+                Effect.fn(`rq.gameState.${action.type}`)(function* () {
+                    dispatchRaw(action);
+                })(),
+            );
+        },
+        [],
+    );
     const canUndo = history.past.length > 0;
     const canRedo = history.future.length > 0;
     const nextUndo = canUndo
@@ -925,22 +971,23 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     // flashing the default `"setup"` pane.
     const [hydrated, setHydrated] = useState(false);
 
-    // One-shot hydration on mount: URL first, then localStorage. The
-    // `?view=setup|checklist|suggest` param overrides the smart default;
-    // with no explicit view we land on the Checklist (play mode) if the
-    // hydrated session has any suggestions, else Setup (the reducer's
-    // default). On desktop `checklist` and `suggest` both render the
-    // same Play grid; on mobile they route to their own pane.
+    // One-shot hydration on mount: read localStorage and apply
+    // `?view=setup|checklist|suggest`. With no explicit view we land
+    // on the Checklist (play mode) if the hydrated session has any
+    // suggestions, else Setup (the reducer's default). On desktop
+    // `checklist` and `suggest` both render the same Play grid; on
+    // mobile they route to their own pane.
+    //
+    // The historical `?state=...` base64-encoded session URL was
+    // dropped during M3. Old shared links no longer hydrate; the
+    // server-stored `/share/[id]` flow that replaces them lands in M9.
     useEffect(() => {
         if (didHydrate.current) return;
         didHydrate.current = true;
         if (typeof window === "undefined") return;
         const params = new URLSearchParams(window.location.search);
-        const stateParam = params.get("state");
         const viewParam = params.get("view");
-        let session: GameSession | undefined;
-        if (stateParam) session = decodeSessionFromUrl(stateParam);
-        if (!session) session = loadFromLocalStorage();
+        const session = loadFromLocalStorage();
         if (session) dispatch({ type: "replaceSession", session });
 
         // View precedence: explicit `?view=` wins; otherwise pick based
@@ -975,9 +1022,10 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         window.history.replaceState(null, "", newUrl);
     }, [state.uiMode]);
 
-    // Save to localStorage whenever inputs change. Skip the first render
-    // (before hydration) to avoid trampling a saved session with the
-    // empty default.
+    // Save to localStorage whenever inputs change, and mirror the
+    // session into the RQ cache so DevTools and the persister see the
+    // same data. Skip the first render (before hydration) to avoid
+    // trampling a saved session with the empty default.
     useEffect(() => {
         if (!didHydrate.current) return;
         const session: GameSession = {
@@ -991,7 +1039,8 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             accusations: accusationsAsData,
         };
         saveToLocalStorage(session);
-    }, [state, suggestionsAsData, accusationsAsData]);
+        queryClient.setQueryData(gameSessionQueryKey, session);
+    }, [state, suggestionsAsData, accusationsAsData, queryClient]);
 
     // ---- Analytics: state-driven funnel events ----------------------------
 
@@ -1098,30 +1147,12 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         return false;
     }, [state]);
 
-    const currentShareUrl = useCallback((): string => {
-        if (typeof window === "undefined") return "";
-        const session: GameSession = {
-            setup: state.setup,
-            hands: groupKnownCardsByPlayer(state.knownCards),
-            handSizes: state.handSizes.map(([player, size]) => ({
-                player,
-                size,
-            })),
-            suggestions: suggestionsAsData,
-            accusations: accusationsAsData,
-        };
-        const encoded = encodeSessionToUrl(session);
-        const base = `${window.location.origin}${window.location.pathname}`;
-        return `${base}?state=${encoded}`;
-    }, [state, suggestionsAsData, accusationsAsData]);
-
     const value: ClueContextValue = useMemo(
         () => ({
             state,
             dispatch,
             derived,
             hasGameData,
-            currentShareUrl,
             canUndo,
             canRedo,
             undo,
@@ -1135,7 +1166,6 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             dispatch,
             derived,
             hasGameData,
-            currentShareUrl,
             canUndo,
             canRedo,
             undo,

@@ -63,6 +63,8 @@ vi.mock("../hooks/useIsDesktop", () => ({
 
 import { render, waitFor } from "@testing-library/react";
 import { Clue } from "../Clue";
+import { TestQueryClientProvider } from "../../test-utils/queryClient";
+import { seedOnboardingDismissed } from "../../test-utils/onboardingSeed";
 
 const setIsDesktop = async (value: boolean): Promise<void> => {
     const mod = await import("../hooks/useIsDesktop");
@@ -80,6 +82,11 @@ const findSuggestionLog = (): HTMLElement | null =>
 beforeEach(() => {
     window.localStorage.clear();
     window.history.replaceState(null, "", "/");
+    // Suppress the splash, tour, and install-prompt auto-fires so
+    // they don't stack on top of the underlying PlayLayout under test.
+    // (Without this, the combined `checklistSuggest` tour would
+    // dispatch `setUiMode` mid-render and clobber the `?view=` param.)
+    seedOnboardingDismissed();
 });
 
 describe("PlayLayout — desktop renders both panes side-by-side", () => {
@@ -89,7 +96,7 @@ describe("PlayLayout — desktop renders both panes side-by-side", () => {
 
     test("checklist mode mounts the Checklist AND the SuggestionLogPanel", async () => {
         window.history.replaceState(null, "", "/?view=checklist");
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(findChecklist()).toBeInTheDocument();
         });
@@ -102,7 +109,7 @@ describe("PlayLayout — desktop renders both panes side-by-side", () => {
 
     test("suggest mode also mounts both panes (no breakpoint-level slide)", async () => {
         window.history.replaceState(null, "", "/?view=suggest");
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(findSuggestionLog()).toBeInTheDocument();
         });
@@ -117,7 +124,7 @@ describe("PlayLayout — mobile mounts only the active pane", () => {
 
     test("checklist mode: Checklist is mounted, SuggestionLogPanel is NOT", async () => {
         window.history.replaceState(null, "", "/?view=checklist");
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(findChecklist()).toBeInTheDocument();
         });
@@ -131,7 +138,7 @@ describe("PlayLayout — mobile mounts only the active pane", () => {
 
     test("suggest mode: SuggestionLogPanel is mounted, Checklist is NOT", async () => {
         window.history.replaceState(null, "", "/?view=suggest");
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(findSuggestionLog()).toBeInTheDocument();
         });

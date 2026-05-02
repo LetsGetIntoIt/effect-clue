@@ -5,18 +5,28 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { gameSetupStarted } from "../analytics/events";
 import { startSetup } from "../analytics/gameSession";
+import { AccountProvider } from "./account/AccountProvider";
+import { ShareProvider } from "./share/ShareProvider";
 import { BottomNav } from "./components/BottomNav";
 import { Checklist } from "./components/Checklist";
 import { GlobalContradictionBanner } from "./components/GlobalContradictionBanner";
+import { InstallPromptProvider } from "./components/InstallPromptProvider";
 import { PlayLayout } from "./components/PlayLayout";
 import { Toolbar } from "./components/Toolbar";
 import { TooltipProvider } from "./components/Tooltip";
 import { ConfirmProvider, useConfirm } from "./hooks/useConfirm";
+import { useSplashGate } from "./hooks/useSplashGate";
 import { SelectionProvider } from "./SelectionContext";
 import { useGlobalShortcut } from "./keyMap";
 import { T_STANDARD, useReducedTransition } from "./motion";
 import type { UiMode } from "../logic/ClueState";
+import { StartupCoordinatorProvider, useStartupCoordinator } from "./onboarding/StartupCoordinator";
+import { SplashModal } from "./components/SplashModal";
 import { ClueProvider, useClue } from "./state";
+import { TourProvider, useTour } from "./tour/TourProvider";
+import { TourPopover } from "./tour/TourPopover";
+import { useTourGate } from "./tour/useTourGate";
+import { screenKeyForUiMode } from "./tour/screenKey";
 
 // Non user-facing literals.
 const VARIANT_INITIAL = "initial";
@@ -26,6 +36,13 @@ const UI_SETUP: "setup" = "setup";
 const UI_CHECKLIST: "checklist" = "checklist";
 const UI_SUGGEST: "suggest" = "suggest";
 const TOP_LEVEL_PLAY = "play";
+// Coordinator slot discriminators — same shape as `StartupSlot` but
+// pulled out as constants so the i18next/no-literal-string lint rule
+// treats them as wire-format identifiers, not user copy.
+const COORDINATOR_PHASE_TOUR = "tour" as const;
+// ScreenKey discriminator for the M22 first-suggestion tour. Pulled
+// to module scope for the same i18next-lint reason.
+const FIRST_SUGGESTION_SCREEN_KEY = "firstSuggestion" as const;
 
 /**
  * Horizontal mental-model of the three views. Setup sits to the
@@ -59,9 +76,9 @@ const slideVariants: Variants = {
  * **Desktop (≥ 800px)** shows the `Checklist` and `SuggestionLogPanel`
  * side-by-side in a 2-column grid. A top-right `Toolbar` holds Undo
  * and Redo as top-level buttons plus a `⋯` overflow menu for Game
- * setup, Share link, and New game. Setup mode (entered via ⌘H or the
- * overflow menu) swaps the grid for a full-width Checklist that
- * unlocks inline-edit affordances.
+ * setup and New game. Setup mode (entered via ⌘H or the overflow
+ * menu) swaps the grid for a full-width Checklist that unlocks
+ * inline-edit affordances.
  *
  * **Mobile (< 800px)** hides the desktop Toolbar entirely. A fixed
  * `BottomNav` takes its place, with Checklist / Suggest tabs that
@@ -87,7 +104,6 @@ const slideVariants: Variants = {
  * (`?view=…`) stays coherent on both sides.
  */
 export function Clue() {
-    const t = useTranslations("app");
     const headerRef = useRef<HTMLElement>(null);
     useLayoutEffect(() => {
         const el = headerRef.current;
@@ -113,6 +129,57 @@ export function Clue() {
           <ClueProvider>
            <ConfirmProvider>
            <SelectionProvider>
+            <CoordinatedShell headerRef={headerRef} />
+           </SelectionProvider>
+           </ConfirmProvider>
+          </ClueProvider>
+        </TooltipProvider>
+    );
+}
+
+/**
+ * Mounts the startup coordinator + tour provider with values pulled
+ * from `useClue()`. The coordinator needs `hydrated` (so it doesn't
+ * decide based on default state) and the active screen key (so per-
+ * screen tour eligibility is computed against the screen the user
+ * actually landed on).
+ */
+function CoordinatedShell({
+    headerRef,
+}: {
+    readonly headerRef: React.RefObject<HTMLElement | null>;
+}) {
+    const { hydrated, state } = useClue();
+    const activeScreen = screenKeyForUiMode(state.uiMode);
+    return (
+        <StartupCoordinatorProvider
+            hydrated={hydrated}
+            activeScreen={activeScreen}
+        >
+            <TourProvider>
+                <ClueShell headerRef={headerRef} />
+            </TourProvider>
+        </StartupCoordinatorProvider>
+    );
+}
+
+/**
+ * Inner shell that reads `useClue().hydrated` so we can pass it to
+ * the install-prompt provider. Splitting this out keeps `Clue`
+ * itself out of `useClue`, which would crash if we ever rendered
+ * the shell before `<ClueProvider>` mounted.
+ */
+function ClueShell({
+    headerRef,
+}: {
+    readonly headerRef: React.RefObject<HTMLElement | null>;
+}) {
+    const t = useTranslations("app");
+    const { showSplash, dismiss: dismissSplash } = useSplashGate();
+    return (
+        <InstallPromptProvider>
+        <AccountProvider>
+        <ShareProvider>
             <main className="mx-auto flex min-w-max max-w-[1400px] flex-col gap-5 px-5 pb-24 [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+1.5rem)]">
                 <header
                     ref={headerRef}
@@ -132,13 +199,154 @@ export function Clue() {
                     <TabContent />
                 </div>
                 <NewGameShortcut />
+                <TourScreenGate />
+                <FirstSuggestionTourGate />
+                <TourPopover />
             </main>
             <BottomNav />
-           </SelectionProvider>
-           </ConfirmProvider>
-          </ClueProvider>
-        </TooltipProvider>
+            <SplashModal open={showSplash} onDismiss={dismissSplash} />
+        </ShareProvider>
+        </AccountProvider>
+        </InstallPromptProvider>
     );
+}
+
+/**
+ * Reads `state.uiMode` and the per-screen tour gate to fire whichever
+ * screen-specific tour applies. Mounts once inside the provider stack
+ * so `useTourGate` (per-screen storage) and `useTour` (start tour)
+ * are both available.
+ *
+ * The gate only checks first-visit + 4-week dormancy — it does NOT
+ * fire mid-game when the user toggles between Setup / Checklist /
+ * Suggest. We track the screen-key the gate fired against; once a
+ * tour fires for that key, the same key won't re-fire in the same
+ * mount even if the user revisits it.
+ */
+
+function TourScreenGate() {
+    const { state, hydrated } = useClue();
+    const { startTour, activeScreen } = useTour();
+    const { phase, reportClosed } = useStartupCoordinator();
+    const screenKey = screenKeyForUiMode(state.uiMode);
+    const { shouldShow, dismiss } = useTourGate(screenKey, {
+        enabled: hydrated,
+    });
+
+    // Track which screen key we've already fired in this mount so we
+    // don't re-fire a tour the user already saw mid-session (the gate
+    // localStorage write happens AFTER the read; without this guard a
+    // splash flash + uiMode flip during hydration could stack two
+    // start calls).
+    const firedRef = useRef<Set<string>>(new Set());
+
+    useEffect(() => {
+        if (!hydrated) return;
+        if (!shouldShow) return;
+        if (activeScreen) return; // a tour is already running.
+        if (firedRef.current.has(screenKey)) return;
+        // The coordinator's phase blocks tour firing while
+        // `splash`, `install`, or `boot` own the slot — they're the
+        // states where firing would stack modals on top of each
+        // other. Phase `tour` is the explicit go-ahead from the
+        // coordinator at boot. Phase `done` covers post-boot
+        // client-side navigation: by the time the user clicks
+        // "Start playing" (setup → checklistSuggest), splash and
+        // install have already had their chance, so a fresh per-
+        // screen tour can fire without coordinator intervention.
+        if (phase === "boot" || phase === "splash" || phase === "install") {
+            return;
+        }
+        firedRef.current.add(screenKey);
+        startTour(screenKey);
+        // The gate's `dismiss` flips its own internal state and persists
+        // `lastDismissedAt`. We pair tour completion / dismiss with
+        // gate dismiss so subsequent visits respect the 4-week cadence.
+        // The actual flag is set in the per-tour finish path; for now
+        // just mark "we showed the tour" so a refresh in this session
+        // won't re-fire.
+        dismiss();
+    }, [hydrated, shouldShow, phase, screenKey, activeScreen, startTour, dismiss]);
+
+    // Whenever the tour transitions from active → not active AND we
+    // were in the coordinator's "tour" phase, advance the coordinator.
+    // This catches every dismiss path (skip / esc / backdrop / X /
+    // complete) without each path having to remember.
+    const wasActiveRef = useRef(false);
+    useEffect(() => {
+        const isActive = activeScreen !== undefined;
+        if (wasActiveRef.current && !isActive && phase === COORDINATOR_PHASE_TOUR) {
+            reportClosed(COORDINATOR_PHASE_TOUR);
+        }
+        wasActiveRef.current = isActive;
+    }, [activeScreen, phase, reportClosed]);
+
+    return null;
+}
+
+/**
+ * Mid-game tour: when the user logs their first suggestion of a
+ * game, point at the deduction grid (desktop) or the Checklist
+ * BottomNav tab (mobile) and explain that the solver re-runs with
+ * each addition. Same 4-week dormancy gate as the other tours via
+ * `useTourGate("firstSuggestion")`. Fires at most once per user per
+ * 4-week window — explicitly NOT once-per-game; if the user solves
+ * a case, starts a new one, and logs the first suggestion of THAT
+ * game, the gate's dismissal timestamp suppresses a re-fire.
+ *
+ * Trigger: a 0 → 1 transition on `state.suggestions.length`.
+ * Detected by tracking the last seen length in a ref so the
+ * comparison is "actually went from empty to non-empty in this
+ * mount", not "currently has > 0 suggestions" (which would re-fire
+ * on every mount of a hydrated session).
+ */
+function FirstSuggestionTourGate() {
+    const { state, hydrated } = useClue();
+    const { startTour, activeScreen } = useTour();
+    const { phase } = useStartupCoordinator();
+    const { shouldShow, dismiss } = useTourGate(
+        FIRST_SUGGESTION_SCREEN_KEY,
+        { enabled: hydrated },
+    );
+    const lastSeenLengthRef = useRef<number | null>(null);
+    const firedRef = useRef(false);
+
+    useEffect(() => {
+        const currentLength = state.suggestions.length;
+        // First mount: just snapshot, don't fire.
+        if (lastSeenLengthRef.current === null) {
+            lastSeenLengthRef.current = currentLength;
+            return;
+        }
+        // Detect 0 → 1+ transition (the user just logged their
+        // first suggestion of this mount). `>` rather than `=== 1`
+        // so multi-suggestion-add edge cases (unlikely, but possible
+        // via `loadSession` if we ever build one) still trigger.
+        const isFirstAddition =
+            lastSeenLengthRef.current === 0 && currentLength > 0;
+        lastSeenLengthRef.current = currentLength;
+        if (!isFirstAddition) return;
+        if (!hydrated) return;
+        if (!shouldShow) return;
+        if (activeScreen) return;
+        if (firedRef.current) return;
+        if (phase === "boot" || phase === "splash" || phase === "install") {
+            return;
+        }
+        firedRef.current = true;
+        startTour(FIRST_SUGGESTION_SCREEN_KEY);
+        dismiss();
+    }, [
+        state.suggestions.length,
+        hydrated,
+        shouldShow,
+        activeScreen,
+        phase,
+        startTour,
+        dismiss,
+    ]);
+
+    return null;
 }
 
 /**

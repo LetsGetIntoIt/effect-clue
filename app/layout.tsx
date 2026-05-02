@@ -37,6 +37,16 @@ const bodyFont = Crimson_Text({
 export const metadata: Metadata = {
     title: messages.app.title,
     description: messages.app.description,
+    // M24: use the same magnifying-glass SVG that the PWA install
+    // icon points at (`public/icons/icon.svg`) for the browser-tab
+    // favicon. Chrome / Edge / Firefox accept SVG favicons natively;
+    // Safari falls back gracefully to the default tab placeholder.
+    // Keeping a single source means a future palette / artwork
+    // change updates both surfaces in lockstep.
+    icons: {
+        icon: "/icons/icon.svg",
+        apple: "/icons/icon-maskable.svg",
+    },
 };
 
 export default function RootLayout({

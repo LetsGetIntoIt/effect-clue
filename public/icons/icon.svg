@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+    <!-- Clue Solver app icon. Parchment background, oxblood border,
+         magnifying glass + question mark — the visual shorthand for
+         "mystery solver". Designed to read at 192px and scale up to
+         512px without anti-aliasing problems. -->
+    <rect width="512" height="512" rx="96" fill="#efe6d3"/>
+    <rect x="20" y="20" width="472" height="472" rx="80" fill="none" stroke="#7a1c1c" stroke-width="14"/>
+    <!-- Magnifying glass body -->
+    <circle cx="216" cy="216" r="100" fill="none" stroke="#7a1c1c" stroke-width="22"/>
+    <!-- Handle -->
+    <line x1="290" y1="290" x2="380" y2="380" stroke="#7a1c1c" stroke-width="28" stroke-linecap="round"/>
+    <!-- "?" inside the lens -->
+    <text x="216" y="244" font-family="Georgia, 'Times New Roman', serif" font-size="120" font-weight="bold" fill="#7a1c1c" text-anchor="middle">?</text>
+</svg>

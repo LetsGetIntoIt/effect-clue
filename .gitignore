@@ -26,6 +26,24 @@ dist-ssr
 out/
 next-env.d.ts
 
+# Serwist-emitted service worker artifacts — `public/sw.js` is
+# regenerated on every production build by `serwist build` (the
+# configurator-mode post-step). Source lives in `app/sw.ts`. Don't
+# track the build output.
+/public/sw.js
+/public/sw.js.map
+/public/swe-worker-*.js
+/public/swe-worker-*.js.map
+
+# Environment files. Anything matching `.env` or `.env.*` carries
+# real secrets and must never land in git. The committed template
+# is `env.example` (no leading dot) — Vercel's deploy log warns
+# whenever it sees a `.env*` file in the source checkout, so we
+# keep the canonical template under a name that doesn't match the
+# pattern.
+.env
+.env.*
+
 # VSCode
 .vscode/*
 !.vscode/extensions.json

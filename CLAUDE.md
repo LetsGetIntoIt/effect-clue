@@ -145,6 +145,32 @@ Why: `Duration.seconds(15)` reads as "15 seconds" at every call site; `15_000` r
 
 When you find a raw `setTimeout(fn, 15_000)`, `Date.now()`, `Date.now() - then`, or a `loggedAt: number` field while making changes, convert it as part of the change. New code uses `Duration` / `DateTime` from the start.
 
+## Database migrations
+
+Every database migration in `src/server/migrations/` is **forward-only and backwards-compatible**. The deployed application code is the canonical reader of the schema; migrations may never break a shape that's still in use by the rolled-out app. This is a hard rule, not a stylistic preference — the deploy pipeline can't pause between schema and code rollout.
+
+The allowed list:
+
+- **New tables.** Create in any state.
+- **New nullable columns** (with or without a default).
+- **New indexes** (created with `CONCURRENTLY` where the SQL backend supports it; not all our migrations do today, but for high-traffic tables prefer concurrent index builds).
+- **New constraints** that no existing row violates (e.g. a UNIQUE on a column that's already been deduplicated by application code).
+
+The disallowed list — every one of these requires a multi-deploy plan, NOT a single migration:
+
+- **Dropping a column** the deployed application code still reads. The fix: deploy app code that no longer references the column, wait long enough that you're confident no rollback would need the old code, THEN deploy a migration-only commit that drops the column.
+- **Renaming a column or table in place.** The fix: add the new column, dual-write from the app for a period, switch reads, then drop the old column in a separate migration after the dust settles.
+- **Tightening a column to `NOT NULL` without a default.** The fix: add the column nullable-with-default first, deploy a backfill, deploy app code that always writes the column, THEN tighten to `NOT NULL` in a follow-up migration.
+- **Tightening a type** (e.g. `TEXT → INTEGER` via `USING ::integer`). The fix: add a new column with the tighter type, dual-write from the app, switch reads, drop the old column.
+
+Why so strict: Vercel doesn't distinguish "staged builds" from "deployed builds" — by the time a migration runs, the new app code is already serving traffic, and the old app code is still serving traffic from instances that haven't recycled yet. A migration that breaks either side breaks production.
+
+A migration commit's PR description should call out:
+
+- What it adds.
+- Whether it's a single-step (forward-only addition) or a multi-step (rolling out alongside an application code change). Multi-step migrations get one migration per step, never bundled.
+- For renames / drops / tightenings: which prior commit deployed the app code that no longer needs the old shape, plus the date that commit was deployed.
+
 ## Forbidden shortcuts when fixing failures
 
 When a check (typecheck, lint, test, knip, i18n:check, build) fails, fix the *cause*, not the *symptom*. The following shortcuts are never acceptable:
@@ -190,6 +216,7 @@ When I ask you to "rebase on/against latest origin/main" (or "latest remote main
 2. `git fetch origin main` — pull the latest refs without touching your branch.
 3. Skim `git log --oneline HEAD..origin/main` and `git log --stat <new-commits>` to understand what landed upstream. Cross-reference with the files this branch touches — that's where conflicts and silent regressions will be.
 4. `git rebase origin/main`. If conflicts surface, resolve each one by hand and `git rebase --continue`. Don't `--skip` your own commit and don't `--abort` unless the conflict is truly intractable.
+   - **Lockfile conflicts in `pnpm-lock.yaml` resolve themselves.** Resolve the `package.json` conflict by hand, then run `pnpm install` from the repo root — that's enough. pnpm sees the conflict markers in the lockfile, treats it as a request to re-resolve, and writes a clean lockfile that matches the resolved `package.json`. **Don't** `git checkout --theirs pnpm-lock.yaml` first; it's redundant and risks losing the dep state pnpm would have preserved. After `pnpm install` finishes, `git add package.json pnpm-lock.yaml` and `git rebase --continue`.
 5. **Reapply matching upstream patterns to any new code we wrote.** If the upstream commit removed a pattern (e.g. `data-animated-focus`, `focus:outline-none`, a deprecated import), our new code added since the rebase point may still use it — search the diff and apply the same cleanup so we don't reintroduce what was just removed.
 6. Re-run the full pre-commit green-check set — `pnpm install && pnpm typecheck && pnpm lint && pnpm test && pnpm knip && pnpm i18n:check` (assuming you've already run `nvm use` in this shell). A clean rebase is not the same as a green rebase.
 7. Verify in the `next-dev` preview if anything we changed is observable in the browser.

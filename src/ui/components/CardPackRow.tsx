@@ -3,7 +3,7 @@
 import { DateTime } from "effect";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { T_STANDARD, useReducedTransition } from "../motion";
 import {
     cardPackPickerOpened,
@@ -13,23 +13,25 @@ import {
 import { cardSetEquals, type CardSet } from "../../logic/CardSet";
 import {
     compareCardPackLabels,
-    forgetCardPackUse,
-    loadCardPackUsage,
-    recordCardPackUse,
     topRecentPacks,
-    type CardPackUsage,
 } from "../../logic/CardPackUsage";
-import { CARD_SETS } from "../../logic/GameSetup";
 import {
-    CustomCardSet,
-    deleteCustomCardSet,
-    loadCustomCardSets,
-    saveCustomCardSet,
-} from "../../logic/CustomCardSets";
+    useCardPackUsage,
+    useForgetCardPackUse,
+    useRecordCardPackUse,
+} from "../../data/cardPackUsage";
+import { CARD_SETS } from "../../logic/GameSetup";
+import { CustomCardSet } from "../../logic/CustomCardSets";
+import {
+    useCustomCardPacks,
+    useDeleteCardPack,
+    useSaveCardPack,
+} from "../../data/customCardPacks";
 import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 import { CardPackPicker, type PickerPack } from "./CardPackPicker";
-import { SearchIcon } from "./Icons";
+import { SearchIcon, ShareIcon } from "./Icons";
+import { useShareContext } from "../share/ShareProvider";
 
 const RECENT_LIMIT = 3;
 const SURFACE_BUDGET = 1 + RECENT_LIMIT; // Classic + 3 recents = 4 pills before the dropdown.
@@ -96,20 +98,21 @@ export function CardPackRow() {
     const setup = state.setup;
     const hasDestructiveData =
         state.knownCards.length > 0 || state.suggestions.length > 0;
-    // Initialise empty so server HTML and client's first render agree; the
-    // real lists load in mount effects. Reading localStorage in the
-    // useState initialiser would produce 0 packs on SSR and N packs on
-    // the client's first render — a hydration mismatch.
-    const [customPacks, setCustomPacks] = useState<ReadonlyArray<CustomCardSet>>(
-        [],
-    );
-    const [usage, setUsage] = useState<CardPackUsage>(new Map());
+    // RQ-backed reads. Both queries are SSR-gated and fall back to
+    // empty (`[]` / `new Map()`) until the client fetches — so the
+    // server HTML and client's first render agree. After mutations,
+    // each hook's `setQueryData` keeps the cache up to date without a
+    // refetch.
+    const customPacksQuery = useCustomCardPacks();
+    const usageQuery = useCardPackUsage();
+    const customPacks = customPacksQuery.data ?? [];
+    const usage = usageQuery.data ?? new Map();
+    const savePackMutation = useSaveCardPack();
+    const deletePackMutation = useDeleteCardPack();
+    const recordUseMutation = useRecordCardPackUse();
+    const forgetUseMutation = useForgetCardPackUse();
+    const { openModalWith: openShareModalWith } = useShareContext();
     const [pickerOpen, setPickerOpen] = useState(false);
-
-    useEffect(() => {
-        setCustomPacks(loadCustomCardSets());
-        setUsage(loadCardPackUsage());
-    }, []);
 
     // The Classic id is the first entry in CARD_SETS and is the
     // single always-pinned pill. Master Detective participates in
@@ -188,6 +191,37 @@ export function CardPackRow() {
     const showSaveAsActive = activeMatch === undefined;
 
     /**
+     * The custom pack the user most-recently loaded, regardless of
+     * whether the live deck still matches its contents. This is the
+     * pack the user is conceptually "editing" — when `activeMatch`
+     * is undefined but `loadedCustomPack` is defined, the deck has
+     * diverged from the loaded pack and the save action should
+     * default to "Update [pack name]" instead of creating a new pack.
+     *
+     * Classic doesn't qualify: it's a built-in, not user-owned, so
+     * editing the Classic deck always produces a new custom pack.
+     */
+    const loadedCustomPack = useMemo<DisplayPack | undefined>(() => {
+        let candidateId: string | undefined;
+        let mostRecent: DateTime.Utc | undefined;
+        for (const [id, at] of usage.entries()) {
+            if (id === classic.id) continue;
+            if (
+                !mostRecent ||
+                DateTime.toEpochMillis(at) > DateTime.toEpochMillis(mostRecent)
+            ) {
+                mostRecent = at;
+                candidateId = id;
+            }
+        }
+        if (!candidateId) return undefined;
+        return otherPacks.find(p => p.id === candidateId);
+    }, [otherPacks, usage, classic.id]);
+
+    const canUpdateLoadedPack =
+        showSaveAsActive && loadedCustomPack !== undefined;
+
+    /**
      * Sorted alphabetically with Classic pinned first; this is what
      * the typeahead dropdown displays before any filtering.
      */
@@ -228,8 +262,7 @@ export function CardPackRow() {
             packType: pack.isCustom ? PACK_TYPE_CUSTOM : PACK_TYPE_BUILT_IN,
             source,
         });
-        recordCardPackUse(pack.id);
-        setUsage(loadCardPackUsage());
+        recordUseMutation.mutate(pack.id);
     };
 
     const onSelectFromSurface = (pack: DisplayPack) => {
@@ -243,18 +276,49 @@ export function CardPackRow() {
         void performLoad(pack, SOURCE_SEARCH);
     };
 
-    const onSaveCardSet = () => {
+    const onSaveCardSet = async () => {
+        // When the user has a custom pack loaded and has edited the
+        // deck since loading, the save button updates that pack in
+        // place rather than minting a new id. The label stays the
+        // same as the loaded pack (no prompt) so "Update MyDeck"
+        // doesn't surprise the user with a label-rename dialog.
+        if (canUpdateLoadedPack && loadedCustomPack !== undefined) {
+            const updated = await savePackMutation.mutateAsync({
+                label: loadedCustomPack.label,
+                cardSet: setup.cardSet,
+                existingId: loadedCustomPack.id,
+            });
+            recordUseMutation.mutate(updated.id);
+            return;
+        }
         const label = window.prompt(t("saveAsCardPackPrompt"));
         if (!label || !label.trim()) return;
-        const newPack = saveCustomCardSet(label.trim(), setup.cardSet);
+        const newPack = await savePackMutation.mutateAsync({
+            label: label.trim(),
+            cardSet: setup.cardSet,
+        });
         // Stamp the new pack as the most-recently-used pack so the
         // active-match resolver picks it up: with cardSetEquals(setup,
         // newPack.cardSet) trivially true (we just snapshotted setup),
         // the new pack becomes the active pill — and the Save pill
         // un-activates because the live deck now matches a saved pack.
-        recordCardPackUse(newPack.id);
-        setCustomPacks(loadCustomCardSets());
-        setUsage(loadCardPackUsage());
+        recordUseMutation.mutate(newPack.id);
+    };
+
+    /**
+     * "Save as new pack…" — secondary action when a loaded custom
+     * pack is being edited but the user wants to fork rather than
+     * overwrite. Prompts for a new label and inserts (no
+     * `existingId`).
+     */
+    const onSaveAsNewCardSet = async () => {
+        const label = window.prompt(t("saveAsCardPackPrompt"));
+        if (!label || !label.trim()) return;
+        const newPack = await savePackMutation.mutateAsync({
+            label: label.trim(),
+            cardSet: setup.cardSet,
+        });
+        recordUseMutation.mutate(newPack.id);
     };
 
     const onDeleteCustomPack = async (pack: DisplayPack) => {
@@ -266,16 +330,33 @@ export function CardPackRow() {
             }))
         )
             return;
-        deleteCustomCardSet(pack.id);
-        forgetCardPackUse(pack.id);
-        setCustomPacks(loadCustomCardSets());
-        setUsage(loadCardPackUsage());
+        deletePackMutation.mutate(pack.id);
+        forgetUseMutation.mutate(pack.id);
     };
 
     const onDeleteFromPicker = (picked: PickerPack) => {
         const pack = findDisplayPack(picked.id);
         if (!pack || !pack.isCustom) return;
         void onDeleteCustomPack(pack);
+    };
+
+    const onSharePackFromPicker = (picked: PickerPack) => {
+        const pack = findDisplayPack(picked.id);
+        if (!pack) return;
+        // Per-pack share defaults to "card pack only" — players /
+        // hand sizes / suggestions are state of the live game and
+        // don't belong in a from-picker share. The receiver still
+        // sees toggles in the modal and can change them before
+        // submitting.
+        openShareModalWith({
+            initialToggles: {
+                cardPack: true,
+                players: false,
+                knownCards: false,
+                suggestions: false,
+            },
+            forcedCardPack: pack.cardSet,
+        });
     };
 
     const onPickerOpenChange = (next: boolean) => {
@@ -290,7 +371,10 @@ export function CardPackRow() {
     const pillLayoutTransition = useReducedTransition(T_STANDARD);
 
     return (
-        <div className="mb-4 rounded-[var(--radius)] border border-border bg-case-file-bg p-3">
+        <div
+            className="mb-4 rounded-[var(--radius)] border border-border bg-case-file-bg p-3"
+            data-tour-anchor="setup-card-pack"
+        >
             <div className="mb-2.5 text-[12px] font-semibold uppercase tracking-[0.05em] text-accent">
                 {t("cardPack")}
             </div>
@@ -396,6 +480,7 @@ export function CardPackRow() {
                         packs={pickerPacks}
                         onSelect={onSelectFromPicker}
                         onDeleteCustomPack={onDeleteFromPicker}
+                        onSharePack={onSharePackFromPicker}
                         activeMatchId={activeMatch?.id}
                     >
                         <button
@@ -422,12 +507,50 @@ export function CardPackRow() {
                             : "border-border bg-white text-muted hover:bg-hover hover:text-accent")
                     }
                     onClick={onSaveCardSet}
-                    title={t("saveAsCardPackTitle")}
+                    title={
+                        canUpdateLoadedPack && loadedCustomPack !== undefined
+                            ? t("updateCardPackTitle", {
+                                  label: loadedCustomPack.label,
+                              })
+                            : t("saveAsCardPackTitle")
+                    }
                     {...(showSaveAsActive
                         ? { "data-card-pack-save-active": TRUE_LITERAL }
                         : {})}
                 >
-                    {t("saveAsCardPack")}
+                    {canUpdateLoadedPack && loadedCustomPack !== undefined
+                        ? t("updateCardPack", {
+                              label: loadedCustomPack.label,
+                          })
+                        : t("saveAsCardPack")}
+                </button>
+                {canUpdateLoadedPack ? (
+                    <button
+                        type="button"
+                        className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent"
+                        onClick={onSaveAsNewCardSet}
+                        title={t("saveAsCardPackTitle")}
+                    >
+                        {t("saveAsNewCardPack")}
+                    </button>
+                ) : null}
+                <button
+                    type="button"
+                    className="ml-auto inline-flex cursor-pointer items-center gap-1 rounded border border-border bg-white px-3 py-1 text-[13px] text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent"
+                    onClick={() =>
+                        openShareModalWith({
+                            initialToggles: {
+                                cardPack: true,
+                                players: true,
+                                knownCards: false,
+                                suggestions: false,
+                            },
+                        })
+                    }
+                    title={t("shareSetupTitle")}
+                >
+                    <ShareIcon size={14} />
+                    {t("shareSetup")}
                 </button>
             </div>
         </div>

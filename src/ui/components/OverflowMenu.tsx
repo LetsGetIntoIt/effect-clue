@@ -5,7 +5,7 @@ import { motion } from "motion/react";
 import { type ReactNode, useState } from "react";
 import { T_FAST, useReducedTransition } from "../motion";
 
-interface OverflowMenuItem {
+interface OverflowMenuButton {
     readonly label: string;
     readonly active?: boolean;
     readonly trailingIcon?: ReactNode;
@@ -13,10 +13,35 @@ interface OverflowMenuItem {
 }
 
 /**
+ * Section divider between groups of menu items. Renders as a
+ * 1px hairline; carries no interaction. Pass between two
+ * `OverflowMenuButton`s in the `items` array.
+ */
+interface OverflowMenuDivider {
+    readonly type: "divider";
+}
+
+type OverflowMenuItem = OverflowMenuButton | OverflowMenuDivider;
+
+const isDivider = (item: OverflowMenuItem): item is OverflowMenuDivider =>
+    "type" in item && item.type === "divider";
+
+/**
  * Shared `⋯` overflow menu. Used by the desktop header Toolbar and the
  * mobile BottomNav. Internally a Radix Popover — each menu item closes
  * the popover before firing its handler so confirms/dialogs don't fight
  * with the open menu.
+ *
+ * Items can be either buttons or `{ type: "divider" }` sentinels for
+ * separating logical groups (e.g. Game / Account & content / Help).
+ *
+ * The optional `forceOpen` prop lets the onboarding tour pin the menu
+ * open while it's pointing the user at "everything else lives here".
+ * When `forceOpen === true`, the menu is open regardless of internal
+ * click / hover state. Internal close attempts (Esc, outside click)
+ * still update the internal state, but the visible open state stays
+ * `true` until `forceOpen` flips back to `false` (i.e. the tour
+ * advances past that step).
  */
 export function OverflowMenu({
     triggerClassName,
@@ -24,25 +49,38 @@ export function OverflowMenu({
     side,
     align,
     items,
+    forceOpen,
+    contentClassName,
 }: {
     readonly triggerClassName: string;
     readonly triggerLabel: string;
     readonly side: "top" | "bottom";
     readonly align: "start" | "end";
     readonly items: ReadonlyArray<OverflowMenuItem>;
+    readonly forceOpen?: boolean;
+    /**
+     * Extra className applied to the portaled `RadixPopover.Content`.
+     * Used by callers in mobile-only or desktop-only contexts to add
+     * a viewport-gated `hidden` class so the portaled menu mirrors
+     * the parent's CSS visibility — the menu is portaled outside its
+     * parent, so a `display: none` on the parent doesn't reach it.
+     */
+    readonly contentClassName?: string;
 }) {
-    const [open, setOpen] = useState(false);
+    const [internalOpen, setInternalOpen] = useState(false);
+    const open = forceOpen === true ? true : internalOpen;
     const itemTransition = useReducedTransition(T_FAST);
     const closeThen = (fn: () => void | Promise<void>) => () => {
-        setOpen(false);
+        setInternalOpen(false);
         void fn();
     };
     return (
-        <RadixPopover.Root open={open} onOpenChange={setOpen}>
+        <RadixPopover.Root open={open} onOpenChange={setInternalOpen}>
             <RadixPopover.Trigger
                 aria-label={triggerLabel}
                 title={triggerLabel}
                 className={triggerClassName}
+                data-tour-anchor="overflow-menu"
             >
                 ⋯
             </RadixPopover.Trigger>
@@ -52,9 +90,28 @@ export function OverflowMenu({
                     align={align}
                     sideOffset={6}
                     collisionPadding={8}
-                    className="z-50 min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[13px] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
+                    // The menu's content carries the same anchor as
+                    // the trigger so the onboarding tour's spotlight
+                    // expands to cover the opened menu (not just the
+                    // ⋯ button). The TourPopover's `findAnchorElements`
+                    // unions every match.
+                    data-tour-anchor="overflow-menu"
+                    className={
+                        "z-50 min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[13px] shadow-[0_6px_16px_rgba(0,0,0,0.18)]" +
+                        (contentClassName ? ` ${contentClassName}` : "")
+                    }
                 >
                     {items.map((item, i) => {
+                        if (isDivider(item)) {
+                            return (
+                                <div
+                                    key={i}
+                                    role="separator"
+                                    aria-orientation="horizontal"
+                                    className="my-1 h-px bg-border"
+                                />
+                            );
+                        }
                         const handleClick = closeThen(item.onClick);
                         const content = (
                             <MenuItem

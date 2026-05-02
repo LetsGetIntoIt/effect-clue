@@ -1,15 +1,10 @@
 "use client";
 
 import { Clue } from "../../src/ui/Clue";
-import { SplashModal } from "../../src/ui/components/SplashModal";
-import { useSplashGate } from "../../src/ui/hooks/useSplashGate";
 
+// Splash, tour, and install prompt all auto-fire from inside <Clue/>
+// via `<StartupCoordinatorProvider>` so they don't stack on top of
+// each other. This page is intentionally a thin shell.
 export default function PlayPage() {
-    const { showSplash, dismiss } = useSplashGate();
-    return (
-        <>
-            <Clue />
-            <SplashModal open={showSplash} onDismiss={dismiss} />
-        </>
-    );
+    return <Clue />;
 }

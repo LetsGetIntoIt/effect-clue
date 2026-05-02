@@ -1,0 +1,32 @@
+# Local Postgres for `pnpm dev` (M6+ server features).
+#
+# Spin up:   pnpm db:up
+# Tail logs: pnpm db:logs
+# Reset:     pnpm db:reset    (wipes the volume — re-runs all migrations)
+# psql:      pnpm db:psql
+#
+# The matching DATABASE_URL is committed in env.example as a copy-paste
+# block. The same migrator code path runs against this Docker container
+# AND Neon — "works locally" => "works on Vercel".
+
+services:
+    postgres:
+        image: postgres:16-alpine
+        container_name: effect-clue-postgres
+        restart: unless-stopped
+        environment:
+            POSTGRES_USER: effect_clue
+            POSTGRES_PASSWORD: local_dev_only
+            POSTGRES_DB: effect_clue
+        ports:
+            - "5432:5432"
+        volumes:
+            - effect-clue-pg-data:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U effect_clue -d effect_clue"]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+
+volumes:
+    effect-clue-pg-data:

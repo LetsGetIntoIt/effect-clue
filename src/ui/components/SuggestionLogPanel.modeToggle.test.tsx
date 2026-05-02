@@ -116,6 +116,8 @@ vi.mock("../../analytics/events", async () => {
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { Clue } from "../Clue";
 import { accusationFormOpened } from "../../analytics/events";
+import { TestQueryClientProvider } from "../../test-utils/queryClient";
+import { seedOnboardingDismissed } from "../../test-utils/onboardingSeed";
 
 const findActiveTab = (): HTMLElement => {
     const el = document.querySelector<HTMLElement>(
@@ -145,7 +147,7 @@ const isSuggestionForm = (): boolean =>
     document.querySelector('[data-pill-id="suggester"]') !== null;
 
 const mountClue = async (): Promise<void> => {
-    render(<Clue />);
+    render(<Clue />, { wrapper: TestQueryClientProvider });
     // Default startup lands on Setup until the user starts a game; the
     // panel under test is always mounted in the Play layout. Force the
     // URL into suggest view so the panel renders.
@@ -159,6 +161,7 @@ const mountClue = async (): Promise<void> => {
 
 beforeEach(() => {
     window.localStorage.clear();
+    seedOnboardingDismissed();
     window.history.replaceState(null, "", "/?view=suggest");
     vi.mocked(accusationFormOpened).mockClear();
 });

@@ -56,9 +56,12 @@ vi.mock("motion/react", () => {
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Clue } from "../Clue";
+import { TestQueryClientProvider } from "../../test-utils/queryClient";
+import { seedOnboardingDismissed } from "../../test-utils/onboardingSeed";
 
 beforeEach(() => {
     window.localStorage.clear();
+    seedOnboardingDismissed();
     window.history.replaceState(null, "", "/");
 });
 
@@ -78,14 +81,14 @@ const waitForSetupChecklist = async (): Promise<HTMLElement> => {
 
 describe("Checklist — setup mode — top-level structure", () => {
     test("renders the Start Playing CTA", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(document.querySelector("[data-setup-cta]")).toBeInTheDocument();
         });
     });
 
     test("shows the setup-only add-player column header", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             // `tSetup("addPlayerLabel")` → the literal "addPlayerLabel"
             // through the key-passthrough i18n mock.
@@ -94,7 +97,7 @@ describe("Checklist — setup mode — top-level structure", () => {
     });
 
     test("does NOT render the case-file header (that's a deduce-mode affordance)", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForSetupChecklist();
         // CaseFileHeader i18n key is "caseFileLabel" (or similar); it
         // shouldn't appear in setup mode because the case-file column
@@ -105,7 +108,7 @@ describe("Checklist — setup mode — top-level structure", () => {
 
 describe("Checklist — setup mode — hand-size inputs", () => {
     test("renders one `<input type=number>` per player for the hand-size row", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             // DEFAULT_SETUP has 4 players → 4 hand-size inputs.
             const inputs = document.querySelectorAll<HTMLInputElement>(
@@ -117,7 +120,7 @@ describe("Checklist — setup mode — hand-size inputs", () => {
 
     test("typing a new hand size updates the input value", async () => {
         const user = userEvent.setup();
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             const inputs = document.querySelectorAll("input[type='number']");
             expect(inputs.length).toBeGreaterThanOrEqual(1);
@@ -133,7 +136,7 @@ describe("Checklist — setup mode — hand-size inputs", () => {
 
 describe("Checklist — setup mode — category / card editable labels", () => {
     test("category names are rendered as editable text inputs", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             // DEFAULT_SETUP has 3 categories (Suspect / Weapon / Room),
             // each with an editable input in setup mode.
@@ -146,7 +149,7 @@ describe("Checklist — setup mode — category / card editable labels", () => {
     });
 
     test("card names are rendered as editable text inputs (too many to enumerate exhaustively, just assert presence)", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             const textInputs = Array.from(
                 document.querySelectorAll<HTMLInputElement>(
@@ -163,7 +166,7 @@ describe("Checklist — setup mode — category / card editable labels", () => {
 
 describe("Checklist — setup mode — player cell interactions", () => {
     test("player cells render as native checkboxes in setup mode", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             // Native checkboxes live only in setup mode body cells
             // (play mode collapses them into popover triggers).
@@ -178,7 +181,7 @@ describe("Checklist — setup mode — player cell interactions", () => {
 
 describe("Checklist — setup mode — add-player column", () => {
     test("shows the add-player CTA (tSetup('addPlayerLabel'))", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(screen.getByText("addPlayerLabel")).toBeInTheDocument();
         });
@@ -186,7 +189,7 @@ describe("Checklist — setup mode — add-player column", () => {
 
     test("clicking add-player adds a fifth `Player 5` row", async () => {
         const user = userEvent.setup();
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(document.querySelectorAll("input[type='number']").length)
                 .toBeGreaterThanOrEqual(4);
@@ -205,7 +208,7 @@ describe("Checklist — setup mode — add-player column", () => {
 describe("Checklist — setup mode → Start Playing transition", () => {
     test("clicking the Start Playing CTA flips uiMode to checklist (URL shows `?view=checklist`)", async () => {
         const user = userEvent.setup();
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(document.querySelector("[data-setup-cta]"))
                 .toBeInTheDocument();
@@ -220,7 +223,7 @@ describe("Checklist — setup mode → Start Playing transition", () => {
 
 describe("Checklist — setup mode — keyboard-navigation bounds", () => {
     test("nav ring extends up to row -2 (player name row) in setup mode", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             // `data-cell-row="-2"` is the player-name row, only present
             // in setup mode (minRow = -2 when inSetup is true).
@@ -232,7 +235,7 @@ describe("Checklist — setup mode — keyboard-navigation bounds", () => {
     });
 
     test("nav ring extends left to col -1 (card name column) in setup mode", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             const cardNameCells = document.querySelectorAll(
                 "[data-cell-col='-1']",
@@ -244,7 +247,7 @@ describe("Checklist — setup mode — keyboard-navigation bounds", () => {
 
 describe("Checklist — setup mode — scope of rendered controls", () => {
     test("no popover pills render in setup mode (they live in deduce mode only)", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForSetupChecklist();
         // `data-pill-id` is the SuggestionForm's trigger attribute;
         // the SuggestionLogPanel isn't mounted in setup mode (no
@@ -338,7 +341,7 @@ describe("Checklist — setup mode — scope of rendered controls", () => {
         // Ensure URL doesn't push us into deduce mode.
         window.history.replaceState(null, "", "/");
 
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForSetupChecklist();
 
         // Sanity: deduce wired up — the Plum suspect row's case-file

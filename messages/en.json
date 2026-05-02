@@ -8,7 +8,9 @@
         "cancel": "Cancel",
         "confirmTitle": "Please confirm",
         "info": "More info",
-        "infoGlyph": "ⓘ"
+        "infoGlyph": "ⓘ",
+        "close": "Close",
+        "back": "Back"
     },
     "bottomNav": {
         "ariaLabel": "Primary navigation",
@@ -39,9 +41,6 @@
         "redo": "Redo{shortcut}",
         "redoAria": "Redo",
         "redoTitle": "Redo (⌘⇧Z / Ctrl+Shift+Z)",
-        "share": "Share link",
-        "shareCopied": "Copied!",
-        "copyFallback": "Copy this URL:",
         "newGame": "New game{shortcut}",
         "newGameConfirm": "Start a new game? This will clear all players, cards, known hands, and suggestions."
     },
@@ -89,6 +88,13 @@
         "saveAsCardPack": "+ Save as card pack",
         "saveAsCardPackTitle": "Save the current cards as a reusable card pack",
         "saveAsCardPackPrompt": "Save this card pack. Name it:",
+        "updateCardPack": "Update {label}",
+        "updateCardPackTitle": "Save your edits to {label} (in place)",
+        "saveAsNewCardPack": "+ Save as new pack",
+        "shareSetup": "Share setup",
+        "shareSetupTitle": "Share this game setup (card pack + players) with a friend",
+        "sharePackTitle": "Share {label} with a friend",
+        "sharePackAria": "Share card pack {label}",
         "deleteCustomCardSetConfirm": "Delete card pack \"{label}\"?",
         "allCardPacksPill": "All card packs",
         "allCardPacksPillTitle": "Show every saved card pack",
@@ -287,5 +293,121 @@
         "knownCardUnset": "Unset",
         "handSizeFix": "Hand size: <strong>{player}</strong> = {size}",
         "handSizeReset": "Reset"
+    },
+    "share": {
+        "menuItem": "Share game",
+        "createTitle": "Share this game",
+        "createDescriptionLead": "Pick what to include. Friends with the link can import any combination of:",
+        "archetypePack": "A custom card pack so a friend can play with the same set.",
+        "archetypeInProgress": "A game in progress so a friend can pick up where you left off.",
+        "archetypeSolved": "A finished mystery so a friend can see how you solved it.",
+        "ttl": "1 day",
+        "linkExpiresIn": "Link expires in {duration}.",
+        "signInTitle": "Sign in or create account to share",
+        "signInDescription": "Sharing a custom card pack saves it to your account so the receiver can pick it up. Sign in once and we'll continue your share.",
+        "signInToShare": "Sign in or create account to share",
+        "toggleCardPack": "Card pack",
+        "togglePlayers": "Players + hand sizes",
+        "toggleKnownCards": "Known cards",
+        "toggleSuggestions": "Suggestions + accusations",
+        "requiresPlayers": "Requires players + hand sizes",
+        "requiresCardPackForPlayers": "Card pack is required when sharing players",
+        "createAndCopy": "Create + copy link",
+        "creating": "Creating…",
+        "copied": "Link copied!",
+        "copyFallback": "Copy this URL:",
+        "errorGeneric": "Couldn't create the share. Try again in a moment.",
+        "importTitle": "A friend shared a Clue Solver game",
+        "importDescription": "Pick which parts of the share to import into your local game.",
+        "importModalTitle": "Import a shared game",
+        "importModalDescription": "Tick the sections you want. Anything left off won't touch your current game.",
+        "importAction": "Import",
+        "importing": "Importing…"
+    },
+    "account": {
+        "titleSignedOut": "Sign in to Clue Solver",
+        "titleSignedIn": "Your account",
+        "descriptionSignedOut": "Sign in to sync your custom card packs across devices and keep games you've shared with friends.",
+        "descriptionSignedIn": "Signed in. Your custom card packs sync to this account.",
+        "benefitSyncPacks": "Custom card packs sync across every device you use.",
+        "benefitSharedGames": "Game shares stay tied to your account so you can find them later.",
+        "signInWithGoogle": "Sign in with Google",
+        "signOut": "Sign out",
+        "menuItemSignedOut": "Sign in",
+        "menuItemSignedIn": "Account · {name}",
+        "menuItemMyCardPacks": "My card packs"
+    },
+    "installPrompt": {
+        "title": "Install Clue Solver",
+        "description": "Add Clue Solver to your home screen for a faster, fuller experience.",
+        "benefitOffline": "Works offline once installed — same deducer, no network needed.",
+        "benefitHomeScreen": "Launches from your home screen with its own icon, no browser bar.",
+        "benefitFastLaunch": "Cold-starts faster than a fresh tab.",
+        "install": "Install",
+        "notNow": "Not now",
+        "menuItem": "Install app"
+    },
+    "onboarding": {
+        "next": "Next",
+        "back": "Back",
+        "skip": "Skip tour",
+        "skipParens": "(Skip tour)",
+        "stepCounter": "{step} of {total}",
+        "finish": "Finish",
+        "startPlaying": "Start playing",
+        "gotIt": "Got it",
+        "takeTour": "Take tour",
+        "setup": {
+            "cardPack": {
+                "title": "Pick a card pack",
+                "body": "Start with the Classic deck, swap to Master Detective, or roll your own and save it as a custom pack."
+            },
+            "players": {
+                "title": "Add the players",
+                "body": "Type each player's name. Use + Player for as many as you need — Clue traditionally has 3-6, but the solver scales to any size."
+            },
+            "handSize": {
+                "title": "Set hand sizes",
+                "body": "How many cards each player was dealt. The solver uses this to deduce who can't be holding which card."
+            },
+            "knownCard": {
+                "title": "Mark cards you've seen",
+                "body": "Click a cell to record what you know about each (player, card) pair: Y if they hold it, N if you know they don't, blank if unknown."
+            },
+            "overflow": {
+                "title": "Everything else lives here",
+                "body": "The ⋯ menu has Game setup, Take tour, New game, About, and (after sign-in) your account."
+            },
+            "start": {
+                "title": "Ready to play",
+                "body": "Click Start playing to flip into Play mode. The deducer keeps running in the background as you log suggestions and disproofs."
+            }
+        },
+        "checklist": {
+            "cell": {
+                "title": "Each cell is a deduction",
+                "body": "Y means a player holds that card; N means they don't. The solver runs after every change and fills in everything it can derive."
+            },
+            "caseFile": {
+                "title": "The case file",
+                "body": "When the solver narrows a category to a single suspect / weapon / room, the case-file column shows it — that's your accusation."
+            }
+        },
+        "suggest": {
+            "addForm": {
+                "title": "Add the first suggestion of the game to get started!",
+                "body": "After adding, switch to the checklist to see updated deductions."
+            },
+            "priorLog": {
+                "title": "All suggestions are logged here",
+                "body": "Every suggestion you log shows up here. Click any row to edit it later if you mis-typed something."
+            }
+        },
+        "firstSuggestion": {
+            "checklist": {
+                "title": "See updated deductions on the checklist",
+                "body": "The solver re-runs after every suggestion — your next deduction may already be on the board."
+            }
+        }
     }
 }

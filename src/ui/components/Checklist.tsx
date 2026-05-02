@@ -352,6 +352,11 @@ export function Checklist() {
         <th
             key="add-player-col"
             className="w-px whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-center"
+            // The setup tour's "Add players" step highlights the
+            // entire header row of player cells, including the
+            // "+ Player" affordance, so the user can see all the
+            // ways they manage the player set in one spotlight.
+            data-tour-anchor="setup-player-column"
         >
             <button
                 type="button"
@@ -474,6 +479,14 @@ export function Checklist() {
         <section
             ref={rootRef}
             id="checklist"
+            // M22 firstSuggestion tour anchor (desktop variant). On
+            // mobile the same step instead points at the BottomNav's
+            // Checklist tab; the `anchorByViewport` resolver on
+            // `TourStep` picks the right token at popover-render
+            // time. Both anchors live in the DOM unconditionally;
+            // the resolver simply queries for whichever side of the
+            // breakpoint is active.
+            data-tour-anchor="desktop-checklist-area"
             className="min-w-max rounded-[var(--radius)] border border-border bg-panel p-4"
             onMouseLeave={onGridLeave}
             onBlur={e => {
@@ -498,6 +511,7 @@ export function Checklist() {
                         <button
                             type="button"
                             data-setup-cta
+                            data-tour-anchor="setup-start-playing"
                             className="cursor-pointer rounded-[var(--radius)] border-none bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover"
                             onClick={() =>
                                 dispatch({
@@ -537,10 +551,23 @@ export function Checklist() {
                             {inSetup || !hasKeyboard ? null : label("global.gotoChecklist")}
                         </th>
                         {owners.flatMap((owner, ownerIdx) => {
+                            // Setup-tour anchor: every player's header
+                            // cell carries `setup-player-column` so the
+                            // spotlight highlights the entire row of
+                            // player names. The Case File header skips
+                            // this anchor since it's not a player.
+                            const playerHeaderAnchor =
+                                inSetup && owner._tag === "Player"
+                                    ? {
+                                          "data-tour-anchor":
+                                              "setup-player-column",
+                                      }
+                                    : {};
                             const cell = (
                                 <th
                                     key={ownerKey(owner)}
                                     className="border-r border-b border-border bg-row-header px-2 py-1 text-center align-top font-semibold"
+                                    {...playerHeaderAnchor}
                                 >
                                     {inSetup && owner._tag === "Player" ? (
                                         <PlayerNameInput
@@ -561,7 +588,14 @@ export function Checklist() {
                     </tr>
                     {inSetup && (
                         <tr>
-                            <th className="whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-left font-semibold">
+                            <th
+                                className="whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-left font-semibold"
+                                // The setup tour's "Set hand sizes"
+                                // step highlights the row label cell
+                                // alongside every player's input so
+                                // the spotlight covers the whole row.
+                                data-tour-anchor="setup-hand-size"
+                            >
                                 {tSetup("handSize")}
                             </th>
                             {owners.flatMap((owner, ownerIdx) => {
@@ -576,10 +610,16 @@ export function Checklist() {
                                 } else {
                                     const current = handSizeMap.get(owner.player);
                                     const def = defaults.get(owner.player);
+                                    // Anchor the setup tour's hand-size step
+                                    // to EVERY player's hand-size cell so the
+                                    // spotlight highlights the whole row, not
+                                    // just one cell. The TourPopover unions
+                                    // the matched rects.
                                     cell = (
                                         <td
                                             key={ownerKey(owner)}
                                             className="border-r border-b border-border px-1.5 py-1 text-center"
+                                            data-tour-anchor="setup-hand-size"
                                         >
                                             <input
                                                 type="number"
@@ -938,6 +978,46 @@ export function Checklist() {
                                                 rowIdx,
                                                 colIdx,
                                             );
+                                        // Tour anchors:
+                                        //   - `setup-known-cell` ("Mark
+                                        //     the cards you were dealt")
+                                        //     applies to every cell in
+                                        //     the first player column so
+                                        //     the spotlight highlights the
+                                        //     whole column the user fills
+                                        //     in.
+                                        //   - `checklist-cell` ("Click a
+                                        //     cell to record what you
+                                        //     know") applies only to the
+                                        //     top-left cell — a
+                                        //     teach-the-click anchor for
+                                        //     the play-mode tour.
+                                        // The TourPopover unions all
+                                        // matched rects via the `~=`
+                                        // attribute selector.
+                                        const firstColAnchor =
+                                            colIdx === 0
+                                                ? "setup-known-cell"
+                                                : undefined;
+                                        const firstCellAnchor =
+                                            rowIdx === 0 && colIdx === 0
+                                                ? "checklist-cell"
+                                                : undefined;
+                                        const anchorTokens = [
+                                            firstColAnchor,
+                                            firstCellAnchor,
+                                        ].filter(
+                                            (t): t is string => t !== undefined,
+                                        );
+                                        const firstCellAnchorAttr:
+                                            | Record<string, string>
+                                            | undefined =
+                                            anchorTokens.length > 0
+                                                ? {
+                                                      "data-tour-anchor":
+                                                          anchorTokens.join(" "),
+                                                  }
+                                                : undefined;
                                         let cell: ReactNode;
                                         if (setupInteractive) {
                                             const ariaLabel = tSetup(
@@ -961,6 +1041,7 @@ export function Checklist() {
                                                     aria-label={ariaLabel}
                                                     data-cell-row={rowIdx}
                                                     data-cell-col={colIdx}
+                                                    {...firstCellAnchorAttr}
                                                     onFocus={onCellFocus}
                                                     onClick={() =>
                                                         toggleKnownCard(
@@ -1056,6 +1137,7 @@ export function Checklist() {
                                                         aria-haspopup="dialog"
                                                         data-cell-row={rowIdx}
                                                         data-cell-col={colIdx}
+                                                        {...firstCellAnchorAttr}
                                                         onFocus={onCellFocus}
                                                         onKeyDown={e => {
                                                             // Enter/Space should open the
@@ -1093,6 +1175,7 @@ export function Checklist() {
                                                     tabIndex={0}
                                                     data-cell-row={rowIdx}
                                                     data-cell-col={colIdx}
+                                                    {...firstCellAnchorAttr}
                                                     onFocus={onCellFocus}
                                                     onKeyDown={onGridArrowKey}
                                                     {...hoverHandlers}
@@ -1105,6 +1188,7 @@ export function Checklist() {
                                                 <td
                                                     key={`${ownerKey(owner)}-${String(entry.id)}`}
                                                     className={tdClassName}
+                                                    {...firstCellAnchorAttr}
                                                     {...hoverHandlers}
                                                 >
                                                     {cellContent}
@@ -1690,6 +1774,7 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
         <motion.div
             ref={headerRef}
             className="mb-4 rounded-[var(--radius)] border border-border bg-case-file-bg p-3"
+            data-tour-anchor="checklist-case-file"
             animate={headerAnimate}
             transition={isCelebrating ? wiggleTransition : celebrateTransition}
         >

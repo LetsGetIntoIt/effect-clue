@@ -83,6 +83,8 @@ import {
 } from "../../logic/Suggestion";
 import { cardByName } from "../../logic/test-utils/CardByName";
 import { Clue } from "../Clue";
+import { TestQueryClientProvider } from "../../test-utils/queryClient";
+import { seedOnboardingDismissed } from "../../test-utils/onboardingSeed";
 
 const getRow = (): HTMLElement => {
     const el = document.querySelector<HTMLElement>(
@@ -121,7 +123,7 @@ const seedOneSuggestionAndMount = async (
         // (`view: "checklist"`) is fine for desktop tests.
         window.history.replaceState(null, "", "/?view=suggest");
     }
-    render(<Clue />);
+    render(<Clue />, { wrapper: TestQueryClientProvider });
     await waitFor(() => {
         expect(window.location.search).toContain(`view=${view}`);
     });
@@ -135,6 +137,9 @@ const seedOneSuggestionAndMount = async (
 beforeEach(() => {
     window.localStorage.clear();
     window.history.replaceState(null, "", "/");
+    // Suppress splash, tour, and install-prompt auto-fires so they
+    // don't dispatch `setUiMode` mid-render or block click events.
+    seedOnboardingDismissed();
 });
 
 const waitPillsVisible = async (): Promise<void> => {

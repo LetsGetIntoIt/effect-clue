@@ -12,9 +12,18 @@ import { useLongPress } from "../hooks/useLongPress";
 import { useClue } from "../state";
 import { shortcutSuffix } from "../keyMap";
 import { T_SPRING_SOFT, T_STANDARD, useReducedTransition } from "../motion";
+import { useTour } from "../tour/TourProvider";
+import { screenKeyForUiMode } from "../tour/screenKey";
+import { useAccountContext } from "../account/AccountProvider";
+import { useShareContext } from "../share/ShareProvider";
+import { useSession } from "../hooks/useSession";
 import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
+import { useInstallPromptContext } from "./InstallPromptProvider";
+import type { InstallPromptTrigger } from "../../analytics/events";
 import { OverflowMenu } from "./OverflowMenu";
 import { useToolbarActions } from "./Toolbar";
+
+const TRIGGER_MENU: InstallPromptTrigger = "menu";
 
 /**
  * Mobile-only fixed-bottom navigation. Shown only under 800px — the
@@ -72,6 +81,7 @@ export function BottomNav() {
                         shortcut: shortcutSuffix("global.gotoChecklist", hasKeyboard),
                     })}
                     active={mode === "checklist"}
+                    tourAnchor="bottom-nav-checklist"
                     onClick={() =>
                         dispatch({ type: "setUiMode", mode: "checklist" })
                     }
@@ -121,10 +131,15 @@ function NavTabItem({
     label,
     active,
     onClick,
+    tourAnchor,
 }: {
     readonly label: string;
     readonly active: boolean;
     readonly onClick: () => void;
+    /** Optional `data-tour-anchor` attached to the underlying button.
+     * Used by the M22 firstSuggestion tour to point at the Checklist
+     * tab on mobile. */
+    readonly tourAnchor?: string;
 }) {
     const underlineTransition = useReducedTransition(T_SPRING_SOFT);
     const colorTransition = useReducedTransition(T_STANDARD);
@@ -135,6 +150,9 @@ function NavTabItem({
                 role="tab"
                 aria-selected={active}
                 onClick={onClick}
+                {...(tourAnchor !== undefined
+                    ? { "data-tour-anchor": tourAnchor }
+                    : {})}
                 className={
                     "relative flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--radius)] border-0 bg-transparent px-2 text-[13px] font-semibold"
                 }
@@ -226,8 +244,9 @@ function NavIconItem({
  * with mobile-specific trigger styling (icon slot, ~12 tall/wide) and
  * `side="top"` so the popover opens upward above the fixed nav. The
  * menu items mirror the desktop Toolbar: Game setup (switches to Setup
- * mode), Share link, and New game. Share + New game reuse
- * `useToolbarActions` so the mobile flow is identical to the desktop.
+ * mode) and New game. New game reuses `useToolbarActions` so the
+ * mobile flow is identical to the desktop. The Share item was dropped
+ * in M3 and M9 will reintroduce it.
  */
 function BottomOverflowMenu({
     setupActive,
@@ -238,8 +257,28 @@ function BottomOverflowMenu({
 }) {
     const t = useTranslations("bottomNav");
     const tToolbar = useTranslations("toolbar");
+    const tOnboarding = useTranslations("onboarding");
+    const tInstall = useTranslations("installPrompt");
+    const tAccount = useTranslations("account");
+    const tShare = useTranslations("share");
     const hasKeyboard = useHasKeyboard();
-    const { onShare, onNewGame, copied } = useToolbarActions();
+    const { state } = useClue();
+    const { onNewGame } = useToolbarActions();
+    const { restartTourForScreen, currentStep } = useTour();
+    // Force this menu open while the "Everything else lives here" tour
+    // step is active so the user can see the items without clicking ⋯.
+    const tourForcesMenuOpen = currentStep?.anchor === "overflow-menu";
+    const { installable, openModal: openInstallModal } =
+        useInstallPromptContext();
+    const { openModal: openAccountModal } = useAccountContext();
+    const { openModal: openShareModal } = useShareContext();
+    const session = useSession();
+    const accountLabel =
+        session.data?.user && !session.data.user.isAnonymous
+            ? tAccount("menuItemSignedIn", {
+                  name: session.data.user.name ?? session.data.user.email,
+              })
+            : tAccount("menuItemSignedOut");
     return (
         <li>
             <OverflowMenu
@@ -247,7 +286,14 @@ function BottomOverflowMenu({
                 triggerLabel={t("more")}
                 side="top"
                 align="end"
+                forceOpen={tourForcesMenuOpen}
+                // BottomNav itself is hidden on desktop via CSS, but
+                // the portaled menu content lives on body and would
+                // otherwise ghost on desktop when forceOpen flips it
+                // on for the tour. Hide above the 800px breakpoint.
+                contentClassName="[@media(min-width:800px)]:hidden"
                 items={[
+                    // Group 1: Game
                     {
                         label: t("gameSetup", {
                             shortcut: shortcutSuffix("global.gotoSetup", hasKeyboard),
@@ -256,17 +302,43 @@ function BottomOverflowMenu({
                         onClick: onSetup,
                     },
                     {
-                        label: copied
-                            ? tToolbar("shareCopied")
-                            : tToolbar("share"),
-                        onClick: onShare,
-                    },
-                    {
                         label: tToolbar("newGame", {
                             shortcut: shortcutSuffix("global.newGame", hasKeyboard),
                         }),
                         onClick: onNewGame,
                     },
+                    {
+                        label: tShare("menuItem"),
+                        onClick: () => openShareModal(),
+                    },
+                    { type: "divider" },
+                    // Group 2: Account & content
+                    {
+                        label: accountLabel,
+                        onClick: () => openAccountModal(),
+                    },
+                    {
+                        label: tAccount("menuItemMyCardPacks"),
+                        onClick: () => openAccountModal(),
+                    },
+                    {
+                        label: tOnboarding("takeTour"),
+                        onClick: () =>
+                            restartTourForScreen(
+                                screenKeyForUiMode(state.uiMode),
+                            ),
+                    },
+                    { type: "divider" },
+                    // Group 3: Help / system
+                    ...(installable
+                        ? [
+                              {
+                                  label: tInstall("menuItem"),
+                                  onClick: () =>
+                                      openInstallModal(TRIGGER_MENU),
+                              } as const,
+                          ]
+                        : []),
                     {
                         label: t("about"),
                         trailingIcon: <ExternalLinkIcon size={14} />,

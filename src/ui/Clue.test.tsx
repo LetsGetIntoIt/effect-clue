@@ -63,6 +63,8 @@ vi.mock("motion/react", () => {
 
 import { render, screen, waitFor } from "@testing-library/react";
 import { Clue } from "./Clue";
+import { TestQueryClientProvider } from "../test-utils/queryClient";
+import { seedOnboardingDismissed } from "../test-utils/onboardingSeed";
 
 beforeEach(() => {
     window.localStorage.clear();
@@ -70,11 +72,14 @@ beforeEach(() => {
     // `ClueProvider` mutates `?view=` on every uiMode change, so
     // a stale param from a prior test would leak into hydration.
     window.history.replaceState(null, "", "/");
+    // Suppress the splash, tour, and install-prompt auto-fires so
+    // they don't stack on top of the underlying app under test.
+    seedOnboardingDismissed();
 });
 
 describe("Clue — top-level structure", () => {
     test("renders the app title via next-intl", () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         // The mock returns the i18n key verbatim. `app.title` → `title`.
         expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
             "title",
@@ -86,11 +91,11 @@ describe("Clue — top-level structure", () => {
         // SelectionProvider together. If any of them had a missing peer
         // or threw on mount, render() would propagate the error — this
         // test pins that green path.
-        expect(() => render(<Clue />)).not.toThrow();
+        expect(() => render(<Clue />, { wrapper: TestQueryClientProvider })).not.toThrow();
     });
 
     test("after the initial mount, hydration completes and the view skeleton is removed", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         // The view skeleton is aria-hidden with a tailwind pulse class;
         // it goes away once `hydrated` flips true. `waitFor` retries
         // until React's post-commit hydration effect has flushed.
@@ -105,7 +110,7 @@ describe("Clue — top-level structure", () => {
 
 describe("Clue — URL-based view hydration", () => {
     test("no view param → default setup view; URL gets `?view=setup` after hydration", async () => {
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         // With no `?view=`, no localStorage, and no suggestions,
         // the hydration path leaves uiMode at its default ("setup").
         // The URL-sync effect then writes `?view=setup` into the URL
@@ -121,7 +126,7 @@ describe("Clue — URL-based view hydration", () => {
 
     test("`?view=checklist` → URL preserved through hydration", async () => {
         window.history.replaceState(null, "", "/?view=checklist");
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(window.location.search).toContain("view=checklist");
         });
@@ -129,9 +134,48 @@ describe("Clue — URL-based view hydration", () => {
 
     test("`?view=suggest` → URL preserved through hydration", async () => {
         window.history.replaceState(null, "", "/?view=suggest");
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(window.location.search).toContain("view=suggest");
+        });
+    });
+
+    test("clicking the overflow menu's Game setup item from Suggest flips uiMode back to setup", async () => {
+        // Regression: when CardPackUsage's RQ-cache entry was rehydrated
+        // from the persister into a plain object, `usage.entries()` in
+        // CardPackRow threw on the next render — which manifested as
+        // "can't go back to Game setup" because the Setup screen
+        // crashed on mount. Even without the persister, the dispatch
+        // path itself must reliably flip `?view=setup`.
+        const { default: userEvent } = await import("@testing-library/user-event");
+        window.history.replaceState(null, "", "/?view=suggest");
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        // Wait for hydration so the Setup ↔ Play split has settled.
+        await waitFor(() => {
+            expect(window.location.search).toContain("view=suggest");
+        });
+        const user = userEvent.setup();
+        // jsdom doesn't run a layout engine, so `offsetParent`
+        // can't distinguish between the desktop Toolbar trigger and
+        // the mobile BottomNav trigger. Both wire the same dispatch
+        // callback, so clicking the first one is sufficient for the
+        // regression — what matters is that the menu item's onClick
+        // actually flips `uiMode` and doesn't crash on the way.
+        const triggers = document.querySelectorAll<HTMLElement>(
+            "[data-tour-anchor='overflow-menu']",
+        );
+        expect(triggers.length).toBeGreaterThan(0);
+        await user.click(triggers[0]!);
+        // The next-intl mock at the top of this file returns the
+        // i18n key verbatim (with values JSON-appended), so the menu
+        // label renders as `gameSetup:{"shortcut":...}` rather than
+        // the production "Game setup (⌘H)" text. Match the prefix.
+        const item = await screen.findByRole("button", {
+            name: /^gameSetup/,
+        });
+        await user.click(item);
+        await waitFor(() => {
+            expect(window.location.search).toContain("view=setup");
         });
     });
 
@@ -169,7 +213,7 @@ describe("Clue — URL-based view hydration", () => {
             ],
             accusations: [],
         });
-        render(<Clue />);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
             expect(window.location.search).toContain("view=checklist");
         });

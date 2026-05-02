@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState } from "react";
 import { aboutLinkClicked, gameSetupStarted } from "../../analytics/events";
 import { startSetup } from "../../analytics/gameSession";
 import { describeAction } from "../../logic/describeAction";
@@ -10,9 +9,20 @@ import { useConfirm } from "../hooks/useConfirm";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useClue } from "../state";
 import { shortcutSuffix } from "../keyMap";
+import { useTour } from "../tour/TourProvider";
+import { screenKeyForUiMode } from "../tour/screenKey";
+import { useAccountContext } from "../account/AccountProvider";
+import { useShareContext } from "../share/ShareProvider";
+import { useSession } from "../hooks/useSession";
 import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
+import { useInstallPromptContext } from "./InstallPromptProvider";
+import type { InstallPromptTrigger } from "../../analytics/events";
 import { OverflowMenu } from "./OverflowMenu";
 import { Tooltip } from "./Tooltip";
+
+// Module-scope discriminator values, exempt from the i18next literal
+// lint rule.
+const TRIGGER_MENU: InstallPromptTrigger = "menu";
 
 const buttonClass =
     "rounded-[var(--radius)] border border-border bg-white px-3.5 py-1.5 " +
@@ -21,32 +31,19 @@ const buttonClass =
     "focus-visible:ring-offset-1 focus-visible:ring-offset-bg";
 
 /**
- * Shared handlers for the Share-link and New-game actions. Keeps the
- * clipboard fallback + transient "Copied!" state + confirm-and-dispatch
- * flow in one place so both the desktop Toolbar and the mobile
- * BottomNav overflow menu behave identically.
+ * Shared handlers for the New-game action used by both the desktop
+ * Toolbar overflow menu and the mobile BottomNav overflow menu.
+ *
+ * The Share-link action that used to live here was dropped during M3
+ * — the base64 `?state=...` URL flow was removed entirely, and the
+ * server-stored `/share/[id]` flow that replaces it lands in M9 with
+ * its own creation modal. There is no Share menu item between M3 and
+ * M9.
  */
 export function useToolbarActions() {
     const t = useTranslations("toolbar");
-    const { dispatch, currentShareUrl } = useClue();
+    const { dispatch } = useClue();
     const confirm = useConfirm();
-    const [copied, setCopied] = useState(false);
-
-    const onShare = async () => {
-        const url = currentShareUrl();
-        if (!url) return;
-        try {
-            if (navigator?.clipboard) {
-                await navigator.clipboard.writeText(url);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-            } else {
-                window.prompt(t("copyFallback"), url);
-            }
-        } catch {
-            window.prompt(t("copyFallback"), url);
-        }
-    };
 
     const onNewGame = async () => {
         if (await confirm({ message: t("newGameConfirm") })) {
@@ -56,19 +53,24 @@ export function useToolbarActions() {
         }
     };
 
-    return { onShare, onNewGame, copied };
+    return { onNewGame };
 }
 
 /**
  * Top-of-page controls (desktop only): undo/redo as top-level buttons,
- * plus a ⋯ overflow menu that hosts Game setup, Share link, and New
- * game. Mirrors the mobile `BottomNav` overflow so both breakpoints
- * share the same menu structure.
+ * plus a ⋯ overflow menu that hosts Game setup and New game. Mirrors
+ * the mobile `BottomNav` overflow so both breakpoints share the same
+ * menu structure. The Share item that used to live here was dropped
+ * in M3; M9 reintroduces it pointing at the server-stored share flow.
  */
 export function Toolbar() {
     const t = useTranslations("toolbar");
     const tNav = useTranslations("bottomNav");
     const tHistory = useTranslations("history");
+    const tOnboarding = useTranslations("onboarding");
+    const tInstall = useTranslations("installPrompt");
+    const tAccount = useTranslations("account");
+    const tShare = useTranslations("share");
     const hasKeyboard = useHasKeyboard();
     const {
         state,
@@ -80,7 +82,23 @@ export function Toolbar() {
         nextUndo,
         nextRedo,
     } = useClue();
-    const { onShare, onNewGame, copied } = useToolbarActions();
+    const { onNewGame } = useToolbarActions();
+    const { restartTourForScreen, currentStep } = useTour();
+    // The "Everything else lives here" tour step points at this menu.
+    // Force it open while that step is active so the user can see
+    // what's inside without having to click ⋯ themselves.
+    const tourForcesMenuOpen = currentStep?.anchor === "overflow-menu";
+    const { installable, openModal: openInstallModal } =
+        useInstallPromptContext();
+    const { openModal: openAccountModal } = useAccountContext();
+    const { openModal: openShareModal } = useShareContext();
+    const session = useSession();
+    const accountLabel =
+        session.data?.user && !session.data.user.isAnonymous
+            ? tAccount("menuItemSignedIn", {
+                  name: session.data.user.name ?? session.data.user.email,
+              })
+            : tAccount("menuItemSignedOut");
 
     const undoTooltip = nextUndo
         ? tHistory("undoTooltip", {
@@ -134,7 +152,15 @@ export function Toolbar() {
                 triggerLabel={tNav("more")}
                 side="bottom"
                 align="end"
+                forceOpen={tourForcesMenuOpen}
+                // The Toolbar is hidden via CSS on mobile, but the
+                // portaled menu content is rendered to body and
+                // wouldn't inherit that. Hide it here when below the
+                // 800px breakpoint so the desktop menu doesn't ghost
+                // on mobile when forceOpen flips it on for the tour.
+                contentClassName="[@media(max-width:799px)]:hidden"
                 items={[
+                    // Group 1: Game
                     {
                         label: tNav("gameSetup", {
                             shortcut: shortcutSuffix("global.gotoSetup", hasKeyboard),
@@ -144,15 +170,48 @@ export function Toolbar() {
                             dispatch({ type: "setUiMode", mode: "setup" }),
                     },
                     {
-                        label: copied ? t("shareCopied") : t("share"),
-                        onClick: onShare,
-                    },
-                    {
                         label: t("newGame", {
                             shortcut: shortcutSuffix("global.newGame", hasKeyboard),
                         }),
                         onClick: onNewGame,
                     },
+                    {
+                        label: tShare("menuItem"),
+                        onClick: () => openShareModal(),
+                    },
+                    { type: "divider" },
+                    // Group 2: Account & content
+                    {
+                        label: accountLabel,
+                        onClick: () => openAccountModal(),
+                    },
+                    {
+                        label: tAccount("menuItemMyCardPacks"),
+                        onClick: () => openAccountModal(),
+                    },
+                    {
+                        label: tOnboarding("takeTour"),
+                        onClick: () =>
+                            restartTourForScreen(
+                                screenKeyForUiMode(state.uiMode),
+                            ),
+                    },
+                    { type: "divider" },
+                    // Group 3: Help / system. "Install app" only
+                    // appears when the browser confirmed
+                    // installability via `beforeinstallprompt`.
+                    // On Safari / iOS the event never fires, so the
+                    // item never renders — those users install via
+                    // the share sheet.
+                    ...(installable
+                        ? [
+                              {
+                                  label: tInstall("menuItem"),
+                                  onClick: () =>
+                                      openInstallModal(TRIGGER_MENU),
+                              } as const,
+                          ]
+                        : []),
                     {
                         label: tNav("about"),
                         trailingIcon: <ExternalLinkIcon size={14} />,

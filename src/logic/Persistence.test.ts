@@ -10,9 +10,7 @@ import {
 import { newSuggestionId, Suggestion, SuggestionId } from "./Suggestion";
 import {
     decodeSession,
-    decodeSessionFromUrl,
     encodeSession,
-    encodeSessionToUrl,
     loadFromLocalStorage,
     saveToLocalStorage,
     type GameSession,
@@ -235,47 +233,3 @@ describe("saveToLocalStorage / loadFromLocalStorage", () => {
     });
 });
 
-describe("encodeSessionToUrl / decodeSessionFromUrl", () => {
-    test("produces URL-safe characters only (no +, /, =)", () => {
-        const encoded = encodeSessionToUrl(richSession());
-        expect(encoded).not.toMatch(/[+/=]/);
-    });
-
-    test("round-trips a rich session through URL encoding", () => {
-        const s = richSession();
-        const decoded = decodeSessionFromUrl(encodeSessionToUrl(s));
-        expect(decoded?.suggestions).toHaveLength(3);
-        expect(decoded?.suggestions[2]?.seenCard).toBe(KNIFE);
-    });
-
-    test("round-trips the minimal session", () => {
-        const decoded = decodeSessionFromUrl(encodeSessionToUrl(minimalSession));
-        expect(decoded).toBeDefined();
-        expect(decoded?.handSizes).toHaveLength(3);
-    });
-
-    test("decode returns undefined for malformed base64", () => {
-        expect(decodeSessionFromUrl("!@#$")).toBeUndefined();
-    });
-
-    test("decode returns undefined when the payload decodes to non-JSON", () => {
-        // `aGVsbG8` = "hello" — valid base64 but not JSON.
-        expect(decodeSessionFromUrl("aGVsbG8")).toBeUndefined();
-    });
-
-    test("decode returns undefined when the JSON isn't a valid session shape", () => {
-        // JSON literal `42`, base64 ("NDI=") with the padding stripped
-        // the way `encodeSessionToUrl` strips it.
-        expect(decodeSessionFromUrl("NDI")).toBeUndefined();
-    });
-
-    test("decode handles payloads that need `=` padding restored", () => {
-        // Encode strips `=` padding; decoding must re-add it. Round-trip
-        // with a session whose JSON length % 4 == 1 to force 3 `=`s
-        // (minimalSession's JSON is predictable enough).
-        const encoded = encodeSessionToUrl(minimalSession);
-        // Sanity: encoded must not end in `=`, then decode must succeed.
-        expect(encoded).not.toMatch(/=$/);
-        expect(decodeSessionFromUrl(encoded)).toBeDefined();
-    });
-});
