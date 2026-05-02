@@ -46,8 +46,15 @@ import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { XIcon } from "../components/Icons";
 import { useClue } from "../state";
+import {
+    findAnchorElements,
+    pickPopoverRect,
+    resolveAnchorToken,
+    resolvePopoverAnchorToken,
+    resolveSideAndAlign,
+    unionRect,
+} from "./popoverGeometry";
 import { useTour } from "./TourProvider";
-import type { TourStep } from "./tours";
 
 /**
  * Wrapper around `getBoundingClientRect()` that satisfies the shape
@@ -58,13 +65,6 @@ type VirtualElement = {
     readonly getBoundingClientRect: () => DOMRect;
 };
 
-// Module-scope discriminators for `step.popoverAnchorPriority`. Pulled
-// out so the `i18next/no-literal-string` lint rule treats them as
-// wire-format flags rather than user-facing copy.
-const POPOVER_PRIORITY_FIRST = "first-visible" as const;
-const POPOVER_PRIORITY_LAST = "last-visible" as const;
-const POPOVER_SIDE_BOTTOM = "bottom" as const;
-const POPOVER_ALIGN_CENTER = "center" as const;
 // `KeyboardEvent.key` value for Escape. Module-scope so the
 // `i18next/no-literal-string` rule doesn't flag the comparison.
 const KEY_ESCAPE = "Escape" as const;
@@ -75,113 +75,10 @@ const DISMISS_VIA_ESC = "esc" as const;
 // to allow keyboard events that target the popover's own buttons.
 const POPOVER_CONTENT_ATTR = "data-tour-popover-content" as const;
 
-/**
- * Find every on-page element a tour step targets.
- *
- * Uses the `~=` attribute selector so a single DOM element can carry
- * multiple anchor names (space-separated), e.g. the first cell of the
- * checklist grid is both `setup-known-cell` and `checklist-cell`.
- * Returns the empty array when no element matches; the caller falls
- * back to a fixed viewport position.
- */
-const findAnchorElements = (anchor: string): HTMLElement[] => {
-    if (typeof document === "undefined") return [];
-    return Array.from(
-        document.querySelectorAll<HTMLElement>(
-            `[data-tour-anchor~="${anchor}"]`,
-        ),
-    );
-};
-
-/**
- * Resolve a step's anchor token, picking the right one for the
- * current viewport when `anchorByViewport` is set. The mobile
- * breakpoint matches the layout boundary used everywhere else
- * (BottomNav vs desktop Toolbar; PlayLayout's single-pane vs
- * side-by-side render). Falls back to `step.anchor` for SSR / tests
- * where matchMedia hasn't run yet.
- */
-const resolveAnchorToken = (step: TourStep): string => {
-    if (!step.anchorByViewport) return step.anchor;
-    if (typeof window === "undefined") return step.anchor;
-    const isDesktop = window.matchMedia("(min-width: 800px)").matches;
-    return isDesktop
-        ? step.anchorByViewport.desktop
-        : step.anchorByViewport.mobile;
-};
-
-/**
- * Resolve the token used to position the POPOVER specifically. Falls
- * back to the spotlight token when no override is set, so steps that
- * don't care about decoupling the two get today's behavior. Same
- * viewport-conditional + SSR fallback logic as `resolveAnchorToken`.
- */
-const resolvePopoverAnchorToken = (step: TourStep): string =>
-    step.popoverAnchor ?? resolveAnchorToken(step);
-
-type Side = "top" | "right" | "bottom" | "left";
-type Align = "start" | "center" | "end";
-
-/**
- * Resolve the popover's `side` and `align` for the active viewport.
- * `sideByViewport` wins when set; otherwise falls back to the
- * top-level `side`/`align`, then to Radix defaults of
- * `bottom`/`center`. Mirrors `resolveAnchorToken`'s SSR fallback
- * (mobile config when matchMedia isn't available — matches the
- * `useHasKeyboard` / BottomNav default).
- */
-const resolveSideAndAlign = (
-    step: TourStep,
-): { side: Side; align: Align } => {
-    const fallbackSide = step.side ?? POPOVER_SIDE_BOTTOM;
-    const fallbackAlign = step.align ?? POPOVER_ALIGN_CENTER;
-    if (!step.sideByViewport) {
-        return { side: fallbackSide, align: fallbackAlign };
-    }
-    if (typeof window === "undefined") {
-        const m = step.sideByViewport.mobile;
-        return {
-            side: m.side ?? fallbackSide,
-            align: m.align ?? fallbackAlign,
-        };
-    }
-    const isDesktop = window.matchMedia("(min-width: 800px)").matches;
-    const v = isDesktop
-        ? step.sideByViewport.desktop
-        : step.sideByViewport.mobile;
-    return {
-        side: v.side ?? fallbackSide,
-        align: v.align ?? fallbackAlign,
-    };
-};
-
-/**
- * The smallest axis-aligned rect that contains every input rect.
- * Used to highlight a row, a column, or any group of elements as a
- * single spotlight without rendering one per element.
- *
- * Zero-area rects (typically `display: none` siblings — e.g. the
- * Toolbar's ⋯ trigger that's hidden on mobile while the BottomNav's
- * ⋯ trigger carries the same anchor) are filtered out before
- * unioning. Including them would extend the union all the way to
- * the document origin (0,0), making the spotlight cover huge swaths
- * of the page.
- */
-const unionRect = (rects: ReadonlyArray<DOMRect>): DOMRect | null => {
-    const visible = rects.filter(r => r.width > 0 && r.height > 0);
-    if (visible.length === 0) return null;
-    let left = Infinity;
-    let top = Infinity;
-    let right = -Infinity;
-    let bottom = -Infinity;
-    for (const r of visible) {
-        if (r.left < left) left = r.left;
-        if (r.top < top) top = r.top;
-        if (r.right > right) right = r.right;
-        if (r.bottom > bottom) bottom = r.bottom;
-    }
-    return new DOMRect(left, top, right - left, bottom - top);
-};
+// `findAnchorElements`, `resolveAnchorToken`, `resolvePopoverAnchorToken`,
+// `resolveSideAndAlign`, `unionRect`, and `pickPopoverRect` are now in
+// `./popoverGeometry` so they can be unit-tested without mounting the
+// full Radix popover tree.
 
 const fallbackVirtualRect = (): DOMRect => {
     if (typeof window === "undefined") {
@@ -388,29 +285,15 @@ export function TourPopover() {
             const popoverEls = currentStep.popoverAnchor !== undefined
                 ? findAnchorElements(resolvePopoverAnchorToken(currentStep))
                 : els;
-            const popoverPriority =
-                currentStep.popoverAnchorPriority ?? POPOVER_PRIORITY_FIRST;
             const spotlightMeasure = (): DOMRect => {
                 const rects = els.map(el => el.getBoundingClientRect());
                 return unionRect(rects) ?? fallbackVirtualRect();
             };
-            const popoverMeasure = (): DOMRect => {
-                // Iterate forward (`first-visible`) or backward
-                // (`last-visible`). Skip zero-area elements — the
-                // Toolbar + BottomNav both render an OverflowMenu
-                // trigger with the same anchor name; one is hidden
-                // via CSS on the other's breakpoint and reports
-                // 0x0. Skipping it ensures we anchor to the visible
-                // one regardless of priority.
-                const ordered = popoverPriority === POPOVER_PRIORITY_LAST
-                    ? [...popoverEls].reverse()
-                    : popoverEls;
-                for (const el of ordered) {
-                    const r = el.getBoundingClientRect();
-                    if (r.width > 0 && r.height > 0) return r;
-                }
-                return fallbackVirtualRect();
-            };
+            const popoverMeasure = (): DOMRect =>
+                pickPopoverRect(
+                    popoverEls,
+                    currentStep.popoverAnchorPriority,
+                ) ?? fallbackVirtualRect();
             virtualElementRef.current = {
                 getBoundingClientRect: popoverMeasure,
             };
