@@ -551,16 +551,26 @@ export function Checklist() {
                             {inSetup || !hasKeyboard ? null : label("global.gotoChecklist")}
                         </th>
                         {owners.flatMap((owner, ownerIdx) => {
-                            // Setup-tour anchor: every player's header
-                            // cell carries `setup-player-column` so the
-                            // spotlight highlights the entire row of
-                            // player names. The Case File header skips
-                            // this anchor since it's not a player.
+                            // Setup-tour anchors for player header cells:
+                            //   - `setup-player-column` (every player
+                            //     header) so the "Add players" step
+                            //     spotlights the row of player names.
+                            //   - `setup-known-cell-header` (FIRST
+                            //     player only) so the "Mark cards"
+                            //     step's popover anchors to the top
+                            //     of the column rather than the full
+                            //     column union (which is too tall to
+                            //     position against on narrow viewports).
+                            // The Case File header skips both since
+                            // it's not a player.
+                            const isFirstPlayer =
+                                owner._tag === "Player" && ownerIdx === 0;
                             const playerHeaderAnchor =
                                 inSetup && owner._tag === "Player"
                                     ? {
-                                          "data-tour-anchor":
-                                              "setup-player-column",
+                                          "data-tour-anchor": isFirstPlayer
+                                              ? "setup-player-column setup-known-cell-header"
+                                              : "setup-player-column",
                                       }
                                     : {};
                             const cell = (

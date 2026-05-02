@@ -25,8 +25,19 @@ import { SplashModal } from "./components/SplashModal";
 import { ClueProvider, useClue } from "./state";
 import { TourProvider, useTour } from "./tour/TourProvider";
 import { TourPopover } from "./tour/TourPopover";
-import { useTourGate } from "./tour/useTourGate";
-import { screenKeyForUiMode } from "./tour/screenKey";
+import {
+    computeShouldShowTour,
+    TOUR_RE_ENGAGE_DURATION,
+    useTourGate,
+} from "./tour/useTourGate";
+import {
+    loadTourState,
+    saveTourDismissed,
+    saveTourVisited,
+} from "./tour/TourState";
+import { TelemetryRuntime } from "../observability/runtime";
+import { DateTime } from "effect";
+import { screenKeyForUiMode, uiModeForScreenKey } from "./tour/screenKey";
 
 // Non user-facing literals.
 const VARIANT_INITIAL = "initial";
@@ -149,12 +160,27 @@ function CoordinatedShell({
 }: {
     readonly headerRef: React.RefObject<HTMLElement | null>;
 }) {
-    const { hydrated, state } = useClue();
+    const { hydrated, state, dispatch } = useClue();
     const activeScreen = screenKeyForUiMode(state.uiMode);
+    // Translate the coordinator's precedence-redirect request back
+    // into a `setUiMode` dispatch. The coordinator only fires this
+    // when the highest-priority eligible tour belongs to a screen
+    // the user is NOT on (e.g. brand-new user who landed on
+    // `/play?view=checklist` gets sent to `setup`).
+    const handleRedirectToScreen = useCallback(
+        (screen: ReturnType<typeof screenKeyForUiMode>) => {
+            const targetMode = uiModeForScreenKey(screen);
+            if (targetMode === undefined) return;
+            if (targetMode === state.uiMode) return;
+            dispatch({ type: "setUiMode", mode: targetMode });
+        },
+        [dispatch, state.uiMode],
+    );
     return (
         <StartupCoordinatorProvider
             hydrated={hydrated}
             activeScreen={activeScreen}
+            onRedirectToScreen={handleRedirectToScreen}
         >
             <TourProvider>
                 <ClueShell headerRef={headerRef} />
@@ -285,29 +311,33 @@ function TourScreenGate() {
 }
 
 /**
- * Mid-game tour: when the user logs their first suggestion of a
- * game, point at the deduction grid (desktop) or the Checklist
- * BottomNav tab (mobile) and explain that the solver re-runs with
- * each addition. Same 4-week dormancy gate as the other tours via
- * `useTourGate("firstSuggestion")`. Fires at most once per user per
- * 4-week window — explicitly NOT once-per-game; if the user solves
- * a case, starts a new one, and logs the first suggestion of THAT
- * game, the gate's dismissal timestamp suppresses a re-fire.
+ * Mid-game tour: when the user adds a suggestion while the
+ * `firstSuggestion` gate is fresh, point at the deduction grid
+ * (desktop) or the Checklist BottomNav tab (mobile) and explain
+ * that the solver re-runs with each addition. Fires at most once
+ * per user per 4-week window — explicitly NOT once-per-game; if
+ * the user solves a case, starts a new one, and logs a suggestion,
+ * the previously-saved dismissal suppresses a re-fire.
  *
- * Trigger: a 0 → 1 transition on `state.suggestions.length`.
- * Detected by tracking the last seen length in a ref so the
- * comparison is "actually went from empty to non-empty in this
- * mount", not "currently has > 0 suggestions" (which would re-fire
- * on every mount of a hydrated session).
+ * Trigger: ANY suggestion-count increase since this mount, gated
+ * by a fresh read of `tour.firstSuggestion` localStorage at the
+ * moment of the addition. "Fresh read" matters: when the user
+ * clicks ⋯ → "Take tour" mid-game, `restartTourForScreen` wipes
+ * EVERY tour key (including `firstSuggestion`). Reading the gate
+ * at trigger time picks up that wipe — the next suggestion they
+ * log re-fires the tour. A mount-time gate snapshot wouldn't, and
+ * the user would have to refresh the page to see it again.
+ *
+ * Tracks the last seen length in a ref so we only fire on a real
+ * "user added something this session" transition, not on every
+ * mount of a hydrated session that already has suggestions. The
+ * `firedRef` guard keeps it to one fire per mount even if the user
+ * adds several suggestions in a row.
  */
 function FirstSuggestionTourGate() {
     const { state, hydrated } = useClue();
     const { startTour, activeScreen } = useTour();
     const { phase } = useStartupCoordinator();
-    const { shouldShow, dismiss } = useTourGate(
-        FIRST_SUGGESTION_SCREEN_KEY,
-        { enabled: hydrated },
-    );
     const lastSeenLengthRef = useRef<number | null>(null);
     const firedRef = useRef(false);
 
@@ -318,33 +348,42 @@ function FirstSuggestionTourGate() {
             lastSeenLengthRef.current = currentLength;
             return;
         }
-        // Detect 0 → 1+ transition (the user just logged their
-        // first suggestion of this mount). `>` rather than `=== 1`
-        // so multi-suggestion-add edge cases (unlikely, but possible
-        // via `loadSession` if we ever build one) still trigger.
-        const isFirstAddition =
-            lastSeenLengthRef.current === 0 && currentLength > 0;
+        // Fire on ANY increase (going up by one or more) — not just
+        // the 0 → 1+ transition, because the user may already have
+        // suggestions logged when the gate becomes eligible (e.g.
+        // they cleared it via "Take tour" mid-game).
+        const justAdded = currentLength > lastSeenLengthRef.current;
         lastSeenLengthRef.current = currentLength;
-        if (!isFirstAddition) return;
+        if (!justAdded) return;
         if (!hydrated) return;
-        if (!shouldShow) return;
         if (activeScreen) return;
         if (firedRef.current) return;
         if (phase === "boot" || phase === "splash" || phase === "install") {
             return;
         }
+        // Gate evaluated FRESH at trigger time, not at mount time.
+        // This is what makes "Take tour"'s mid-session wipe of
+        // `tour.firstSuggestion.v1` take effect on the next add —
+        // a snapshot from useTourGate at mount would miss the wipe.
+        const now = DateTime.nowUnsafe();
+        const shouldShow = TelemetryRuntime.runSync(
+            computeShouldShowTour(
+                loadTourState(FIRST_SUGGESTION_SCREEN_KEY),
+                now,
+                TOUR_RE_ENGAGE_DURATION,
+            ),
+        );
+        if (!shouldShow) return;
         firedRef.current = true;
         startTour(FIRST_SUGGESTION_SCREEN_KEY);
-        dismiss();
-    }, [
-        state.suggestions.length,
-        hydrated,
-        shouldShow,
-        activeScreen,
-        phase,
-        startTour,
-        dismiss,
-    ]);
+        // Persist BOTH timestamps so the gate returns false until
+        // the next 4-week re-engage window opens. Saving only
+        // `lastDismissedAt` would keep the gate eligible because
+        // the gate's "dismissed but never visited" branch returns
+        // true (a defensive "if state is incoherent, show again").
+        saveTourVisited(FIRST_SUGGESTION_SCREEN_KEY, now);
+        saveTourDismissed(FIRST_SUGGESTION_SCREEN_KEY, now);
+    }, [state.suggestions.length, hydrated, activeScreen, phase, startTour]);
 
     return null;
 }

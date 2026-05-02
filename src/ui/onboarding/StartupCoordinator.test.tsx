@@ -14,15 +14,18 @@ import {
     describe,
     expect,
     test,
+    vi,
 } from "vitest";
 import { act, render } from "@testing-library/react";
 import {
     StartupCoordinatorProvider,
     useStartupCoordinator,
 } from "./StartupCoordinator";
+import type { ScreenKey } from "../tour/TourState";
 
 const STORAGE_SPLASH = "effect-clue.splash.v1";
 const STORAGE_TOUR_SETUP = "effect-clue.tour.setup.v1";
+const STORAGE_TOUR_CHECKLIST_SUGGEST = "effect-clue.tour.checklistSuggest.v1";
 const STORAGE_INSTALL = "effect-clue.install-prompt.v1";
 
 const seed = (key: string, value: object): void => {
@@ -47,7 +50,17 @@ const dismissedAtAllGates = (): void => {
         lastVisitedAt: recent,
         lastDismissedAt: recent,
     });
+    // Seed BOTH per-screen tour gates so the precedence sweep across
+    // [setup, checklistSuggest] doesn't pick up an unseeded screen as
+    // eligible. With precedence enabled, leaving any screen unseeded
+    // (i.e. no localStorage entry) makes the coordinator treat that
+    // tour as "fresh, never seen" → eligible.
     seed(STORAGE_TOUR_SETUP, {
+        version: 1,
+        lastVisitedAt: recent,
+        lastDismissedAt: recent,
+    });
+    seed(STORAGE_TOUR_CHECKLIST_SUGGEST, {
         version: 1,
         lastVisitedAt: recent,
         lastDismissedAt: recent,
@@ -70,12 +83,27 @@ function Probe() {
 
 const mount = (
     activeScreen: "setup" | "checklistSuggest" = "setup",
-): void => {
-    render(
-        <StartupCoordinatorProvider hydrated activeScreen={activeScreen}>
+    onRedirectToScreen?: (screen: ScreenKey) => void,
+): { rerender: (nextScreen: ScreenKey) => void } => {
+    // Conditional-spread the redirect callback so TypeScript's
+    // `exactOptionalPropertyTypes` doesn't reject `undefined`. Tests
+    // that omit the callback exercise the fallback (no redirect).
+    const redirectProp = onRedirectToScreen
+        ? { onRedirectToScreen }
+        : {};
+    const Wrapped = ({ screen }: { screen: ScreenKey }) => (
+        <StartupCoordinatorProvider
+            hydrated
+            activeScreen={screen}
+            {...redirectProp}
+        >
             <Probe />
-        </StartupCoordinatorProvider>,
+        </StartupCoordinatorProvider>
     );
+    const utils = render(<Wrapped screen={activeScreen} />);
+    return {
+        rerender: nextScreen => utils.rerender(<Wrapped screen={nextScreen} />),
+    };
 };
 
 beforeEach(() => {
@@ -95,11 +123,17 @@ describe("StartupCoordinator — priority order", () => {
     });
 
     test("only splash eligible → phase becomes splash, then done after dismiss", () => {
+        const recent = new Date().toISOString();
         seed(STORAGE_SPLASH, { version: 1 });
         seed(STORAGE_TOUR_SETUP, {
             version: 1,
-            lastVisitedAt: new Date().toISOString(),
-            lastDismissedAt: new Date().toISOString(),
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_CHECKLIST_SUGGEST, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
         });
         seed(STORAGE_INSTALL, { version: 1, visits: 0 });
         mount();
@@ -129,6 +163,11 @@ describe("StartupCoordinator — priority order", () => {
             lastDismissedAt: recent,
         });
         seed(STORAGE_TOUR_SETUP, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_CHECKLIST_SUGGEST, {
             version: 1,
             lastVisitedAt: recent,
             lastDismissedAt: recent,
@@ -184,6 +223,11 @@ describe("StartupCoordinator — tour suppresses install", () => {
             lastVisitedAt: recent,
             lastDismissedAt: recent,
         });
+        seed(STORAGE_TOUR_CHECKLIST_SUGGEST, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
         seed(STORAGE_INSTALL, { version: 1, visits: 1 });
         mount();
         expect(probe.current?.phase).toBe("splash");
@@ -226,6 +270,144 @@ describe("StartupCoordinator — defensive transitions", () => {
         seed("effect-clue.tour.checklistSuggest.v1", { version: 1 });
         seed(STORAGE_INSTALL, { version: 1, visits: 0 });
         mount("checklistSuggest");
+        expect(probe.current?.phase).toBe("tour");
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Round-4: tour precedence. The coordinator picks the highest-priority
+// eligible tour across all per-screen gates and asks the parent to
+// redirect (via `onRedirectToScreen`) when the user landed on a
+// different screen. Today's precedence list: [setup, checklistSuggest].
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("StartupCoordinator — tour precedence", () => {
+    test("brand-new user lands on checklistSuggest → redirect to setup", () => {
+        // Setup tour eligible (no localStorage entry → first visit).
+        // checklistSuggest also eligible. User landed on
+        // `checklistSuggest`. Setup wins precedence; coordinator asks
+        // parent to redirect.
+        const recent = new Date().toISOString();
+        seed(STORAGE_SPLASH, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_INSTALL, { version: 1, visits: 0 });
+        // No tour state seeded → both tours are eligible.
+
+        const onRedirect = vi.fn();
+        const harness = mount("checklistSuggest", onRedirect);
+        // Coordinator dispatched the redirect — phase stays at boot
+        // pending the parent's setUiMode + re-render with the new
+        // screen.
+        expect(onRedirect).toHaveBeenCalledWith("setup");
+        expect(probe.current?.phase).toBe("boot");
+        // Parent dispatches setUiMode("setup") → activeScreen prop
+        // updates → effect re-runs and snapshots eligibility.
+        act(() => harness.rerender("setup"));
+        expect(probe.current?.phase).toBe("tour");
+    });
+
+    test("brand-new user already on setup → no redirect", () => {
+        const recent = new Date().toISOString();
+        seed(STORAGE_SPLASH, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_INSTALL, { version: 1, visits: 0 });
+
+        const onRedirect = vi.fn();
+        mount("setup", onRedirect);
+        expect(onRedirect).not.toHaveBeenCalled();
+        expect(probe.current?.phase).toBe("tour");
+    });
+
+    test("returning user (setup completed) on checklistSuggest → no redirect", () => {
+        // Setup completed (lastDismissedAt set). checklistSuggest
+        // eligible. Precedence walks setup first (skipped, not
+        // eligible) then checklistSuggest (eligible, matches the
+        // user's current screen) → no redirect, tour fires.
+        const recent = new Date().toISOString();
+        seed(STORAGE_SPLASH, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_SETUP, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_INSTALL, { version: 1, visits: 0 });
+
+        const onRedirect = vi.fn();
+        mount("checklistSuggest", onRedirect);
+        expect(onRedirect).not.toHaveBeenCalled();
+        expect(probe.current?.phase).toBe("tour");
+    });
+
+    test("no tours eligible → no redirect; phase advances past tour", () => {
+        // All tours dismissed. Coordinator finds no eligible target;
+        // no redirect. Tour eligibility = false; phase falls through
+        // to install (eligible) per the priority order.
+        dismissedAtAllGates();
+        // Re-seed install as eligible.
+        seed(STORAGE_INSTALL, { version: 1, visits: 1 });
+
+        const onRedirect = vi.fn();
+        mount("checklistSuggest", onRedirect);
+        expect(onRedirect).not.toHaveBeenCalled();
+        expect(probe.current?.phase).toBe("install");
+    });
+
+    test("splash-eligible boot defers precedence to splash close", () => {
+        // Splash + setup both eligible; user is on checklistSuggest.
+        // The redirect should NOT fire while splash is on screen.
+        // After splash close, the redirect fires.
+        seed(STORAGE_SPLASH, { version: 1 }); // eligible
+        seed(STORAGE_INSTALL, { version: 1, visits: 0 });
+
+        const onRedirect = vi.fn();
+        const harness = mount("checklistSuggest", onRedirect);
+        // Splash phase first; no redirect yet.
+        expect(probe.current?.phase).toBe("splash");
+        expect(onRedirect).not.toHaveBeenCalled();
+        // Close splash → coordinator re-runs precedence.
+        act(() => probe.current?.reportClosed("splash"));
+        expect(onRedirect).toHaveBeenCalledWith("setup");
+        // Phase advances to tour optimistically (the redirect dispatch
+        // will land + re-render with the new screen, where the
+        // matching tour fires).
+        expect(probe.current?.phase).toBe("tour");
+        // Parent dispatches the redirect; activeScreen prop updates.
+        act(() => harness.rerender("setup"));
+        // Phase stays on tour (snapshot already set; no re-decision).
+        expect(probe.current?.phase).toBe("tour");
+    });
+
+    test("when no onRedirectToScreen is provided, falls back to single-screen eligibility", () => {
+        // Defensive: if a caller doesn't supply the callback, the
+        // coordinator behaves as it did before precedence — checks
+        // ONLY the active screen's eligibility.
+        const recent = new Date().toISOString();
+        seed(STORAGE_SPLASH, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        // Setup eligible; user on checklistSuggest with that screen
+        // also eligible (precedence WOULD redirect to setup, but
+        // without the callback, no redirect).
+        seed(STORAGE_INSTALL, { version: 1, visits: 0 });
+
+        // Redirect callback explicitly OMITTED.
+        mount("checklistSuggest");
+        // Tour fires — but for the user's CURRENT screen, not setup.
+        // We can't directly assert which tour fires from here (the
+        // tour content is owned by `TourScreenGate`/`TourProvider`),
+        // but phase=tour confirms the coordinator decided to fire.
         expect(probe.current?.phase).toBe("tour");
     });
 });

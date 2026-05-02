@@ -120,6 +120,49 @@ Resize the preview between viewports as you go — many of these regress on one 
 - The SuggestionLog column is sticky-top with a bounded `max-height` and its own internal `overflow-y-auto`. As the page scrolls vertically, the log pane stays in view; as the log's *internal* content overflows, the log scrolls inside its own frame.
 - Banner appearing / disappearing doesn't cause a layout jump in the table or the log — the banner publishes its height as `--contradiction-banner-offset`, which `<main>`'s padding-top consumes.
 
+### Tour-popover verification
+
+The tour popover system (`src/ui/tour/TourPopover.tsx`, `src/ui/tour/tours.ts`) positions a Radix popover next to a "spotlight" cutout that highlights the anchor element. jsdom can't run layout, so popover/spotlight pixel positions cannot be unit-tested — they're verified manually in the `next-dev` preview at both viewport breakpoints whenever you touch:
+
+- `src/ui/tour/tours.ts` — step config (`anchor`, `popoverAnchor`, `popoverAnchorPriority`, `side`, `align`, `sideByViewport`, `viewport`, `anchorByViewport`).
+- `src/ui/tour/TourPopover.tsx` — anchor resolution, side/align resolution, positioning effect.
+- A `data-tour-anchor="…"` attribute on any DOM node — adding, removing, or moving one changes which element drives spotlight + popover position.
+- `src/ui/onboarding/StartupCoordinator.tsx` precedence rules — changes which tour fires when.
+
+**Verification rule.** For every tour the app can launch, walk every step at desktop (1280×800) AND mobile (375×812) in the `next-dev` preview. For each step:
+
+1. **Popover fully on-screen** — `top ≥ 0 && left ≥ 0 && right ≤ vw && bottom ≤ vh`. ***Hard requirement.*** A clipped popover means the user can't read the copy or click Next, so the tour stalls.
+2. **Popover doesn't cover the spotlight area** — *soft requirement.* The spotlight is the user's "look here" cue; the popover blocking it defeats the purpose. If avoiding overlap forces the popover off-screen, **prefer popover visibility** (rule #1 always wins). When overlap is unavoidable, position the popover so it covers the *less important* part of the spotlight (e.g. the top of a tall column the user is being introduced to, not the middle).
+3. **No console warnings during the tour** — particularly React's "Each child in a list should have a unique 'key' prop" warning that surfaces when Radix's Slot iterates `Popover.Content`'s children. The current fix is a `<div className="contents">` wrapper; if you restructure those children, re-verify.
+
+Sequencing and precedence are covered by `src/ui/onboarding/StartupCoordinator.test.tsx` + `src/ui/tour/screenKey.test.ts` — those tests pin which tour fires under which conditions, the splash → tour → install ordering, the brand-new-user redirect, and that completion locks the gate. **You don't need to walk those scenarios manually unless you change `TOUR_PRECEDENCE`, add a new screen to the tour registry, or touch the gate logic.** The manual walk is purely about pixel positioning.
+
+**Enumerating the tours.** The full list of tours that can launch lives in `src/ui/tour/tours.ts` under the `TOURS` registry. Today (subject to drift — re-read the registry as the source of truth):
+
+- **`setup`** — fires on first visit to the Setup pane. How to launch: clear `effect-clue.*` from localStorage and load `/play?view=setup`. (Brand-new users landing anywhere else get redirected here by the coordinator.)
+- **`checklistSuggest`** — fires on first visit to the Play pane (Checklist + Suggest). Launch: dismiss `setup` first (e.g. seed `effect-clue.tour.setup.v1` with `lastDismissedAt`), then load `/play?view=checklist`. Step count is viewport-conditional today (one mobile-only step) — verify the "N of M" counter matches what's visible.
+- **`firstSuggestion`** — fires once per 4-week window when the user logs the first suggestion of any session. Launch: clear all tour state, dismiss splash + the per-screen tours, set up a game with default players, navigate to suggest mode, and submit the form. The popover fires immediately after the suggestion is added.
+
+If you add a new tour to the registry, add it to this list AND walk it at both breakpoints before merging.
+
+**Step launchers.** When you need to ship a step deep in a multi-step tour without walking the earlier steps every time:
+
+- The "Restart tour" overflow-menu item (in the ⋯ menu) wipes every per-screen tour-gate flag and re-fires the tour for the user's *current* screen. Useful for re-running setup or checklistSuggest without crafting localStorage by hand.
+- For mid-tour steps, advance via the popover's Next button. There's no "jump to step N" affordance today — if you need one, advance with the keyboard (Tab → Tab → Tab → Enter cycles to Next).
+
+**Drift signals.** While walking the tours, if any of these surface, treat them as bugs:
+
+- Popover left edge < 0 or right edge > viewport width — usually a `side: "left"` / `side: "right"` step on a viewport too narrow to fit. Fix with `sideByViewport` flipping to `top` / `bottom` on the affected breakpoint.
+- Popover top edge < 0 — usually `side: "top"` against a tall anchor whose top is near `y=0` (Radix tries to put it above, no room). Fix with a smaller `popoverAnchor` (a small element at a known position inside the spotlight area), or flip `side: "bottom"`.
+- Popover anchored to the trigger of an open dropdown but ending up where it covers the dropdown's items — `popoverAnchorPriority: "last-visible"` resolves to the portaled menu content instead of the trigger.
+- Step counter shows e.g. "5 of 5" on desktop where you expect "4 of 4" — a step's `viewport: "mobile"` (or `"desktop"`) field is missing, so `useFilterStepsByViewport` lets the wrong step through. Or vice versa.
+
+When a layout change makes any of the requirements above fail, prefer fixing in this order:
+1. Adjust `side`/`align` (or `sideByViewport`) on the affected step.
+2. Adjust `popoverAnchor` to a smaller / better-positioned element if the spotlight anchor is too large.
+3. Adjust `anchorByViewport` to point at a different DOM node per breakpoint.
+4. As a last resort, add or remove a step.
+
 ## Tests
 
 Write exhaustive tests for any code you add or modify.

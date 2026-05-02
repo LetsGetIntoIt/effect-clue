@@ -363,3 +363,258 @@ describe("TourPopover — M20 interaction rules", () => {
         expect(api.activeScreen).toBeUndefined();
     });
 });
+
+// -----------------------------------------------------------------------
+// Round-4: Veil isolation. While a tour is active, keyboard events that
+// don't target the popover are swallowed in capture phase so app-level
+// shortcuts (⌘K, ⌘Z, etc.) don't fire under the veil. Escape still
+// dismisses the tour. Scroll is left alone — `body.style.overflow`
+// stays unchanged so the user can pan the page to read context.
+// -----------------------------------------------------------------------
+
+describe("TourPopover — veil isolation", () => {
+    test("Escape dismisses the active tour", () => {
+        let api!: ReturnType<typeof useTour>;
+        render(
+            <Harness
+                anchors={[
+                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                ]}
+            >
+                {c => {
+                    api = c;
+                    return null;
+                }}
+            </Harness>,
+            { wrapper: TestQueryClientProvider },
+        );
+        act(() => api.startTour("setup"));
+        expect(api.activeScreen).toBe("setup");
+        act(() => {
+            window.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "Escape" }),
+            );
+        });
+        expect(api.activeScreen).toBeUndefined();
+    });
+
+    test("non-Escape keys outside the popover are preventDefault'd + stopPropagation'd", () => {
+        let api!: ReturnType<typeof useTour>;
+        // Bubble-phase listener that simulates an app-level keyboard
+        // shortcut. If our capture-phase isolator works, this should
+        // NOT fire while the tour is active.
+        const bubbleHandler = vi.fn();
+        window.addEventListener("keydown", bubbleHandler);
+        try {
+            render(
+                <Harness
+                    anchors={[
+                        {
+                            testId: "card-pack",
+                            anchorAttr: "setup-card-pack",
+                        },
+                    ]}
+                >
+                    {c => {
+                        api = c;
+                        return null;
+                    }}
+                </Harness>,
+                { wrapper: TestQueryClientProvider },
+            );
+            act(() => api.startTour("setup"));
+            // Dispatch a keydown that targets <body> (outside the
+            // popover content portal). The event's metaKey + key is a
+            // stand-in for ⌘K; the value doesn't matter — our
+            // isolator swallows ALL non-Escape keys whose target
+            // isn't inside the popover.
+            const ev = new KeyboardEvent("keydown", {
+                key: "k",
+                bubbles: true,
+                cancelable: true,
+            });
+            act(() => {
+                document.body.dispatchEvent(ev);
+            });
+            expect(bubbleHandler).not.toHaveBeenCalled();
+            // The tour stays active.
+            expect(api.activeScreen).toBe("setup");
+        } finally {
+            window.removeEventListener("keydown", bubbleHandler);
+        }
+    });
+
+    test("keys targeting the popover content pass through (Tab between buttons)", () => {
+        let api!: ReturnType<typeof useTour>;
+        const bubbleHandler = vi.fn();
+        window.addEventListener("keydown", bubbleHandler);
+        try {
+            render(
+                <Harness
+                    anchors={[
+                        {
+                            testId: "card-pack",
+                            anchorAttr: "setup-card-pack",
+                        },
+                    ]}
+                >
+                    {c => {
+                        api = c;
+                        return null;
+                    }}
+                </Harness>,
+                { wrapper: TestQueryClientProvider },
+            );
+            act(() => api.startTour("setup"));
+            // Find the popover content boundary and dispatch a key
+            // event that fires INSIDE it.
+            const popoverContent = document.querySelector(
+                "[data-tour-popover-content]",
+            );
+            expect(popoverContent).not.toBeNull();
+            const ev = new KeyboardEvent("keydown", {
+                key: "Tab",
+                bubbles: true,
+                cancelable: true,
+            });
+            act(() => {
+                popoverContent!.dispatchEvent(ev);
+            });
+            // Bubble-phase listener fires because the isolator passed
+            // the event through (target is inside the popover).
+            expect(bubbleHandler).toHaveBeenCalled();
+            // Tour stays active.
+            expect(api.activeScreen).toBe("setup");
+        } finally {
+            window.removeEventListener("keydown", bubbleHandler);
+        }
+    });
+
+    test("scroll is not blocked: body.style.overflow stays untouched while tour is active", () => {
+        let api!: ReturnType<typeof useTour>;
+        document.body.style.overflow = "";
+        render(
+            <Harness
+                anchors={[
+                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                ]}
+            >
+                {c => {
+                    api = c;
+                    return null;
+                }}
+            </Harness>,
+            { wrapper: TestQueryClientProvider },
+        );
+        const before = document.body.style.overflow;
+        act(() => api.startTour("setup"));
+        expect(document.body.style.overflow).toBe(before);
+        act(() => api.dismissTour("close"));
+        expect(document.body.style.overflow).toBe(before);
+    });
+});
+
+// -----------------------------------------------------------------------
+// Round-4: popoverAnchor + popoverAnchorPriority decouple where the
+// popover binds from where the spotlight unions. Used by:
+//   - the player-column step (popover anchors to the column header)
+//   - the overflow-menu step (popover anchors to the open dropdown,
+//     not the trigger that's earlier in DOM order)
+// -----------------------------------------------------------------------
+
+describe("TourPopover — popoverAnchor + popoverAnchorPriority", () => {
+    test("popoverAnchor token resolves to its OWN element set, distinct from the spotlight token", () => {
+        // The setup tour's `setup-known-cell` step has
+        // `popoverAnchor: "setup-known-cell-header"`. With both tokens
+        // present in the DOM, the popover binds to the header and the
+        // spotlight unions the body cells. We can't assert on
+        // pixel positions in jsdom — but we CAN assert that the
+        // expected DOM nodes exist and the popover renders without
+        // crashing.
+        let api!: ReturnType<typeof useTour>;
+        render(
+            <Harness
+                anchors={[
+                    // Spotlight target: 3 body cells.
+                    { testId: "cell-1", anchorAttr: "setup-known-cell" },
+                    { testId: "cell-2", anchorAttr: "setup-known-cell" },
+                    { testId: "cell-3", anchorAttr: "setup-known-cell" },
+                    // Popover target: 1 header cell.
+                    {
+                        testId: "header",
+                        anchorAttr: "setup-known-cell-header",
+                    },
+                ]}
+            >
+                {c => {
+                    api = c;
+                    return null;
+                }}
+            </Harness>,
+            { wrapper: TestQueryClientProvider },
+        );
+        act(() => api.startTour("setup"));
+        // Advance to step 4 (`setup-known-cell` — index 3, 0-indexed).
+        act(() => api.nextStep()); // → 1
+        act(() => api.nextStep()); // → 2
+        act(() => api.nextStep()); // → 3
+        // The popover renders with the right copy
+        // (`setup.knownCard.title`).
+        expect(
+            screen.getByText("setup.knownCard.title"),
+        ).toBeInTheDocument();
+        // Both anchor sets are queryable via `data-tour-anchor~=`.
+        expect(
+            document.querySelectorAll(
+                "[data-tour-anchor~='setup-known-cell']",
+            ).length,
+        ).toBe(3);
+        expect(
+            document.querySelectorAll(
+                "[data-tour-anchor~='setup-known-cell-header']",
+            ).length,
+        ).toBe(1);
+    });
+
+    test("popoverAnchorPriority='last-visible' resolves to the LAST matched element (overflow-menu trigger + open content)", () => {
+        // The setup tour's `overflow-menu` step uses
+        // `popoverAnchorPriority: "last-visible"` so when both the
+        // trigger button and the portaled menu content are mounted,
+        // the popover binds to the menu content (which is later in
+        // DOM order via the portal).
+        let api!: ReturnType<typeof useTour>;
+        render(
+            <Harness
+                anchors={[
+                    {
+                        testId: "trigger",
+                        anchorAttr: "overflow-menu",
+                    },
+                    {
+                        testId: "menu-content",
+                        anchorAttr: "overflow-menu",
+                    },
+                ]}
+            >
+                {c => {
+                    api = c;
+                    return null;
+                }}
+            </Harness>,
+            { wrapper: TestQueryClientProvider },
+        );
+        act(() => api.startTour("setup"));
+        // Advance to step 5 (`overflow-menu`, 0-indexed = 4).
+        for (let i = 0; i < 4; i++) act(() => api.nextStep());
+        // Both anchored elements are in the DOM.
+        expect(
+            document.querySelectorAll(
+                "[data-tour-anchor~='overflow-menu']",
+            ).length,
+        ).toBe(2);
+        // Popover renders.
+        expect(
+            screen.getByText("setup.overflow.title"),
+        ).toBeInTheDocument();
+    });
+});

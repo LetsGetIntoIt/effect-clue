@@ -235,6 +235,11 @@ function AddSuggestion() {
 
     return (
         <div
+            // Spotlight target for the wrap-up step of the
+            // checklist+suggest tour. The popover anchors to the
+            // smaller `suggest-add-form-header` (the section title)
+            // so it stays in viewport on tall layouts; the spotlight
+            // unions the two and ends up covering the entire form.
             data-tour-anchor="suggest-add-form"
             onPointerDown={onWrapperActivity}
             onPointerMove={onWrapperActivity}
@@ -345,6 +350,12 @@ function AddSuggestion() {
         return (
             <h3
                 className={`${SECTION_TITLE} leading-[1.5]`}
+                // Tour anchor: the wrap-up step of the
+                // checklist+suggest tour anchors its popover here
+                // (rather than the full form below) so the popover
+                // stays inside the viewport on layouts where the
+                // form sits at the bottom of the panel.
+                data-tour-anchor="suggest-add-form-header"
             >
                 {t.rich("addTitle", {
                     suggestionKey: label("global.gotoPlay"),

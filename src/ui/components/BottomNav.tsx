@@ -91,6 +91,7 @@ export function BottomNav() {
                         shortcut: shortcutSuffix("global.gotoPlay", hasKeyboard),
                     })}
                     active={mode === "suggest"}
+                    tourAnchor="bottom-nav-suggest"
                     onClick={() =>
                         dispatch({ type: "setUiMode", mode: "suggest" })
                     }
