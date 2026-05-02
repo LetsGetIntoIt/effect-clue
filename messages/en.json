@@ -301,6 +301,8 @@
         "menuItemTransferDevice": "Continue on another device",
         "packTitle": "Share this card pack",
         "packDescription": "Send a friend a link so they can use this pack in their own game.",
+        "packIncludesHeader": "This pack includes:",
+        "packCategoryItem": "{category} ({count})",
         "inviteTitle": "Invite a player",
         "inviteDescription": "Send a link to get another player set up quickly to use the solver themselves. Look at you being a nice detective, letting your competitors have access to this super power!",
         "inviteIncludeProgressBoth": "Include all {suggestions} prior suggestions and {accusations} failed accusations",

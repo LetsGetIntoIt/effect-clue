@@ -153,6 +153,8 @@ export const pickProgressLabelKey = (
     }
     return null;
 };
+const PACK_INCLUDES_HEADER_KEY = "packIncludesHeader";
+const PACK_CATEGORY_ITEM_KEY = "packCategoryItem";
 const COPIED_KEY = "copied";
 const CREATING_KEY = "creating";
 const SIGN_IN_TO_SHARE_KEY = "signInToShare";
@@ -345,10 +347,8 @@ export function ShareCreateModal({
     // The pack the share will contain. Picker entry overrides; setup
     // and overflow-menu entries use the live setup's pack.
     const activeCardSet = forcedCardPack ?? state.setup.cardSet;
-    const { isCustom: cardSetIsCustom } = resolvePackLabel(
-        activeCardSet,
-        forcedCardPackLabel,
-    );
+    const { label: activeCardSetLabel, isCustom: cardSetIsCustom } =
+        resolvePackLabel(activeCardSet, forcedCardPackLabel);
 
     const suggestionsCount = derived.suggestionsAsData.length;
     const accusationsCount = derived.accusationsAsData.length;
@@ -558,6 +558,37 @@ export function ShareCreateModal({
                                     <Dialog.Description className="px-5 pt-3 text-[14px] leading-relaxed">
                                         {t(descriptionKey)}
                                     </Dialog.Description>
+                                    {variant === VARIANT_PACK ? (
+                                        <div
+                                            className="mx-5 mt-3 rounded-[var(--radius)] border border-border bg-white px-3 py-2 text-[13px] leading-snug"
+                                            data-share-pack-details
+                                        >
+                                            <div className="font-semibold text-accent">
+                                                {activeCardSetLabel}
+                                            </div>
+                                            <div className="mt-1 text-[12px] text-muted">
+                                                {t(PACK_INCLUDES_HEADER_KEY)}
+                                            </div>
+                                            <ul className="m-0 mt-1 list-disc pl-5">
+                                                {activeCardSet.categories.map(
+                                                    (cat) => (
+                                                        <li key={cat.id}>
+                                                            {t(
+                                                                PACK_CATEGORY_ITEM_KEY,
+                                                                {
+                                                                    category:
+                                                                        cat.name,
+                                                                    count:
+                                                                        cat.cards
+                                                                            .length,
+                                                                },
+                                                            )}
+                                                        </li>
+                                                    ),
+                                                )}
+                                            </ul>
+                                        </div>
+                                    ) : null}
                                     {variant === VARIANT_TRANSFER ? (
                                         <div
                                             className="mx-5 mt-3 rounded-[var(--radius)] border border-danger bg-danger/10 px-3 py-2 text-[13px] leading-snug text-danger"

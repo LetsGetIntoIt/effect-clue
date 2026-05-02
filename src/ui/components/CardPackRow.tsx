@@ -342,17 +342,22 @@ export function CardPackRow() {
         void onDeleteCustomPack(pack);
     };
 
-    const onSharePackFromPicker = (picked: PickerPack) => {
-        const pack = findDisplayPack(picked.id);
-        if (!pack) return;
-        // Per-pack share is always pack-only (Flow 1): the picker is
-        // a content-management surface, not a game-state one. The
-        // picked pack overrides the live setup pack so the share
-        // contains exactly what the user clicked.
+    const onSharePill = (pack: DisplayPack) => {
+        // Per-pack share is always pack-only (Flow 1): the surface
+        // pill / picker row is a content-management surface, not a
+        // game-state one. The clicked pack overrides the live setup
+        // pack so the share contains exactly what the user clicked,
+        // regardless of which pack is active in the table below.
         openShareCardPack({
             forcedCardPack: pack.cardSet,
             packLabel: pack.label,
         });
+    };
+
+    const onSharePackFromPicker = (picked: PickerPack) => {
+        const pack = findDisplayPack(picked.id);
+        if (!pack) return;
+        onSharePill(pack);
     };
 
     const onPickerOpenChange = (next: boolean) => {
@@ -398,34 +403,61 @@ export function CardPackRow() {
                     const loadTone = isActive
                         ? "font-semibold"
                         : "hover:bg-hover";
-                    if (pack.isCustom) {
-                        return (
-                            <motion.span
-                                key={pack.id}
-                                layout
-                                transition={pillLayoutTransition}
-                                className={`${wrapperBase} ${wrapperTone}`}
+                    // Both built-in and custom pills wrap a label
+                    // button + a share icon button, so the share
+                    // affordance is reachable on every pack pill —
+                    // not just on the active one (which is what the
+                    // bottom-row "Share this pack" button targets).
+                    // Custom pills additionally append a × delete.
+                    const sharePillBase =
+                        "cursor-pointer border-l px-2 py-1 transition-colors duration-200 ease-out";
+                    const sharePillTone = isActive
+                        ? "border-white/40 text-white/80 hover:bg-white/15"
+                        : "border-border text-muted hover:bg-hover hover:text-accent";
+                    const deletePillTone = isActive
+                        ? "border-white/40 text-white/80 hover:bg-white/15"
+                        : "border-border text-muted hover:bg-hover hover:text-danger";
+                    return (
+                        <motion.span
+                            key={pack.id}
+                            layout
+                            transition={pillLayoutTransition}
+                            className={`${wrapperBase} ${wrapperTone}`}
+                        >
+                            <button
+                                type="button"
+                                className={`${loadBase} ${loadTone}`}
+                                onClick={() => onSelectFromSurface(pack)}
+                                title={
+                                    pack.isCustom
+                                        ? t("loadCustomCardSetTitle", {
+                                              label: pack.label,
+                                          })
+                                        : pack.label
+                                }
+                                aria-pressed={isActive}
+                                {...dataAttr}
                             >
+                                {pack.label}
+                            </button>
+                            <button
+                                type="button"
+                                className={`${sharePillBase} ${sharePillTone}`}
+                                onClick={() => onSharePill(pack)}
+                                title={t("sharePackTitle", {
+                                    label: pack.label,
+                                })}
+                                aria-label={t("sharePackAria", {
+                                    label: pack.label,
+                                })}
+                                data-share-pack-pill
+                            >
+                                <ShareIcon size={12} />
+                            </button>
+                            {pack.isCustom ? (
                                 <button
                                     type="button"
-                                    className={`${loadBase} ${loadTone}`}
-                                    onClick={() => onSelectFromSurface(pack)}
-                                    title={t("loadCustomCardSetTitle", {
-                                        label: pack.label,
-                                    })}
-                                    aria-pressed={isActive}
-                                    {...dataAttr}
-                                >
-                                    {pack.label}
-                                </button>
-                                <button
-                                    type="button"
-                                    className={
-                                        "cursor-pointer border-l px-2 py-1 transition-colors duration-200 ease-out " +
-                                        (isActive
-                                            ? "border-white/40 text-white/80 hover:bg-white/15"
-                                            : "border-border text-muted hover:bg-hover hover:text-danger")
-                                    }
+                                    className={`${sharePillBase} ${deletePillTone}`}
                                     onClick={() => void onDeleteCustomPack(pack)}
                                     title={t("deleteCustomCardSetTitle", {
                                         label: pack.label,
@@ -436,27 +468,8 @@ export function CardPackRow() {
                                 >
                                     ×
                                 </button>
-                            </motion.span>
-                        );
-                    }
-                    return (
-                        <motion.button
-                            key={pack.id}
-                            layout
-                            transition={pillLayoutTransition}
-                            type="button"
-                            className={
-                                "cursor-pointer rounded border px-3 py-1 text-[13px] transition-colors duration-200 ease-out " +
-                                (isActive
-                                    ? "border-accent bg-accent font-semibold text-white"
-                                    : "border-border bg-white hover:bg-hover")
-                            }
-                            onClick={() => onSelectFromSurface(pack)}
-                            aria-pressed={isActive}
-                            {...dataAttr}
-                        >
-                            {pack.label}
-                        </motion.button>
+                            ) : null}
+                        </motion.span>
                     );
                 })}
                 <AnimatePresence initial={false}>
