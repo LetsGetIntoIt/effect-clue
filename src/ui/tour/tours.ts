@@ -70,6 +70,29 @@ export interface TourStep {
     /** Defaults to `"center"`. */
     readonly align?: "start" | "center" | "end";
     /**
+     * Viewport-conditional override for `side` + `align`. Like
+     * `anchorByViewport` (which selects a different anchor *element*
+     * per breakpoint), this picks a different side/align per
+     * breakpoint when the natural anchor sits in different parts of
+     * the layout on mobile vs desktop. Used by the `overflow-menu`
+     * step where the menu opens DOWN on desktop and UP on mobile.
+     *
+     * When set, takes precedence over `side` + `align` once the
+     * client knows which breakpoint is active (`window.matchMedia
+     * ("(min-width: 800px)")`). On SSR / tests where matchMedia
+     * isn't available, falls back to the top-level `side` / `align`.
+     */
+    readonly sideByViewport?: {
+        readonly mobile: {
+            readonly side?: "top" | "right" | "bottom" | "left";
+            readonly align?: "start" | "center" | "end";
+        };
+        readonly desktop: {
+            readonly side?: "top" | "right" | "bottom" | "left";
+            readonly align?: "start" | "center" | "end";
+        };
+    };
+    /**
      * If set, the driver dispatches `setUiMode` to this mode before
      * the step renders so the anchor is mounted in the visible pane.
      */
@@ -82,6 +105,42 @@ export interface TourStep {
      * Checklist & Suggest tour's wrap-up step.
      */
     readonly finishLabelKey?: string;
+    /**
+     * When set, the popover anchors to elements matching THIS token
+     * instead of `anchor`. The spotlight still resolves `anchor` (so
+     * the highlight region is unchanged) — only the popover binding
+     * moves. Useful when the spotlight covers a tall / wide region
+     * (e.g. an entire column) and anchoring the popover to the first
+     * cell would push it off-screen on narrow viewports.
+     */
+    readonly popoverAnchor?: string;
+    /**
+     * Among matched elements, which one drives popover position.
+     * Defaults to `"first-visible"` — the natural "anchor to the first
+     * visible element" rule that handles ordinary single-element
+     * anchors and same-token-on-multiple-breakpoints (Toolbar +
+     * BottomNav both carrying the same token; we pick the visible
+     * one).
+     *
+     * `"last-visible"` is needed for portaled overlays — the overflow
+     * menu's portaled content appears AFTER the trigger button in
+     * DOM order, so picking the LAST visible element resolves to the
+     * open dropdown when present, falling back to the trigger when
+     * not.
+     */
+    readonly popoverAnchorPriority?: "first-visible" | "last-visible";
+    /**
+     * Limits this step to a single viewport breakpoint. Steps with a
+     * non-matching `viewport` value are FILTERED OUT of the tour
+     * before it starts — the step counter ("3 of 5") and the
+     * `tour_started.stepCount` analytics property both reflect the
+     * post-filter list. Use this for steps that only make sense on
+     * one layout (e.g. "Tap the Suggest tab" makes no sense on
+     * desktop where both panes are side-by-side).
+     *
+     * Defaults to `"both"` — step renders on every viewport.
+     */
+    readonly viewport?: "mobile" | "desktop" | "both";
 }
 
 /**
@@ -117,28 +176,57 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             align: "center",
         },
         {
+            // Spotlight unions every cell in the first player column
+            // (header + body cells). Popover anchors to the column
+            // HEADER only — pinning to the full column would put the
+            // popover off-screen on narrow viewports because Radix
+            // tries to anchor against a tall rect.
             anchor: "setup-known-cell",
+            popoverAnchor: "setup-known-cell-header",
             titleKey: "setup.knownCard.title",
             bodyKey: "setup.knownCard.body",
-            // The first-player column extends from the top to the
-            // bottom of the table. Putting the popover to the right
-            // keeps the column itself unobscured so the user can
-            // see the cells they're being introduced to.
-            side: "right",
-            align: "start",
+            // Per-viewport positioning:
+            //   - desktop: sit to the RIGHT of the column header so
+            //     the entire column stays visible. The setup table
+            //     is wide enough on desktop that there's room.
+            //   - mobile: sit BELOW the header (popover hangs into
+            //     the column body, covering the top 2-3 rows). Side
+            //     "right" doesn't fit on mobile because the column
+            //     pushes near the right edge.
+            side: "bottom",
+            align: "center",
+            sideByViewport: {
+                desktop: { side: "right", align: "start" },
+                mobile: { side: "bottom", align: "center" },
+            },
         },
         {
             anchor: "overflow-menu",
             titleKey: "setup.overflow.title",
             bodyKey: "setup.overflow.body",
-            // The overflow menu opens vertically from the trigger
-            // (downward on desktop, upward on mobile). Anchoring the
-            // popover to the LEFT of the trigger keeps the menu
-            // contents visible — Radix's collision detection will
-            // flip to bottom/top if the left edge runs out of room
-            // on a small viewport.
+            // The trigger is in DOM order before the portaled menu
+            // content; `last-visible` resolves to the OPEN dropdown
+            // when it's present (which it is during this step, via
+            // forceOpen). The popover lands beside the dropdown,
+            // leaving both the trigger AND the menu items unobscured.
+            //
+            // The popover is too wide (~360px) to fit in the gap on
+            // either SIDE of the menu on mobile (where the menu fills
+            // most of the right column), so the side flips per
+            // viewport:
+            //   - desktop: menu opens DOWN from a TOP-right trigger;
+            //     plenty of room to the LEFT → side:"left".
+            //   - mobile: menu opens UP from a BOTTOM-right trigger;
+            //     plenty of room ABOVE → side:"top", align:"end" so
+            //     the popover hugs the menu's right edge and stays
+            //     in-viewport on a 375 px viewport.
+            popoverAnchorPriority: "last-visible",
             side: "left",
             align: "start",
+            sideByViewport: {
+                mobile: { side: "top", align: "end" },
+                desktop: { side: "left", align: "start" },
+            },
         },
         {
             anchor: "setup-start-playing",
@@ -166,6 +254,21 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             requiredUiMode: "checklist",
         },
         {
+            // Mobile-only: on a narrow layout the checklist and
+            // suggest panes don't co-exist, so we have to hand the
+            // user the wayfinding cue ("tap Suggest to log a
+            // suggestion") before the next step actually flips
+            // them over to that pane. Skipped on desktop where
+            // both panes are visible at the same time.
+            anchor: "bottom-nav-suggest",
+            titleKey: "checklist.gotoSuggest.title",
+            bodyKey: "checklist.gotoSuggest.body",
+            side: "top",
+            align: "center",
+            requiredUiMode: "checklist",
+            viewport: "mobile",
+        },
+        {
             // The user sees the suggestion log BEFORE we point at
             // the form to add the first one. Order matters —
             // landing on the form last lets the wrap-up step's
@@ -184,11 +287,23 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             // override flips the next-button copy from generic
             // "Finish" to "Start playing" so the user reads it as
             // a continuation, not a chore.
+            //
+            // Spotlight + popover both anchor to the whole form so
+            // the spotlight rings the user's target while the
+            // popover stays OUTSIDE that target. On desktop the
+            // form sits high in the right column so popover goes
+            // above it; on mobile the form sits at the top of the
+            // pane, so popover goes below it. Either way the
+            // spotlight + popover don't overlap.
             anchor: "suggest-add-form",
             titleKey: "suggest.addForm.title",
             bodyKey: "suggest.addForm.body",
-            side: "bottom",
-            align: "start",
+            side: "top",
+            align: "end",
+            sideByViewport: {
+                desktop: { side: "top", align: "end" },
+                mobile: { side: "bottom", align: "center" },
+            },
             requiredUiMode: "suggest",
             finishLabelKey: "startPlaying",
         },

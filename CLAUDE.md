@@ -120,6 +120,58 @@ Resize the preview between viewports as you go — many of these regress on one 
 - The SuggestionLog column is sticky-top with a bounded `max-height` and its own internal `overflow-y-auto`. As the page scrolls vertically, the log pane stays in view; as the log's *internal* content overflows, the log scrolls inside its own frame.
 - Banner appearing / disappearing doesn't cause a layout jump in the table or the log — the banner publishes its height as `--contradiction-banner-offset`, which `<main>`'s padding-top consumes.
 
+### Tour-popover verification
+
+The tour popover system (`src/ui/tour/TourPopover.tsx`, `src/ui/tour/tours.ts`) positions a Radix popover next to a "spotlight" cutout that highlights the anchor element. jsdom can't run layout, so popover/spotlight pixel positions cannot be unit-tested — they're verified manually in the `next-dev` preview at both viewport breakpoints whenever you touch:
+
+- `src/ui/tour/tours.ts` — step config (`anchor`, `popoverAnchor`, `popoverAnchorPriority`, `side`, `align`, `sideByViewport`, `viewport`).
+- `src/ui/tour/TourPopover.tsx` — anchor resolution, side/align resolution, positioning effect.
+- A `data-tour-anchor="…"` attribute on any DOM node — adding, removing, or moving one changes which element drives spotlight + popover position.
+- `src/ui/onboarding/StartupCoordinator.tsx` precedence rules — changes which tour fires when.
+
+**Verification workflow.** For each tour, walk every step at desktop **1280×800** AND mobile **375×812** in the `next-dev` preview. For each step:
+
+1. **Popover fully on-screen** — `top ≥ 0 && left ≥ 0 && right ≤ vw && bottom ≤ vh`. *Hard requirement.*
+2. **Spotlight surrounds the right anchor element(s)** — visually confirm the dimming hole encloses what the copy is referring to.
+3. **Popover doesn't block the spotlight area** — *soft requirement*. If unavoidable (anchor extends past the viewport), the popover MUST cover the *less important* part of the spotlight (e.g. cover top rows of a tall column rather than the center). Popover visibility wins; partial spotlight occlusion is acceptable.
+4. **No console warnings** — particularly the React 19 "Each child in a list should have a unique 'key' prop" warning, which fires when Radix's Slot iterates Popover.Content's children. Resolved today by wrapping the popover's inner content in a single `<div className="contents">`; if you restructure the children, re-verify.
+5. **Step counter matches the visible viewport** — mobile-only steps (`viewport: "mobile"`) don't appear on desktop, and the "step N of M" counter reflects the post-filter list. After resizing mid-tour, the counter re-derives via `useFilterStepsByViewport`.
+
+**Tour matrix to walk** (post-round-4):
+
+| Tour | Desktop steps | Mobile steps | Mobile-only steps |
+|------|---------------|--------------|-------------------|
+| `setup` (6) | 6 | 6 | — |
+| `checklistSuggest` (4 desktop / 5 mobile) | 4 | 5 | `bottom-nav-suggest` (between `checklist-case-file` and `suggest-prior-log`) |
+| `firstSuggestion` (1) | 1 | 1 | — *(viewport-conditional anchor: `desktop-checklist-area` desktop, `bottom-nav-checklist` mobile)* |
+
+**Steps with known popover/spotlight overlap** (acceptable per #3 above):
+
+- `setup-known-cell` mobile — popover covers the top ~3 rows of the player column. Desktop sits to the RIGHT of the column (no overlap, full column visible) via `sideByViewport`.
+- `firstSuggestion` desktop — anchor is the entire deduction grid (~880 px tall, exceeds viewport). Popover clamps near the top with overlap. Mobile anchors to the BottomNav Checklist tab — small, no overlap.
+
+**Sequencing & precedence** (covered by `src/ui/onboarding/StartupCoordinator.test.tsx` + `src/ui/tour/screenKey.test.ts` — no manual walk needed unless you change `TOUR_PRECEDENCE` or add a new screen):
+
+- Splash always wins ahead of tour and install at boot.
+- After splash dismisses, the coordinator picks the highest-priority eligible tour from `TOUR_PRECEDENCE = ["setup", "checklistSuggest"]`. If that tour belongs to a different screen than the user landed on, the coordinator dispatches `setUiMode` to redirect.
+- A tour completing (Next on the last step) writes `lastDismissedAt` for that screen — same gate effect as Skip / Esc / X. The 4-week re-engage cadence applies to both completion and dismissal.
+- After a tour fires, install is suppressed for the rest of the session.
+
+**Test scenarios to walk in the preview** (clear `effect-clue.*` keys in localStorage between each one):
+
+1. **Brand-new user lands on `/`** → splash → setup tour (6 steps).
+2. **Brand-new user lands on `/play?view=checklist`** → splash → coordinator redirects to `?view=setup` → setup tour fires.
+3. **Returning user (setup completed) lands on `/play`** → no redirect → checklist+suggest tour (4 desktop / 5 mobile steps).
+4. **Returning user with all tours completed lands on `/play`** → no tour, install prompt fires (if eligible).
+5. **Resize from desktop to mobile mid-tour during `checklistSuggest`** → step counter re-derives (4 → 5 if not yet past the new mobile-only step).
+6. **Tour active + try `⌘K` / arrow keys / Tab** → keyboard isolator swallows everything except `Esc` (dismiss) and keys targeting popover content (Tab between Back / Skip / Next).
+7. **Tour active + click backdrop** → tour stays active. Click ⌘+wheel scroll the page → page scrolls (veil doesn't lock scroll).
+
+When a layout change makes any of these scenarios fail, prefer fixing in this order:
+1. Adjust `side`/`align` (or `sideByViewport`) on the affected step.
+2. Adjust `popoverAnchor` to a smaller / better-positioned element if the spotlight anchor is too large.
+3. As a last resort, add or remove a step.
+
 ## Tests
 
 Write exhaustive tests for any code you add or modify.

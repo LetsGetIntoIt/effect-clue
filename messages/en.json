@@ -391,6 +391,10 @@
             "caseFile": {
                 "title": "The case file",
                 "body": "When the solver narrows a category to a single suspect / weapon / room, the case-file column shows it — that's your accusation."
+            },
+            "gotoSuggest": {
+                "title": "Tap Suggest to log a suggestion",
+                "body": "Suggestions live on the Suggest pane. Tap the tab to switch over and log the first one."
             }
         },
         "suggest": {

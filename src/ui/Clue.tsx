@@ -26,7 +26,7 @@ import { ClueProvider, useClue } from "./state";
 import { TourProvider, useTour } from "./tour/TourProvider";
 import { TourPopover } from "./tour/TourPopover";
 import { useTourGate } from "./tour/useTourGate";
-import { screenKeyForUiMode } from "./tour/screenKey";
+import { screenKeyForUiMode, uiModeForScreenKey } from "./tour/screenKey";
 
 // Non user-facing literals.
 const VARIANT_INITIAL = "initial";
@@ -149,12 +149,27 @@ function CoordinatedShell({
 }: {
     readonly headerRef: React.RefObject<HTMLElement | null>;
 }) {
-    const { hydrated, state } = useClue();
+    const { hydrated, state, dispatch } = useClue();
     const activeScreen = screenKeyForUiMode(state.uiMode);
+    // Translate the coordinator's precedence-redirect request back
+    // into a `setUiMode` dispatch. The coordinator only fires this
+    // when the highest-priority eligible tour belongs to a screen
+    // the user is NOT on (e.g. brand-new user who landed on
+    // `/play?view=checklist` gets sent to `setup`).
+    const handleRedirectToScreen = useCallback(
+        (screen: ReturnType<typeof screenKeyForUiMode>) => {
+            const targetMode = uiModeForScreenKey(screen);
+            if (targetMode === undefined) return;
+            if (targetMode === state.uiMode) return;
+            dispatch({ type: "setUiMode", mode: targetMode });
+        },
+        [dispatch, state.uiMode],
+    );
     return (
         <StartupCoordinatorProvider
             hydrated={hydrated}
             activeScreen={activeScreen}
+            onRedirectToScreen={handleRedirectToScreen}
         >
             <TourProvider>
                 <ClueShell headerRef={headerRef} />

@@ -56,6 +56,23 @@ import { TOUR_RE_ENGAGE_DURATION } from "../tour/useTourGate";
 import { loadTourState, type ScreenKey } from "../tour/TourState";
 
 /**
+ * Priority order for auto-firing tours at boot. The coordinator
+ * picks the highest-priority eligible tour. If that tour belongs to
+ * a screen the user is NOT currently on, it asks the parent to
+ * redirect (via the `onRedirectToScreen` prop) before firing.
+ *
+ * Screens omitted from this list are NOT auto-fired by precedence:
+ *   - `firstSuggestion` is event-triggered (after the user logs
+ *     their first suggestion in any session), not screen-mounted.
+ *   - `account` and `shareImport` are reserved for M7 / M9 — they
+ *     overlay any uiMode rather than redirect.
+ */
+const TOUR_PRECEDENCE: ReadonlyArray<ScreenKey> = [
+    "setup",
+    "checklistSuggest",
+] as const;
+
+/**
  * The slots the coordinator manages. Each maps to one auto-firable
  * surface on /play.
  */
@@ -127,6 +144,21 @@ const isTourEligible = (screen: ScreenKey, now: DateTime.Utc): boolean => {
     );
 };
 
+/**
+ * Walk `TOUR_PRECEDENCE` in order, return the FIRST eligible screen
+ * (or `undefined` when no tour wants to fire). Pure read of
+ * localStorage via `loadTourState` — same reads that
+ * `isTourEligible` does, just done across the priority list.
+ */
+const findHighestPriorityEligibleTour = (
+    now: DateTime.Utc,
+): ScreenKey | undefined => {
+    for (const screen of TOUR_PRECEDENCE) {
+        if (isTourEligible(screen, now)) return screen;
+    }
+    return undefined;
+};
+
 const isInstallEligibleByCounter = (now: DateTime.Utc): boolean => {
     const state = loadInstallPromptState();
     // Account for the visit-bump that happens on this mount. The
@@ -166,6 +198,7 @@ export function StartupCoordinatorProvider({
     children,
     hydrated,
     activeScreen,
+    onRedirectToScreen,
 }: {
     readonly children: ReactNode;
     /**
@@ -182,6 +215,20 @@ export function StartupCoordinatorProvider({
      * re-fire a tour automatically (the user can use ⋯ → Take tour).
      */
     readonly activeScreen: ScreenKey;
+    /**
+     * Optional precedence-redirect callback. When the highest-priority
+     * eligible tour (per `TOUR_PRECEDENCE`) does NOT match
+     * `activeScreen`, the coordinator invokes this with the target
+     * screen. The parent should map the screen back to a `uiMode` and
+     * dispatch `setUiMode` so the user lands on the right pane before
+     * the tour fires.
+     *
+     * When omitted, the precedence redirect is disabled and the
+     * coordinator falls back to single-screen tour eligibility. Useful
+     * for tests and for any caller that doesn't want the redirect
+     * behavior.
+     */
+    readonly onRedirectToScreen?: (screen: ScreenKey) => void;
 }) {
     const [phase, setPhase] = useState<StartupPhase>(PHASE_BOOT);
 
@@ -191,16 +238,63 @@ export function StartupCoordinatorProvider({
     // splash/tour/install gates' own writes during their open path).
     const eligibilityRef = useRef<Eligibility | null>(null);
 
+    // Latest redirect callback in a ref so the boot effect doesn't
+    // need to depend on its identity (the parent often passes an
+    // inline arrow). The redirect only fires inside the effect after
+    // an eligibility decision, which is gated by `eligibilityRef`,
+    // so closure-staleness across renders isn't a concern.
+    const redirectRef = useRef(onRedirectToScreen);
+    redirectRef.current = onRedirectToScreen;
+
     // Compute eligibility once on hydration and decide the first
     // phase. The pure decision lives in `pickNextPhase`.
+    //
+    // Precedence: if a higher-priority tour (per `TOUR_PRECEDENCE`)
+    // is eligible on a screen the user is NOT on, ask the parent to
+    // redirect. The effect short-circuits (returns without writing
+    // the snapshot) so when `activeScreen` updates from the parent's
+    // dispatch, we re-run and fall through to the snapshot branch.
+    //
+    // Splash-first wins regardless of precedence — the precedence
+    // decision is deferred to `reportClosed("splash")`. This avoids
+    // dispatching `setUiMode` while the splash modal is on screen
+    // (which would cause a layout shift behind it).
     useEffect(() => {
         if (!hydrated) return;
         if (phase !== PHASE_BOOT) return;
         if (eligibilityRef.current !== null) return;
         const now = DateTime.nowUnsafe();
+
+        if (isSplashEligible(now)) {
+            const eligibility: Eligibility = {
+                splash: true,
+                // Tour eligibility is recomputed when splash closes;
+                // hold it as `false` here so a stale snapshot can't
+                // accidentally fire the tour for the wrong screen.
+                tour: false,
+                install: isInstallEligibleByCounter(now),
+            };
+            eligibilityRef.current = eligibility;
+            setPhase(SLOT_SPLASH);
+            return;
+        }
+
+        const target = findHighestPriorityEligibleTour(now);
+        if (
+            target !== undefined &&
+            target !== activeScreen &&
+            redirectRef.current
+        ) {
+            // Don't snapshot yet — wait for the parent to dispatch the
+            // redirect, which will update `activeScreen` and re-run
+            // this effect.
+            redirectRef.current(target);
+            return;
+        }
+
         const eligibility: Eligibility = {
-            splash: isSplashEligible(now),
-            tour: isTourEligible(activeScreen, now),
+            splash: false,
+            tour: target !== undefined,
             install: isInstallEligibleByCounter(now),
         };
         eligibilityRef.current = eligibility;
@@ -213,15 +307,48 @@ export function StartupCoordinatorProvider({
         // Only advance when the closing slot matches the active phase.
         // Defensive — guards against a stale onClose from a slot that
         // already advanced, e.g. install snooze + close fired twice.
+        if (slot === SLOT_SPLASH) {
+            // Re-run the precedence decision now that splash is gone.
+            // The user might still be on a non-precedence screen, so
+            // we may need to redirect before phase advances to `tour`.
+            const now = DateTime.nowUnsafe();
+            const target = findHighestPriorityEligibleTour(now);
+            setPhase(prev => {
+                if (prev !== SLOT_SPLASH) return prev;
+                if (target === undefined) {
+                    // No tour wants to fire; fall through to install.
+                    return pickNextPhase({
+                        splash: false,
+                        tour: false,
+                        install: snapshot.install,
+                    });
+                }
+                if (target !== activeScreen && redirectRef.current) {
+                    // Mirror the snapshot to reflect that a tour will
+                    // fire (so the next `reportClosed("tour")` reads
+                    // a consistent snapshot), then redirect. The
+                    // coordinator advances to `tour` immediately —
+                    // when the redirect lands, the right tour will
+                    // fire on the new screen.
+                    eligibilityRef.current = {
+                        splash: false,
+                        tour: true,
+                        install: snapshot.install,
+                    };
+                    redirectRef.current(target);
+                    return SLOT_TOUR;
+                }
+                eligibilityRef.current = {
+                    splash: false,
+                    tour: true,
+                    install: snapshot.install,
+                };
+                return SLOT_TOUR;
+            });
+            return;
+        }
         setPhase(prev => {
             if (prev !== slot) return prev;
-            if (slot === SLOT_SPLASH) {
-                return pickNextPhase({
-                    splash: false,
-                    tour: snapshot.tour,
-                    install: snapshot.install,
-                });
-            }
             if (slot === SLOT_TOUR) {
                 // Tour suppresses install per the spec. Even if the
                 // install gate is otherwise eligible, we do NOT
@@ -233,7 +360,7 @@ export function StartupCoordinatorProvider({
             // install
             return PHASE_DONE;
         });
-    }, []);
+    }, [activeScreen]);
 
     const value = useMemo<CoordinatorValue>(
         () => ({ phase, reportClosed }),

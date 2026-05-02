@@ -58,6 +58,23 @@ type VirtualElement = {
     readonly getBoundingClientRect: () => DOMRect;
 };
 
+// Module-scope discriminators for `step.popoverAnchorPriority`. Pulled
+// out so the `i18next/no-literal-string` lint rule treats them as
+// wire-format flags rather than user-facing copy.
+const POPOVER_PRIORITY_FIRST = "first-visible" as const;
+const POPOVER_PRIORITY_LAST = "last-visible" as const;
+const POPOVER_SIDE_BOTTOM = "bottom" as const;
+const POPOVER_ALIGN_CENTER = "center" as const;
+// `KeyboardEvent.key` value for Escape. Module-scope so the
+// `i18next/no-literal-string` rule doesn't flag the comparison.
+const KEY_ESCAPE = "Escape" as const;
+// Analytics discriminator for tour dismissal via Esc keypress.
+const DISMISS_VIA_ESC = "esc" as const;
+// Attribute we add to the Radix Popover.Content so the keyboard
+// isolator can do an O(1) `popoverContent.contains(eventTarget)` check
+// to allow keyboard events that target the popover's own buttons.
+const POPOVER_CONTENT_ATTR = "data-tour-popover-content" as const;
+
 /**
  * Find every on-page element a tour step targets.
  *
@@ -91,6 +108,51 @@ const resolveAnchorToken = (step: TourStep): string => {
     return isDesktop
         ? step.anchorByViewport.desktop
         : step.anchorByViewport.mobile;
+};
+
+/**
+ * Resolve the token used to position the POPOVER specifically. Falls
+ * back to the spotlight token when no override is set, so steps that
+ * don't care about decoupling the two get today's behavior. Same
+ * viewport-conditional + SSR fallback logic as `resolveAnchorToken`.
+ */
+const resolvePopoverAnchorToken = (step: TourStep): string =>
+    step.popoverAnchor ?? resolveAnchorToken(step);
+
+type Side = "top" | "right" | "bottom" | "left";
+type Align = "start" | "center" | "end";
+
+/**
+ * Resolve the popover's `side` and `align` for the active viewport.
+ * `sideByViewport` wins when set; otherwise falls back to the
+ * top-level `side`/`align`, then to Radix defaults of
+ * `bottom`/`center`. Mirrors `resolveAnchorToken`'s SSR fallback
+ * (mobile config when matchMedia isn't available — matches the
+ * `useHasKeyboard` / BottomNav default).
+ */
+const resolveSideAndAlign = (
+    step: TourStep,
+): { side: Side; align: Align } => {
+    const fallbackSide = step.side ?? POPOVER_SIDE_BOTTOM;
+    const fallbackAlign = step.align ?? POPOVER_ALIGN_CENTER;
+    if (!step.sideByViewport) {
+        return { side: fallbackSide, align: fallbackAlign };
+    }
+    if (typeof window === "undefined") {
+        const m = step.sideByViewport.mobile;
+        return {
+            side: m.side ?? fallbackSide,
+            align: m.align ?? fallbackAlign,
+        };
+    }
+    const isDesktop = window.matchMedia("(min-width: 800px)").matches;
+    const v = isDesktop
+        ? step.sideByViewport.desktop
+        : step.sideByViewport.mobile;
+    return {
+        side: v.side ?? fallbackSide,
+        align: v.align ?? fallbackAlign,
+    };
 };
 
 /**
@@ -306,28 +368,44 @@ export function TourPopover() {
             //
             // Spotlight uses the UNION of all matched rects so it
             // can highlight a row/column/group as one cohesive
-            // shape. Popover positioning anchors to JUST THE FIRST
-            // matched element, not the union. Reasoning: for big
-            // unions (e.g. trigger + open menu, or a column tall
-            // enough to fill the viewport), there's nowhere for the
-            // popover to fit if Radix tries to position it against
-            // the whole union — collision detection ends up shoving
-            // the popper off-screen. Anchoring to the first
-            // element keeps the popover near a natural visual hook
-            // while the spotlight communicates the full extent of
-            // the highlighted region.
+            // shape. Popover positioning anchors to a SINGLE element
+            // (not the union). Reasoning: for big unions (e.g. an
+            // entire column or trigger + open menu), there's nowhere
+            // for the popover to fit if Radix tries to position it
+            // against the whole union — collision detection ends up
+            // shoving the popper off-screen.
+            //
+            // Two knobs select the popover's anchor element:
+            //   - `step.popoverAnchor` overrides the token (lets a
+            //     step keep the spotlight on a wide region while
+            //     pinning the popover to a small one — used for the
+            //     player-column step).
+            //   - `step.popoverAnchorPriority` picks `first-visible`
+            //     (default) or `last-visible` from the matched
+            //     elements (used for the overflow-menu step where
+            //     the portaled menu content appears AFTER the trigger
+            //     in DOM order).
+            const popoverEls = currentStep.popoverAnchor !== undefined
+                ? findAnchorElements(resolvePopoverAnchorToken(currentStep))
+                : els;
+            const popoverPriority =
+                currentStep.popoverAnchorPriority ?? POPOVER_PRIORITY_FIRST;
             const spotlightMeasure = (): DOMRect => {
                 const rects = els.map(el => el.getBoundingClientRect());
                 return unionRect(rects) ?? fallbackVirtualRect();
             };
             const popoverMeasure = (): DOMRect => {
-                // Pick the first VISIBLE element. The Toolbar +
-                // BottomNav both render an OverflowMenu trigger
-                // with the same anchor name; one is hidden via CSS
-                // on the other's breakpoint and reports a 0x0 rect.
-                // Skip the zero-area one so the popover anchors to
-                // the visible trigger.
-                for (const el of els) {
+                // Iterate forward (`first-visible`) or backward
+                // (`last-visible`). Skip zero-area elements — the
+                // Toolbar + BottomNav both render an OverflowMenu
+                // trigger with the same anchor name; one is hidden
+                // via CSS on the other's breakpoint and reports
+                // 0x0. Skipping it ensures we anchor to the visible
+                // one regardless of priority.
+                const ordered = popoverPriority === POPOVER_PRIORITY_LAST
+                    ? [...popoverEls].reverse()
+                    : popoverEls;
+                for (const el of ordered) {
                     const r = el.getBoundingClientRect();
                     if (r.width > 0 && r.height > 0) return r;
                 }
@@ -401,12 +479,19 @@ export function TourPopover() {
 
         // ResizeObserver per matched element so we follow internal
         // resizes (e.g. the user typing in a hand-size input that
-        // grows the cell).
-        const els = findAnchorElements(resolveAnchorToken(currentStep));
+        // grows the cell). Observe BOTH the spotlight and popover
+        // anchor sets — the popover anchor may be a different element
+        // than the spotlight when `step.popoverAnchor` is set
+        // (e.g. the player-column step's popover targets just the
+        // header cell while the spotlight covers all body cells).
+        const observedEls = new Set<HTMLElement>([
+            ...findAnchorElements(resolveAnchorToken(currentStep)),
+            ...findAnchorElements(resolvePopoverAnchorToken(currentStep)),
+        ]);
         let observer: ResizeObserver | null = null;
-        if (typeof ResizeObserver !== "undefined" && els.length > 0) {
+        if (typeof ResizeObserver !== "undefined" && observedEls.size > 0) {
             observer = new ResizeObserver(() => recompute());
-            for (const el of els) observer.observe(el);
+            for (const el of observedEls) observer.observe(el);
         }
 
         // MutationObserver on the body to catch anchors that
@@ -449,24 +534,64 @@ export function TourPopover() {
         };
     }, [activeScreen, stepIndex, currentStep, state.uiMode]);
 
-    // Esc dismisses the active tour. Wired at the document level
-    // rather than via Radix's `onOpenChange` because the controlled
-    // `open` Popover would otherwise also fire `onOpenChange(false)`
-    // for outside clicks AND for any sibling modal's interactions —
-    // letting the tour dismiss itself the moment the splash modal
-    // dispatched its own outside-click guard.
+    // While a tour is active, the page beneath the veil should be
+    // keyboard-inert. App-level shortcuts (`⌘K`, `⌘Z`, the per-tab
+    // "go to" shortcuts, etc.) listen at the window in BUBBLE phase;
+    // we install a CAPTURE-phase listener so we run first and can
+    // selectively swallow events.
+    //
+    //   - Escape dismisses the tour (existing behavior, kept as the
+    //     authoritative keyboard-out path).
+    //   - Other keys: if the event target is inside the popover
+    //     content (Tab between Back / Skip / Next, Enter to click),
+    //     pass through. Otherwise stopPropagation + preventDefault so
+    //     the page beneath gets nothing.
+    //
+    // `capture: true` matters for collisions — bubble-phase listeners
+    // we want to suppress fire AFTER us, so our `stopPropagation` is
+    // load-bearing.
     useEffect(() => {
         if (!activeScreen) return;
         const onKey = (e: KeyboardEvent): void => {
-            if (e.key === "Escape") {
+            if (e.key === KEY_ESCAPE) {
                 e.stopPropagation();
-                // eslint-disable-next-line i18next/no-literal-string -- analytics discriminator
-                dismissTour("esc");
+                dismissTour(DISMISS_VIA_ESC);
+                return;
             }
+            const target = e.target;
+            if (target instanceof Node) {
+                const popoverContent = document.querySelector(
+                    `[${POPOVER_CONTENT_ATTR}]`,
+                );
+                if (popoverContent && popoverContent.contains(target)) {
+                    return;
+                }
+            }
+            e.stopPropagation();
+            e.preventDefault();
         };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
+        window.addEventListener("keydown", onKey, { capture: true });
+        return () =>
+            window.removeEventListener("keydown", onKey, { capture: true });
     }, [activeScreen, dismissTour]);
+
+    // Pull keyboard focus into the popover's "Next" button each time
+    // a step becomes active. Without this, focus stays on whatever
+    // element initiated the tour (usually a menu item or the document
+    // body), so `Tab` would walk into the page beneath — already
+    // suppressed by the keydown isolator above, but it FEELS off.
+    // Focusing inside the popover anchors the user's keyboard intent
+    // where the visual attention already is.
+    const nextButtonRef = useRef<HTMLButtonElement | null>(null);
+    useEffect(() => {
+        if (!activeScreen || !currentStep) return;
+        // Defer to the next paint so Radix's portal mount completes
+        // before we try to focus.
+        const id = requestAnimationFrame(() => {
+            nextButtonRef.current?.focus();
+        });
+        return () => cancelAnimationFrame(id);
+    }, [activeScreen, stepIndex, currentStep]);
 
     if (!activeScreen || !steps || !currentStep) return null;
 
@@ -485,6 +610,11 @@ export function TourPopover() {
     // Pad the spotlight by a few pixels so the highlight comfortably
     // surrounds the target rather than hugging its edges.
     const SPOTLIGHT_PAD = 6;
+    // Per-step `side` + `align`, with `sideByViewport` overriding the
+    // top-level values when set. Computed during render so it picks
+    // up the active viewport on each remount.
+    const { side: resolvedSide, align: resolvedAlign } =
+        resolveSideAndAlign(currentStep);
 
     return (
         <>
@@ -553,8 +683,8 @@ export function TourPopover() {
                 <Popover.Anchor virtualRef={virtualElementRef} />
                 <Popover.Portal>
                     <Popover.Content
-                        side={currentStep.side ?? "bottom"}
-                        align={currentStep.align ?? "center"}
+                        side={resolvedSide}
+                        align={resolvedAlign}
                         sideOffset={14}
                         collisionPadding={24}
                         // The tour floats above the backdrop (z-40)
@@ -581,11 +711,30 @@ export function TourPopover() {
                         role="dialog"
                         aria-labelledby="tour-step-title"
                         aria-describedby="tour-step-body"
+                        // Boundary marker for the keyboard isolator —
+                        // any keydown whose target is INSIDE this
+                        // element passes through; everything else is
+                        // swallowed.
+                        data-tour-popover-content=""
                         // The anchorTick re-render forces Radix to
                         // recompute its popper position when
                         // virtualElementRef.current swapped.
                         key={anchorTick}
                     >
+                        {/* Single wrapping element so `Popover.Content`
+                            sees ONE child rather than a list. Radix's
+                            DismissableLayer + FocusScope wrap content
+                            via `Slot` (with `asChild`), and `Slot`
+                            calls `React.Children.toArray(children)`
+                            which warns in React 19 about unkeyed
+                            JSX children even when the array isn't
+                            iterated further. Wrapping in a single
+                            `<div>` (or Fragment) is the standard
+                            workaround. The wrapper is `display:
+                            contents` so it doesn't add a layout box —
+                            Tailwind utility classes still target the
+                            children directly. */}
+                        <div className="contents">
                         <Popover.Arrow
                             width={14}
                             height={8}
@@ -601,7 +750,9 @@ export function TourPopover() {
                             tight around its content. The step
                             counter moved to the bottom-left of the
                             footer so it sits next to the Skip link. */}
-                        <div className="flex items-start justify-between gap-3 px-4 pt-3 pb-2">
+                        <div
+                            className="flex items-start justify-between gap-3 px-4 pt-3 pb-2"
+                        >
                             <div
                                 id="tour-step-title"
                                 className="font-semibold text-[15px] leading-snug text-[var(--color-tour-text)]"
@@ -629,7 +780,9 @@ export function TourPopover() {
                                 {bodyText}
                             </div>
                         )}
-                        <div className="flex items-center justify-between gap-3 border-t border-[var(--color-tour-border)] px-4 py-2.5">
+                        <div
+                            className="flex items-center justify-between gap-3 border-t border-[var(--color-tour-border)] px-4 py-2.5"
+                        >
                             <span className="text-[12px] text-[var(--color-tour-accent)]">
                                 {t("stepCounter", {
                                     step: stepNumber,
@@ -654,6 +807,7 @@ export function TourPopover() {
                                     {t("back")}
                                 </button>
                                 <button
+                                    ref={nextButtonRef}
                                     type="button"
                                     onClick={() => nextStep()}
                                     className="cursor-pointer rounded-[var(--tour-radius)] border-2 border-[var(--color-tour-accent)] bg-[var(--color-tour-accent)] px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--color-tour-accent-hover)]"
@@ -661,6 +815,7 @@ export function TourPopover() {
                                     {isLastStep ? t(finishKey) : t("next")}
                                 </button>
                             </div>
+                        </div>
                         </div>
                     </Popover.Content>
                 </Popover.Portal>
