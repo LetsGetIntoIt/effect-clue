@@ -18,7 +18,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { splashScreenDismissed } from "../../analytics/events";
 import { AboutContent } from "./AboutContent";
 import { ArrowRightIcon, XIcon } from "./Icons";
@@ -33,6 +33,7 @@ export function SplashModal({
 }) {
     const t = useTranslations("splash");
     const [dontShowAgain, setDontShowAgain] = useState(false);
+    const ctaRef = useRef<HTMLButtonElement | null>(null);
 
     const handleDismiss = (method: "start_playing" | "x_button") => {
         splashScreenDismissed({
@@ -58,6 +59,21 @@ export function SplashModal({
                         "-translate-x-1/2 -translate-y-1/2 rounded-[var(--radius)] border border-border " +
                         "bg-panel shadow-[0_10px_28px_rgba(0,0,0,0.28)] focus:outline-none"
                     }
+                    onOpenAutoFocus={(e) => {
+                        // Radix's default focuses the first focusable
+                        // descendant — that's the X. Bias instead toward
+                        // the CTA so a user who hits Enter on muscle
+                        // memory accepts rather than dismisses. The
+                        // setTimeout (vs rAF) lets Radix's FocusScope
+                        // settle before we override — rAF can lose the
+                        // race when the modal opens during a busy
+                        // render path (e.g. coming out of the startup
+                        // coordinator).
+                        e.preventDefault();
+                        window.setTimeout(() => {
+                            ctaRef.current?.focus();
+                        }, 50);
+                    }}
                 >
                     <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
                         <Dialog.Title className="m-0 font-display text-[20px] text-accent">
@@ -78,6 +94,7 @@ export function SplashModal({
                     </div>
                     <div className="shrink-0 border-t border-border bg-panel px-5 pt-4 pb-5">
                         <button
+                            ref={ctaRef}
                             type="button"
                             onClick={() => handleDismiss("start_playing")}
                             className={

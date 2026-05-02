@@ -49,6 +49,10 @@ import {
     type ReactNode,
 } from "react";
 import { DateTime, Duration } from "effect";
+import {
+    isStaleGameEligible,
+    loadGameLifecycleState,
+} from "../../logic/GameLifecycleState";
 import { loadInstallPromptState } from "../../logic/InstallPromptState";
 import { loadSplashState } from "../../logic/SplashState";
 import { ABOUT_APP_SPLASH_SCREEN_DISMISSAL_DURATION } from "../hooks/useSplashGate";
@@ -154,7 +158,7 @@ const decideTourDispatch = (
  * The slots the coordinator manages. Each maps to one auto-firable
  * surface on /play.
  */
-type StartupSlot = "splash" | "tour" | "install";
+type StartupSlot = "splash" | "staleGame" | "tour" | "install";
 
 // Module-scoped phase/slot constants. Pulled out so the
 // `i18next/no-literal-string` lint rule treats them as wire-format
@@ -162,8 +166,11 @@ type StartupSlot = "splash" | "tour" | "install";
 const PHASE_BOOT = "boot" as const;
 const PHASE_DONE = "done" as const;
 const SLOT_SPLASH: StartupSlot = "splash";
+const SLOT_STALE_GAME: StartupSlot = "staleGame";
 const SLOT_TOUR: StartupSlot = "tour";
 const SLOT_INSTALL: StartupSlot = "install";
+
+const SCREEN_CHECKLIST: ScreenKey = "checklistSuggest";
 
 /**
  * Phases the coordinator walks through. `boot` is the initial state
@@ -260,9 +267,34 @@ const isInstallEligibleByCounter = (now: DateTime.Utc): boolean => {
 
 interface Eligibility {
     readonly splash: boolean;
+    readonly staleGame: boolean;
     readonly tour: boolean;
     readonly install: boolean;
 }
+
+/**
+ * Stale-game prompt eligibility. Gates the prompt to:
+ *  - The Checklist / Suggest pane only — never on Setup, since the
+ *    user is already free to start fresh from there.
+ *  - Idle-or-empty games per the threshold pair in
+ *    `GameLifecycleState`. See `isStaleGameEligible` for the rules.
+ */
+const isStaleGameEligibleForCoordinator = ({
+    activeScreen,
+    gameStarted,
+    now,
+}: {
+    readonly activeScreen: ScreenKey;
+    readonly gameStarted: boolean;
+    readonly now: DateTime.Utc;
+}): boolean => {
+    if (activeScreen !== SCREEN_CHECKLIST) return false;
+    return isStaleGameEligible({
+        state: loadGameLifecycleState(),
+        gameStarted,
+        now,
+    });
+};
 
 /**
  * Pure decision helper. Picks the first slot from the priority list
@@ -274,6 +306,7 @@ interface Eligibility {
  */
 const pickNextPhase = (eligibility: Eligibility): StartupPhase => {
     if (eligibility.splash) return SLOT_SPLASH;
+    if (eligibility.staleGame) return SLOT_STALE_GAME;
     if (eligibility.tour) return SLOT_TOUR;
     if (eligibility.install) return SLOT_INSTALL;
     return PHASE_DONE;
@@ -283,6 +316,7 @@ export function StartupCoordinatorProvider({
     children,
     hydrated,
     activeScreen,
+    gameStarted,
     onRedirectToScreen,
 }: {
     readonly children: ReactNode;
@@ -300,6 +334,13 @@ export function StartupCoordinatorProvider({
      * re-fire a tour automatically (the user can use ⋯ → Take tour).
      */
     readonly activeScreen: ScreenKey;
+    /**
+     * Whether the hydrated game has any progress on it (known cards,
+     * suggestions, accusations). Drives the stale-game prompt's
+     * choice between the "started" and "unstarted" eligibility
+     * thresholds.
+     */
+    readonly gameStarted: boolean;
     /**
      * Optional precedence-redirect callback. When the highest-priority
      * eligible tour (per `TOUR_PRECEDENCE`) does NOT match
@@ -353,14 +394,35 @@ export function StartupCoordinatorProvider({
         if (isSplashEligible(now)) {
             const eligibility: Eligibility = {
                 splash: true,
-                // Tour eligibility is recomputed when splash closes;
-                // hold it as `false` here so a stale snapshot can't
-                // accidentally fire the tour for the wrong screen.
+                // Stale-game and tour eligibility are recomputed when
+                // splash closes; hold both as `false` here so a stale
+                // snapshot can't fire the wrong slot for the wrong
+                // screen.
+                staleGame: false,
                 tour: false,
                 install: isInstallEligibleByCounter(now),
             };
             eligibilityRef.current = eligibility;
             setPhase(SLOT_SPLASH);
+            return;
+        }
+
+        const staleGame = isStaleGameEligibleForCoordinator({
+            activeScreen,
+            gameStarted,
+            now,
+        });
+        if (staleGame) {
+            const eligibility: Eligibility = {
+                splash: false,
+                staleGame: true,
+                // Tour eligibility is recomputed when staleGame
+                // closes; hold as `false` here.
+                tour: false,
+                install: isInstallEligibleByCounter(now),
+            };
+            eligibilityRef.current = eligibility;
+            setPhase(SLOT_STALE_GAME);
             return;
         }
 
@@ -381,12 +443,13 @@ export function StartupCoordinatorProvider({
 
         const eligibility: Eligibility = {
             splash: false,
+            staleGame: false,
             tour: decision === TOUR_DECISION_FIRE,
             install: isInstallEligibleByCounter(now),
         };
         eligibilityRef.current = eligibility;
         setPhase(pickNextPhase(eligibility));
-    }, [hydrated, phase, activeScreen]);
+    }, [hydrated, phase, activeScreen, gameStarted]);
 
     const reportClosed = useCallback((slot: StartupSlot) => {
         const snapshot = eligibilityRef.current;
@@ -396,10 +459,29 @@ export function StartupCoordinatorProvider({
         // already advanced, e.g. install snooze + close fired twice.
         if (slot === SLOT_SPLASH) {
             // Re-run the precedence decision now that splash is gone.
-            // Same `decideTourDispatch` rule as boot — we only redirect
-            // off the user's current screen for the setup tour; other
-            // tours fire in place or wait for next navigation.
+            // Stale-game runs first if the user is on Checklist /
+            // Suggest with an idle game; otherwise fall through to the
+            // tour decision. Same `decideTourDispatch` rule as boot —
+            // we only redirect off the user's current screen for the
+            // setup tour; other tours fire in place or wait for next
+            // navigation.
             const now = DateTime.nowUnsafe();
+            if (
+                isStaleGameEligibleForCoordinator({
+                    activeScreen,
+                    gameStarted,
+                    now,
+                })
+            ) {
+                eligibilityRef.current = {
+                    splash: false,
+                    staleGame: true,
+                    tour: false,
+                    install: snapshot.install,
+                };
+                setPhase(prev => (prev === SLOT_SPLASH ? SLOT_STALE_GAME : prev));
+                return;
+            }
             const target = findHighestPriorityEligibleTour(now);
             const decision = decideTourDispatch(
                 target,
@@ -417,6 +499,7 @@ export function StartupCoordinatorProvider({
                     // fire on the new screen.
                     eligibilityRef.current = {
                         splash: false,
+                        staleGame: false,
                         tour: true,
                         install: snapshot.install,
                     };
@@ -426,11 +509,58 @@ export function StartupCoordinatorProvider({
                 const willFireTour = decision === TOUR_DECISION_FIRE;
                 eligibilityRef.current = {
                     splash: false,
+                    staleGame: false,
                     tour: willFireTour,
                     install: snapshot.install,
                 };
                 return pickNextPhase({
                     splash: false,
+                    staleGame: false,
+                    tour: willFireTour,
+                    install: snapshot.install,
+                });
+            });
+            return;
+        }
+        if (slot === SLOT_STALE_GAME) {
+            // After the stale-game prompt closes (accept OR keep
+            // working), recompute the tour decision. On accept the
+            // parent has already redirected to setup — the closure's
+            // `activeScreen` is still the old one for one render, but
+            // `decideTourDispatch` will return `redirect-then-fire`
+            // for the setup tour and the redirect call is idempotent
+            // with the parent's own `setUiMode`. On keep-working the
+            // user stayed on Checklist / Suggest and the
+            // `checklistSuggest` tour can fire if eligible.
+            const now = DateTime.nowUnsafe();
+            const target = findHighestPriorityEligibleTour(now);
+            const decision = decideTourDispatch(
+                target,
+                activeScreen,
+                redirectRef.current !== undefined,
+            );
+            setPhase(prev => {
+                if (prev !== SLOT_STALE_GAME) return prev;
+                if (decision === TOUR_DECISION_REDIRECT_THEN_FIRE) {
+                    eligibilityRef.current = {
+                        splash: false,
+                        staleGame: false,
+                        tour: true,
+                        install: snapshot.install,
+                    };
+                    redirectRef.current?.(target as ScreenKey);
+                    return SLOT_TOUR;
+                }
+                const willFireTour = decision === TOUR_DECISION_FIRE;
+                eligibilityRef.current = {
+                    splash: false,
+                    staleGame: false,
+                    tour: willFireTour,
+                    install: snapshot.install,
+                };
+                return pickNextPhase({
+                    splash: false,
+                    staleGame: false,
                     tour: willFireTour,
                     install: snapshot.install,
                 });
@@ -450,7 +580,7 @@ export function StartupCoordinatorProvider({
             // install
             return PHASE_DONE;
         });
-    }, [activeScreen]);
+    }, [activeScreen, gameStarted]);
 
     const value = useMemo<CoordinatorValue>(
         () => ({ phase, reportClosed }),

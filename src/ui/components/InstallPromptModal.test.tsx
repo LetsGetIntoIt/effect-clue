@@ -2,10 +2,12 @@
  * Pins the install-prompt modal's analytics emission, including the
  * reengagement context (`reengaged`, `daysSinceLastDismissal`,
  * `visitCount`) read from `InstallPromptState` localStorage at the
- * moment the user clicks Install / Snooze / X.
+ * moment the user clicks Install / Snooze / X. Also pins the focus
+ * bias toward "Not now" so users who tap Enter don't get launched
+ * into the OS install dialog they didn't ask for.
  */
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DateTime } from "effect";
 
 const captureCalls: Array<{
@@ -60,6 +62,68 @@ const seedState = (state: {
         JSON.stringify(payload),
     );
 };
+
+describe("InstallPromptModal — render", () => {
+    test("renders title, value-prop bullets, and both buttons when open", async () => {
+        const InstallPromptModal = await importModal();
+        render(
+            <InstallPromptModal
+                open
+                trigger="auto"
+                onInstall={async () => true}
+                onSnooze={() => {}}
+                onClose={() => {}}
+            />,
+        );
+        expect(
+            screen.getByText("installPrompt.title"),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByText("installPrompt.benefitOffline"),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "installPrompt.notNow" }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "installPrompt.install" }),
+        ).toBeInTheDocument();
+    });
+
+    test("renders nothing when closed", async () => {
+        const InstallPromptModal = await importModal();
+        render(
+            <InstallPromptModal
+                open={false}
+                trigger="auto"
+                onInstall={async () => true}
+                onSnooze={() => {}}
+                onClose={() => {}}
+            />,
+        );
+        expect(
+            screen.queryByText("installPrompt.title"),
+        ).not.toBeInTheDocument();
+    });
+
+    test("auto-focuses Not now, not the X or Install", async () => {
+        const InstallPromptModal = await importModal();
+        render(
+            <InstallPromptModal
+                open
+                trigger="auto"
+                onInstall={async () => true}
+                onSnooze={() => {}}
+                onClose={() => {}}
+            />,
+        );
+        const notNow = screen.getByRole("button", {
+            name: "installPrompt.notNow",
+        });
+        await waitFor(() => {
+            expect(notNow).toHaveFocus();
+        });
+    });
+});
 
 describe("InstallPromptModal — analytics", () => {
     test("Install with no prior dismissal sends reengaged: false, visitCount from state", async () => {

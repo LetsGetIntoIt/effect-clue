@@ -22,6 +22,8 @@ import { T_STANDARD, useReducedTransition } from "./motion";
 import type { UiMode } from "../logic/ClueState";
 import { StartupCoordinatorProvider, useStartupCoordinator } from "./onboarding/StartupCoordinator";
 import { SplashModal } from "./components/SplashModal";
+import { StaleGameModal } from "./components/StaleGameModal";
+import { useStaleGameGate } from "./hooks/useStaleGameGate";
 import { ClueProvider, useClue } from "./state";
 import { TourProvider, useTour } from "./tour/TourProvider";
 import { TourPopover } from "./tour/TourPopover";
@@ -167,6 +169,12 @@ function CoordinatedShell({
 }) {
     const { hydrated, state, dispatch } = useClue();
     const activeScreen = screenKeyForUiMode(state.uiMode);
+    // Whether the hydrated game has any progress. Drives the
+    // staleGame slot's threshold choice in the coordinator.
+    const gameStarted =
+        state.knownCards.length > 0
+        || state.suggestions.length > 0
+        || state.accusations.length > 0;
     // Translate the coordinator's precedence-redirect request back
     // into a `setUiMode` dispatch. The coordinator only fires this
     // when the highest-priority eligible tour belongs to a screen
@@ -185,6 +193,7 @@ function CoordinatedShell({
         <StartupCoordinatorProvider
             hydrated={hydrated}
             activeScreen={activeScreen}
+            gameStarted={gameStarted}
             onRedirectToScreen={handleRedirectToScreen}
         >
             <TourProvider>
@@ -207,6 +216,7 @@ function ClueShell({
 }) {
     const t = useTranslations("app");
     const { showSplash, dismiss: dismissSplash } = useSplashGate();
+    const staleGame = useStaleGameGate();
     return (
         <InstallPromptProvider>
         <AccountProvider>
@@ -236,6 +246,14 @@ function ClueShell({
             </main>
             <BottomNav />
             <SplashModal open={showSplash} onDismiss={dismissSplash} />
+            <StaleGameModal
+                open={staleGame.open}
+                variant={staleGame.variant}
+                referenceTimestamp={staleGame.referenceTimestamp}
+                now={staleGame.now}
+                onSetupNewGame={staleGame.setupNewGame}
+                onKeepWorking={staleGame.keepWorking}
+            />
         </ShareProvider>
         </AccountProvider>
         </InstallPromptProvider>

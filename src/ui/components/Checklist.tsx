@@ -286,6 +286,7 @@ export function Checklist() {
         maxCol: totalCols - 1,
     };
 
+
     // Handle ⌘J / ⌘H focus requests: locate a cell by (row,col) and
     // focus it. "first" falls back to the first interactive cell.
     //
@@ -699,7 +700,9 @@ export function Checklist() {
                         const canRemoveCategory = setup.categories.length > 1;
                         const canRemoveCard = category.cards.length > 1;
                         return [
-                            <tr key={`h-${String(category.id)}`}>
+                            <tr
+                                key={`h-${String(category.id)}`}
+                                                            >
                                 <th
                                     colSpan={cardSpan}
                                     className="border-r border-b border-border bg-category-header px-2 py-1.5 text-left text-[11px] uppercase tracking-[0.05em] text-white"
@@ -777,7 +780,9 @@ export function Checklist() {
                                 const cardRowIdx =
                                     rowIdxByCard.get(entry.id) ?? -1;
                                 return (
-                                <tr key={String(entry.id)}>
+                                <tr
+                                    key={String(entry.id)}
+                                                                    >
                                     <th className="w-px whitespace-nowrap border-r border-b border-border px-2 py-1 text-left font-normal">
                                         {inSetup ? (
                                             <div className="flex items-center justify-between gap-2">
@@ -1234,7 +1239,9 @@ export function Checklist() {
                             }),
                             ...(inSetup
                                 ? [
-                                      <tr key={`add-card-${String(category.id)}`}>
+                                      <tr
+                                          key={`add-card-${String(category.id)}`}
+                                                                                >
                                           <th
                                               colSpan={cardSpan}
                                               className="border-r border-b border-border bg-row-alt px-1.5 py-1 text-left"
