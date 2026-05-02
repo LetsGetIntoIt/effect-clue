@@ -88,7 +88,7 @@ vi.mock("../hooks/useSession", () => ({
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ClueProvider } from "../state";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
-import { ShareCreateModal } from "./ShareCreateModal";
+import { ShareCreateModal, pickProgressLabelKey } from "./ShareCreateModal";
 
 const mountModal = (
     variant: "pack" | "invite" | "transfer",
@@ -153,12 +153,40 @@ describe("ShareCreateModal — variant chrome", () => {
         expect(warning?.textContent).toContain("transferWarning");
     });
 
-    test("invite variant with no logged suggestions hides the optional checkbox", () => {
-        // Default ClueProvider state has zero suggestions logged.
+    test("invite variant with no logged progress hides the optional checkbox", () => {
+        // Default ClueProvider state has zero suggestions and zero
+        // accusations logged — checkbox is gated on either being > 0.
         mountModal("invite");
         expect(
             document.querySelector("input[type='checkbox']"),
         ).toBeNull();
+    });
+});
+
+describe("pickProgressLabelKey", () => {
+    test("returns null when there's no progress to include", () => {
+        expect(pickProgressLabelKey(0, 0)).toBeNull();
+    });
+
+    test("suggestions only → suggestions-only key", () => {
+        expect(pickProgressLabelKey(3, 0)).toEqual({
+            key: "inviteIncludeProgressSuggestionsOnly",
+            values: { count: 3 },
+        });
+    });
+
+    test("accusations only → accusations-only key", () => {
+        expect(pickProgressLabelKey(0, 2)).toEqual({
+            key: "inviteIncludeProgressAccusationsOnly",
+            values: { count: 2 },
+        });
+    });
+
+    test("both → combined key with both counts", () => {
+        expect(pickProgressLabelKey(5, 1)).toEqual({
+            key: "inviteIncludeProgressBoth",
+            values: { suggestions: 5, accusations: 1 },
+        });
     });
 });
 

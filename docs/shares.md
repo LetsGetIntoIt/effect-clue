@@ -25,7 +25,7 @@ just summarises what's in the link.
 | Variant | Entry points | What ships | Notes |
 |---|---|---|---|
 | `pack` | Card-pack row in Setup ("Share this pack" button), per-pack share icon in the "All card packs" picker | Card pack only | Picker entry passes `forcedCardPack` so the share contains the *picked* pack rather than the live setup pack |
-| `invite` | Setup pane near the Start playing CTA, overflow menu ("Invite a player") | Card pack + players + hand sizes; optional checkbox adds suggestions + accusations when ≥1 has been logged | The optional checkbox is conditionally rendered — gone if no suggestions exist yet |
+| `invite` | Setup pane near the Start playing CTA, overflow menu ("Invite a player") | Card pack + players + hand sizes; optional checkbox adds suggestions + accusations together when at least one of either has been logged | Checkbox is hidden when neither suggestions nor accusations exist. Label adapts to what's there: "Include all N prior suggestions and M failed accusations", "Include all N prior suggestions", or "Include all M prior failed accusations" |
 | `transfer` | Overflow menu only ("Continue on another device") | Everything: card pack + players + hand sizes + known cards + suggestions + accusations | Renders a prominent privacy warning above the CTA — this link discloses your hand |
 
 The flow taxonomy intentionally hides the underlying column structure

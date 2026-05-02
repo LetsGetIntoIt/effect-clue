@@ -108,7 +108,51 @@ const DESCRIPTION_KEY_FOR: Record<ShareVariant, string> = {
 const SIGN_IN_TITLE_KEY = "signInTitle";
 const SIGN_IN_DESCRIPTION_KEY = "signInDescription";
 const TRANSFER_WARNING_KEY = "transferWarning";
-const INVITE_INCLUDE_PROGRESS_LABEL_KEY = "inviteIncludeProgressLabel";
+const INVITE_INCLUDE_PROGRESS_BOTH_KEY = "inviteIncludeProgressBoth";
+const INVITE_INCLUDE_PROGRESS_SUGGESTIONS_ONLY_KEY =
+    "inviteIncludeProgressSuggestionsOnly";
+const INVITE_INCLUDE_PROGRESS_ACCUSATIONS_ONLY_KEY =
+    "inviteIncludeProgressAccusationsOnly";
+
+/**
+ * Pick the right "include progress" checkbox label key for a given
+ * (suggestionsCount, accusationsCount). Returns null when there's
+ * nothing to include — the checkbox should be hidden in that case.
+ *
+ * The split into three keys (vs. ICU plural / multi-arg interpolation)
+ * keeps each label short and readable in every condition. Pure
+ * function for unit-testability — see ShareCreateModal.test.tsx.
+ */
+export const pickProgressLabelKey = (
+    suggestionsCount: number,
+    accusationsCount: number,
+): {
+    key: string;
+    values: Record<string, number>;
+} | null => {
+    if (suggestionsCount > 0 && accusationsCount > 0) {
+        return {
+            key: INVITE_INCLUDE_PROGRESS_BOTH_KEY,
+            values: {
+                suggestions: suggestionsCount,
+                accusations: accusationsCount,
+            },
+        };
+    }
+    if (suggestionsCount > 0) {
+        return {
+            key: INVITE_INCLUDE_PROGRESS_SUGGESTIONS_ONLY_KEY,
+            values: { count: suggestionsCount },
+        };
+    }
+    if (accusationsCount > 0) {
+        return {
+            key: INVITE_INCLUDE_PROGRESS_ACCUSATIONS_ONLY_KEY,
+            values: { count: accusationsCount },
+        };
+    }
+    return null;
+};
 const COPIED_KEY = "copied";
 const CREATING_KEY = "creating";
 const SIGN_IN_TO_SHARE_KEY = "signInToShare";
@@ -307,8 +351,13 @@ export function ShareCreateModal({
     );
 
     const suggestionsCount = derived.suggestionsAsData.length;
+    const accusationsCount = derived.accusationsAsData.length;
+    const progressLabel = pickProgressLabelKey(
+        suggestionsCount,
+        accusationsCount,
+    );
     const showProgressToggle =
-        variant === VARIANT_INVITE && suggestionsCount > 0;
+        variant === VARIANT_INVITE && progressLabel !== null;
 
     const needsSignIn =
         !session.data?.user || session.data.user.isAnonymous;
@@ -517,7 +566,7 @@ export function ShareCreateModal({
                                             {t(TRANSFER_WARNING_KEY)}
                                         </div>
                                     ) : null}
-                                    {showProgressToggle ? (
+                                    {showProgressToggle && progressLabel ? (
                                         <div className="px-5 pt-4 text-[14px]">
                                             <label className="flex cursor-pointer items-center gap-2">
                                                 <input
@@ -532,10 +581,8 @@ export function ShareCreateModal({
                                                 />
                                                 <span>
                                                     {t(
-                                                        INVITE_INCLUDE_PROGRESS_LABEL_KEY,
-                                                        {
-                                                            count: suggestionsCount,
-                                                        },
+                                                        progressLabel.key,
+                                                        progressLabel.values,
                                                     )}
                                                 </span>
                                             </label>
