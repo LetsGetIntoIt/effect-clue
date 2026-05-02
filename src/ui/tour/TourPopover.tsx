@@ -289,11 +289,28 @@ export function TourPopover() {
                 const rects = els.map(el => el.getBoundingClientRect());
                 return unionRect(rects) ?? fallbackVirtualRect();
             };
-            const popoverMeasure = (): DOMRect =>
-                pickPopoverRect(
+            const popoverMeasure = (): DOMRect => {
+                // Prefer the popover's own anchor target (when set);
+                // fall back to the spotlight elements if nothing
+                // matched. This is what makes a per-viewport
+                // popoverAnchor work — `firstSuggestion`'s
+                // `popoverAnchor: "checklist-case-file"` only
+                // resolves on desktop (the checklist pane is
+                // mounted); on mobile the same token finds nothing
+                // and we drop back to the spotlight elements
+                // (`bottom-nav-checklist`).
+                const fromPopover = pickPopoverRect(
                     popoverEls,
                     currentStep.popoverAnchorPriority,
-                ) ?? fallbackVirtualRect();
+                );
+                if (fromPopover !== null) return fromPopover;
+                return (
+                    pickPopoverRect(
+                        els,
+                        currentStep.popoverAnchorPriority,
+                    ) ?? fallbackVirtualRect()
+                );
+            };
             virtualElementRef.current = {
                 getBoundingClientRect: popoverMeasure,
             };

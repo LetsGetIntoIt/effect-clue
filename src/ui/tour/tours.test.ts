@@ -147,22 +147,30 @@ describe("TOURS — firstSuggestion tour", () => {
         expect(TOURS.firstSuggestion).toHaveLength(1);
     });
 
-    test("desktop anchor is the case-file summary, NOT the full deduction grid", () => {
-        // Earlier the desktop anchor was `desktop-checklist-area`
-        // which is ~880 px tall and exceeded the viewport — Radix
-        // had nowhere to fit the popover above or below and clamped
-        // it past the top of the screen. Now anchored to the
-        // small case-file summary box so the popover sits below it
-        // safely.
+    test("desktop spotlight covers the WHOLE checklist; mobile points at the BottomNav Checklist tab", () => {
+        // The exact details inside the deduction grid don't matter
+        // for this step — the user just needs a "look here after
+        // dismissing" cue. Spotlight covers the whole grid on
+        // desktop; popover anchors to a smaller element so it
+        // actually fits.
         const step = TOURS.firstSuggestion[0]!;
-        expect(step.anchorByViewport?.desktop).toBe("checklist-case-file");
+        expect(step.anchorByViewport?.desktop).toBe("desktop-checklist-area");
         expect(step.anchorByViewport?.mobile).toBe("bottom-nav-checklist");
     });
 
-    test("desktop side flips to bottom (popover sits below the case-file summary)", () => {
+    test("popover anchors to the case-file summary on desktop; falls back to the spotlight on mobile", () => {
+        // The popoverAnchor token resolves to an element on desktop
+        // (the case-file summary box at the top of the checklist)
+        // but to nothing on mobile (the checklist pane isn't
+        // mounted in the suggest viewport). The popover-measurement
+        // fallback in TourPopover.tsx handles that by reverting to
+        // the spotlight elements (`bottom-nav-checklist`).
         const step = TOURS.firstSuggestion[0]!;
-        // Mobile: side="top" → popover above the BottomNav tab.
-        // Desktop: side="bottom" → popover below the case-file box.
+        expect(step.popoverAnchor).toBe("checklist-case-file");
+    });
+
+    test("sideByViewport pins desktop=bottom (below case-file box), mobile=top (above BottomNav tab)", () => {
+        const step = TOURS.firstSuggestion[0]!;
         expect(step.sideByViewport?.desktop).toEqual({
             side: "bottom",
             align: "start",

@@ -310,22 +310,29 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
     ],
     /**
      * One-step popover that fires the first time the user logs a
-     * suggestion in any game. The anchor is viewport-conditional:
+     * suggestion in any game.
      *
-     *   - mobile: BottomNav's Checklist tab (small, at the bottom of
-     *     the screen). Popover above it. The user is on the suggest
-     *     pane post-submit; the popover tells them to tap over to
-     *     the checklist.
-     *   - desktop: the case-file summary box at the top of the
-     *     checklist (small, well-positioned). Popover below it. Both
-     *     panes are visible at this breakpoint, so pointing at the
-     *     summary is enough to direct the user's attention.
+     * Spotlight (`anchorByViewport`):
+     *   - mobile: the BottomNav Checklist tab. The user is on the
+     *     suggest pane post-submit; spotlight + popover prompt them
+     *     to tap over to the checklist.
+     *   - desktop: the WHOLE deduction grid wrapper
+     *     (`desktop-checklist-area`). Both panes are visible; the
+     *     spotlight rings the entire area where the user's
+     *     attention should land. The exact details inside the grid
+     *     don't matter — the user just needs a "look here" cue.
      *
-     * Anchoring desktop to the WHOLE deduction grid (its predecessor
-     * `desktop-checklist-area`) sized the spotlight at ~880 px tall,
-     * which exceeded the viewport. Radix had nowhere to fit the
-     * popover above or below and clamped it past the top of the
-     * screen. Per-viewport `side`/`align` keeps both layouts safe.
+     * Popover (`popoverAnchor`):
+     *   - desktop: anchored to the case-file summary box
+     *     (`checklist-case-file`) — small + well-positioned at the
+     *     top of the checklist, so the popover sits below it
+     *     comfortably. The popover lives INSIDE the spotlight area
+     *     which is fine: nothing important is being obscured (the
+     *     summary itself remains visible above the popover).
+     *   - mobile: `checklist-case-file` doesn't exist on mobile
+     *     (the checklist pane isn't mounted), so the popover falls
+     *     back to the spotlight anchor — the BottomNav tab. Popover
+     *     sits above the tab.
      *
      * Same 4-week re-engage cadence as the other tours via
      * `useTourGate`.
@@ -337,8 +344,14 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             anchor: "first-suggestion-checklist",
             anchorByViewport: {
                 mobile: "bottom-nav-checklist",
-                desktop: "checklist-case-file",
+                desktop: "desktop-checklist-area",
             },
+            // Popover anchors to the case-file summary on desktop
+            // (small, top of the checklist). On mobile this token
+            // resolves to no element, so the popover falls back to
+            // the spotlight anchor (the BottomNav tab) via
+            // `popoverMeasure`'s fallback path.
+            popoverAnchor: "checklist-case-file",
             titleKey: "firstSuggestion.checklist.title",
             bodyKey: "firstSuggestion.checklist.body",
             side: "top",
