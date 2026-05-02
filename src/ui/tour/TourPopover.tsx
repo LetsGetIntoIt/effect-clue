@@ -50,6 +50,7 @@ import {
     findAnchorElements,
     pickPopoverRect,
     resolveAnchorToken,
+    resolveHideArrow,
     resolvePopoverAnchorToken,
     resolveSideAndAlign,
     unionRect,
@@ -635,12 +636,14 @@ export function TourPopover() {
                             Tailwind utility classes still target the
                             children directly. */}
                         <div className="contents">
-                        <Popover.Arrow
-                            width={14}
-                            height={8}
-                            className="fill-[var(--color-tour-bg)] stroke-[var(--color-tour-border)]"
-                            strokeWidth={2}
-                        />
+                        {!resolveHideArrow(currentStep) && (
+                            <Popover.Arrow
+                                width={14}
+                                height={8}
+                                className="fill-[var(--color-tour-bg)] stroke-[var(--color-tour-border)]"
+                                strokeWidth={2}
+                            />
+                        )}
                         {/* Header: just the step's own title + the
                             close X. The cross-tour label ("Setup
                             tour" / "Checklist & Suggest tour") was

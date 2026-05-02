@@ -141,6 +141,26 @@ export interface TourStep {
      * Defaults to `"both"` — step renders on every viewport.
      */
     readonly viewport?: "mobile" | "desktop" | "both";
+    /**
+     * Suppress the popover's pointer arrow per breakpoint. Useful
+     * when the popover sits INSIDE the spotlit area on one
+     * viewport but BESIDE it on another — the arrow's job is
+     * "this popover is talking about that element over there", so
+     * it only makes sense when the popover is outside the
+     * spotlight. The `firstSuggestion` step is the example: on
+     * desktop the popover sits inside the wide checklist
+     * spotlight, so the arrow has nothing meaningful to point at;
+     * on mobile the popover sits above the BottomNav Checklist
+     * tab, so the arrow IS pointing at something useful.
+     *
+     * Defaults to `{ mobile: false, desktop: false }` — arrow
+     * shown on both viewports. Either key is independently
+     * optional.
+     */
+    readonly hideArrow?: {
+        readonly mobile?: boolean;
+        readonly desktop?: boolean;
+    };
 }
 
 /**
@@ -363,6 +383,13 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             // Single-step tour ends with a "Got it" CTA — no
             // back-button context, just an acknowledgement.
             finishLabelKey: "gotIt",
+            // Desktop: the popover sits INSIDE the wide checklist
+            // spotlight, so the arrow has nothing meaningful to
+            // point at — hide it. Mobile: the popover sits ABOVE
+            // the BottomNav Checklist tab (outside the small
+            // spotlight on the tab), so the arrow IS pointing at
+            // something useful — keep it.
+            hideArrow: { desktop: true },
         },
     ],
     // Reserved for M7 / M9 — no content yet.

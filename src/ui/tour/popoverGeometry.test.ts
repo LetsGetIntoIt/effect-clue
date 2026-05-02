@@ -29,6 +29,7 @@ import {
     isDesktopViewport,
     pickPopoverRect,
     resolveAnchorToken,
+    resolveHideArrow,
     resolvePopoverAnchorToken,
     resolveSideAndAlign,
     unionRect,
@@ -213,6 +214,46 @@ describe("resolveSideAndAlign", () => {
                 },
             }),
         ).toEqual({ side: "right", align: "end" });
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// resolveHideArrow
+// ─────────────────────────────────────────────────────────────────────────
+
+describe("resolveHideArrow", () => {
+    test("default (no hideArrow): arrow is shown on both viewports", () => {
+        stubMatchMedia(true);
+        expect(resolveHideArrow(baseStep)).toBe(false);
+        stubMatchMedia(false);
+        expect(resolveHideArrow(baseStep)).toBe(false);
+    });
+
+    test("hideArrow.desktop: arrow hidden on desktop, shown on mobile", () => {
+        const step: TourStep = { ...baseStep, hideArrow: { desktop: true } };
+        stubMatchMedia(true);
+        expect(resolveHideArrow(step)).toBe(true);
+        stubMatchMedia(false);
+        expect(resolveHideArrow(step)).toBe(false);
+    });
+
+    test("hideArrow.mobile: arrow hidden on mobile, shown on desktop", () => {
+        const step: TourStep = { ...baseStep, hideArrow: { mobile: true } };
+        stubMatchMedia(true);
+        expect(resolveHideArrow(step)).toBe(false);
+        stubMatchMedia(false);
+        expect(resolveHideArrow(step)).toBe(true);
+    });
+
+    test("hideArrow set on both: arrow hidden everywhere", () => {
+        const step: TourStep = {
+            ...baseStep,
+            hideArrow: { mobile: true, desktop: true },
+        };
+        stubMatchMedia(true);
+        expect(resolveHideArrow(step)).toBe(true);
+        stubMatchMedia(false);
+        expect(resolveHideArrow(step)).toBe(true);
     });
 });
 

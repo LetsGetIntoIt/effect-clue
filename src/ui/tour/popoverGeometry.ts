@@ -142,6 +142,21 @@ export const unionRect = (rects: ReadonlyArray<DOMRect>): DOMRect | null => {
 };
 
 /**
+ * Resolve whether the popover's pointer arrow should be HIDDEN for
+ * the active viewport. `hideArrow.desktop` / `.mobile` opt out of
+ * the arrow on each breakpoint; missing keys default to `false`
+ * (arrow shown). Most steps don't set `hideArrow` at all and the
+ * arrow renders as a normal Radix Popover.Arrow.
+ */
+export const resolveHideArrow = (step: TourStep): boolean => {
+    if (!step.hideArrow) return false;
+    const isDesktop = isDesktopViewport();
+    return isDesktop
+        ? step.hideArrow.desktop ?? false
+        : step.hideArrow.mobile ?? false;
+};
+
+/**
  * Pick the rect of the visible element that should drive the popover
  * position, honouring `step.popoverAnchorPriority`:
  *

@@ -180,6 +180,15 @@ describe("TOURS — firstSuggestion tour", () => {
             align: "center",
         });
     });
+
+    test("hideArrow on desktop only (popover sits inside spotlight on desktop; arrow is useful on mobile)", () => {
+        // Desktop: arrow has nothing meaningful to point at (popover
+        // is inside the spotlight). Mobile: arrow points down at the
+        // BottomNav Checklist tab, which is genuinely a different
+        // element than the popover.
+        expect(TOURS.firstSuggestion[0]!.hideArrow?.desktop).toBe(true);
+        expect(TOURS.firstSuggestion[0]!.hideArrow?.mobile).toBeUndefined();
+    });
 });
 
 describe("TOURS — placeholder tours", () => {
