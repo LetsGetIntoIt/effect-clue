@@ -514,15 +514,6 @@ export function Checklist() {
                     <div className="mt-3 flex flex-wrap items-center justify-start gap-3 [@media(min-width:800px)]:justify-end">
                         <button
                             type="button"
-                            className="inline-flex cursor-pointer items-center gap-1 rounded-[var(--radius)] border-none bg-transparent px-1 py-1 text-[13px] text-muted hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                            onClick={() => openInvitePlayer()}
-                            data-share-invite-from-setup
-                        >
-                            <ShareIcon size={14} />
-                            {tShare("entryInvitePlayer")}
-                        </button>
-                        <button
-                            type="button"
                             data-setup-cta
                             data-tour-anchor="setup-start-playing"
                             className="cursor-pointer rounded-[var(--radius)] border-none bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover"
@@ -540,6 +531,15 @@ export function Checklist() {
                                 : tSetup("startPlaying", {
                                       shortcut: shortcutSuffix("global.gotoPlay", hasKeyboard),
                                   })}
+                        </button>
+                        <button
+                            type="button"
+                            className="inline-flex cursor-pointer items-center gap-1 rounded-[var(--radius)] border-none bg-transparent px-1 py-1 text-[13px] text-muted hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                            onClick={() => openInvitePlayer()}
+                            data-share-invite-from-setup
+                        >
+                            <ShareIcon size={14} />
+                            {tShare("entryInvitePlayer")}
                         </button>
                     </div>
                 </div>
