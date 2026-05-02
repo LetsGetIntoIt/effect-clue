@@ -30,7 +30,7 @@ import {
 import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 import { CardPackPicker, type PickerPack } from "./CardPackPicker";
-import { SearchIcon } from "./Icons";
+import { SearchIcon, TrashIcon } from "./Icons";
 import { ShareIcon } from "./ShareIcon";
 import { useShareContext } from "../share/ShareProvider";
 
@@ -407,7 +407,8 @@ export function CardPackRow() {
                     // affordance is reachable on every pack pill —
                     // not just on the active one (which is what the
                     // bottom-row "Share this pack" button targets).
-                    // Custom pills additionally append a × delete.
+                    // Custom pills additionally append a trash-icon
+                    // delete (destructive — paired with a confirm dialog).
                     const sharePillBase =
                         "cursor-pointer border-l px-2 py-1 transition-colors duration-200 ease-out";
                     const sharePillTone = isActive
@@ -465,7 +466,7 @@ export function CardPackRow() {
                                         label: pack.label,
                                     })}
                                 >
-                                    ×
+                                    <TrashIcon size={12} />
                                 </button>
                             ) : null}
                         </motion.span>

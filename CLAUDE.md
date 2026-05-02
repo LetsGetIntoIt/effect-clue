@@ -163,6 +163,17 @@ When a layout change makes any of the requirements above fail, prefer fixing in 
 3. Adjust `anchorByViewport` to point at a different DOM node per breakpoint.
 4. As a last resort, add or remove a step.
 
+## Icons
+
+Use these four icons consistently — picking the wrong glyph mis-signals what the button does and creates ambiguity for users on touch devices where there's no tooltip.
+
+- **`XIcon`** — non-destructive cancel / dismiss / close. Modal close buttons, dismiss-this-banner, exit-out-of-flow. Never use for delete.
+- **`TrashIcon`** — destructive delete / remove / discard. Always pair with a confirm dialog (or undo affordance) when the action is irreversible.
+- **`ShareIcon`** — any "share this with someone" action. Renders the platform-aware glyph internally (Apple share-sheet on iOS / macOS, Material 3-node graph elsewhere) — callers don't need to handle the platform split.
+- **`ExternalLinkIcon`** — links that open a new tab or navigate outside the app.
+
+If you need a glyph that doesn't fit one of these, add it to `src/ui/components/Icons.tsx` (or `ShareIcon.tsx` for share variants) — don't reach for an emoji or a literal character (`×`, `→`, etc.) that might be misread.
+
 ## Sharing
 
 If you touch anything in `src/ui/share/`, `src/server/actions/shares.ts`, `src/logic/ShareCodec.ts`, or any `shares` DB column, walk through [docs/shares.md](docs/shares.md) first. Three rules drive the design and shouldn't be loosened without a deliberate change to the doc:
