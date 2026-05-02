@@ -302,7 +302,7 @@
         "packTitle": "Share this card pack",
         "packDescription": "Send a friend a link so they can use this pack in their own game.",
         "inviteTitle": "Invite a player",
-        "inviteDescription": "Send a friend a link so they can join this game and follow along while you solve it.",
+        "inviteDescription": "Send a link to get another player set up quickly to use the solver themselves. Look at you being a nice detective, letting your competitors have access to this super power!",
         "inviteIncludeProgressBoth": "Include all {suggestions} prior suggestions and {accusations} failed accusations",
         "inviteIncludeProgressSuggestionsOnly": "Include all {count} prior suggestions",
         "inviteIncludeProgressAccusationsOnly": "Include all {count} prior failed accusations",
