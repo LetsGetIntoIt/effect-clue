@@ -20,7 +20,19 @@
  *                         languageChanged, localstorageCleared
  *   Onboarding / splash : splashScreenViewed, splashScreenDismissed,
  *                         youtubeEmbedPlayed, aboutLinkClicked
+ *   Onboarding tour     : tourStarted, tourStepAdvanced, tourStepViewed,
+ *                         tourCompleted, tourDismissed, tourAbandoned,
+ *                         tourRestarted
+ *   PWA install         : installPrompted, installAccepted,
+ *                         installDismissed, installCompleted,
+ *                         appLaunchedStandalone
  *   Performance signals : webVital, deducerRun
+ *
+ * Several of the splash / install / tour emitters layer PostHog
+ * person-property updates (`$set` / `$set_once`) onto the event
+ * payload via `withPersonProperties()` — this powers cross-funnel
+ * cohort filtering ("did dismissing splash affect setup completion?")
+ * without separate identify calls. See `personProperties.ts`.
  *
  * Note: this app is a Clue *solver*, not a Clue *game* — the user records
  * what other players suggested in their physical game, and the deducer
@@ -34,13 +46,26 @@
  */
 "use client";
 
+import { DateTime } from "effect";
 import { posthog } from "./posthog";
+import {
+    personIso,
+    withPersonProperties,
+    type InstallStatus,
+    type SplashStatus,
+    type TourStatus,
+} from "./personProperties";
 
 const capture = (event: string, props?: Record<string, unknown>): void => {
     if (typeof window === "undefined") return;
     if (!posthog.__loaded) return;
     posthog.capture(event, props);
 };
+
+/** Capture-time clock for the `last_*_at` person properties. The
+ *  emitter owns its own timestamp — it's strictly an analytics signal,
+ *  not a domain timestamp, so we don't take it as a parameter. */
+const nowIso = (): string => personIso(DateTime.nowUnsafe());
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -213,15 +238,55 @@ export const localstorageCleared = (props: { hadActiveGame: boolean }): void =>
 
 // ── Onboarding / splash ───────────────────────────────────────────────────
 
+/**
+ * Fires the moment the splash modal becomes visible. Carries enough
+ * context that PostHog dashboards can answer view-rate, reengagement,
+ * and "did the user opt out earlier?" questions without joining
+ * across separate events.
+ *
+ * `reengaged` flips true when the user is seeing the splash again
+ * after a previous dismissal *and* their `lastVisitedAt` was older
+ * than the gate's re-engagement window — i.e. the splash re-fired on
+ * its own after the snooze expired. Lets a Trends insight read
+ * reengagement view-rate by filtering `reengaged: true`.
+ */
 export const splashScreenViewed = (props: {
     dismissedBefore: boolean;
     daysSinceLastVisit: number | null;
-}): void => capture("splash_screen_viewed", props);
+    reengaged: boolean;
+    daysSinceLastDismissal: number | null;
+}): void => {
+    const at = nowIso();
+    const status: SplashStatus = "viewed";
+    capture("splash_screen_viewed", {
+        ...props,
+        ...withPersonProperties(
+            {
+                splash_status: status,
+                last_splash_viewed_at: at,
+            },
+            { first_splash_viewed_at: at },
+        ),
+    });
+};
 
 export const splashScreenDismissed = (props: {
     method: "start_playing" | "x_button";
     dontShowAgainChecked: boolean;
-}): void => capture("splash_screen_dismissed", props);
+}): void => {
+    const status: SplashStatus = props.dontShowAgainChecked
+        ? "dismissed_with_dontshow"
+        : "dismissed_no_dontshow";
+    capture("splash_screen_dismissed", {
+        ...props,
+        ...withPersonProperties({
+            splash_status: status,
+            splash_dont_show_again: props.dontShowAgainChecked,
+            last_splash_dismiss_method: props.method,
+            last_splash_dismissed_at: nowIso(),
+        }),
+    });
+};
 
 export const youtubeEmbedPlayed = (props: {
     context: "page" | "modal";
@@ -257,10 +322,53 @@ export type TourDismissVia =
     | "close"
     | "anchor_missing";
 
+/** Build the `tour_<screenKey>_status` person-property key for a
+ *  given screen. Centralized here so the wire-format string is built
+ *  the same way at every emission site. */
+const tourStatusKey = (screenKey: TourScreenKey): string =>
+    `tour_${screenKey}_status`;
+
+const lastTourStartedAtKey = (screenKey: TourScreenKey): string =>
+    `last_tour_${screenKey}_started_at`;
+
+const firstTourStartedAtKey = (screenKey: TourScreenKey): string =>
+    `first_tour_${screenKey}_started_at`;
+
+const lastTourCompletedAtKey = (screenKey: TourScreenKey): string =>
+    `last_tour_${screenKey}_completed_at`;
+
+const lastTourDismissedAtKey = (screenKey: TourScreenKey): string =>
+    `last_tour_${screenKey}_dismissed_at`;
+
+const lastTourStepIndexKey = (screenKey: TourScreenKey): string =>
+    `last_tour_${screenKey}_step_index`;
+
+const lastTourAbandonedAtKey = (screenKey: TourScreenKey): string =>
+    `last_tour_${screenKey}_abandoned_at`;
+
 export const tourStarted = (props: {
     screenKey: TourScreenKey;
     stepCount: number;
-}): void => capture("tour_started", props);
+    /** `true` when the user has previously dismissed this tour and
+     *  is now seeing it again after the re-engage window. */
+    reengaged: boolean;
+    /** Days since the previous dismissal, or `null` if the user has
+     *  never dismissed this tour before. */
+    daysSinceLastDismissal: number | null;
+}): void => {
+    const at = nowIso();
+    const status: TourStatus = "started";
+    capture("tour_started", {
+        ...props,
+        ...withPersonProperties(
+            {
+                [tourStatusKey(props.screenKey)]: status,
+                [lastTourStartedAtKey(props.screenKey)]: at,
+            },
+            { [firstTourStartedAtKey(props.screenKey)]: at },
+        ),
+    });
+};
 
 export const tourStepAdvanced = (props: {
     screenKey: TourScreenKey;
@@ -270,17 +378,91 @@ export const tourStepAdvanced = (props: {
     direction: "forward" | "back";
 }): void => capture("tour_step_advanced", props);
 
+/**
+ * Fires once per step the user actually sees, in addition to
+ * `tour_step_advanced` which fires on the navigation moment. The
+ * step-viewed event is what powers the histogram funnel: a Trends
+ * insight grouped by `stepIndex` (and filterable by `screenKey`)
+ * auto-discovers new steps as tours change in code, with no
+ * dashboard re-config needed.
+ */
+export const tourStepViewed = (props: {
+    screenKey: TourScreenKey;
+    stepIndex: number;
+    /** The step's `data-tour-anchor` token. Free-form; the histogram
+     *  insight slices by `stepIndex`, but `stepId` is what makes
+     *  individual rows readable in the PostHog UI. */
+    stepId: string;
+    totalSteps: number;
+    isFirstStep: boolean;
+    isLastStep: boolean;
+}): void => {
+    capture("tour_step_viewed", {
+        ...props,
+        ...withPersonProperties({
+            [lastTourStepIndexKey(props.screenKey)]: props.stepIndex,
+        }),
+    });
+};
+
 export const tourCompleted = (props: {
     screenKey: TourScreenKey;
     totalSteps: number;
-}): void => capture("tour_completed", props);
+}): void => {
+    const status: TourStatus = "completed";
+    capture("tour_completed", {
+        ...props,
+        ...withPersonProperties({
+            [tourStatusKey(props.screenKey)]: status,
+            [lastTourCompletedAtKey(props.screenKey)]: nowIso(),
+        }),
+    });
+};
 
 export const tourDismissed = (props: {
     screenKey: TourScreenKey;
     stepIndex: number;
     totalSteps: number;
     via: TourDismissVia;
-}): void => capture("tour_dismissed", props);
+}): void => {
+    const status: TourStatus =
+        props.via === "skip"
+            ? "dismissed_skip"
+            : props.via === "close"
+              ? "dismissed_close"
+              : props.via === "esc"
+                ? "dismissed_esc"
+                : "dismissed_anchor_missing";
+    capture("tour_dismissed", {
+        ...props,
+        ...withPersonProperties({
+            [tourStatusKey(props.screenKey)]: status,
+            [lastTourDismissedAtKey(props.screenKey)]: nowIso(),
+            [lastTourStepIndexKey(props.screenKey)]: props.stepIndex,
+        }),
+    });
+};
+
+/** Fires when a tour is active and the page is unloaded (tab close,
+ *  browser back) without the user reaching `tour_completed` /
+ *  `tour_dismissed`. Lets the dropoff dashboard cleanly bucket "left
+ *  the site" as a third class alongside Skip / Close / Esc. */
+export const tourAbandoned = (props: {
+    screenKey: TourScreenKey;
+    lastStepIndex: number;
+    lastStepId: string;
+    totalSteps: number;
+}): void => {
+    const status: TourStatus = "abandoned";
+    capture("tour_abandoned", {
+        ...props,
+        ...withPersonProperties({
+            [tourStatusKey(props.screenKey)]: status,
+            [lastTourAbandonedAtKey(props.screenKey)]: nowIso(),
+            [lastTourStepIndexKey(props.screenKey)]: props.lastStepIndex,
+        }),
+    });
+};
 
 /** Fires on "Restart tour" overflow-menu click before `tourStarted`. */
 export const tourRestarted = (props: {
@@ -303,27 +485,86 @@ export type InstallDismissVia =
     | "snooze"
     | "native_decline";
 
+/**
+ * Fires when our in-app install modal opens. `reengaged` flips true
+ * when the modal is re-firing after a previous dismissal whose snooze
+ * has now elapsed — the same definition the splash uses, so the two
+ * dashboards read symmetrically.
+ *
+ * `visitCount` mirrors the localStorage `visits` counter at the time
+ * the modal opens, so the team can read "what fraction of users on
+ * their N-th visit see the prompt?" without joining events.
+ */
 export const installPrompted = (props: {
     trigger: InstallPromptTrigger;
-}): void => capture("install_prompted", props);
+    reengaged: boolean;
+    daysSinceLastDismissal: number | null;
+    visitCount: number;
+}): void => {
+    const at = nowIso();
+    const status: InstallStatus = "prompted";
+    capture("install_prompted", {
+        ...props,
+        ...withPersonProperties(
+            {
+                install_status: status,
+                last_install_prompted_at: at,
+            },
+            { first_install_prompted_at: at },
+        ),
+    });
+};
 
 export const installAccepted = (props: {
     trigger: InstallPromptTrigger;
-}): void => capture("install_accepted", props);
+}): void => {
+    const status: InstallStatus = "accepted";
+    capture("install_accepted", {
+        ...props,
+        ...withPersonProperties({
+            install_status: status,
+            last_install_accepted_at: nowIso(),
+        }),
+    });
+};
 
 export const installDismissed = (props: {
     trigger: InstallPromptTrigger;
     via: InstallDismissVia;
-}): void => capture("install_dismissed", props);
+}): void => {
+    const status: InstallStatus =
+        props.via === "native_decline"
+            ? "dismissed_native_decline"
+            : "dismissed_snoozed";
+    capture("install_dismissed", {
+        ...props,
+        ...withPersonProperties({
+            install_status: status,
+            last_install_dismiss_via: props.via,
+            last_install_dismissed_at: nowIso(),
+        }),
+    });
+};
 
 /** Fires when the browser confirms a successful install (`appinstalled` event). */
-export const installCompleted = (): void =>
-    capture("install_completed");
+export const installCompleted = (): void => {
+    const status: InstallStatus = "completed";
+    capture("install_completed", {
+        ...withPersonProperties({
+            install_status: status,
+            app_installed: true,
+            last_install_completed_at: nowIso(),
+        }),
+    });
+};
 
 /** Fires on every load when `display-mode: standalone` matches — the user
  *  has installed and is launching from the home screen / dock. */
-export const appLaunchedStandalone = (): void =>
-    capture("app_launched_standalone");
+export const appLaunchedStandalone = (): void => {
+    capture("app_launched_standalone", {
+        ...withPersonProperties({ app_installed: true }),
+    });
+};
 
 // ── Auth (M7) ─────────────────────────────────────────────────────────────
 //

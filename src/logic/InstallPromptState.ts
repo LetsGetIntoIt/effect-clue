@@ -134,3 +134,50 @@ export const computeShouldShowInstallPrompt = (
     const elapsed = DateTime.distance(state.lastDismissedAt, now);
     return Duration.isGreaterThan(elapsed, snoozeDuration);
 };
+
+/**
+ * Reengagement context for the `install_prompted` analytics payload.
+ *
+ * `reengaged` flips true when the user is seeing the prompt again
+ * after a previous dismissal whose snooze has elapsed — same
+ * definition as the splash gate so the two dashboards read
+ * symmetrically.
+ *
+ * `daysSinceLastDismissal` is `null` when the user has never
+ * dismissed before (first-time prompt). `visitCount` mirrors the
+ * `visits` counter in localStorage so the dashboard can answer
+ * "what visit number is the install prompt landing on?".
+ */
+interface InstallPromptAnalyticsContext {
+    readonly reengaged: boolean;
+    readonly daysSinceLastDismissal: number | null;
+    readonly visitCount: number;
+}
+
+const daysBetween = (from: DateTime.Utc, to: DateTime.Utc): number => {
+    const ms = Duration.toMillis(DateTime.distance(from, to));
+    return Math.floor(ms / Duration.toMillis(Duration.days(1)));
+};
+
+export const computeInstallPromptAnalyticsContext = (
+    state: InstallPromptState,
+    now: DateTime.Utc,
+    snoozeDuration: Duration.Duration = INSTALL_PROMPT_SNOOZE_DURATION,
+): InstallPromptAnalyticsContext => {
+    const lastDismissedAt = state.lastDismissedAt;
+    if (lastDismissedAt === undefined) {
+        return {
+            reengaged: false,
+            daysSinceLastDismissal: null,
+            visitCount: state.visits,
+        };
+    }
+    return {
+        reengaged: Duration.isGreaterThan(
+            DateTime.distance(lastDismissedAt, now),
+            snoozeDuration,
+        ),
+        daysSinceLastDismissal: daysBetween(lastDismissedAt, now),
+        visitCount: state.visits,
+    };
+};
