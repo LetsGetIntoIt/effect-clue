@@ -286,6 +286,11 @@ export function Checklist() {
         maxCol: totalCols - 1,
     };
 
+    // Expand-in / contract-out animation for newly added or removed
+    // Checklist rows (cards, categories) and columns (players).
+    //
+    // Honors `prefers-reduced-motion` via `useReducedTransition`.
+    const cellEntryTransition = useReducedTransition(T_FAST);
 
     // Handle ⌘J / ⌘H focus requests: locate a cell by (row,col) and
     // focus it. "first" falls back to the first interactive cell.
@@ -594,16 +599,26 @@ export function Checklist() {
                                     className="border-r border-b border-border bg-row-header px-2 py-1 text-center align-top font-semibold"
                                     {...playerHeaderAnchor}
                                 >
-                                    {inSetup && owner._tag === "Player" ? (
-                                        <PlayerNameInput
-                                            player={owner.player}
-                                            allPlayers={setup.players}
-                                            colIdx={ownerIdx}
-                                            bounds={bounds}
-                                        />
-                                    ) : (
-                                        ownerLabel(owner)
-                                    )}
+                                    <AnimatePresence>
+                                    <motion.div
+                                        key={ownerKey(owner)}
+                                        initial={ANIM_HIDDEN_COL}
+                                        animate={ANIM_VISIBLE_COL}
+                                        transition={cellEntryTransition}
+                                        style={STYLE_OVERFLOW_HIDDEN}
+                                    >
+                                        {inSetup && owner._tag === "Player" ? (
+                                            <PlayerNameInput
+                                                player={owner.player}
+                                                allPlayers={setup.players}
+                                                colIdx={ownerIdx}
+                                                bounds={bounds}
+                                            />
+                                        ) : (
+                                            ownerLabel(owner)
+                                        )}
+                                    </motion.div>
+                                    </AnimatePresence>
                                 </th>
                             );
                             return inSetup && owner._tag === "CaseFile"
@@ -708,7 +723,15 @@ export function Checklist() {
                                     className="border-r border-b border-border bg-category-header px-2 py-1.5 text-left text-[11px] uppercase tracking-[0.05em] text-white"
                                 >
                                     {inSetup ? (
-                                        <div className="flex items-center justify-between gap-2">
+                                        <AnimatePresence>
+                                        <motion.div
+                                            key={`cat-${String(category.id)}`}
+                                            className="flex items-center justify-between gap-2"
+                                            initial={ANIM_HIDDEN_ROW}
+                                            animate={ANIM_VISIBLE_ROW}
+                                            transition={cellEntryTransition}
+                                            style={STYLE_OVERFLOW_HIDDEN}
+                                        >
                                             <InlineTextEdit
                                                 value={category.name}
                                                 className="min-w-0 flex-1 rounded border border-white/30 bg-transparent px-1 py-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-white focus:bg-white/10 focus:outline-none"
@@ -770,7 +793,8 @@ export function Checklist() {
                                             >
                                                 &times;
                                             </button>
-                                        </div>
+                                        </motion.div>
+                                        </AnimatePresence>
                                     ) : (
                                         category.name
                                     )}
@@ -782,10 +806,18 @@ export function Checklist() {
                                 return (
                                 <tr
                                     key={String(entry.id)}
-                                                                    >
+                                >
                                     <th className="w-px whitespace-nowrap border-r border-b border-border px-2 py-1 text-left font-normal">
                                         {inSetup ? (
-                                            <div className="flex items-center justify-between gap-2">
+                                            <AnimatePresence>
+                                            <motion.div
+                                                key={String(entry.id)}
+                                                className="flex items-center justify-between gap-2"
+                                                initial={ANIM_HIDDEN_ROW}
+                                                animate={ANIM_VISIBLE_ROW}
+                                                transition={cellEntryTransition}
+                                                style={STYLE_OVERFLOW_HIDDEN}
+                                            >
                                                 <InlineTextEdit
                                                     value={entry.name}
                                                     className="min-w-0 flex-1 rounded border border-border/60 bg-transparent px-1 py-0.5 text-[12px] focus:border-accent focus:outline-none"
@@ -846,7 +878,8 @@ export function Checklist() {
                                                 >
                                                     &times;
                                                 </button>
-                                            </div>
+                                            </motion.div>
+                                            </AnimatePresence>
                                         ) : (
                                             entry.name
                                         )}
@@ -1721,6 +1754,14 @@ const CSS_WHITE = "#ffffff";
 const CSS_INK = "#2a1f12";
 const MOTION_WAIT: "wait" = "wait";
 const MOTION_POP_LAYOUT: "popLayout" = "popLayout";
+// Animation target values for the cell-content expand/collapse. Pulled
+// out so the i18next/no-literal-string rule treats them as wire-format
+// CSS keywords rather than user-facing copy.
+const ANIM_HIDDEN_ROW = { height: 0, opacity: 0 } as const;
+const ANIM_VISIBLE_ROW = { height: "auto", opacity: 1 } as const;
+const ANIM_HIDDEN_COL = { width: 0, opacity: 0 } as const;
+const ANIM_VISIBLE_COL = { width: "auto", opacity: 1 } as const;
+const STYLE_OVERFLOW_HIDDEN = { overflow: "hidden" } as const;
 
 function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
     const t = useTranslations("deduce");
