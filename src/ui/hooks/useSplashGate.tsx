@@ -103,12 +103,33 @@ export function useSplashGate(): {
                 ABOUT_APP_SPLASH_SCREEN_DISMISSAL_DURATION,
             ),
         );
+        const dismissedBefore = state.lastDismissedAt !== undefined;
+        const daysSinceLastVisit =
+            state.lastVisitedAt !== undefined
+                ? daysBetween(state.lastVisitedAt, now)
+                : null;
+        const daysSinceLastDismissal =
+            state.lastDismissedAt !== undefined
+                ? daysBetween(state.lastDismissedAt, now)
+                : null;
+        // `reengaged` is true when the user previously dismissed the
+        // splash AND the snooze window has elapsed — i.e. the splash
+        // re-fired on its own after a dormant stretch. Mirrors the
+        // gate condition in `computeShouldShowSplash` so the
+        // dashboard's "reengaged" filter matches the code's gate
+        // exactly.
+        const reengaged =
+            dismissedBefore &&
+            state.lastVisitedAt !== undefined &&
+            Duration.isGreaterThan(
+                DateTime.distance(state.lastVisitedAt, now),
+                ABOUT_APP_SPLASH_SCREEN_DISMISSAL_DURATION,
+            );
         splashScreenViewed({
-            dismissedBefore: state.lastDismissedAt !== undefined,
-            daysSinceLastVisit:
-                state.lastVisitedAt !== undefined
-                    ? daysBetween(state.lastVisitedAt, now)
-                    : null,
+            dismissedBefore,
+            daysSinceLastVisit,
+            reengaged,
+            daysSinceLastDismissal,
         });
     }, [phase]);
 

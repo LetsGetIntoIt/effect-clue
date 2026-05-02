@@ -24,25 +24,29 @@ import {
     useContext,
     useEffect,
     useMemo,
+    useRef,
     useState,
     type ReactNode,
 } from "react";
-import { DateTime, Effect } from "effect";
+import { DateTime, Duration, Effect } from "effect";
 import {
     tourCompleted,
     tourDismissed,
     tourRestarted,
     tourStarted,
     tourStepAdvanced,
+    tourStepViewed,
     type TourDismissVia,
 } from "../../analytics/events";
 import { TelemetryRuntime } from "../../observability/runtime";
 import { TOURS, type TourStep } from "./tours";
 import {
+    loadTourState,
     resetAllTourState,
     saveTourDismissed,
     type ScreenKey,
 } from "./TourState";
+import { useTourAbandonReporter } from "./useTourAbandonReporter";
 
 interface TourContextValue {
     /** The currently-active tour, or undefined when no tour is showing. */
@@ -160,6 +164,32 @@ const useFilterStepsByViewport = (
 // so React sees a stable identity across renders.
 const EMPTY_STEPS: ReadonlyArray<TourStep> = [];
 
+const daysBetween = (from: DateTime.Utc, to: DateTime.Utc): number => {
+    const ms = Duration.toMillis(DateTime.distance(from, to));
+    return Math.floor(ms / Duration.toMillis(Duration.days(1)));
+};
+
+/**
+ * Compute the reengagement context for `tourStarted` from a screen's
+ * persisted state. Pulled out so both auto-fire (`startTour`) and
+ * manual restart (`restartTourForScreen`) can use it — manual
+ * restart reads state BEFORE wiping it, so the analytics still
+ * reflect the user's history.
+ */
+const tourReengagementContext = (
+    state: { lastDismissedAt?: DateTime.Utc },
+    now: DateTime.Utc,
+): { reengaged: boolean; daysSinceLastDismissal: number | null } => {
+    const lastDismissedAt = state.lastDismissedAt;
+    if (lastDismissedAt === undefined) {
+        return { reengaged: false, daysSinceLastDismissal: null };
+    }
+    return {
+        reengaged: true,
+        daysSinceLastDismissal: daysBetween(lastDismissedAt, now),
+    };
+};
+
 export function TourProvider({ children }: { readonly children: ReactNode }) {
     const [activeScreen, setActiveScreen] = useState<ScreenKey | undefined>(
         undefined,
@@ -196,7 +226,15 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
         });
         if (stepsForScreen.length === 0) return;
         TelemetryRuntime.runSync(startEffect(screen));
-        tourStarted({ screenKey: screen, stepCount: stepsForScreen.length });
+        const reengage = tourReengagementContext(
+            loadTourState(screen),
+            DateTime.nowUnsafe(),
+        );
+        tourStarted({
+            screenKey: screen,
+            stepCount: stepsForScreen.length,
+            ...reengage,
+        });
         setActiveScreen(screen);
         setStepIndex(0);
     }, []);
@@ -281,6 +319,15 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
 
     const restartTourForScreen = useCallback(
         (screen: ScreenKey) => {
+            // Read the dismissal state BEFORE wiping, so the analytics
+            // payload reflects the user's actual history. After
+            // `resetAllTourState()` runs, `lastDismissedAt` is gone —
+            // but the user did dismiss it before, and a manual restart
+            // is a reengagement signal worth preserving.
+            const reengage = tourReengagementContext(
+                loadTourState(screen),
+                DateTime.nowUnsafe(),
+            );
             resetAllTourState();
             tourRestarted({ screenKey: screen });
             // Same viewport filter as `startTour` so the analytics
@@ -304,12 +351,83 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
             tourStarted({
                 screenKey: screen,
                 stepCount: stepsForScreen.length,
+                ...reengage,
             });
             setActiveScreen(screen);
             setStepIndex(0);
         },
         [],
     );
+
+    // Abandon reporter: fires `tour_abandoned` if the user closes
+    // the tab while the tour is open. Returns `markTerminated` so
+    // the dismiss / completion paths can prevent a same-tick
+    // `pagehide` from firing a redundant abandon event.
+    const { markTerminated } = useTourAbandonReporter({
+        activeScreen,
+        stepIndex,
+        currentStep,
+        totalSteps,
+    });
+
+    // The original nextStep / dismissTour callbacks are wrapped so
+    // they call `markTerminated` after dispatching their terminal
+    // event. Wrappers don't change behavior; they just notify the
+    // abandon reporter.
+    const nextStepWrapped = useCallback(() => {
+        const wasLastStep =
+            activeScreen !== undefined &&
+            steps !== undefined &&
+            stepIndex >= steps.length - 1;
+        nextStep();
+        if (wasLastStep) markTerminated();
+    }, [nextStep, activeScreen, steps, stepIndex, markTerminated]);
+
+    const dismissTourWrapped = useCallback(
+        (via: TourDismissVia) => {
+            dismissTour(via);
+            markTerminated();
+        },
+        [dismissTour, markTerminated],
+    );
+
+    // Per-step view event for the histogram funnel. Fires once per
+    // (activeScreen, stepIndex) combination — one event when a tour
+    // starts (step 0), one event on each Next/Back navigation. The
+    // ref dedup ensures React StrictMode's double-invocation in dev
+    // doesn't fire two events for the same step.
+    const lastStepViewedRef = useRef<{
+        screen: ScreenKey;
+        index: number;
+    } | null>(null);
+    useEffect(() => {
+        if (
+            activeScreen === undefined ||
+            currentStep === undefined ||
+            steps === undefined
+        ) {
+            // Tour closed — clear the ref so the next start fires
+            // step 0's event again.
+            lastStepViewedRef.current = null;
+            return;
+        }
+        const last = lastStepViewedRef.current;
+        if (last?.screen === activeScreen && last.index === stepIndex) {
+            return;
+        }
+        lastStepViewedRef.current = {
+            screen: activeScreen,
+            index: stepIndex,
+        };
+        tourStepViewed({
+            screenKey: activeScreen,
+            stepIndex,
+            stepId: currentStep.anchor,
+            totalSteps,
+            isFirstStep: stepIndex === 0,
+            isLastStep,
+        });
+    }, [activeScreen, stepIndex, currentStep, steps, totalSteps, isLastStep]);
 
     const value = useMemo<TourContextValue>(
         () => ({
@@ -319,9 +437,9 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
             currentStep,
             isLastStep,
             startTour,
-            nextStep,
+            nextStep: nextStepWrapped,
             prevStep,
-            dismissTour,
+            dismissTour: dismissTourWrapped,
             restartTourForScreen,
         }),
         [
@@ -331,9 +449,9 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
             currentStep,
             isLastStep,
             startTour,
-            nextStep,
+            nextStepWrapped,
             prevStep,
-            dismissTour,
+            dismissTourWrapped,
             restartTourForScreen,
         ],
     );

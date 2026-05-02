@@ -57,14 +57,24 @@ describe("SplashModal", () => {
         render(<SplashModal open onDismiss={onDismiss} />);
         fireEvent.click(screen.getByRole("button", { name: "splash.startPlaying" }));
         expect(onDismiss).toHaveBeenCalledWith(false);
-        expect(captureCalls).toEqual([
-            {
-                event: "splash_screen_dismissed",
-                props: {
-                    method: "start_playing",
-                    dontShowAgainChecked: false,
+        expect(captureCalls).toHaveLength(1);
+        expect(captureCalls[0]).toMatchObject({
+            event: "splash_screen_dismissed",
+            props: {
+                method: "start_playing",
+                dontShowAgainChecked: false,
+                $set: {
+                    splash_status: "dismissed_no_dontshow",
+                    splash_dont_show_again: false,
+                    last_splash_dismiss_method: "start_playing",
                 },
             },
+        });
+        // Timestamp shape isn't pinned but presence is — it powers
+        // the dashboard's "last dismissed" cohort.
+        expect(captureCalls[0]?.props).toHaveProperty([
+            "$set",
+            "last_splash_dismissed_at",
         ]);
     });
 
@@ -74,15 +84,19 @@ describe("SplashModal", () => {
         render(<SplashModal open onDismiss={onDismiss} />);
         fireEvent.click(screen.getByRole("button", { name: "splash.close" }));
         expect(onDismiss).toHaveBeenCalledWith(false);
-        expect(captureCalls).toEqual([
-            {
-                event: "splash_screen_dismissed",
-                props: {
-                    method: "x_button",
-                    dontShowAgainChecked: false,
+        expect(captureCalls).toHaveLength(1);
+        expect(captureCalls[0]).toMatchObject({
+            event: "splash_screen_dismissed",
+            props: {
+                method: "x_button",
+                dontShowAgainChecked: false,
+                $set: {
+                    splash_status: "dismissed_no_dontshow",
+                    splash_dont_show_again: false,
+                    last_splash_dismiss_method: "x_button",
                 },
             },
-        ]);
+        });
     });
 
     test("checkbox toggle propagates into the dismiss event and onDismiss arg", async () => {
@@ -93,14 +107,18 @@ describe("SplashModal", () => {
         await user.click(screen.getByRole("checkbox"));
         await user.click(screen.getByRole("button", { name: "splash.startPlaying" }));
         expect(onDismiss).toHaveBeenCalledWith(true);
-        expect(captureCalls).toEqual([
-            {
-                event: "splash_screen_dismissed",
-                props: {
-                    method: "start_playing",
-                    dontShowAgainChecked: true,
+        expect(captureCalls).toHaveLength(1);
+        expect(captureCalls[0]).toMatchObject({
+            event: "splash_screen_dismissed",
+            props: {
+                method: "start_playing",
+                dontShowAgainChecked: true,
+                $set: {
+                    splash_status: "dismissed_with_dontshow",
+                    splash_dont_show_again: true,
+                    last_splash_dismiss_method: "start_playing",
                 },
             },
-        ]);
+        });
     });
 });

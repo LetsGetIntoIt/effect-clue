@@ -18,8 +18,23 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, render } from "@testing-library/react";
 import { type ReactNode } from "react";
+import { DateTime } from "effect";
 import { TourProvider, useTour } from "./TourProvider";
-import { loadTourState } from "./TourState";
+import { loadTourState, saveTourDismissed } from "./TourState";
+
+const captureCalls: Array<{
+    event: string;
+    props: Record<string, unknown> | undefined;
+}> = [];
+
+vi.mock("../../analytics/posthog", () => ({
+    posthog: {
+        __loaded: true,
+        capture: (event: string, props?: Record<string, unknown>) => {
+            captureCalls.push({ event, props });
+        },
+    },
+}));
 
 const stubMatchMedia = (matches: boolean): void => {
     window.matchMedia = vi.fn().mockImplementation(() => ({
@@ -71,6 +86,7 @@ function mount(children?: ReactNode): TourApi {
 
 beforeEach(() => {
     window.localStorage.clear();
+    captureCalls.length = 0;
 });
 
 afterEach(() => {
@@ -197,5 +213,134 @@ describe("TourProvider — viewport filter", () => {
         // `bottom-nav-suggest` and isLastStep would be false at this
         // point — pinning isLastStep at desktop step 3 confirms the
         // filter is wiring through.
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Analytics — generic per-step view event powers a histogram funnel that
+// auto-discovers steps as tours change in code. We pin the exact event
+// sequence walking through a tour so a regression in the wiring (e.g.
+// dropping step-0's view event) shows up as a failing test.
+// ─────────────────────────────────────────────────────────────────────────
+
+const eventNames = (): ReadonlyArray<string> =>
+    captureCalls.map(c => c.event);
+
+describe("TourProvider — analytics events", () => {
+    test("startTour fires tour_started then tour_step_viewed for step 0", () => {
+        stubMatchMedia(true);
+        const api = mount();
+        act(() => api.current().startTour("setup"));
+        expect(eventNames()).toEqual(["tour_started", "tour_step_viewed"]);
+        expect(captureCalls[0]).toMatchObject({
+            event: "tour_started",
+            props: {
+                screenKey: "setup",
+                stepCount: 6,
+                reengaged: false,
+                daysSinceLastDismissal: null,
+            },
+        });
+        expect(captureCalls[1]).toMatchObject({
+            event: "tour_step_viewed",
+            props: {
+                screenKey: "setup",
+                stepIndex: 0,
+                stepId: "setup-card-pack",
+                totalSteps: 6,
+                isFirstStep: true,
+                isLastStep: false,
+            },
+        });
+    });
+
+    test("nextStep emits tour_step_advanced then tour_step_viewed for the new step", () => {
+        stubMatchMedia(true);
+        const api = mount();
+        act(() => api.current().startTour("setup"));
+        captureCalls.length = 0; // discard start events
+        act(() => api.current().nextStep());
+        expect(eventNames()).toEqual([
+            "tour_step_advanced",
+            "tour_step_viewed",
+        ]);
+        expect(captureCalls[1]).toMatchObject({
+            event: "tour_step_viewed",
+            props: {
+                screenKey: "setup",
+                stepIndex: 1,
+                stepId: "setup-player-column",
+                isFirstStep: false,
+                isLastStep: false,
+            },
+        });
+    });
+
+    test("completing a tour fires tour_completed (no extra step_viewed)", () => {
+        stubMatchMedia(true);
+        const api = mount();
+        act(() => api.current().startTour("setup"));
+        captureCalls.length = 0;
+        for (let i = 0; i < 6; i++) {
+            act(() => api.current().nextStep());
+        }
+        // 5 advances + 5 step_views (steps 1..5) + 1 completion.
+        const last = captureCalls[captureCalls.length - 1];
+        expect(last?.event).toBe("tour_completed");
+        expect(last).toMatchObject({
+            props: {
+                screenKey: "setup",
+                totalSteps: 6,
+                $set: { tour_setup_status: "completed" },
+            },
+        });
+    });
+
+    test("dismissTour fires tour_dismissed with the via-keyed status", () => {
+        stubMatchMedia(true);
+        const api = mount();
+        act(() => api.current().startTour("setup"));
+        captureCalls.length = 0;
+        act(() => api.current().dismissTour("skip"));
+        expect(captureCalls).toHaveLength(1);
+        expect(captureCalls[0]).toMatchObject({
+            event: "tour_dismissed",
+            props: {
+                screenKey: "setup",
+                stepIndex: 0,
+                via: "skip",
+                $set: {
+                    tour_setup_status: "dismissed_skip",
+                    last_tour_setup_step_index: 0,
+                },
+            },
+        });
+    });
+
+    test("tour_started carries reengaged: true after a previous dismissal", () => {
+        stubMatchMedia(true);
+        // Pre-seed a dismissal so loadTourState reports lastDismissedAt.
+        saveTourDismissed("setup", DateTime.nowUnsafe());
+        const api = mount();
+        act(() => api.current().startTour("setup"));
+        expect(captureCalls[0]).toMatchObject({
+            event: "tour_started",
+            props: { screenKey: "setup", reengaged: true },
+        });
+        expect(captureCalls[0]?.props).toHaveProperty(
+            "daysSinceLastDismissal",
+            0,
+        );
+    });
+
+    test("restartTourForScreen reports reengaged from BEFORE wiping state", () => {
+        stubMatchMedia(true);
+        saveTourDismissed("setup", DateTime.nowUnsafe());
+        const api = mount();
+        act(() => api.current().restartTourForScreen("setup"));
+        const startedEvent = captureCalls.find(c => c.event === "tour_started");
+        expect(startedEvent).toMatchObject({
+            props: { screenKey: "setup", reengaged: true },
+        });
     });
 });

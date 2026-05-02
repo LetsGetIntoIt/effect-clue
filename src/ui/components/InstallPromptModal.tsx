@@ -19,6 +19,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
+import { DateTime } from "effect";
 import {
     installAccepted,
     installDismissed,
@@ -26,6 +27,10 @@ import {
     type InstallDismissVia,
     type InstallPromptTrigger,
 } from "../../analytics/events";
+import {
+    computeInstallPromptAnalyticsContext,
+    loadInstallPromptState,
+} from "../../logic/InstallPromptState";
 import { ArrowRightIcon, XIcon } from "./Icons";
 
 // Module-scope discriminator constants for the analytics payload —
@@ -56,7 +61,11 @@ export function InstallPromptModal({
     const tCommon = useTranslations("common");
 
     const handleInstall = async (): Promise<void> => {
-        installPrompted({ trigger });
+        const ctx = computeInstallPromptAnalyticsContext(
+            loadInstallPromptState(),
+            DateTime.nowUnsafe(),
+        );
+        installPrompted({ trigger, ...ctx });
         const accepted = await onInstall();
         if (accepted) {
             installAccepted({ trigger });
