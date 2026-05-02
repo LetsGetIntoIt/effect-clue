@@ -70,6 +70,11 @@ import {
     loadFromLocalStorage,
     saveToLocalStorage,
 } from "../logic/Persistence";
+import {
+    loadGameLifecycleState,
+    markGameCreated,
+    markGameTouched,
+} from "../logic/GameLifecycleState";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     deduceWithExplanations,
@@ -89,7 +94,7 @@ import {
     makeSetupLayer,
     makeSuggestionsLayer,
 } from "../logic/services";
-import { Duration, Layer } from "effect";
+import { DateTime, Duration, Layer } from "effect";
 import { requestFocusAddForm } from "./addFormFocus";
 import { requestFocusChecklistCell } from "./checklistFocus";
 import { useGlobalShortcut } from "./keyMap";
@@ -709,6 +714,18 @@ export function ClueProvider({ children }: { children: ReactNode }) {
                     dispatchRaw(action);
                 })(),
             );
+            // Sync game-lifecycle storage so the stale-game prompt
+            // sees genuine staleness. `setUiMode` and `replaceSession`
+            // are excluded — flipping panes or rehydrating from
+            // localStorage isn't "the user touched the game".
+            if (action.type === "newGame") {
+                markGameCreated(DateTime.nowUnsafe());
+            } else if (
+                action.type !== "setUiMode"
+                && action.type !== "replaceSession"
+            ) {
+                markGameTouched(DateTime.nowUnsafe());
+            }
         },
         [],
     );
@@ -726,8 +743,14 @@ export function ClueProvider({ children }: { children: ReactNode }) {
               previousState: history.current,
           }
         : undefined;
-    const undo = useCallback(() => dispatchRaw({ type: "__undo" }), []);
-    const redo = useCallback(() => dispatchRaw({ type: "__redo" }), []);
+    const undo = useCallback(() => {
+        dispatchRaw({ type: "__undo" });
+        markGameTouched(DateTime.nowUnsafe());
+    }, []);
+    const redo = useCallback(() => {
+        dispatchRaw({ type: "__redo" });
+        markGameTouched(DateTime.nowUnsafe());
+    }, []);
 
     // Refs shared by several shortcut handlers so their handler
     // references stay stable (no listener churn when state changes).
@@ -989,6 +1012,34 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         const viewParam = params.get("view");
         const session = loadFromLocalStorage();
         if (session) dispatch({ type: "replaceSession", session });
+
+        // Backfill lifecycle timestamps for users upgrading from a
+        // build before this feature shipped. New users get fresh
+        // `createdAt`/`lastModifiedAt` from the `newGame` / mutation
+        // path; existing sessions need a one-time stamp so the
+        // stale-game gate has something to reason about. Use the
+        // most recent suggestion/accusation `loggedAt` when present
+        // (best-effort proxy for "last touched"), else stamp now.
+        const lifecycle = loadGameLifecycleState();
+        if (
+            lifecycle.createdAt === undefined
+            && lifecycle.lastModifiedAt === undefined
+        ) {
+            const loggedAtSamples: number[] = [];
+            for (const s of session?.suggestions ?? []) {
+                if (s.loggedAt > 0) loggedAtSamples.push(s.loggedAt);
+            }
+            for (const a of session?.accusations ?? []) {
+                if (a.loggedAt > 0) loggedAtSamples.push(a.loggedAt);
+            }
+            if (loggedAtSamples.length > 0) {
+                const maxLoggedAt = Math.max(...loggedAtSamples);
+                const stamp = DateTime.makeUnsafe(new Date(maxLoggedAt));
+                markGameCreated(stamp);
+            } else {
+                markGameCreated(DateTime.nowUnsafe());
+            }
+        }
 
         // View precedence: explicit `?view=` wins; otherwise pick based
         // on hydrated suggestions. The default state.uiMode is "setup",

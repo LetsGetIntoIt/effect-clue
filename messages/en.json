@@ -358,6 +358,16 @@
         "notNow": "Not now",
         "menuItem": "Install app"
     },
+    "staleGame": {
+        "title": "Pick up where you left off?",
+        "descriptionStarted": "You haven't touched this game in {humanDuration}. Want to set up a new one?",
+        "descriptionUnstarted": "This game has been sitting empty for {humanDuration}. Want to set up a new one?",
+        "durationDays": "{count, plural, one {# day} other {# days}}",
+        "durationHours": "{count, plural, one {# hour} other {# hours}}",
+        "durationMinutes": "{count, plural, one {# minute} other {# minutes}}",
+        "keepWorking": "Keep working",
+        "setupNew": "Set up new game"
+    },
     "onboarding": {
         "next": "Next",
         "back": "Back",

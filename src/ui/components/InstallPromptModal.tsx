@@ -19,6 +19,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
+import { useRef } from "react";
 import {
     installAccepted,
     installDismissed,
@@ -54,6 +55,7 @@ export function InstallPromptModal({
 }) {
     const t = useTranslations("installPrompt");
     const tCommon = useTranslations("common");
+    const notNowRef = useRef<HTMLButtonElement | null>(null);
 
     const handleInstall = async (): Promise<void> => {
         installPrompted({ trigger });
@@ -98,6 +100,20 @@ export function InstallPromptModal({
                         "-translate-x-1/2 -translate-y-1/2 rounded-[var(--radius)] border border-border " +
                         "bg-panel shadow-[0_10px_28px_rgba(0,0,0,0.28)] focus:outline-none"
                     }
+                    onOpenAutoFocus={(e) => {
+                        // Radix focuses the X by default. We bias toward
+                        // "Not now" instead — the user wasn't seeking
+                        // out an install, so a stray Enter on the
+                        // primary "Install" button would feel hostile.
+                        // The setTimeout (vs rAF) lets Radix's
+                        // FocusScope settle before we override — rAF
+                        // can lose the race when the modal opens
+                        // during a busy render path.
+                        e.preventDefault();
+                        window.setTimeout(() => {
+                            notNowRef.current?.focus();
+                        }, 50);
+                    }}
                 >
                     <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
                         <Dialog.Title className="m-0 font-display text-[20px] text-accent">
@@ -120,6 +136,7 @@ export function InstallPromptModal({
                     </ul>
                     <div className="mt-4 flex items-center justify-end gap-2 border-t border-border bg-panel px-5 pt-4 pb-5">
                         <button
+                            ref={notNowRef}
                             type="button"
                             onClick={handleSnooze}
                             className="cursor-pointer rounded-[var(--radius)] border border-border bg-white px-4 py-2 text-[14px] hover:bg-hover"

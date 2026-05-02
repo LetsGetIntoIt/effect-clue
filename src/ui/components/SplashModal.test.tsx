@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const captureCalls: Array<{
@@ -49,6 +49,17 @@ describe("SplashModal", () => {
         const SplashModal = await importModal();
         render(<SplashModal open={false} onDismiss={() => {}} />);
         expect(screen.queryByText("splash.title")).not.toBeInTheDocument();
+    });
+
+    test("auto-focuses the CTA, not the X", async () => {
+        const SplashModal = await importModal();
+        render(<SplashModal open onDismiss={() => {}} />);
+        const cta = screen.getByRole("button", {
+            name: "splash.startPlaying",
+        });
+        await waitFor(() => {
+            expect(cta).toHaveFocus();
+        });
     });
 
     test("'Start playing' fires dismiss with method=start_playing and the checkbox state", async () => {
