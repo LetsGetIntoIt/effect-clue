@@ -410,4 +410,87 @@ describe("StartupCoordinator — tour precedence", () => {
         // but phase=tour confirms the coordinator decided to fire.
         expect(probe.current?.phase).toBe("tour");
     });
+
+    test("returning user (setup completed) on setup → no redirect, no auto-tour", () => {
+        // Setup tour completed; checklistSuggest tour is eligible
+        // (e.g. it's been ≥4 weeks since last dismissal, or the user
+        // restarted it via ⋯ → Take tour). User landed on setup.
+        //
+        // Old behavior: coordinator would redirect them off setup to
+        // fire the checklistSuggest tour. New behavior: leave them on
+        // setup. The checklistSuggest tour fires when the user
+        // navigates to checklist/suggest themselves (handled by the
+        // per-screen TourScreenGate, not the coordinator).
+        const recent = new Date().toISOString();
+        seed(STORAGE_SPLASH, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_SETUP, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        // checklistSuggest left unseeded → eligible.
+        seed(STORAGE_INSTALL, { version: 1, visits: 1 });
+
+        const onRedirect = vi.fn();
+        mount("setup", onRedirect);
+        expect(onRedirect).not.toHaveBeenCalled();
+        // Tour phase skipped; install (next priority) is eligible
+        // since visits → 2 and tour wasn't auto-fired.
+        expect(probe.current?.phase).toBe("install");
+    });
+
+    test("returning user (setup completed) on setup, install ineligible → done", () => {
+        // Same setup as above but install gate is also satisfied.
+        // Phase advances all the way to done.
+        const recent = new Date().toISOString();
+        seed(STORAGE_SPLASH, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_SETUP, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        // checklistSuggest left unseeded → eligible.
+        seed(STORAGE_INSTALL, {
+            version: 1,
+            visits: 99,
+            lastDismissedAt: recent,
+        });
+
+        const onRedirect = vi.fn();
+        mount("setup", onRedirect);
+        expect(onRedirect).not.toHaveBeenCalled();
+        expect(probe.current?.phase).toBe("done");
+    });
+
+    test("post-splash: returning user (setup completed) on setup → splash dismiss does NOT redirect", () => {
+        // Splash + checklistSuggest both eligible (setup completed),
+        // user is on setup. Splash fires first. After splash close,
+        // the post-splash precedence re-decision should NOT redirect
+        // off setup just because checklistSuggest is eligible.
+        seed(STORAGE_SPLASH, { version: 1 }); // eligible
+        const recent = new Date().toISOString();
+        seed(STORAGE_TOUR_SETUP, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        // checklistSuggest unseeded → eligible.
+        seed(STORAGE_INSTALL, { version: 1, visits: 0 });
+
+        const onRedirect = vi.fn();
+        mount("setup", onRedirect);
+        expect(probe.current?.phase).toBe("splash");
+        act(() => probe.current?.reportClosed("splash"));
+        expect(onRedirect).not.toHaveBeenCalled();
+        // No tour fires; nothing else eligible → done.
+        expect(probe.current?.phase).toBe("done");
+    });
 });

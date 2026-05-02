@@ -58,8 +58,9 @@ import { loadTourState, type ScreenKey } from "../tour/TourState";
 /**
  * Priority order for auto-firing tours at boot. The coordinator
  * picks the highest-priority eligible tour. If that tour belongs to
- * a screen the user is NOT currently on, it asks the parent to
- * redirect (via the `onRedirectToScreen` prop) before firing.
+ * a screen the user is NOT currently on, it MAY ask the parent to
+ * redirect (via `onRedirectToScreen`) — but only for the setup tour.
+ * See `shouldRedirectForTour` below.
  *
  * Screens omitted from this list are NOT auto-fired by precedence:
  *   - `firstSuggestion` is event-triggered (after the user logs
@@ -71,6 +72,66 @@ const TOUR_PRECEDENCE: ReadonlyArray<ScreenKey> = [
     "setup",
     "checklistSuggest",
 ] as const;
+
+const SCREEN_SETUP: ScreenKey = "setup";
+
+/**
+ * Should the coordinator pull the user off their current screen to
+ * fire the highest-priority eligible tour? Only the setup tour gets
+ * the redirect treatment — for everything else, we defer to the
+ * per-screen `TourScreenGate` to fire the tour the next time the
+ * user navigates to its screen themselves.
+ *
+ * Why setup-only: setup is the prerequisite for everything else in
+ * the app (you can't meaningfully use the checklist or suggest panes
+ * without a configured game). A brand-new user who landed deep-linked
+ * on `/play?view=checklist` genuinely needs to be moved back to setup
+ * first. For all other tours, silently bouncing the user off the
+ * screen they intentionally landed on is more disorienting than
+ * waiting for them to navigate there themselves.
+ */
+const shouldRedirectForTour = (
+    target: ScreenKey,
+    activeScreen: ScreenKey,
+): boolean => target === SCREEN_SETUP && activeScreen !== SCREEN_SETUP;
+
+/**
+ * Decide what the coordinator should do with the highest-priority
+ * eligible tour, given the screen the user landed on and whether a
+ * redirect callback is available.
+ *
+ *   - `"fire"` — phase advances to `tour`; the matching tour fires
+ *     in place. Either the target matches the active screen, OR the
+ *     coordinator wanted to redirect but had no callback (test path).
+ *   - `"redirect-then-fire"` — call `onRedirectToScreen(target)`;
+ *     the active-screen prop will update on the parent's next render
+ *     and the matching tour fires after.
+ *   - `"skip"` — no tour auto-fires this boot. Either nothing is
+ *     eligible, or the eligible tour is for a screen the user isn't
+ *     on AND we don't redirect for it. The per-screen
+ *     `TourScreenGate` will fire it the next time the user navigates
+ *     there themselves.
+ */
+const TOUR_DECISION_FIRE = "fire" as const;
+const TOUR_DECISION_REDIRECT_THEN_FIRE = "redirect-then-fire" as const;
+const TOUR_DECISION_SKIP = "skip" as const;
+type TourDecision =
+    | typeof TOUR_DECISION_FIRE
+    | typeof TOUR_DECISION_REDIRECT_THEN_FIRE
+    | typeof TOUR_DECISION_SKIP;
+
+const decideTourDispatch = (
+    target: ScreenKey | undefined,
+    activeScreen: ScreenKey,
+    canRedirect: boolean,
+): TourDecision => {
+    if (target === undefined) return TOUR_DECISION_SKIP;
+    if (target === activeScreen) return TOUR_DECISION_FIRE;
+    if (shouldRedirectForTour(target, activeScreen)) {
+        return canRedirect ? TOUR_DECISION_REDIRECT_THEN_FIRE : TOUR_DECISION_FIRE;
+    }
+    return TOUR_DECISION_SKIP;
+};
 
 /**
  * The slots the coordinator manages. Each maps to one auto-firable
@@ -280,21 +341,23 @@ export function StartupCoordinatorProvider({
         }
 
         const target = findHighestPriorityEligibleTour(now);
-        if (
-            target !== undefined &&
-            target !== activeScreen &&
-            redirectRef.current
-        ) {
+        const decision = decideTourDispatch(
+            target,
+            activeScreen,
+            redirectRef.current !== undefined,
+        );
+
+        if (decision === TOUR_DECISION_REDIRECT_THEN_FIRE) {
             // Don't snapshot yet — wait for the parent to dispatch the
             // redirect, which will update `activeScreen` and re-run
-            // this effect.
-            redirectRef.current(target);
+            // this effect (which will then take the "fire" branch).
+            redirectRef.current?.(target as ScreenKey);
             return;
         }
 
         const eligibility: Eligibility = {
             splash: false,
-            tour: target !== undefined,
+            tour: decision === TOUR_DECISION_FIRE,
             install: isInstallEligibleByCounter(now),
         };
         eligibilityRef.current = eligibility;
@@ -309,21 +372,19 @@ export function StartupCoordinatorProvider({
         // already advanced, e.g. install snooze + close fired twice.
         if (slot === SLOT_SPLASH) {
             // Re-run the precedence decision now that splash is gone.
-            // The user might still be on a non-precedence screen, so
-            // we may need to redirect before phase advances to `tour`.
+            // Same `decideTourDispatch` rule as boot — we only redirect
+            // off the user's current screen for the setup tour; other
+            // tours fire in place or wait for next navigation.
             const now = DateTime.nowUnsafe();
             const target = findHighestPriorityEligibleTour(now);
+            const decision = decideTourDispatch(
+                target,
+                activeScreen,
+                redirectRef.current !== undefined,
+            );
             setPhase(prev => {
                 if (prev !== SLOT_SPLASH) return prev;
-                if (target === undefined) {
-                    // No tour wants to fire; fall through to install.
-                    return pickNextPhase({
-                        splash: false,
-                        tour: false,
-                        install: snapshot.install,
-                    });
-                }
-                if (target !== activeScreen && redirectRef.current) {
+                if (decision === TOUR_DECISION_REDIRECT_THEN_FIRE) {
                     // Mirror the snapshot to reflect that a tour will
                     // fire (so the next `reportClosed("tour")` reads
                     // a consistent snapshot), then redirect. The
@@ -335,15 +396,20 @@ export function StartupCoordinatorProvider({
                         tour: true,
                         install: snapshot.install,
                     };
-                    redirectRef.current(target);
+                    redirectRef.current?.(target as ScreenKey);
                     return SLOT_TOUR;
                 }
+                const willFireTour = decision === TOUR_DECISION_FIRE;
                 eligibilityRef.current = {
                     splash: false,
-                    tour: true,
+                    tour: willFireTour,
                     install: snapshot.install,
                 };
-                return SLOT_TOUR;
+                return pickNextPhase({
+                    splash: false,
+                    tour: willFireTour,
+                    install: snapshot.install,
+                });
             });
             return;
         }
