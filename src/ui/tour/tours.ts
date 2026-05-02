@@ -311,10 +311,24 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
     /**
      * One-step popover that fires the first time the user logs a
      * suggestion in any game. The anchor is viewport-conditional:
-     * mobile points at the BottomNav's Checklist tab; desktop points
-     * at the wrapping section of the deduction grid (where the
-     * solver's updates show up). Same 4-week re-engage cadence as
-     * the other tours via `useTourGate`.
+     *
+     *   - mobile: BottomNav's Checklist tab (small, at the bottom of
+     *     the screen). Popover above it. The user is on the suggest
+     *     pane post-submit; the popover tells them to tap over to
+     *     the checklist.
+     *   - desktop: the case-file summary box at the top of the
+     *     checklist (small, well-positioned). Popover below it. Both
+     *     panes are visible at this breakpoint, so pointing at the
+     *     summary is enough to direct the user's attention.
+     *
+     * Anchoring desktop to the WHOLE deduction grid (its predecessor
+     * `desktop-checklist-area`) sized the spotlight at ~880 px tall,
+     * which exceeded the viewport. Radix had nowhere to fit the
+     * popover above or below and clamped it past the top of the
+     * screen. Per-viewport `side`/`align` keeps both layouts safe.
+     *
+     * Same 4-week re-engage cadence as the other tours via
+     * `useTourGate`.
      */
     firstSuggestion: [
         {
@@ -323,12 +337,16 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             anchor: "first-suggestion-checklist",
             anchorByViewport: {
                 mobile: "bottom-nav-checklist",
-                desktop: "desktop-checklist-area",
+                desktop: "checklist-case-file",
             },
             titleKey: "firstSuggestion.checklist.title",
             bodyKey: "firstSuggestion.checklist.body",
             side: "top",
             align: "center",
+            sideByViewport: {
+                mobile: { side: "top", align: "center" },
+                desktop: { side: "bottom", align: "start" },
+            },
             // Single-step tour ends with a "Got it" CTA — no
             // back-button context, just an acknowledgement.
             finishLabelKey: "gotIt",

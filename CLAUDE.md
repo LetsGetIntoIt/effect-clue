@@ -124,53 +124,44 @@ Resize the preview between viewports as you go — many of these regress on one 
 
 The tour popover system (`src/ui/tour/TourPopover.tsx`, `src/ui/tour/tours.ts`) positions a Radix popover next to a "spotlight" cutout that highlights the anchor element. jsdom can't run layout, so popover/spotlight pixel positions cannot be unit-tested — they're verified manually in the `next-dev` preview at both viewport breakpoints whenever you touch:
 
-- `src/ui/tour/tours.ts` — step config (`anchor`, `popoverAnchor`, `popoverAnchorPriority`, `side`, `align`, `sideByViewport`, `viewport`).
+- `src/ui/tour/tours.ts` — step config (`anchor`, `popoverAnchor`, `popoverAnchorPriority`, `side`, `align`, `sideByViewport`, `viewport`, `anchorByViewport`).
 - `src/ui/tour/TourPopover.tsx` — anchor resolution, side/align resolution, positioning effect.
 - A `data-tour-anchor="…"` attribute on any DOM node — adding, removing, or moving one changes which element drives spotlight + popover position.
 - `src/ui/onboarding/StartupCoordinator.tsx` precedence rules — changes which tour fires when.
 
-**Verification workflow.** For each tour, walk every step at desktop **1280×800** AND mobile **375×812** in the `next-dev` preview. For each step:
+**Verification rule.** For every tour the app can launch, walk every step at desktop (1280×800) AND mobile (375×812) in the `next-dev` preview. For each step:
 
-1. **Popover fully on-screen** — `top ≥ 0 && left ≥ 0 && right ≤ vw && bottom ≤ vh`. *Hard requirement.*
-2. **Spotlight surrounds the right anchor element(s)** — visually confirm the dimming hole encloses what the copy is referring to.
-3. **Popover doesn't block the spotlight area** — *soft requirement*. If unavoidable (anchor extends past the viewport), the popover MUST cover the *less important* part of the spotlight (e.g. cover top rows of a tall column rather than the center). Popover visibility wins; partial spotlight occlusion is acceptable.
-4. **No console warnings** — particularly the React 19 "Each child in a list should have a unique 'key' prop" warning, which fires when Radix's Slot iterates Popover.Content's children. Resolved today by wrapping the popover's inner content in a single `<div className="contents">`; if you restructure the children, re-verify.
-5. **Step counter matches the visible viewport** — mobile-only steps (`viewport: "mobile"`) don't appear on desktop, and the "step N of M" counter reflects the post-filter list. After resizing mid-tour, the counter re-derives via `useFilterStepsByViewport`.
+1. **Popover fully on-screen** — `top ≥ 0 && left ≥ 0 && right ≤ vw && bottom ≤ vh`. ***Hard requirement.*** A clipped popover means the user can't read the copy or click Next, so the tour stalls.
+2. **Popover doesn't cover the spotlight area** — *soft requirement.* The spotlight is the user's "look here" cue; the popover blocking it defeats the purpose. If avoiding overlap forces the popover off-screen, **prefer popover visibility** (rule #1 always wins). When overlap is unavoidable, position the popover so it covers the *less important* part of the spotlight (e.g. the top of a tall column the user is being introduced to, not the middle).
+3. **No console warnings during the tour** — particularly React's "Each child in a list should have a unique 'key' prop" warning that surfaces when Radix's Slot iterates `Popover.Content`'s children. The current fix is a `<div className="contents">` wrapper; if you restructure those children, re-verify.
 
-**Tour matrix to walk** (post-round-4):
+Sequencing and precedence are covered by `src/ui/onboarding/StartupCoordinator.test.tsx` + `src/ui/tour/screenKey.test.ts` — those tests pin which tour fires under which conditions, the splash → tour → install ordering, the brand-new-user redirect, and that completion locks the gate. **You don't need to walk those scenarios manually unless you change `TOUR_PRECEDENCE`, add a new screen to the tour registry, or touch the gate logic.** The manual walk is purely about pixel positioning.
 
-| Tour | Desktop steps | Mobile steps | Mobile-only steps |
-|------|---------------|--------------|-------------------|
-| `setup` (6) | 6 | 6 | — |
-| `checklistSuggest` (4 desktop / 5 mobile) | 4 | 5 | `bottom-nav-suggest` (between `checklist-case-file` and `suggest-prior-log`) |
-| `firstSuggestion` (1) | 1 | 1 | — *(viewport-conditional anchor: `desktop-checklist-area` desktop, `bottom-nav-checklist` mobile)* |
+**Enumerating the tours.** The full list of tours that can launch lives in `src/ui/tour/tours.ts` under the `TOURS` registry. Today (subject to drift — re-read the registry as the source of truth):
 
-**Steps with known popover/spotlight overlap** (acceptable per #3 above):
+- **`setup`** — fires on first visit to the Setup pane. How to launch: clear `effect-clue.*` from localStorage and load `/play?view=setup`. (Brand-new users landing anywhere else get redirected here by the coordinator.)
+- **`checklistSuggest`** — fires on first visit to the Play pane (Checklist + Suggest). Launch: dismiss `setup` first (e.g. seed `effect-clue.tour.setup.v1` with `lastDismissedAt`), then load `/play?view=checklist`. Step count is viewport-conditional today (one mobile-only step) — verify the "N of M" counter matches what's visible.
+- **`firstSuggestion`** — fires once per 4-week window when the user logs the first suggestion of any session. Launch: clear all tour state, dismiss splash + the per-screen tours, set up a game with default players, navigate to suggest mode, and submit the form. The popover fires immediately after the suggestion is added.
 
-- `setup-known-cell` mobile — popover covers the top ~3 rows of the player column. Desktop sits to the RIGHT of the column (no overlap, full column visible) via `sideByViewport`.
-- `firstSuggestion` desktop — anchor is the entire deduction grid (~880 px tall, exceeds viewport). Popover clamps near the top with overlap. Mobile anchors to the BottomNav Checklist tab — small, no overlap.
+If you add a new tour to the registry, add it to this list AND walk it at both breakpoints before merging.
 
-**Sequencing & precedence** (covered by `src/ui/onboarding/StartupCoordinator.test.tsx` + `src/ui/tour/screenKey.test.ts` — no manual walk needed unless you change `TOUR_PRECEDENCE` or add a new screen):
+**Step launchers.** When you need to ship a step deep in a multi-step tour without walking the earlier steps every time:
 
-- Splash always wins ahead of tour and install at boot.
-- After splash dismisses, the coordinator picks the highest-priority eligible tour from `TOUR_PRECEDENCE = ["setup", "checklistSuggest"]`. If that tour belongs to a different screen than the user landed on, the coordinator dispatches `setUiMode` to redirect.
-- A tour completing (Next on the last step) writes `lastDismissedAt` for that screen — same gate effect as Skip / Esc / X. The 4-week re-engage cadence applies to both completion and dismissal.
-- After a tour fires, install is suppressed for the rest of the session.
+- The "Restart tour" overflow-menu item (in the ⋯ menu) wipes every per-screen tour-gate flag and re-fires the tour for the user's *current* screen. Useful for re-running setup or checklistSuggest without crafting localStorage by hand.
+- For mid-tour steps, advance via the popover's Next button. There's no "jump to step N" affordance today — if you need one, advance with the keyboard (Tab → Tab → Tab → Enter cycles to Next).
 
-**Test scenarios to walk in the preview** (clear `effect-clue.*` keys in localStorage between each one):
+**Drift signals.** While walking the tours, if any of these surface, treat them as bugs:
 
-1. **Brand-new user lands on `/`** → splash → setup tour (6 steps).
-2. **Brand-new user lands on `/play?view=checklist`** → splash → coordinator redirects to `?view=setup` → setup tour fires.
-3. **Returning user (setup completed) lands on `/play`** → no redirect → checklist+suggest tour (4 desktop / 5 mobile steps).
-4. **Returning user with all tours completed lands on `/play`** → no tour, install prompt fires (if eligible).
-5. **Resize from desktop to mobile mid-tour during `checklistSuggest`** → step counter re-derives (4 → 5 if not yet past the new mobile-only step).
-6. **Tour active + try `⌘K` / arrow keys / Tab** → keyboard isolator swallows everything except `Esc` (dismiss) and keys targeting popover content (Tab between Back / Skip / Next).
-7. **Tour active + click backdrop** → tour stays active. Click ⌘+wheel scroll the page → page scrolls (veil doesn't lock scroll).
+- Popover left edge < 0 or right edge > viewport width — usually a `side: "left"` / `side: "right"` step on a viewport too narrow to fit. Fix with `sideByViewport` flipping to `top` / `bottom` on the affected breakpoint.
+- Popover top edge < 0 — usually `side: "top"` against a tall anchor whose top is near `y=0` (Radix tries to put it above, no room). Fix with a smaller `popoverAnchor` (a small element at a known position inside the spotlight area), or flip `side: "bottom"`.
+- Popover anchored to the trigger of an open dropdown but ending up where it covers the dropdown's items — `popoverAnchorPriority: "last-visible"` resolves to the portaled menu content instead of the trigger.
+- Step counter shows e.g. "5 of 5" on desktop where you expect "4 of 4" — a step's `viewport: "mobile"` (or `"desktop"`) field is missing, so `useFilterStepsByViewport` lets the wrong step through. Or vice versa.
 
-When a layout change makes any of these scenarios fail, prefer fixing in this order:
+When a layout change makes any of the requirements above fail, prefer fixing in this order:
 1. Adjust `side`/`align` (or `sideByViewport`) on the affected step.
 2. Adjust `popoverAnchor` to a smaller / better-positioned element if the spotlight anchor is too large.
-3. As a last resort, add or remove a step.
+3. Adjust `anchorByViewport` to point at a different DOM node per breakpoint.
+4. As a last resort, add or remove a step.
 
 ## Tests
 
