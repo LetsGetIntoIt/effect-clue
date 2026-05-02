@@ -28,6 +28,7 @@ const STORAGE_TOUR_SETUP = "effect-clue.tour.setup.v1";
 const STORAGE_TOUR_CHECKLIST_SUGGEST = "effect-clue.tour.checklistSuggest.v1";
 const STORAGE_TOUR_SHARING = "effect-clue.tour.sharing.v1";
 const STORAGE_INSTALL = "effect-clue.install-prompt.v1";
+const STORAGE_GAME_LIFECYCLE = "effect-clue.gameLifecycle.v1";
 
 const seed = (key: string, value: object): void => {
     window.localStorage.setItem(key, JSON.stringify(value));
@@ -79,7 +80,9 @@ const dismissedAtAllGates = (): void => {
 
 interface ProbeState {
     phase: string;
-    reportClosed: (slot: "splash" | "tour" | "install") => void;
+    reportClosed: (
+        slot: "splash" | "staleGame" | "tour" | "install",
+    ) => void;
 }
 
 const probe: { current: ProbeState | null } = { current: null };
@@ -93,6 +96,7 @@ function Probe() {
 const mount = (
     activeScreen: "setup" | "checklistSuggest" = "setup",
     onRedirectToScreen?: (screen: ScreenKey) => void,
+    gameStarted: boolean = false,
 ): { rerender: (nextScreen: ScreenKey) => void } => {
     // Conditional-spread the redirect callback so TypeScript's
     // `exactOptionalPropertyTypes` doesn't reject `undefined`. Tests
@@ -104,6 +108,7 @@ const mount = (
         <StartupCoordinatorProvider
             hydrated
             activeScreen={screen}
+            gameStarted={gameStarted}
             {...redirectProp}
         >
             <Probe />
@@ -643,5 +648,121 @@ describe("StartupCoordinator — sharing follow-up tour", () => {
 
         mount("setup");
         expect(probe.current?.phase).toBe("done");
+    });
+});
+
+describe("StartupCoordinator — staleGame slot", () => {
+    const longAgoIso = new Date(
+        Date.now() - 30 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    test("started, idle past threshold, on Checklist → phase becomes staleGame", () => {
+        dismissedAtAllGates();
+        seed(STORAGE_GAME_LIFECYCLE, {
+            version: 1,
+            createdAt: longAgoIso,
+            lastModifiedAt: longAgoIso,
+        });
+        mount("checklistSuggest", undefined, true);
+        expect(probe.current?.phase).toBe("staleGame");
+    });
+
+    test("unstarted, older than threshold, on Checklist → phase becomes staleGame", () => {
+        dismissedAtAllGates();
+        seed(STORAGE_GAME_LIFECYCLE, {
+            version: 1,
+            createdAt: longAgoIso,
+        });
+        mount("checklistSuggest", undefined, false);
+        expect(probe.current?.phase).toBe("staleGame");
+    });
+
+    test("on Setup screen → never fires staleGame even if idle", () => {
+        dismissedAtAllGates();
+        seed(STORAGE_GAME_LIFECYCLE, {
+            version: 1,
+            createdAt: longAgoIso,
+            lastModifiedAt: longAgoIso,
+        });
+        mount("setup", undefined, true);
+        expect(probe.current?.phase).toBe("done");
+    });
+
+    test("freshly snoozed → suppressed", () => {
+        dismissedAtAllGates();
+        const recentSnooze = new Date(Date.now() - 60 * 1000).toISOString();
+        seed(STORAGE_GAME_LIFECYCLE, {
+            version: 1,
+            createdAt: longAgoIso,
+            lastModifiedAt: longAgoIso,
+            lastSnoozedAt: recentSnooze,
+        });
+        mount("checklistSuggest", undefined, true);
+        expect(probe.current?.phase).toBe("done");
+    });
+
+    test("staleGame closes → phase advances to checklistSuggest tour when eligible", () => {
+        // Splash + setup tour dismissed; checklistSuggest left
+        // unseeded so it remains eligible.
+        const recent = new Date().toISOString();
+        seed(STORAGE_SPLASH, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_SETUP, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_SHARING, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_GAME_LIFECYCLE, {
+            version: 1,
+            createdAt: longAgoIso,
+            lastModifiedAt: longAgoIso,
+        });
+        seed(STORAGE_INSTALL, { version: 1, visits: 0 });
+
+        mount("checklistSuggest", undefined, true);
+        expect(probe.current?.phase).toBe("staleGame");
+        act(() => probe.current?.reportClosed("staleGame"));
+        expect(probe.current?.phase).toBe("tour");
+    });
+
+    test("staleGame closes with no tour eligible → advances to install or done", () => {
+        dismissedAtAllGates();
+        seed(STORAGE_GAME_LIFECYCLE, {
+            version: 1,
+            createdAt: longAgoIso,
+            lastModifiedAt: longAgoIso,
+        });
+        mount("checklistSuggest", undefined, true);
+        expect(probe.current?.phase).toBe("staleGame");
+        act(() => probe.current?.reportClosed("staleGame"));
+        expect(probe.current?.phase).toBe("done");
+    });
+
+    test("splash closes with stale-game eligible → advances to staleGame, not tour", () => {
+        // Splash eligible (no dismiss). Setup tour also unseeded so it
+        // would otherwise win, but staleGame should suppress it.
+        seed(STORAGE_SPLASH, { version: 1 });
+        seed(STORAGE_TOUR_SETUP, { version: 1 });
+        seed(STORAGE_TOUR_CHECKLIST_SUGGEST, { version: 1 });
+        seed(STORAGE_TOUR_SHARING, { version: 1 });
+        seed(STORAGE_GAME_LIFECYCLE, {
+            version: 1,
+            createdAt: longAgoIso,
+            lastModifiedAt: longAgoIso,
+        });
+        seed(STORAGE_INSTALL, { version: 1, visits: 0 });
+
+        mount("checklistSuggest", undefined, true);
+        expect(probe.current?.phase).toBe("splash");
+        act(() => probe.current?.reportClosed("splash"));
+        expect(probe.current?.phase).toBe("staleGame");
     });
 });
