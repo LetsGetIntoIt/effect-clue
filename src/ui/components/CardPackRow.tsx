@@ -94,7 +94,6 @@ const totalCardsIn = (cardSet: CardSet): number =>
  */
 export function CardPackRow() {
     const t = useTranslations("setup");
-    const tShare = useTranslations("share");
     const confirm = useConfirm();
     const { state, dispatch } = useClue();
     const setup = state.setup;
@@ -543,22 +542,6 @@ export function CardPackRow() {
                         {t("saveAsNewCardPack")}
                     </button>
                 ) : null}
-                <button
-                    type="button"
-                    className="ml-auto inline-flex cursor-pointer items-center gap-1 rounded border border-border bg-white px-3 py-1 text-[13px] text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent"
-                    onClick={() =>
-                        openShareCardPack(
-                            activeMatch !== undefined
-                                ? { packLabel: activeMatch.label }
-                                : undefined,
-                        )
-                    }
-                    title={t("shareSetupTitle")}
-                    data-share-pack-from-setup
-                >
-                    <ShareIcon size={14} />
-                    {tShare("entryShareCardPack")}
-                </button>
             </div>
         </div>
     );
