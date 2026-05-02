@@ -130,6 +130,7 @@ const surfaceLabels = (): ReadonlyArray<string> => {
         if (text.startsWith("updateCardPack")) continue;
         if (text.startsWith("allCardPacksPill")) continue;
         if (text.startsWith("shareSetup")) continue;
+        if (text.startsWith("entryShareCardPack")) continue;
         if (btn.getAttribute("aria-label")?.startsWith("deleteCustomCardSetAria"))
             continue;
         if (seen.has(text)) continue;

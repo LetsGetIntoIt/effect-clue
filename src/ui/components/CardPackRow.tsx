@@ -30,7 +30,8 @@ import {
 import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 import { CardPackPicker, type PickerPack } from "./CardPackPicker";
-import { SearchIcon, ShareIcon } from "./Icons";
+import { SearchIcon } from "./Icons";
+import { ShareIcon } from "./ShareIcon";
 import { useShareContext } from "../share/ShareProvider";
 
 const RECENT_LIMIT = 3;
@@ -93,6 +94,7 @@ const totalCardsIn = (cardSet: CardSet): number =>
  */
 export function CardPackRow() {
     const t = useTranslations("setup");
+    const tShare = useTranslations("share");
     const confirm = useConfirm();
     const { state, dispatch } = useClue();
     const setup = state.setup;
@@ -111,7 +113,7 @@ export function CardPackRow() {
     const deletePackMutation = useDeleteCardPack();
     const recordUseMutation = useRecordCardPackUse();
     const forgetUseMutation = useForgetCardPackUse();
-    const { openModalWith: openShareModalWith } = useShareContext();
+    const { openShareCardPack } = useShareContext();
     const [pickerOpen, setPickerOpen] = useState(false);
 
     // The Classic id is the first entry in CARD_SETS and is the
@@ -343,19 +345,13 @@ export function CardPackRow() {
     const onSharePackFromPicker = (picked: PickerPack) => {
         const pack = findDisplayPack(picked.id);
         if (!pack) return;
-        // Per-pack share defaults to "card pack only" — players /
-        // hand sizes / suggestions are state of the live game and
-        // don't belong in a from-picker share. The receiver still
-        // sees toggles in the modal and can change them before
-        // submitting.
-        openShareModalWith({
-            initialToggles: {
-                cardPack: true,
-                players: false,
-                knownCards: false,
-                suggestions: false,
-            },
+        // Per-pack share is always pack-only (Flow 1): the picker is
+        // a content-management surface, not a game-state one. The
+        // picked pack overrides the live setup pack so the share
+        // contains exactly what the user clicked.
+        openShareCardPack({
             forcedCardPack: pack.cardSet,
+            packLabel: pack.label,
         });
     };
 
@@ -538,19 +534,17 @@ export function CardPackRow() {
                     type="button"
                     className="ml-auto inline-flex cursor-pointer items-center gap-1 rounded border border-border bg-white px-3 py-1 text-[13px] text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent"
                     onClick={() =>
-                        openShareModalWith({
-                            initialToggles: {
-                                cardPack: true,
-                                players: true,
-                                knownCards: false,
-                                suggestions: false,
-                            },
-                        })
+                        openShareCardPack(
+                            activeMatch !== undefined
+                                ? { packLabel: activeMatch.label }
+                                : undefined,
+                        )
                     }
                     title={t("shareSetupTitle")}
+                    data-share-pack-from-setup
                 >
                     <ShareIcon size={14} />
-                    {t("shareSetup")}
+                    {tShare("entryShareCardPack")}
                 </button>
             </div>
         </div>

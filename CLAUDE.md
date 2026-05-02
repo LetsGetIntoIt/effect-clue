@@ -163,6 +163,14 @@ When a layout change makes any of the requirements above fail, prefer fixing in 
 3. Adjust `anchorByViewport` to point at a different DOM node per breakpoint.
 4. As a last resort, add or remove a step.
 
+## Sharing
+
+If you touch anything in `src/ui/share/`, `src/server/actions/shares.ts`, `src/logic/ShareCodec.ts`, or any `shares` DB column, walk through [docs/shares.md](docs/shares.md) first. Three rules drive the design and shouldn't be loosened without a deliberate change to the doc:
+
+- **Universal sign-in.** Every share requires a real, non-anonymous user. The check lives at the top of `createShare` and the DB enforces it via `owner_id NOT NULL`. Don't reintroduce per-flow auth conditionals.
+- **Kind-based wire contract.** `createShare`'s input is a discriminated union by `kind`. The server whitelists fields per kind and rejects anything extraneous. Don't expose the column structure to the client; add new flows by adding new kinds.
+- **Effect-Schema-validated wire format.** All six wire fields go through codecs in `src/logic/ShareCodec.ts`. Don't add a new wire field with a raw `JSON.stringify` / `JSON.parse` — write a codec, route both sender and receiver through it.
+
 ## Tests
 
 Write exhaustive tests for any code you add or modify.

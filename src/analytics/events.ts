@@ -396,13 +396,19 @@ export type ShareDismissVia =
 export const shareCreateStarted = (): void =>
     capture("share_create_started");
 
+/**
+ * Sender created a share. M22: emitted with the new variant taxonomy
+ * (`pack` / `invite` / `transfer`) plus a derived `includesProgress`
+ * flag (true when the share carries suggestions+accusations — always
+ * for `transfer`, optionally for `invite`). The legacy per-section
+ * `included*` booleans were dropped — they're now derivable from
+ * `kind` + `includesProgress` and recreating them four-way at the call
+ * site is needless surface for the funnel queries to track.
+ */
 export const shareCreated = (props: {
-    includedPack: boolean;
-    includedPlayers: boolean;
-    includedKnownCards: boolean;
-    includedSuggestions: boolean;
+    kind: "pack" | "invite" | "transfer";
     packIsCustom: boolean;
-    requiresAuth: boolean;
+    includesProgress: boolean;
 }): void => capture("share_created", props);
 
 export const shareLinkCopied = (): void => capture("share_link_copied");
@@ -415,12 +421,19 @@ export const shareImportStarted = (props: {
     shareIdHash: string;
 }): void => capture("share_import_started", props);
 
+/**
+ * Receiver imported a share. M22: receive modal switched from a
+ * pick-what-to-import toggle UI to "import everything in the link",
+ * so the per-section `included*` flags are gone. We still record
+ * which slices the share *contained* (mirrors of the receive-modal
+ * bullet list, derived from snapshot column nullability).
+ */
 export const shareImported = (props: {
     shareIdHash: string;
-    includedPack: boolean;
-    includedPlayers: boolean;
-    includedKnownCards: boolean;
-    includedSuggestions: boolean;
+    hadPack: boolean;
+    hadPlayers: boolean;
+    hadKnownCards: boolean;
+    hadSuggestions: boolean;
     triggeredNewGame: boolean;
     savedPackToAccount: boolean;
 }): void => capture("share_imported", props);

@@ -1,14 +1,22 @@
 /**
- * Owns the open/closed state of the share-create modal and any
- * per-call entry-point options (initial toggle defaults, forced card
- * pack). The Toolbar / BottomNav overflow menu items call
- * `openModal()` with no args to use the modal's defaults; the
- * Setup-screen "Share this setup" button calls `openModalWith({...})`
- * to land on prefilled toggles, and per-pack share buttons call
- * `openModalWith({ forcedCardPack })` so the share contains that
- * specific pack rather than whatever's loaded in the live setup.
+ * Owns the open/closed state of the share-create modal and the
+ * variant + per-call options the entry point selects.
  *
- * Mirrors the `AccountProvider` / `InstallPromptProvider` pattern.
+ * Three named openers, one per flow:
+ *   - `openShareCardPack({ forcedCardPack?, packLabel? })` —
+ *     pack-only share. Card pack row in setup + per-pack share in
+ *     the picker call this; the picker passes its own pack via
+ *     `forcedCardPack`.
+ *   - `openInvitePlayer()` — invite-a-player share. Setup pane
+ *     near the Start playing CTA + overflow menu call this.
+ *   - `openContinueOnAnotherDevice()` — full transfer share with
+ *     all private game state. Overflow menu only.
+ *
+ * The previous `openModal` / `openModalWith({ initialToggles, ... })`
+ * API was removed in M22 — the toggle-based contract leaked the
+ * server's column structure into the UI. The variant API is the
+ * stable surface; new sender entry points should reuse one of the
+ * three openers rather than passing toggles directly.
  */
 "use client";
 
@@ -21,35 +29,35 @@ import {
     type ReactNode,
 } from "react";
 import type { CardSet } from "../../logic/CardSet";
-import {
-    ShareCreateModal,
-    type ShareToggleState,
-} from "./ShareCreateModal";
+import { ShareCreateModal, type ShareVariant } from "./ShareCreateModal";
 
-interface OpenModalOptions {
-    readonly initialToggles?: Partial<ShareToggleState>;
+interface OpenSharePackOptions {
+    /** When opened from the picker, ships the picked pack instead of
+     * whatever's currently loaded in setup. */
     readonly forcedCardPack?: CardSet;
+    /** User-facing label for the picked / active pack. Embedded in
+     * the wire payload so the receive modal renders the pack's name
+     * instead of "(untitled)". */
+    readonly packLabel?: string;
 }
 
 interface ShareContextValue {
     readonly open: boolean;
-    readonly openModal: () => void;
-    readonly openModalWith: (options: OpenModalOptions) => void;
+    readonly openShareCardPack: (opts?: OpenSharePackOptions) => void;
+    readonly openInvitePlayer: () => void;
+    readonly openContinueOnAnotherDevice: () => void;
 }
 
 /**
- * Default no-op context value. Returned by `useShareContext()` when
- * the consumer isn't wrapped in `<ShareProvider>` — this lets
- * isolated component tests (CardPackRow without the full provider
- * stack) still mount without crashing. The trade-off is that a
- * production miswire silently no-ops instead of throwing; we lean on
- * the test suite to ensure the providers stay composed in the real
- * tree.
+ * Default no-op context value, returned when a component is mounted
+ * without `<ShareProvider>` above it. Lets isolated component tests
+ * (CardPackRow alone, etc.) render without crashing.
  */
 const SHARE_CONTEXT_DEFAULT: ShareContextValue = {
     open: false,
-    openModal: () => {},
-    openModalWith: () => {},
+    openShareCardPack: () => {},
+    openInvitePlayer: () => {},
+    openContinueOnAnotherDevice: () => {},
 };
 
 const ShareContext = createContext<ShareContextValue>(SHARE_CONTEXT_DEFAULT);
@@ -57,49 +65,78 @@ const ShareContext = createContext<ShareContextValue>(SHARE_CONTEXT_DEFAULT);
 export const useShareContext = (): ShareContextValue =>
     useContext(ShareContext);
 
+const VARIANT_PACK: ShareVariant = "pack";
+const VARIANT_INVITE: ShareVariant = "invite";
+const VARIANT_TRANSFER: ShareVariant = "transfer";
+
 export function ShareProvider({
     children,
 }: {
     readonly children: ReactNode;
 }) {
     const [open, setOpen] = useState(false);
-    const [initialToggles, setInitialToggles] = useState<
-        Partial<ShareToggleState> | undefined
-    >(undefined);
+    const [variant, setVariant] = useState<ShareVariant>(VARIANT_PACK);
     const [forcedCardPack, setForcedCardPack] = useState<
         CardSet | undefined
     >(undefined);
-    const openModal = useCallback(() => {
-        setInitialToggles(undefined);
-        setForcedCardPack(undefined);
-        setOpen(true);
-    }, []);
-    const openModalWith = useCallback(
-        (options: OpenModalOptions) => {
-            setInitialToggles(options.initialToggles);
-            setForcedCardPack(options.forcedCardPack);
+    const [forcedCardPackLabel, setForcedCardPackLabel] = useState<
+        string | undefined
+    >(undefined);
+
+    const openShareCardPack = useCallback(
+        (opts?: OpenSharePackOptions) => {
+            setVariant(VARIANT_PACK);
+            setForcedCardPack(opts?.forcedCardPack);
+            setForcedCardPackLabel(opts?.packLabel);
             setOpen(true);
         },
         [],
     );
+    const openInvitePlayer = useCallback(() => {
+        setVariant(VARIANT_INVITE);
+        setForcedCardPack(undefined);
+        setForcedCardPackLabel(undefined);
+        setOpen(true);
+    }, []);
+    const openContinueOnAnotherDevice = useCallback(() => {
+        setVariant(VARIANT_TRANSFER);
+        setForcedCardPack(undefined);
+        setForcedCardPackLabel(undefined);
+        setOpen(true);
+    }, []);
     const closeModal = useCallback(() => {
         setOpen(false);
-        // Don't reset prefill state here — the modal is unmounting,
-        // and clearing now would re-render with default toggles for
-        // a frame before it goes away.
+        // Keep variant + forced state in place — the modal is unmounting,
+        // and clearing now would re-render with default state for a
+        // frame before it goes away.
     }, []);
+
     const value = useMemo<ShareContextValue>(
-        () => ({ open, openModal, openModalWith }),
-        [open, openModal, openModalWith],
+        () => ({
+            open,
+            openShareCardPack,
+            openInvitePlayer,
+            openContinueOnAnotherDevice,
+        }),
+        [
+            open,
+            openShareCardPack,
+            openInvitePlayer,
+            openContinueOnAnotherDevice,
+        ],
     );
+
     return (
         <ShareContext.Provider value={value}>
             {children}
             <ShareCreateModal
                 open={open}
                 onClose={closeModal}
-                {...(initialToggles !== undefined ? { initialToggles } : {})}
+                variant={variant}
                 {...(forcedCardPack !== undefined ? { forcedCardPack } : {})}
+                {...(forcedCardPackLabel !== undefined
+                    ? { forcedCardPackLabel }
+                    : {})}
             />
         </ShareContext.Provider>
     );

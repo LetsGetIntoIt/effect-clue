@@ -10,7 +10,7 @@ import {
     useRef,
     useState,
 } from "react";
-import { ShareIcon } from "./Icons";
+import { ShareIcon } from "./ShareIcon";
 
 /**
  * Pack-shaped record consumed by the picker. Custom packs carry
