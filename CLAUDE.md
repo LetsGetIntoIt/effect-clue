@@ -142,6 +142,7 @@ Sequencing and precedence are covered by `src/ui/onboarding/StartupCoordinator.t
 - **`setup`** — fires on first visit to the Setup pane. How to launch: clear `effect-clue.*` from localStorage and load `/play?view=setup`. (Brand-new users landing anywhere else get redirected here by the coordinator.)
 - **`checklistSuggest`** — fires on first visit to the Play pane (Checklist + Suggest). Launch: dismiss `setup` first (e.g. seed `effect-clue.tour.setup.v1` with `lastDismissedAt`), then load `/play?view=checklist`. Step count is viewport-conditional today (one mobile-only step) — verify the "N of M" counter matches what's visible.
 - **`firstSuggestion`** — fires once per 4-week window when the user logs the first suggestion of any session. Launch: clear all tour state, dismiss splash + the per-screen tours, set up a game with default players, navigate to suggest mode, and submit the form. The popover fires immediately after the suggestion is added.
+- **`sharing`** — follow-up tour that calls out the three share affordances on the Setup pane (per-pack share button, Invite a player link, Continue on another device in the overflow menu). Has prerequisites: both the `setup` AND `checklistSuggest` tours must have been dismissed first (any path — Skip / X / completed). Launch: seed `effect-clue.tour.setup.v1` AND `effect-clue.tour.checklistSuggest.v1` with `lastDismissedAt`, leave `effect-clue.tour.sharing.v1` unseeded, then load `/play?view=setup`. Does NOT redirect off other screens — if the user lands on `/play?view=checklist` it waits for them to navigate to setup themselves. Uses the same overflow-menu `forceOpen` wiring as the setup tour's overflow step (Toolbar / BottomNav both observe `currentStep?.anchor === "overflow-menu"`).
 
 If you add a new tour to the registry, add it to this list AND walk it at both breakpoints before merging.
 
@@ -162,6 +163,25 @@ When a layout change makes any of the requirements above fail, prefer fixing in 
 2. Adjust `popoverAnchor` to a smaller / better-positioned element if the spotlight anchor is too large.
 3. Adjust `anchorByViewport` to point at a different DOM node per breakpoint.
 4. As a last resort, add or remove a step.
+
+## Icons
+
+Use these four icons consistently — picking the wrong glyph mis-signals what the button does and creates ambiguity for users on touch devices where there's no tooltip.
+
+- **`XIcon`** — non-destructive cancel / dismiss / close. Modal close buttons, dismiss-this-banner, exit-out-of-flow. Never use for delete.
+- **`TrashIcon`** — destructive delete / remove / discard. Always pair with a confirm dialog (or undo affordance) when the action is irreversible.
+- **`ShareIcon`** — any "share this with someone" action. Renders the platform-aware glyph internally (Apple share-sheet on iOS / macOS, Material 3-node graph elsewhere) — callers don't need to handle the platform split.
+- **`ExternalLinkIcon`** — links that open a new tab or navigate outside the app.
+
+If you need a glyph that doesn't fit one of these, add it to `src/ui/components/Icons.tsx` (or `ShareIcon.tsx` for share variants) — don't reach for an emoji or a literal character (`×`, `→`, etc.) that might be misread.
+
+## Sharing
+
+If you touch anything in `src/ui/share/`, `src/server/actions/shares.ts`, `src/logic/ShareCodec.ts`, or any `shares` DB column, walk through [docs/shares.md](docs/shares.md) first. Three rules drive the design and shouldn't be loosened without a deliberate change to the doc:
+
+- **Universal sign-in.** Every share requires a real, non-anonymous user. The check lives at the top of `createShare` and the DB enforces it via `owner_id NOT NULL`. Don't reintroduce per-flow auth conditionals.
+- **Kind-based wire contract.** `createShare`'s input is a discriminated union by `kind`. The server whitelists fields per kind and rejects anything extraneous. Don't expose the column structure to the client; add new flows by adding new kinds.
+- **Effect-Schema-validated wire format.** All six wire fields go through codecs in `src/logic/ShareCodec.ts`. Don't add a new wire field with a raw `JSON.stringify` / `JSON.parse` — write a codec, route both sender and receiver through it.
 
 ## Tests
 

@@ -78,6 +78,34 @@ const PersistedAccusationSchema = Schema.Struct({
 });
 
 /**
+ * Convenience array wrappers for the share codec — the shares wire
+ * format ships these as top-level JSON arrays rather than wrapped
+ * inside a v6-style envelope.
+ */
+export const PlayersArraySchema = Schema.Array(PlayerSchema);
+export const HandSizesArraySchema = Schema.Array(PersistedHandSizeSchema);
+export const HandsArraySchema = Schema.Array(PersistedHandSchema);
+export const SuggestionsArraySchema = Schema.Array(PersistedSuggestionSchema);
+export const AccusationsArraySchema = Schema.Array(PersistedAccusationSchema);
+
+/**
+ * Wire shape for the card-pack half of a share. The `name` field is
+ * informational — the sender embeds the user-facing label of the pack
+ * when it can identify one (built-in name from CARD_SETS, or the
+ * user's custom-pack label) so the receive modal can show "Card pack:
+ * Master Detective" instead of "Card pack: (untitled)". Receivers
+ * cross-reference `categories` against built-in packs to decide
+ * whether to render "(custom)" — `name` alone is not authoritative.
+ *
+ * `CardSet` itself (`src/logic/CardSet.ts`) carries no identity, so
+ * the sender encodes both halves explicitly.
+ */
+export const CardSetSchema = Schema.Struct({
+    name: Schema.optional(Schema.String),
+    categories: Schema.Array(PersistedCategorySchema),
+});
+
+/**
  * Canonical v6 session shape. The only version the decoder accepts.
  */
 const PersistedSessionV6Schema = Schema.Struct({

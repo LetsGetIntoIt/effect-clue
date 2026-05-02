@@ -272,7 +272,8 @@ function BottomOverflowMenu({
     const { installable, openModal: openInstallModal } =
         useInstallPromptContext();
     const { openModal: openAccountModal } = useAccountContext();
-    const { openModal: openShareModal } = useShareContext();
+    const { openInvitePlayer, openContinueOnAnotherDevice } =
+        useShareContext();
     const session = useSession();
     const accountLabel =
         session.data?.user && !session.data.user.isAnonymous
@@ -309,8 +310,12 @@ function BottomOverflowMenu({
                         onClick: onNewGame,
                     },
                     {
-                        label: tShare("menuItem"),
-                        onClick: () => openShareModal(),
+                        label: tShare("menuItemInvitePlayer"),
+                        onClick: () => openInvitePlayer(),
+                    },
+                    {
+                        label: tShare("menuItemTransferDevice"),
+                        onClick: () => openContinueOnAnotherDevice(),
                     },
                     { type: "divider" },
                     // Group 2: Account & content

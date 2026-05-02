@@ -26,6 +26,7 @@ import type { ScreenKey } from "../tour/TourState";
 const STORAGE_SPLASH = "effect-clue.splash.v1";
 const STORAGE_TOUR_SETUP = "effect-clue.tour.setup.v1";
 const STORAGE_TOUR_CHECKLIST_SUGGEST = "effect-clue.tour.checklistSuggest.v1";
+const STORAGE_TOUR_SHARING = "effect-clue.tour.sharing.v1";
 const STORAGE_INSTALL = "effect-clue.install-prompt.v1";
 
 const seed = (key: string, value: object): void => {
@@ -61,6 +62,14 @@ const dismissedAtAllGates = (): void => {
         lastDismissedAt: recent,
     });
     seed(STORAGE_TOUR_CHECKLIST_SUGGEST, {
+        version: 1,
+        lastVisitedAt: recent,
+        lastDismissedAt: recent,
+    });
+    // Sharing tour is a follow-up that becomes eligible once both
+    // foundational tours are dismissed. Seed it dismissed too so
+    // tests that expect "no tour eligible" still hold.
+    seed(STORAGE_TOUR_SHARING, {
         version: 1,
         lastVisitedAt: recent,
         lastDismissedAt: recent,
@@ -135,6 +144,11 @@ describe("StartupCoordinator — priority order", () => {
             lastVisitedAt: recent,
             lastDismissedAt: recent,
         });
+        seed(STORAGE_TOUR_SHARING, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
         seed(STORAGE_INSTALL, { version: 1, visits: 0 });
         mount();
         expect(probe.current?.phase).toBe("splash");
@@ -168,6 +182,11 @@ describe("StartupCoordinator — priority order", () => {
             lastDismissedAt: recent,
         });
         seed(STORAGE_TOUR_CHECKLIST_SUGGEST, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_SHARING, {
             version: 1,
             lastVisitedAt: recent,
             lastDismissedAt: recent,
@@ -224,6 +243,11 @@ describe("StartupCoordinator — tour suppresses install", () => {
             lastDismissedAt: recent,
         });
         seed(STORAGE_TOUR_CHECKLIST_SUGGEST, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_SHARING, {
             version: 1,
             lastVisitedAt: recent,
             lastDismissedAt: recent,
@@ -409,5 +433,215 @@ describe("StartupCoordinator — tour precedence", () => {
         // tour content is owned by `TourScreenGate`/`TourProvider`),
         // but phase=tour confirms the coordinator decided to fire.
         expect(probe.current?.phase).toBe("tour");
+    });
+
+    test("returning user (setup completed) on setup → no redirect, no auto-tour", () => {
+        // Setup tour completed; checklistSuggest tour is eligible
+        // (e.g. it's been ≥4 weeks since last dismissal, or the user
+        // restarted it via ⋯ → Take tour). User landed on setup.
+        //
+        // Old behavior: coordinator would redirect them off setup to
+        // fire the checklistSuggest tour. New behavior: leave them on
+        // setup. The checklistSuggest tour fires when the user
+        // navigates to checklist/suggest themselves (handled by the
+        // per-screen TourScreenGate, not the coordinator).
+        const recent = new Date().toISOString();
+        seed(STORAGE_SPLASH, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_SETUP, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        // checklistSuggest left unseeded → eligible.
+        seed(STORAGE_INSTALL, { version: 1, visits: 1 });
+
+        const onRedirect = vi.fn();
+        mount("setup", onRedirect);
+        expect(onRedirect).not.toHaveBeenCalled();
+        // Tour phase skipped; install (next priority) is eligible
+        // since visits → 2 and tour wasn't auto-fired.
+        expect(probe.current?.phase).toBe("install");
+    });
+
+    test("returning user (setup completed) on setup, install ineligible → done", () => {
+        // Same setup as above but install gate is also satisfied.
+        // Phase advances all the way to done.
+        const recent = new Date().toISOString();
+        seed(STORAGE_SPLASH, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_SETUP, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        // checklistSuggest left unseeded → eligible.
+        seed(STORAGE_INSTALL, {
+            version: 1,
+            visits: 99,
+            lastDismissedAt: recent,
+        });
+
+        const onRedirect = vi.fn();
+        mount("setup", onRedirect);
+        expect(onRedirect).not.toHaveBeenCalled();
+        expect(probe.current?.phase).toBe("done");
+    });
+
+    test("post-splash: returning user (setup completed) on setup → splash dismiss does NOT redirect", () => {
+        // Splash + checklistSuggest both eligible (setup completed),
+        // user is on setup. Splash fires first. After splash close,
+        // the post-splash precedence re-decision should NOT redirect
+        // off setup just because checklistSuggest is eligible.
+        seed(STORAGE_SPLASH, { version: 1 }); // eligible
+        const recent = new Date().toISOString();
+        seed(STORAGE_TOUR_SETUP, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        // checklistSuggest unseeded → eligible.
+        seed(STORAGE_INSTALL, { version: 1, visits: 0 });
+
+        const onRedirect = vi.fn();
+        mount("setup", onRedirect);
+        expect(probe.current?.phase).toBe("splash");
+        act(() => probe.current?.reportClosed("splash"));
+        expect(onRedirect).not.toHaveBeenCalled();
+        // No tour fires; nothing else eligible → done.
+        expect(probe.current?.phase).toBe("done");
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Sharing follow-up tour. Eligibility requires BOTH `setup` and
+// `checklistSuggest` to have been dismissed. Doesn't redirect off
+// any other screen (per `decideTourDispatch` — only the foundational
+// setup tour gets the redirect treatment).
+// ─────────────────────────────────────────────────────────────────────
+
+describe("StartupCoordinator — sharing follow-up tour", () => {
+    test("both prereqs dismissed + user on setup → fires sharing tour in place", () => {
+        const recent = new Date().toISOString();
+        seed(STORAGE_SPLASH, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_SETUP, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_CHECKLIST_SUGGEST, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        // sharing left unseeded → eligible.
+        seed(STORAGE_INSTALL, { version: 1, visits: 0 });
+
+        const onRedirect = vi.fn();
+        mount("setup", onRedirect);
+        expect(onRedirect).not.toHaveBeenCalled();
+        // Coordinator advances to tour phase; the actual tour driven
+        // by TourScreenGate will pick "sharing" (verified by the
+        // screenKey.test.ts coverage of pickFirstEligibleScreenKey).
+        expect(probe.current?.phase).toBe("tour");
+    });
+
+    test("only setup dismissed (checklistSuggest unmet) → sharing ineligible", () => {
+        // Just setup dismissed. checklistSuggest unseeded — itself
+        // eligible AND blocks sharing's prerequisites.
+        const recent = new Date().toISOString();
+        seed(STORAGE_SPLASH, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_SETUP, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        // checklistSuggest left unseeded → eligible (and blocks sharing).
+        seed(STORAGE_INSTALL, { version: 1, visits: 0 });
+
+        const onRedirect = vi.fn();
+        mount("setup", onRedirect);
+        // Precedence walks setup (dismissed, ineligible), then
+        // checklistSuggest (eligible, but user is on setup → no
+        // redirect for non-setup tours → skip), then sharing
+        // (prereqs unmet → ineligible). Nothing fires.
+        expect(onRedirect).not.toHaveBeenCalled();
+        expect(probe.current?.phase).toBe("done");
+    });
+
+    test("both prereqs dismissed + user on checklistSuggest → no redirect, sharing waits", () => {
+        // Per the recent rule, only setup tour gets the redirect.
+        // Sharing fires only when the user is already on the setup
+        // pane. If they land on checklist, sharing waits for next
+        // navigation.
+        const recent = new Date().toISOString();
+        seed(STORAGE_SPLASH, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_SETUP, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_CHECKLIST_SUGGEST, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        // sharing unseeded → eligible.
+        seed(STORAGE_INSTALL, { version: 1, visits: 0 });
+
+        const onRedirect = vi.fn();
+        mount("checklistSuggest", onRedirect);
+        // Sharing tour belongs to setup uiMode; user is on
+        // checklistSuggest. shouldRedirectForTour returns false for
+        // sharing (only "setup" target redirects). decideTourDispatch
+        // returns "skip". Coordinator does not fire.
+        expect(onRedirect).not.toHaveBeenCalled();
+        expect(probe.current?.phase).toBe("done");
+    });
+
+    test("sharing already dismissed within re-engage window → not eligible again", () => {
+        const recent = new Date().toISOString();
+        seed(STORAGE_SPLASH, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_SETUP, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_CHECKLIST_SUGGEST, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_SHARING, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_INSTALL, { version: 1, visits: 0 });
+
+        mount("setup");
+        expect(probe.current?.phase).toBe("done");
     });
 });

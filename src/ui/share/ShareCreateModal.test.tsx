@@ -1,22 +1,25 @@
 /**
- * Tests for the M16 toggle dependency rules in `ShareCreateModal`.
+ * Tests for the variant-driven `ShareCreateModal` (M22).
  *
- * The DB-dependent paths (`createShare`, sign-in roundtrip) are
- * out of scope here — they need an integration harness against the
- * Docker Postgres + a mocked better-auth session, which is M19's
- * larger ask. This file covers the pure UI rules:
+ * Prior version verified the now-removed 4-toggle dependency rules.
+ * Toggles are gone — the modal now picks one of three flows
+ * (`pack` / `invite` / `transfer`) and the UI surface for each is
+ * fixed, so the test focus shifts to:
  *
- * - Default toggles render with cardPack + players on, others off.
- * - Enabling players forces cardPack on AND disables the toggle.
- * - Disabling players re-enables the cardPack toggle.
- * - knownCards / suggestions are gated on players.
- *
- * The mock pattern mirrors `src/ui/Clue.test.tsx`: `next-intl`
- * passes keys through verbatim, `motion/react` becomes plain DOM,
- * and the createShare server action is stubbed.
+ *   - Each variant renders its own title + description.
+ *   - The transfer-only privacy warning surfaces only for `transfer`.
+ *   - The invite-only optional "include progress" checkbox surfaces
+ *     only for `invite`, and only when the live state has logged
+ *     suggestions.
+ *   - The CTA reads "Sign in or create account to share" for anon
+ *     users (universal rule, no kind/pack-custom conditional anymore)
+ *     and "Copy link" otherwise.
+ *   - The wire payload `createShare` receives carries the right `kind`
+ *     for the variant (regression guard against the old toggle-shape
+ *     payload silently coming back).
  */
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { forwardRef, createElement } from "react";
+import { forwardRef, createElement, act } from "react";
 import type { ReactNode } from "react";
 
 vi.mock("next-intl", () => {
@@ -65,90 +68,234 @@ vi.mock("motion/react", () => {
     };
 });
 
-// Stub the server action — every test in this file exercises the
-// pure-UI toggle dependency rules and never hits createShare.
+const createShareMock = vi.fn();
 vi.mock("../../server/actions/shares", () => ({
-    createShare: vi.fn(),
+    createShare: (input: unknown) => createShareMock(input),
 }));
 
-// useSession returns a stable null so the modal treats the user
-// as anonymous — irrelevant to the toggle tests but required to
-// avoid a network call from the real hook.
+let mockSession: {
+    data: { user: { id: string; isAnonymous: boolean } } | null;
+} = { data: null };
 vi.mock("../hooks/useSession", () => ({
-    useSession: () => ({ data: null, isPending: false, error: null }),
+    useSession: () => ({
+        data: mockSession.data,
+        isPending: false,
+        error: null,
+    }),
     sessionQueryKey: ["session"],
 }));
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ClueProvider } from "../state";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
-import { ShareCreateModal } from "./ShareCreateModal";
+import { ShareCreateModal, pickProgressLabelKey } from "./ShareCreateModal";
 
-const mountModal = () =>
+const mountModal = (
+    variant: "pack" | "invite" | "transfer",
+) =>
     render(
         <ClueProvider>
-            <ShareCreateModal open={true} onClose={() => {}} />
+            <ShareCreateModal
+                open={true}
+                onClose={() => {}}
+                variant={variant}
+            />
         </ClueProvider>,
         { wrapper: TestQueryClientProvider },
     );
 
-const findToggle = (label: string): HTMLInputElement => {
-    const span = screen.getByText(label);
-    const lbl = span.closest("label");
-    if (!lbl) throw new Error(`label not found for ${label}`);
-    const input = lbl.querySelector(
-        "input[type='checkbox']",
-    ) as HTMLInputElement | null;
-    if (!input) throw new Error(`checkbox not found for ${label}`);
-    return input;
+const findCta = (): HTMLButtonElement => {
+    const el = document.querySelector(
+        "[data-share-cta]",
+    ) as HTMLButtonElement | null;
+    if (!el) throw new Error("Share CTA not found");
+    return el;
 };
 
 beforeEach(() => {
     window.localStorage.clear();
+    createShareMock.mockReset();
+    createShareMock.mockResolvedValue({ id: "stub-share-id" });
+    mockSession = { data: null };
 });
 
-describe("ShareCreateModal — toggle dependency rules", () => {
-    test("defaults: cardPack + players checked, knownCards + suggestions unchecked", () => {
-        mountModal();
-        expect(findToggle("toggleCardPack").checked).toBe(true);
-        expect(findToggle("toggleCardPack").disabled).toBe(true);
-        expect(findToggle("togglePlayers").checked).toBe(true);
-        expect(findToggle("togglePlayers").disabled).toBe(false);
-        expect(findToggle("toggleKnownCards").checked).toBe(false);
-        expect(findToggle("toggleKnownCards").disabled).toBe(false);
-        expect(findToggle("toggleSuggestions").checked).toBe(false);
-        expect(findToggle("toggleSuggestions").disabled).toBe(false);
+describe("ShareCreateModal — variant chrome", () => {
+    test("pack variant renders pack title + description, no warning, no progress checkbox", () => {
+        mountModal("pack");
+        expect(screen.getByText("packTitle")).toBeTruthy();
+        expect(screen.getByText("packDescription")).toBeTruthy();
+        expect(
+            document.querySelector("[data-share-transfer-warning]"),
+        ).toBeNull();
+        // No optional checkbox for pack variant.
+        expect(
+            document.querySelector("input[type='checkbox']"),
+        ).toBeNull();
     });
 
-    test("turning players off re-enables the cardPack toggle", () => {
-        mountModal();
-        const players = findToggle("togglePlayers");
-        fireEvent.click(players);
-        expect(findToggle("togglePlayers").checked).toBe(false);
-        // cardPack stays checked (we don't auto-uncheck on
-        // players-off; the user's free to keep it) but its disable
-        // state lifts so the user can opt out if they want.
-        expect(findToggle("toggleCardPack").disabled).toBe(false);
-        // knownCards / suggestions force-reset to false AND disabled
-        // when players is off.
-        expect(findToggle("toggleKnownCards").disabled).toBe(true);
-        expect(findToggle("toggleKnownCards").checked).toBe(false);
-        expect(findToggle("toggleSuggestions").disabled).toBe(true);
-        expect(findToggle("toggleSuggestions").checked).toBe(false);
+    test("invite variant renders invite title + description, no warning", () => {
+        mountModal("invite");
+        expect(screen.getByText("inviteTitle")).toBeTruthy();
+        expect(screen.getByText("inviteDescription")).toBeTruthy();
+        expect(
+            document.querySelector("[data-share-transfer-warning]"),
+        ).toBeNull();
     });
 
-    test("turning players back on re-locks cardPack as required-checked", () => {
-        mountModal();
-        // Toggle players off → on.
-        fireEvent.click(findToggle("togglePlayers"));
-        // After turning players off, manually uncheck cardPack so we
-        // can verify the players-on transition force-checks it again.
-        fireEvent.click(findToggle("toggleCardPack"));
-        expect(findToggle("toggleCardPack").checked).toBe(false);
-        // Now toggle players back on — cardPack must come along.
-        fireEvent.click(findToggle("togglePlayers"));
-        expect(findToggle("togglePlayers").checked).toBe(true);
-        expect(findToggle("toggleCardPack").checked).toBe(true);
-        expect(findToggle("toggleCardPack").disabled).toBe(true);
+    test("transfer variant renders transfer title + description + warning", () => {
+        mountModal("transfer");
+        expect(screen.getByText("transferTitle")).toBeTruthy();
+        expect(screen.getByText("transferDescription")).toBeTruthy();
+        const warning = document.querySelector(
+            "[data-share-transfer-warning]",
+        );
+        expect(warning).not.toBeNull();
+        expect(warning?.textContent).toContain("transferWarning");
+    });
+
+    test("invite variant with no logged progress hides the optional checkbox", () => {
+        // Default ClueProvider state has zero suggestions and zero
+        // accusations logged — checkbox is gated on either being > 0.
+        mountModal("invite");
+        expect(
+            document.querySelector("input[type='checkbox']"),
+        ).toBeNull();
+    });
+});
+
+describe("pickProgressLabelKey", () => {
+    test("returns null when there's no progress to include", () => {
+        expect(pickProgressLabelKey(0, 0)).toBeNull();
+    });
+
+    test("suggestions only → suggestions-only key", () => {
+        expect(pickProgressLabelKey(3, 0)).toEqual({
+            key: "inviteIncludeProgressSuggestionsOnly",
+            values: { count: 3 },
+        });
+    });
+
+    test("accusations only → accusations-only key", () => {
+        expect(pickProgressLabelKey(0, 2)).toEqual({
+            key: "inviteIncludeProgressAccusationsOnly",
+            values: { count: 2 },
+        });
+    });
+
+    test("both → combined key with both counts", () => {
+        expect(pickProgressLabelKey(5, 1)).toEqual({
+            key: "inviteIncludeProgressBoth",
+            values: { suggestions: 5, accusations: 1 },
+        });
+    });
+});
+
+describe("ShareCreateModal — universal sign-in CTA", () => {
+    test("anonymous user sees 'Sign in to share' regardless of variant", () => {
+        mockSession = { data: null };
+        for (const variant of ["pack", "invite", "transfer"] as const) {
+            const { unmount } = mountModal(variant);
+            expect(findCta().textContent).toContain("signInToShare");
+            unmount();
+        }
+    });
+
+    test("anonymous-plugin user sees 'Sign in to share'", () => {
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: true } },
+        };
+        mountModal("pack");
+        expect(findCta().textContent).toContain("signInToShare");
+    });
+
+    test("signed-in non-anon user sees 'Copy link'", () => {
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: false } },
+        };
+        mountModal("pack");
+        expect(findCta().textContent).toContain("copyLink");
+    });
+});
+
+describe("ShareCreateModal — wire payload by variant", () => {
+    test("pack variant sends kind: 'pack' with only cardPackData", async () => {
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: false } },
+        };
+        mountModal("pack");
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await waitFor(() => {
+            expect(createShareMock).toHaveBeenCalled();
+        });
+        const payload = createShareMock.mock.calls[0]?.[0];
+        expect(payload.kind).toBe("pack");
+        expect(payload.cardPackData).toBeTypeOf("string");
+        expect(payload.playersData).toBeUndefined();
+        expect(payload.knownCardsData).toBeUndefined();
+        // Regression: no leftover `cardPackIsCustom` from the old shape.
+        expect(payload.cardPackIsCustom).toBeUndefined();
+    });
+
+    test("invite variant sends kind: 'invite' with cardPack + players + handSizes", async () => {
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: false } },
+        };
+        mountModal("invite");
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await waitFor(() => {
+            expect(createShareMock).toHaveBeenCalled();
+        });
+        const payload = createShareMock.mock.calls[0]?.[0];
+        expect(payload.kind).toBe("invite");
+        expect(payload.cardPackData).toBeTypeOf("string");
+        expect(payload.playersData).toBeTypeOf("string");
+        expect(payload.handSizesData).toBeTypeOf("string");
+        // No progress logged → optional fields absent.
+        expect(payload.suggestionsData).toBeUndefined();
+        expect(payload.accusationsData).toBeUndefined();
+        expect(payload.knownCardsData).toBeUndefined();
+    });
+
+    test("transfer variant sends kind: 'transfer' with all six fields", async () => {
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: false } },
+        };
+        mountModal("transfer");
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await waitFor(() => {
+            expect(createShareMock).toHaveBeenCalled();
+        });
+        const payload = createShareMock.mock.calls[0]?.[0];
+        expect(payload.kind).toBe("transfer");
+        expect(payload.cardPackData).toBeTypeOf("string");
+        expect(payload.playersData).toBeTypeOf("string");
+        expect(payload.handSizesData).toBeTypeOf("string");
+        expect(payload.knownCardsData).toBeTypeOf("string");
+        expect(payload.suggestionsData).toBeTypeOf("string");
+        expect(payload.accusationsData).toBeTypeOf("string");
+    });
+});
+
+describe("ShareCreateModal — sign-in slide", () => {
+    test("server ERR_SIGN_IN_REQUIRED slides to sign-in step", async () => {
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: false } },
+        };
+        createShareMock.mockRejectedValue(
+            new Error("sign_in_required_to_share"),
+        );
+        mountModal("pack");
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await waitFor(() => {
+            expect(screen.getByText("signInTitle")).toBeTruthy();
+        });
     });
 });

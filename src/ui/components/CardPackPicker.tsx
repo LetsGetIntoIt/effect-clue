@@ -10,7 +10,8 @@ import {
     useRef,
     useState,
 } from "react";
-import { ShareIcon } from "./Icons";
+import { ShareIcon } from "./ShareIcon";
+import { TrashIcon } from "./Icons";
 
 /**
  * Pack-shaped record consumed by the picker. Custom packs carry
@@ -284,7 +285,7 @@ export function CardPackPicker({
                                                         { label: pack.label },
                                                     )}
                                                 >
-                                                    ×
+                                                    <TrashIcon size={13} />
                                                 </button>
                                             ) : null}
                                         </li>

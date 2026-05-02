@@ -64,7 +64,9 @@ import {
     useReducedTransition,
 } from "../motion";
 import { useConfetti } from "../hooks/useConfetti";
+import { useShareContext } from "../share/ShareProvider";
 import { CardPackRow } from "./CardPackRow";
+import { ShareIcon } from "./ShareIcon";
 import { Envelope } from "./Icons";
 import { InfoPopover } from "./InfoPopover";
 
@@ -212,7 +214,9 @@ function navigateGrid(
 export function Checklist() {
     const t = useTranslations("deduce");
     const tSetup = useTranslations("setup");
+    const tShare = useTranslations("share");
     const tReasons = useTranslations("reasons");
+    const { openInvitePlayer } = useShareContext();
     const hasKeyboard = useHasKeyboard();
     const { state, dispatch, derived } = useClue();
     const {
@@ -507,7 +511,7 @@ export function Checklist() {
                     <p className="m-0 mt-1.5 text-[14px] leading-relaxed">
                         {tSetup("description")}
                     </p>
-                    <div className="mt-3 flex justify-start [@media(min-width:800px)]:justify-end">
+                    <div className="mt-3 flex flex-wrap items-center justify-start gap-3 [@media(min-width:800px)]:justify-end">
                         <button
                             type="button"
                             data-setup-cta
@@ -527,6 +531,16 @@ export function Checklist() {
                                 : tSetup("startPlaying", {
                                       shortcut: shortcutSuffix("global.gotoPlay", hasKeyboard),
                                   })}
+                        </button>
+                        <button
+                            type="button"
+                            className="inline-flex cursor-pointer items-center gap-1 rounded-[var(--radius)] border-none bg-transparent px-1 py-1 text-[13px] text-muted hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                            onClick={() => openInvitePlayer()}
+                            data-share-invite-from-setup
+                            data-tour-anchor="setup-invite-player"
+                        >
+                            <ShareIcon size={14} />
+                            {tShare("entryInvitePlayer")}
                         </button>
                     </div>
                 </div>

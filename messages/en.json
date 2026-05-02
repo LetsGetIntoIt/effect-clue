@@ -91,8 +91,6 @@
         "updateCardPack": "Update {label}",
         "updateCardPackTitle": "Save your edits to {label} (in place)",
         "saveAsNewCardPack": "+ Save as new pack",
-        "shareSetup": "Share setup",
-        "shareSetupTitle": "Share this game setup (card pack + players) with a friend",
         "sharePackTitle": "Share {label} with a friend",
         "sharePackAria": "Share card pack {label}",
         "deleteCustomCardSetConfirm": "Delete card pack \"{label}\"?",
@@ -295,33 +293,46 @@
         "handSizeReset": "Reset"
     },
     "share": {
-        "menuItem": "Share game",
-        "createTitle": "Share this game",
-        "createDescriptionLead": "Pick what to include. Friends with the link can import any combination of:",
-        "archetypePack": "A custom card pack so a friend can play with the same set.",
-        "archetypeInProgress": "A game in progress so a friend can pick up where you left off.",
-        "archetypeSolved": "A finished mystery so a friend can see how you solved it.",
+        "entryInvitePlayer": "Invite a player",
+        "menuItemInvitePlayer": "Invite a player",
+        "menuItemTransferDevice": "Continue on another device",
+        "packTitle": "Share this card pack",
+        "packDescription": "Send a friend a link so they can use this pack in their own game.",
+        "packIncludesHeader": "This pack includes:",
+        "packCategoryItem": "{category} ({count})",
+        "inviteTitle": "Invite a player",
+        "inviteDescription": "Send a link to get another player set up quickly to use the solver themselves. Look at you being a nice detective, letting your competitors have access to this super power!",
+        "inviteIncludeProgressBoth": "Include all {suggestions} prior suggestions and {accusations} failed accusations",
+        "inviteIncludeProgressSuggestionsOnly": "Include all {count} prior suggestions",
+        "inviteIncludeProgressAccusationsOnly": "Include all {count} prior failed accusations",
+        "transferTitle": "Continue on another device",
+        "transferDescription": "Send yourself a link to pick up this game on another device.",
+        "transferWarning": "Caution! This link includes private information about which cards you have. Use it to move your game to another device — think carefully before sharing this link with another player.",
         "ttl": "1 day",
         "linkExpiresIn": "Link expires in {duration}.",
         "signInTitle": "Sign in or create account to share",
-        "signInDescription": "Sharing a custom card pack saves it to your account so the receiver can pick it up. Sign in once and we'll continue your share.",
+        "signInDescription": "Sharing a Clue game saves it to your account so the receiver can pick it up. Sign in once and we'll continue your share.",
         "signInToShare": "Sign in or create account to share",
-        "toggleCardPack": "Card pack",
-        "togglePlayers": "Players + hand sizes",
-        "toggleKnownCards": "Known cards",
-        "toggleSuggestions": "Suggestions + accusations",
-        "requiresPlayers": "Requires players + hand sizes",
-        "requiresCardPackForPlayers": "Card pack is required when sharing players",
-        "createAndCopy": "Create + copy link",
+        "copyLink": "Copy link",
         "creating": "Creating…",
         "copied": "Link copied!",
         "copyFallback": "Copy this URL:",
         "errorGeneric": "Couldn't create the share. Try again in a moment.",
         "importTitle": "A friend shared a Clue Solver game",
-        "importDescription": "Pick which parts of the share to import into your local game.",
         "importModalTitle": "Import a shared game",
-        "importModalDescription": "Tick the sections you want. Anything left off won't touch your current game.",
-        "importAction": "Import",
+        "importSharedBy": "Shared by {name}",
+        "importIncludesHeader": "This share includes:",
+        "importIncludesPackBuiltIn": "Card pack: {label}",
+        "importIncludesPackCustom": "Card pack: {label} (custom)",
+        "importIncludesPackUnnamedCustom": "Card pack (custom)",
+        "importIncludesPlayers": "Players ({count}): {names}",
+        "importIncludesPlayersOverflow": "Players ({count}): {names} +{extra} more",
+        "importIncludesHandSizes": "Hand sizes",
+        "importIncludesKnownCards": "Known cards ({count})",
+        "importIncludesSuggestions": "Suggestions ({count})",
+        "importIncludesAccusations": "Accusations ({count})",
+        "importEmpty": "This share is empty — nothing to import.",
+        "importAction": "Add to my game",
         "importing": "Importing…"
     },
     "account": {
@@ -411,6 +422,20 @@
             "checklist": {
                 "title": "See updated deductions on the checklist",
                 "body": "The solver re-runs after every suggestion — your next deduction may already be on the board."
+            }
+        },
+        "sharing": {
+            "pack": {
+                "title": "Share any card pack",
+                "body": "You can share any card pack with the share icon next to its name. Useful for custom card packs you create — your friends can use them in their own games."
+            },
+            "invite": {
+                "title": "Invite another player",
+                "body": "Send a friend a link to set them up with their own solver session for this game. They get to deduce alongside you on their own device."
+            },
+            "overflow": {
+                "title": "More share options here",
+                "body": "Find Invite a player and Continue on another device under the menu — the second one moves your in-progress game to a different device."
             }
         }
     }

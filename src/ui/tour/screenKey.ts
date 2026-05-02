@@ -9,11 +9,14 @@
  * in `Toolbar.tsx` / `BottomNav.tsx` (which screen's tour to
  * re-fire after wiping the gate flags).
  */
+import { DateTime, Duration } from "effect";
 import type { UiMode } from "../../logic/ClueState";
-import type { ScreenKey } from "./TourState";
+import { TOUR_PREREQUISITES, TOUR_RE_ENGAGE_DURATION } from "./tours";
+import { loadTourState, type ScreenKey } from "./TourState";
 
 const SETUP: ScreenKey = "setup";
 const CHECKLIST_SUGGEST: ScreenKey = "checklistSuggest";
+const SHARING: ScreenKey = "sharing";
 
 /** Module-scope `uiMode` discriminators. The `i18next/no-literal-string`
  * lint rule treats inline string literals as user-facing copy; pulling
@@ -49,5 +52,57 @@ export const screenKeyForUiMode = (mode: UiMode): ScreenKey => {
 export const uiModeForScreenKey = (screen: ScreenKey): UiMode | undefined => {
     if (screen === SETUP) return UI_MODE_SETUP;
     if (screen === CHECKLIST_SUGGEST) return UI_MODE_CHECKLIST;
+    if (screen === SHARING) return UI_MODE_SETUP;
     return undefined;
+};
+
+/**
+ * Priority-ordered list of tour `ScreenKey`s that fire on a given
+ * `uiMode`. Most modes have a single tour; `setup` has both the
+ * foundational `setup` tour and the follow-up `sharing` tour, in
+ * that order.
+ *
+ * `TourScreenGate` walks this list and gates the FIRST tour whose
+ * prerequisites are met AND whose own re-engage gate says "show". A
+ * mode with no eligible tour returns its primary tour anyway so the
+ * gate machinery still runs (and just decides not to show).
+ */
+export const screensForUiMode = (mode: UiMode): ReadonlyArray<ScreenKey> => {
+    if (mode === UI_MODE_SETUP) return [SETUP, SHARING];
+    return [CHECKLIST_SUGGEST];
+};
+
+/**
+ * Pick the first `ScreenKey` from `candidates` that's actually eligible
+ * to fire right now: every prerequisite tour has been dismissed, AND
+ * the candidate's own re-engage gate is open (never dismissed, OR
+ * dismissed and the dormancy window has elapsed).
+ *
+ * Returns the first candidate when nothing is eligible — keeps the
+ * call site's hook signature stable; the per-screen gate hook will
+ * decide not to show anyway.
+ *
+ * Pure read of localStorage via `loadTourState`; no side effects.
+ */
+export const pickFirstEligibleScreenKey = (
+    candidates: ReadonlyArray<ScreenKey>,
+    now: DateTime.Utc,
+): ScreenKey => {
+    for (const candidate of candidates) {
+        const prereqs = TOUR_PREREQUISITES[candidate] ?? [];
+        const prereqsAllDismissed = prereqs.every(
+            (p) => loadTourState(p).lastDismissedAt !== undefined,
+        );
+        if (!prereqsAllDismissed) continue;
+        const state = loadTourState(candidate);
+        if (state.lastDismissedAt === undefined) return candidate;
+        if (state.lastVisitedAt === undefined) return candidate;
+        const elapsed = DateTime.distance(state.lastVisitedAt, now);
+        if (Duration.isGreaterThan(elapsed, TOUR_RE_ENGAGE_DURATION)) {
+            return candidate;
+        }
+    }
+    // None eligible — return the first candidate (the primary tour for
+    // this uiMode) so the gate hook still runs against a stable key.
+    return candidates[0]!;
 };

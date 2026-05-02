@@ -48,6 +48,7 @@ const encode = Schema.encodeSync(PersistedTourStateSchema);
 export type ScreenKey =
     | "setup"
     | "checklistSuggest"
+    | "sharing"
     | "firstSuggestion"
     | "account"
     | "shareImport";
