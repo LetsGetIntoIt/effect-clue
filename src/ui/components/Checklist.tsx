@@ -537,6 +537,7 @@ export function Checklist() {
                             className="inline-flex cursor-pointer items-center gap-1 rounded-[var(--radius)] border-none bg-transparent px-1 py-1 text-[13px] text-muted hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                             onClick={() => openInvitePlayer()}
                             data-share-invite-from-setup
+                            data-tour-anchor="setup-invite-player"
                         >
                             <ShareIcon size={14} />
                             {tShare("entryInvitePlayer")}

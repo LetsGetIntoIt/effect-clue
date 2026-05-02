@@ -52,6 +52,8 @@ import { DateTime, Duration } from "effect";
 import { loadInstallPromptState } from "../../logic/InstallPromptState";
 import { loadSplashState } from "../../logic/SplashState";
 import { ABOUT_APP_SPLASH_SCREEN_DISMISSAL_DURATION } from "../hooks/useSplashGate";
+import { uiModeForScreenKey } from "../tour/screenKey";
+import { TOUR_PREREQUISITES } from "../tour/tours";
 import { TOUR_RE_ENGAGE_DURATION } from "../tour/useTourGate";
 import { loadTourState, type ScreenKey } from "../tour/TourState";
 
@@ -71,6 +73,7 @@ import { loadTourState, type ScreenKey } from "../tour/TourState";
 const TOUR_PRECEDENCE: ReadonlyArray<ScreenKey> = [
     "setup",
     "checklistSuggest",
+    "sharing",
 ] as const;
 
 const SCREEN_SETUP: ScreenKey = "setup";
@@ -120,13 +123,27 @@ type TourDecision =
     | typeof TOUR_DECISION_REDIRECT_THEN_FIRE
     | typeof TOUR_DECISION_SKIP;
 
+/**
+ * Two screen keys "match" for tour-firing purposes when they map to
+ * the same `uiMode`. This is wider than identity equality: the
+ * `sharing` follow-up tour fires on the same `uiMode` ("setup") as
+ * the foundational `setup` tour, so a user on `state.uiMode = "setup"`
+ * is on-screen for both.
+ */
+const tourMatchesActiveScreen = (
+    target: ScreenKey,
+    activeScreen: ScreenKey,
+): boolean =>
+    uiModeForScreenKey(target) !== undefined &&
+    uiModeForScreenKey(target) === uiModeForScreenKey(activeScreen);
+
 const decideTourDispatch = (
     target: ScreenKey | undefined,
     activeScreen: ScreenKey,
     canRedirect: boolean,
 ): TourDecision => {
     if (target === undefined) return TOUR_DECISION_SKIP;
-    if (target === activeScreen) return TOUR_DECISION_FIRE;
+    if (tourMatchesActiveScreen(target, activeScreen)) return TOUR_DECISION_FIRE;
     if (shouldRedirectForTour(target, activeScreen)) {
         return canRedirect ? TOUR_DECISION_REDIRECT_THEN_FIRE : TOUR_DECISION_FIRE;
     }
@@ -196,6 +213,13 @@ const isSplashEligible = (now: DateTime.Utc): boolean => {
 };
 
 const isTourEligible = (screen: ScreenKey, now: DateTime.Utc): boolean => {
+    // Prerequisite tours must all have been dismissed (any reason —
+    // skip / complete / X / Esc). The follow-up tour is a "now that
+    // you've seen the basics" callout, not a primary onboarding step.
+    const prereqs = TOUR_PREREQUISITES[screen] ?? [];
+    for (const prereq of prereqs) {
+        if (loadTourState(prereq).lastDismissedAt === undefined) return false;
+    }
     const state = loadTourState(screen);
     if (state.lastDismissedAt === undefined) return true;
     if (state.lastVisitedAt === undefined) return true;

@@ -47,4 +47,9 @@ export const seedOnboardingDismissed = (): void => {
         "effect-clue.tour.checklistSuggest.v1",
         tourSeed,
     );
+    // Sharing tour is a follow-up that fires once both setup +
+    // checklistSuggest have been dismissed (which they are, above).
+    // Seed its dismissal so component tests don't see it auto-fire on
+    // the setup screen.
+    window.localStorage.setItem("effect-clue.tour.sharing.v1", tourSeed);
 };

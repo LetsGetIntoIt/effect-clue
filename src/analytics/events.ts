@@ -242,6 +242,7 @@ export const aboutLinkClicked = (props: {
 export type TourScreenKey =
     | "setup"
     | "checklistSuggest"
+    | "sharing"
     | "firstSuggestion"
     | "account"
     | "shareImport";

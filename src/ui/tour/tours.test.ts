@@ -27,7 +27,7 @@
  *     popover bug).
  */
 import { describe, expect, test } from "vitest";
-import { TOURS, type TourStep } from "./tours";
+import { TOUR_PREREQUISITES, TOURS, type TourStep } from "./tours";
 
 const findStep = (
     tour: ReadonlyArray<TourStep>,
@@ -188,6 +188,60 @@ describe("TOURS — firstSuggestion tour", () => {
         // element than the popover.
         expect(TOURS.firstSuggestion[0]!.hideArrow?.desktop).toBe(true);
         expect(TOURS.firstSuggestion[0]!.hideArrow?.mobile).toBeUndefined();
+    });
+});
+
+describe("TOURS — sharing follow-up tour", () => {
+    test("has 3 steps in declaration order — pack share, invite link, overflow menu", () => {
+        expect(TOURS.sharing.map((s) => s.anchor)).toEqual([
+            "setup-share-pack-pill",
+            "setup-invite-player",
+            "overflow-menu",
+        ]);
+    });
+
+    test("anchors land on actual data-tour-anchor attributes wired in the UI", () => {
+        // Sanity check the anchors are spelled exactly as they appear
+        // on the DOM nodes (CardPackRow, Checklist, OverflowMenu).
+        const anchors = TOURS.sharing.map((s) => s.anchor);
+        expect(anchors).toContain("setup-share-pack-pill");
+        expect(anchors).toContain("setup-invite-player");
+        expect(anchors).toContain("overflow-menu");
+    });
+
+    test("overflow-menu step uses last-visible priority + sideByViewport (mirrors setup tour's pattern)", () => {
+        const step = findStep(TOURS.sharing, "overflow-menu");
+        expect(step.popoverAnchorPriority).toBe("last-visible");
+        expect(step.sideByViewport?.desktop).toEqual({
+            side: "left",
+            align: "start",
+        });
+        expect(step.sideByViewport?.mobile).toEqual({
+            side: "top",
+            align: "end",
+        });
+    });
+
+    test("closing step uses 'gotIt' finish label (one-shot acknowledgement)", () => {
+        const overflow = findStep(TOURS.sharing, "overflow-menu");
+        expect(overflow.finishLabelKey).toBe("gotIt");
+    });
+});
+
+describe("TOUR_PREREQUISITES", () => {
+    test("sharing tour requires both setup AND checklistSuggest dismissed", () => {
+        expect(TOUR_PREREQUISITES.sharing).toEqual([
+            "setup",
+            "checklistSuggest",
+        ]);
+    });
+
+    test("setup tour has no prerequisites (foundational)", () => {
+        expect(TOUR_PREREQUISITES.setup).toBeUndefined();
+    });
+
+    test("checklistSuggest tour has no prerequisites (foundational)", () => {
+        expect(TOUR_PREREQUISITES.checklistSuggest).toBeUndefined();
     });
 });
 

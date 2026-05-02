@@ -5,10 +5,32 @@
  * `ScreenKey` (or a `ScreenKey` that maps to the wrong uiMode and
  * thereby breaks `StartupCoordinator`'s precedence redirect).
  */
-import { describe, expect, test } from "vitest";
-import { screenKeyForUiMode, uiModeForScreenKey } from "./screenKey";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { DateTime } from "effect";
+import {
+    pickFirstEligibleScreenKey,
+    screenKeyForUiMode,
+    screensForUiMode,
+    uiModeForScreenKey,
+} from "./screenKey";
 import type { ScreenKey } from "./TourState";
 import type { UiMode } from "../../logic/ClueState";
+
+const STORAGE_TOUR_SETUP = "effect-clue.tour.setup.v1";
+const STORAGE_TOUR_CHECKLIST_SUGGEST = "effect-clue.tour.checklistSuggest.v1";
+const STORAGE_TOUR_SHARING = "effect-clue.tour.sharing.v1";
+
+const seedDismissed = (key: string): void => {
+    const recent = new Date().toISOString();
+    window.localStorage.setItem(
+        key,
+        JSON.stringify({
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        }),
+    );
+};
 
 describe("screenKeyForUiMode", () => {
     test("setup uiMode → setup screen", () => {
@@ -27,6 +49,10 @@ describe("screenKeyForUiMode", () => {
 describe("uiModeForScreenKey", () => {
     test("setup screen → setup uiMode (canonical)", () => {
         expect(uiModeForScreenKey("setup")).toBe("setup");
+    });
+
+    test("sharing screen → setup uiMode (follow-up tour fires on the setup pane)", () => {
+        expect(uiModeForScreenKey("sharing")).toBe("setup");
     });
 
     test("checklistSuggest screen → checklist uiMode (canonical)", () => {
@@ -79,4 +105,83 @@ describe("uiMode ↔ ScreenKey round-trip", () => {
             expect(screenKeyForUiMode(mode!)).toBe(screen);
         });
     }
+});
+
+describe("screensForUiMode", () => {
+    test("setup uiMode lists [setup, sharing] in priority order", () => {
+        // The foundational `setup` tour fires first; `sharing` is the
+        // follow-up that picks up after both setup + checklistSuggest
+        // have been dismissed.
+        expect(screensForUiMode("setup")).toEqual(["setup", "sharing"]);
+    });
+
+    test("checklist uiMode lists only [checklistSuggest]", () => {
+        expect(screensForUiMode("checklist")).toEqual(["checklistSuggest"]);
+    });
+
+    test("suggest uiMode lists only [checklistSuggest]", () => {
+        expect(screensForUiMode("suggest")).toEqual(["checklistSuggest"]);
+    });
+});
+
+describe("pickFirstEligibleScreenKey", () => {
+    beforeEach(() => {
+        window.localStorage.clear();
+    });
+
+    afterEach(() => {
+        window.localStorage.clear();
+    });
+
+    const now = DateTime.makeUnsafe(new Date(0));
+
+    test("brand-new user on setup → picks setup (no localStorage at all)", () => {
+        expect(pickFirstEligibleScreenKey(["setup", "sharing"], now)).toBe(
+            "setup",
+        );
+    });
+
+    test("setup tour dismissed but checklistSuggest not → sharing prereqs unmet → falls back to setup", () => {
+        // setup dismissed, but checklistSuggest never seen. Sharing's
+        // prereq list is ["setup", "checklistSuggest"] — both must be
+        // dismissed. Only one is. Sharing is ineligible. Setup itself
+        // is dismissed-and-recent so its own gate also fails. The
+        // helper falls back to the first candidate ("setup") so the
+        // gate hook runs against a stable key (and decides not to
+        // show).
+        seedDismissed(STORAGE_TOUR_SETUP);
+        expect(pickFirstEligibleScreenKey(["setup", "sharing"], now)).toBe(
+            "setup",
+        );
+    });
+
+    test("both prereqs dismissed → sharing eligible → returns sharing", () => {
+        seedDismissed(STORAGE_TOUR_SETUP);
+        seedDismissed(STORAGE_TOUR_CHECKLIST_SUGGEST);
+        expect(pickFirstEligibleScreenKey(["setup", "sharing"], now)).toBe(
+            "sharing",
+        );
+    });
+
+    test("both prereqs + sharing all dismissed-recently → fallback to first candidate", () => {
+        seedDismissed(STORAGE_TOUR_SETUP);
+        seedDismissed(STORAGE_TOUR_CHECKLIST_SUGGEST);
+        seedDismissed(STORAGE_TOUR_SHARING);
+        // No tour eligible; helper returns the first candidate so the
+        // gate signature stays stable.
+        expect(pickFirstEligibleScreenKey(["setup", "sharing"], now)).toBe(
+            "setup",
+        );
+    });
+
+    test("checklist uiMode → only checklistSuggest is in the list, picks it", () => {
+        // Even with sharing's prereqs dismissed, the checklist uiMode's
+        // candidate list doesn't include sharing — so sharing never
+        // fires here.
+        seedDismissed(STORAGE_TOUR_SETUP);
+        seedDismissed(STORAGE_TOUR_CHECKLIST_SUGGEST);
+        expect(
+            pickFirstEligibleScreenKey(["checklistSuggest"], now),
+        ).toBe("checklistSuggest");
+    });
 });

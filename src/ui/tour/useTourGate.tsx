@@ -18,6 +18,7 @@
 import { useEffect, useState } from "react";
 import { DateTime, Duration, Effect } from "effect";
 import { TelemetryRuntime } from "../../observability/runtime";
+import { TOUR_RE_ENGAGE_DURATION } from "./tours";
 import {
     loadTourState,
     saveTourDismissed,
@@ -26,7 +27,8 @@ import {
     type TourState,
 } from "./TourState";
 
-export const TOUR_RE_ENGAGE_DURATION = Duration.weeks(4);
+// Re-exported for callers that already import from this module.
+export { TOUR_RE_ENGAGE_DURATION };
 
 export const computeShouldShowTour = Effect.fn("tour.computeGate")(
     function* (

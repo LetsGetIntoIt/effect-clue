@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, type Variants } from "motion/react";
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { gameSetupStarted } from "../analytics/events";
 import { startSetup } from "../analytics/gameSession";
@@ -37,7 +37,12 @@ import {
 } from "./tour/TourState";
 import { TelemetryRuntime } from "../observability/runtime";
 import { DateTime } from "effect";
-import { screenKeyForUiMode, uiModeForScreenKey } from "./tour/screenKey";
+import {
+    pickFirstEligibleScreenKey,
+    screenKeyForUiMode,
+    screensForUiMode,
+    uiModeForScreenKey,
+} from "./tour/screenKey";
 
 // Non user-facing literals.
 const VARIANT_INITIAL = "initial";
@@ -254,7 +259,20 @@ function TourScreenGate() {
     const { state, hydrated } = useClue();
     const { startTour, activeScreen } = useTour();
     const { phase, reportClosed } = useStartupCoordinator();
-    const screenKey = screenKeyForUiMode(state.uiMode);
+    // Resolve which tour key to gate against. Most uiModes have one
+    // candidate; the setup uiMode has both `setup` (foundational)
+    // and `sharing` (follow-up after both setup + checklistSuggest
+    // have been dismissed). `pickFirstEligibleScreenKey` walks the
+    // candidates and picks the first whose prerequisites + own
+    // re-engage gate are satisfied. Always returns SOME key so the
+    // useTourGate signature stays stable.
+    const screenKey = useMemo(() => {
+        if (!hydrated) return screenKeyForUiMode(state.uiMode);
+        return pickFirstEligibleScreenKey(
+            screensForUiMode(state.uiMode),
+            DateTime.nowUnsafe(),
+        );
+    }, [hydrated, state.uiMode]);
     const { shouldShow, dismiss } = useTourGate(screenKey, {
         enabled: hydrated,
     });

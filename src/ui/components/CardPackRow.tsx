@@ -451,6 +451,9 @@ export function CardPackRow() {
                                     label: pack.label,
                                 })}
                                 data-share-pack-pill
+                                {...(isFirst
+                                    ? { "data-tour-anchor": "setup-share-pack-pill" }
+                                    : {})}
                             >
                                 <ShareIcon size={12} />
                             </button>

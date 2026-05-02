@@ -11,8 +11,18 @@
  * `TourPopover` at render time. Author the copy and add new steps
  * here; the wiring picks up new steps for free.
  */
+import { Duration } from "effect";
 import type { UiMode } from "../../logic/ClueState";
 import type { ScreenKey } from "./TourState";
+
+/**
+ * How long after dismissal a per-screen tour stays dormant before
+ * it's eligible to fire again. Kept here (alongside the tour
+ * registry) so both `useTourGate` and the coordinator's eligibility
+ * check can read the same constant without dragging React imports
+ * across module boundaries.
+ */
+export const TOUR_RE_ENGAGE_DURATION = Duration.weeks(4);
 
 /**
  * A single step in a tour. The `anchor` resolves to
@@ -392,7 +402,75 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             hideArrow: { desktop: true },
         },
     ],
+    /**
+     * Follow-up tour that calls out the three ways to share. Fires on
+     * the user's *next* visit to the Setup pane after they've already
+     * dismissed the setup AND checklistSuggest tours — by then they
+     * understand the app well enough to care about the share
+     * affordances. See `TOUR_PREREQUISITES` below.
+     *
+     * Doesn't redirect: per `StartupCoordinator`'s `decideTourDispatch`
+     * rule, only the setup tour pulls the user off their current
+     * screen. If a returning user lands on /play?view=checklist, the
+     * sharing tour waits for them to navigate to setup themselves.
+     */
+    sharing: [
+        {
+            // Anchored at the share button on the FIRST pack pill (Classic
+            // by default). Popover phrases as "any pack" so the user
+            // generalizes from the example to their custom packs.
+            anchor: "setup-share-pack-pill",
+            titleKey: "sharing.pack.title",
+            bodyKey: "sharing.pack.body",
+            side: "bottom",
+            align: "start",
+        },
+        {
+            // The "Invite a player" link beside Start playing in the
+            // Game-setup intro card.
+            anchor: "setup-invite-player",
+            titleKey: "sharing.invite.title",
+            bodyKey: "sharing.invite.body",
+            side: "bottom",
+            align: "end",
+        },
+        {
+            // Same overflow-menu anchor + forceOpen wiring as the setup
+            // tour's overflow step — Toolbar / BottomNav both observe
+            // `currentStep?.anchor === "overflow-menu"` and open the
+            // menu programmatically while this step is active.
+            anchor: "overflow-menu",
+            titleKey: "sharing.overflow.title",
+            bodyKey: "sharing.overflow.body",
+            popoverAnchorPriority: "last-visible",
+            side: "left",
+            align: "start",
+            sideByViewport: {
+                mobile: { side: "top", align: "end" },
+                desktop: { side: "left", align: "start" },
+            },
+            finishLabelKey: "gotIt",
+        },
+    ],
     // Reserved for M7 / M9 — no content yet.
     account: [],
     shareImport: [],
+};
+
+/**
+ * Some tours don't fire until other tours have already been seen. Each
+ * key's value lists the tours whose `lastDismissedAt` must be defined
+ * before this tour is eligible. Read by `StartupCoordinator` (which
+ * walks `TOUR_PRECEDENCE` to pick what fires at boot) and by the
+ * `TourScreenGate` (which picks which tour to gate against on each
+ * uiMode).
+ *
+ * `sharing` waits for both `setup` and `checklistSuggest` so a brand-
+ * new user gets the foundational tours first; only after they've been
+ * around the app once does the share-affordances callout fire.
+ */
+export const TOUR_PREREQUISITES: Partial<
+    Record<ScreenKey, ReadonlyArray<ScreenKey>>
+> = {
+    sharing: ["setup", "checklistSuggest"],
 };

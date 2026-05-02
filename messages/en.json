@@ -423,6 +423,20 @@
                 "title": "See updated deductions on the checklist",
                 "body": "The solver re-runs after every suggestion — your next deduction may already be on the board."
             }
+        },
+        "sharing": {
+            "pack": {
+                "title": "Share any card pack",
+                "body": "You can share any card pack with the share icon next to its name. Useful for custom card packs you create — your friends can use them in their own games."
+            },
+            "invite": {
+                "title": "Invite another player",
+                "body": "Send a friend a link to set them up with their own solver session for this game. They get to deduce alongside you on their own device."
+            },
+            "overflow": {
+                "title": "More share options here",
+                "body": "Find Invite a player and Continue on another device under the menu — the second one moves your in-progress game to a different device."
+            }
         }
     }
 }
