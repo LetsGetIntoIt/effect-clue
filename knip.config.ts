@@ -41,6 +41,9 @@ const config: KnipConfig = {
 		// the top level keeps CSS tooling and editor integrations happy,
 		// even though nothing imports it directly.
 		"tailwindcss",
+
+                // used for Vercel CLI commands, but knip doesn't know that
+                "vercel",
 	],
 };
 
