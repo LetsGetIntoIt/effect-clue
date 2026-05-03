@@ -1351,7 +1351,7 @@ export function Checklist() {
                         <tr>
                             <th
                                 colSpan={cardSpan}
-                                className="border-r border-b border-border bg-row-alt px-1.5 py-2 text-center"
+                                className="border-r border-b border-border bg-row-alt px-1.5 py-2 text-left"
                             >
                                 <button
                                     type="button"
