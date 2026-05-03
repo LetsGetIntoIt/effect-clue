@@ -1,0 +1,87 @@
+# Project-local Codex command rules for effect-clue.
+# These rules load only when this project's .codex layer is trusted.
+
+prefix_rule(pattern = ["nvm", "use"], decision = "allow", justification = "Use the repo-pinned Node version")
+prefix_rule(pattern = ["nvm", "install"], decision = "prompt", justification = "Installing Node versions can download software")
+prefix_rule(pattern = ["source", "~/.nvm/nvm.sh"], decision = "allow", justification = "Load nvm when the shell profile did not")
+
+prefix_rule(pattern = ["pnpm", "install"], decision = "prompt", justification = "Installing dependencies can download and run newly acquired software")
+prefix_rule(pattern = ["pnpm", "typecheck"], decision = "allow", justification = "Run project verification")
+prefix_rule(pattern = ["pnpm", "test"], decision = "allow", justification = "Run project tests")
+prefix_rule(pattern = ["pnpm", "knip"], decision = "allow", justification = "Run unused-export verification")
+prefix_rule(pattern = ["pnpm", "lint"], decision = "allow", justification = "Run lint verification")
+prefix_rule(pattern = ["pnpm", "i18n:check"], decision = "allow", justification = "Run i18n key verification")
+prefix_rule(pattern = ["pnpm", "view"], decision = "allow", justification = "Inspect package metadata")
+
+prefix_rule(pattern = ["git", "add"], decision = "allow", justification = "Stage requested changes from within the effect-clue worktree")
+prefix_rule(pattern = ["git", "branch", "--show-current"], decision = "allow", justification = "Inspect current branch from within the effect-clue worktree")
+prefix_rule(pattern = ["git", "diff"], decision = "allow", justification = "Inspect working tree diffs from within the effect-clue worktree")
+prefix_rule(pattern = ["git", "fetch"], decision = "allow", justification = "Fetch remote refs from within the effect-clue worktree")
+prefix_rule(pattern = ["git", "log"], decision = "allow", justification = "Inspect commit history from within the effect-clue worktree")
+prefix_rule(pattern = ["git", "rebase"], decision = "allow", justification = "Rebase requested branches from within the effect-clue worktree")
+prefix_rule(pattern = ["git", "stash"], decision = "allow", justification = "Manage local work in progress from within the effect-clue worktree")
+prefix_rule(pattern = ["git", "status"], decision = "allow", justification = "Inspect working tree state from within the effect-clue worktree")
+
+prefix_rule(
+    pattern = ["git", "checkout", "-b"],
+    decision = "allow",
+    justification = "Create requested branches from within the effect-clue worktree",
+    match = [
+        "git checkout -b codex/example",
+    ],
+    not_match = [
+        "git checkout main",
+        "git checkout -- file.ts",
+    ],
+)
+
+prefix_rule(
+    pattern = ["git", "commit"],
+    decision = "allow",
+    justification = "Create requested commits from within the effect-clue worktree",
+    match = [
+        "git commit -m 'Update docs'",
+        "git commit --amend --no-edit",
+    ],
+)
+
+prefix_rule(
+    pattern = ["git", "push", "-u", "--force"],
+    decision = "forbidden",
+    justification = "Do not auto-allow force pushes; ask the user explicitly instead",
+)
+
+prefix_rule(
+    pattern = ["git", "push", "-u", "-f"],
+    decision = "forbidden",
+    justification = "Do not auto-allow force pushes; ask the user explicitly instead",
+)
+
+prefix_rule(
+    pattern = ["git", "push", "-u"],
+    decision = "prompt",
+    justification = "Codex prefix rules cannot exclude later force flags like `git push -u origin branch --force`; prompt before upstream pushes",
+    match = [
+        "git push -u origin codex/example",
+    ],
+    not_match = [
+        "git push origin codex/example",
+        "git push --force-with-lease origin codex/example",
+    ],
+)
+
+prefix_rule(
+    pattern = ["gh", "pr", ["create", "view", "edit", "checks", "status", "diff", "list"]],
+    decision = "allow",
+    justification = "Run safer pull-request inspection and setup commands from within the effect-clue worktree",
+    match = [
+        "gh pr create --fill",
+        "gh pr view 110 --json url,state",
+        "gh pr checks 110",
+        "gh pr list --state open",
+    ],
+    not_match = [
+        "gh pr merge 110 --auto --merge",
+        "gh pr close 110",
+    ],
+)
