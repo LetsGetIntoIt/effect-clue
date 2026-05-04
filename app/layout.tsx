@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import { Alfa_Slab_One, Crimson_Text } from "next/font/google";
 import { I18nProvider } from "../src/i18n/I18nProvider";
 import { messages } from "../src/i18n/messages";
+import { assertGoogleOAuthEnvConfigured } from "../src/server/authEnv";
 import { Providers } from "./Providers";
 import "./globals.css";
+
+assertGoogleOAuthEnvConfigured();
 
 /**
  * Display font for titles / section headings.

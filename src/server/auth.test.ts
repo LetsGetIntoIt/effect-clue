@@ -43,15 +43,13 @@ const importAuthWithEnv = async (
                   readonly allowedHosts: ReadonlyArray<string>;
                   readonly protocol: string;
               };
-        readonly socialProviders:
-            | undefined
-            | {
-                  readonly google: {
-                      readonly clientId: string;
-                      readonly clientSecret: string;
-                      readonly prompt: string;
-                  };
-              };
+        readonly socialProviders: {
+            readonly google: {
+                readonly clientId: string;
+                readonly clientSecret: string;
+                readonly prompt: string;
+            };
+        };
         readonly logger: { readonly level: string };
         readonly plugins: ReadonlyArray<string>;
     };
@@ -96,19 +94,23 @@ describe("better-auth config", () => {
         ).rejects.toThrow("GOOGLE_CLIENT_SECRET is required");
     });
 
-    test("uses request-derived local auth URL and disables Google OAuth when credentials are absent", async () => {
+    test("uses request-derived local auth URL when Google credentials are configured", async () => {
         const config = await importAuthWithEnv({
             NODE_ENV: "development",
             BETTER_AUTH_URL: undefined,
-            GOOGLE_CLIENT_ID: undefined,
-            GOOGLE_CLIENT_SECRET: undefined,
+            GOOGLE_CLIENT_ID: "google-id",
+            GOOGLE_CLIENT_SECRET: "google-secret",
         });
 
         expect(config.baseURL).toEqual({
             allowedHosts: ["localhost:*", "127.*:*", "[::1]:*"],
             protocol: "http",
         });
-        expect(config.socialProviders).toBeUndefined();
+        expect(config.socialProviders.google).toEqual({
+            clientId: "google-id",
+            clientSecret: "google-secret",
+            prompt: "select_account",
+        });
     });
 
     test("enables Better Auth debug logs with AUTH_DEBUG=1", async () => {

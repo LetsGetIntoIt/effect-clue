@@ -367,13 +367,18 @@ describe("ShareCreateModal — sign-in slide", () => {
         await act(async () => {
             fireEvent.click(findCta());
         });
+        const googleButton = await screen.findByRole("button", {
+            name: "signInWithGoogle",
+        });
         await act(async () => {
-            fireEvent.click(screen.getByText("signInWithGoogle"));
+            fireEvent.click(googleButton);
         });
 
-        expect(signInSocialMock).toHaveBeenCalledWith({
-            provider: "google",
-            callbackURL: "/play?view=setup",
+        await waitFor(() => {
+            expect(signInSocialMock).toHaveBeenCalledWith({
+                provider: "google",
+                callbackURL: "/play?view=setup",
+            });
         });
         expect(
             window.sessionStorage.getItem("effect-clue.pending-share.v1"),
