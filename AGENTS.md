@@ -62,10 +62,37 @@ Scripts that require `pnpm install`:
 - `pnpm knip` — unused-exports audit
 - `pnpm i18n:check` — orphan-key audit (`scripts/check-i18n-keys.mjs`)
 - `pnpm dev` — Next.js dev server (used by Claude's `next-dev` preview and by Codex browser verification)
+- `pnpm db:up` / `pnpm db:down` — local Docker Postgres for server actions, auth, sharing, and card-pack sync
 - `pnpm build` — static export
 - `pnpm start` — serve the static export
 
-Claude's `next-dev` preview configured in `.claude/launch.json` runs `pnpm install && exec pnpm dev` itself, so those previews are self-healing and the dev server receives shutdown signals directly. In Codex, run `pnpm install` and then `pnpm dev` directly, then open `http://localhost:3000` in the in-app browser. When you start a dev server from a shell session, stop that same session before finishing the turn so the Next.js process does not remain orphaned on port 3000. The pre-commit checks above are not self-healing; if any of them fails with a module-not-found error, run `pnpm install` first and retry.
+Claude's `next-dev` preview configured in `.claude/launch.json` runs `pnpm install && exec pnpm dev` itself, so those previews are self-healing and the dev server receives shutdown signals directly. In Codex, use the local preview workflow below. The pre-commit checks above are not self-healing; if any of them fails with a module-not-found error, run `pnpm install` first and retry.
+
+## Local database and dev server lifecycle
+
+The local app uses Docker Postgres for server actions, Better Auth,
+sharing, and synced card packs. Do not paper over PgClient connection
+errors in application code; fix the local database/env setup instead.
+
+Before starting the preview in Codex:
+
+1. Make sure `.env.local` points `DATABASE_URL` at the Docker database:
+   `postgres://effect_clue:local_dev_only@localhost:5432/effect_clue`.
+2. Make sure `.env.local` has non-empty `GOOGLE_CLIENT_ID` and
+   `GOOGLE_CLIENT_SECRET`. Missing or blank Google OAuth env vars are
+   startup-time errors by design.
+3. Do not print secret values. If you need to inspect env health, print
+   only `<set>` / `<empty>` status.
+4. Start the local database with `pnpm db:up`.
+5. Start the app with `pnpm dev`, then open `http://localhost:3000` in
+   the in-app browser.
+
+Shutdown is part of the workflow. When you start `pnpm dev` from a
+shell session, stop that same session with Ctrl-C before finishing.
+Then run `pnpm db:down` so the Docker Postgres container is not left
+running after the agent/session is done. The only exception is an
+explicit user request to leave the preview running for handoff; in that
+case, say which server/database processes were intentionally left up.
 
 ## Verification checks
 
@@ -81,7 +108,7 @@ If you amend or update a commit, re-run the full set — a previously-green comm
 
 ## Manual verification in the preview
 
-For any change that's observable in the browser, exercise the change yourself before reporting the task done. In Claude, use the `next-dev` preview configured in `.claude/launch.json`; in Codex, run `pnpm dev` and use the in-app browser at `http://localhost:3000`. Follow the active agent's browser verification workflow: start/reload the preview, check console/network/logs, take a screenshot or snapshot as proof. Don't ask the user to verify manually.
+For any change that's observable in the browser, exercise the change yourself before reporting the task done. In Claude, use the `next-dev` preview configured in `.claude/launch.json`; in Codex, follow the local database and dev server lifecycle above, then use the in-app browser at `http://localhost:3000`. Follow the active agent's browser verification workflow: start/reload the preview, check console/network/logs, take a screenshot or snapshot as proof. Don't ask the user to verify manually.
 
 ### Layout, scroll, and animation behaviors
 
