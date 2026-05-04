@@ -66,6 +66,32 @@ import { Clue } from "./Clue";
 import { TestQueryClientProvider } from "../test-utils/queryClient";
 import { seedOnboardingDismissed } from "../test-utils/onboardingSeed";
 
+const seedStartupDismissedWithSharingEligible = (): void => {
+    const recent = new Date().toISOString();
+    window.localStorage.setItem(
+        "effect-clue.splash.v1",
+        JSON.stringify({
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        }),
+    );
+    window.localStorage.setItem(
+        "effect-clue.install-prompt.v1",
+        JSON.stringify({ version: 1, visits: 0 }),
+    );
+    const primaryTourSeed = JSON.stringify({
+        version: 1,
+        lastVisitedAt: recent,
+        lastDismissedAt: recent,
+    });
+    window.localStorage.setItem("effect-clue.tour.setup.v1", primaryTourSeed);
+    window.localStorage.setItem(
+        "effect-clue.tour.checklistSuggest.v1",
+        primaryTourSeed,
+    );
+};
+
 beforeEach(() => {
     window.localStorage.clear();
     // Reset URL between tests — the URL-sync `useEffect` in
@@ -177,6 +203,35 @@ describe("Clue — URL-based view hydration", () => {
         await waitFor(() => {
             expect(window.location.search).toContain("view=setup");
         });
+    });
+
+    test("returning to setup after primary tours does not auto-fire the sharing follow-up mid-session", async () => {
+        const { default: userEvent } = await import("@testing-library/user-event");
+        window.localStorage.clear();
+        seedStartupDismissedWithSharingEligible();
+        window.history.replaceState(null, "", "/?view=checklist");
+
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitFor(() => {
+            expect(window.location.search).toContain("view=checklist");
+        });
+        expect(screen.queryByText("sharing.pack.title")).toBeNull();
+
+        const user = userEvent.setup();
+        const triggers = document.querySelectorAll<HTMLElement>(
+            "[data-tour-anchor='overflow-menu']",
+        );
+        expect(triggers.length).toBeGreaterThan(0);
+        await user.click(triggers[0]!);
+        const item = await screen.findByRole("button", {
+            name: /^gameSetup/,
+        });
+        await user.click(item);
+
+        await waitFor(() => {
+            expect(window.location.search).toContain("view=setup");
+        });
+        expect(screen.queryByText("sharing.pack.title")).toBeNull();
     });
 
     test("a hydrated session with saved suggestions lands on checklist when no view is specified", async () => {

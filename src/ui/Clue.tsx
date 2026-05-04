@@ -58,6 +58,7 @@ const TOP_LEVEL_PLAY = "play";
 // pulled out as constants so the i18next/no-literal-string lint rule
 // treats them as wire-format identifiers, not user copy.
 const COORDINATOR_PHASE_TOUR = "tour" as const;
+const COORDINATOR_PHASE_DONE = "done" as const;
 // ScreenKey discriminator for the M22 first-suggestion tour. Pulled
 // to module scope for the same i18next-lint reason.
 const FIRST_SUGGESTION_SCREEN_KEY = "firstSuggestion" as const;
@@ -286,11 +287,21 @@ function TourScreenGate() {
     // useTourGate signature stays stable.
     const screenKey = useMemo(() => {
         if (!hydrated) return screenKeyForUiMode(state.uiMode);
+        // Setup has two possible tours: the foundational setup tour
+        // and the later sharing follow-up. Let the coordinator pick
+        // either during boot, but after boot only fire the primary
+        // screen tour on navigation. Otherwise a user who completes
+        // setup, completes Checklist & Suggest, and immediately
+        // returns to Game setup sees another tour in the same flow.
+        const candidates =
+            phase === COORDINATOR_PHASE_DONE && state.uiMode === UI_SETUP
+                ? [screenKeyForUiMode(state.uiMode)]
+                : screensForUiMode(state.uiMode);
         return pickFirstEligibleScreenKey(
-            screensForUiMode(state.uiMode),
+            candidates,
             DateTime.nowUnsafe(),
         );
-    }, [hydrated, state.uiMode]);
+    }, [hydrated, phase, state.uiMode]);
     const { shouldShow, dismiss } = useTourGate(screenKey, {
         enabled: hydrated,
     });
