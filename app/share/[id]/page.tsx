@@ -9,6 +9,7 @@
  * `<ClueProvider>`.
  */
 import { notFound } from "next/navigation";
+import { ConfirmProvider } from "../../../src/ui/hooks/useConfirm";
 import { getShare } from "../../../src/server/actions/shares";
 import { ShareImportPage } from "../../../src/ui/share/ShareImportPage";
 
@@ -28,5 +29,9 @@ export default async function SharePageRoute({
     } catch {
         notFound();
     }
-    return <ShareImportPage snapshot={snapshot} />;
+    return (
+        <ConfirmProvider>
+            <ShareImportPage snapshot={snapshot} />
+        </ConfirmProvider>
+    );
 }

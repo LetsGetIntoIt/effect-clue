@@ -4,9 +4,11 @@
  *
  * The receive page calls `useApplyShareSnapshot()` and gets back a
  * single-arg function: pass it the `ShareSnapshot` and the receiver's
- * `<ClueProvider>` state is replaced. The split between the pure
- * builder (`buildSessionFromSnapshot`) and the hook lets us unit-test
- * the snapshot-decode logic without React.
+ * persisted game is replaced. The play page then hydrates from that
+ * persisted session after the router sends the receiver to `/play`.
+ * The split between the pure builder (`buildSessionFromSnapshot`) and
+ * the localStorage writer lets us unit-test the snapshot-decode logic
+ * without React.
  *
  * Hydration semantics:
  *   - The share is the new game. Sections present in the snapshot
@@ -20,9 +22,11 @@
  *   - Branded ids round-trip through the Effect Schema codecs — no
  *     manual `Player()` / `Card()` re-wrapping needed downstream.
  *
- * Cache + persistence side effects: dispatching `replaceSession`
- * triggers the `<ClueProvider>`'s mirror-to-localStorage + RQ-cache
- * effect, so we don't write to either directly.
+ * Persistence side effects: the share landing page intentionally sits
+ * outside the play shell, so it must not call `useClue()`. Instead it
+ * writes the decoded session directly to the v6 persistence slot; the
+ * next `/play` mount reads it through the normal `<ClueProvider>`
+ * hydration path.
  */
 "use client";
 
@@ -33,8 +37,17 @@ import {
     CardEntry,
     Category,
 } from "../../logic/CardSet";
-import { GameSetup } from "../../logic/GameSetup";
-import type { GameSession } from "../../logic/Persistence";
+import { DEFAULT_SETUP, GameSetup } from "../../logic/GameSetup";
+import {
+    loadFromLocalStorage,
+    saveToLocalStorage,
+    type GameSession,
+} from "../../logic/Persistence";
+import {
+    saveCustomCardSet,
+    type CustomCardSet,
+} from "../../logic/CustomCardSets";
+import { recordCardPackUse } from "../../logic/CardPackUsage";
 import { PlayerSet } from "../../logic/PlayerSet";
 import {
     accusationsCodec,
@@ -45,7 +58,6 @@ import {
     suggestionsCodec,
 } from "../../logic/ShareCodec";
 import { newSuggestionId, Suggestion } from "../../logic/Suggestion";
-import { useClue } from "../state";
 
 export interface ShareSnapshotForHydration {
     readonly cardPackData: string | null;
@@ -76,6 +88,24 @@ export class ShareSnapshotDecodeError extends Error {
         this.field = field;
     }
 }
+
+export const sessionHasGameData = (session: GameSession): boolean => {
+    if (session.hands.some((hand) => hand.cards.length > 0)) return true;
+    if (session.handSizes.length > 0) return true;
+    if (session.suggestions.length > 0) return true;
+    if (session.accusations.length > 0) return true;
+    const players = session.setup.players;
+    if (players.length !== DEFAULT_SETUP.players.length) return true;
+    for (let i = 0; i < players.length; i += 1) {
+        if (players[i] !== DEFAULT_SETUP.players[i]) return true;
+    }
+    return false;
+};
+
+export const hasPersistedGameData = (): boolean => {
+    const session = loadFromLocalStorage();
+    return session !== undefined && sessionHasGameData(session);
+};
 
 /**
  * Decode a single wire field via its codec. Throws
@@ -214,16 +244,53 @@ export const buildSessionFromSnapshot = (
     };
 };
 
+export const saveCardPackFromSnapshot = (
+    snapshot: ShareSnapshotForHydration,
+): CustomCardSet => {
+    if (snapshot.cardPackData === null) {
+        throw new ShareSnapshotDecodeError(F_CARD_PACK_DATA);
+    }
+    const decoded = decodeField(
+        F_CARD_PACK_DATA,
+        snapshot.cardPackData,
+        cardPackCodec,
+    );
+    const cardSet = CardSet({
+        categories: decoded.categories.map((c) =>
+            Category({
+                id: c.id,
+                name: c.name,
+                cards: c.cards.map((card) =>
+                    CardEntry({ id: card.id, name: card.name }),
+                ),
+            }),
+        ),
+    });
+    const savedPack = saveCustomCardSet(
+        decoded.name ?? "",
+        cardSet,
+    );
+    recordCardPackUse(savedPack.id);
+    return savedPack;
+};
+
+export const applyShareSnapshotToLocalStorage = (
+    snapshot: ShareSnapshotForHydration,
+): GameSession => {
+    const currentSession = loadFromLocalStorage();
+    const session = buildSessionFromSnapshot(
+        snapshot,
+        currentSession?.setup.cardSet ?? DEFAULT_SETUP.cardSet,
+        currentSession?.setup.playerSet ?? DEFAULT_SETUP.playerSet,
+    );
+    saveToLocalStorage(session);
+    return session;
+};
+
 export function useApplyShareSnapshot(): (
     snapshot: ShareSnapshotForHydration,
 ) => void {
-    const { state, dispatch } = useClue();
     return (snapshot) => {
-        const session = buildSessionFromSnapshot(
-            snapshot,
-            state.setup.cardSet,
-            state.setup.playerSet,
-        );
-        dispatch({ type: "replaceSession", session });
+        applyShareSnapshotToLocalStorage(snapshot);
     };
 }

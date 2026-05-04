@@ -17,17 +17,50 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
-import { useQueryClient } from "@tanstack/react-query";
-import { sessionQueryKey, useSession } from "../hooks/useSession";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import {
+    type SignInFromContext,
+    signInFailed,
+    signInStarted,
+} from "../../analytics/events";
+import { getMyCardPacks } from "../../server/actions/packs";
+import {
+    useCustomCardPacks,
+} from "../../data/customCardPacks";
+import { useSession } from "../hooks/useSession";
 import { XIcon } from "../components/Icons";
+import { AccountAvatar } from "./AccountAvatar";
+import { authClient } from "./authClient";
 import { DevSignInForm } from "./DevSignInForm";
 
 const isDev = process.env.NODE_ENV === "development";
 
-// Wire-format constants — exempt from i18next/no-literal-string.
-const SIGN_OUT_URL = "/api/auth/sign-out";
-const METHOD_POST = "POST";
-const CRED_INCLUDE: RequestCredentials = "include";
+const PROVIDER_GOOGLE = "google" as const;
+export const myCardPacksQueryKey = (userId: string | undefined) =>
+    ["my-card-packs", userId] as const;
+const SIGN_IN_FROM_MENU: SignInFromContext = "menu";
+
+interface CardPackListItem {
+    readonly id: string;
+    readonly clientGeneratedId?: string;
+    readonly label: string;
+}
+
+export const mergeCardPacks = (
+    localPacks: ReadonlyArray<CardPackListItem>,
+    serverPacks: ReadonlyArray<CardPackListItem>,
+): ReadonlyArray<CardPackListItem> => {
+    const serverClientIds = new Set(
+        serverPacks
+            .map((pack) => pack.clientGeneratedId)
+            .filter((id): id is string => id !== undefined),
+    );
+    return [
+        ...serverPacks,
+        ...localPacks.filter((pack) => !serverClientIds.has(pack.id)),
+    ];
+};
 
 export function AccountModal({
     open,
@@ -38,34 +71,45 @@ export function AccountModal({
 }) {
     const t = useTranslations("account");
     const tCommon = useTranslations("common");
-    const queryClient = useQueryClient();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     const session = useSession();
+    const user = session.data?.user;
+    const isAnon = !user || user.isAnonymous;
+    const localCardPacks = useCustomCardPacks();
+    const myCardPacks = useQuery({
+        queryKey: myCardPacksQueryKey(user?.id),
+        queryFn: getMyCardPacks,
+        enabled: open && !isAnon,
+    });
+    const packs = mergeCardPacks(
+        localCardPacks.data ?? [],
+        myCardPacks.data ?? [],
+    );
 
-    const onGoogleSignIn = (): void => {
-        if (typeof window === "undefined") return;
-        // Redirect via better-auth's social-sign-in endpoint. We
-        // round-trip rather than calling a JS API so the cookie
-        // lands the same way for OAuth + dev-credentials paths.
-        const url = `/api/auth/sign-in/social?provider=google&callbackURL=${encodeURIComponent(window.location.pathname)}`;
-        window.location.href = url;
+    const callbackURL = (): string => {
+        const qs = searchParams.toString();
+        return qs.length > 0 ? `${pathname}?${qs}` : pathname;
     };
 
-    const onSignOut = async (): Promise<void> => {
-        await fetch(SIGN_OUT_URL, {
-            method: METHOD_POST,
-            credentials: CRED_INCLUDE,
+    const onGoogleSignIn = async (): Promise<void> => {
+        signInStarted({ provider: PROVIDER_GOOGLE, from: SIGN_IN_FROM_MENU });
+        const result = await authClient.signIn.social({
+            provider: PROVIDER_GOOGLE,
+            callbackURL: callbackURL(),
         });
-        await queryClient.invalidateQueries({ queryKey: sessionQueryKey });
-        onClose();
+        if (result.error !== null) {
+            signInFailed({
+                provider: PROVIDER_GOOGLE,
+                reason: result.error.code ?? String(result.error.status),
+            });
+        }
     };
 
     const onDevSignedIn = async (): Promise<void> => {
-        await queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+        await session.refetch();
         onClose();
     };
-
-    const user = session.data?.user;
-    const isAnon = !user || user.isAnonymous;
 
     return (
         <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
@@ -101,7 +145,7 @@ export function AccountModal({
                                 </ul>
                                 <button
                                     type="button"
-                                    onClick={onGoogleSignIn}
+                                    onClick={() => void onGoogleSignIn()}
                                     className="mt-4 cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover"
                                 >
                                     {t("signInWithGoogle")}
@@ -113,13 +157,10 @@ export function AccountModal({
                         ) : (
                             <div className="mt-4 flex flex-col gap-3">
                                 <div className="flex items-center gap-3">
-                                    {user?.image !== null && user?.image !== undefined ? (
-                                        <img
-                                            src={user.image}
-                                            alt=""
-                                            className="h-12 w-12 rounded-full"
-                                        />
-                                    ) : null}
+                                    <AccountAvatar
+                                        user={user}
+                                        sizeClassName="h-12 w-12"
+                                    />
                                     <div className="flex flex-col">
                                         <div className="text-[15px] font-semibold">
                                             {user?.name ?? user?.email}
@@ -129,13 +170,35 @@ export function AccountModal({
                                         </div>
                                     </div>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => void onSignOut()}
-                                    className="mt-2 cursor-pointer rounded-[var(--radius)] border border-border bg-white px-4 py-2 text-[13px] hover:bg-hover"
-                                >
-                                    {t("signOut")}
-                                </button>
+                                <section className="rounded-[var(--radius)] border border-border bg-white px-3 py-2">
+                                    <h3 className="m-0 text-[13px] font-semibold text-accent">
+                                        {t("myCardPacksTitle")}
+                                    </h3>
+                                    {myCardPacks.isPending && packs.length === 0 ? (
+                                        <div className="mt-2 text-[12px] text-muted">
+                                            {t("myCardPacksLoading")}
+                                        </div>
+                                    ) : myCardPacks.isError && packs.length === 0 ? (
+                                        <div className="mt-2 text-[12px] text-danger">
+                                            {t("myCardPacksError")}
+                                        </div>
+                                    ) : packs.length === 0 ? (
+                                        <div className="mt-2 text-[12px] text-muted">
+                                            {t("myCardPacksEmpty")}
+                                        </div>
+                                    ) : (
+                                        <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0 text-[13px]">
+                                            {packs.map((pack) => (
+                                                <li
+                                                    key={pack.id}
+                                                    className="truncate rounded bg-row-alt px-2 py-1"
+                                                >
+                                                    {pack.label}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </section>
                             </div>
                         )}
                     </div>

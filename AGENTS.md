@@ -65,7 +65,7 @@ Scripts that require `pnpm install`:
 - `pnpm build` — static export
 - `pnpm start` — serve the static export
 
-Claude's `next-dev` preview configured in `.claude/launch.json` runs `pnpm install && pnpm dev` itself, so those previews are self-healing. In Codex, run `pnpm install` and then `pnpm dev` directly, then open `http://localhost:3000` in the in-app browser. The pre-commit checks above are not self-healing; if any of them fails with a module-not-found error, run `pnpm install` first and retry.
+Claude's `next-dev` preview configured in `.claude/launch.json` runs `pnpm install && exec pnpm dev` itself, so those previews are self-healing and the dev server receives shutdown signals directly. In Codex, run `pnpm install` and then `pnpm dev` directly, then open `http://localhost:3000` in the in-app browser. When you start a dev server from a shell session, stop that same session before finishing the turn so the Next.js process does not remain orphaned on port 3000. The pre-commit checks above are not self-healing; if any of them fails with a module-not-found error, run `pnpm install` first and retry.
 
 ## Verification checks
 

@@ -4,7 +4,10 @@ import * as RadixPopover from "@radix-ui/react-popover";
 import { LayoutGroup, motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { ReactNode, useState } from "react";
-import { aboutLinkClicked } from "../../analytics/events";
+import {
+    aboutLinkClicked,
+    signOut as signOutEvent,
+} from "../../analytics/events";
 import { describeAction } from "../../logic/describeAction";
 import { routes } from "../../routes";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
@@ -14,7 +17,9 @@ import { shortcutSuffix } from "../keyMap";
 import { T_SPRING_SOFT, T_STANDARD, useReducedTransition } from "../motion";
 import { useTour } from "../tour/TourProvider";
 import { screenKeyForUiMode } from "../tour/screenKey";
+import { AccountAvatar } from "../account/AccountAvatar";
 import { useAccountContext } from "../account/AccountProvider";
+import { authClient } from "../account/authClient";
 import { useShareContext } from "../share/ShareProvider";
 import { useSession } from "../hooks/useSession";
 import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
@@ -275,12 +280,20 @@ function BottomOverflowMenu({
     const { openInvitePlayer, openContinueOnAnotherDevice } =
         useShareContext();
     const session = useSession();
-    const accountLabel =
-        session.data?.user && !session.data.user.isAnonymous
-            ? tAccount("menuItemSignedIn", {
-                  name: session.data.user.name ?? session.data.user.email,
-              })
-            : tAccount("menuItemSignedOut");
+    const user = session.data?.user;
+    const signedIn = user !== undefined && !user.isAnonymous;
+    const accountLabel = signedIn
+        ? tAccount("signOut")
+        : tAccount("menuItemSignedOut");
+    const onAccountClick = async () => {
+        if (!signedIn) {
+            openAccountModal();
+            return;
+        }
+        await authClient.signOut();
+        signOutEvent();
+        await session.refetch();
+    };
     return (
         <li>
             <OverflowMenu
@@ -321,7 +334,13 @@ function BottomOverflowMenu({
                     // Group 2: Account & content
                     {
                         label: accountLabel,
-                        onClick: () => openAccountModal(),
+                        leadingIcon: (
+                            <AccountAvatar
+                                user={signedIn ? user : null}
+                                sizeClassName="h-6 w-6"
+                            />
+                        ),
+                        onClick: onAccountClick,
                     },
                     {
                         label: tAccount("menuItemMyCardPacks"),

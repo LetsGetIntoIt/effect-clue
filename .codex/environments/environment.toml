@@ -22,7 +22,7 @@ name = "Dev server"
 icon = "run"
 command = '''
 cd "$CODEX_WORKTREE_PATH"
-pnpm dev
+exec pnpm dev
 '''
 
 [[actions]]

@@ -4,10 +4,12 @@ import * as RadixPopover from "@radix-ui/react-popover";
 import { motion } from "motion/react";
 import { type ReactNode, useState } from "react";
 import { T_FAST, useReducedTransition } from "../motion";
+import { MenuIcon } from "./MenuIcon";
 
 interface OverflowMenuButton {
     readonly label: string;
     readonly active?: boolean;
+    readonly leadingIcon?: ReactNode;
     readonly trailingIcon?: ReactNode;
     readonly onClick: () => void | Promise<void>;
 }
@@ -82,7 +84,7 @@ export function OverflowMenu({
                 className={triggerClassName}
                 data-tour-anchor="overflow-menu"
             >
-                ⋯
+                <MenuIcon size={18} />
             </RadixPopover.Trigger>
             <RadixPopover.Portal>
                 <RadixPopover.Content
@@ -119,6 +121,9 @@ export function OverflowMenu({
                                 {...(item.active !== undefined
                                     ? { active: item.active }
                                     : {})}
+                                {...(item.leadingIcon !== undefined
+                                    ? { leadingIcon: item.leadingIcon }
+                                    : {})}
                                 {...(item.trailingIcon !== undefined
                                     ? { trailingIcon: item.trailingIcon }
                                     : {})}
@@ -145,11 +150,13 @@ export function OverflowMenu({
 function MenuItem({
     label,
     active,
+    leadingIcon,
     trailingIcon,
     onClick,
 }: {
     readonly label: string;
     readonly active?: boolean;
+    readonly leadingIcon?: ReactNode;
     readonly trailingIcon?: ReactNode;
     readonly onClick: () => void;
 }) {
@@ -162,7 +169,14 @@ function MenuItem({
                 (active ? "text-accent font-semibold" : "text-inherit")
             }
         >
-            <span>{label}</span>
+            <span className="flex min-w-0 items-center gap-2">
+                {leadingIcon !== undefined ? (
+                    <span className="flex shrink-0 items-center">
+                        {leadingIcon}
+                    </span>
+                ) : null}
+                <span className="truncate">{label}</span>
+            </span>
             {trailingIcon !== undefined ? (
                 <span className="flex shrink-0 items-center text-muted">
                     {trailingIcon}

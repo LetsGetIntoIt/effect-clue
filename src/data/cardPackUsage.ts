@@ -30,7 +30,7 @@ import {
 } from "../logic/CardPackUsage";
 import { TelemetryRuntime } from "../observability/runtime";
 
-const cardPackUsageQueryKey = ["card-pack-usage"] as const;
+export const cardPackUsageQueryKey = ["card-pack-usage"] as const;
 
 const isClient = (): boolean => typeof window !== "undefined";
 const emptyUsage: CardPackUsage = new Map();

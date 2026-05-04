@@ -33,9 +33,27 @@ vi.mock("next/navigation", () => ({
 }));
 
 const applyMock = vi.fn();
+const saveCardPackFromSnapshotMock = vi.fn();
+let mockHasPersistedGameData = false;
 vi.mock("./useApplyShareSnapshot", () => ({
     useApplyShareSnapshot: () => applyMock,
+    hasPersistedGameData: () => mockHasPersistedGameData,
+    saveCardPackFromSnapshot: (snapshot: unknown) =>
+        saveCardPackFromSnapshotMock(snapshot),
 }));
+
+const invalidateQueriesMock = vi.fn();
+vi.mock("@tanstack/react-query", async () => {
+    const actual = await vi.importActual<typeof import("@tanstack/react-query")>(
+        "@tanstack/react-query",
+    );
+    return {
+        ...actual,
+        useQueryClient: () => ({
+            invalidateQueries: invalidateQueriesMock,
+        }),
+    };
+});
 
 const sharedAnalytics = {
     shareImportStarted: vi.fn(),
@@ -54,7 +72,13 @@ vi.mock("../../analytics/events", () => ({
         sharedAnalytics.shareOpened(...args),
 }));
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import {
+    fireEvent,
+    render,
+    screen,
+    waitFor,
+    within,
+} from "@testing-library/react";
 import { Card, CardCategory, Player } from "../../logic/GameObjects";
 import { CARD_SETS } from "../../logic/GameSetup";
 import {
@@ -68,6 +92,7 @@ import {
 import { newSuggestionId } from "../../logic/Suggestion";
 import { newAccusationId } from "../../logic/Accusation";
 import { ShareImportPage } from "./ShareImportPage";
+import { ConfirmProvider } from "../hooks/useConfirm";
 
 const CUSTOM_PACK_PAYLOAD = Schema.encodeSync(cardPackCodec)({
     name: "My Office",
@@ -177,24 +202,33 @@ const buildSnapshot = (overrides: SnapshotOverrides) => ({
 });
 
 beforeEach(() => {
+    mockHasPersistedGameData = false;
     routerPushMock.mockReset();
     applyMock.mockReset();
+    saveCardPackFromSnapshotMock.mockReset();
+    invalidateQueriesMock.mockReset();
+    invalidateQueriesMock.mockResolvedValue(undefined);
     sharedAnalytics.shareImportStarted.mockReset();
     sharedAnalytics.shareImported.mockReset();
     sharedAnalytics.shareImportDismissed.mockReset();
     sharedAnalytics.shareOpened.mockReset();
 });
 
+const renderImportPage = (snapshot: ReturnType<typeof buildSnapshot>) =>
+    render(
+        <ConfirmProvider>
+            <ShareImportPage snapshot={snapshot} />
+        </ConfirmProvider>,
+    );
+
 describe("ShareImportPage — sender display", () => {
     test("non-anonymous sender → renders 'Shared by {name}' line", () => {
-        render(
-            <ShareImportPage
-                snapshot={buildSnapshot({
+        renderImportPage(
+            buildSnapshot({
                     cardPackData: CLASSIC_PACK_PAYLOAD,
                     ownerName: "Alice",
                     ownerIsAnonymous: false,
-                })}
-            />,
+            }),
         );
         const senderLine = document.querySelector(
             "[data-share-import-sender]",
@@ -205,13 +239,11 @@ describe("ShareImportPage — sender display", () => {
     });
 
     test("anonymous sender (ownerName: null) → no sender line", () => {
-        render(
-            <ShareImportPage
-                snapshot={buildSnapshot({
+        renderImportPage(
+            buildSnapshot({
                     cardPackData: CLASSIC_PACK_PAYLOAD,
                     ownerName: null,
-                })}
-            />,
+            }),
         );
         expect(
             document.querySelector("[data-share-import-sender]"),
@@ -220,13 +252,67 @@ describe("ShareImportPage — sender display", () => {
 });
 
 describe("ShareImportPage — bullet list", () => {
-    test("Classic built-in pack → renders 'Card pack: Classic' (no '(custom)')", () => {
-        render(
-            <ShareImportPage
-                snapshot={buildSnapshot({
+    test("pack-only share uses card-pack title, content heading, and CTA", () => {
+        renderImportPage(
+            buildSnapshot({
+                cardPackData: CUSTOM_PACK_PAYLOAD,
+            }),
+        );
+
+        expect(screen.getByText("importModalTitlePack")).toBeInTheDocument();
+        expect(
+            screen.getByText(
+                'importIncludesHeaderPackNamed:{"label":"My Office"}',
+            ),
+        ).toBeInTheDocument();
+        expect(screen.getByText("importActionPack")).toBeInTheDocument();
+        expect(
+            document.querySelector("[data-share-import-bullet='pack']"),
+        ).toBeNull();
+        expect(
+            document.querySelectorAll(
+                "[data-share-import-bullet='pack-category']",
+            ).length,
+        ).toBe(1);
+        expect(document.body.textContent).toContain("Suspect");
+        expect(document.body.textContent).toContain("\"count\":2");
+    });
+
+    test("invite-style share uses game-setup title, content heading, and CTA", () => {
+        renderImportPage(
+            buildSnapshot({
+                cardPackData: CUSTOM_PACK_PAYLOAD,
+                playersData: PLAYERS_PAYLOAD_TWO,
+                handSizesData: HAND_SIZES_PAYLOAD,
+            }),
+        );
+
+        expect(screen.getByText("importModalTitleInvite")).toBeInTheDocument();
+        expect(screen.getByText("importIncludesHeaderInvite")).toBeInTheDocument();
+        expect(screen.getByText("importActionInvite")).toBeInTheDocument();
+    });
+
+    test("transfer/progress share uses continue-game title, content heading, and CTA", () => {
+        renderImportPage(
+            buildSnapshot({
+                cardPackData: CUSTOM_PACK_PAYLOAD,
+                playersData: PLAYERS_PAYLOAD_TWO,
+                handSizesData: HAND_SIZES_PAYLOAD,
+                knownCardsData: KNOWN_CARDS_PAYLOAD,
+            }),
+        );
+
+        expect(screen.getByText("importModalTitleTransfer")).toBeInTheDocument();
+        expect(screen.getByText("importIncludesHeaderTransfer")).toBeInTheDocument();
+        expect(screen.getByText("importActionTransfer")).toBeInTheDocument();
+    });
+
+    test("game share with Classic built-in pack → renders 'Card pack: Classic' (no '(custom)')", () => {
+        renderImportPage(
+            buildSnapshot({
                     cardPackData: CLASSIC_PACK_PAYLOAD,
-                })}
-            />,
+                    playersData: PLAYERS_PAYLOAD_TWO,
+            }),
         );
         const packBullet = document.querySelector(
             "[data-share-import-bullet='pack']",
@@ -236,13 +322,12 @@ describe("ShareImportPage — bullet list", () => {
         expect(packBullet?.textContent).not.toContain("PackCustom");
     });
 
-    test("named custom pack → renders 'Card pack: My Office (custom)'", () => {
-        render(
-            <ShareImportPage
-                snapshot={buildSnapshot({
+    test("game share with named custom pack → renders 'Card pack: My Office (custom)'", () => {
+        renderImportPage(
+            buildSnapshot({
                     cardPackData: CUSTOM_PACK_PAYLOAD,
-                })}
-            />,
+                    playersData: PLAYERS_PAYLOAD_TWO,
+            }),
         );
         const packBullet = document.querySelector(
             "[data-share-import-bullet='pack']",
@@ -252,14 +337,12 @@ describe("ShareImportPage — bullet list", () => {
     });
 
     test("invite share with players + handSizes → 4 bullets, no known/sugg/accu", () => {
-        render(
-            <ShareImportPage
-                snapshot={buildSnapshot({
+        renderImportPage(
+            buildSnapshot({
                     cardPackData: CUSTOM_PACK_PAYLOAD,
                     playersData: PLAYERS_PAYLOAD_TWO,
                     handSizesData: HAND_SIZES_PAYLOAD,
-                })}
-            />,
+            }),
         );
         expect(
             document.querySelector("[data-share-import-bullet='pack']"),
@@ -282,17 +365,15 @@ describe("ShareImportPage — bullet list", () => {
     });
 
     test("transfer share → all 6 bullets present with counts", () => {
-        render(
-            <ShareImportPage
-                snapshot={buildSnapshot({
+        renderImportPage(
+            buildSnapshot({
                     cardPackData: CUSTOM_PACK_PAYLOAD,
                     playersData: PLAYERS_PAYLOAD_TWO,
                     handSizesData: HAND_SIZES_PAYLOAD,
                     knownCardsData: KNOWN_CARDS_PAYLOAD,
                     suggestionsData: SUGGESTIONS_PAYLOAD,
                     accusationsData: ACCUSATIONS_PAYLOAD,
-                })}
-            />,
+            }),
         );
         const knownBullet = document.querySelector(
             "[data-share-import-bullet='known-cards']",
@@ -310,13 +391,11 @@ describe("ShareImportPage — bullet list", () => {
     });
 
     test("more than 4 player names → uses overflow copy with '+N more'", () => {
-        render(
-            <ShareImportPage
-                snapshot={buildSnapshot({
+        renderImportPage(
+            buildSnapshot({
                     cardPackData: CUSTOM_PACK_PAYLOAD,
                     playersData: PLAYERS_PAYLOAD_FIVE,
-                })}
-            />,
+            }),
         );
         const playersBullet = document.querySelector(
             "[data-share-import-bullet='players']",
@@ -330,9 +409,7 @@ describe("ShareImportPage — bullet list", () => {
 
 describe("ShareImportPage — empty share guard", () => {
     test("no card pack → empty-state copy, Import disabled", () => {
-        render(
-            <ShareImportPage snapshot={buildSnapshot({})} />,
-        );
+        renderImportPage(buildSnapshot({}));
         expect(screen.getByText("importEmpty")).toBeTruthy();
         const cta = document.querySelector(
             "[data-share-import-cta]",
@@ -343,6 +420,27 @@ describe("ShareImportPage — empty share guard", () => {
 });
 
 describe("ShareImportPage — import action", () => {
+    test("pack-only import saves a card pack and does not overwrite current game", async () => {
+        mockHasPersistedGameData = true;
+        const snapshot = buildSnapshot({
+            cardPackData: CUSTOM_PACK_PAYLOAD,
+        });
+        renderImportPage(snapshot);
+
+        const cta = document.querySelector(
+            "[data-share-import-cta]",
+        ) as HTMLButtonElement;
+        fireEvent.click(cta);
+
+        await waitFor(() => {
+            expect(saveCardPackFromSnapshotMock).toHaveBeenCalledWith(snapshot);
+        });
+        expect(screen.queryByText("newGameConfirm")).not.toBeInTheDocument();
+        expect(applyMock).not.toHaveBeenCalled();
+        expect(routerPushMock).toHaveBeenCalledWith("/play");
+        expect(invalidateQueriesMock).toHaveBeenCalledTimes(2);
+    });
+
     test("clicking Import calls the hydration hook with the snapshot, then routes to /play", () => {
         const snapshot = buildSnapshot({
             cardPackData: CLASSIC_PACK_PAYLOAD,
@@ -351,10 +449,11 @@ describe("ShareImportPage — import action", () => {
             ownerName: "Alice",
             ownerIsAnonymous: false,
         });
-        render(<ShareImportPage snapshot={snapshot} />);
+        renderImportPage(snapshot);
         const cta = document.querySelector(
             "[data-share-import-cta]",
         ) as HTMLButtonElement;
+        expect(cta.textContent).toBe("importActionInvite");
         fireEvent.click(cta);
         expect(applyMock).toHaveBeenCalledWith(snapshot);
         expect(routerPushMock).toHaveBeenCalledWith("/play");
@@ -366,5 +465,48 @@ describe("ShareImportPage — import action", () => {
                 hadSuggestions: false,
             }),
         );
+    });
+
+    test("dirty receiver game shows the existing New Game warning before importing", async () => {
+        mockHasPersistedGameData = true;
+        const snapshot = buildSnapshot({
+            cardPackData: CLASSIC_PACK_PAYLOAD,
+            playersData: PLAYERS_PAYLOAD_TWO,
+        });
+        renderImportPage(snapshot);
+
+        const cta = document.querySelector(
+            "[data-share-import-cta]",
+        ) as HTMLButtonElement;
+        fireEvent.click(cta);
+
+        expect(screen.getByText("newGameConfirm")).toBeInTheDocument();
+        expect(applyMock).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByText("confirm"));
+
+        await waitFor(() => {
+            expect(applyMock).toHaveBeenCalledWith(snapshot);
+            expect(routerPushMock).toHaveBeenCalledWith("/play");
+        });
+    });
+
+    test("canceling the dirty-game warning leaves the current game untouched", () => {
+        mockHasPersistedGameData = true;
+        const snapshot = buildSnapshot({
+            cardPackData: CLASSIC_PACK_PAYLOAD,
+            playersData: PLAYERS_PAYLOAD_TWO,
+        });
+        renderImportPage(snapshot);
+
+        const cta = document.querySelector(
+            "[data-share-import-cta]",
+        ) as HTMLButtonElement;
+        fireEvent.click(cta);
+        const dialog = screen.getByRole("alertdialog");
+        fireEvent.click(within(dialog).getByText("cancel"));
+
+        expect(applyMock).not.toHaveBeenCalled();
+        expect(routerPushMock).not.toHaveBeenCalled();
     });
 });

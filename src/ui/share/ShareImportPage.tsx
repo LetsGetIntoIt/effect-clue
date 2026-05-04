@@ -30,6 +30,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
+import { useQueryClient } from "@tanstack/react-query";
 import {
     shareImportDismissed,
     shareImported,
@@ -40,8 +41,15 @@ import {
 import { cardSetEquals } from "../../logic/CardSet";
 import { CARD_SETS } from "../../logic/GameSetup";
 import { cardPackCodec, playersCodec } from "../../logic/ShareCodec";
+import { customCardPacksQueryKey } from "../../data/customCardPacks";
+import { cardPackUsageQueryKey } from "../../data/cardPackUsage";
 import { XIcon } from "../components/Icons";
-import { useApplyShareSnapshot } from "./useApplyShareSnapshot";
+import { useConfirm } from "../hooks/useConfirm";
+import {
+    hasPersistedGameData,
+    saveCardPackFromSnapshot,
+    useApplyShareSnapshot,
+} from "./useApplyShareSnapshot";
 
 interface ShareSnapshot {
     readonly id: string;
@@ -62,10 +70,39 @@ const VIA_BACKDROP: ShareDismissVia = "backdrop";
 // collapsing the rest to "+N more". Mirrors the inline-name budget on
 // the create side.
 const PLAYER_NAMES_VISIBLE = 4;
+const RECEIVE_FLOW_PACK = "pack";
+const RECEIVE_FLOW_INVITE = "invite";
+const RECEIVE_FLOW_TRANSFER = "transfer";
+type ReceiveFlow =
+    | typeof RECEIVE_FLOW_PACK
+    | typeof RECEIVE_FLOW_INVITE
+    | typeof RECEIVE_FLOW_TRANSFER;
+
+const TITLE_KEY_FOR: Record<ReceiveFlow, string> = {
+    [RECEIVE_FLOW_PACK]: "importModalTitlePack",
+    [RECEIVE_FLOW_INVITE]: "importModalTitleInvite",
+    [RECEIVE_FLOW_TRANSFER]: "importModalTitleTransfer",
+};
+const INCLUDES_HEADER_KEY_FOR: Record<ReceiveFlow, string> = {
+    [RECEIVE_FLOW_PACK]: "importIncludesHeaderPack",
+    [RECEIVE_FLOW_INVITE]: "importIncludesHeaderInvite",
+    [RECEIVE_FLOW_TRANSFER]: "importIncludesHeaderTransfer",
+};
+const ACTION_KEY_FOR: Record<ReceiveFlow, string> = {
+    [RECEIVE_FLOW_PACK]: "importActionPack",
+    [RECEIVE_FLOW_INVITE]: "importActionInvite",
+    [RECEIVE_FLOW_TRANSFER]: "importActionTransfer",
+};
+const PACK_NAMED_HEADER_KEY = "importIncludesHeaderPackNamed";
 
 interface PackSummary {
     readonly label: string;
     readonly isCustom: boolean;
+    readonly categories: ReadonlyArray<{
+        readonly id: string;
+        readonly name: string;
+        readonly count: number;
+    }>;
     /** True when the snapshot has a card pack but we couldn't pull
      * a label out of it (the sender was on a really old version, or
      * the pack has a structural shape we don't recognise). The bullet
@@ -94,13 +131,40 @@ const summarisePack = (cardPackData: string): PackSummary | null => {
         ),
     );
     if (builtIn) {
-        return { label: builtIn.label, isCustom: false, isUnnamedCustom: false };
+        return {
+            label: builtIn.label,
+            isCustom: false,
+            isUnnamedCustom: false,
+            categories: decoded.success.categories.map((c) => ({
+                id: c.id,
+                name: c.name,
+                count: c.cards.length,
+            })),
+        };
     }
     const wireName = decoded.success.name;
     if (wireName !== undefined && wireName !== "") {
-        return { label: wireName, isCustom: true, isUnnamedCustom: false };
+        return {
+            label: wireName,
+            isCustom: true,
+            isUnnamedCustom: false,
+            categories: decoded.success.categories.map((c) => ({
+                id: c.id,
+                name: c.name,
+                count: c.cards.length,
+            })),
+        };
     }
-    return { label: "", isCustom: true, isUnnamedCustom: true };
+    return {
+        label: "",
+        isCustom: true,
+        isUnnamedCustom: true,
+        categories: decoded.success.categories.map((c) => ({
+            id: c.id,
+            name: c.name,
+            count: c.cards.length,
+        })),
+    };
 };
 
 interface PlayersSummary {
@@ -157,11 +221,14 @@ export function ShareImportPage({
     readonly snapshot: ShareSnapshot;
 }) {
     const t = useTranslations("share");
+    const tToolbar = useTranslations("toolbar");
     const tCommon = useTranslations("common");
     const router = useRouter();
+    const queryClient = useQueryClient();
     const [open, setOpen] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const applySnapshot = useApplyShareSnapshot();
+    const confirm = useConfirm();
 
     const hasPack = snapshot.cardPackData !== null;
     const hasPlayers = snapshot.playersData !== null;
@@ -170,6 +237,12 @@ export function ShareImportPage({
     const hasSugg = snapshot.suggestionsData !== null;
     const hasAccu = snapshot.accusationsData !== null;
     const isEmpty = !hasPack && !hasPlayers;
+    const receiveFlow: ReceiveFlow =
+        !hasPlayers
+            ? RECEIVE_FLOW_PACK
+            : hasKnown || hasSugg || hasAccu
+                ? RECEIVE_FLOW_TRANSFER
+                : RECEIVE_FLOW_INVITE;
 
     const packSummary = useMemo(
         () => (hasPack ? summarisePack(snapshot.cardPackData!) : null),
@@ -199,10 +272,26 @@ export function ShareImportPage({
     }, [snapshot.id]);
 
     const onImport = async (): Promise<void> => {
+        if (receiveFlow !== RECEIVE_FLOW_PACK && hasPersistedGameData()) {
+            const ok = await confirm({
+                message: tToolbar("newGameConfirm"),
+            });
+            if (!ok) return;
+        }
         setSubmitting(true);
         shareImportStarted({ shareIdHash: hashShareId(snapshot.id) });
         try {
-            applySnapshot(snapshot);
+            if (receiveFlow === RECEIVE_FLOW_PACK) {
+                saveCardPackFromSnapshot(snapshot);
+                await queryClient.invalidateQueries({
+                    queryKey: customCardPacksQueryKey,
+                });
+                await queryClient.invalidateQueries({
+                    queryKey: cardPackUsageQueryKey,
+                });
+            } else {
+                applySnapshot(snapshot);
+            }
             shareImported({
                 shareIdHash: hashShareId(snapshot.id),
                 hadPack: hasPack,
@@ -257,6 +346,14 @@ export function ShareImportPage({
         });
     })();
 
+    const includesHeader =
+        receiveFlow === RECEIVE_FLOW_PACK &&
+        packSummary !== null &&
+        !packSummary.isUnnamedCustom
+            ? t(PACK_NAMED_HEADER_KEY, { label: packSummary.label })
+            : t(INCLUDES_HEADER_KEY_FOR[receiveFlow]);
+    const showPackBullet = receiveFlow !== RECEIVE_FLOW_PACK;
+
     return (
         <main className="mx-auto flex max-w-[640px] flex-col gap-5 px-5 py-8">
             <h1 className="m-0 font-display text-[28px] text-accent">
@@ -277,7 +374,7 @@ export function ShareImportPage({
                     >
                         <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
                             <Dialog.Title className="m-0 font-display text-[20px] text-accent">
-                                {t("importModalTitle")}
+                                {t(TITLE_KEY_FOR[receiveFlow])}
                             </Dialog.Title>
                             <button
                                 type="button"
@@ -305,17 +402,38 @@ export function ShareImportPage({
                         ) : (
                             <>
                                 <div className="px-5 pt-4 text-[14px] font-semibold">
-                                    {t("importIncludesHeader")}
+                                    {includesHeader}
                                 </div>
                                 <ul
                                     className="m-0 list-disc px-5 pl-9 pt-1 text-[14px]"
                                     data-share-import-bullets
                                 >
-                                    {packBullet !== null ? (
+                                    {showPackBullet && packBullet !== null ? (
                                         <li data-share-import-bullet="pack">
                                             {packBullet}
                                         </li>
                                     ) : null}
+                                    {receiveFlow === RECEIVE_FLOW_PACK &&
+                                    packSummary !== null
+                                        ? packSummary.categories.map(
+                                            (category) => (
+                                                <li
+                                                    key={category.id}
+                                                    data-share-import-bullet="pack-category"
+                                                >
+                                                    {t(
+                                                        "packCategoryItem",
+                                                        {
+                                                            category:
+                                                                category.name,
+                                                            count:
+                                                                category.count,
+                                                        },
+                                                    )}
+                                                </li>
+                                            ),
+                                        )
+                                        : null}
                                     {playersBullet !== null ? (
                                         <li data-share-import-bullet="players">
                                             {playersBullet}
@@ -365,7 +483,9 @@ export function ShareImportPage({
                                 data-share-import-cta
                                 className="cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                                {submitting ? t("importing") : t("importAction")}
+                                {submitting
+                                    ? t("importing")
+                                    : t(ACTION_KEY_FOR[receiveFlow])}
                             </button>
                         </div>
                     </Dialog.Content>

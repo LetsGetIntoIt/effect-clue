@@ -74,8 +74,12 @@ better-auth uses this to build the OAuth callback URLs.
 ## 5. Google OAuth client
 
 Required for previews and production. Local dev can use the dev-only
-username/password path inside the Account modal — that path
-tree-shakes out of production bundles, see CI assertion below.
+username/password path inside the Account modal, but the Google
+client ID and secret still need to be present because the Better Auth
+server config fails fast when either is missing. That keeps OAuth
+misconfiguration from turning into a confusing missing-provider error.
+The dev credential path tree-shakes out of production bundles, see CI
+assertion below.
 
 1. <https://console.cloud.google.com> → **APIs & Services →
    Credentials → Create Credentials → OAuth client ID → Web
@@ -103,6 +107,10 @@ Re-pull locally:
 ```bash
 vercel env pull .env.development.local
 ```
+
+For local OAuth debugging, set `AUTH_DEBUG=1` before starting the dev
+server. That raises Better Auth's server logger to debug level; omit
+it (or set anything else) for the default warn-level logs.
 
 ## 6. Cron secret (M17 — share cleanup)
 

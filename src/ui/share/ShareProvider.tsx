@@ -24,11 +24,17 @@ import {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useMemo,
     useState,
     type ReactNode,
 } from "react";
 import type { CardSet } from "../../logic/CardSet";
+import { useSession } from "../hooks/useSession";
+import {
+    consumePendingShareIntent,
+    type PendingShareIntent,
+} from "./pendingShare";
 import { ShareCreateModal, type ShareVariant } from "./ShareCreateModal";
 
 interface OpenSharePackOptions {
@@ -82,6 +88,9 @@ export function ShareProvider({
     const [forcedCardPackLabel, setForcedCardPackLabel] = useState<
         string | undefined
     >(undefined);
+    const [resumeIntent, setResumeIntent] =
+        useState<PendingShareIntent | null>(null);
+    const session = useSession();
 
     const openShareCardPack = useCallback(
         (opts?: OpenSharePackOptions) => {
@@ -106,9 +115,27 @@ export function ShareProvider({
     }, []);
     const closeModal = useCallback(() => {
         setOpen(false);
+        setResumeIntent(null);
         // Keep variant + forced state in place — the modal is unmounting,
         // and clearing now would re-render with default state for a
         // frame before it goes away.
+    }, []);
+
+    useEffect(() => {
+        const user = session.data?.user;
+        if (!user || user.isAnonymous) return;
+        if (open || resumeIntent !== null) return;
+        const pending = consumePendingShareIntent();
+        if (pending === null) return;
+        setVariant(pending.variant);
+        setForcedCardPack(undefined);
+        setForcedCardPackLabel(undefined);
+        setResumeIntent(pending);
+        setOpen(true);
+    }, [open, resumeIntent, session.data]);
+
+    const onResumeConsumed = useCallback(() => {
+        setResumeIntent(null);
     }, []);
 
     const value = useMemo<ShareContextValue>(
@@ -137,6 +164,8 @@ export function ShareProvider({
                 {...(forcedCardPackLabel !== undefined
                     ? { forcedCardPackLabel }
                     : {})}
+                {...(resumeIntent !== null ? { resumeIntent } : {})}
+                onResumeConsumed={onResumeConsumed}
             />
         </ShareContext.Provider>
     );
