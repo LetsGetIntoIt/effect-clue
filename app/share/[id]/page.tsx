@@ -10,14 +10,13 @@
  */
 import { ConfirmProvider } from "../../../src/ui/hooks/useConfirm";
 import { getShare } from "../../../src/server/actions/shares";
+import { ERR_SHARE_NOT_FOUND } from "../../../src/server/shares/errors";
 import { ShareImportPage } from "../../../src/ui/share/ShareImportPage";
 import { ShareMissingPage } from "../../../src/ui/share/ShareMissingPage";
 
 interface Params {
     readonly id: string;
 }
-
-const ERR_SHARE_NOT_FOUND = "share_not_found";
 
 export default async function SharePageRoute({
     params,
