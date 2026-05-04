@@ -32,6 +32,11 @@ vi.mock("next-intl", () => {
     };
 });
 
+vi.mock("next/navigation", () => ({
+    usePathname: () => "/play",
+    useSearchParams: () => new URLSearchParams("view=setup"),
+}));
+
 vi.mock("motion/react", () => {
     const motion = new Proxy(
         {},
@@ -71,6 +76,15 @@ vi.mock("motion/react", () => {
 const createShareMock = vi.fn();
 vi.mock("../../server/actions/shares", () => ({
     createShare: (input: unknown) => createShareMock(input),
+}));
+
+const signInSocialMock = vi.fn();
+vi.mock("../account/authClient", () => ({
+    authClient: {
+        signIn: {
+            social: (input: unknown) => signInSocialMock(input),
+        },
+    },
 }));
 
 let mockSession: {
@@ -114,8 +128,11 @@ const findCta = (): HTMLButtonElement => {
 
 beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     createShareMock.mockReset();
     createShareMock.mockResolvedValue({ id: "stub-share-id" });
+    signInSocialMock.mockReset();
+    signInSocialMock.mockResolvedValue({ data: null, error: null });
     mockSession = { data: null };
 });
 
@@ -283,6 +300,35 @@ describe("ShareCreateModal — wire payload by variant", () => {
 });
 
 describe("ShareCreateModal — sign-in slide", () => {
+    test("anonymous CTA opens the sign-in step without calling createShare", async () => {
+        mockSession = { data: null };
+        mountModal("pack");
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        expect(createShareMock).not.toHaveBeenCalled();
+        expect(screen.getByText("signInTitle")).toBeTruthy();
+    });
+
+    test("Google sign-in uses Better Auth client and stores pending share intent", async () => {
+        mockSession = { data: null };
+        mountModal("pack");
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await act(async () => {
+            fireEvent.click(screen.getByText("signInWithGoogle"));
+        });
+
+        expect(signInSocialMock).toHaveBeenCalledWith({
+            provider: "google",
+            callbackURL: "/play?view=setup",
+        });
+        expect(
+            window.sessionStorage.getItem("effect-clue.pending-share.v1"),
+        ).toContain("\"variant\":\"pack\"");
+    });
+
     test("server ERR_SIGN_IN_REQUIRED slides to sign-in step", async () => {
         mockSession = {
             data: { user: { id: "u1", isAnonymous: false } },
@@ -296,6 +342,39 @@ describe("ShareCreateModal — sign-in slide", () => {
         });
         await waitFor(() => {
             expect(screen.getByText("signInTitle")).toBeTruthy();
+        });
+    });
+
+    test("resume intent creates the pending share after OAuth returns", async () => {
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: false } },
+        };
+        const payload = {
+            kind: "pack" as const,
+            cardPackData: JSON.stringify({
+                name: "Classic",
+                categories: [],
+            }),
+        };
+        render(
+            <ClueProvider>
+                <ShareCreateModal
+                    open={true}
+                    onClose={() => {}}
+                    variant="pack"
+                    resumeIntent={{
+                        variant: "pack",
+                        payload,
+                        packIsCustom: false,
+                        includesProgress: false,
+                    }}
+                />
+            </ClueProvider>,
+            { wrapper: TestQueryClientProvider },
+        );
+
+        await waitFor(() => {
+            expect(createShareMock).toHaveBeenCalledWith(payload);
         });
     });
 });

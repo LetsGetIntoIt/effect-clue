@@ -32,9 +32,12 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Schema } from "effect";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
-import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+    type SignInFromContext,
+    signInFailed,
+    signInStarted,
     shareCreateStarted,
     shareCreated,
     shareLinkCopied,
@@ -65,16 +68,21 @@ import {
     type CreateShareInput,
 } from "../../server/actions/shares";
 import { useClue } from "../state";
-import { sessionQueryKey, useSession } from "../hooks/useSession";
+import { useSession } from "../hooks/useSession";
+import { authClient } from "../account/authClient";
 import { DevSignInForm } from "../account/DevSignInForm";
 import { T_STANDARD, useReducedTransition } from "../motion";
 import { XIcon } from "../components/Icons";
+import {
+    savePendingShareIntent,
+    type PendingShareIntent,
+} from "./pendingShare";
 
 const isDev = process.env.NODE_ENV === "development";
 
 // Wire-format constants — exempt from i18next/no-literal-string.
-const SOCIAL_SIGN_IN_PROVIDER = "google";
-const SOCIAL_SIGN_IN_PATH = "/api/auth/sign-in/social";
+const SOCIAL_SIGN_IN_PROVIDER = "google" as const;
+const SIGN_IN_FROM_SHARING: SignInFromContext = "sharing";
 
 // Module-scope step / variant discriminators (flow-control values, not
 // user-facing copy — exempt from i18next literal lint).
@@ -310,6 +318,9 @@ interface ShareCreateModalProps {
      * receiver can render the pack's name.
      */
     readonly forcedCardPackLabel?: string;
+    /** Pending OAuth share restored after Better Auth redirects back. */
+    readonly resumeIntent?: PendingShareIntent;
+    readonly onResumeConsumed?: () => void;
 }
 
 export function ShareCreateModal({
@@ -318,12 +329,15 @@ export function ShareCreateModal({
     variant,
     forcedCardPack,
     forcedCardPackLabel,
+    resumeIntent,
+    onResumeConsumed,
 }: ShareCreateModalProps) {
     const t = useTranslations("share");
     const tCommon = useTranslations("common");
     const tAccount = useTranslations("account");
     const { state, derived } = useClue();
-    const queryClient = useQueryClient();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     const session = useSession();
     const transition = useReducedTransition(T_STANDARD);
     const [step, setStep] = useState<Step>(STEP_TOGGLES);
@@ -362,83 +376,87 @@ export function ShareCreateModal({
     const needsSignIn =
         !session.data?.user || session.data.user.isAnonymous;
 
-    const onCreate = async (): Promise<void> => {
-        setSubmitting(true);
-        setError(null);
+    const callbackURL = (): string => {
+        const qs = searchParams.toString();
+        return qs.length > 0 ? `${pathname}?${qs}` : pathname;
+    };
 
-        let payload: CreateShareInput;
-        try {
-            if (variant === VARIANT_PACK) {
-                // Pack variant: only the pack ships. The forcedCardPack
-                // path (per-pack share from picker) overrides the live
-                // setup pack — the share contains the picked pack, not
-                // whatever's currently loaded.
-                payload = buildPackInput(activeCardSet, forcedCardPackLabel);
-            } else {
-                // Invite + transfer variants ship the live game's data.
-                // forcedCardPack doesn't apply here — these flows only
-                // open from setup-pane / overflow entries that work
-                // against the live state. Branded ids stay branded
-                // through to the codec so round-tripping `Player` /
-                // `Card` doesn't require any type-level laundering.
-                const hands = state.knownCards.reduce<
-                    Array<{
-                        player: GameSession["hands"][number]["player"];
-                        cards: Array<
-                            GameSession["hands"][number]["cards"][number]
-                        >;
-                    }>
-                >((acc, kc) => {
-                    const existing = acc.find((h) => h.player === kc.player);
-                    if (existing) {
-                        existing.cards.push(kc.card);
-                        return acc;
-                    }
-                    return [...acc, { player: kc.player, cards: [kc.card] }];
-                }, []);
-                const gameSession: GameSession = {
-                    setup: state.setup,
-                    hands,
-                    handSizes: state.handSizes.map(([player, size]) => ({
-                        player,
-                        size,
-                    })),
-                    suggestions: derived.suggestionsAsData,
-                    accusations: derived.accusationsAsData,
-                };
-                if (variant === VARIANT_INVITE) {
-                    payload = buildInviteInput(
-                        gameSession,
-                        forcedCardPackLabel,
-                        includeProgress,
-                    );
-                } else {
-                    payload = buildTransferInput(
-                        gameSession,
-                        forcedCardPackLabel,
-                    );
-                }
-            }
-        } catch {
-            setSubmitting(false);
-            setError(t(ERROR_GENERIC_KEY));
-            return;
+    const includesProgressFor = (v: ShareVariant): boolean =>
+        v === VARIANT_INVITE ? includeProgress : v === VARIANT_TRANSFER;
+
+    const buildPayload = useCallback((): CreateShareInput => {
+        if (variant === VARIANT_PACK) {
+            // Pack variant: only the pack ships. The forcedCardPack
+            // path (per-pack share from picker) overrides the live
+            // setup pack — the share contains the picked pack, not
+            // whatever's currently loaded.
+            return buildPackInput(activeCardSet, forcedCardPackLabel);
         }
 
+        // Invite + transfer variants ship the live game's data.
+        // forcedCardPack doesn't apply here — these flows only open
+        // from setup-pane / overflow entries that work against the
+        // live state.
+        const hands = state.knownCards.reduce<
+            Array<{
+                player: GameSession["hands"][number]["player"];
+                cards: Array<GameSession["hands"][number]["cards"][number]>;
+            }>
+        >((acc, kc) => {
+            const existing = acc.find((h) => h.player === kc.player);
+            if (existing) {
+                existing.cards.push(kc.card);
+                return acc;
+            }
+            return [...acc, { player: kc.player, cards: [kc.card] }];
+        }, []);
+        const gameSession: GameSession = {
+            setup: state.setup,
+            hands,
+            handSizes: state.handSizes.map(([player, size]) => ({
+                player,
+                size,
+            })),
+            suggestions: derived.suggestionsAsData,
+            accusations: derived.accusationsAsData,
+        };
+        if (variant === VARIANT_INVITE) {
+            return buildInviteInput(
+                gameSession,
+                forcedCardPackLabel,
+                includeProgress,
+            );
+        }
+        return buildTransferInput(gameSession, forcedCardPackLabel);
+    }, [
+        activeCardSet,
+        derived.accusationsAsData,
+        derived.suggestionsAsData,
+        forcedCardPackLabel,
+        includeProgress,
+        state.handSizes,
+        state.knownCards,
+        state.setup,
+        variant,
+    ]);
+
+    const createFromPayload = useCallback(async (
+        payload: CreateShareInput,
+        meta: {
+            readonly kind: ShareVariant;
+            readonly packIsCustom: boolean;
+            readonly includesProgress: boolean;
+        },
+    ): Promise<void> => {
+        setSubmitting(true);
+        setError(null);
         try {
             shareCreateStarted();
             const result = await createShare(payload);
-            shareCreated({
-                kind: variant,
-                packIsCustom: cardSetIsCustom,
-                includesProgress:
-                    variant === VARIANT_INVITE
-                        ? includeProgress
-                        : variant === VARIANT_TRANSFER,
-            });
+            shareCreated(meta);
             const url =
-                typeof window !== "undefined"
-                    ? `${window.location.origin}${SHARE_BASE_PATH}${result.id}`
+                typeof globalThis.location !== "undefined"
+                    ? `${globalThis.location.origin}${SHARE_BASE_PATH}${result.id}`
                     : `${SHARE_BASE_PATH}${result.id}`;
             try {
                 if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -464,6 +482,29 @@ export function ShareCreateModal({
         } finally {
             setSubmitting(false);
         }
+    }, [t]);
+
+    const onCreate = async (): Promise<void> => {
+        if (needsSignIn) {
+            setError(null);
+            setDirection(1);
+            setStep(STEP_SIGN_IN);
+            return;
+        }
+
+        let payload: CreateShareInput;
+        try {
+            payload = buildPayload();
+        } catch {
+            setError(t(ERROR_GENERIC_KEY));
+            return;
+        }
+
+        await createFromPayload(payload, {
+            kind: variant,
+            packIsCustom: cardSetIsCustom,
+            includesProgress: includesProgressFor(variant),
+        });
     };
 
     /**
@@ -473,7 +514,7 @@ export function ShareCreateModal({
      * user click again.
      */
     const onSignedIn = async (): Promise<void> => {
-        await queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+        await session.refetch();
         setDirection(-1);
         setStep(STEP_TOGGLES);
         if (pendingRetryRef.current) {
@@ -482,16 +523,47 @@ export function ShareCreateModal({
         }
     };
 
-    const onGoogleSignIn = (): void => {
-        if (typeof window !== "undefined") {
-            const url =
-                `${SOCIAL_SIGN_IN_PATH}?provider=${SOCIAL_SIGN_IN_PROVIDER}` +
-                `&callbackURL=${encodeURIComponent(
-                    window.location.pathname + window.location.search,
-                )}`;
-            window.location.href = url;
+    const onGoogleSignIn = async (): Promise<void> => {
+        let payload: CreateShareInput;
+        try {
+            payload = buildPayload();
+        } catch {
+            setError(t(ERROR_GENERIC_KEY));
+            return;
+        }
+        savePendingShareIntent({
+            variant,
+            payload,
+            packIsCustom: cardSetIsCustom,
+            includesProgress: includesProgressFor(variant),
+        });
+        signInStarted({
+            provider: SOCIAL_SIGN_IN_PROVIDER,
+            from: SIGN_IN_FROM_SHARING,
+        });
+        const result = await authClient.signIn.social({
+            provider: SOCIAL_SIGN_IN_PROVIDER,
+            callbackURL: callbackURL(),
+        });
+        if (result.error !== null) {
+            signInFailed({
+                provider: SOCIAL_SIGN_IN_PROVIDER,
+                reason: result.error.code ?? String(result.error.status),
+            });
         }
     };
+
+    const resumedRef = useRef<PendingShareIntent | null>(null);
+    useEffect(() => {
+        if (!open || resumeIntent === undefined) return;
+        if (resumedRef.current === resumeIntent) return;
+        resumedRef.current = resumeIntent;
+        void createFromPayload(resumeIntent.payload, {
+            kind: resumeIntent.variant,
+            packIsCustom: resumeIntent.packIsCustom,
+            includesProgress: resumeIntent.includesProgress,
+        }).then(() => onResumeConsumed?.());
+    }, [createFromPayload, onResumeConsumed, open, resumeIntent]);
 
     const goBackToToggles = (): void => {
         pendingRetryRef.current = false;
@@ -624,11 +696,11 @@ export function ShareCreateModal({
                                             {error}
                                         </div>
                                     ) : null}
-                                    {copied ? (
-                                        <div className="px-5 pt-3 text-[12px] text-muted">
-                                            {t(LINK_EXPIRES_IN_KEY, { duration: t(TTL_KEY) })}
-                                        </div>
-                                    ) : null}
+                                    <div className="px-5 pt-3 text-[12px] text-muted">
+                                        {t(LINK_EXPIRES_IN_KEY, {
+                                            duration: t(TTL_KEY),
+                                        })}
+                                    </div>
                                 </motion.div>
                             ) : (
                                 <motion.div
@@ -646,7 +718,7 @@ export function ShareCreateModal({
                                     <div className="flex flex-col gap-2 px-5 pt-4 pb-2">
                                         <button
                                             type="button"
-                                            onClick={onGoogleSignIn}
+                                            onClick={() => void onGoogleSignIn()}
                                             className="cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover"
                                         >
                                             {tAccount("signInWithGoogle")}

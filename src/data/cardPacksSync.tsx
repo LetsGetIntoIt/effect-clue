@@ -17,15 +17,18 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
     localPacksPushedOnSignIn,
 } from "../analytics/events";
 import { loadCustomCardSets } from "../logic/CustomCardSets";
 import { pushLocalPacksOnSignIn } from "../server/actions/packs";
 import { useSession } from "../ui/hooks/useSession";
+import { myCardPacksQueryKey } from "../ui/account/AccountModal";
 
 export function CardPacksSyncOnSignIn() {
     const session = useSession();
+    const queryClient = useQueryClient();
     const lastSyncedUserIdRef = useRef<string | null>(null);
 
     useEffect(() => {
@@ -52,13 +55,16 @@ export function CardPacksSyncOnSignIn() {
                     countRenamed: result.countRenamed,
                     countFailed: result.countFailed,
                 });
+                await queryClient.invalidateQueries({
+                    queryKey: myCardPacksQueryKey(user.id),
+                });
             } catch {
                 // Sign-in itself succeeded — the push is best-effort
                 // and Sentry catches any thrown error from the
                 // server-action wrapper. Don't block the UI on it.
             }
         })();
-    }, [session.data]);
+    }, [queryClient, session.data]);
 
     return null;
 }

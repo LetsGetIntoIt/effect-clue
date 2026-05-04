@@ -4,7 +4,7 @@
         {
             "name": "next-dev",
             "runtimeExecutable": "sh",
-            "runtimeArgs": ["-c", "pnpm install && pnpm dev"],
+            "runtimeArgs": ["-c", "pnpm install && exec pnpm dev"],
             "port": 3000,
             "autoPort": true
         }

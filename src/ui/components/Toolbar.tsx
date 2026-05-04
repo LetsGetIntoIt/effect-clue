@@ -1,7 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { aboutLinkClicked, gameSetupStarted } from "../../analytics/events";
+import {
+    aboutLinkClicked,
+    gameSetupStarted,
+    signOut as signOutEvent,
+} from "../../analytics/events";
 import { startSetup } from "../../analytics/gameSession";
 import { describeAction } from "../../logic/describeAction";
 import { routes } from "../../routes";
@@ -11,7 +15,9 @@ import { useClue } from "../state";
 import { shortcutSuffix } from "../keyMap";
 import { useTour } from "../tour/TourProvider";
 import { screenKeyForUiMode } from "../tour/screenKey";
+import { AccountAvatar } from "../account/AccountAvatar";
 import { useAccountContext } from "../account/AccountProvider";
+import { authClient } from "../account/authClient";
 import { useShareContext } from "../share/ShareProvider";
 import { useSession } from "../hooks/useSession";
 import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
@@ -94,12 +100,20 @@ export function Toolbar() {
     const { openInvitePlayer, openContinueOnAnotherDevice } =
         useShareContext();
     const session = useSession();
-    const accountLabel =
-        session.data?.user && !session.data.user.isAnonymous
-            ? tAccount("menuItemSignedIn", {
-                  name: session.data.user.name ?? session.data.user.email,
-              })
-            : tAccount("menuItemSignedOut");
+    const user = session.data?.user;
+    const signedIn = user !== undefined && !user.isAnonymous;
+    const accountLabel = signedIn
+        ? tAccount("signOut")
+        : tAccount("menuItemSignedOut");
+    const onAccountClick = async () => {
+        if (!signedIn) {
+            openAccountModal();
+            return;
+        }
+        await authClient.signOut();
+        signOutEvent();
+        await session.refetch();
+    };
 
     const undoTooltip = nextUndo
         ? tHistory("undoTooltip", {
@@ -149,7 +163,7 @@ export function Toolbar() {
                 </button>
             </Tooltip>
             <OverflowMenu
-                triggerClassName={buttonClass}
+                triggerClassName={`${buttonClass} inline-flex items-center justify-center`}
                 triggerLabel={tNav("more")}
                 side="bottom"
                 align="end"
@@ -188,7 +202,13 @@ export function Toolbar() {
                     // Group 2: Account & content
                     {
                         label: accountLabel,
-                        onClick: () => openAccountModal(),
+                        leadingIcon: (
+                            <AccountAvatar
+                                user={signedIn ? user : null}
+                                sizeClassName="h-6 w-6"
+                            />
+                        ),
+                        onClick: onAccountClick,
                     },
                     {
                         label: tAccount("menuItemMyCardPacks"),

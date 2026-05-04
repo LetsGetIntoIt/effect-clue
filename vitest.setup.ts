@@ -87,6 +87,11 @@ if (
 // module-load time, so polyfill before any test imports them.
 import { TextDecoder, TextEncoder } from "util";
 
+process.env["BETTER_AUTH_URL"] ??= "http://localhost:3000";
+process.env["BETTER_AUTH_SECRET"] ??= "test-better-auth-secret-1234567890";
+process.env["GOOGLE_CLIENT_ID"] ??= "test-google-client-id";
+process.env["GOOGLE_CLIENT_SECRET"] ??= "test-google-client-secret";
+
 if (typeof globalThis.TextEncoder === "undefined") {
     (globalThis as unknown as { TextEncoder: typeof TextEncoder }).TextEncoder =
         TextEncoder;

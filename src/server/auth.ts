@@ -43,6 +43,27 @@ import { anonymous } from "better-auth/plugins";
 import { Pool } from "pg";
 
 const isDev = process.env["NODE_ENV"] === "development";
+const AUTH_DEBUG_ON = "1";
+const GOOGLE_PROMPT_SELECT_ACCOUNT = "select_account" as const;
+const LOGGER_LEVEL_DEBUG = "debug" as const;
+const LOGGER_LEVEL_WARN = "warn" as const;
+const FIELD_ACCOUNT_ID = "account_id" as const;
+const FIELD_ACCESS_TOKEN = "access_token" as const;
+const FIELD_ACCESS_TOKEN_EXPIRES_AT =
+    "access_token_expires_at" as const;
+const FIELD_CREATED_AT = "created_at" as const;
+const FIELD_EMAIL_VERIFIED = "email_verified" as const;
+const FIELD_EXPIRES_AT = "expires_at" as const;
+const FIELD_ID_TOKEN = "id_token" as const;
+const FIELD_IP_ADDRESS = "ip_address" as const;
+const FIELD_IS_ANONYMOUS = "is_anonymous" as const;
+const FIELD_PROVIDER_ID = "provider_id" as const;
+const FIELD_REFRESH_TOKEN = "refresh_token" as const;
+const FIELD_REFRESH_TOKEN_EXPIRES_AT =
+    "refresh_token_expires_at" as const;
+const FIELD_UPDATED_AT = "updated_at" as const;
+const FIELD_USER_AGENT = "user_agent" as const;
+const FIELD_USER_ID = "user_id" as const;
 
 // ─── Defense-in-depth layer 5 ──────────────────────────────────────
 // If a misconfiguration ever leaks `DEV_AUTH_ENABLED=true` into a
@@ -59,12 +80,31 @@ if (
     );
 }
 
+const requiredEnv = (name: string): string => {
+    const value = process.env[name];
+    if (value === undefined || value.trim() === "") {
+        throw new Error(
+            `${name} is required for Better Auth configuration.`,
+        );
+    }
+    return value;
+};
+
+const requiredBaseURL = (): string => {
+    const value = process.env["BETTER_AUTH_URL"];
+    if (value !== undefined && value.trim() !== "") return value;
+    if (isDev) return "http://localhost:3000";
+    throw new Error(
+        // eslint-disable-next-line i18next/no-literal-string -- developer-facing configuration error.
+        "BETTER_AUTH_URL is required outside local development.",
+    );
+};
+
 const databaseUrl = process.env["DATABASE_URL"] ?? "";
-const baseURL =
-    process.env["BETTER_AUTH_URL"] ?? "http://localhost:3000";
+const baseURL = requiredBaseURL();
 const secret = process.env["BETTER_AUTH_SECRET"] ?? "";
-const googleClientId = process.env["GOOGLE_CLIENT_ID"];
-const googleClientSecret = process.env["GOOGLE_CLIENT_SECRET"];
+const googleClientId = requiredEnv("GOOGLE_CLIENT_ID");
+const googleClientSecret = requiredEnv("GOOGLE_CLIENT_SECRET");
 
 /**
  * The better-auth pool is a *separate* pg pool from the one
@@ -84,15 +124,66 @@ export const auth = betterAuth({
     emailAndPassword: {
         enabled: isDev,
     },
-    ...(googleClientId !== undefined && googleClientSecret !== undefined
-        ? {
-              socialProviders: {
-                  google: {
-                      clientId: googleClientId,
-                      clientSecret: googleClientSecret,
-                  },
-              },
-          }
-        : {}),
-    plugins: [anonymous()],
+    user: {
+        fields: {
+            emailVerified: FIELD_EMAIL_VERIFIED,
+            createdAt: FIELD_CREATED_AT,
+            updatedAt: FIELD_UPDATED_AT,
+        },
+    },
+    session: {
+        fields: {
+            userId: FIELD_USER_ID,
+            expiresAt: FIELD_EXPIRES_AT,
+            ipAddress: FIELD_IP_ADDRESS,
+            userAgent: FIELD_USER_AGENT,
+            createdAt: FIELD_CREATED_AT,
+            updatedAt: FIELD_UPDATED_AT,
+        },
+    },
+    account: {
+        fields: {
+            userId: FIELD_USER_ID,
+            accountId: FIELD_ACCOUNT_ID,
+            providerId: FIELD_PROVIDER_ID,
+            accessToken: FIELD_ACCESS_TOKEN,
+            refreshToken: FIELD_REFRESH_TOKEN,
+            idToken: FIELD_ID_TOKEN,
+            accessTokenExpiresAt: FIELD_ACCESS_TOKEN_EXPIRES_AT,
+            refreshTokenExpiresAt: FIELD_REFRESH_TOKEN_EXPIRES_AT,
+            createdAt: FIELD_CREATED_AT,
+            updatedAt: FIELD_UPDATED_AT,
+        },
+    },
+    verification: {
+        fields: {
+            expiresAt: FIELD_EXPIRES_AT,
+            createdAt: FIELD_CREATED_AT,
+            updatedAt: FIELD_UPDATED_AT,
+        },
+    },
+    socialProviders: {
+        google: {
+            clientId: googleClientId,
+            clientSecret: googleClientSecret,
+            prompt: GOOGLE_PROMPT_SELECT_ACCOUNT,
+        },
+    },
+    logger: {
+        level:
+            process.env["AUTH_DEBUG"] === AUTH_DEBUG_ON
+                ? LOGGER_LEVEL_DEBUG
+                : LOGGER_LEVEL_WARN,
+    },
+    plugins: [
+        anonymous({
+            schema: {
+                user: {
+                    fields: {
+                        isAnonymous: FIELD_IS_ANONYMOUS,
+                    },
+                },
+            },
+        }),
+    ],
 });

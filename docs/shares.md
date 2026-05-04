@@ -8,10 +8,12 @@
 
 ## What sharing is
 
-A user copies a `https://winclue.vercel.app/share/{id}` link, sends
-it to someone (often themselves), and that recipient's local Clue
-Solver game state is replaced with the sender's snapshot when they
-click "Add to my game".
+A user copies a `https://winclue.vercel.app/share/{id}` link and sends
+it to someone (often themselves). Game/setup links replace the
+recipient's local Clue Solver game state with the sender's snapshot.
+Card-pack-only links are additive: they save the shared pack to the
+recipient's card-pack library and mark it as recently used without
+changing the current game.
 
 There are three sender flows, all written by the same modal
 ([src/ui/share/ShareCreateModal.tsx](../src/ui/share/ShareCreateModal.tsx))
@@ -152,29 +154,38 @@ to detect built-ins — the `name` is informational, not authoritative.
 3. `getShare` reads the snapshot row + `LEFT JOIN "user"` for the
    sender's display name + anonymous flag, returns
    `ShareSnapshot`.
-4. `ShareImportPage` renders a modal:
-   - "A friend shared a Clue Solver game" title.
+4. `ShareImportPage` renders a modal based on the snapshot contents:
+   - Pack-only shares use a card-pack title and CTA. The contents
+     heading names the pack when available, then lists only the pack
+     categories/counts.
+   - Invite/setup shares use a shared-game setup title and CTA.
+   - Transfer/progress shares use a continue-game title and CTA.
    - "Shared by {name}" line, only when `ownerName !== null`
      (server collapses to null for anonymous-plugin owners).
-   - "This share includes:" header + a bulleted list — one bullet
+   - A contents header + a bulleted list — one bullet
      per non-null snapshot slice, with values:
      `Card pack: Master Detective` or `Card pack: My Office (custom)`,
      `Players (4): Alice, Bob, Carol, Dana`,
      `Hand sizes`,
      `Known cards (12)`, etc.
-   - One CTA — `Add to my game`.
-5. Click → `useApplyShareSnapshot()` decodes each wire field via
-   the codec, builds a `GameSession`, dispatches `replaceSession`.
-   The existing `<ClueProvider>` mirror-effect writes the new state
-   to `localStorage` + the `["game-session"]` RQ cache.
+   - One CTA matched to the inferred receive flow.
+5. Click:
+   - Pack-only → decodes `cardPackData`, writes a new custom card pack,
+     records the pack as most-recently-used, invalidates the card-pack
+     queries, and routes to `/play`. It does not call the game-session
+     hydration path or overwrite the current game.
+   - Invite / transfer → `useApplyShareSnapshot()` decodes each wire
+     field via the codec, builds a `GameSession`, and writes the new
+     state to `localStorage`.
 6. Router pushes to `/play`.
 
 **Hydration semantics:** the share is the new game. Sections present
 in the snapshot replace the matching slice; sections absent are
 blanked (because they may reference cards from the receiver's old
-pack). Defensive empty-share branch (no card pack — unreachable
-from the new sender flows but possible for legacy / direct API
-calls) renders an empty-state message and disables Import.
+pack). Pack-only shares bypass hydration entirely and add only the
+card pack. Defensive empty-share branch (no card pack — unreachable
+from the new sender flows but possible for legacy / direct API calls)
+renders an empty-state message and disables Import.
 
 ## DB representation
 

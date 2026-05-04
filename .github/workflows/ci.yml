@@ -80,6 +80,11 @@ jobs:
     name: build
     runs-on: ubuntu-latest
     env:
+      DATABASE_URL: postgres://effect_clue:effect_clue@localhost:5432/effect_clue
+      BETTER_AUTH_SECRET: ci-better-auth-secret-at-least-32-characters
+      BETTER_AUTH_URL: http://localhost:3000
+      GOOGLE_CLIENT_ID: ci-google-client-id
+      GOOGLE_CLIENT_SECRET: ci-google-client-secret
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}

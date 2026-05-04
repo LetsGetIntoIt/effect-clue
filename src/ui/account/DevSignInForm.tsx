@@ -1,10 +1,10 @@
 /* eslint-disable i18next/no-literal-string -- whole file is dev-only;
    tree-shaken from production. Local-only copy doesn't go through i18n. */
 /**
- * Local-development-only sign-in form. Posts straight to
- * better-auth's `/api/auth/sign-in/email` endpoint with
- * pre-seeded test credentials so dev machines can run the full
- * authenticated flow without leaving localhost.
+ * Local-development-only sign-in form. Uses Better Auth's client
+ * `signIn.email` action with pre-seeded test credentials so dev
+ * machines can run the full authenticated flow without leaving
+ * localhost.
  *
  * Defense-in-depth layer 4: the parent (`AccountModal`) wraps
  * this component in `process.env.NODE_ENV === "development" &&
@@ -20,6 +20,7 @@
 "use client";
 
 import { useState } from "react";
+import { authClient } from "./authClient";
 
 interface DevSignInFormProps {
     /** Called after a successful sign-in so the parent can refresh
@@ -38,16 +39,12 @@ export function DevSignInForm({ onSignedIn }: DevSignInFormProps) {
         setSubmitting(true);
         setError(null);
         try {
-            const res = await fetch("/api/auth/sign-in/email", {
-                method: "POST",
-                credentials: "include",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ email, password }),
+            const result = await authClient.signIn.email({
+                email,
+                password,
             });
-            if (!res.ok) {
-                setError(`Sign-in failed (${res.status})`);
+            if (result.error !== null) {
+                setError(`Sign-in failed (${result.error.status})`);
                 return;
             }
             onSignedIn();

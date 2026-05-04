@@ -1,28 +1,15 @@
 /**
- * RQ-wrapped session hook. Reads better-auth's session via the
- * `/api/auth/get-session` endpoint and caches it in the React Query
- * cache so the rest of the app can subscribe without re-fetching.
+ * App-shaped wrapper around Better Auth's React session hook.
  *
- * Mirrors the convention from `src/data/`: one query per persistence
- * boundary, `staleTime` set to a generous default, mutations
- * (sign-in / sign-out) update the cache directly via
- * `setQueryData` rather than re-fetching.
+ * The Better Auth client owns the actual `/api/auth/get-session`
+ * request, cache, focus revalidation, and cross-tab updates. This
+ * wrapper keeps the smaller shape existing UI components read
+ * (`session.data?.user.isAnonymous`, `expiresAt`) so the rest of the
+ * app doesn't depend on Better Auth's full wire object.
  */
 "use client";
 
-import {
-    useQuery,
-    type UseQueryResult,
-} from "@tanstack/react-query";
-import { Duration } from "effect";
-
-// Module-scope wire-format constants exempt from
-// `i18next/no-literal-string`.
-const SESSION_KEY = "session";
-const GET_SESSION_URL = "/api/auth/get-session";
-const CRED_INCLUDE: RequestCredentials = "include";
-
-export const sessionQueryKey = [SESSION_KEY] as const;
+import { authClient } from "../account/authClient";
 
 /**
  * Shape of the session better-auth returns. Subset of the full
@@ -41,35 +28,43 @@ interface Session {
     readonly expiresAt: string;
 }
 
-const fetchSession = async (): Promise<Session | null> => {
-    if (typeof window === "undefined") return null;
-    try {
-        const res = await fetch(GET_SESSION_URL, {
-            credentials: CRED_INCLUDE,
-        });
-        if (!res.ok) return null;
-        const json = (await res.json()) as
-            | { user: SessionUser; session: { expiresAt: string } }
-            | null;
-        if (!json || !json.user) return null;
-        return {
-            user: json.user,
-            expiresAt: json.session.expiresAt,
-        };
-    } catch {
-        return null;
-    }
+interface SessionResult {
+    readonly data: Session | null;
+    readonly isPending: boolean;
+    readonly isRefetching: boolean;
+    readonly error: Error | null;
+    readonly refetch: () => Promise<void>;
+}
+
+const toExpiresAt = (value: unknown): string => {
+    if (value instanceof Date) return value.toISOString();
+    return typeof value === "string" ? value : String(value);
 };
 
 /**
  * Returns the current session (or `null` for signed-out users).
- * Refetches on window focus so signing out in another tab is
- * picked up.
  */
-export const useSession = (): UseQueryResult<Session | null, Error> =>
-    useQuery({
-        queryKey: sessionQueryKey,
-        queryFn: fetchSession,
-        staleTime: Duration.toMillis(Duration.minutes(5)),
-        refetchOnWindowFocus: true,
-    });
+export const useSession = (): SessionResult => {
+    const session = authClient.useSession();
+    const raw = session.data;
+    const data =
+        raw == null
+            ? null
+            : {
+                  user: {
+                      id: raw.user.id,
+                      email: raw.user.email,
+                      name: raw.user.name,
+                      image: raw.user.image ?? null,
+                      isAnonymous: raw.user.isAnonymous === true,
+                  },
+                  expiresAt: toExpiresAt(raw.session.expiresAt),
+              };
+    return {
+        data,
+        isPending: session.isPending,
+        isRefetching: session.isRefetching,
+        error: session.error,
+        refetch: session.refetch,
+    };
+};

@@ -40,7 +40,7 @@ import {
 } from "../logic/CustomCardSets";
 import { TelemetryRuntime } from "../observability/runtime";
 
-const customCardPacksQueryKey = ["custom-card-packs"] as const;
+export const customCardPacksQueryKey = ["custom-card-packs"] as const;
 
 /** SSR-safe gate: localStorage queries only run on the client. */
 const isClient = (): boolean => typeof window !== "undefined";

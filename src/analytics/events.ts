@@ -574,7 +574,11 @@ export const appLaunchedStandalone = (): void => {
 
 export type AccountModalSource = "menu" | "tour" | "share_import";
 export type AuthProvider = "google";
-export type SignInFromContext = "menu" | "share_import" | "save_pack";
+export type SignInFromContext =
+    | "menu"
+    | "share_import"
+    | "save_pack"
+    | "sharing";
 
 export const accountModalOpened = (props: {
     state: "anon" | "signedIn";

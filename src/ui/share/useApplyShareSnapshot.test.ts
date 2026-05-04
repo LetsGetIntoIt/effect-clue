@@ -14,10 +14,11 @@
  *     failing field's name surfaced.
  */
 import { Schema } from "effect";
-import { describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 import { Card, CardCategory, Player } from "../../logic/GameObjects";
 import { newAccusationId } from "../../logic/Accusation";
 import { newSuggestionId } from "../../logic/Suggestion";
+import { GameSetup } from "../../logic/GameSetup";
 import { CardSet, CardEntry, Category } from "../../logic/CardSet";
 import { PlayerSet } from "../../logic/PlayerSet";
 import {
@@ -29,10 +30,20 @@ import {
     suggestionsCodec,
 } from "../../logic/ShareCodec";
 import {
+    applyShareSnapshotToLocalStorage,
     buildSessionFromSnapshot,
+    hasPersistedGameData,
+    saveCardPackFromSnapshot,
     ShareSnapshotDecodeError,
+    sessionHasGameData,
     type ShareSnapshotForHydration,
 } from "./useApplyShareSnapshot";
+import {
+    loadFromLocalStorage,
+    saveToLocalStorage,
+} from "../../logic/Persistence";
+import { loadCustomCardSets } from "../../logic/CustomCardSets";
+import { loadCardPackUsage } from "../../logic/CardPackUsage";
 
 const RECEIVER_FALLBACK_PACK = CardSet({
     categories: [
@@ -136,6 +147,10 @@ const apply = (
         RECEIVER_FALLBACK_PACK,
         RECEIVER_FALLBACK_PLAYERS,
     );
+
+beforeEach(() => {
+    window.localStorage.clear();
+});
 
 describe("buildSessionFromSnapshot — variant shapes", () => {
     test("pack-only snapshot → pack replaced, game-state blanked, receiver player set preserved", () => {
@@ -271,3 +286,161 @@ describe("buildSessionFromSnapshot — decode failures", () => {
         expect(String(session.suggestions[0]!.id).length).toBeGreaterThan(0);
     });
 });
+
+describe("applyShareSnapshotToLocalStorage — receive page handoff", () => {
+    test("writes the decoded share without requiring ClueProvider", () => {
+        const session = applyShareSnapshotToLocalStorage(
+            sampleSnapshot({
+                cardPack: true,
+                players: true,
+                handSizes: true,
+                knownCards: true,
+                suggestions: true,
+                accusations: true,
+            }),
+        );
+        const persisted = loadFromLocalStorage();
+
+        expect(persisted?.setup.players).toEqual(session.setup.players);
+        expect(persisted?.hands.length).toBe(1);
+        expect(persisted?.suggestions.length).toBe(1);
+        expect(persisted?.accusations.length).toBe(1);
+    });
+
+    test("pack-only shares preserve the receiver's existing players", () => {
+        saveToLocalStorage({
+            setup: GameSetup({
+                cardSet: RECEIVER_FALLBACK_PACK,
+                playerSet: RECEIVER_FALLBACK_PLAYERS,
+            }),
+            hands: [],
+            handSizes: [],
+            suggestions: [],
+            accusations: [],
+        });
+
+        const session = applyShareSnapshotToLocalStorage(
+            sampleSnapshot({ cardPack: true }),
+        );
+
+        expect(session.setup.players).toEqual(
+            RECEIVER_FALLBACK_PLAYERS.players,
+        );
+        expect(loadFromLocalStorage()?.setup.players).toEqual(
+            RECEIVER_FALLBACK_PLAYERS.players,
+        );
+    });
+});
+
+describe("saveCardPackFromSnapshot — pack-only receive", () => {
+    test("adds the shared pack, marks it recent, and leaves the current game untouched", () => {
+        const currentSession = {
+            setup: GameSetup({
+                cardSet: RECEIVER_FALLBACK_PACK,
+                playerSet: RECEIVER_FALLBACK_PLAYERS,
+            }),
+            hands: [{ player: Player("Original-Receiver-1"), cards: [] }],
+            handSizes: [{ player: Player("Original-Receiver-1"), size: 1 }],
+            suggestions: [],
+            accusations: [],
+        };
+        saveToLocalStorage(currentSession);
+
+        const savedPack = saveCardPackFromSnapshot(
+            sampleSnapshot({ cardPack: true }),
+        );
+
+        expect(savedPack.label).toBe("Classic");
+        expect(savedPack.cardSet.categories[0]!.name).toBe("Suspect");
+        expect(loadCustomCardSets()).toContainEqual(savedPack);
+        expect(loadCardPackUsage().has(savedPack.id)).toBe(true);
+        expect(loadFromLocalStorage()).toEqual(currentSession);
+    });
+
+    test("missing cardPackData throws without touching saved packs", () => {
+        expect(() =>
+            saveCardPackFromSnapshot({
+                cardPackData: null,
+                playersData: null,
+                handSizesData: null,
+                knownCardsData: null,
+                suggestionsData: null,
+                accusationsData: null,
+            }),
+        ).toThrow(ShareSnapshotDecodeError);
+        expect(loadCustomCardSets()).toEqual([]);
+    });
+});
+
+describe("share receive dirty-state detection", () => {
+    test("default persisted session is clean", () => {
+        const clean = {
+            setup: GameSetup({
+                cardSet: RECEIVER_FALLBACK_PACK,
+                playerSet: DEFAULT_PLAYER_SET(),
+            }),
+            hands: [],
+            handSizes: [],
+            suggestions: [],
+            accusations: [],
+        };
+
+        expect(sessionHasGameData(clean)).toBe(false);
+    });
+
+    test("hand sizes, progress, or edited players are dirty", () => {
+        const base = GameSetup({
+            cardSet: RECEIVER_FALLBACK_PACK,
+            playerSet: DEFAULT_PLAYER_SET(),
+        });
+
+        expect(
+            sessionHasGameData({
+                setup: base,
+                hands: [],
+                handSizes: [{ player: Player("Player 1"), size: 4 }],
+                suggestions: [],
+                accusations: [],
+            }),
+        ).toBe(true);
+        expect(
+            sessionHasGameData({
+                setup: GameSetup({
+                    cardSet: RECEIVER_FALLBACK_PACK,
+                    playerSet: PlayerSet({
+                        players: [Player("Alice"), Player("Player 2")],
+                    }),
+                }),
+                hands: [],
+                handSizes: [],
+                suggestions: [],
+                accusations: [],
+            }),
+        ).toBe(true);
+    });
+
+    test("hasPersistedGameData reads the same predicate from localStorage", () => {
+        expect(hasPersistedGameData()).toBe(false);
+        saveToLocalStorage({
+            setup: GameSetup({
+                cardSet: RECEIVER_FALLBACK_PACK,
+                playerSet: DEFAULT_PLAYER_SET(),
+            }),
+            hands: [{ player: Player("Player 1"), cards: [Card("card-x")] }],
+            handSizes: [],
+            suggestions: [],
+            accusations: [],
+        });
+        expect(hasPersistedGameData()).toBe(true);
+    });
+});
+
+const DEFAULT_PLAYER_SET = () =>
+    PlayerSet({
+        players: [
+            Player("Player 1"),
+            Player("Player 2"),
+            Player("Player 3"),
+            Player("Player 4"),
+        ],
+    });
