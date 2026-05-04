@@ -19,7 +19,7 @@
 		"i18n:check": "node scripts/check-i18n-keys.mjs",
 		"assert:no-dev-auth": "node scripts/assert-no-dev-auth.mjs",
 		"assert:sw-emitted": "node scripts/assert-sw-emitted.mjs",
-		"dev": "next dev",
+		"dev": "node scripts/dev.mjs",
 		"build": "next build && serwist build",
 		"build:offline-test": "pnpm build && pnpm start",
 		"start": "next start",

@@ -61,7 +61,7 @@ Scripts that require `pnpm install`:
 - `pnpm test` — Vitest (run mode) / `pnpm test:watch` — Vitest watch / `pnpm test:ui` — Vitest UI
 - `pnpm knip` — unused-exports audit
 - `pnpm i18n:check` — orphan-key audit (`scripts/check-i18n-keys.mjs`)
-- `pnpm dev` — Next.js dev server (used by Claude's `next-dev` preview and by Codex browser verification)
+- `pnpm dev` — Next.js dev server (used by Claude's `next-dev` preview and by Codex browser verification). It starts at `PORT` or `3000`, then automatically uses the next available port if that one is busy.
 - `pnpm db:up` / `pnpm db:down` — local Docker Postgres for server actions, auth, sharing, and card-pack sync
 - `pnpm build` — static export
 - `pnpm start` — serve the static export
@@ -84,8 +84,10 @@ Before starting the preview in Codex:
 3. Do not print secret values. If you need to inspect env health, print
    only `<set>` / `<empty>` status.
 4. Start the local database with `pnpm db:up`.
-5. Start the app with `pnpm dev`, then open `http://localhost:3000` in
-   the in-app browser.
+5. Start the app with `pnpm dev`, then open the `Local:` URL printed
+   by Next.js in the in-app browser. It is usually
+   `http://localhost:3000`, but the dev script auto-selects the next
+   available port when 3000 is already in use.
 
 Shutdown is part of the workflow. When you start `pnpm dev` from a
 shell session, stop that same session with Ctrl-C before finishing.
@@ -108,7 +110,7 @@ If you amend or update a commit, re-run the full set — a previously-green comm
 
 ## Manual verification in the preview
 
-For any change that's observable in the browser, exercise the change yourself before reporting the task done. In Claude, use the `next-dev` preview configured in `.claude/launch.json`; in Codex, follow the local database and dev server lifecycle above, then use the in-app browser at `http://localhost:3000`. Follow the active agent's browser verification workflow: start/reload the preview, check console/network/logs, take a screenshot or snapshot as proof. Don't ask the user to verify manually.
+For any change that's observable in the browser, exercise the change yourself before reporting the task done. In Claude, use the `next-dev` preview configured in `.claude/launch.json`; in Codex, follow the local database and dev server lifecycle above, then use the printed `Local:` URL in the in-app browser. Follow the active agent's browser verification workflow: start/reload the preview, check console/network/logs, take a screenshot or snapshot as proof. Don't ask the user to verify manually.
 
 ### Layout, scroll, and animation behaviors
 
