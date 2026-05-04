@@ -46,6 +46,14 @@ You may notice that each Bash tool call appears to start a fresh subshell, so PA
 
 Once per shell session — and after any `package.json` / `pnpm-lock.yaml` change — run `pnpm install` from the repo root. Every script in this repo reads from `node_modules` and will error out if it hasn't been populated. Run it as a plain `pnpm install` call; do not prepend nvm setup (see the Node version section above).
 
+In Codex, a fresh worktree may need to fetch the npm registry while the default
+command sandbox has DNS/network access disabled. If `node_modules` is missing or
+the install will clearly need registry tarballs, run the same plain
+`pnpm install` with network approval/escalation up front. If you see
+`getaddrinfo ENOTFOUND registry.npmjs.org`, treat it as sandbox networking and
+retry `pnpm install` with network approval; do not change package managers,
+clear the lockfile, or add nvm setup.
+
 Scripts that require `pnpm install`:
 
 - `pnpm typecheck` — TypeScript (`tsc --noEmit`)
