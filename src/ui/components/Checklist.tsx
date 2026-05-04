@@ -408,6 +408,7 @@ export function Checklist() {
                 undefined,
                 tableEntryTransition,
             ),
+            "mx-auto",
         );
 
     // Handle ⌘J / ⌘H focus requests: locate a cell by (row,col) and
@@ -2276,7 +2277,7 @@ const ADD_PLAYER_COLUMN_KEY = "add-player-col";
 const CELL_BASE =
     "border-r border-b border-border text-center font-semibold relative overflow-hidden";
 const CELL_CONTENT =
-    "flex h-full w-9 min-w-9 items-center justify-center px-2 py-1";
+    "mx-auto flex h-full w-9 min-w-9 items-center justify-center px-2 py-1";
 
 const STICKY_FIRST_COL =
     "sticky left-0 z-[var(--z-checklist-sticky-column)]";

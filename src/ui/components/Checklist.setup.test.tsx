@@ -297,6 +297,24 @@ describe("Checklist — setup mode — player cell interactions", () => {
             expect(checkboxes.length).toBeGreaterThan(50);
         });
     });
+
+    test("centers checkbox content within the player cells", async () => {
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitFor(() => {
+            expect(
+                document.querySelector<HTMLInputElement>("input[type='checkbox']"),
+            ).toBeInTheDocument();
+        });
+
+        const checkbox = document.querySelector<HTMLInputElement>(
+            "input[type='checkbox']",
+        );
+        expect(checkbox).toBeDefined();
+        if (!checkbox) return;
+        expect(checkbox.parentElement?.className).toContain("mx-auto");
+        expect(checkbox.parentElement?.parentElement?.parentElement?.className)
+            .toContain("mx-auto");
+    });
 });
 
 describe("Checklist — setup mode — add-player column", () => {
