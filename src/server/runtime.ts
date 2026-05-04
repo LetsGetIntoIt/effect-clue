@@ -27,12 +27,26 @@ import {
     NodePath,
 } from "@effect/platform-node";
 import { PgClient, PgMigrator } from "@effect/sql-pg";
-import { Config, Layer, ManagedRuntime } from "effect";
+import { Config, Layer, ManagedRuntime, Redacted } from "effect";
 import { Migrator } from "effect/unstable/sql";
+import { LOCAL_DATABASE_URL } from "./localDatabase";
 import { migrations } from "./migrations";
 
+const isLocalRuntime = process.env["NODE_ENV"] !== "production";
+
+const databaseUrlConfig = isLocalRuntime
+    ? Config.string("DATABASE_URL").pipe(
+          Config.withDefault(LOCAL_DATABASE_URL),
+          Config.map((value) =>
+              Redacted.make(
+                  value.trim() === "" ? LOCAL_DATABASE_URL : value,
+              ),
+          ),
+      )
+    : Config.nonEmptyString("DATABASE_URL").pipe(Config.map(Redacted.make));
+
 const PgLive = PgClient.layerConfig({
-    url: Config.redacted("DATABASE_URL"),
+    url: databaseUrlConfig,
 });
 
 /**

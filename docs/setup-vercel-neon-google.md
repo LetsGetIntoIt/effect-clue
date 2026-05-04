@@ -42,6 +42,32 @@ Verify `DATABASE_URL` and `DATABASE_URL_UNPOOLED` are present.
 Vercel + Neon auto-creates a Neon **branch per Vercel preview**, which
 isolates each preview's migrations. Confirm in the Neon dashboard.
 
+### GitHub Actions for Neon branch workflows
+
+The schema-diff and preview-branch cleanup workflows authenticate to
+Neon's API directly. The Vercel integration populates database
+connection strings for the app, but it does not provide a GitHub
+Actions API token.
+
+Add these under GitHub repo **Settings → Secrets and variables →
+Actions**:
+
+| Kind | Name | Value |
+| --- | --- | --- |
+| Repository variable | `NEON_PROJECT_ID` | The Neon project ID. |
+| Repository secret | `NEON_API_KEY` | A Neon API key. |
+
+Prefer a Neon **project-scoped API key** if the project is
+organization-owned: Neon Console → Organization Settings → API keys →
+Create new → Project-scoped → choose the Clue project. Project-scoped
+keys are limited to one project and cannot delete the associated
+project.
+
+If project-scoped keys are unavailable, create a personal API key:
+Neon Console → Account settings → API keys → Create new. Neon only
+shows the token once; copy it immediately and store it as the
+`NEON_API_KEY` repository secret.
+
 ### Neon free-tier auto-suspend
 
 Free-tier compute idles after a short window, adding cold-start
@@ -67,16 +93,20 @@ Per environment:
 | --- | --- |
 | Production | `https://winclue.vercel.app` |
 | Preview | `https://$VERCEL_URL` (Vercel system var — set the value literally to `https://$VERCEL_URL` in the dashboard; Vercel substitutes at runtime) |
-| Development | `http://localhost:3000` |
+| Development | Leave blank unless you need to force a fixed local OAuth callback URL |
 
 better-auth uses this to build the OAuth callback URLs.
+In local development, leaving it blank lets Better Auth derive the
+actual `localhost` host and port from the incoming request, so Next's
+automatic port fallback keeps working when 3000 is already occupied.
 
 ## 5. Google OAuth client
 
 Required for previews and production. Local dev can use the dev-only
-username/password path inside the Account modal, but the Google
-client ID and secret still need to be present because the Better Auth
-server config fails fast when either is missing. That keeps OAuth
+username/password path inside the Account modal, so
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` may be left blank when
+running against Docker offline. Production and Vercel previews still
+fail fast when either Google value is missing, which keeps OAuth
 misconfiguration from turning into a confusing missing-provider error.
 The dev credential path tree-shakes out of production bundles, see CI
 assertion below.
@@ -90,13 +120,18 @@ assertion below.
    - Add your email + any other testers as test users.
 3. **Authorized JavaScript origins** — add:
    - `https://winclue.vercel.app`
-   - `http://localhost:3000`
+   - Any localhost ports you use for local Google OAuth, e.g.
+     `http://localhost:3000`
    - Specific Vercel preview URLs as needed (Google may reject
      wildcards).
 4. **Authorized redirect URIs** — add the exact callback URL for each
    environment:
    - `https://winclue.vercel.app/api/auth/callback/google`
-   - `http://localhost:3000/api/auth/callback/google`
+   - The exact localhost callback URL for any local Google OAuth port
+     you use, e.g. `http://localhost:3000/api/auth/callback/google`.
+     Next may auto-select another port when 3000 is occupied; either
+     add that exact callback too, or free/pin port 3000 before testing
+     Google OAuth locally.
    - Specific preview-deploy URLs as they come up. Wildcards are not
      supported here.
 5. Capture `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Add both to

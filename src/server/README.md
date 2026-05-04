@@ -73,10 +73,12 @@ against the migrator's metadata table.
 ## Local development
 
 The committed [`docker-compose.yml`](../../docker-compose.yml) at the
-repo root spins up a `postgres:16-alpine` service on
-`localhost:5432`. The same `MigratorLive` code path that runs against
-Neon in production runs against this Docker container locally, so
-"works on Docker" implies "works on Vercel" for migrations.
+repo root spins up a Neon-aligned `postgres:17` service on
+`localhost:5432` by default. Set `POSTGRES_HOST_PORT` if another local
+Postgres already owns 5432. The same `MigratorLive` code path that
+runs against Neon in production runs against this Docker container
+locally, so "works on Docker" implies "works on Vercel" for
+migrations.
 
 ```bash
 pnpm db:up         # start postgres
@@ -86,7 +88,9 @@ pnpm db:reset      # wipe the volume; migrations re-run on next request
 
 Drop the local `DATABASE_URL` from
 [`env.example`](../../env.example) into your `.env.local` —
-nothing else needs to change to switch between Docker and Neon.
+nothing else needs to change to switch between Docker and Neon. In
+development, a blank or missing `DATABASE_URL` falls back to that same
+local Docker URL.
 
 ## Env vars
 
@@ -94,7 +98,9 @@ nothing else needs to change to switch between Docker and Neon.
 never accidentally lands in a log. Pull the production-shaped vars
 locally with `vercel env pull .env.development.local`, or use the
 local Docker block in [`env.example`](../../env.example) and skip
-Vercel entirely for local work.
+Vercel entirely for local work. Leave `BETTER_AUTH_URL` blank in
+local development so Better Auth derives the actual localhost port
+from the request when Next auto-selects a fallback port.
 
 | Variable | Owner | Used for |
 | --- | --- | --- |

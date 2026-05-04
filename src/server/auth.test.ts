@@ -30,17 +30,28 @@ const importAuthWithEnv = async (
             }
         },
     }));
-    process.env = { ...ORIGINAL_ENV, ...env };
+    process.env = {
+        ...ORIGINAL_ENV,
+        DATABASE_URL: "postgres://example.test/app",
+        ...env,
+    };
     await import("./auth");
     return capturedConfig as {
-        readonly baseURL: string;
-        readonly socialProviders: {
-            readonly google: {
-                readonly clientId: string;
-                readonly clientSecret: string;
-                readonly prompt: string;
-            };
-        };
+        readonly baseURL:
+            | string
+            | {
+                  readonly allowedHosts: ReadonlyArray<string>;
+                  readonly protocol: string;
+              };
+        readonly socialProviders:
+            | undefined
+            | {
+                  readonly google: {
+                      readonly clientId: string;
+                      readonly clientSecret: string;
+                      readonly prompt: string;
+                  };
+              };
         readonly logger: { readonly level: string };
         readonly plugins: ReadonlyArray<string>;
     };
@@ -55,7 +66,7 @@ describe("better-auth config", () => {
         });
 
         expect(config.baseURL).toBe("https://example.test");
-        expect(config.socialProviders.google).toEqual({
+        expect(config.socialProviders?.google).toEqual({
             clientId: "google-id",
             clientSecret: "google-secret",
             prompt: "select_account",
@@ -66,6 +77,7 @@ describe("better-auth config", () => {
     test("fails fast when Google client id is missing", async () => {
         await expect(
             importAuthWithEnv({
+                NODE_ENV: "production",
                 BETTER_AUTH_URL: "https://example.test",
                 GOOGLE_CLIENT_ID: undefined,
                 GOOGLE_CLIENT_SECRET: "google-secret",
@@ -76,11 +88,27 @@ describe("better-auth config", () => {
     test("fails fast when Google client secret is missing", async () => {
         await expect(
             importAuthWithEnv({
+                NODE_ENV: "production",
                 BETTER_AUTH_URL: "https://example.test",
                 GOOGLE_CLIENT_ID: "google-id",
                 GOOGLE_CLIENT_SECRET: undefined,
             }),
         ).rejects.toThrow("GOOGLE_CLIENT_SECRET is required");
+    });
+
+    test("uses request-derived local auth URL and disables Google OAuth when credentials are absent", async () => {
+        const config = await importAuthWithEnv({
+            NODE_ENV: "development",
+            BETTER_AUTH_URL: undefined,
+            GOOGLE_CLIENT_ID: undefined,
+            GOOGLE_CLIENT_SECRET: undefined,
+        });
+
+        expect(config.baseURL).toEqual({
+            allowedHosts: ["localhost:*", "127.*:*", "[::1]:*"],
+            protocol: "http",
+        });
+        expect(config.socialProviders).toBeUndefined();
     });
 
     test("enables Better Auth debug logs with AUTH_DEBUG=1", async () => {

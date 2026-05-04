@@ -1,0 +1,115 @@
+# NOTE(delete-neon-preview-branches)
+# ----------------------------
+#
+# On our Neon free plan, we can have a max of 10 preview DB branches.
+#
+# Neon will clean up old branches after Vercel deletes the preview builds,
+# but those are configured to last for 1 or 2 weeks (and can't go much lower than that).
+# Because of this, it is very important that we clean up branches quicker than that
+# to make space for more active development.
+#
+# If/when we pay for a Neon plan, we can:
+# - delete this logic, since the limit will be higher. It should be enough to wait for
+#   the automatic cleanup of preview branches after the 1-2 weeks takes to delete them.
+# - PROTECT THE PRODUCTION DATABASE!
+#
+# This workflow is triggered by:
+# - PRs that are merged (not just closed) and head branch is not main
+# - delete events for any branch (not just a tag) and branch is not main
+#
+# VERY IMPORTANT!
+# - This workflow skips the main git branch
+# - This workflow skips deleting any database other than "preview/*" branches
+#
+# BE CAREFUL! On our free Neon plan, the production database is not protected,
+# so it can be deleted. Which would be very very bad. That is why the checks
+# are extremely defensive here.
+
+name: Delete Neon Preview Branches
+
+on:
+  pull_request:
+    types: [closed]
+    branches-ignore:
+      - main
+  delete:
+    branches-ignore:
+      - main
+
+jobs:
+  delete-preview-branch:
+    # For PR events: only run if PR was merged (not just closed) and head branch is not main
+    # For delete events: only run if it's a branch (not a tag) and branch is not main
+    if: |
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.head.ref != 'main') ||
+      (github.event_name == 'delete' && github.event.ref_type == 'branch' && github.event.ref != 'refs/heads/main')
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get branch name from event
+        id: branch_name
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # For PR events, use the head ref.
+            branch_name="${{ github.event.pull_request.head.ref }}"
+          else
+            # For delete events, extract branch name from ref.
+            # github.event.ref can be either "refs/heads/branch-name" or just "branch-name".
+            branch_name="${{ github.event.ref }}"
+            if [[ "$branch_name" =~ ^refs/heads/ ]]; then
+              branch_name="${branch_name#refs/heads/}"
+            fi
+          fi
+
+          if [ -z "$branch_name" ]; then
+            echo "::error::Branch name is empty"
+            exit 1
+          fi
+
+          echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
+          echo "Detected branch: $branch_name"
+
+      - name: Map Git branch to Neon branch
+        id: branches
+        run: |
+          branch_name="${{ steps.branch_name.outputs.branch_name }}"
+
+          # Maps Git branch names to Neon database branch names.
+          # Same logic as neon-schema-diff.yml, except main is rejected here.
+          map_branch() {
+            local branch_name=$1
+            if [ "$branch_name" == "main" ]; then
+              echo "::error::This workflow should not be triggered on main. It is not safe to delete the database associated with main" >&2
+              exit 1
+            else
+              # The preview DB branch, automatically created by the Vercel-Neon integration for each preview deployment.
+              echo "preview/$branch_name"
+            fi
+          }
+
+          neon_branch=$(map_branch "$branch_name")
+          echo "neon_branch=$neon_branch" >> $GITHUB_OUTPUT
+          echo "git_branch=$branch_name" >> $GITHUB_OUTPUT
+
+      - name: Only preview branches are safe to delete
+        id: check
+        run: |
+          neon_branch="${{ steps.branches.outputs.neon_branch }}"
+          if [[ "$neon_branch" =~ ^preview/ ]]; then
+            echo "is_preview=true" >> $GITHUB_OUTPUT
+            echo "Will delete preview branch: $neon_branch"
+          else
+            echo "::error::Only preview branches (preview/*) are safe to delete. Refusing to delete: $neon_branch"
+            echo "is_preview=false" >> $GITHUB_OUTPUT
+            echo "Skipping deletion of non-preview branch: $neon_branch"
+            exit 1
+          fi
+
+      - name: Delete Neon Preview Branch
+        if: steps.check.outputs.is_preview == 'true'
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: ${{ steps.branches.outputs.neon_branch }}
+          api_key: ${{ secrets.NEON_API_KEY }}
