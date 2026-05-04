@@ -91,7 +91,7 @@
 		"@effect/language-service": "0.85.1",
 		"@effect/vitest": "4.0.0-beta.59",
 		"@serwist/cli": "9.5.11",
-		"@serwist/next": "9.5.10",
+		"@serwist/next": "9.5.11",
 		"@tailwindcss/postcss": "4.2.4",
 		"@tanstack/react-query-devtools": "5.100.8",
 		"@testing-library/jest-dom": "6.9.1",
