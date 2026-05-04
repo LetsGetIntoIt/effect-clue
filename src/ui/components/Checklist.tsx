@@ -1,6 +1,6 @@
 "use client";
 
-import { Equal, Result } from "effect";
+import { Duration, Equal, Result } from "effect";
 import { useTranslations } from "next-intl";
 import { playerAdded, whyTooltipOpened } from "../../analytics/events";
 import {
@@ -55,7 +55,7 @@ import {
     rememberChecklistCell,
 } from "../checklistFocus";
 import { label, matches, shortcutSuffix } from "../keyMap";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, type Transition } from "motion/react";
 import {
     T_CELEBRATE,
     T_FAST,
@@ -286,61 +286,129 @@ export function Checklist() {
         maxCol: totalCols - 1,
     };
 
-    // Expand-in animation for newly added Checklist rows (cards,
-    // categories) and columns (players). Each cell content is
-    // wrapped in a `<motion.div>` keyed by entry id inside its own
-    // per-cell `<AnimatePresence>`. The motion.div animates
-    // `maxHeight` / `maxWidth` from 0 to a generous cap (plus
-    // opacity) so the row visually grows into place rather than
-    // blinking in.
-    //
-    // Notes on the design:
-    //
-    //  - **`cellAnimateInitial` flag**: defaults `false` and flips
-    //    `true` a tick after mount. With `initial={false}` on first
-    //    paint, the post-hydration state from localStorage doesn't
-    //    shimmer in. Once the flag flips, AnimatePresence instances
-    //    created *after* mount (inside a brand-new card / category
-    //    / player row) mount with `initial=true` and run the entry
-    //    animation.
-    //
-    //  - **No `<motion.tr>` / `<motion.th>`**: those components,
-    //    when placed inside `<AnimatePresence>`, wrap the row/cell
-    //    in `<PopChild>` / `<PopChildMeasure>` helpers that
-    //    swallowed click events on the row's own buttons in this
-    //    codebase (e.g. `Remove Miss Scarlet` × stopped firing).
-    //    Animating cell content via `<motion.div>` inside the cell
-    //    avoids that.
-    //
-    //  - **`maxHeight` / `maxWidth` rather than `height/width:
-    //    auto`**: Framer Motion v12's `auto` keyword measurement
-    //    is unreliable inside table cells — newly-mounted rows
-    //    would stay stuck at `height: 0`. `max-*` doesn't need
-    //    measurement: the cell takes its natural size up to the
-    //    cap, so a generous cap (200px) gives a real expand-in.
-    //
-    //  - **No exit animation**: the `<AnimatePresence>` lives
-    //    *inside* each row's `<th>` cell, so when dispatch removes
-    //    the row the `<tr>` and its descendants (including the
-    //    AnimatePresence) all unmount synchronously. Framer's exit
-    //    lifecycle needs the AnimatePresence to stay in the DOM
-    //    during the exit, which would require `<motion.tr>` direct
-    //    children of an outer AnimatePresence — and that breaks
-    //    click dispatch in this codebase. Removes therefore snap
-    //    cleanly; we accept the trade-off for reliable dispatches.
-    //
-    // Honors `prefers-reduced-motion` via `useReducedTransition`.
-    // Use 220ms (slower than the 120ms `T_FAST` we use for value
-    // glyph swaps) so the expand reads as deliberate motion. At
-    // 120ms the change scans as a flicker rather than an animation.
-    const cellEntryTransition = useReducedTransition({ duration: 0.22 });
-    const [cellAnimateInitial, setCellAnimateInitial] = useState(false);
-    useEffect(() => {
-        const id = window.setTimeout(() => {
-            setCellAnimateInitial(true);
-        }, 0);
-        return () => window.clearTimeout(id);
-    }, []);
+    const playerColumnKeys = useStablePlayerColumnKeys(setup.players);
+    const tableEntryTransition = useReducedTransition(TABLE_ENTRY_TRANSITION);
+    const tableRowEntryTransition = useReducedTransition(
+        TABLE_ROW_ENTRY_TRANSITION,
+    );
+    const tableCollapseTransition = useReducedTransition(
+        TABLE_COLLAPSE_TRANSITION,
+    );
+    const tableDangerTransition = useReducedTransition(
+        TABLE_DANGER_TRANSITION,
+        { fadeMs: TABLE_REDUCED_DANGER_FADE_MS },
+    );
+    const tableExitFadeSeconds =
+        typeof tableDangerTransition.duration === "number"
+            ? tableDangerTransition.duration
+            : TABLE_DANGER_FADE_SECONDS;
+    const tableExitRedSeconds =
+        tableExitFadeSeconds + TABLE_DANGER_HOLD_SECONDS;
+    const tableExitCollapseSeconds =
+        typeof tableCollapseTransition.duration === "number"
+            ? tableCollapseTransition.duration
+            : Duration.toSeconds(TABLE_COLLAPSE_DURATION);
+    const tableExitTotalSeconds =
+        tableExitRedSeconds + tableExitCollapseSeconds;
+    const tableExitRedRatio =
+        tableExitTotalSeconds === 0
+            ? 1
+            : tableExitRedSeconds / tableExitTotalSeconds;
+    const rowExit = {
+        maxHeight: [CELL_EXPAND_CAP_PX, CELL_EXPAND_CAP_PX, 0],
+        opacity: 1,
+        backgroundColor: CSS_DANGER,
+        color: CSS_WHITE,
+        transition: {
+            maxHeight: {
+                duration: tableExitTotalSeconds,
+                times: [0, tableExitRedRatio, 1],
+                ease: TABLE_EASE,
+            },
+            backgroundColor: tableDangerTransition,
+            color: tableDangerTransition,
+        },
+    };
+    const columnExit = {
+        ...TABLE_COLUMN_HIDDEN,
+        opacity: 1,
+        transition: {
+            ...tableCollapseTransition,
+            delay: tableExitRedSeconds,
+        },
+    } as const;
+    const cellExitTone = {
+        backgroundColor: CSS_DANGER,
+        color: CSS_WHITE,
+        transition: {
+            backgroundColor: tableDangerTransition,
+            color: tableDangerTransition,
+        },
+    } as const;
+    const columnCellExit = {
+        maxWidth: 0,
+        opacity: 1,
+        backgroundColor: CSS_DANGER,
+        color: CSS_WHITE,
+        transition: {
+            maxWidth: {
+                ...tableCollapseTransition,
+                delay: tableExitRedSeconds,
+            },
+            backgroundColor: tableDangerTransition,
+            color: tableDangerTransition,
+        },
+    } as const;
+    const rowPresenceExit = {
+        opacity: 1,
+        transition: { duration: tableExitTotalSeconds },
+    } as const;
+    const tableRowMotionProps = {
+        exit: rowPresenceExit,
+    } as const;
+    const renderDimensionReveal = (
+        axis: TableAnimationAxis,
+        children: ReactNode,
+        className?: string,
+        transition: Transition = axis === TABLE_AXIS_ROW
+            ? tableRowEntryTransition
+            : tableEntryTransition,
+    ) => (
+        <motion.div
+            className={className}
+            initial={
+                axis === TABLE_AXIS_ROW ? TABLE_ROW_HIDDEN : TABLE_COLUMN_HIDDEN
+            }
+            animate={
+                axis === TABLE_AXIS_ROW
+                    ? TABLE_ROW_VISIBLE
+                    : TABLE_COLUMN_VISIBLE
+            }
+            exit={axis === TABLE_AXIS_ROW ? rowExit : columnExit}
+            transition={transition}
+            style={STYLE_OVERFLOW_HIDDEN}
+        >
+            {children}
+        </motion.div>
+    );
+    const renderRowReveal = (
+        children: ReactNode,
+        className?: string,
+        transition?: Transition,
+    ) => (
+        renderDimensionReveal(TABLE_AXIS_ROW, children, className, transition)
+    );
+    const renderColumnReveal = (children: ReactNode, className?: string) => (
+        renderDimensionReveal(TABLE_AXIS_COLUMN, children, className)
+    );
+    const renderTableCellContent = (children: ReactNode) =>
+        renderColumnReveal(
+            renderRowReveal(
+                <div className={CELL_CONTENT}>{children}</div>,
+                undefined,
+                tableEntryTransition,
+            ),
+        );
 
     // Handle ⌘J / ⌘H focus requests: locate a cell by (row,col) and
     // focus it. "first" falls back to the first interactive cell.
@@ -409,34 +477,51 @@ export function Checklist() {
     // column; Play mode skips the cell entirely (unchanged column
     // count).
     const addPlayerHeaderCell = (
-        <th
-            key="add-player-col"
-            className="w-px whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-center"
+        <motion.th
+            key={ADD_PLAYER_COLUMN_KEY}
+            className="w-px overflow-hidden whitespace-nowrap border-r border-b border-border bg-row-header p-0 text-center"
+            initial={TABLE_COLUMN_HIDDEN}
+            animate={TABLE_COLUMN_VISIBLE}
+            exit={columnCellExit}
+            transition={tableEntryTransition}
             // The setup tour's "Add players" step highlights the
             // entire header row of player cells, including the
             // "+ Player" affordance, so the user can see all the
             // ways they manage the player set in one spotlight.
             data-tour-anchor="setup-player-column"
         >
-            <button
-                type="button"
-                className="cursor-pointer whitespace-nowrap rounded border-none bg-accent px-2 py-1 text-[12px] font-semibold leading-none text-white hover:bg-accent-hover"
-                title={tSetup("addPlayerTitle")}
-                onClick={() => {
-                    const position = state.setup.players.length;
-                    dispatch({ type: "addPlayer" });
-                    playerAdded({
-                        playerCount: position + 1,
-                        position,
-                    });
-                }}
-            >
-                {tSetup("addPlayerLabel")}
-            </button>
-        </th>
+            {renderColumnReveal(
+                <div className="px-1.5 py-1">
+                    <button
+                        type="button"
+                        className="cursor-pointer whitespace-nowrap rounded border-none bg-accent px-2 py-1 text-[12px] font-semibold leading-none text-white hover:bg-accent-hover"
+                        title={tSetup("addPlayerTitle")}
+                        onClick={() => {
+                            const position = state.setup.players.length;
+                            dispatch({ type: "addPlayer" });
+                            playerAdded({
+                                playerCount: position + 1,
+                                position,
+                            });
+                        }}
+                    >
+                        {tSetup("addPlayerLabel")}
+                    </button>
+                </div>,
+            )}
+        </motion.th>
     );
     const addPlayerEmptyCell = (
-        <td key="add-player-col" className="border-r border-b border-border" />
+        <motion.td
+            key={ADD_PLAYER_COLUMN_KEY}
+            className="overflow-hidden border-r border-b border-border"
+            initial={TABLE_COLUMN_HIDDEN}
+            animate={TABLE_COLUMN_VISIBLE}
+            exit={columnCellExit}
+            transition={tableEntryTransition}
+        >
+            {renderColumnReveal(<div className="h-7 w-0" />)}
+        </motion.td>
     );
 
     const handSizeMap = new Map(state.handSizes);
@@ -620,6 +705,7 @@ export function Checklist() {
                         <th className="border-r border-b border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted">
                             {inSetup || !hasKeyboard ? null : label("global.gotoChecklist")}
                         </th>
+                        <AnimatePresence initial={false} mode={MOTION_SYNC}>
                         {owners.flatMap((owner, ownerIdx) => {
                             // Setup-tour anchors for player header cells:
                             //   - `setup-player-column` (every player
@@ -644,19 +730,17 @@ export function Checklist() {
                                       }
                                     : {};
                             const cell = (
-                                <th
-                                    key={ownerKey(owner)}
-                                    className="border-r border-b border-border bg-row-header px-2 py-1 text-center align-top font-semibold"
+                                <motion.th
+                                    key={ownerKey(owner, playerColumnKeys)}
+                                    className="overflow-hidden border-r border-b border-border bg-row-header p-0 text-center align-top font-semibold"
+                                    initial={TABLE_COLUMN_HIDDEN}
+                                    animate={TABLE_COLUMN_VISIBLE}
+                                    exit={columnCellExit}
+                                    transition={tableEntryTransition}
                                     {...playerHeaderAnchor}
                                 >
-                                    <AnimatePresence>
-                                        <motion.div
-                                            key={ownerKey(owner)}
-                                            initial={cellAnimateInitial ? ANIM_HIDDEN_COL : false}
-                                            animate={ANIM_VISIBLE_COL}
-                                            transition={cellEntryTransition}
-                                            style={STYLE_OVERFLOW_HIDDEN}
-                                        >
+                                    {renderColumnReveal(
+                                        <div className="px-2 py-1">
                                             {inSetup && owner._tag === "Player" ? (
                                                 <PlayerNameInput
                                                     player={owner.player}
@@ -667,14 +751,15 @@ export function Checklist() {
                                             ) : (
                                                 ownerLabel(owner)
                                             )}
-                                        </motion.div>
-                                    </AnimatePresence>
-                                </th>
+                                        </div>,
+                                    )}
+                                </motion.th>
                             );
                             return inSetup && owner._tag === "CaseFile"
                                 ? [addPlayerHeaderCell, cell]
                                 : [cell];
                         })}
+                        </AnimatePresence>
                     </tr>
                     {inSetup && (
                         <tr>
@@ -688,14 +773,21 @@ export function Checklist() {
                             >
                                 {tSetup("handSize")}
                             </th>
+                            <AnimatePresence initial={false} mode={MOTION_SYNC}>
                             {owners.flatMap((owner, ownerIdx) => {
                                 let cell: ReactNode;
                                 if (owner._tag !== "Player") {
                                     cell = (
-                                        <td
-                                            key={ownerKey(owner)}
-                                            className="border-r border-b border-border"
-                                        />
+                                        <motion.td
+                                            key={ownerKey(owner, playerColumnKeys)}
+                                            className="overflow-hidden border-r border-b border-border"
+                                            initial={TABLE_COLUMN_HIDDEN}
+                                            animate={TABLE_COLUMN_VISIBLE}
+                                            exit={columnCellExit}
+                                            transition={tableEntryTransition}
+                                        >
+                                            {renderColumnReveal(<div className="h-7 w-0" />)}
+                                        </motion.td>
                                     );
                                 } else {
                                     const current = handSizeMap.get(owner.player);
@@ -706,82 +798,87 @@ export function Checklist() {
                                     // just one cell. The TourPopover unions
                                     // the matched rects.
                                     cell = (
-                                        <td
-                                            key={ownerKey(owner)}
-                                            className="border-r border-b border-border px-1.5 py-1 text-center"
+                                        <motion.td
+                                            key={ownerKey(owner, playerColumnKeys)}
+                                            className="overflow-hidden border-r border-b border-border p-0 text-center"
+                                            initial={TABLE_COLUMN_HIDDEN}
+                                            animate={TABLE_COLUMN_VISIBLE}
+                                            exit={columnCellExit}
+                                            transition={tableEntryTransition}
                                             data-tour-anchor="setup-hand-size"
                                         >
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                max={allCardIds(setup).length}
-                                                className="w-14 rounded border border-border p-0.5 text-center text-[12px]"
-                                                value={
-                                                    current === undefined
-                                                        ? ""
-                                                        : String(current)
-                                                }
-                                                placeholder={
-                                                    def === undefined
-                                                        ? ""
-                                                        : String(def)
-                                                }
-                                                data-cell-row={-1}
-                                                data-cell-col={ownerIdx}
-                                                onFocus={() =>
-                                                    rememberChecklistCell(
-                                                        -1,
-                                                        ownerIdx,
-                                                    )
-                                                }
-                                                onKeyDown={e =>
-                                                    navigateGrid(
-                                                        e,
-                                                        -1,
-                                                        ownerIdx,
-                                                        bounds,
-                                                        { isTextInput: true },
-                                                    )
-                                                }
-                                                onChange={e =>
-                                                    onHandSizeChange(
-                                                        owner.player,
-                                                        e.currentTarget.value,
-                                                    )
-                                                }
-                                            />
-                                        </td>
+                                            {renderColumnReveal(
+                                                <div className="px-1.5 py-1">
+                                                    <input
+                                                        type="number"
+                                                        min={0}
+                                                        max={allCardIds(setup).length}
+                                                        className="w-14 rounded border border-border p-0.5 text-center text-[12px]"
+                                                        value={
+                                                            current === undefined
+                                                                ? ""
+                                                                : String(current)
+                                                        }
+                                                        placeholder={
+                                                            def === undefined
+                                                                ? ""
+                                                                : String(def)
+                                                        }
+                                                        data-cell-row={-1}
+                                                        data-cell-col={ownerIdx}
+                                                        onFocus={() =>
+                                                            rememberChecklistCell(
+                                                                -1,
+                                                                ownerIdx,
+                                                            )
+                                                        }
+                                                        onKeyDown={e =>
+                                                            navigateGrid(
+                                                                e,
+                                                                -1,
+                                                                ownerIdx,
+                                                                bounds,
+                                                                { isTextInput: true },
+                                                            )
+                                                        }
+                                                        onChange={e =>
+                                                            onHandSizeChange(
+                                                                owner.player,
+                                                                e.currentTarget.value,
+                                                            )
+                                                        }
+                                                    />
+                                                </div>,
+                                            )}
+                                        </motion.td>
                                     );
                                 }
                                 return inSetup && owner._tag === "CaseFile"
                                     ? [addPlayerEmptyCell, cell]
                                     : [cell];
                             })}
+                            </AnimatePresence>
                         </tr>
                     )}
                 </thead>
                 <tbody>
+                    <AnimatePresence initial={false} mode={MOTION_SYNC}>
                     {setup.categories.flatMap(category => {
                         const canRemoveCategory = setup.categories.length > 1;
                         const canRemoveCard = category.cards.length > 1;
                         return [
-                            <tr
+                            <motion.tr
                                 key={`h-${String(category.id)}`}
-                                                            >
-                                <th
+                                {...tableRowMotionProps}
+                            >
+                                <motion.th
                                     colSpan={cardSpan}
-                                    className="border-r border-b border-border bg-category-header px-2 py-1.5 text-left text-[11px] uppercase tracking-[0.05em] text-white"
+                                    className="overflow-hidden border-r border-b border-border bg-category-header p-0 text-left text-[11px] uppercase tracking-[0.05em] text-white"
+                                    exit={cellExitTone}
                                 >
-                                    {inSetup ? (
-                                        <AnimatePresence>
-                                        <motion.div
-                                            key={`cat-${String(category.id)}`}
-                                            className="flex items-center justify-between gap-2"
-                                            initial={cellAnimateInitial ? ANIM_HIDDEN_ROW : false}
-                                            animate={ANIM_VISIBLE_ROW}
-                                            transition={cellEntryTransition}
-                                            style={STYLE_OVERFLOW_HIDDEN}
-                                            >
+                                    {renderRowReveal(
+                                        inSetup ? (
+                                            <div className="flex items-center justify-between gap-2 px-2 py-1.5">
                                             <InlineTextEdit
                                                 value={category.name}
                                                 className="min-w-0 flex-1 rounded border border-white/30 bg-transparent px-1 py-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-white focus:bg-white/10 focus:outline-none"
@@ -843,31 +940,30 @@ export function Checklist() {
                                             >
                                                 &times;
                                             </button>
-                                        </motion.div>
-                                        </AnimatePresence>
-                                    ) : (
-                                        category.name
+                                            </div>
+                                        ) : (
+                                            <div className="px-2 py-1.5">
+                                                {category.name}
+                                            </div>
+                                        ),
                                     )}
-                                </th>
-                            </tr>,
+                                </motion.th>
+                            </motion.tr>,
                             ...category.cards.map(entry => {
                                 const cardRowIdx =
                                     rowIdxByCard.get(entry.id) ?? -1;
                                 return (
-                                <tr
+                                <motion.tr
                                     key={String(entry.id)}
+                                    {...tableRowMotionProps}
                                 >
-                                    <th className="w-px whitespace-nowrap border-r border-b border-border px-2 py-1 text-left font-normal">
-                                        {inSetup ? (
-                                            <AnimatePresence>
-                                            <motion.div
-                                                key={String(entry.id)}
-                                                className="flex items-center justify-between gap-2"
-                                                initial={cellAnimateInitial ? ANIM_HIDDEN_ROW : false}
-                                                animate={ANIM_VISIBLE_ROW}
-                                                transition={cellEntryTransition}
-                                                style={STYLE_OVERFLOW_HIDDEN}
-                                                >
+                                    <motion.th
+                                        className="w-px overflow-hidden whitespace-nowrap border-r border-b border-border p-0 text-left font-normal"
+                                        exit={cellExitTone}
+                                    >
+                                        {renderRowReveal(
+                                            inSetup ? (
+                                                <div className="flex items-center justify-between gap-2 px-2 py-1">
                                                 <InlineTextEdit
                                                     value={entry.name}
                                                     className="min-w-0 flex-1 rounded border border-border/60 bg-transparent px-1 py-0.5 text-[12px] focus:border-accent focus:outline-none"
@@ -928,12 +1024,19 @@ export function Checklist() {
                                                 >
                                                     &times;
                                                 </button>
-                                            </motion.div>
-                                            </AnimatePresence>
-                                        ) : (
-                                            entry.name
+                                                </div>
+                                            ) : (
+                                                <div className="px-2 py-1">
+                                                    {entry.name}
+                                                </div>
+                                            ),
                                         )}
-                                    </th>
+                                    </motion.th>
+                                    <AnimatePresence
+                                        initial={false}
+                                        mode={MOTION_SYNC}
+                                        propagate
+                                    >
                                     {owners.flatMap((owner, colIdx) => {
                                         const rowIdx =
                                             rowIdxByCard.get(entry.id) ?? -1;
@@ -1130,6 +1233,7 @@ export function Checklist() {
                                                           anchorTokens.join(" "),
                                                   }
                                                 : undefined;
+                                        const ownerCellKey = `${ownerKey(owner, playerColumnKeys)}-${String(entry.id)}`;
                                         let cell: ReactNode;
                                         if (setupInteractive) {
                                             const ariaLabel = tSetup(
@@ -1144,9 +1248,11 @@ export function Checklist() {
                                                 },
                                             );
                                             cell = (
-                                                <td
-                                                    key={`${ownerKey(owner)}-${String(entry.id)}`}
+                                                <motion.td
+                                                    key={ownerCellKey}
                                                     className={tdClassName}
+                                                    exit={columnCellExit}
+                                                    style={STYLE_COLUMN_CELL_VISIBLE}
                                                     role="button"
                                                     tabIndex={0}
                                                     aria-pressed={isKnownY}
@@ -1179,8 +1285,8 @@ export function Checklist() {
                                                     }}
                                                     {...hoverHandlers}
                                                 >
-                                                    {cellContent}
-                                                </td>
+                                                    {renderTableCellContent(cellContent)}
+                                                </motion.td>
                                             );
                                         } else if (popoverInteractive) {
                                             // Either:
@@ -1215,7 +1321,7 @@ export function Checklist() {
                                             );
                                             cell = (
                                                 <InfoPopover
-                                                    key={`${ownerKey(owner)}-${String(entry.id)}`}
+                                                    key={ownerCellKey}
                                                     content={tooltipContent}
                                                     variant="accent"
                                                     open={isOpen}
@@ -1242,11 +1348,13 @@ export function Checklist() {
                                                         }
                                                     }}
                                                 >
-                                                    <td
+                                                    <motion.td
                                                         className={tdClassName}
+                                                        exit={columnCellExit}
+                                                        style={STYLE_COLUMN_CELL_VISIBLE}
                                                         role="button"
                                                         tabIndex={0}
-                                                        aria-haspopup="dialog"
+                                                        aria-haspopup={ARIA_HASPOPUP_DIALOG}
                                                         data-cell-row={rowIdx}
                                                         data-cell-col={colIdx}
                                                         {...firstCellAnchorAttr}
@@ -1270,8 +1378,8 @@ export function Checklist() {
                                                         }}
                                                         {...hoverHandlers}
                                                     >
-                                                        {cellContent}
-                                                    </td>
+                                                        {renderTableCellContent(cellContent)}
+                                                    </motion.td>
                                                 </InfoPopover>
                                             );
                                         } else if (isPlayerCell) {
@@ -1281,9 +1389,11 @@ export function Checklist() {
                                             // arrow navigation doesn't skip
                                             // blank cells.
                                             cell = (
-                                                <td
-                                                    key={`${ownerKey(owner)}-${String(entry.id)}`}
+                                                <motion.td
+                                                    key={ownerCellKey}
                                                     className={tdClassName}
+                                                    exit={columnCellExit}
+                                                    style={STYLE_COLUMN_CELL_VISIBLE}
                                                     tabIndex={0}
                                                     data-cell-row={rowIdx}
                                                     data-cell-col={colIdx}
@@ -1292,79 +1402,98 @@ export function Checklist() {
                                                     onKeyDown={onGridArrowKey}
                                                     {...hoverHandlers}
                                                 >
-                                                    {cellContent}
-                                                </td>
+                                                    {renderTableCellContent(cellContent)}
+                                                </motion.td>
                                             );
                                         } else {
                                             cell = (
-                                                <td
-                                                    key={`${ownerKey(owner)}-${String(entry.id)}`}
+                                                <motion.td
+                                                    key={ownerCellKey}
                                                     className={tdClassName}
+                                                    exit={columnCellExit}
+                                                    style={STYLE_COLUMN_CELL_VISIBLE}
                                                     {...firstCellAnchorAttr}
                                                     {...hoverHandlers}
                                                 >
-                                                    {cellContent}
-                                                </td>
+                                                    {renderTableCellContent(cellContent)}
+                                                </motion.td>
                                             );
                                         }
                                         const emptyCell = (
-                                            <td
-                                                key={`add-player-col-${String(entry.id)}`}
-                                                className="border-r border-b border-border"
-                                            />
+                                            <motion.td
+                                                key={`${ADD_PLAYER_COLUMN_KEY}-${String(entry.id)}`}
+                                                className="overflow-hidden border-r border-b border-border"
+                                                exit={columnCellExit}
+                                                style={STYLE_COLUMN_CELL_VISIBLE}
+                                            >
+                                                {renderTableCellContent(null)}
+                                            </motion.td>
                                         );
                                         return inSetup && owner._tag === "CaseFile"
                                             ? [emptyCell, cell]
                                             : [cell];
                                     })}
-                                </tr>
+                                    </AnimatePresence>
+                                </motion.tr>
                                 );
                             }),
                             ...(inSetup
                                 ? [
-                                      <tr
+                                      <motion.tr
                                           key={`add-card-${String(category.id)}`}
-                                                                                >
-                                          <th
+                                          {...tableRowMotionProps}
+                                      >
+                                          <motion.th
                                               colSpan={cardSpan}
-                                              className="border-r border-b border-border bg-row-alt px-1.5 py-1 text-left"
+                                              className="overflow-hidden border-r border-b border-border bg-row-alt p-0 text-left"
+                                              exit={cellExitTone}
                                           >
-                                              <button
-                                                  type="button"
-                                                  className="cursor-pointer border-none bg-transparent p-0 text-[12px] text-accent underline"
-                                                  onClick={() =>
-                                                      dispatch({
-                                                          type: "addCardToCategoryById",
-                                                          categoryId: category.id,
-                                                      })
-                                                  }
-                                              >
-                                                  {tSetup("addCard")}
-                                              </button>
-                                          </th>
-                                      </tr>,
+                                              {renderRowReveal(
+                                                  <div className="px-1.5 py-1">
+                                                      <button
+                                                          type="button"
+                                                          className="cursor-pointer border-none bg-transparent p-0 text-[12px] text-accent underline"
+                                                          onClick={() =>
+                                                              dispatch({
+                                                                  type: "addCardToCategoryById",
+                                                                  categoryId: category.id,
+                                                              })
+                                                          }
+                                                      >
+                                                          {tSetup("addCard")}
+                                                      </button>
+                                                  </div>,
+                                              )}
+                                          </motion.th>
+                                      </motion.tr>,
                                   ]
                                 : []),
                         ];
                     })}
                     {inSetup && (
-                        <tr>
-                            <th
+                        <motion.tr key="add-category" {...tableRowMotionProps}>
+                            <motion.th
                                 colSpan={cardSpan}
-                                className="border-r border-b border-border bg-row-alt px-1.5 py-2 text-left"
+                                className="overflow-hidden border-r border-b border-border bg-row-alt p-0 text-left"
+                                exit={cellExitTone}
                             >
-                                <button
-                                    type="button"
-                                    className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-hover"
-                                    onClick={() =>
-                                        dispatch({ type: "addCategory" })
-                                    }
-                                >
-                                    {tSetup("addCategory")}
-                                </button>
-                            </th>
-                        </tr>
+                                {renderRowReveal(
+                                    <div className="px-1.5 py-2">
+                                        <button
+                                            type="button"
+                                            className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-hover"
+                                            onClick={() =>
+                                                dispatch({ type: "addCategory" })
+                                            }
+                                        >
+                                            {tSetup("addCategory")}
+                                        </button>
+                                    </div>,
+                                )}
+                            </motion.th>
+                        </motion.tr>
                     )}
+                    </AnimatePresence>
                 </tbody>
             </table>
             </div>
@@ -1802,25 +1931,48 @@ const CSS_ACCENT = "var(--color-accent)";
 const CSS_BORDER = "var(--color-border)";
 const CSS_WHITE = "#ffffff";
 const CSS_INK = "#2a1f12";
+const CSS_DANGER = "var(--color-danger)";
+const ARIA_HASPOPUP_DIALOG = "dialog";
+const MOTION_SYNC: "sync" = "sync";
 const MOTION_WAIT: "wait" = "wait";
 const MOTION_POP_LAYOUT: "popLayout" = "popLayout";
-// Animation target values for the cell-content expand/collapse. Pulled
-// out so the i18next/no-literal-string rule treats them as wire-format
-// CSS keywords rather than user-facing copy.
-// Animate `maxHeight` / `maxWidth` from 0 to a generous cap rather
-// than `height/width: auto`. Framer Motion v12's `auto` keyword
-// measurement is unreliable inside table cells — newly-mounted
-// rows would stay stuck at `height: 0`. `max-height` / `max-width`
-// don't have that measurement step: the cell takes its natural
-// size up to the cap, so the cap just needs to be larger than any
-// row / column will ever be. Combined with `overflow: hidden` on
-// the wrapper this gives a clean expand-in.
+const TABLE_AXIS_ROW = "row";
+const TABLE_AXIS_COLUMN = "column";
+type TableAnimationAxis = typeof TABLE_AXIS_ROW | typeof TABLE_AXIS_COLUMN;
 const CELL_EXPAND_CAP_PX = 200;
-const ANIM_HIDDEN_ROW = { maxHeight: 0, opacity: 0 } as const;
-const ANIM_VISIBLE_ROW = { maxHeight: CELL_EXPAND_CAP_PX, opacity: 1 } as const;
-const ANIM_HIDDEN_COL = { maxWidth: 0, opacity: 0 } as const;
-const ANIM_VISIBLE_COL = { maxWidth: CELL_EXPAND_CAP_PX, opacity: 1 } as const;
+const TABLE_ENTRY_DURATION = Duration.millis(220);
+const TABLE_ROW_ENTRY_DURATION = Duration.millis(300);
+const TABLE_DANGER_FADE_DURATION = Duration.millis(120);
+const TABLE_DANGER_HOLD_DURATION = Duration.millis(240);
+const TABLE_COLLAPSE_DURATION = Duration.millis(180);
+const TABLE_REDUCED_DANGER_FADE_MS = Duration.toMillis(
+    Duration.millis(80),
+);
+const TABLE_DANGER_FADE_SECONDS = Duration.toSeconds(TABLE_DANGER_FADE_DURATION);
+const TABLE_DANGER_HOLD_SECONDS = Duration.toSeconds(TABLE_DANGER_HOLD_DURATION);
+const TABLE_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+const TABLE_ENTRY_TRANSITION: Transition = {
+    duration: Duration.toSeconds(TABLE_ENTRY_DURATION),
+    ease: TABLE_EASE,
+};
+const TABLE_ROW_ENTRY_TRANSITION: Transition = {
+    duration: Duration.toSeconds(TABLE_ROW_ENTRY_DURATION),
+    ease: TABLE_EASE,
+};
+const TABLE_DANGER_TRANSITION: Transition = {
+    duration: Duration.toSeconds(TABLE_DANGER_FADE_DURATION),
+    ease: "easeOut",
+};
+const TABLE_COLLAPSE_TRANSITION: Transition = {
+    duration: Duration.toSeconds(TABLE_COLLAPSE_DURATION),
+    ease: TABLE_EASE,
+};
+const TABLE_ROW_HIDDEN = { maxHeight: 0, opacity: 0 } as const;
+const TABLE_ROW_VISIBLE = { maxHeight: CELL_EXPAND_CAP_PX, opacity: 1 } as const;
+const TABLE_COLUMN_HIDDEN = { maxWidth: 0, opacity: 0 } as const;
+const TABLE_COLUMN_VISIBLE = { maxWidth: CELL_EXPAND_CAP_PX, opacity: 1 } as const;
 const STYLE_OVERFLOW_HIDDEN = { overflow: "hidden" } as const;
+const STYLE_COLUMN_CELL_VISIBLE = { maxWidth: CELL_EXPAND_CAP_PX } as const;
 
 function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
     const t = useTranslations("deduce");
@@ -2019,8 +2171,62 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
     );
 }
 
-const ownerKey = (owner: Owner): string =>
-    owner._tag === "Player" ? `p-${owner.player}` : "case-file";
+const ownerKey = (
+    owner: Owner,
+    playerColumnKeys?: ReadonlyMap<Player, string>,
+): string =>
+    owner._tag === "Player"
+        ? (playerColumnKeys?.get(owner.player) ?? `p-${String(owner.player)}`)
+        : "case-file";
+
+interface PlayerColumnKeyEntry {
+    readonly player: Player;
+    readonly key: string;
+}
+
+function useStablePlayerColumnKeys(
+    players: ReadonlyArray<Player>,
+): ReadonlyMap<Player, string> {
+    const previousRef = useRef<ReadonlyArray<PlayerColumnKeyEntry>>([]);
+    const nextIdRef = useRef(0);
+    return useMemo(() => {
+        const previous = previousRef.current;
+        const unusedByName = new Map<string, Array<PlayerColumnKeyEntry>>();
+        for (const entry of previous) {
+            const name = String(entry.player);
+            const bucket = unusedByName.get(name) ?? [];
+            bucket.push(entry);
+            unusedByName.set(name, bucket);
+        }
+
+        const claimedKeys = new Set<string>();
+        const next = players.map((player, index): PlayerColumnKeyEntry => {
+            const name = String(player);
+            const exact = unusedByName.get(name)?.shift();
+            if (exact) {
+                claimedKeys.add(exact.key);
+                return { player, key: exact.key };
+            }
+
+            const previousAtIndex = previous[index];
+            if (
+                previousAtIndex !== undefined &&
+                !claimedKeys.has(previousAtIndex.key)
+            ) {
+                claimedKeys.add(previousAtIndex.key);
+                return { player, key: previousAtIndex.key };
+            }
+
+            const key = `player-col-${nextIdRef.current}`;
+            nextIdRef.current += 1;
+            claimedKeys.add(key);
+            return { player, key };
+        });
+
+        previousRef.current = next;
+        return new Map(next.map(entry => [entry.player, entry.key] as const));
+    }, [players]);
+}
 
 const cellLabel = (value: CellValue | undefined): string => {
     if (value === Y) return "✓";
@@ -2057,8 +2263,11 @@ function AnimatedCellGlyph({ value }: { readonly value: CellValue | undefined })
     );
 }
 
+const ADD_PLAYER_COLUMN_KEY = "add-player-col";
 const CELL_BASE =
-    "w-9 min-w-9 border-r border-b border-border px-2 py-1 text-center font-semibold relative";
+    "border-r border-b border-border text-center font-semibold relative overflow-hidden";
+const CELL_CONTENT =
+    "flex h-full w-9 min-w-9 items-center justify-center px-2 py-1";
 
 // Z-index ladder for the checklist:
 //   - sticky <thead>            : z-20 (anchored at top during scroll)
