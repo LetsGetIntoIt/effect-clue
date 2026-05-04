@@ -18,31 +18,36 @@ vi.mock("next-intl", () => {
 });
 
 vi.mock("motion/react", () => {
+    const motionCache: Record<string, React.ComponentType<unknown>> = {};
     const motion = new Proxy(
         {},
         {
-            get: (_t, tag: string) =>
-                forwardRef(
-                    (
-                        props: Record<string, unknown>,
-                        ref: React.Ref<HTMLElement>,
-                    ) => {
-                        const {
-                            layout: _layout,
-                            layoutId: _layoutId,
-                            initial: _initial,
-                            animate: _animate,
-                            exit: _exit,
-                            transition: _transition,
-                            variants: _variants,
-                            custom: _custom,
-                            whileHover: _whileHover,
-                            whileTap: _whileTap,
-                            ...rest
-                        } = props;
-                        return createElement(tag, { ...rest, ref });
-                    },
-                ),
+            get: (_t, tag: string) => {
+                if (motionCache[tag] === undefined) {
+                    motionCache[tag] = forwardRef(
+                        (
+                            props: Record<string, unknown>,
+                            ref: React.Ref<HTMLElement>,
+                        ) => {
+                            const {
+                                layout: _layout,
+                                layoutId: _layoutId,
+                                initial: _initial,
+                                animate: _animate,
+                                exit: _exit,
+                                transition: _transition,
+                                variants: _variants,
+                                custom: _custom,
+                                whileHover: _whileHover,
+                                whileTap: _whileTap,
+                                ...rest
+                            } = props;
+                            return createElement(tag, { ...rest, ref });
+                        },
+                    ) as React.ComponentType<unknown>;
+                }
+                return motionCache[tag];
+            },
         },
     );
     return {
@@ -164,6 +169,101 @@ describe("Checklist — setup mode — category / card editable labels", () => {
     });
 });
 
+describe("Checklist — setup mode — table animation identity", () => {
+    test("renaming a player reuses the existing header and body column cells", async () => {
+        const user = userEvent.setup();
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitForSetupChecklist();
+
+        const playerInput = Array.from(
+            document.querySelectorAll<HTMLInputElement>("input[type='text']"),
+        ).find(input => input.value === "Player 1");
+        expect(playerInput).toBeDefined();
+        if (!playerInput) return;
+        const headerCell = playerInput.closest("th");
+        const bodyCell = document.querySelector<HTMLElement>(
+            "[data-cell-row='0'][data-cell-col='0']",
+        );
+        expect(headerCell).toBeDefined();
+        expect(bodyCell).toBeDefined();
+        if (!headerCell || !bodyCell) return;
+
+        await user.clear(playerInput);
+        await user.type(playerInput, "Detective");
+        await user.tab();
+
+        await waitFor(() => {
+            const renamedInput = Array.from(
+                document.querySelectorAll<HTMLInputElement>("input[type='text']"),
+            ).find(input => input.value === "Detective");
+            expect(renamedInput).toBeDefined();
+            expect(renamedInput?.closest("th")).toBe(headerCell);
+            expect(
+                document.querySelector<HTMLElement>(
+                    "[data-cell-row='0'][data-cell-col='0']",
+                ),
+            ).toBe(bodyCell);
+        });
+    });
+
+    test("renaming categories and cards reuses their existing rows", async () => {
+        const user = userEvent.setup();
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitForSetupChecklist();
+
+        const categoryInput = Array.from(
+            document.querySelectorAll<HTMLInputElement>("input[type='text']"),
+        ).find(input => input.value === "Suspect");
+        const cardInput = Array.from(
+            document.querySelectorAll<HTMLInputElement>("input[type='text']"),
+        ).find(input => input.value === "Miss Scarlet");
+        expect(categoryInput).toBeDefined();
+        expect(cardInput).toBeDefined();
+        if (!categoryInput || !cardInput) return;
+        const categoryRow = categoryInput.closest("tr");
+        const cardRow = cardInput.closest("tr");
+        expect(categoryRow).toBeDefined();
+        expect(cardRow).toBeDefined();
+        if (!categoryRow || !cardRow) return;
+
+        await user.clear(categoryInput);
+        await user.type(categoryInput, "Person");
+        await user.tab();
+        await user.clear(cardInput);
+        await user.type(cardInput, "Ms. Scarlet");
+        await user.tab();
+
+        await waitFor(() => {
+            const renamedCategory = Array.from(
+                document.querySelectorAll<HTMLInputElement>("input[type='text']"),
+            ).find(input => input.value === "Person");
+            const renamedCard = Array.from(
+                document.querySelectorAll<HTMLInputElement>("input[type='text']"),
+            ).find(input => input.value === "Ms. Scarlet");
+            expect(renamedCategory?.closest("tr")).toBe(categoryRow);
+            expect(renamedCard?.closest("tr")).toBe(cardRow);
+        });
+    });
+
+    test("presence layers keep table rows and cells semantic", async () => {
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitForSetupChecklist();
+
+        const tbody = document.querySelector("tbody");
+        expect(tbody).toBeDefined();
+        if (!tbody) return;
+        expect(Array.from(tbody.children).every(el => el.tagName === "TR"))
+            .toBe(true);
+        for (const row of Array.from(tbody.children)) {
+            expect(
+                Array.from(row.children).every(
+                    el => el.tagName === "TH" || el.tagName === "TD",
+                ),
+            ).toBe(true);
+        }
+    });
+});
+
 describe("Checklist — setup mode — player cell interactions", () => {
     test("player cells render as native checkboxes in setup mode", async () => {
         render(<Clue />, { wrapper: TestQueryClientProvider });
@@ -201,6 +301,61 @@ describe("Checklist — setup mode — add-player column", () => {
             expect(
                 document.querySelectorAll("input[type='number']").length,
             ).toBeGreaterThanOrEqual(5);
+        });
+    });
+});
+
+describe("Checklist — setup mode — animated add/remove surfaces", () => {
+    test("adding and removing a card updates the table controls", async () => {
+        const user = userEvent.setup();
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitForSetupChecklist();
+
+        const initialRemoveCount = screen.getAllByRole("button", {
+            name: /removeCardTitle/,
+        }).length;
+        const addCardButtons = screen.getAllByRole("button", { name: "addCard" });
+        await user.click(addCardButtons[0]!);
+        await waitFor(() => {
+            expect(
+                screen.getAllByRole("button", { name: /removeCardTitle/ }),
+            ).toHaveLength(initialRemoveCount + 1);
+        });
+
+        const removeButtons = screen.getAllByRole("button", {
+            name: /removeCardTitle/,
+        });
+        await user.click(removeButtons[removeButtons.length - 1]!);
+        await waitFor(() => {
+            expect(
+                screen.getAllByRole("button", { name: /removeCardTitle/ }),
+            ).toHaveLength(initialRemoveCount);
+        });
+    });
+
+    test("adding and removing a category updates the table controls", async () => {
+        const user = userEvent.setup();
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitForSetupChecklist();
+
+        const initialRemoveCount = screen.getAllByRole("button", {
+            name: /removeCategoryTitle/,
+        }).length;
+        await user.click(screen.getByRole("button", { name: "addCategory" }));
+        await waitFor(() => {
+            expect(
+                screen.getAllByRole("button", { name: /removeCategoryTitle/ }),
+            ).toHaveLength(initialRemoveCount + 1);
+        });
+
+        const removeButtons = screen.getAllByRole("button", {
+            name: /removeCategoryTitle/,
+        });
+        await user.click(removeButtons[removeButtons.length - 1]!);
+        await waitFor(() => {
+            expect(
+                screen.getAllByRole("button", { name: /removeCategoryTitle/ }),
+            ).toHaveLength(initialRemoveCount);
         });
     });
 });
