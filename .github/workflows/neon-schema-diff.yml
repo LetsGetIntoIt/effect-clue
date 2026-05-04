@@ -1,0 +1,39 @@
+name: Neon Schema Diff
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  schema-diff:
+    permissions:
+      pull-requests: write
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Map Git branches to Neon branches
+        id: branches
+        run: |
+          # Maps Git branch names to Neon database branch names.
+          map_branch() {
+            local branch_name=$1
+            if [ "$branch_name" == "main" ]; then
+              # The production DB branch, automatically managed by the Vercel-Neon integration.
+              echo "main"
+            else
+              # The preview DB branch, automatically created by the Vercel-Neon integration for each preview deployment.
+              echo "preview/$branch_name"
+            fi
+          }
+
+          compare_branch=$(map_branch "${{ github.head_ref }}")
+          base_branch=$(map_branch "${{ github.base_ref }}")
+
+          echo "compare=$compare_branch" >> $GITHUB_OUTPUT
+          echo "base=$base_branch" >> $GITHUB_OUTPUT
+      - uses: neondatabase/schema-diff-action@v1
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          compare_branch: ${{ steps.branches.outputs.compare }}
+          base_branch: ${{ steps.branches.outputs.base }}

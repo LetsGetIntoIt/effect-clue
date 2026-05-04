@@ -101,13 +101,15 @@ pnpm db:up         # Postgres in Docker; safe to skip if you don't need server f
 pnpm dev
 ```
 
-Then open <http://localhost:3000>.
+Then open the local URL printed by Next.js. It is usually
+<http://localhost:3000>, but Next will automatically pick another
+available port when 3000 is already in use.
 
-The third-party SDKs (Sentry, Honeycomb, PostHog) all no-op when their env vars are unset, so the app runs end-to-end with an empty `.env.local`.
+The third-party SDKs (Sentry, Honeycomb, PostHog) all no-op when their env vars are unset, and local development falls back to the committed Docker Postgres URL when `DATABASE_URL` is blank, so the app runs end-to-end with an empty `.env.local` after `pnpm db:up`.
 
 ### Local Postgres via Docker
 
-`docker-compose.yml` at the repo root spins up a single `postgres:16-alpine` service on `localhost:5432`. The default `DATABASE_URL` to drop into `.env.local` is committed in [env.example](env.example) — copy the local-Docker block.
+`docker-compose.yml` at the repo root spins up a single Neon-aligned `postgres:17` service on `localhost:5432`. The default `DATABASE_URL` to drop into `.env.local` is committed in [env.example](env.example) — copy the local-Docker block. Set `POSTGRES_HOST_PORT` if port 5432 is already in use.
 
 | Command | What it does |
 | --- | --- |
@@ -167,10 +169,12 @@ Copy [env.example](env.example) to `.env.local`. All third-party integrations ar
 | `DATABASE_URL` | Postgres connection string. Local Docker default committed in [env.example](env.example); Neon URL for previews/production. |
 | `DATABASE_URL_UNPOOLED` | Direct (non-pooler) Postgres URL. Reserved for migration runs that need a stable session. |
 | `BETTER_AUTH_SECRET` | Server-only secret for session JWT signing. Generate with `openssl rand -hex 32`. |
-| `BETTER_AUTH_URL` | Public URL of the deployed app — `http://localhost:3000` in dev. |
+| `BETTER_AUTH_URL` | Public URL of the deployed app. Leave blank in local dev so auth follows the actual auto-selected localhost port. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth client. Optional in local dev (the dev-only username/password flow covers it); required for previews/production. |
 
 In CI/production, the build job needs `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` to upload source maps. Production also needs the DB and auth vars wired in Vercel — see [docs/setup-vercel-neon-google.md](docs/setup-vercel-neon-google.md).
+
+Neon schema-diff and preview-branch cleanup workflows also need GitHub Actions access to Neon: set repository variable `NEON_PROJECT_ID` and repository secret `NEON_API_KEY`. See [docs/setup-vercel-neon-google.md](docs/setup-vercel-neon-google.md) for the API key setup.
 
 ---
 

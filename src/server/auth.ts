@@ -39,12 +39,16 @@
 import "server-only";
 
 import { betterAuth } from "better-auth";
+import type { BaseURLConfig } from "better-auth";
 import { anonymous } from "better-auth/plugins";
 import { Pool } from "pg";
+import { LOCAL_DATABASE_URL } from "./localDatabase";
 
 const isDev = process.env["NODE_ENV"] === "development";
+const isLocalRuntime = process.env["NODE_ENV"] !== "production";
 const AUTH_DEBUG_ON = "1";
 const GOOGLE_PROMPT_SELECT_ACCOUNT = "select_account" as const;
+const LOCAL_AUTH_PROTOCOL = "http" as const;
 const LOGGER_LEVEL_DEBUG = "debug" as const;
 const LOGGER_LEVEL_WARN = "warn" as const;
 const FIELD_ACCOUNT_ID = "account_id" as const;
@@ -90,21 +94,76 @@ const requiredEnv = (name: string): string => {
     return value;
 };
 
-const requiredBaseURL = (): string => {
-    const value = process.env["BETTER_AUTH_URL"];
-    if (value !== undefined && value.trim() !== "") return value;
-    if (isDev) return "http://localhost:3000";
+const optionalEnv = (name: string): string | undefined => {
+    const value = process.env[name];
+    if (value === undefined || value.trim() === "") return undefined;
+    return value;
+};
+
+const requiredBaseURL = (): BaseURLConfig => {
+    const value = optionalEnv("BETTER_AUTH_URL");
+    if (value !== undefined) return value;
+    if (isLocalRuntime) {
+        return {
+            allowedHosts: ["localhost:*", "127.*:*", "[::1]:*"],
+            protocol: LOCAL_AUTH_PROTOCOL,
+        };
+    }
     throw new Error(
         // eslint-disable-next-line i18next/no-literal-string -- developer-facing configuration error.
         "BETTER_AUTH_URL is required outside local development.",
     );
 };
 
-const databaseUrl = process.env["DATABASE_URL"] ?? "";
+const requiredDatabaseUrl = (): string => {
+    const value = optionalEnv("DATABASE_URL");
+    if (value !== undefined) return value;
+    if (isLocalRuntime) return LOCAL_DATABASE_URL;
+    throw new Error(
+        // eslint-disable-next-line i18next/no-literal-string -- developer-facing configuration error.
+        "DATABASE_URL is required outside local development.",
+    );
+};
+
+const googleProviderConfig = ():
+    | {
+          readonly google: {
+              readonly clientId: string;
+              readonly clientSecret: string;
+              readonly prompt: typeof GOOGLE_PROMPT_SELECT_ACCOUNT;
+          };
+      }
+    | undefined => {
+    const clientId = optionalEnv("GOOGLE_CLIENT_ID");
+    const clientSecret = optionalEnv("GOOGLE_CLIENT_SECRET");
+    if (clientId !== undefined && clientSecret !== undefined) {
+        return {
+            google: {
+                clientId,
+                clientSecret,
+                prompt: GOOGLE_PROMPT_SELECT_ACCOUNT,
+            },
+        };
+    }
+    if (
+        isLocalRuntime &&
+        clientId === undefined &&
+        clientSecret === undefined
+    ) {
+        return undefined;
+    }
+    if (clientId === undefined) {
+        requiredEnv("GOOGLE_CLIENT_ID");
+    } else {
+        requiredEnv("GOOGLE_CLIENT_SECRET");
+    }
+    return undefined;
+};
+
+const databaseUrl = requiredDatabaseUrl();
 const baseURL = requiredBaseURL();
 const secret = process.env["BETTER_AUTH_SECRET"] ?? "";
-const googleClientId = requiredEnv("GOOGLE_CLIENT_ID");
-const googleClientSecret = requiredEnv("GOOGLE_CLIENT_SECRET");
+const socialProviders = googleProviderConfig();
 
 /**
  * The better-auth pool is a *separate* pg pool from the one
@@ -162,13 +221,7 @@ export const auth = betterAuth({
             updatedAt: FIELD_UPDATED_AT,
         },
     },
-    socialProviders: {
-        google: {
-            clientId: googleClientId,
-            clientSecret: googleClientSecret,
-            prompt: GOOGLE_PROMPT_SELECT_ACCOUNT,
-        },
-    },
+    socialProviders,
     logger: {
         level:
             process.env["AUTH_DEBUG"] === AUTH_DEBUG_ON

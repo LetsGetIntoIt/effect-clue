@@ -8,10 +8,20 @@
 # The matching DATABASE_URL is committed in env.example as a copy-paste
 # block. The same migrator code path runs against this Docker container
 # AND Neon — "works locally" => "works on Vercel".
+#
+# This setup is based on Neon's local-development guide:
+# https://neon.com/guides/local-development-with-neon
+#
+# Optional offline hostname: if you want to use db.localtest.me in a
+# connection string, add this to /etc/hosts:
+#     127.0.0.1 db.localtest.me
 
 services:
     postgres:
-        image: postgres:16-alpine
+        # Keep this in sync with the Postgres major version Neon uses.
+        # Renovate updates this through StoryCut's neon-local-postgres preset.
+        image: postgres:17
+        command: ["-d 1", "-c", "log_statement=all"]
         container_name: effect-clue-postgres
         restart: unless-stopped
         environment:
@@ -19,14 +29,14 @@ services:
             POSTGRES_PASSWORD: local_dev_only
             POSTGRES_DB: effect_clue
         ports:
-            - "5432:5432"
+            - "${POSTGRES_HOST_PORT:-5432}:5432"
         volumes:
             - effect-clue-pg-data:/var/lib/postgresql/data
         healthcheck:
             test: ["CMD-SHELL", "pg_isready -U effect_clue -d effect_clue"]
-            interval: 5s
+            interval: 10s
             timeout: 5s
-            retries: 10
+            retries: 5
 
 volumes:
     effect-clue-pg-data:
