@@ -60,7 +60,7 @@ export function Tooltip({
                         sideOffset={6}
                         collisionPadding={8}
                         className={
-                            "z-50 max-w-[320px] rounded-[var(--radius)] border px-3 py-2 text-[12px] leading-snug shadow-[0_6px_16px_rgba(0,0,0,0.18)] " +
+                            "z-[var(--z-popover)] max-w-[320px] rounded-[var(--radius)] border px-3 py-2 text-[12px] leading-snug shadow-[0_6px_16px_rgba(0,0,0,0.18)] " +
                             toneClasses
                         }
                     >

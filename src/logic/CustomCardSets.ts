@@ -163,3 +163,14 @@ export const deleteCustomCardSet = (id: string): void => {
     const packs = loadCustomCardSets();
     writeAll(packs.filter(p => p.id !== id));
 };
+
+/**
+ * Replace the whole saved-pack library. Used by sign-in
+ * reconciliation after the server and local libraries have been
+ * de-duplicated into one canonical list.
+ */
+export const replaceCustomCardSets = (
+    packs: ReadonlyArray<CustomCardSet>,
+): void => {
+    writeAll(packs);
+};

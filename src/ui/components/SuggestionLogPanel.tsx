@@ -455,7 +455,7 @@ function TabButton({
                     transition={indicatorTransition}
                 />
             )}
-            <span className="relative z-10">{children}</span>
+            <span className="relative z-[var(--z-local-raised)]">{children}</span>
         </button>
     );
 }

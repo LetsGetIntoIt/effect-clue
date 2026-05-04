@@ -42,6 +42,7 @@
 "use client";
 
 import * as Popover from "@radix-ui/react-popover";
+import { useReducedMotion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { XIcon } from "../components/Icons";
@@ -71,6 +72,8 @@ type VirtualElement = {
 const KEY_ESCAPE = "Escape" as const;
 // Analytics discriminator for tour dismissal via Esc keypress.
 const DISMISS_VIA_ESC = "esc" as const;
+const SCROLL_BEHAVIOR_AUTO: ScrollBehavior = "auto";
+const SCROLL_BEHAVIOR_SMOOTH: ScrollBehavior = "smooth";
 // Attribute we add to the Radix Popover.Content so the keyboard
 // isolator can do an O(1) `popoverContent.contains(eventTarget)` check
 // to allow keyboard events that target the popover's own buttons.
@@ -108,6 +111,7 @@ export function TourPopover() {
         dismissTour,
     } = useTour();
     const { state, dispatch } = useClue();
+    const prefersReducedMotion = useReducedMotion();
 
     // The virtualRef passed into Radix Popover. Each step recomputes
     // it via the effect below.
@@ -174,8 +178,8 @@ export function TourPopover() {
             return;
         }
 
-        const scrollSpotlightIntoView = (rect: DOMRect): void => {
-            if (typeof window === "undefined") return;
+        const scrollSpotlightIntoView = (rect: DOMRect): boolean => {
+            if (typeof window === "undefined") return false;
             const margin = 48;
             const vw = window.innerWidth;
             const vh = window.innerHeight;
@@ -183,7 +187,7 @@ export function TourPopover() {
                 rect.top >= margin && rect.bottom <= vh - margin;
             const inViewHorizontal =
                 rect.left >= margin && rect.right <= vw - margin;
-            if (inViewVertical && inViewHorizontal) return;
+            if (inViewVertical && inViewHorizontal) return false;
             // The page splits scroll: vertical scroll lives on the
             // body when content overflows (the `min-w-max` <main> +
             // tall checklist make body's scrollHeight > clientHeight);
@@ -211,17 +215,9 @@ export function TourPopover() {
                 : rect.width + margin * 2 < vw
                     ? rect.left + rect.width / 2 - vw / 2
                     : rect.left - margin;
-            // Use `auto` (instantaneous) rather than `smooth`. The
-            // recompute fires multiple times per step (mutation
-            // observer + step-change effect + React re-renders all
-            // re-trigger it), and back-to-back smooth-scroll calls
-            // cancel each other before the animation can commit any
-            // movement — leaving body.scrollTop stuck at 0. Instant
-            // scroll matches the user's mental model anyway: the
-            // tour jumped to a new step, the page should already be
-            // showing what the step is about.
-            // eslint-disable-next-line i18next/no-literal-string -- ScrollBehavior enum
-            const behavior: ScrollBehavior = "auto";
+            const behavior: ScrollBehavior = prefersReducedMotion
+                ? SCROLL_BEHAVIOR_AUTO
+                : SCROLL_BEHAVIOR_SMOOTH;
             const body = document.body;
             const html = document.documentElement;
             // Pick whichever element is actually scrollable for each
@@ -238,13 +234,26 @@ export function TourPopover() {
                     top: verticalEl.scrollTop + dy,
                     behavior,
                 });
+                if (verticalEl === html) {
+                    window.scrollTo({
+                        top: window.scrollY + dy,
+                        behavior,
+                    });
+                }
             }
             if (dx !== 0) {
                 horizontalEl.scrollTo({
                     left: horizontalEl.scrollLeft + dx,
                     behavior,
                 });
+                if (horizontalEl === html) {
+                    window.scrollTo({
+                        left: window.scrollX + dx,
+                        behavior,
+                    });
+                }
             }
+            return dx !== 0 || dy !== 0;
         };
 
         const recompute = (): void => {
@@ -328,10 +337,12 @@ export function TourPopover() {
                 lastUnionKeyRef.current = unionKey;
                 setAnchorTick(n => n + 1);
             }
-            // Auto-scroll once per step so anchors below the fold
-            // (or off to the side on a horizontally-scrolling page)
-            // come into view. Subsequent recomputes don't re-scroll;
-            // the user is in control once they start interacting.
+            // Auto-scroll at most once per step so anchors below the
+            // fold (or off to the side on a horizontally-scrolling
+            // page) come into view. Native smooth scroll emits scroll
+            // events while it moves; avoiding repeated calls here
+            // keeps the browser's own animation from being cancelled
+            // and restarted by our tracking recomputes.
             const scrollTracker = scrolledForStepRef.current;
             if (
                 scrollTracker.screen !== activeScreen ||
@@ -341,13 +352,8 @@ export function TourPopover() {
                     screen: activeScreen,
                     step: stepIndex,
                 };
+                scrollSpotlightIntoView(measured);
             }
-            // Always re-check whether the spotlight is in view: the
-            // page may have reflowed (e.g. menu opened, image
-            // loaded) since we last checked. The fn no-ops when the
-            // rect is comfortably inside the viewport, and `auto`
-            // scroll is idempotent at the same target.
-            scrollSpotlightIntoView(measured);
         };
 
         recompute();
@@ -433,7 +439,13 @@ export function TourPopover() {
                 if (t !== undefined) window.clearTimeout(t);
             }
         };
-    }, [activeScreen, stepIndex, currentStep, state.uiMode]);
+    }, [
+        activeScreen,
+        stepIndex,
+        currentStep,
+        state.uiMode,
+        prefersReducedMotion,
+    ]);
 
     // While a tour is active, the page beneath the veil should be
     // keyboard-inert. App-level shortcuts (`⌘K`, `⌘Z`, the per-tab
@@ -531,7 +543,7 @@ export function TourPopover() {
                 with content. */}
             <div
                 aria-hidden
-                className="fixed inset-0 z-40"
+                className="fixed inset-0 z-[var(--z-tour-backdrop)]"
             />
             {/* Spotlight: a transparent box sized to the anchor with
                 a giant `box-shadow` painting darkness OUTSIDE the box.
@@ -559,14 +571,14 @@ export function TourPopover() {
                             "0 0 0 9999px rgba(0,0,0,0.45), 0 0 0 2px var(--color-tour-accent)",
                         borderRadius: "var(--tour-radius)",
                         pointerEvents: "auto",
-                        zIndex: 41,
+                        zIndex: "var(--z-tour-spotlight)",
                     }}
                     className="tour-spotlight transition-all"
                 />
             ) : (
                 <div
                     aria-hidden
-                    className="fixed inset-0 z-40 bg-black/45"
+                    className="fixed inset-0 z-[var(--z-tour-backdrop)] bg-black/45"
                 />
             )}
             {/* Key the entire Popover.Root tree on the active step
@@ -588,11 +600,9 @@ export function TourPopover() {
                         align={resolvedAlign}
                         sideOffset={14}
                         collisionPadding={24}
-                        // The tour floats above the backdrop (z-40)
-                        // AND above any popover/menu the active step
-                        // might trigger to open (the overflow menu
-                        // content uses z-50). Bumped to z-60 so the
-                        // tour copy stays visible. The
+                        // The tour floats above the backdrop and
+                        // above any popover/menu the active step
+                        // might trigger to open. The
                         // `max-h-[calc(100vh-32px)] overflow-y-auto`
                         // pair caps the popover at viewport height
                         // so a tall popover (long body copy + 4-line
@@ -602,7 +612,7 @@ export function TourPopover() {
                         // resolve the popper to a y-coord with the
                         // bottom edge below the viewport.
                         className={
-                            "z-[60] w-[min(92vw,360px)] max-h-[calc(100vh-32px)] overflow-y-auto rounded-[var(--tour-radius)] " +
+                            "z-[var(--z-tour-popover)] w-[min(92vw,360px)] max-h-[calc(100vh-32px)] overflow-y-auto rounded-[var(--tour-radius)] " +
                             "border-2 border-[var(--color-tour-border)] " +
                             "bg-[var(--color-tour-bg)] text-[var(--color-tour-text)] " +
                             "shadow-[0_10px_28px_rgba(30,64,175,0.28)] focus:outline-none"

@@ -72,7 +72,7 @@ import { useSession } from "../hooks/useSession";
 import { authClient } from "../account/authClient";
 import { DevSignInForm } from "../account/DevSignInForm";
 import { T_STANDARD, useReducedTransition } from "../motion";
-import { XIcon } from "../components/Icons";
+import { CheckIcon, XIcon } from "../components/Icons";
 import {
     savePendingShareIntent,
     type PendingShareIntent,
@@ -171,6 +171,7 @@ const COPY_FALLBACK_KEY = "copyFallback";
 const ERROR_GENERIC_KEY = "errorGeneric";
 const LINK_EXPIRES_IN_KEY = "linkExpiresIn";
 const TTL_KEY = "ttl";
+const SHARE_URL_ARIA_KEY = "shareUrlAria";
 
 const ERR_SIGN_IN_REQUIRED_MSG = "sign_in_required_to_share";
 
@@ -351,11 +352,14 @@ export function ShareCreateModal({
     useEffect(() => {
         if (open && !prevOpenRef.current) {
             setIncludeProgress(false);
+            setCopied(false);
+            setShareUrl(null);
         }
         prevOpenRef.current = open;
     }, [open]);
     const [submitting, setSubmitting] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [shareUrl, setShareUrl] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     // The pack the share will contain. Picker entry overrides; setup
@@ -440,6 +444,22 @@ export function ShareCreateModal({
         variant,
     ]);
 
+    const copyShareUrl = useCallback(async (url: string): Promise<void> => {
+        try {
+            if (typeof navigator !== "undefined" && navigator.clipboard) {
+                await navigator.clipboard.writeText(url);
+                shareLinkCopied();
+                setCopied(true);
+                return;
+            }
+        } catch {
+            // Fall through to the prompt fallback below.
+        }
+        if (typeof window !== "undefined") {
+            window.prompt(t(COPY_FALLBACK_KEY), url);
+        }
+    }, [t]);
+
     const createFromPayload = useCallback(async (
         payload: CreateShareInput,
         meta: {
@@ -458,17 +478,8 @@ export function ShareCreateModal({
                 typeof globalThis.location !== "undefined"
                     ? `${globalThis.location.origin}${SHARE_BASE_PATH}${result.id}`
                     : `${SHARE_BASE_PATH}${result.id}`;
-            try {
-                if (typeof navigator !== "undefined" && navigator.clipboard) {
-                    await navigator.clipboard.writeText(url);
-                    shareLinkCopied();
-                    setCopied(true);
-                }
-            } catch {
-                if (typeof window !== "undefined") {
-                    window.prompt(t(COPY_FALLBACK_KEY), url);
-                }
-            }
+            setShareUrl(url);
+            await copyShareUrl(url);
         } catch (e) {
             const msg = String(e);
             if (msg.includes(ERR_SIGN_IN_REQUIRED_MSG)) {
@@ -482,9 +493,13 @@ export function ShareCreateModal({
         } finally {
             setSubmitting(false);
         }
-    }, [t]);
+    }, [copyShareUrl, t]);
 
     const onCreate = async (): Promise<void> => {
+        if (shareUrl !== null) {
+            await copyShareUrl(shareUrl);
+            return;
+        }
         if (needsSignIn) {
             setError(null);
             setDirection(1);
@@ -573,6 +588,7 @@ export function ShareCreateModal({
 
     const close = (): void => {
         setCopied(false);
+        setShareUrl(null);
         setError(null);
         setStep(STEP_TOGGLES);
         setDirection(1);
@@ -594,10 +610,10 @@ export function ShareCreateModal({
     return (
         <Dialog.Root open={open} onOpenChange={(next) => !next && close()}>
             <Dialog.Portal>
-                <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
+                <Dialog.Overlay className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/40" />
                 <Dialog.Content
                     className={
-                        "fixed left-1/2 top-1/2 z-50 flex w-[min(92vw,480px)] flex-col " +
+                        "fixed left-1/2 top-1/2 z-[var(--z-dialog-content)] flex w-[min(92vw,480px)] flex-col " +
                         "-translate-x-1/2 -translate-y-1/2 rounded-[var(--radius)] border border-border " +
                         "bg-panel shadow-[0_10px_28px_rgba(0,0,0,0.28)] focus:outline-none"
                     }
@@ -701,6 +717,56 @@ export function ShareCreateModal({
                                             duration: t(TTL_KEY),
                                         })}
                                     </div>
+                                    {shareUrl !== null ? (
+                                        <div
+                                            className="mx-5 mt-3 flex min-w-0 items-center gap-2 rounded-[var(--radius)] border border-border bg-white p-2"
+                                            data-share-created-url
+                                        >
+                                            <input
+                                                readOnly
+                                                value={shareUrl}
+                                                aria-label={t(SHARE_URL_ARIA_KEY)}
+                                                className="min-w-0 flex-1 rounded border border-border bg-panel px-2 py-1 text-[12px] text-muted"
+                                                onFocus={(e) =>
+                                                    e.currentTarget.select()
+                                                }
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    void copyShareUrl(shareUrl)
+                                                }
+                                                className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-[var(--radius)] border border-border bg-white px-2 py-1 text-[12px] font-semibold text-accent hover:bg-hover"
+                                                data-share-copy-existing
+                                            >
+                                                <AnimatePresence initial={false}>
+                                                    {copied ? (
+                                                        <motion.span
+                                                            key="check"
+                                                            initial={{
+                                                                scale: 0.6,
+                                                                opacity: 0,
+                                                            }}
+                                                            animate={{
+                                                                scale: 1,
+                                                                opacity: 1,
+                                                            }}
+                                                            exit={{
+                                                                scale: 0.6,
+                                                                opacity: 0,
+                                                            }}
+                                                            transition={transition}
+                                                            className="inline-flex"
+                                                            data-share-copy-check
+                                                        >
+                                                            <CheckIcon size={14} />
+                                                        </motion.span>
+                                                    ) : null}
+                                                </AnimatePresence>
+                                                {t(COPY_LINK_KEY)}
+                                            </button>
+                                        </div>
+                                    ) : null}
                                 </motion.div>
                             ) : (
                                 <motion.div

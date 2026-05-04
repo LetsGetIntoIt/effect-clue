@@ -317,6 +317,7 @@
         "creating": "Creating…",
         "copied": "Link copied!",
         "copyFallback": "Copy this URL:",
+        "shareUrlAria": "Share link",
         "errorGeneric": "Couldn't create the share. Try again in a moment.",
         "importTitle": "A friend shared something for Clue Solver",
         "importModalTitlePack": "Import a card pack",
@@ -337,6 +338,10 @@
         "importIncludesSuggestions": "Suggestions ({count})",
         "importIncludesAccusations": "Accusations ({count})",
         "importEmpty": "This share is empty — nothing to import.",
+        "missingTitle": "Oops, we couldn't solve this one",
+        "missingBody": "This share link doesn't exist, or it expired. Ask your friend to send a new one.",
+        "missingActionContinue": "Continue your current game",
+        "missingActionStart": "Start a new game",
         "importActionPack": "Import this pack",
         "importActionInvite": "Start this game",
         "importActionTransfer": "Continue this game",
@@ -402,8 +407,8 @@
                 "body": "How many cards each player was dealt. The solver uses this to deduce who can't be holding which card."
             },
             "knownCard": {
-                "title": "Mark cards you've seen",
-                "body": "Click a cell to record what you know about each (player, card) pair: Y if they hold it, N if you know they don't, blank if unknown."
+                "title": "Mark the cards you were dealt",
+                "body": "Click a cell to mark the cards you were dealt, plus any other cards you happen to know. Maybe you snuck a peek. We won't judge."
             },
             "overflow": {
                 "title": "Everything else lives here",

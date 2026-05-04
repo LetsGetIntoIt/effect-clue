@@ -17,8 +17,10 @@
  * support — is exercised by mounting elements with both single and
  * space-separated `data-tour-anchor` values.
  */
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { forwardRef, createElement, type ReactNode } from "react";
+
+const motionMock = vi.hoisted(() => ({ reducedMotion: false }));
 
 vi.mock("next-intl", () => {
     const t = (key: string, values?: Record<string, unknown>): string =>
@@ -53,7 +55,7 @@ vi.mock("motion/react", () => {
     return {
         motion,
         AnimatePresence: ({ children }: { children: ReactNode }) => children,
-        useReducedMotion: () => false,
+        useReducedMotion: () => motionMock.reducedMotion,
     };
 });
 
@@ -62,6 +64,10 @@ import { ClueProvider } from "../state";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
 import { TourProvider, useTour } from "./TourProvider";
 import { TourPopover } from "./TourPopover";
+
+beforeEach(() => {
+    motionMock.reducedMotion = false;
+});
 
 /**
  * Mounts the popover inside a `<TourProvider>` and exposes the
@@ -273,11 +279,14 @@ describe("TourPopover — M20 interaction rules", () => {
         );
         act(() => api.startTour("setup"));
         expect(api.activeScreen).toBe("setup");
-        // The backdrop is the fixed-inset div with z-40 that has no
+        // The backdrop is the fixed-inset div using the tour-backdrop
+        // z-index token and has no
         // `aria-hidden` siblings carrying the tour content. Find it
         // by its class signature.
-        const backdrop = document.querySelector<HTMLDivElement>(
-            "div.fixed.inset-0.z-40",
+        const backdrop = Array.from(
+            document.querySelectorAll<HTMLDivElement>("div.fixed.inset-0"),
+        ).find((el) =>
+            el.className.includes("z-[var(--z-tour-backdrop)]"),
         );
         expect(backdrop).not.toBeNull();
         fireEvent.click(backdrop!);
@@ -511,6 +520,97 @@ describe("TourPopover — veil isolation", () => {
         expect(document.body.style.overflow).toBe(before);
         act(() => api.dismissTour("close"));
         expect(document.body.style.overflow).toBe(before);
+    });
+
+    test("out-of-view anchors use native smooth body scroll", () => {
+        let api!: ReturnType<typeof useTour>;
+        Object.defineProperty(window, "innerHeight", {
+            configurable: true,
+            value: 500,
+        });
+        Object.defineProperty(window, "innerWidth", {
+            configurable: true,
+            value: 500,
+        });
+        Object.defineProperty(document.body, "scrollHeight", {
+            configurable: true,
+            value: 2000,
+        });
+        Object.defineProperty(document.body, "clientHeight", {
+            configurable: true,
+            value: 500,
+        });
+        const bodyScrollTo = vi.fn();
+        document.body.scrollTo = bodyScrollTo;
+
+        render(
+            <Harness
+                anchors={[
+                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                ]}
+            >
+                {c => {
+                    api = c;
+                    return null;
+                }}
+            </Harness>,
+            { wrapper: TestQueryClientProvider },
+        );
+        const anchor = screen.getByTestId("card-pack");
+        anchor.getBoundingClientRect = () =>
+            new DOMRect(100, 1000, 100, 100);
+
+        act(() => api.startTour("setup"));
+
+        expect(bodyScrollTo).toHaveBeenCalledWith(
+            expect.objectContaining({ behavior: "smooth" }),
+        );
+    });
+
+    test("out-of-view anchors use instant scroll for reduced motion", () => {
+        motionMock.reducedMotion = true;
+        let api!: ReturnType<typeof useTour>;
+        Object.defineProperty(window, "innerHeight", {
+            configurable: true,
+            value: 500,
+        });
+        Object.defineProperty(window, "innerWidth", {
+            configurable: true,
+            value: 500,
+        });
+        Object.defineProperty(document.body, "scrollHeight", {
+            configurable: true,
+            value: 2000,
+        });
+        Object.defineProperty(document.body, "clientHeight", {
+            configurable: true,
+            value: 500,
+        });
+        const bodyScrollTo = vi.fn();
+        document.body.scrollTo = bodyScrollTo;
+
+        render(
+            <Harness
+                anchors={[
+                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                ]}
+            >
+                {c => {
+                    api = c;
+                    return null;
+                }}
+            </Harness>,
+            { wrapper: TestQueryClientProvider },
+        );
+        const anchor = screen.getByTestId("card-pack");
+        anchor.getBoundingClientRect = () =>
+            new DOMRect(100, 1000, 100, 100);
+
+        act(() => api.startTour("setup"));
+
+        expect(bodyScrollTo).toHaveBeenCalledWith(
+            expect.objectContaining({ behavior: "auto" }),
+        );
     });
 });
 

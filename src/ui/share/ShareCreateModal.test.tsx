@@ -129,6 +129,11 @@ const findCta = (): HTMLButtonElement => {
 beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: undefined,
+    });
+    window.prompt = vi.fn();
     createShareMock.mockReset();
     createShareMock.mockResolvedValue({ id: "stub-share-id" });
     signInSocialMock.mockReset();
@@ -168,6 +173,13 @@ describe("ShareCreateModal — variant chrome", () => {
         );
         expect(warning).not.toBeNull();
         expect(warning?.textContent).toContain("transferWarning");
+    });
+
+    test("shows the share expiry copy", () => {
+        mountModal("pack");
+        expect(
+            screen.getByText('linkExpiresIn:{"duration":"ttl"}'),
+        ).toBeTruthy();
     });
 
     test("invite variant with no logged progress hides the optional checkbox", () => {
@@ -296,6 +308,45 @@ describe("ShareCreateModal — wire payload by variant", () => {
         expect(payload.knownCardsData).toBeTypeOf("string");
         expect(payload.suggestionsData).toBeTypeOf("string");
         expect(payload.accusationsData).toBeTypeOf("string");
+    });
+});
+
+describe("ShareCreateModal — copy existing share URL", () => {
+    test("successful create stores the URL and recopy does not create another share", async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, "clipboard", {
+            configurable: true,
+            value: { writeText },
+        });
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: false } },
+        };
+        mountModal("pack");
+
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await waitFor(() => {
+            expect(createShareMock).toHaveBeenCalledTimes(1);
+        });
+        expect(
+            document.querySelector("[data-share-created-url]"),
+        ).not.toBeNull();
+        expect(writeText).toHaveBeenCalledTimes(1);
+
+        const copyButton = document.querySelector(
+            "[data-share-copy-existing]",
+        ) as HTMLButtonElement | null;
+        expect(copyButton).not.toBeNull();
+        await act(async () => {
+            fireEvent.click(copyButton!);
+        });
+
+        expect(createShareMock).toHaveBeenCalledTimes(1);
+        expect(writeText).toHaveBeenCalledTimes(2);
+        expect(
+            document.querySelector("[data-share-copy-check]"),
+        ).not.toBeNull();
     });
 });
 

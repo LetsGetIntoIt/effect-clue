@@ -50,6 +50,7 @@ import {
     saveCardPackFromSnapshot,
     useApplyShareSnapshot,
 } from "./useApplyShareSnapshot";
+import { hashShareId } from "./shareAnalytics";
 
 interface ShareSnapshot {
     readonly id: string;
@@ -364,10 +365,10 @@ export function ShareImportPage({
                 onOpenChange={(next) => !next && close(VIA_BACKDROP)}
             >
                 <Dialog.Portal>
-                    <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
+                    <Dialog.Overlay className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/40" />
                     <Dialog.Content
                         className={
-                            "fixed left-1/2 top-1/2 z-50 flex w-[min(92vw,480px)] flex-col " +
+                            "fixed left-1/2 top-1/2 z-[var(--z-dialog-content)] flex w-[min(92vw,480px)] flex-col " +
                             "-translate-x-1/2 -translate-y-1/2 rounded-[var(--radius)] border border-border " +
                             "bg-panel shadow-[0_10px_28px_rgba(0,0,0,0.28)] focus:outline-none"
                         }
@@ -494,19 +495,3 @@ export function ShareImportPage({
         </main>
     );
 }
-
-/**
- * Hash a share id for analytics so PostHog never sees the raw
- * cuid2. The hash function is intentionally simple (FNV-1a 32-bit
- * folded to 8 hex chars) — collisions are fine; we only need the
- * identifier to be stable across events for the same share so
- * funnels work.
- */
-const hashShareId = (id: string): string => {
-    let h = 0x811c9dc5;
-    for (let i = 0; i < id.length; i += 1) {
-        h ^= id.charCodeAt(i);
-        h = (h * 0x01000193) >>> 0;
-    }
-    return h.toString(16).padStart(8, "0");
-};

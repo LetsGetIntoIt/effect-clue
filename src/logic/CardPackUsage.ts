@@ -99,6 +99,31 @@ export const forgetCardPackUse = (packId: string): void => {
 };
 
 /**
+ * Rewrite usage entries from old pack ids to canonical pack ids after
+ * de-duplication. If both ids have recency, keep the newer timestamp.
+ */
+export const remapCardPackUsageIds = (
+    idMap: ReadonlyMap<string, string>,
+): CardPackUsage => {
+    if (idMap.size === 0) return loadCardPackUsage();
+    const current = loadCardPackUsage();
+    const next = new Map<string, DateTime.Utc>();
+    for (const [id, usedAt] of current.entries()) {
+        const target = idMap.get(id) ?? id;
+        const existing = next.get(target);
+        if (
+            existing === undefined ||
+            DateTime.toEpochMillis(usedAt) >
+                DateTime.toEpochMillis(existing)
+        ) {
+            next.set(target, usedAt);
+        }
+    }
+    writeAll(next);
+    return next;
+};
+
+/**
  * Pack-shaped record consumed by `topRecentPacks`. Anything with an
  * `id` and a `label` qualifies — the helper is generic so callers can
  * pass the union of built-in `CardSetChoice` and user `CustomCardSet`

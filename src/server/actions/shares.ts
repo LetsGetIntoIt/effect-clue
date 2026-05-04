@@ -36,7 +36,6 @@ import {
     playersCodec,
     suggestionsCodec,
 } from "../../logic/ShareCodec";
-import { auth } from "../auth";
 import { SHARE_TTL } from "../shares/constants";
 import { withServerAction } from "../withServerAction";
 
@@ -266,6 +265,7 @@ const validateInputShape = (input: unknown): CreateShareInput => {
  * navigate to / contact, not to a throwaway local identity.
  */
 const realUserId = async (): Promise<string | null> => {
+    const { auth } = await import("../auth");
     const session = await auth.api.getSession({
         headers: await headers(),
     });

@@ -109,6 +109,26 @@ describe("Checklist — setup mode — top-level structure", () => {
         // is hidden when `inSetup` is true.
         expect(screen.queryByText(/caseFileLabel/)).toBeNull();
     });
+
+    test("uses tokenized sticky z-index classes for the header and first column", async () => {
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitForSetupChecklist();
+
+        const thead = document.querySelector("thead");
+        expect(thead?.className).toContain(
+            "z-[var(--z-checklist-sticky-header)]",
+        );
+        const firstHeader = thead?.querySelector("th");
+        expect(firstHeader?.className).toContain("sticky left-0");
+        expect(firstHeader?.className).toContain(
+            "z-[var(--z-checklist-sticky-header)]",
+        );
+        const firstBodyHeader = document.querySelector("tbody th");
+        expect(firstBodyHeader?.className).toContain("sticky left-0");
+        expect(firstBodyHeader?.className).toContain(
+            "z-[var(--z-checklist-sticky-column)]",
+        );
+    });
 });
 
 describe("Checklist — setup mode — hand-size inputs", () => {

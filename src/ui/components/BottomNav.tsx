@@ -74,7 +74,7 @@ export function BottomNav() {
         <nav
             aria-label={t("ariaLabel")}
             className={
-                "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-panel " +
+                "fixed inset-x-0 bottom-0 z-[var(--z-app-chrome)] border-t border-border bg-panel " +
                 "[padding-bottom:env(safe-area-inset-bottom,0px)] " +
                 "[@media(min-width:800px)]:hidden"
             }
@@ -231,7 +231,7 @@ function NavIconItem({
                         sideOffset={6}
                         collisionPadding={8}
                         onOpenAutoFocus={e => e.preventDefault()}
-                        className="z-50 max-w-[280px] rounded-[var(--radius)] border border-border bg-panel px-3 py-2 text-[12px] leading-snug shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
+                        className="z-[var(--z-popover)] max-w-[280px] rounded-[var(--radius)] border border-border bg-panel px-3 py-2 text-[12px] leading-snug shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
                     >
                         {preview ?? label}
                         <RadixPopover.Arrow

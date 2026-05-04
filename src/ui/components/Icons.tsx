@@ -88,6 +88,28 @@ export function XIcon({ className, size = 18 }: IconProps) {
     );
 }
 
+/** Check mark — paired with successful inline confirmations. */
+export function CheckIcon({ className, size = 18 }: IconProps) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+            className={className}
+        >
+            <polyline points="20 6 9 17 4 12" />
+        </svg>
+    );
+}
+
 /** Right-pointing arrow — paired with primary "get started" CTAs. */
 export function ArrowRightIcon({ className, size = 18 }: IconProps) {
     return (

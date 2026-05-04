@@ -1,21 +1,23 @@
 /**
  * Server-stored share landing page.
  *
- * Server-side: looks up the share by id; on miss, returns 404
- * (`notFound()`). On hit, renders the client-side
+ * Server-side: looks up the share by id; on not-found / expired,
+ * renders a client-side missing-share modal. On hit, renders the
  * `<ShareImportPage>` with the snapshot. The actual import logic
  * (decode → toggle UI → apply to local game state) lives on the
  * client because it needs access to the receiver's
  * `<ClueProvider>`.
  */
-import { notFound } from "next/navigation";
 import { ConfirmProvider } from "../../../src/ui/hooks/useConfirm";
 import { getShare } from "../../../src/server/actions/shares";
 import { ShareImportPage } from "../../../src/ui/share/ShareImportPage";
+import { ShareMissingPage } from "../../../src/ui/share/ShareMissingPage";
 
 interface Params {
     readonly id: string;
 }
+
+const ERR_SHARE_NOT_FOUND = "share_not_found";
 
 export default async function SharePageRoute({
     params,
@@ -26,8 +28,11 @@ export default async function SharePageRoute({
     let snapshot;
     try {
         snapshot = await getShare({ id });
-    } catch {
-        notFound();
+    } catch (e) {
+        if (String(e).includes(ERR_SHARE_NOT_FOUND)) {
+            return <ShareMissingPage shareId={id} />;
+        }
+        throw e;
     }
     return (
         <ConfirmProvider>

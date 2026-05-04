@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
     forgetCardPackUse,
     loadCardPackUsage,
+    remapCardPackUsageIds,
     recordCardPackUse,
     topRecentPacks,
 } from "./CardPackUsage";
@@ -117,6 +118,32 @@ describe("recordCardPackUse + loadCardPackUsage", () => {
             });
         expect(() => recordCardPackUse("classic")).not.toThrow();
         spy.mockRestore();
+    });
+});
+
+describe("remapCardPackUsageIds", () => {
+    test("moves recency from duplicate local ids to the canonical server id", () => {
+        window.localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({
+                version: 1,
+                entries: [
+                    { id: "local-pack", usedAt: 1700000000000 },
+                    { id: "server-pack", usedAt: 1600000000000 },
+                ],
+            }),
+        );
+
+        const usage = remapCardPackUsageIds(
+            new Map([["local-pack", "server-pack"]]),
+        );
+
+        expect(usage.has("local-pack")).toBe(false);
+        const serverUsage = usage.get("server-pack");
+        expect(serverUsage).toBeDefined();
+        expect(serverUsage && DateTime.toEpochMillis(serverUsage)).toBe(
+            1700000000000,
+        );
     });
 });
 

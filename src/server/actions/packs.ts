@@ -42,7 +42,7 @@ import type { CardSet } from "../../logic/CardSet";
 import { auth } from "../auth";
 import { withServerAction } from "../withServerAction";
 
-interface PersistedCardPack {
+export interface PersistedCardPack {
     readonly id: string;
     readonly clientGeneratedId: string;
     readonly label: string;
@@ -68,10 +68,11 @@ interface PushLocalPacksInput {
     }>;
 }
 
-interface PushResult {
+export interface PushResult {
     readonly countPushed: number;
     readonly countAlreadySynced: number;
     readonly countRenamed: number;
+    readonly countDeduped: number;
     readonly countFailed: number;
 }
 
@@ -79,6 +80,61 @@ interface PushResult {
 // i18next/no-literal-string rule.
 const ERR_NOT_SIGNED_IN = "not_signed_in";
 const ERR_UPSERT_NO_ROWS = "upsert_returned_no_rows";
+const PUSH_OUTCOME_ALREADY_SYNCED = "already_synced" as const;
+const PUSH_OUTCOME_DEDUPED = "deduped" as const;
+const PUSH_OUTCOME_RENAMED = "renamed" as const;
+const PUSH_OUTCOME_PUSHED = "pushed" as const;
+
+const visibleCardSetSignature = (cardSet: CardSet): string =>
+    JSON.stringify(
+        cardSet.categories.map((category) => ({
+            name: category.name,
+            cards: category.cards.map((card) => card.name),
+        })),
+    );
+
+const visibleCardSetSignatureFromData = (raw: string): string | null => {
+    try {
+        const parsed: unknown = JSON.parse(raw);
+        if (
+            typeof parsed !== "object" ||
+            parsed === null ||
+            !("categories" in parsed) ||
+            !Array.isArray(parsed.categories)
+        ) {
+            return null;
+        }
+        const categories = [];
+        for (const category of parsed.categories) {
+            if (
+                typeof category !== "object" ||
+                category === null ||
+                !("name" in category) ||
+                typeof category.name !== "string" ||
+                !("cards" in category) ||
+                !Array.isArray(category.cards)
+            ) {
+                return null;
+            }
+            const cards = [];
+            for (const card of category.cards) {
+                if (
+                    typeof card !== "object" ||
+                    card === null ||
+                    !("name" in card) ||
+                    typeof card.name !== "string"
+                ) {
+                    return null;
+                }
+                cards.push(card.name);
+            }
+            categories.push({ name: category.name, cards });
+        }
+        return JSON.stringify(categories);
+    } catch {
+        return null;
+    }
+};
 
 const requireSignedInUser = async (): Promise<{
     readonly userId: string;
@@ -223,11 +279,13 @@ export async function pushLocalPacksOnSignIn(
     let countPushed = 0;
     let countAlreadySynced = 0;
     let countRenamed = 0;
+    let countDeduped = 0;
     let countFailed = 0;
     for (const pack of input.packs) {
         const cardSetData = encodeCardSet(pack.cardSet);
+        const incomingSignature = visibleCardSetSignature(pack.cardSet);
         try {
-            const wasRenamed = await withServerAction(
+            const outcome = await withServerAction(
                 Effect.gen(function* () {
                     const sql = yield* PgClient.PgClient;
 
@@ -235,8 +293,9 @@ export async function pushLocalPacksOnSignIn(
                     const existingLabels = yield* sql<{
                         label: string;
                         client_generated_id: string;
+                        card_set_data: string;
                     }>`
-                        SELECT label, client_generated_id
+                        SELECT label, client_generated_id, card_set_data
                         FROM card_packs
                         WHERE owner_id = ${userId}
                     `;
@@ -260,7 +319,18 @@ export async function pushLocalPacksOnSignIn(
                                 card_set_data = EXCLUDED.card_set_data,
                                 updated_at = NOW()
                         `;
-                        return false; // not renamed; treated as already-synced
+                        return PUSH_OUTCOME_ALREADY_SYNCED;
+                    }
+
+                    const exactDuplicate = existingLabels.find((r) => {
+                        if (r.label !== pack.label) return false;
+                        return (
+                            visibleCardSetSignatureFromData(r.card_set_data) ===
+                            incomingSignature
+                        );
+                    });
+                    if (exactDuplicate) {
+                        return PUSH_OUTCOME_DEDUPED;
                     }
 
                     const labels = new Set(
@@ -285,23 +355,17 @@ export async function pushLocalPacksOnSignIn(
                             ${userId}, ${chosen}, ${cardSetData}
                         )
                     `;
-                    return renamed;
+                    return renamed
+                        ? PUSH_OUTCOME_RENAMED
+                        : PUSH_OUTCOME_PUSHED;
                 }),
             );
-            const same = wasRenamed === false;
-            // We can't (cleanly) tell here whether `same===false`
-            // means "renamed-on-insert" vs "fresh-insert" without
-            // returning the flag from inside the closure; the
-            // helper does, so re-classify here.
-            // (The closure returns `false` for the already-synced
-            // path AND the no-rename fresh path — but the
-            // `same` boolean is overloaded. Cheap fix: track via a
-            // separate query. Skipped for code-density reasons;
-            // the analytics breakdown is approximate.)
-            if (wasRenamed) {
+            if (outcome === PUSH_OUTCOME_RENAMED) {
                 countRenamed += 1;
-            } else if (same) {
+            } else if (outcome === PUSH_OUTCOME_ALREADY_SYNCED) {
                 countAlreadySynced += 1;
+            } else if (outcome === PUSH_OUTCOME_DEDUPED) {
+                countDeduped += 1;
             } else {
                 countPushed += 1;
             }
@@ -309,5 +373,11 @@ export async function pushLocalPacksOnSignIn(
             countFailed += 1;
         }
     }
-    return { countPushed, countAlreadySynced, countRenamed, countFailed };
+    return {
+        countPushed,
+        countAlreadySynced,
+        countRenamed,
+        countDeduped,
+        countFailed,
+    };
 }
