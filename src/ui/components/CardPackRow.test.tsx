@@ -246,7 +246,7 @@ describe("CardPackRow active-match styling", () => {
             "false",
         );
         expect(
-            screen.getByRole("button", { name: "saveAsCardPack" }),
+            screen.getByRole("button", { name: "saveAsNewCardPack" }),
         ).toHaveAttribute("data-card-pack-save-active", "true");
     });
 
@@ -616,7 +616,7 @@ describe("CardPackRow save-as-pack activates the new pack", () => {
             .spyOn(window, "prompt")
             .mockReturnValue("My New Pack");
         await user.click(
-            screen.getByRole("button", { name: "saveAsCardPack" }),
+            screen.getByRole("button", { name: "saveAsNewCardPack" }),
         );
         promptSpy.mockRestore();
         // Save should no longer be active.
@@ -676,6 +676,75 @@ describe("CardPackRow save-as-pack activates the new pack", () => {
         expect(recorded).toBe(true);
     });
 
+    test("editing a built-in pack only offers Save as new pack and persists a custom copy", async () => {
+        const user = userEvent.setup();
+        renderRowWithMutate();
+
+        await user.click(
+            screen.getByRole("button", { name: "Master Detective" }),
+        );
+        await user.click(screen.getByTestId("mutate"));
+
+        expect(
+            screen.queryByRole("button", { name: /updateCardPack/ }),
+        ).toBeNull();
+        expect(
+            screen.queryByRole("button", { name: "saveAsCardPack" }),
+        ).toBeNull();
+        expect(
+            screen.getAllByRole("button", { name: "saveAsNewCardPack" }),
+        ).toHaveLength(1);
+
+        const promptSpy = vi
+            .spyOn(window, "prompt")
+            .mockReturnValue("Master Fork");
+        await user.click(
+            screen.getByRole("button", { name: "saveAsNewCardPack" }),
+        );
+        promptSpy.mockRestore();
+
+        const presets = JSON.parse(
+            window.localStorage.getItem(
+                "effect-clue.custom-presets.v1",
+            ) ?? "null",
+        );
+        const saved = (presets?.presets ?? []).find(
+            (p: { label: string }) => p.label === "Master Fork",
+        );
+        expect(saved).toBeDefined();
+        expect(saved.id).not.toBe("master-detective");
+        expect(saved.id).toMatch(/^custom-/);
+
+        const usage = JSON.parse(
+            window.localStorage.getItem(
+                "effect-clue.card-pack-usage.v1",
+            ) ?? "null",
+        );
+        expect(
+            (usage?.entries ?? []).some(
+                (e: { id: string }) => e.id === saved.id,
+            ),
+        ).toBe(true);
+    });
+
+    test("editing a custom pack keeps Update primary and Save as new secondary", async () => {
+        const user = userEvent.setup();
+        seedCustomPacks(["Alpha"]);
+        renderRowWithMutate();
+
+        await user.click(screen.getByRole("button", { name: "Alpha" }));
+        await user.click(screen.getByTestId("mutate"));
+
+        expect(
+            screen.getByRole("button", {
+                name: 'updateCardPack:{"label":"Alpha"}',
+            }),
+        ).toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "saveAsNewCardPack" }),
+        ).toBeInTheDocument();
+    });
+
     test("saving does not fire cards_dealt or card_pack_selected", async () => {
         // Saving doesn't change the active deck (it only snapshots it),
         // so it shouldn't pollute the deck-swap analytics funnel.
@@ -699,7 +768,7 @@ describe("CardPackRow save-as-pack activates the new pack", () => {
         await user.click(screen.getByTestId("mutate")); // Save now active
         const promptSpy = vi.spyOn(window, "prompt").mockReturnValue(null);
         await user.click(
-            screen.getByRole("button", { name: "saveAsCardPack" }),
+            screen.getByRole("button", { name: "saveAsNewCardPack" }),
         );
         promptSpy.mockRestore();
         // Save still active; no pack-pill activation.
@@ -717,7 +786,7 @@ describe("CardPackRow save-as-pack activates the new pack", () => {
         await user.click(screen.getByTestId("mutate"));
         const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("   ");
         await user.click(
-            screen.getByRole("button", { name: "saveAsCardPack" }),
+            screen.getByRole("button", { name: "saveAsNewCardPack" }),
         );
         promptSpy.mockRestore();
         // Nothing was saved; Save pill stays active.
