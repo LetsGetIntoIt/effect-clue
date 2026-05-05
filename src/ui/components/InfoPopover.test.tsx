@@ -7,7 +7,7 @@ vi.mock("next-intl", () => ({
 }));
 
 describe("InfoPopover — content pointer-event hooks", () => {
-    test("onContentPointerEnter fires when pointer enters the popover content", () => {
+    test("onContentPointerEnter fires for mouse pointer entering the popover content", () => {
         const onEnter = vi.fn();
         render(
             <InfoPopover
@@ -19,11 +19,11 @@ describe("InfoPopover — content pointer-event hooks", () => {
             </InfoPopover>,
         );
         const content = screen.getByRole("dialog");
-        fireEvent.pointerEnter(content);
+        fireEvent.pointerEnter(content, { pointerType: "mouse" });
         expect(onEnter).toHaveBeenCalledTimes(1);
     });
 
-    test("onContentPointerLeave fires when pointer leaves the popover content", () => {
+    test("onContentPointerLeave fires for mouse pointer leaving the popover content", () => {
         const onLeave = vi.fn();
         render(
             <InfoPopover
@@ -35,8 +35,54 @@ describe("InfoPopover — content pointer-event hooks", () => {
             </InfoPopover>,
         );
         const content = screen.getByRole("dialog");
-        fireEvent.pointerLeave(content);
+        fireEvent.pointerLeave(content, { pointerType: "mouse" });
         expect(onLeave).toHaveBeenCalledTimes(1);
+    });
+
+    // The hover-intent contract is mouse-only. On touch, the W3C spec
+    // fires a synthetic `pointerleave` after `pointerup` because the
+    // touch pointer ceases to exist. Forwarding that to the parent's
+    // exit timer would close the popover the user just tapped a
+    // control inside (regression covered: tapping Y/N inside a
+    // checklist popover on mobile dismissed it ~900 ms later).
+    test("does NOT forward touch pointer enter/leave to the parent", () => {
+        const onEnter = vi.fn();
+        const onLeave = vi.fn();
+        render(
+            <InfoPopover
+                content="why"
+                open
+                onContentPointerEnter={onEnter}
+                onContentPointerLeave={onLeave}
+            >
+                <button type="button">trigger</button>
+            </InfoPopover>,
+        );
+        const content = screen.getByRole("dialog");
+        fireEvent.pointerEnter(content, { pointerType: "touch" });
+        fireEvent.pointerLeave(content, { pointerType: "touch" });
+        expect(onEnter).not.toHaveBeenCalled();
+        expect(onLeave).not.toHaveBeenCalled();
+    });
+
+    test("does NOT forward pen pointer enter/leave to the parent", () => {
+        const onEnter = vi.fn();
+        const onLeave = vi.fn();
+        render(
+            <InfoPopover
+                content="why"
+                open
+                onContentPointerEnter={onEnter}
+                onContentPointerLeave={onLeave}
+            >
+                <button type="button">trigger</button>
+            </InfoPopover>,
+        );
+        const content = screen.getByRole("dialog");
+        fireEvent.pointerEnter(content, { pointerType: "pen" });
+        fireEvent.pointerLeave(content, { pointerType: "pen" });
+        expect(onEnter).not.toHaveBeenCalled();
+        expect(onLeave).not.toHaveBeenCalled();
     });
 
     test("absent handlers don't crash on pointer events", () => {
@@ -47,8 +93,10 @@ describe("InfoPopover — content pointer-event hooks", () => {
         );
         const content = screen.getByRole("dialog");
         expect(() => {
-            fireEvent.pointerEnter(content);
-            fireEvent.pointerLeave(content);
+            fireEvent.pointerEnter(content, { pointerType: "mouse" });
+            fireEvent.pointerLeave(content, { pointerType: "mouse" });
+            fireEvent.pointerEnter(content, { pointerType: "touch" });
+            fireEvent.pointerLeave(content, { pointerType: "touch" });
         }).not.toThrow();
     });
 });

@@ -42,6 +42,13 @@ interface InfoPopoverProps {
      * parent driving the open state via hover-intent (e.g. the
      * Checklist) treat the portaled content as part of its hover zone:
      * entering it cancels the parent's exit timer, leaving it re-arms.
+     *
+     * Mouse-only by design: hover-intent is a mouse pattern. On touch,
+     * the W3C spec fires a synthetic `pointerleave` after `pointerup`
+     * (the touch pointer ceases to exist), which would re-arm a parent's
+     * exit timer and close the popover the user just tapped a control
+     * inside. We filter to `pointerType === "mouse"` before forwarding
+     * — touch and pen users dismiss via tap-outside / Esc / re-tap-trigger.
      */
     readonly onContentPointerEnter?: () => void;
     readonly onContentPointerLeave?: () => void;
@@ -119,8 +126,12 @@ export function InfoPopover({
                     sideOffset={6}
                     collisionPadding={8}
                     onOpenAutoFocus={e => e.preventDefault()}
-                    onPointerEnter={onContentPointerEnter}
-                    onPointerLeave={onContentPointerLeave}
+                    onPointerEnter={e => {
+                        if (e.pointerType === "mouse") onContentPointerEnter?.();
+                    }}
+                    onPointerLeave={e => {
+                        if (e.pointerType === "mouse") onContentPointerLeave?.();
+                    }}
                     data-popover-zone={popoverZone}
                     // The `before:` rules render an invisible 10px hover
                     // bridge in the gap between the popover and its
