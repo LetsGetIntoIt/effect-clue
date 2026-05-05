@@ -85,7 +85,8 @@ import { useConfetti } from "../hooks/useConfetti";
 import { useShareContext } from "../share/ShareProvider";
 import { CardPackRow } from "./CardPackRow";
 import { ShareIcon } from "./ShareIcon";
-import { AlertIcon, BoxedQuestionMarkIcon, Envelope } from "./Icons";
+import { AlertIcon, Envelope } from "./Icons";
+import { HypothesisBadge } from "./HypothesisBadge";
 import { InfoPopover } from "./InfoPopover";
 
 /**
@@ -1320,28 +1321,9 @@ export function Checklist() {
                                                         </sup>
                                                     )}
                                                 {hypothesisValue !== undefined && (
-                                                    // Corner badge marking the
-                                                    // cell as the source of a
-                                                    // hypothesis (vs. a cell
-                                                    // whose value follows from
-                                                    // one). Tone reflects the
-                                                    // HYPOTHESIS value, not the
-                                                    // cell's displayed value:
-                                                    // a cell that's been
-                                                    // deduced Y but
-                                                    // hypothesised N shows a
-                                                    // red badge against a
-                                                    // green cell, making the
-                                                    // disagreement visible at
-                                                    // a glance.
-                                                    <BoxedQuestionMarkIcon
-                                                        size={14}
-                                                        className={
-                                                            "absolute right-0.5 top-0.5 " +
-                                                            (hypothesisValue === Y
-                                                                ? "text-yes"
-                                                                : "text-no")
-                                                        }
+                                                    <HypothesisBadge
+                                                        value={hypothesisValue}
+                                                        status={hypothesisStatus}
                                                     />
                                                 )}
                                             </>
