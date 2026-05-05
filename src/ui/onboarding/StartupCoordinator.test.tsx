@@ -377,6 +377,30 @@ describe("StartupCoordinator — tour precedence", () => {
         expect(probe.current?.phase).toBe("tour");
     });
 
+    test("dismissed-only setup state does not redirect back to setup", () => {
+        // A completion/dismissal timestamp by itself is enough to
+        // keep setup suppressed. This protects the real flow where a
+        // setup dismissal can be present before a visit timestamp has
+        // been persisted for that same key.
+        const recent = new Date().toISOString();
+        seed(STORAGE_SPLASH, {
+            version: 1,
+            lastVisitedAt: recent,
+            lastDismissedAt: recent,
+        });
+        seed(STORAGE_TOUR_SETUP, {
+            version: 1,
+            lastDismissedAt: recent,
+        });
+        // checklistSuggest left unseeded → eligible.
+        seed(STORAGE_INSTALL, { version: 1, visits: 0 });
+
+        const onRedirect = vi.fn();
+        mount("checklistSuggest", onRedirect);
+        expect(onRedirect).not.toHaveBeenCalled();
+        expect(probe.current?.phase).toBe("tour");
+    });
+
     test("no tours eligible → no redirect; phase advances past tour", () => {
         // All tours dismissed. Coordinator finds no eligible target;
         // no redirect. Tour eligibility = false; phase falls through

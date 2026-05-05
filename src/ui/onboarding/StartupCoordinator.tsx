@@ -229,9 +229,9 @@ const isTourEligible = (screen: ScreenKey, now: DateTime.Utc): boolean => {
     }
     const state = loadTourState(screen);
     if (state.lastDismissedAt === undefined) return true;
-    if (state.lastVisitedAt === undefined) return true;
+    const referenceAt = state.lastVisitedAt ?? state.lastDismissedAt;
     return Duration.isGreaterThan(
-        DateTime.distance(state.lastVisitedAt, now),
+        DateTime.distance(referenceAt, now),
         TOUR_RE_ENGAGE_DURATION,
     );
 };

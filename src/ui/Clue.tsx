@@ -424,10 +424,10 @@ function FirstSuggestionTourGate() {
         firedRef.current = true;
         startTour(FIRST_SUGGESTION_SCREEN_KEY);
         // Persist BOTH timestamps so the gate returns false until
-        // the next 4-week re-engage window opens. Saving only
-        // `lastDismissedAt` would keep the gate eligible because
-        // the gate's "dismissed but never visited" branch returns
-        // true (a defensive "if state is incoherent, show again").
+        // the next 4-week re-engage window opens. `saveTourDismissed`
+        // also writes the visit timestamp, but the explicit visit
+        // write documents that this event-triggered tour was shown
+        // outside the usual screen-mount gate.
         saveTourVisited(FIRST_SUGGESTION_SCREEN_KEY, now);
         saveTourDismissed(FIRST_SUGGESTION_SCREEN_KEY, now);
     }, [state.suggestions.length, hydrated, activeScreen, phase, startTour]);

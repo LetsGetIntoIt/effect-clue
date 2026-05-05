@@ -6,8 +6,13 @@
  * Gate (read both timestamps before writing the new visit):
  *
  *   show = lastDismissedAt is undefined           // never dismissed
- *       OR lastVisitedAt is undefined             // first visit
- *       OR (now − lastVisitedAt) > DURATION       // dormant returnee
+ *       OR (now − referenceAt) > DURATION         // dormant returnee
+ *
+ * `referenceAt` is `lastVisitedAt` when present, falling back to
+ * `lastDismissedAt`. That fallback matters for older or defensive
+ * states that contain a valid dismissal without a visit timestamp:
+ * the dismissal should still suppress the tour until the re-engage
+ * window expires.
  *
  * Same shape as `useSplashGate` — the splash modal sets the
  * convention for the whole "dismiss + 4-week re-engage" cadence and
@@ -15,7 +20,7 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { DateTime, Duration, Effect } from "effect";
 import { TelemetryRuntime } from "../../observability/runtime";
 import { TOUR_RE_ENGAGE_DURATION } from "./tours";
@@ -37,8 +42,8 @@ export const computeShouldShowTour = Effect.fn("tour.computeGate")(
         duration: Duration.Duration,
     ) {
         if (state.lastDismissedAt === undefined) return true;
-        if (state.lastVisitedAt === undefined) return true;
-        const elapsed = DateTime.distance(state.lastVisitedAt, now);
+        const referenceAt = state.lastVisitedAt ?? state.lastDismissedAt;
+        const elapsed = DateTime.distance(referenceAt, now);
         return Duration.isGreaterThan(elapsed, duration);
     },
 );
@@ -47,6 +52,11 @@ interface UseTourGateOptions {
     /** When false, the gate never fires. Used to defer per-screen tours
      * until the user is actually on that screen. */
     readonly enabled?: boolean;
+}
+
+interface GateDecision {
+    readonly screen: ScreenKey;
+    readonly shouldShow: boolean;
 }
 
 export function useTourGate(
@@ -59,7 +69,10 @@ export function useTourGate(
     readonly dismiss: () => void;
 } {
     const enabled = options.enabled ?? true;
-    const [shouldShow, setShouldShow] = useState(false);
+    const [decision, setDecision] = useState<GateDecision>(() => ({
+        screen,
+        shouldShow: false,
+    }));
 
     useEffect(() => {
         if (!enabled) return;
@@ -73,16 +86,20 @@ export function useTourGate(
         // state from a previous screen visible to the firing
         // effect when the user navigated to a screen whose tour was
         // already dismissed.
-        setShouldShow(should);
+        setDecision({ screen, shouldShow: should });
         // Order is critical: read state and decide BEFORE we overwrite
         // the visit timestamp, otherwise the gap is always 0.
         saveTourVisited(screen, now);
     }, [enabled, screen]);
 
-    const dismiss = () => {
+    const dismiss = useCallback(() => {
         saveTourDismissed(screen, DateTime.nowUnsafe());
-        setShouldShow(false);
-    };
+        setDecision({ screen, shouldShow: false });
+    }, [screen]);
 
-    return { shouldShow, dismiss };
+    return {
+        shouldShow:
+            enabled && decision.screen === screen ? decision.shouldShow : false,
+        dismiss,
+    };
 }

@@ -32,6 +32,16 @@ const seedDismissed = (key: string): void => {
     );
 };
 
+const seedDismissedOnly = (key: string, recent: string): void => {
+    window.localStorage.setItem(
+        key,
+        JSON.stringify({
+            version: 1,
+            lastDismissedAt: recent,
+        }),
+    );
+};
+
 describe("screenKeyForUiMode", () => {
     test("setup uiMode → setup screen", () => {
         expect(screenKeyForUiMode("setup")).toBe("setup");
@@ -157,6 +167,15 @@ describe("pickFirstEligibleScreenKey", () => {
 
     test("both prereqs dismissed → sharing eligible → returns sharing", () => {
         seedDismissed(STORAGE_TOUR_SETUP);
+        seedDismissed(STORAGE_TOUR_CHECKLIST_SUGGEST);
+        expect(pickFirstEligibleScreenKey(["setup", "sharing"], now)).toBe(
+            "sharing",
+        );
+    });
+
+    test("dismissed-only setup state stays suppressed inside the re-engage window", () => {
+        const recent = new Date(DateTime.toEpochMillis(now)).toISOString();
+        seedDismissedOnly(STORAGE_TOUR_SETUP, recent);
         seedDismissed(STORAGE_TOUR_CHECKLIST_SUGGEST);
         expect(pickFirstEligibleScreenKey(["setup", "sharing"], now)).toBe(
             "sharing",

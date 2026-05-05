@@ -133,7 +133,7 @@ export const saveTourVisited = (
 export const saveTourDismissed = (
     screen: ScreenKey,
     now: DateTime.Utc,
-): void => writeMerged(screen, { lastDismissedAt: now });
+): void => writeMerged(screen, { lastVisitedAt: now, lastDismissedAt: now });
 
 /**
  * Wipe every per-screen tour key from localStorage so the next visit

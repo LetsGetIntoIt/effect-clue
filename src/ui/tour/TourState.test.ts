@@ -57,7 +57,7 @@ describe("saveTourVisited / saveTourDismissed round-trip", () => {
         ).toBe(DateTime.toEpochMillis(t));
     });
 
-    test("save dismissed merges with prior visited timestamp", () => {
+    test("save dismissed records the dismissal as the latest visit", () => {
         const visited = now("2026-04-01T00:00:00Z");
         const dismissed = now("2026-04-29T00:00:00Z");
         saveTourVisited("setup", visited);
@@ -65,7 +65,19 @@ describe("saveTourVisited / saveTourDismissed round-trip", () => {
         const loaded = loadTourState("setup");
         expect(
             DateTime.toEpochMillis(loaded.lastVisitedAt!),
-        ).toBe(DateTime.toEpochMillis(visited));
+        ).toBe(DateTime.toEpochMillis(dismissed));
+        expect(
+            DateTime.toEpochMillis(loaded.lastDismissedAt!),
+        ).toBe(DateTime.toEpochMillis(dismissed));
+    });
+
+    test("save dismissed without a prior visit writes both timestamps", () => {
+        const dismissed = now("2026-04-29T00:00:00Z");
+        saveTourDismissed("setup", dismissed);
+        const loaded = loadTourState("setup");
+        expect(
+            DateTime.toEpochMillis(loaded.lastVisitedAt!),
+        ).toBe(DateTime.toEpochMillis(dismissed));
         expect(
             DateTime.toEpochMillis(loaded.lastDismissedAt!),
         ).toBe(DateTime.toEpochMillis(dismissed));
