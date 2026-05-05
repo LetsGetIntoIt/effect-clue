@@ -11,6 +11,7 @@ import type {
     HypothesisValue,
 } from "../../logic/Hypothesis";
 import { HashMap } from "effect";
+import { AlertIcon } from "./Icons";
 import { HypothesisControl } from "./HypothesisControl";
 
 interface CellWhyPopoverProps {
@@ -109,19 +110,30 @@ export function CellWhyPopover({
                     onChange={onHypothesisChange}
                     status={status}
                 />
-                {statusMessage !== undefined && (
-                    <div
-                        className={
-                            "text-[12px] " +
-                            (status.kind === "directlyContradicted" ||
-                            status.kind === "jointlyConflicts"
-                                ? "text-danger"
-                                : "text-muted")
-                        }
-                    >
-                        {statusMessage}
-                    </div>
-                )}
+                {statusMessage !== undefined && (() => {
+                    const isContradicted =
+                        status.kind === "directlyContradicted" ||
+                        status.kind === "jointlyConflicts";
+                    if (isContradicted) {
+                        // Connect the dots to the cell's alert icon: a
+                        // bordered red panel with the same warning icon
+                        // makes the cause visible at popover-open time.
+                        return (
+                            <div className="flex items-start gap-2 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-2 text-[12px] text-danger">
+                                <AlertIcon
+                                    size={14}
+                                    className="mt-[1px] flex-shrink-0"
+                                />
+                                <span>{statusMessage}</span>
+                            </div>
+                        );
+                    }
+                    return (
+                        <div className="text-[12px] text-muted">
+                            {statusMessage}
+                        </div>
+                    );
+                })()}
                 {renderListBelow && activeHypothesisLabels.length > 0 && (
                     <ul className="ml-3 list-disc text-[12px] text-muted">
                         {activeHypothesisLabels.map(label => (

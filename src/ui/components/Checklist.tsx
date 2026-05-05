@@ -75,7 +75,7 @@ import { useConfetti } from "../hooks/useConfetti";
 import { useShareContext } from "../share/ShareProvider";
 import { CardPackRow } from "./CardPackRow";
 import { ShareIcon } from "./ShareIcon";
-import { AlertIcon, Envelope } from "./Icons";
+import { AlertIcon, BoxedQuestionMarkIcon, Envelope } from "./Icons";
 import { InfoPopover } from "./InfoPopover";
 
 /**
@@ -1198,6 +1198,22 @@ export function Checklist() {
                                                             )}
                                                         </sup>
                                                     )}
+                                                {hypothesisValue !== undefined && (
+                                                    // Corner badge marking the
+                                                    // cell as the source of a
+                                                    // hypothesis (vs. a cell
+                                                    // whose value follows from
+                                                    // one). Renders alongside
+                                                    // the central glyph in
+                                                    // every direct-hypothesis
+                                                    // status (active,
+                                                    // confirmed, contradicted,
+                                                    // conflicting).
+                                                    <BoxedQuestionMarkIcon
+                                                        size={10}
+                                                        className="absolute right-0.5 top-0.5 opacity-70"
+                                                    />
+                                                )}
                                             </>
                                         );
                                         // A cell needs the interactive
@@ -2357,20 +2373,18 @@ function useStablePlayerColumnKeys(
 // scope so the `no-literal-string` lint rule reads them as code, not
 // UI text. The matching presentation lives in `renderGlyphNode`.
 //
-// `questionDirect` vs `questionDerived` distinguishes a cell the user
-// pinned a hypothesis on (rendered bolder so it reads as the source)
-// from a cell whose `?` follows from one of those hypotheses.
+// Direct-hypothesis cells use the same "?" glyph as derived cells —
+// the visual distinction lives in a separate corner badge rendered
+// alongside the glyph (see `cellContent` below).
 const GLYPH_YES = "yes" as const;
 const GLYPH_NO = "no" as const;
-const GLYPH_QUESTION_DIRECT = "questionDirect" as const;
-const GLYPH_QUESTION_DERIVED = "questionDerived" as const;
+const GLYPH_QUESTION = "question" as const;
 const GLYPH_ALERT = "alert" as const;
 const GLYPH_BLANK = "blank" as const;
 type GlyphKind =
     | typeof GLYPH_YES
     | typeof GLYPH_NO
-    | typeof GLYPH_QUESTION_DIRECT
-    | typeof GLYPH_QUESTION_DERIVED
+    | typeof GLYPH_QUESTION
     | typeof GLYPH_ALERT
     | typeof GLYPH_BLANK;
 
@@ -2393,9 +2407,8 @@ const glyphKindFor = (
             if (display.value === N) return GLYPH_NO;
             return GLYPH_BLANK;
         case "hypothesis":
-            return GLYPH_QUESTION_DIRECT;
         case "derived":
-            return GLYPH_QUESTION_DERIVED;
+            return GLYPH_QUESTION;
         case "blank":
             return GLYPH_BLANK;
     }
@@ -2407,13 +2420,7 @@ const renderGlyphNode = (kind: GlyphKind): ReactNode => {
             return "✓";
         case GLYPH_NO:
             return "·";
-        case GLYPH_QUESTION_DIRECT:
-            // Direct hypothesis cells render the "?" heavier than the
-            // surrounding cell weight (`font-semibold` on the <td>) so
-            // they read as the source the derived `?` cells follow
-            // from.
-            return <span className="font-extrabold">?</span>;
-        case GLYPH_QUESTION_DERIVED:
+        case GLYPH_QUESTION:
             return "?";
         case GLYPH_ALERT:
             return <AlertIcon size={14} className="text-danger" />;

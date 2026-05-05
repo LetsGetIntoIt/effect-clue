@@ -259,6 +259,35 @@ export function AlertIcon({ className, size = 14 }: IconProps) {
     );
 }
 
+/**
+ * Rounded square framing a question mark — used as a small corner
+ * badge on checklist cells the user has pinned a hypothesis on, to
+ * distinguish them from the cells whose value follows from those
+ * hypotheses. Renders in `currentColor` so the parent picks the tone.
+ */
+export function BoxedQuestionMarkIcon({ className, size = 12 }: IconProps) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+            className={className}
+        >
+            <rect x="3" y="3" width="18" height="18" rx="3" />
+            <path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.7" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+    );
+}
+
 /** Arrow leaving a frame — paired with links that open in a new tab. */
 export function ExternalLinkIcon({ className, size = 14 }: IconProps) {
     return (
