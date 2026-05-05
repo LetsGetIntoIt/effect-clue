@@ -93,93 +93,97 @@ export function CellWhyPopover({
         }
     })();
 
+    const isContradicted =
+        status.kind === "directlyContradicted" ||
+        status.kind === "jointlyConflicts";
+    const isJointConflict = status.kind === "jointlyConflicts";
+    // The conflict list lives INSIDE the danger box for joint
+    // conflicts (so the bullets read as part of the warning) and
+    // BELOW the popover body for derived cells (where they're
+    // explanatory, not part of an alert).
+    const renderListInsideDanger =
+        isJointConflict && activeHypothesisLabels.length > 0;
+    const renderListOutside =
+        renderListBelow && !renderListInsideDanger && activeHypothesisLabels.length > 0;
+
+    const statusBox = statusMessage === undefined ? null : isContradicted ? (
+        // Connect the dots to the cell's alert icon: a bordered red
+        // panel with the same warning icon makes the cause visible at
+        // popover-open time. Joint-conflict lists live inside this
+        // box so the bullets read as part of the warning.
+        <div className="flex items-start gap-2 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-2 text-[12px] text-danger">
+            <AlertIcon size={14} className="mt-[1px] flex-shrink-0" />
+            <div className="flex flex-col gap-1">
+                <span>{statusMessage}</span>
+                {renderListInsideDanger && (
+                    <ul className="ml-3 list-disc">
+                        {activeHypothesisLabels.map(lbl => (
+                            <li key={lbl}>{lbl}</li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+        </div>
+    ) : status.kind === "confirmed" ? (
+        // Mirror the contradiction panel but in the success palette
+        // so the affirmative status reads with matching weight.
+        <div className="flex items-start gap-2 rounded-[var(--radius)] border border-yes/40 bg-yes-bg p-2 text-[12px] text-yes">
+            <CheckIcon size={14} className="mt-[1px] flex-shrink-0" />
+            <span>{statusMessage}</span>
+        </div>
+    ) : (
+        <div className="text-[12px] text-muted">{statusMessage}</div>
+    );
+
     return (
         <div className="contents">
-            <div className="flex flex-col gap-2">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                    {t("sectionLabel", {
+            <div className="flex flex-col gap-3">
+                <div className="text-[14px] font-semibold uppercase tracking-wide text-fg">
+                    {t("cellHeading", {
                         owner: ownerLabel(cell.owner),
                         card: cardLabel,
                     })}
                 </div>
-                <p className="text-[12px] leading-snug text-muted">
-                    {t("helpText")}
-                </p>
-                <HypothesisControl
-                    value={hypothesisValue}
-                    onChange={onHypothesisChange}
-                    status={status}
-                />
-                {statusMessage !== undefined && (() => {
-                    const isContradicted =
-                        status.kind === "directlyContradicted" ||
-                        status.kind === "jointlyConflicts";
-                    // Joint-conflict popovers render the list of
-                    // colliding hypotheses INSIDE the red box so the
-                    // bullets read as part of the warning, not as a
-                    // separate factoid below it.
-                    const listInsideBox =
-                        status.kind === "jointlyConflicts" &&
-                        activeHypothesisLabels.length > 0;
-                    if (isContradicted) {
-                        return (
-                            <div className="flex items-start gap-2 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-2 text-[12px] text-danger">
-                                <AlertIcon
-                                    size={14}
-                                    className="mt-[1px] flex-shrink-0"
-                                />
-                                <div className="flex flex-col gap-1">
-                                    <span>{statusMessage}</span>
-                                    {listInsideBox && (
-                                        <ul className="ml-3 list-disc">
-                                            {activeHypothesisLabels.map(lbl => (
-                                                <li key={lbl}>{lbl}</li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    }
-                    if (status.kind === "confirmed") {
-                        return (
-                            <div className="flex items-start gap-2 rounded-[var(--radius)] border border-yes/40 bg-yes-bg p-2 text-[12px] text-yes">
-                                <CheckIcon
-                                    size={14}
-                                    className="mt-[1px] flex-shrink-0"
-                                />
-                                <span>{statusMessage}</span>
-                            </div>
-                        );
-                    }
-                    return (
-                        <div className="text-[12px] text-muted">
-                            {statusMessage}
+                {whyText !== undefined && (
+                    <div className="flex flex-col gap-2">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-fg">
+                            {t("hardFactsLabel")}
                         </div>
-                    );
-                })()}
-                {renderListBelow &&
-                    activeHypothesisLabels.length > 0 &&
-                    status.kind !== "jointlyConflicts" && (
+                        <div className="whitespace-pre-line">{whyText}</div>
+                    </div>
+                )}
+                <div
+                    className={
+                        whyText !== undefined
+                            ? "flex flex-col gap-2 border-t border-border pt-3"
+                            : "flex flex-col gap-2"
+                    }
+                >
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-fg">
+                        {t("hypothesisLabel")}
+                    </div>
+                    <p className="text-[12px] leading-snug text-muted">
+                        {t("helpText")}
+                    </p>
+                    <HypothesisControl
+                        value={hypothesisValue}
+                        onChange={onHypothesisChange}
+                        status={status}
+                    />
+                    {statusBox}
+                    {renderListOutside && (
                         <ul className="ml-3 list-disc text-[12px] text-muted">
                             {activeHypothesisLabels.map(lbl => (
                                 <li key={lbl}>{lbl}</li>
                             ))}
                         </ul>
                     )}
-                {whyText !== undefined && (
-                    <div className="flex flex-col gap-2 border-t border-border/50 pt-2">
-                        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                            {t("hardFactsLabel")}
+                    {whyText === undefined && status.kind === "off" && (
+                        <div className="text-[12px] text-muted">
+                            {t("emptyHint")}
                         </div>
-                        <div className="whitespace-pre-line">{whyText}</div>
-                    </div>
-                )}
-                {whyText === undefined && status.kind === "off" && (
-                    <div className="text-[12px] text-muted">
-                        {t("emptyHint")}
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </div>
     );

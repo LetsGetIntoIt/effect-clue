@@ -131,7 +131,8 @@
     },
     "hypothesis": {
         "groupLabel": "Hypothesis",
-        "sectionLabel": "Hypothesis · {owner} / {card}",
+        "cellHeading": "{owner} / {card}",
+        "hypothesisLabel": "Hypothesis",
         "hardFactsLabel": "Hard facts",
         "helpText": "Have a hunch? Set it here to treat it like a soft deduction — we'll tell you when it's confirmed, plausible, or rejected.",
         "optionOff": "Off",
