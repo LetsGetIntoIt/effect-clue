@@ -299,6 +299,31 @@ export function Checklist() {
     //   - no why popover is open (`popoverCell === null`).
     const popoverCellRef = useRef<Cell | null>(popoverCell);
     popoverCellRef.current = popoverCell;
+    // Touch-only "first tap dismisses, second tap opens" gate. On
+    // touch, tapping a cell while a popover is already open on a
+    // different cell should dismiss the open popover and NOT swap
+    // it onto the freshly tapped cell — the user has to tap the new
+    // cell a second time to see its popover. Mouse and keyboard
+    // continue to swap on hover / open on click as before; on those
+    // input types, peeking at adjacent cells is cheap and useful.
+    //
+    // The pointerdown handler on each popover-interactive cell sets
+    // this flag when the conditions match. Radix's
+    // `onPointerDownOutside` then closes the previously-open popover,
+    // and the click that follows would normally fire `onOpenChange(true)`
+    // on the freshly tapped cell — we consume the flag there to
+    // suppress that open. The flag self-resets at the start of every
+    // pointerdown so a stale value can never carry over.
+    const dismissNextTouchOpenRef = useRef(false);
+    // Map from `ownerCellKey` to the popover-interactive cell's DOM
+    // node. Each such cell registers itself via a callback ref. The
+    // popover-cell-changed effect below uses this map to move focus
+    // onto the cell whose popover just opened — important for the
+    // mouse hover-intent path, which sets `popoverCell` after a
+    // 300 ms hover but never naturally moves focus. With the cell
+    // focused, the `:focus` ring outlines the popover's anchor cell
+    // even when the popover content is portaled away from it.
+    const cellNodesByKeyRef = useRef<Map<string, HTMLElement>>(new Map());
     // Analytics context: snapshot the inputs `statusFor` needs so the
     // keyboard handler can read them at action time without bloating
     // the useEffect dep list.
@@ -413,6 +438,26 @@ export function Checklist() {
         jointFailed,
     ]);
 
+    const playerColumnKeys = useStablePlayerColumnKeys(setup.players);
+
+    // When `popoverCell` becomes (or changes to) a non-null cell,
+    // move focus onto its trigger `<td>` if it isn't already there.
+    // The hover-intent path opens the popover from a mouse hover,
+    // which doesn't naturally move focus; without this effect the
+    // popover would float without a visible cell anchor (the popover
+    // content is portaled into `document.body`, so the visual link
+    // back to the trigger comes entirely from the cell's `:focus`
+    // ring). `preventScroll: true` keeps the page from jumping —
+    // the user is already looking at the cell.
+    useEffect(() => {
+        if (popoverCell === null) return;
+        const key = `${ownerKey(popoverCell.owner, playerColumnKeys)}-${String(popoverCell.card)}`;
+        const node = cellNodesByKeyRef.current.get(key);
+        if (node && document.activeElement !== node) {
+            node.focus({ preventScroll: true });
+        }
+    }, [popoverCell, playerColumnKeys]);
+
     const owners: ReadonlyArray<Owner> = allOwners(setup);
 
     // Flat (card → row) index used for arrow-key grid navigation.
@@ -439,7 +484,6 @@ export function Checklist() {
         maxCol: totalCols - 1,
     };
 
-    const playerColumnKeys = useStablePlayerColumnKeys(setup.players);
     const tableEntryTransition = useReducedTransition(TABLE_ENTRY_TRANSITION);
     const tableRowEntryTransition = useReducedTransition(
         TABLE_ROW_ENTRY_TRANSITION,
@@ -1580,6 +1624,28 @@ export function Checklist() {
                                                     open={isOpen}
                                                     onOpenChange={open => {
                                                         if (open) {
+                                                            if (
+                                                                dismissNextTouchOpenRef.current
+                                                            ) {
+                                                                // Touch tap
+                                                                // on a different
+                                                                // cell while a
+                                                                // popover was
+                                                                // open: the
+                                                                // open popover
+                                                                // already closed
+                                                                // via Radix's
+                                                                // pointerdown-outside
+                                                                // path; suppress
+                                                                // this open so
+                                                                // the user has
+                                                                // to tap again
+                                                                // to see the
+                                                                // new cell's
+                                                                // popover.
+                                                                dismissNextTouchOpenRef.current = false;
+                                                                return;
+                                                            }
                                                             // Explicit
                                                             // activation
                                                             // (click /
@@ -1609,6 +1675,18 @@ export function Checklist() {
                                                     popoverZone="checklist"
                                                 >
                                                     <motion.td
+                                                        ref={(el: HTMLElement | null) => {
+                                                            if (el) {
+                                                                cellNodesByKeyRef.current.set(
+                                                                    ownerCellKey,
+                                                                    el,
+                                                                );
+                                                            } else {
+                                                                cellNodesByKeyRef.current.delete(
+                                                                    ownerCellKey,
+                                                                );
+                                                            }
+                                                        }}
                                                         className={tdClassName}
                                                         exit={columnCellExit}
                                                         style={STYLE_COLUMN_CELL_VISIBLE}
@@ -1619,6 +1697,45 @@ export function Checklist() {
                                                         data-cell-col={colIdx}
                                                         {...firstCellAnchorAttr}
                                                         onFocus={onCellFocus}
+                                                        onPointerDown={e => {
+                                                            // Reset any stale
+                                                            // flag from a prior
+                                                            // gesture that
+                                                            // didn't complete a
+                                                            // click.
+                                                            dismissNextTouchOpenRef.current =
+                                                                false;
+                                                            if (
+                                                                e.pointerType
+                                                                    !== "touch"
+                                                            )
+                                                                return;
+                                                            // Touch tap on a
+                                                            // different cell
+                                                            // while a popover
+                                                            // is open: arm the
+                                                            // dismiss-not-open
+                                                            // gate. The flag
+                                                            // is consumed by
+                                                            // this cell's
+                                                            // onOpenChange a
+                                                            // few events later
+                                                            // when the click
+                                                            // would otherwise
+                                                            // open the new
+                                                            // popover.
+                                                            if (
+                                                                popoverCellRef.current
+                                                                    !== null
+                                                                && !Equal.equals(
+                                                                    popoverCellRef.current,
+                                                                    thisCell,
+                                                                )
+                                                            ) {
+                                                                dismissNextTouchOpenRef.current =
+                                                                    true;
+                                                            }
+                                                        }}
                                                         onKeyDown={e => {
                                                             // Enter/Space should open the
                                                             // info popover. Radix binds
@@ -2607,7 +2724,7 @@ const STICKY_FIRST_COL_HEADER =
 
 // Z-index ladder for the checklist:
 //   - body cell hover ring      : --z-checklist-cell-hover
-//   - body cell focus-visible   : --z-checklist-cell-focus
+//   - body cell focus           : --z-checklist-cell-focus
 //   - sticky first column       : --z-checklist-sticky-column
 //   - sticky <thead>            : --z-checklist-sticky-header
 // The body-cell z-index escape keeps rings from being painted under
@@ -2624,10 +2741,18 @@ const STICKY_FIRST_COL_HEADER =
 // stacking context and respects z-index escape, so the ring renders
 // on all four sides regardless of which cell its neighbour is.
 //
-// 3px ring matches the global `*:focus-visible` outline width set
-// in `app/globals.css` so checklist cells read at the same weight
-// as every other focusable element on the page (inputs, buttons,
-// etc.).
+// 3px ring width matches the global `*:focus-visible` outline width
+// set in `app/globals.css` so checklist cells read at the same weight
+// as every other focusable element on the page (inputs, buttons, etc.).
+//
+// `:focus` (NOT `:focus-visible`): when a touch user taps a cell to
+// open its popover, we want the ring to make the trigger cell visible
+// — the popover is portaled into `document.body`, so without the ring
+// the user can't tell which cell anchors it. `:focus-visible` skips
+// touch and mouse focus, which would leave the popover floating
+// without a visible source. The slight cost is a ring after every
+// mouse click on a cell; that's acceptable here because the popover
+// it pairs with is the primary feedback anyway.
 //
 // The ring-offset color is set per-cell to match the cell's own
 // background (`ring-offset-yes-bg`, `ring-offset-no-bg`, or
@@ -2635,8 +2760,15 @@ const STICKY_FIRST_COL_HEADER =
 // visually equivalent to the transparent offset CSS outlines have.
 // Without that match the offset would render as a solid panel band
 // and the focus indicator would look like a thick double-ring.
+// `hover:` modifiers are gated by `not-focus:` so the soft hover
+// ring (2px, accent/30) yields to the focus ring (3px, accent)
+// whenever the cell is focused. Without that gate, both rules
+// write `--tw-ring-shadow` and the hover-pseudo wins while the
+// pointer is still over the focused cell — so opening the popover
+// via hover would show a faint hint until the cursor moved away,
+// at which point the strong focus ring would finally appear.
 const CELL_INTERACTIVE =
-    " cursor-pointer hover:z-[var(--z-checklist-cell-hover)] hover:rounded-[2px] hover:ring-2 hover:ring-accent/30 focus-visible:z-[var(--z-checklist-cell-focus)] focus-visible:ring-[3px] focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:rounded-[2px] focus-visible:outline-none";
+    " cursor-pointer hover:not-focus:z-[var(--z-checklist-cell-hover)] hover:not-focus:rounded-[2px] hover:not-focus:ring-2 hover:not-focus:ring-accent/30 focus:z-[var(--z-checklist-cell-focus)] focus:ring-[3px] focus:ring-accent focus:ring-offset-2 focus:rounded-[2px] focus:outline-none";
 
 const CELL_HIGHLIGHTED =
     " z-[var(--z-checklist-cell-hover)] ring-2 ring-accent ring-offset-1 ring-offset-panel";
@@ -2666,10 +2798,10 @@ const cellClass = (
                 ? display.value
                 : undefined;
     if (tone === Y) {
-        return `${base} bg-yes-bg text-yes focus-visible:ring-offset-yes-bg`;
+        return `${base} bg-yes-bg text-yes focus:ring-offset-yes-bg`;
     }
     if (tone === N) {
-        return `${base} bg-no-bg text-no focus-visible:ring-offset-no-bg`;
+        return `${base} bg-no-bg text-no focus:ring-offset-no-bg`;
     }
-    return `${base} bg-white focus-visible:ring-offset-white`;
+    return `${base} bg-white focus:ring-offset-white`;
 };
