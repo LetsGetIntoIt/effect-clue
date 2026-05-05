@@ -298,6 +298,22 @@ export function Checklist() {
     //   - no why popover is open (`popoverCell === null`).
     const popoverCellRef = useRef<Cell | null>(popoverCell);
     popoverCellRef.current = popoverCell;
+    // Touch-only "first tap dismisses, second tap opens" gate. On
+    // touch, tapping a cell while a popover is already open on a
+    // different cell should dismiss the open popover and NOT swap
+    // it onto the freshly tapped cell — the user has to tap the new
+    // cell a second time to see its popover. Mouse and keyboard
+    // continue to swap on hover / open on click as before; on those
+    // input types, peeking at adjacent cells is cheap and useful.
+    //
+    // The pointerdown handler on each popover-interactive cell sets
+    // this flag when the conditions match. Radix's
+    // `onPointerDownOutside` then closes the previously-open popover,
+    // and the click that follows would normally fire `onOpenChange(true)`
+    // on the freshly tapped cell — we consume the flag there to
+    // suppress that open. The flag self-resets at the start of every
+    // pointerdown so a stale value can never carry over.
+    const dismissNextTouchOpenRef = useRef(false);
     // Analytics context: snapshot the inputs `statusFor` needs so the
     // keyboard handler can read them at action time without bloating
     // the useEffect dep list.
@@ -1598,6 +1614,28 @@ export function Checklist() {
                                                     open={isOpen}
                                                     onOpenChange={open => {
                                                         if (open) {
+                                                            if (
+                                                                dismissNextTouchOpenRef.current
+                                                            ) {
+                                                                // Touch tap
+                                                                // on a different
+                                                                // cell while a
+                                                                // popover was
+                                                                // open: the
+                                                                // open popover
+                                                                // already closed
+                                                                // via Radix's
+                                                                // pointerdown-outside
+                                                                // path; suppress
+                                                                // this open so
+                                                                // the user has
+                                                                // to tap again
+                                                                // to see the
+                                                                // new cell's
+                                                                // popover.
+                                                                dismissNextTouchOpenRef.current = false;
+                                                                return;
+                                                            }
                                                             // Explicit
                                                             // activation
                                                             // (click /
@@ -1637,6 +1675,45 @@ export function Checklist() {
                                                         data-cell-col={colIdx}
                                                         {...firstCellAnchorAttr}
                                                         onFocus={onCellFocus}
+                                                        onPointerDown={e => {
+                                                            // Reset any stale
+                                                            // flag from a prior
+                                                            // gesture that
+                                                            // didn't complete a
+                                                            // click.
+                                                            dismissNextTouchOpenRef.current =
+                                                                false;
+                                                            if (
+                                                                e.pointerType
+                                                                    !== "touch"
+                                                            )
+                                                                return;
+                                                            // Touch tap on a
+                                                            // different cell
+                                                            // while a popover
+                                                            // is open: arm the
+                                                            // dismiss-not-open
+                                                            // gate. The flag
+                                                            // is consumed by
+                                                            // this cell's
+                                                            // onOpenChange a
+                                                            // few events later
+                                                            // when the click
+                                                            // would otherwise
+                                                            // open the new
+                                                            // popover.
+                                                            if (
+                                                                popoverCellRef.current
+                                                                    !== null
+                                                                && !Equal.equals(
+                                                                    popoverCellRef.current,
+                                                                    thisCell,
+                                                                )
+                                                            ) {
+                                                                dismissNextTouchOpenRef.current =
+                                                                    true;
+                                                            }
+                                                        }}
                                                         onKeyDown={e => {
                                                             // Enter/Space should open the
                                                             // info popover. Radix binds
