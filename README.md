@@ -94,10 +94,12 @@ Tests live next to source as `Foo.test.ts(x)` beside `Foo.ts(x)`.
 ### First-time setup
 
 ```bash
-nvm use            # picks the version from .nvmrc
+nvm use                          # picks the version from .nvmrc
 pnpm install
-cp env.example .env.local
-pnpm db:up         # Postgres in Docker; safe to skip if you don't need server features
+cp env.example .env.local        # variable scaffolding + Docker DB defaults
+# Fill in GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.local
+# (see "Google OAuth — local dev" below for the one-time setup).
+pnpm db:up                       # Postgres in Docker; safe to skip if you don't need server features
 pnpm dev
 ```
 
@@ -105,7 +107,46 @@ Then open the local URL printed by Next.js. It is usually
 <http://localhost:3000>, but Next will automatically pick another
 available port when 3000 is already in use.
 
-The third-party SDKs (Sentry, Honeycomb, PostHog) all no-op when their env vars are unset, and local development falls back to the committed Docker Postgres URL when `DATABASE_URL` is blank, so the app runs end-to-end with an empty `.env.local` after `pnpm db:up`.
+The third-party SDKs (Sentry, Honeycomb, PostHog) all no-op when their env vars are unset, so the app runs end-to-end with everything else blank in `.env.local` once the OAuth values are filled in.
+
+#### Google OAuth — local dev
+
+Better Auth requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` even in
+local dev (`pnpm dev` exits at startup if either is empty — see
+[src/server/authEnv.ts](src/server/authEnv.ts)). One-time setup per machine:
+
+1. <https://console.cloud.google.com> → **APIs & Services →
+   Credentials → Create Credentials → OAuth client ID → Web application**.
+2. **Authorized JavaScript origins** — add `http://localhost:3000`
+   (and any other localhost ports you regularly use).
+3. **Authorized redirect URIs** — add
+   `http://localhost:3000/api/auth/callback/google` and matching
+   entries for any other ports.
+4. Copy the resulting client ID + secret into `.env.local`.
+
+This is a localhost-scoped client — keeping the values out of any
+tracked file (including `env.example`) avoids GitHub's secret-scanning
+push protection and the "secrets in repo" footgun.
+
+If you're working on Better Auth / sharing changes against a fully-
+provisioned environment instead, follow [docs/setup-vercel-neon-google.md](docs/setup-vercel-neon-google.md)
+to wire up Vercel + Neon, then `vercel env pull .env.local` to seed
+the file (this also pulls a Neon `DATABASE_URL` that overrides the
+Docker default).
+
+#### Worktrees inherit `.env.local`
+
+Once the main checkout's `.env.local` is configured, every worktree
+spun up via `git worktree add` (or via Claude / Codex agents under
+`.claude/worktrees/<name>/`) can copy that file in one command:
+
+```bash
+cp "$(git rev-parse --git-common-dir)/../.env.local" .env.local
+```
+
+Don't symlink — edits to env in the worktree should not leak back
+into the main checkout. See AGENTS.md "Worktree env setup" for the
+agent-specific lifecycle.
 
 ### Local Postgres via Docker
 
@@ -170,7 +211,7 @@ Copy [env.example](env.example) to `.env.local`. All third-party integrations ar
 | `DATABASE_URL_UNPOOLED` | Direct (non-pooler) Postgres URL. Reserved for migration runs that need a stable session. |
 | `BETTER_AUTH_SECRET` | Server-only secret for session JWT signing. Generate with `openssl rand -hex 32`. |
 | `BETTER_AUTH_URL` | Public URL of the deployed app. Leave blank in local dev so auth follows the actual auto-selected localhost port. |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth client. Optional in local dev (the dev-only username/password flow covers it); required for previews/production. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth client. **Required in every environment** — `pnpm dev` exits at startup if either is empty. Use a localhost-scoped client locally (see "Google OAuth — local dev" above); previews/production use a separate client in Vercel env vars. |
 
 In CI/production, the build job needs `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` to upload source maps. Production also needs the DB and auth vars wired in Vercel — see [docs/setup-vercel-neon-google.md](docs/setup-vercel-neon-google.md).
 

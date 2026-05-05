@@ -102,14 +102,22 @@ automatic port fallback keeps working when 3000 is already occupied.
 
 ## 5. Google OAuth client
 
-Required for previews and production. Local dev can use the dev-only
-username/password path inside the Account modal, so
-`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` may be left blank when
-running against Docker offline. Production and Vercel previews still
-fail fast when either Google value is missing, which keeps OAuth
-misconfiguration from turning into a confusing missing-provider error.
-The dev credential path tree-shakes out of production bundles, see CI
-assertion below.
+Required in every environment — `pnpm dev` exits at startup if either
+`GOOGLE_CLIENT_ID` or `GOOGLE_CLIENT_SECRET` is missing (see
+`src/server/authEnv.ts`). The committed `env.example` intentionally
+leaves both blank: GitHub secret scanning rejects pushed values, and
+keeping localhost-only credentials out of the repo avoids the "secrets
+in tracked files" footgun. The README's "Google OAuth — local dev"
+section walks through creating a localhost-scoped client and seeding
+`.env.local` once per machine; subsequent worktrees inherit it via
+`cp "$(git rev-parse --git-common-dir)/../.env.local" .env.local`.
+
+The values below configure the **production / preview** OAuth client,
+which is separate from your dev one and lives in Vercel env vars.
+Production and Vercel previews fail fast on the same missing-value
+check, which keeps OAuth misconfiguration from surfacing later as a
+confusing missing-provider error. The dev credential path tree-shakes
+out of production bundles, see CI assertion below.
 
 1. <https://console.cloud.google.com> → **APIs & Services →
    Credentials → Create Credentials → OAuth client ID → Web

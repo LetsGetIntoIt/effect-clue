@@ -66,7 +66,27 @@ Scripts that require `pnpm install`:
 - `pnpm build` — static export
 - `pnpm start` — serve the static export
 
-Claude's `next-dev` preview configured in `.claude/launch.json` runs `pnpm install && exec pnpm dev` itself, so those previews are self-healing and the dev server receives shutdown signals directly. In Codex, use the local preview workflow below. The pre-commit checks above are not self-healing; if any of them fails with a module-not-found error, run `pnpm install` first and retry.
+Claude's `next-dev` preview configured in `.claude/launch.json` runs `pnpm install && exec pnpm dev` itself, so those previews are self-healing for `node_modules` and the dev server receives shutdown signals directly. They are **not** self-healing for `.env.local` — see "Worktree env setup" below. In Codex, use the local preview workflow below. The pre-commit checks above are not self-healing either; if any of them fails with a module-not-found error, run `pnpm install` first and retry.
+
+## Worktree env setup
+
+Both Claude and Codex agents typically work in a worktree under `.claude/worktrees/<name>/`. A fresh worktree starts without a `.env.local`, but `pnpm dev` exits at startup on missing `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `DATABASE_URL` (by design — see `src/server/authEnv.ts`). The fix is one shell command:
+
+```sh
+cp "$(git rev-parse --git-common-dir)/../.env.local" .env.local
+```
+
+`git rev-parse --git-common-dir` returns the shared `.git` directory of the worktree, which lives inside the main checkout, so `<git-common-dir>/../.env.local` always resolves to the main checkout's env file regardless of where the worktree sits on disk.
+
+That's it — no `vercel env pull`, no Google Console round-trip. The agent inherits whatever the human dev already configured for the main checkout. If `.env.local` doesn't exist yet in the main checkout, see "First-time setup" in [README.md](README.md) for the one-time bootstrap (it covers creating a localhost-scoped Google OAuth client and seeding `.env.local`).
+
+The committed [env.example](env.example) holds the variable names + non-secret defaults (Docker `DATABASE_URL`, PostHog host) but intentionally leaves the OAuth values blank — GitHub secret scanning rejects any pushed value, and "secrets in tracked files" is a footgun even when the values are dev-only.
+
+Operational notes:
+
+1. **Copy, don't symlink.** Edits to env in the worktree (e.g. swapping a DB URL while testing) would leak into the main checkout if symlinked. `.env.local` is gitignored.
+2. **Restart after editing.** Next.js only reads env at startup, so if you change `.env.local` while the preview is running, restart it (`preview_stop` then `preview_start` for Claude; Ctrl-C and `pnpm dev` for Codex).
+3. **Don't print secrets.** Print only `<set>` / `<empty>` status when inspecting env health. The full `.env.local` should be treated as opaque.
 
 ## Local database and dev server lifecycle
 
@@ -76,18 +96,22 @@ errors in application code; fix the local database/env setup instead.
 
 Before starting the preview in Codex:
 
-1. Make sure `.env.local` points `DATABASE_URL` at the Docker database:
-   `postgres://effect_clue:local_dev_only@localhost:5432/effect_clue`.
-2. Make sure `.env.local` has non-empty `GOOGLE_CLIENT_ID` and
-   `GOOGLE_CLIENT_SECRET`. Missing or blank Google OAuth env vars are
-   startup-time errors by design.
-3. Do not print secret values. If you need to inspect env health, print
-   only `<set>` / `<empty>` status.
-4. Start the local database with `pnpm db:up`.
-5. Start the app with `pnpm dev`, then open the `Local:` URL printed
-   by Next.js in the in-app browser. It is usually
-   `http://localhost:3000`, but the dev script auto-selects the next
-   available port when 3000 is already in use.
+1. **Env file** — see "Worktree env setup" above. One `cp` from the
+   main checkout's `.env.local` is enough; the agent inherits whatever
+   is already working there. Don't fetch new secrets in a worktree —
+   if something is missing, fix it in the main checkout's `.env.local`
+   and re-copy.
+2. **Database** — `pnpm db:up` starts the local Docker Postgres at
+   `postgres://effect_clue:local_dev_only@localhost:5432/effect_clue`
+   (the same URL `env.example` ships with).
+3. **Dev server** — `pnpm dev`. Then open the `Local:` URL printed
+   by Next.js in the in-app browser. Usually `http://localhost:3000`,
+   but the dev script auto-selects the next available port when
+   3000 is already in use.
+
+Claude's `next-dev` preview is the same chain wrapped in
+`.claude/launch.json`. The preview tooling does NOT seed `.env.local`,
+so the env step (1) above still applies before `preview_start`.
 
 Shutdown is part of the workflow. When you start `pnpm dev` from a
 shell session, stop that same session with Ctrl-C before finishing.
