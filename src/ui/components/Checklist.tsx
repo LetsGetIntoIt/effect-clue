@@ -75,7 +75,7 @@ import { useConfetti } from "../hooks/useConfetti";
 import { useShareContext } from "../share/ShareProvider";
 import { CardPackRow } from "./CardPackRow";
 import { ShareIcon } from "./ShareIcon";
-import { Envelope } from "./Icons";
+import { AlertIcon, Envelope } from "./Icons";
 import { InfoPopover } from "./InfoPopover";
 
 /**
@@ -1165,7 +1165,10 @@ export function Checklist() {
                                             />
                                         ) : (
                                             <>
-                                                <AnimatedCellGlyph display={display} />
+                                                <AnimatedCellGlyph
+                                                    display={display}
+                                                    status={hypothesisStatus}
+                                                />
                                                 {footnoteNumbers.length > 0 &&
                                                     value === undefined && (
                                                         <sup className="ml-0.5 text-[9px] font-normal text-accent">
@@ -2014,11 +2017,12 @@ const buildCellTitle = (args: {
         });
     });
 
+    // The "Why this value:" prefix used to lead the chain text, but the
+    // popover now renders a "Hard facts" section heading above it
+    // (parallel to the "Hypothesis" heading), so the prefix is
+    // redundant here.
     const parts: string[] = [];
-    if (chainLines.length > 0) {
-        parts.push(tDeduce("whyHeader"));
-        parts.push(...chainLines);
-    }
+    if (chainLines.length > 0) parts.push(...chainLines);
     if (footnoteLine) parts.push(footnoteLine);
 
     return parts.length > 0 ? parts.join("\n") : undefined;
@@ -2328,51 +2332,92 @@ function useStablePlayerColumnKeys(
     }, [players]);
 }
 
-const cellLabel = (value: CellValue | undefined): string => {
-    if (value === Y) return "✓";
-    if (value === N) return "·";
-    return "";
-};
+// Discriminator constants for the cell's primary glyph slot. Module-
+// scope so the `no-literal-string` lint rule reads them as code, not
+// UI text. The matching presentation lives in `renderGlyphNode`.
+const GLYPH_YES = "yes" as const;
+const GLYPH_NO = "no" as const;
+const GLYPH_QUESTION = "question" as const;
+const GLYPH_ALERT = "alert" as const;
+const GLYPH_BLANK = "blank" as const;
+type GlyphKind =
+    | typeof GLYPH_YES
+    | typeof GLYPH_NO
+    | typeof GLYPH_QUESTION
+    | typeof GLYPH_ALERT
+    | typeof GLYPH_BLANK;
 
-const displayGlyph = (display: CellDisplay): string => {
+const glyphKindFor = (
+    display: CellDisplay,
+    status: HypothesisStatus,
+): GlyphKind => {
+    // Contradicted hypotheses (directly or jointly) replace whatever
+    // glyph would have rendered with the alert icon, so the conflict
+    // reads at a glance.
+    if (
+        status.kind === "directlyContradicted" ||
+        status.kind === "jointlyConflicts"
+    ) {
+        return GLYPH_ALERT;
+    }
     switch (display.tag) {
         case "real":
-            return cellLabel(display.value);
+            if (display.value === Y) return GLYPH_YES;
+            if (display.value === N) return GLYPH_NO;
+            return GLYPH_BLANK;
         case "hypothesis":
         case "derived":
-            return "?";
+            return GLYPH_QUESTION;
         case "blank":
-            return "";
+            return GLYPH_BLANK;
+    }
+};
+
+const renderGlyphNode = (kind: GlyphKind): ReactNode => {
+    switch (kind) {
+        case GLYPH_YES:
+            return "✓";
+        case GLYPH_NO:
+            return "·";
+        case GLYPH_QUESTION:
+            return "?";
+        case GLYPH_ALERT:
+            return <AlertIcon size={14} className="text-danger" />;
+        case GLYPH_BLANK:
+            return null;
     }
 };
 
 /**
- * Cell Y/N/?/blank glyph with a short pop-in/out as the value changes.
- * Using `AnimatePresence` keyed on the glyph means each state swap
- * renders a fresh `<motion.span>` that scales in while the outgoing
- * one scales out — the tween is fast (120ms) so the cell still feels
- * snappy, not animated-heavy. The cell background transition stays
- * in CSS (`transition-colors`) so motion only owns the glyph.
+ * Cell glyph with a short pop-in/out as the value changes.
+ * Using `AnimatePresence` keyed on the glyph kind means each state
+ * swap renders a fresh `<motion.span>` that scales in while the
+ * outgoing one scales out — the tween is fast (120ms) so the cell
+ * still feels snappy, not animated-heavy. The cell background
+ * transition stays in CSS (`transition-colors`) so motion only owns
+ * the glyph.
  */
 function AnimatedCellGlyph({
     display,
+    status,
 }: {
     readonly display: CellDisplay;
+    readonly status: HypothesisStatus;
 }) {
     const transition = useReducedTransition(T_FAST);
-    const glyph = displayGlyph(display);
+    const kind = glyphKindFor(display, status);
     return (
         <AnimatePresence mode={MOTION_POP_LAYOUT} initial={false}>
-            {glyph !== "" && (
+            {kind !== GLYPH_BLANK && (
                 <motion.span
-                    key={glyph}
+                    key={kind}
                     initial={{ scale: 0.5, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.5, opacity: 0 }}
                     transition={transition}
-                    className="inline-block"
+                    className="inline-flex items-center justify-center"
                 >
-                    {glyph}
+                    {renderGlyphNode(kind)}
                 </motion.span>
             )}
         </AnimatePresence>

@@ -83,6 +83,9 @@ export function CellWhyPopover({
                         card: cardLabel,
                     })}
                 </div>
+                <p className="text-[12px] leading-snug text-muted">
+                    {t("helpText")}
+                </p>
                 <HypothesisControl
                     value={hypothesisValue}
                     onChange={onHypothesisChange}
@@ -110,8 +113,11 @@ export function CellWhyPopover({
                         </ul>
                     )}
                 {whyText !== undefined && (
-                    <div className="border-t border-border/50 pt-2 whitespace-pre-line">
-                        {whyText}
+                    <div className="flex flex-col gap-2 border-t border-border/50 pt-2">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                            {t("hardFactsLabel")}
+                        </div>
+                        <div className="whitespace-pre-line">{whyText}</div>
                     </div>
                 )}
                 {whyText === undefined && status.kind === "off" && (

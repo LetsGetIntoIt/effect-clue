@@ -126,14 +126,15 @@
         "title": "Deduction grid",
         "caseFileProgress": "Case file · {percent}% solved",
         "candidatesCount": "{count, plural, one {# candidate} other {# candidates}}",
-        "whyHeader": "Why this value:",
         "whyLine": "{index}. {headline}{iter, select, none {} other { (iter {iter})}}: {detail}",
         "footnoteLine": "Candidate for suggestion {labels} — refuter's unseen card could be here."
     },
     "hypothesis": {
         "groupLabel": "Hypothesis",
         "sectionLabel": "Hypothesis · {owner} / {card}",
-        "optionOff": "—",
+        "hardFactsLabel": "Hard facts",
+        "helpText": "Have a hunch? Set it here to treat it like a soft deduction — we'll tell you when it's confirmed, plausible, or rejected.",
+        "optionOff": "Off",
         "optionY": "Y",
         "optionN": "N",
         "statusConfirmed": "Confirmed by real facts. You can clear this hypothesis.",
