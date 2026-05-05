@@ -272,6 +272,49 @@ export function Checklist() {
             jointFailed,
         ).kind === "derived";
 
+    // Hypothesis keyboard shortcuts (bare letter keys: O / Y / N).
+    // Implemented as a single window-level listener instead of three
+    // `useGlobalShortcut` calls so the gates run BEFORE
+    // `e.preventDefault()`. The shared helper unconditionally
+    // preventDefault's any matching event, which would swallow plain
+    // typing in setup-mode inputs (e.g. renaming "Miss Scarlet" to
+    // "Ms. Scarlet" — the "n" / "o" / "y" characters never reach the
+    // input).
+    //
+    // The handler bails early — without preventDefault — when:
+    //   - the keystroke target is a text input / textarea / content-
+    //     editable element (defensive: a focused suggestion-form input
+    //     could share the page with an open popover);
+    //   - no why popover is open (`popoverCell === null`).
+    const popoverCellRef = useRef<Cell | null>(popoverCell);
+    popoverCellRef.current = popoverCell;
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as Element | null;
+            if (
+                target instanceof HTMLInputElement
+                || target instanceof HTMLTextAreaElement
+                || (target instanceof HTMLElement && target.isContentEditable)
+            ) {
+                return;
+            }
+            const cell = popoverCellRef.current;
+            if (cell === null) return;
+            if (matches("hypothesis.setOff", e)) {
+                e.preventDefault();
+                dispatch({ type: "clearHypothesis", cell });
+            } else if (matches("hypothesis.setY", e)) {
+                e.preventDefault();
+                dispatch({ type: "setHypothesis", cell, value: Y });
+            } else if (matches("hypothesis.setN", e)) {
+                e.preventDefault();
+                dispatch({ type: "setHypothesis", cell, value: N });
+            }
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [dispatch]);
+
     // Fire `why_tooltip_opened` whenever the popover transitions from
     // closed (or another cell) to open on a new cell. Cells are fresh
     // `Cell(owner, card)` instances on each open, so reference equality

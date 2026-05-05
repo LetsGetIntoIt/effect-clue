@@ -109,6 +109,12 @@ type BindingId =
     | "global.gotoAccusation"
     | "global.gotoChecklist"
     | "global.gotoPriorLog"
+    // Hypothesis controls — only active when a checklist "why"
+    // popover is open. Modeled as global bindings (window-level
+    // keydown) but their handler gates on `popoverCell !== null`.
+    | "hypothesis.setOff"
+    | "hypothesis.setY"
+    | "hypothesis.setN"
     // Navigation primitives (scoped)
     | "nav.up"
     | "nav.down"
@@ -165,6 +171,28 @@ const DEFAULT_KEY_MAP: Record<BindingId, KeyBinding> = {
         id: "global.gotoPriorLog",
         description: "Jump to the prior suggestions log",
         combos: [combo.mod("l", "⌘L")],
+    },
+    // Hypothesis shortcuts are bare letter keys that intentionally
+    // shadow regular typing — the call site gates them on
+    // `popoverCell !== null` and on the event target not being a text
+    // input, so they only fire when the user has the why popover open
+    // on a cell. Modifier-based equivalents (Cmd+Shift+N etc.) all
+    // collide with browser shortcuts (incognito, reopen-tab, …); bare
+    // keys also keep the button labels self-documenting (Y/N/0).
+    "hypothesis.setOff": {
+        id: "hypothesis.setOff",
+        description: "Clear the hypothesis on the open cell",
+        combos: [combo.bareCI("o", "O")],
+    },
+    "hypothesis.setY": {
+        id: "hypothesis.setY",
+        description: "Set the hypothesis on the open cell to Y",
+        combos: [combo.bareCI("y", "Y")],
+    },
+    "hypothesis.setN": {
+        id: "hypothesis.setN",
+        description: "Set the hypothesis on the open cell to N",
+        combos: [combo.bareCI("n", "N")],
     },
     "nav.up": {
         id: "nav.up",

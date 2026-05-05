@@ -3,6 +3,8 @@
 import { useTranslations } from "next-intl";
 import { useCallback, useId, useRef } from "react";
 import type { HypothesisStatus, HypothesisValue } from "../../logic/Hypothesis";
+import { useHasKeyboard } from "../hooks/useHasKeyboard";
+import { label } from "../keyMap";
 
 interface HypothesisControlProps {
     readonly value: HypothesisValue | undefined;
@@ -18,6 +20,12 @@ const OPT_OFF = "off" as const;
 const OPT_Y = "Y" as const;
 const OPT_N = "N" as const;
 type Option = typeof OPT_OFF | typeof OPT_Y | typeof OPT_N;
+
+// Keymap binding IDs. Hoisted so the `no-literal-string` lint rule
+// reads them as code, not UI text.
+const SHORTCUT_OFF = "hypothesis.setOff" as const;
+const SHORTCUT_Y = "hypothesis.setY" as const;
+const SHORTCUT_N = "hypothesis.setN" as const;
 
 const OPTIONS: ReadonlyArray<Option> = [OPT_OFF, OPT_Y, OPT_N];
 
@@ -65,6 +73,7 @@ export function HypothesisControl({
     const groupId = useId();
     const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
     const current = optionFromValue(value);
+    const hasKeyboard = useHasKeyboard();
 
     const focusOption = useCallback((option: Option) => {
         const idx = OPTIONS.indexOf(option);
@@ -100,51 +109,61 @@ export function HypothesisControl({
         [onChange, focusOption],
     );
 
-    const labelFor = (option: Option): string =>
-        option === OPT_OFF
-            ? t("optionOff")
-            : option === OPT_Y
-              ? t("optionY")
-              : t("optionN");
+    const labelFor = (option: Option): string => {
+        if (option === OPT_OFF) return t("optionOff");
+        if (option === OPT_Y) return t("optionY");
+        return t("optionN");
+    };
 
     const isContradicted =
         status.kind === "directlyContradicted" ||
         status.kind === "jointlyConflicts";
 
     return (
-        <div
-            role="radiogroup"
-            aria-label={t("groupLabel")}
-            aria-describedby={`${groupId}-status`}
-            className="inline-flex w-full overflow-hidden rounded-[var(--radius)]"
-        >
-            {OPTIONS.map((option, idx) => {
-                const isSelected = current === option;
-                const className =
-                    baseButtonClass +
-                    (isSelected ? selectedClassFor(option) : "") +
-                    (isSelected && isContradicted
-                        ? " ring-2 ring-danger ring-inset"
-                        : "");
-                return (
-                    <button
-                        key={option}
-                        ref={el => {
-                            buttonRefs.current[idx] = el;
-                        }}
-                        type="button"
-                        role="radio"
-                        aria-checked={isSelected}
-                        tabIndex={isSelected ? 0 : -1}
-                        disabled={disabled}
-                        className={className}
-                        onClick={() => onChange(valueFromOption(option))}
-                        onKeyDown={e => onKeyDown(e, option)}
-                    >
-                        {labelFor(option)}
-                    </button>
-                );
-            })}
+        <div className="flex flex-col gap-1">
+            <div
+                role="radiogroup"
+                aria-label={t("groupLabel")}
+                aria-describedby={`${groupId}-status`}
+                className="inline-flex w-full overflow-hidden rounded-[var(--radius)]"
+            >
+                {OPTIONS.map((option, idx) => {
+                    const isSelected = current === option;
+                    const className =
+                        baseButtonClass +
+                        (isSelected ? selectedClassFor(option) : "") +
+                        (isSelected && isContradicted
+                            ? " ring-2 ring-danger ring-inset"
+                            : "");
+                    return (
+                        <button
+                            key={option}
+                            ref={el => {
+                                buttonRefs.current[idx] = el;
+                            }}
+                            type="button"
+                            role="radio"
+                            aria-checked={isSelected}
+                            tabIndex={isSelected ? 0 : -1}
+                            disabled={disabled}
+                            className={className}
+                            onClick={() => onChange(valueFromOption(option))}
+                            onKeyDown={e => onKeyDown(e, option)}
+                        >
+                            {labelFor(option)}
+                        </button>
+                    );
+                })}
+            </div>
+            {hasKeyboard && (
+                <p className="text-[11px] text-muted">
+                    {t("shortcutHint", {
+                        off: label(SHORTCUT_OFF),
+                        y: label(SHORTCUT_Y),
+                        n: label(SHORTCUT_N),
+                    })}
+                </p>
+            )}
         </div>
     );
 }

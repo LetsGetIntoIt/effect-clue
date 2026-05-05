@@ -137,6 +137,7 @@
         "optionOff": "Off",
         "optionY": "Y",
         "optionN": "N",
+        "shortcutHint": "Type ({y}, {n}, or {off}) to toggle.",
         "statusConfirmed": "Confirmed by real facts. You can clear this hypothesis.",
         "statusDirectlyContradicted": "Contradicts a real fact — your hypothesis can't be true.",
         "statusJointlyConflicts": "Conflicts with another hypothesis. These can't all be true together — drop one to resolve.",
