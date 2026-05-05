@@ -1246,15 +1246,24 @@ export function Checklist() {
                                                     // cell as the source of a
                                                     // hypothesis (vs. a cell
                                                     // whose value follows from
-                                                    // one). Renders alongside
-                                                    // the central glyph in
-                                                    // every direct-hypothesis
-                                                    // status (active,
-                                                    // confirmed, contradicted,
-                                                    // conflicting).
+                                                    // one). Tone reflects the
+                                                    // HYPOTHESIS value, not the
+                                                    // cell's displayed value:
+                                                    // a cell that's been
+                                                    // deduced Y but
+                                                    // hypothesised N shows a
+                                                    // red badge against a
+                                                    // green cell, making the
+                                                    // disagreement visible at
+                                                    // a glance.
                                                     <BoxedQuestionMarkIcon
-                                                        size={10}
-                                                        className="absolute right-0.5 top-0.5 opacity-70"
+                                                        size={14}
+                                                        className={
+                                                            "absolute right-0.5 top-0.5 " +
+                                                            (hypothesisValue === Y
+                                                                ? "text-yes"
+                                                                : "text-no")
+                                                        }
                                                     />
                                                 )}
                                             </>

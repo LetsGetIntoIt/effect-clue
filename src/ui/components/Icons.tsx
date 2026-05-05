@@ -260,10 +260,12 @@ export function AlertIcon({ className, size = 14 }: IconProps) {
 }
 
 /**
- * Rounded square framing a question mark — used as a small corner
- * badge on checklist cells the user has pinned a hypothesis on, to
- * distinguish them from the cells whose value follows from those
- * hypotheses. Renders in `currentColor` so the parent picks the tone.
+ * Solid rounded square with a "?" cut into it — used as a small
+ * corner badge on checklist cells the user has pinned a hypothesis
+ * on. The fill is `currentColor` so the parent's `text-*` class
+ * picks the tone (typically `text-yes` or `text-no` matching the
+ * hypothesis value). The inner "?" strokes in white so it stays
+ * legible regardless of fill colour.
  */
 export function BoxedQuestionMarkIcon({ className, size = 12 }: IconProps) {
     return (
@@ -272,18 +274,36 @@ export function BoxedQuestionMarkIcon({ className, size = 12 }: IconProps) {
             width={size}
             height={size}
             viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
             aria-hidden="true"
             focusable="false"
             className={className}
         >
-            <rect x="3" y="3" width="18" height="18" rx="3" />
-            <path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.7" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
+            <rect
+                x="3"
+                y="3"
+                width="18"
+                height="18"
+                rx="3"
+                fill="currentColor"
+            />
+            <path
+                d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.7"
+                fill="none"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+            <line
+                x1="12"
+                y1="17"
+                x2="12.01"
+                y2="17"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
         </svg>
     );
 }
