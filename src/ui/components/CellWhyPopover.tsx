@@ -114,24 +114,34 @@ export function CellWhyPopover({
                     const isContradicted =
                         status.kind === "directlyContradicted" ||
                         status.kind === "jointlyConflicts";
+                    // Joint-conflict popovers render the list of
+                    // colliding hypotheses INSIDE the red box so the
+                    // bullets read as part of the warning, not as a
+                    // separate factoid below it.
+                    const listInsideBox =
+                        status.kind === "jointlyConflicts" &&
+                        activeHypothesisLabels.length > 0;
                     if (isContradicted) {
-                        // Connect the dots to the cell's alert icon: a
-                        // bordered red panel with the same warning icon
-                        // makes the cause visible at popover-open time.
                         return (
                             <div className="flex items-start gap-2 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-2 text-[12px] text-danger">
                                 <AlertIcon
                                     size={14}
                                     className="mt-[1px] flex-shrink-0"
                                 />
-                                <span>{statusMessage}</span>
+                                <div className="flex flex-col gap-1">
+                                    <span>{statusMessage}</span>
+                                    {listInsideBox && (
+                                        <ul className="ml-3 list-disc">
+                                            {activeHypothesisLabels.map(lbl => (
+                                                <li key={lbl}>{lbl}</li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
                             </div>
                         );
                     }
                     if (status.kind === "confirmed") {
-                        // Mirror the contradiction panel but in the
-                        // success palette so the affirmative status
-                        // reads with matching weight.
                         return (
                             <div className="flex items-start gap-2 rounded-[var(--radius)] border border-yes/40 bg-yes-bg p-2 text-[12px] text-yes">
                                 <CheckIcon
@@ -148,13 +158,15 @@ export function CellWhyPopover({
                         </div>
                     );
                 })()}
-                {renderListBelow && activeHypothesisLabels.length > 0 && (
-                    <ul className="ml-3 list-disc text-[12px] text-muted">
-                        {activeHypothesisLabels.map(label => (
-                            <li key={label}>{label}</li>
-                        ))}
-                    </ul>
-                )}
+                {renderListBelow &&
+                    activeHypothesisLabels.length > 0 &&
+                    status.kind !== "jointlyConflicts" && (
+                        <ul className="ml-3 list-disc text-[12px] text-muted">
+                            {activeHypothesisLabels.map(lbl => (
+                                <li key={lbl}>{lbl}</li>
+                            ))}
+                        </ul>
+                    )}
                 {whyText !== undefined && (
                     <div className="flex flex-col gap-2 border-t border-border/50 pt-2">
                         <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
