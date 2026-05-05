@@ -11,7 +11,7 @@ import type {
     HypothesisValue,
 } from "../../logic/Hypothesis";
 import { HashMap } from "effect";
-import { AlertIcon } from "./Icons";
+import { AlertIcon, CheckIcon } from "./Icons";
 import { HypothesisControl } from "./HypothesisControl";
 
 interface CellWhyPopoverProps {
@@ -121,6 +121,20 @@ export function CellWhyPopover({
                         return (
                             <div className="flex items-start gap-2 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-2 text-[12px] text-danger">
                                 <AlertIcon
+                                    size={14}
+                                    className="mt-[1px] flex-shrink-0"
+                                />
+                                <span>{statusMessage}</span>
+                            </div>
+                        );
+                    }
+                    if (status.kind === "confirmed") {
+                        // Mirror the contradiction panel but in the
+                        // success palette so the affirmative status
+                        // reads with matching weight.
+                        return (
+                            <div className="flex items-start gap-2 rounded-[var(--radius)] border border-yes/40 bg-yes-bg p-2 text-[12px] text-yes">
+                                <CheckIcon
                                     size={14}
                                     className="mt-[1px] flex-shrink-0"
                                 />
