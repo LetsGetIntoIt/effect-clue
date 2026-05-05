@@ -163,6 +163,11 @@ export default [
                             "side",
                             "align",
                             "variant",
+                            // Internal discriminator on `<InfoPopover>`
+                            // — names a hover-zone identifier that
+                            // parent focus-blur logic reads via
+                            // `data-popover-zone`. Not user copy.
+                            "popoverZone",
                             // `<AboutContent context="page" | "modal" />`
                             // — discriminator for which surface fired
                             // an analytics event, not user copy.

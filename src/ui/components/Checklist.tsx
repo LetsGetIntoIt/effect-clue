@@ -634,14 +634,27 @@ export function Checklist() {
             // breakpoint is active.
             data-tour-anchor="desktop-checklist-area"
             className="min-w-max rounded-[var(--radius)] border border-border bg-panel p-4"
-            onMouseLeave={onGridLeave}
+            onMouseLeave={onCellPointerLeave}
             onBlur={e => {
                 // Focus left the checklist root entirely (relatedTarget
                 // is outside the section). Exit popovers mode so the
                 // tab key moving focus away from the grid doesn't
                 // leave a stranded popover + suggestion highlight.
+                //
+                // Special-case: focus moving INTO the portaled popover
+                // content counts as still-engaged. The popover lives in
+                // `document.body`, so `currentTarget.contains` returns
+                // false even when the user is interacting with it; we
+                // identify it via the `data-popover-zone="checklist"`
+                // marker that the InfoPopover stamps on its Content.
                 const next = e.relatedTarget as Node | null;
                 if (next && e.currentTarget.contains(next)) return;
+                if (
+                    next instanceof Element
+                    && next.closest('[data-popover-zone="checklist"]')
+                ) {
+                    return;
+                }
                 onGridLeave();
             }}
         >
@@ -1357,6 +1370,13 @@ export function Checklist() {
                                                             );
                                                         }
                                                     }}
+                                                    onContentPointerEnter={
+                                                        cancelExitTimer
+                                                    }
+                                                    onContentPointerLeave={
+                                                        onCellPointerLeave
+                                                    }
+                                                    popoverZone="checklist"
                                                 >
                                                     <motion.td
                                                         className={tdClassName}

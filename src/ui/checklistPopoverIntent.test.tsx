@@ -231,6 +231,51 @@ describe("useWhyHoverIntent — cancelExitTimer integration", () => {
         });
         expect(result.current.popoverCell).toEqual(cellA);
     });
+
+    test("cell → popover → cell flow keeps popover alive across portal traversal", () => {
+        // Scenario: user opens popover on cellA, moves cursor across the
+        // gap onto the portaled popover content, lingers, then moves
+        // off it. The Checklist wires `onContentPointerEnter` →
+        // `cancelExitTimer` and `onContentPointerLeave` →
+        // `onCellPointerLeave`. We exercise that handshake here through
+        // the hook's public API (no DOM needed).
+        const { result } = renderHook(() => useHarness(), { wrapper: Wrapper });
+        // Open popover.
+        act(() => {
+            result.current.intent.onCellPointerEnter(cellA);
+            vi.advanceTimersByTime(OPEN_DELAY_MS);
+        });
+        expect(result.current.popoverCell).toEqual(cellA);
+        // Pointer leaves cellA — exit timer arms.
+        act(() => {
+            result.current.intent.onCellPointerLeave();
+        });
+        // Pointer enters popover content (or its hover bridge) within
+        // the grace window — Checklist calls cancelExitTimer.
+        act(() => {
+            vi.advanceTimersByTime(200);
+            result.current.intent.cancelExitTimer();
+        });
+        // Popover stays open well past the original exit budget.
+        act(() => {
+            vi.advanceTimersByTime(EXIT_TIMEOUT_MS * 2);
+        });
+        expect(result.current.popoverCell).toEqual(cellA);
+        // Pointer leaves popover content — Checklist calls
+        // onCellPointerLeave, which arms the exit timer again.
+        act(() => {
+            result.current.intent.onCellPointerLeave();
+        });
+        // Without re-engagement, popover closes after the exit budget.
+        act(() => {
+            vi.advanceTimersByTime(EXIT_TIMEOUT_MS - 1);
+        });
+        expect(result.current.popoverCell).toEqual(cellA);
+        act(() => {
+            vi.advanceTimersByTime(1);
+        });
+        expect(result.current.popoverCell).toBeNull();
+    });
 });
 
 describe("useWhyHoverIntent — unmount cleanup", () => {
