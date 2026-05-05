@@ -217,10 +217,81 @@ export const gameAbandoned = (props: {
 
 // ── Feature usage ─────────────────────────────────────────────────────────
 
+/**
+ * Status of the cell at popover-open time. Mirrors `HypothesisStatus`
+ * in `src/logic/Hypothesis.ts` but flattened to a string so the
+ * PostHog funnel can group by it without joining anything else.
+ *
+ *   - `off`           : no hypothesis on this cell, no derivation.
+ *   - `active`        : direct hypothesis, joint deduction succeeds.
+ *   - `derived`       : value follows from another active hypothesis.
+ *   - `confirmed`     : real facts independently prove the hypothesis right.
+ *   - `directlyContradicted` : real facts prove the hypothesis wrong.
+ *   - `jointlyConflicts`     : solo-OK hypothesis that's part of a conflicting set.
+ */
+export type CellHypothesisStatus =
+    | "off"
+    | "active"
+    | "derived"
+    | "confirmed"
+    | "directlyContradicted"
+    | "jointlyConflicts";
+
 export const whyTooltipOpened = (props: {
     /** See `deductionRevealed.categoryName` — same free-form rationale. */
     categoryName: string;
+    /**
+     * `true` when the cell has a real-fact deduction at popover-open
+     * time. Now that the popover opens on every play-mode cell (not
+     * just deducible ones), this lets the funnel separate "user
+     * inspecting a known cell" from "user opening the popover to
+     * pin a hypothesis on a blank".
+     */
+    hasDeduction: boolean;
+    /**
+     * `true` when the user has already pinned a hypothesis on this
+     * exact cell. Lets the funnel measure follow-up engagement —
+     * are users re-opening hypothesis cells to revisit them, or
+     * setting and forgetting?
+     */
+    hasHypothesis: boolean;
+    status: CellHypothesisStatus;
 }): void => capture("why_tooltip_opened", props);
+
+/**
+ * Fires every time the user pins or changes a hypothesis (Y / N)
+ * via the segmented control or a Y/N keyboard shortcut.
+ *
+ *   - `value`         : the new value (Y | N).
+ *   - `previousValue` : "off" for a fresh pin, "Y" / "N" for a flip.
+ *   - `cellStatus`    : the cell's {@link CellHypothesisStatus} *before*
+ *                       the action — answers "what was the user looking
+ *                       at when they decided to pin?". To recover the
+ *                       post-action status, join in PostHog with the
+ *                       next `why_tooltip_opened` on the same cell,
+ *                       which fires when the user re-inspects it.
+ *   - `source`        : "click" (segmented control) | "keyboard"
+ *                       (Y / N bare-key shortcuts).
+ */
+export const hypothesisSet = (props: {
+    value: "Y" | "N";
+    previousValue: "off" | "Y" | "N";
+    cellStatus: CellHypothesisStatus;
+    source: "click" | "keyboard";
+}): void => capture("hypothesis_set", props);
+
+/**
+ * Fires when the user clears a hypothesis (Off via segmented control
+ * or the `O` keyboard shortcut). `cellStatus` is the status the cell
+ * had immediately before the clear — useful for read-rate dashboards
+ * ("are users clearing confirmed hypotheses to tidy up, or clearing
+ * contradicted ones to revise?").
+ */
+export const hypothesisCleared = (props: {
+    previousValue: "Y" | "N";
+    cellStatus: CellHypothesisStatus;
+    source: "click" | "keyboard";
+}): void => capture("hypothesis_cleared", props);
 
 export const checklistRowClicked = (props: {
     cardType: "suspect" | "weapon" | "room";
