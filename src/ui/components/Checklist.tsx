@@ -85,7 +85,7 @@ import { useConfetti } from "../hooks/useConfetti";
 import { useShareContext } from "../share/ShareProvider";
 import { CardPackRow } from "./CardPackRow";
 import { ShareIcon } from "./ShareIcon";
-import { AlertIcon, Envelope } from "./Icons";
+import { AlertIcon, Envelope, LightbulbIcon } from "./Icons";
 import { HypothesisBadge } from "./HypothesisBadge";
 import { InfoPopover } from "./InfoPopover";
 
@@ -1330,7 +1330,7 @@ export function Checklist() {
                                         // opens the deduction-chain popover.
                                         const playInteractive =
                                             !inSetup && isPlayerCell;
-                                        const tooltipText = buildCellTitle({
+                                        const cellWhy = buildCellWhy({
                                             provenance,
                                             suggestions,
                                             accusations,
@@ -1358,11 +1358,17 @@ export function Checklist() {
                                                 />
                                                 {footnoteNumbers.length > 0 &&
                                                     value === undefined && (
-                                                        <sup className="ml-0.5 text-[9px] font-normal text-accent">
+                                                        <span
+                                                            aria-hidden
+                                                            className="pointer-events-none absolute left-[3px] top-[3px] inline-flex items-center gap-[2px] rounded-[3px] border border-accent/40 px-[3px] py-px text-[10px] font-semibold leading-none text-accent tabular-nums"
+                                                        >
+                                                            <LightbulbIcon
+                                                                size={9}
+                                                            />
                                                             {footnoteNumbers.join(
                                                                 ",",
                                                             )}
-                                                        </sup>
+                                                        </span>
                                                     )}
                                                 {hypothesisValue !== undefined && (
                                                     <HypothesisBadge
@@ -1613,7 +1619,8 @@ export function Checklist() {
                                                             });
                                                         }
                                                     }}
-                                                    whyText={tooltipText}
+                                                    whyText={cellWhy.chainText}
+                                                    footnoteText={cellWhy.footnoteText}
                                                 />
                                             );
                                             cell = (
@@ -2249,7 +2256,14 @@ const resolveReasonCopy = (
     }
 };
 
-const buildCellTitle = (args: {
+interface CellWhy {
+    /** "Hard facts" deduction chain — rendered as plain text in the popover. */
+    readonly chainText: string | undefined;
+    /** Footnote candidate-for-suggestion line — rendered with a lightbulb icon. */
+    readonly footnoteText: string | undefined;
+}
+
+const buildCellWhy = (args: {
     provenance: Provenance | undefined;
     suggestions: ReadonlyArray<Suggestion>;
     accusations: ReadonlyArray<Accusation>;
@@ -2259,7 +2273,7 @@ const buildCellTitle = (args: {
     footnoteNumbers: ReadonlyArray<number>;
     tDeduce: ReturnType<typeof useTranslations<"deduce">>;
     tReasons: ReturnType<typeof useTranslations<"reasons">>;
-}): string | undefined => {
+}): CellWhy => {
     const {
         provenance,
         suggestions,
@@ -2272,7 +2286,7 @@ const buildCellTitle = (args: {
         tReasons,
     } = args;
 
-    const footnoteLine =
+    const footnoteText =
         footnoteNumbers.length > 0
             ? tDeduce("footnoteLine", {
                   labels: footnoteNumbers.map(n => `#${n}`).join(", "),
@@ -2303,11 +2317,9 @@ const buildCellTitle = (args: {
     // popover now renders a "Hard facts" section heading above it
     // (parallel to the "Hypothesis" heading), so the prefix is
     // redundant here.
-    const parts: string[] = [];
-    if (chainLines.length > 0) parts.push(...chainLines);
-    if (footnoteLine) parts.push(footnoteLine);
+    const chainText = chainLines.length > 0 ? chainLines.join("\n") : undefined;
 
-    return parts.length > 0 ? parts.join("\n") : undefined;
+    return { chainText, footnoteText };
 };
 
 // Motion-only constants (non user-facing). The "unsolved" color
