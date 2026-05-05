@@ -37,6 +37,21 @@ interface InfoPopoverProps {
      * or pinning the corresponding cell's selection).
      */
     readonly onOpenChange?: (open: boolean) => void;
+    /**
+     * Pointer-event handlers forwarded to the popover content. Lets a
+     * parent driving the open state via hover-intent (e.g. the
+     * Checklist) treat the portaled content as part of its hover zone:
+     * entering it cancels the parent's exit timer, leaving it re-arms.
+     */
+    readonly onContentPointerEnter?: () => void;
+    readonly onContentPointerLeave?: () => void;
+    /**
+     * Optional `data-popover-zone` attribute on the popover content.
+     * Lets a parent's focus-blur handler recognize that focus has moved
+     * into the portaled popover (which lives in `document.body`, not
+     * inside the parent) via `closest("[data-popover-zone='...']")`.
+     */
+    readonly popoverZone?: string;
 }
 
 /**
@@ -60,6 +75,9 @@ export function InfoPopover({
     maxWidthPx = 320,
     open: controlledOpen,
     onOpenChange,
+    onContentPointerEnter,
+    onContentPointerLeave,
+    popoverZone,
 }: InfoPopoverProps) {
     const tCommon = useTranslations("common");
     const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
@@ -101,9 +119,29 @@ export function InfoPopover({
                     sideOffset={6}
                     collisionPadding={8}
                     onOpenAutoFocus={e => e.preventDefault()}
+                    onPointerEnter={onContentPointerEnter}
+                    onPointerLeave={onContentPointerLeave}
+                    data-popover-zone={popoverZone}
+                    // The `before:` rules render an invisible 10px hover
+                    // bridge in the gap between the popover and its
+                    // trigger. `data-side` is set by Radix per
+                    // collision-resolved placement; the bridge always
+                    // points at the trigger. Pseudo-elements participate
+                    // in their parent's pointer-event hit-testing, so
+                    // cursor-in-bridge fires `onPointerEnter` on Content
+                    // — keeping the popover alive AND preventing the
+                    // cell beneath the bridge from receiving its own
+                    // hover (which would otherwise swap the popover
+                    // mid-transit when the user is heading from cell to
+                    // popover).
                     className={
                         "z-[var(--z-popover)] rounded-[var(--radius)] border px-3 py-2 text-[12px] leading-snug shadow-[0_6px_16px_rgba(0,0,0,0.18)] " +
                         "focus:outline-none " +
+                        "before:absolute before:content-[''] " +
+                        "data-[side=top]:before:left-0 data-[side=top]:before:right-0 data-[side=top]:before:bottom-[-10px] data-[side=top]:before:h-[10px] " +
+                        "data-[side=bottom]:before:left-0 data-[side=bottom]:before:right-0 data-[side=bottom]:before:top-[-10px] data-[side=bottom]:before:h-[10px] " +
+                        "data-[side=left]:before:top-0 data-[side=left]:before:bottom-0 data-[side=left]:before:right-[-10px] data-[side=left]:before:w-[10px] " +
+                        "data-[side=right]:before:top-0 data-[side=right]:before:bottom-0 data-[side=right]:before:left-[-10px] data-[side=right]:before:w-[10px] " +
                         toneClasses
                     }
                     style={{ maxWidth: maxWidthPx }}
