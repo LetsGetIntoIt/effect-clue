@@ -703,7 +703,10 @@ export function Checklist() {
             <table className="w-full border-separate border-spacing-0 border-t border-l border-border text-[13px]">
                 <thead className="sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))] z-[var(--z-checklist-sticky-header)] bg-row-header">
                     <tr>
-                        <th className={`${STICKY_FIRST_COL_HEADER} border-r border-b border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted`}>
+                        <th
+                            className={`${STICKY_FIRST_COL_HEADER} border-r border-b border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted`}
+                            data-tour-sticky-left=""
+                        >
                             {inSetup || !hasKeyboard ? null : label("global.gotoChecklist")}
                         </th>
                         <AnimatePresence initial={false} mode={MOTION_SYNC}>
@@ -766,6 +769,7 @@ export function Checklist() {
                         <tr>
                             <th
                                 className={`${STICKY_FIRST_COL_HEADER} whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-left font-semibold`}
+                                data-tour-sticky-left=""
                                 // The setup tour's "Set hand sizes"
                                 // step highlights the row label cell
                                 // alongside every player's input so
@@ -874,6 +878,7 @@ export function Checklist() {
                             >
                                 <motion.th
                                     className={`${STICKY_FIRST_COL} overflow-hidden border-r border-b border-border bg-category-header p-0 text-left text-[11px] uppercase tracking-[0.05em] text-white`}
+                                    data-tour-sticky-left=""
                                     exit={cellExitTone}
                                 >
                                     {renderRowReveal(
@@ -963,6 +968,7 @@ export function Checklist() {
                                 >
                                     <motion.th
                                         className={`${STICKY_FIRST_COL} w-px overflow-hidden whitespace-nowrap border-r border-b border-border bg-panel p-0 text-left font-normal`}
+                                        data-tour-sticky-left=""
                                         exit={cellExitTone}
                                     >
                                         {renderRowReveal(
@@ -1449,6 +1455,7 @@ export function Checklist() {
                                       >
                                           <motion.th
                                               className={`${STICKY_FIRST_COL} overflow-hidden border-r border-b border-border bg-row-alt p-0 text-left`}
+                                              data-tour-sticky-left=""
                                               exit={cellExitTone}
                                           >
                                               {renderRowReveal(
@@ -1481,6 +1488,7 @@ export function Checklist() {
                         <motion.tr key="add-category" {...tableRowMotionProps}>
                             <motion.th
                                 className={`${STICKY_FIRST_COL} overflow-hidden border-r border-b border-border bg-row-alt p-0 text-left`}
+                                data-tour-sticky-left=""
                                 exit={cellExitTone}
                             >
                                 {renderRowReveal(

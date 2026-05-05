@@ -67,6 +67,18 @@ import { TourPopover } from "./TourPopover";
 
 beforeEach(() => {
     motionMock.reducedMotion = false;
+    Object.defineProperty(window, "scrollX", {
+        configurable: true,
+        value: 0,
+    });
+    Object.defineProperty(window, "scrollY", {
+        configurable: true,
+        value: 0,
+    });
+    Object.defineProperty(window, "scrollTo", {
+        configurable: true,
+        value: vi.fn(),
+    });
 });
 
 /**
@@ -83,6 +95,7 @@ function Harness({
     readonly anchors: ReadonlyArray<{
         readonly testId: string;
         readonly anchorAttr?: string;
+        readonly stickyLeft?: boolean;
     }>;
     /** Render-prop receives the tour controls so the test can call
      *  `startTour("setup")` etc. */
@@ -98,6 +111,9 @@ function Harness({
                     };
                     if (a.anchorAttr !== undefined) {
                         props["data-tour-anchor"] = a.anchorAttr;
+                    }
+                    if (a.stickyLeft) {
+                        props["data-tour-sticky-left"] = "";
                     }
                     return createElement("div", { key: a.testId, ...props });
                 })}
@@ -564,6 +580,164 @@ describe("TourPopover — veil isolation", () => {
 
         expect(bodyScrollTo).toHaveBeenCalledWith(
             expect.objectContaining({ behavior: "smooth" }),
+        );
+    });
+
+    test("anchors covered by the sticky first column scroll into the unobscured viewport", () => {
+        let api!: ReturnType<typeof useTour>;
+        Object.defineProperty(window, "innerHeight", {
+            configurable: true,
+            value: 500,
+        });
+        Object.defineProperty(window, "innerWidth", {
+            configurable: true,
+            value: 500,
+        });
+        Object.defineProperty(document.body, "scrollWidth", {
+            configurable: true,
+            value: 1000,
+        });
+        Object.defineProperty(document.body, "clientWidth", {
+            configurable: true,
+            value: 500,
+        });
+        document.body.scrollLeft = 120;
+        const bodyScrollTo = vi.fn();
+        document.body.scrollTo = bodyScrollTo;
+
+        render(
+            <Harness
+                anchors={[
+                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                    { testId: "sticky", stickyLeft: true },
+                ]}
+            >
+                {c => {
+                    api = c;
+                    return null;
+                }}
+            </Harness>,
+            { wrapper: TestQueryClientProvider },
+        );
+        const anchor = screen.getByTestId("card-pack");
+        anchor.getBoundingClientRect = () =>
+            new DOMRect(120, 100, 80, 40);
+        const sticky = screen.getByTestId("sticky");
+        sticky.getBoundingClientRect = () =>
+            new DOMRect(0, 0, 170, 500);
+
+        act(() => api.startTour("setup"));
+
+        expect(bodyScrollTo).toHaveBeenCalledWith(
+            expect.objectContaining({
+                behavior: "smooth",
+                left: 0,
+            }),
+        );
+    });
+
+    test("sticky first-column clearance does not affect non-overlapping anchors", () => {
+        let api!: ReturnType<typeof useTour>;
+        Object.defineProperty(window, "innerHeight", {
+            configurable: true,
+            value: 500,
+        });
+        Object.defineProperty(window, "innerWidth", {
+            configurable: true,
+            value: 500,
+        });
+        Object.defineProperty(document.body, "scrollWidth", {
+            configurable: true,
+            value: 1000,
+        });
+        Object.defineProperty(document.body, "clientWidth", {
+            configurable: true,
+            value: 500,
+        });
+        document.body.scrollLeft = 120;
+        const bodyScrollTo = vi.fn();
+        document.body.scrollTo = bodyScrollTo;
+
+        render(
+            <Harness
+                anchors={[
+                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                    { testId: "sticky", stickyLeft: true },
+                ]}
+            >
+                {c => {
+                    api = c;
+                    return null;
+                }}
+            </Harness>,
+            { wrapper: TestQueryClientProvider },
+        );
+        const anchor = screen.getByTestId("card-pack");
+        anchor.getBoundingClientRect = () =>
+            new DOMRect(120, 300, 80, 40);
+        const sticky = screen.getByTestId("sticky");
+        sticky.getBoundingClientRect = () =>
+            new DOMRect(0, 0, 170, 120);
+
+        act(() => api.startTour("setup"));
+
+        expect(bodyScrollTo).not.toHaveBeenCalled();
+    });
+
+    test("page-level horizontal scroll uses window.scrollX when body.scrollLeft is stale", () => {
+        let api!: ReturnType<typeof useTour>;
+        Object.defineProperty(window, "innerHeight", {
+            configurable: true,
+            value: 500,
+        });
+        Object.defineProperty(window, "innerWidth", {
+            configurable: true,
+            value: 500,
+        });
+        Object.defineProperty(window, "scrollX", {
+            configurable: true,
+            value: 120,
+        });
+        Object.defineProperty(document.body, "scrollWidth", {
+            configurable: true,
+            value: 1000,
+        });
+        Object.defineProperty(document.body, "clientWidth", {
+            configurable: true,
+            value: 500,
+        });
+        document.body.scrollLeft = 0;
+        const bodyScrollTo = vi.fn();
+        document.body.scrollTo = bodyScrollTo;
+
+        render(
+            <Harness
+                anchors={[
+                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                    { testId: "sticky", stickyLeft: true },
+                ]}
+            >
+                {c => {
+                    api = c;
+                    return null;
+                }}
+            </Harness>,
+            { wrapper: TestQueryClientProvider },
+        );
+        const anchor = screen.getByTestId("card-pack");
+        anchor.getBoundingClientRect = () =>
+            new DOMRect(120, 100, 80, 40);
+        const sticky = screen.getByTestId("sticky");
+        sticky.getBoundingClientRect = () =>
+            new DOMRect(0, 0, 170, 500);
+
+        act(() => api.startTour("setup"));
+
+        expect(bodyScrollTo).toHaveBeenCalledWith(
+            expect.objectContaining({ left: 0 }),
+        );
+        expect(window.scrollTo).toHaveBeenCalledWith(
+            expect.objectContaining({ left: 0 }),
         );
     });
 

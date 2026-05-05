@@ -78,6 +78,11 @@ const SCROLL_BEHAVIOR_SMOOTH: ScrollBehavior = "smooth";
 // isolator can do an O(1) `popoverContent.contains(eventTarget)` check
 // to allow keyboard events that target the popover's own buttons.
 const POPOVER_CONTENT_ATTR = "data-tour-popover-content" as const;
+const TOUR_VIEWPORT_MARGIN = 48;
+const TOUR_STICKY_LEFT_GAP = 16;
+const TOUR_STICKY_LEFT_ATTR = "data-tour-sticky-left" as const;
+const SCROLL_AXIS_X = "x" as const;
+const SCROLL_AXIS_Y = "y" as const;
 
 // `findAnchorElements`, `resolveAnchorToken`, `resolvePopoverAnchorToken`,
 // `resolveSideAndAlign`, `unionRect`, and `pickPopoverRect` are now in
@@ -95,6 +100,81 @@ const fallbackVirtualRect = (): DOMRect => {
     const x = Math.max(w - 320, 16);
     const y = Math.max(h - 240, 16);
     return new DOMRect(x, y, 1, 1);
+};
+
+const clamp = (n: number, min: number, max: number): number =>
+    Math.min(max, Math.max(min, n));
+
+const getStickyLeftClearance = (
+    viewportHeight: number,
+    targetRect: DOMRect,
+): number => {
+    if (typeof document === "undefined") return TOUR_VIEWPORT_MARGIN;
+    let stickyRight = 0;
+    const stickyEls = document.querySelectorAll<HTMLElement>(
+        `[${TOUR_STICKY_LEFT_ATTR}]`,
+    );
+    for (const el of stickyEls) {
+        const rect = el.getBoundingClientRect();
+        const isVisible =
+            rect.width > 0
+            && rect.height > 0
+            && rect.left < TOUR_VIEWPORT_MARGIN
+            && rect.right > 0
+            && rect.top < viewportHeight
+            && rect.bottom > 0
+            && rect.top < targetRect.bottom
+            && rect.bottom > targetRect.top;
+        if (isVisible && rect.right > stickyRight) {
+            stickyRight = rect.right;
+        }
+    }
+    return stickyRight > 0
+        ? Math.max(TOUR_VIEWPORT_MARGIN, stickyRight + TOUR_STICKY_LEFT_GAP)
+        : TOUR_VIEWPORT_MARGIN;
+};
+
+const isPageScroller = (el: HTMLElement): boolean =>
+    typeof document !== "undefined"
+    && (el === document.body || el === document.documentElement);
+
+const pageMaxScroll = (axis: "x" | "y"): number => {
+    if (typeof document === "undefined" || typeof window === "undefined") {
+        return 0;
+    }
+    const body = document.body;
+    const html = document.documentElement;
+    const viewport = axis === "x" ? window.innerWidth : window.innerHeight;
+    const scrollSize = axis === "x"
+        ? Math.max(body.scrollWidth, html.scrollWidth)
+        : Math.max(body.scrollHeight, html.scrollHeight);
+    return Math.max(0, scrollSize - viewport);
+};
+
+const maxScroll = (el: HTMLElement, axis: "x" | "y"): number => {
+    if (isPageScroller(el)) return pageMaxScroll(axis);
+    return axis === "x"
+        ? Math.max(0, el.scrollWidth - el.clientWidth)
+        : Math.max(0, el.scrollHeight - el.clientHeight);
+};
+
+const currentScroll = (el: HTMLElement, axis: "x" | "y"): number => {
+    if (isPageScroller(el) && typeof window !== "undefined") {
+        return axis === "x"
+            ? Math.max(el.scrollLeft, window.scrollX)
+            : Math.max(el.scrollTop, window.scrollY);
+    }
+    return axis === "x" ? el.scrollLeft : el.scrollTop;
+};
+
+const scrollPage = (
+    el: HTMLElement,
+    opts: ScrollToOptions,
+): void => {
+    el.scrollTo(opts);
+    if (isPageScroller(el) && typeof window !== "undefined") {
+        window.scrollTo(opts);
+    }
 };
 
 export function TourPopover() {
@@ -180,13 +260,20 @@ export function TourPopover() {
 
         const scrollSpotlightIntoView = (rect: DOMRect): boolean => {
             if (typeof window === "undefined") return false;
-            const margin = 48;
             const vw = window.innerWidth;
             const vh = window.innerHeight;
+            const margin = TOUR_VIEWPORT_MARGIN;
+            const minVisibleLeft = clamp(
+                getStickyLeftClearance(vh, rect),
+                margin,
+                Math.max(margin, vw - margin),
+            );
+            const maxVisibleRight = vw - margin;
             const inViewVertical =
                 rect.top >= margin && rect.bottom <= vh - margin;
             const inViewHorizontal =
-                rect.left >= margin && rect.right <= vw - margin;
+                rect.left >= minVisibleLeft
+                && rect.right <= maxVisibleRight;
             if (inViewVertical && inViewHorizontal) return false;
             // The page splits scroll: vertical scroll lives on the
             // body when content overflows (the `min-w-max` <main> +
@@ -210,11 +297,14 @@ export function TourPopover() {
                 : rect.height + margin * 2 < vh
                     ? rect.top + rect.height / 2 - vh / 2
                     : rect.top - margin;
+            const unobscuredWidth = maxVisibleRight - minVisibleLeft;
             const dx = inViewHorizontal
                 ? 0
-                : rect.width + margin * 2 < vw
-                    ? rect.left + rect.width / 2 - vw / 2
-                    : rect.left - margin;
+                : rect.width < unobscuredWidth
+                    ? rect.left
+                        + rect.width / 2
+                        - (minVisibleLeft + unobscuredWidth / 2)
+                    : rect.left - minVisibleLeft;
             const behavior: ScrollBehavior = prefersReducedMotion
                 ? SCROLL_BEHAVIOR_AUTO
                 : SCROLL_BEHAVIOR_SMOOTH;
@@ -229,31 +319,32 @@ export function TourPopover() {
                 body.scrollHeight > body.clientHeight ? body : html;
             const horizontalEl =
                 body.scrollWidth > body.clientWidth ? body : html;
+            let didScroll = false;
             if (dy !== 0) {
-                verticalEl.scrollTo({
-                    top: verticalEl.scrollTop + dy,
-                    behavior,
-                });
-                if (verticalEl === html) {
-                    window.scrollTo({
-                        top: window.scrollY + dy,
-                        behavior,
-                    });
+                const currentTop = currentScroll(verticalEl, SCROLL_AXIS_Y);
+                const top = clamp(
+                    currentTop + dy,
+                    0,
+                    maxScroll(verticalEl, SCROLL_AXIS_Y),
+                );
+                if (top !== currentTop) {
+                    scrollPage(verticalEl, { top, behavior });
+                    didScroll = true;
                 }
             }
             if (dx !== 0) {
-                horizontalEl.scrollTo({
-                    left: horizontalEl.scrollLeft + dx,
-                    behavior,
-                });
-                if (horizontalEl === html) {
-                    window.scrollTo({
-                        left: window.scrollX + dx,
-                        behavior,
-                    });
+                const currentLeft = currentScroll(horizontalEl, SCROLL_AXIS_X);
+                const left = clamp(
+                    currentLeft + dx,
+                    0,
+                    maxScroll(horizontalEl, SCROLL_AXIS_X),
+                );
+                if (left !== currentLeft) {
+                    scrollPage(horizontalEl, { left, behavior });
+                    didScroll = true;
                 }
             }
-            return dx !== 0 || dy !== 0;
+            return didScroll;
         };
 
         const recompute = (): void => {
