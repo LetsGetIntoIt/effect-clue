@@ -20,6 +20,7 @@ import {
 import {
     allCardEntries,
     CardEntry,
+    CARD_SETS,
     categoryName as resolveCategoryName,
     categoryOfCard,
     Category,
@@ -30,6 +31,11 @@ import {
     GameSetup,
     newGameSetup,
 } from "../logic/GameSetup";
+import {
+    type CardPackUsage,
+    recordCardPackUse,
+} from "../logic/CardPackUsage";
+import { cardPackUsageQueryKey } from "../data/cardPackUsage";
 import { HashMap } from "effect";
 import {
     emptyHypotheses,
@@ -760,6 +766,23 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             // localStorage isn't "the user touched the game".
             if (action.type === "newGame") {
                 markGameCreated(DateTime.nowUnsafe());
+                // Stamp Classic as just-used so the card-pack pill row
+                // re-anchors its active highlight to Classic — matching
+                // the fresh-Classic deck the reducer just loaded. Without
+                // this, whichever pack the user previously loaded stays
+                // most-recent in the usage map, but no pill gets the
+                // active styling because cardSetEquals(setup, that pack)
+                // is now false.
+                const classicId = CARD_SETS[0]!.id;
+                recordCardPackUse(classicId);
+                queryClient.setQueryData<CardPackUsage>(
+                    cardPackUsageQueryKey,
+                    (old) => {
+                        const next = new Map(old ?? new Map());
+                        next.set(classicId, DateTime.nowUnsafe());
+                        return next;
+                    },
+                );
             } else if (
                 action.type !== "setUiMode"
                 && action.type !== "replaceSession"
