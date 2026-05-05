@@ -9,8 +9,18 @@ import {
     type HypothesisValue,
 } from "../../logic/Hypothesis";
 import { CellWhyPopover, hypothesisValueFor } from "./CellWhyPopover";
+
+// Analytics enum tag for the "no hypothesis" baseline. Module-scope
+// so the `no-literal-string` lint rule reads it as code, not UI text.
+const ANALYTICS_PREV_OFF = "off" as const;
 import { useTranslations } from "next-intl";
-import { playerAdded, whyTooltipOpened } from "../../analytics/events";
+import {
+    hypothesisCleared,
+    hypothesisSet,
+    playerAdded,
+    whyTooltipOpened,
+    type CellHypothesisStatus,
+} from "../../analytics/events";
 import {
     useEffect,
     useLayoutEffect,
@@ -288,6 +298,21 @@ export function Checklist() {
     //   - no why popover is open (`popoverCell === null`).
     const popoverCellRef = useRef<Cell | null>(popoverCell);
     popoverCellRef.current = popoverCell;
+    // Analytics context: snapshot the inputs `statusFor` needs so the
+    // keyboard handler can read them at action time without bloating
+    // the useEffect dep list.
+    const analyticsCtxRef = useRef({
+        hypotheses,
+        realKnowledge,
+        jointKnowledge,
+        jointFailed,
+    });
+    analyticsCtxRef.current = {
+        hypotheses,
+        realKnowledge,
+        jointKnowledge,
+        jointFailed,
+    };
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
             const target = e.target as Element | null;
@@ -300,15 +325,43 @@ export function Checklist() {
             }
             const cell = popoverCellRef.current;
             if (cell === null) return;
+            const ctx = analyticsCtxRef.current;
+            const prevValue = hypothesisValueFor(ctx.hypotheses, cell);
+            const cellStatus = statusFor(
+                cell,
+                ctx.realKnowledge,
+                ctx.jointKnowledge,
+                ctx.hypotheses,
+                ctx.jointFailed,
+            ).kind as CellHypothesisStatus;
             if (matches("hypothesis.setOff", e)) {
                 e.preventDefault();
                 dispatch({ type: "clearHypothesis", cell });
+                if (prevValue !== undefined) {
+                    hypothesisCleared({
+                        previousValue: prevValue,
+                        cellStatus,
+                        source: "keyboard",
+                    });
+                }
             } else if (matches("hypothesis.setY", e)) {
                 e.preventDefault();
                 dispatch({ type: "setHypothesis", cell, value: Y });
+                hypothesisSet({
+                    value: Y,
+                    previousValue: prevValue ?? ANALYTICS_PREV_OFF,
+                    cellStatus,
+                    source: "keyboard",
+                });
             } else if (matches("hypothesis.setN", e)) {
                 e.preventDefault();
                 dispatch({ type: "setHypothesis", cell, value: N });
+                hypothesisSet({
+                    value: N,
+                    previousValue: prevValue ?? ANALYTICS_PREV_OFF,
+                    cellStatus,
+                    source: "keyboard",
+                });
             }
         };
         window.addEventListener("keydown", onKeyDown);
@@ -326,13 +379,38 @@ export function Checklist() {
         prevPopoverCellRef.current = popoverCell;
         if (popoverCell !== null && popoverCell !== prev) {
             const catId = categoryOfCard(setup.cardSet, popoverCell.card);
+            const popoverStatus = statusFor(
+                popoverCell,
+                realKnowledge,
+                jointKnowledge,
+                hypotheses,
+                jointFailed,
+            );
+            const realValue = realKnowledge
+                ? getCellByOwnerCard(
+                      realKnowledge,
+                      popoverCell.owner,
+                      popoverCell.card,
+                  )
+                : undefined;
             whyTooltipOpened({
                 categoryName: catId
                     ? categoryName(setup.cardSet, catId)
                     : "",
+                hasDeduction: realValue !== undefined,
+                hasHypothesis:
+                    hypothesisValueFor(hypotheses, popoverCell) !== undefined,
+                status: popoverStatus.kind as CellHypothesisStatus,
             });
         }
-    }, [popoverCell, setup.cardSet]);
+    }, [
+        popoverCell,
+        setup.cardSet,
+        realKnowledge,
+        jointKnowledge,
+        hypotheses,
+        jointFailed,
+    ]);
 
     const owners: ReadonlyArray<Owner> = allOwners(setup);
 
@@ -1480,16 +1558,32 @@ export function Checklist() {
                                                     onHypothesisChange={(
                                                         next: HypothesisValue | undefined,
                                                     ) => {
+                                                        const prevValue = hypothesisValue;
+                                                        const cellStatusKind = hypothesisStatus.kind as CellHypothesisStatus;
                                                         if (next === undefined) {
                                                             dispatch({
                                                                 type: "clearHypothesis",
                                                                 cell: thisCell,
                                                             });
+                                                            if (prevValue !== undefined) {
+                                                                hypothesisCleared({
+                                                                    previousValue: prevValue,
+                                                                    cellStatus: cellStatusKind,
+                                                                    source: "click",
+                                                                });
+                                                            }
                                                         } else {
                                                             dispatch({
                                                                 type: "setHypothesis",
                                                                 cell: thisCell,
                                                                 value: next,
+                                                            });
+                                                            hypothesisSet({
+                                                                value: next,
+                                                                previousValue:
+                                                                    prevValue ?? ANALYTICS_PREV_OFF,
+                                                                cellStatus: cellStatusKind,
+                                                                source: "click",
                                                             });
                                                         }
                                                     }}
