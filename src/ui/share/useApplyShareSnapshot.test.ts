@@ -16,6 +16,7 @@
 import { Schema } from "effect";
 import { beforeEach, describe, expect, test } from "vitest";
 import { Card, CardCategory, Player } from "../../logic/GameObjects";
+import { emptyHypotheses } from "../../logic/Hypothesis";
 import { newAccusationId } from "../../logic/Accusation";
 import { newSuggestionId } from "../../logic/Suggestion";
 import { GameSetup } from "../../logic/GameSetup";
@@ -137,6 +138,7 @@ const sampleSnapshot = (overrides: {
                   },
               ])
             : null,
+    hypothesesData: null,
 });
 
 const apply = (
@@ -227,6 +229,7 @@ describe("buildSessionFromSnapshot — variant shapes", () => {
             knownCardsData: null,
             suggestionsData: null,
             accusationsData: null,
+            hypothesesData: null,
         });
         expect(session.setup.cardSet).toBe(RECEIVER_FALLBACK_PACK);
         expect(session.setup.players).toEqual(
@@ -247,6 +250,7 @@ describe("buildSessionFromSnapshot — decode failures", () => {
                 knownCardsData: null,
                 suggestionsData: null,
                 accusationsData: null,
+                hypothesesData: null,
             }),
         ).toThrow(ShareSnapshotDecodeError);
         try {
@@ -257,6 +261,7 @@ describe("buildSessionFromSnapshot — decode failures", () => {
                 knownCardsData: null,
                 suggestionsData: null,
                 accusationsData: null,
+                hypothesesData: null,
             });
         } catch (e) {
             expect((e as ShareSnapshotDecodeError).field).toBe("cardPackData");
@@ -281,6 +286,7 @@ describe("buildSessionFromSnapshot — decode failures", () => {
                 },
             ]),
             accusationsData: null,
+            hypothesesData: null,
         });
         expect(session.suggestions[0]!.id).toBeTruthy();
         expect(String(session.suggestions[0]!.id).length).toBeGreaterThan(0);
@@ -317,6 +323,7 @@ describe("applyShareSnapshotToLocalStorage — receive page handoff", () => {
             handSizes: [],
             suggestions: [],
             accusations: [],
+            hypotheses: emptyHypotheses,
         });
 
         const session = applyShareSnapshotToLocalStorage(
@@ -343,6 +350,7 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
             handSizes: [{ player: Player("Original-Receiver-1"), size: 1 }],
             suggestions: [],
             accusations: [],
+            hypotheses: emptyHypotheses,
         };
         saveToLocalStorage(currentSession);
 
@@ -366,6 +374,7 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
                 knownCardsData: null,
                 suggestionsData: null,
                 accusationsData: null,
+                hypothesesData: null,
             }),
         ).toThrow(ShareSnapshotDecodeError);
         expect(loadCustomCardSets()).toEqual([]);
@@ -383,6 +392,7 @@ describe("share receive dirty-state detection", () => {
             handSizes: [],
             suggestions: [],
             accusations: [],
+            hypotheses: emptyHypotheses,
         };
 
         expect(sessionHasGameData(clean)).toBe(false);
@@ -401,6 +411,7 @@ describe("share receive dirty-state detection", () => {
                 handSizes: [{ player: Player("Player 1"), size: 4 }],
                 suggestions: [],
                 accusations: [],
+                hypotheses: emptyHypotheses,
             }),
         ).toBe(true);
         expect(
@@ -415,6 +426,7 @@ describe("share receive dirty-state detection", () => {
                 handSizes: [],
                 suggestions: [],
                 accusations: [],
+                hypotheses: emptyHypotheses,
             }),
         ).toBe(true);
     });
@@ -430,6 +442,7 @@ describe("share receive dirty-state detection", () => {
             handSizes: [],
             suggestions: [],
             accusations: [],
+            hypotheses: emptyHypotheses,
         });
         expect(hasPersistedGameData()).toBe(true);
     });

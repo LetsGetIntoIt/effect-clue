@@ -75,6 +75,7 @@ vi.mock("../hooks/useHasKeyboard", () => ({
 
 import { fireEvent, render, waitFor, within } from "@testing-library/react";
 import { saveToLocalStorage } from "../../logic/Persistence";
+import { emptyHypotheses } from "../../logic/Hypothesis";
 import { Player } from "../../logic/GameObjects";
 import { CLASSIC_SETUP_3P } from "../../logic/GameSetup";
 import {
@@ -114,6 +115,7 @@ const seedOneSuggestionAndMount = async (
             }),
         ],
         accusations: [],
+        hypotheses: emptyHypotheses,
     });
     if (view === "suggest") {
         // The mobile play layout only mounts the active pane, so

@@ -38,6 +38,17 @@ import {
     Category,
 } from "../../logic/CardSet";
 import { DEFAULT_SETUP, GameSetup } from "../../logic/GameSetup";
+import { HashMap } from "effect";
+import {
+    CaseFileOwner,
+    PlayerOwner,
+} from "../../logic/GameObjects";
+import {
+    emptyHypotheses,
+    type HypothesisMap,
+    type HypothesisValue,
+} from "../../logic/Hypothesis";
+import { Cell } from "../../logic/Knowledge";
 import {
     loadFromLocalStorage,
     saveToLocalStorage,
@@ -53,6 +64,7 @@ import {
     accusationsCodec,
     cardPackCodec,
     handSizesCodec,
+    hypothesesCodec,
     knownCardsCodec,
     playersCodec,
     suggestionsCodec,
@@ -66,6 +78,7 @@ export interface ShareSnapshotForHydration {
     readonly knownCardsData: string | null;
     readonly suggestionsData: string | null;
     readonly accusationsData: string | null;
+    readonly hypothesesData: string | null;
 }
 
 // Wire-format field names. Module-scope so they don't trip the
@@ -77,6 +90,7 @@ const F_HAND_SIZES_DATA = "handSizesData";
 const F_KNOWN_CARDS_DATA = "knownCardsData";
 const F_SUGGESTIONS_DATA = "suggestionsData";
 const F_ACCUSATIONS_DATA = "accusationsData";
+const F_HYPOTHESES_DATA = "hypothesesData";
 
 const DECODE_ERROR_PREFIX = "share snapshot decode failed: ";
 
@@ -235,12 +249,37 @@ export const buildSessionFromSnapshot = (
               )
             : [];
 
+    const hypotheses: HypothesisMap =
+        snapshot.hypothesesData !== null
+            ? (() => {
+                  const decoded = decodeField(
+                      F_HYPOTHESES_DATA,
+                      snapshot.hypothesesData,
+                      hypothesesCodec,
+                  );
+                  let m: HypothesisMap = emptyHypotheses;
+                  for (const h of decoded) {
+                      const owner =
+                          h.player !== null
+                              ? PlayerOwner(h.player)
+                              : CaseFileOwner();
+                      m = HashMap.set(
+                          m,
+                          Cell(owner, h.card),
+                          h.value as HypothesisValue,
+                      );
+                  }
+                  return m;
+              })()
+            : emptyHypotheses;
+
     return {
         setup,
         hands,
         handSizes,
         suggestions,
         accusations,
+        hypotheses,
     };
 };
 

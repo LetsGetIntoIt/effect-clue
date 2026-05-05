@@ -2,7 +2,9 @@ import type { AccusationId } from "./Accusation";
 import type { CardSet } from "./CardSet";
 import type { Card, CardCategory, Player } from "./GameObjects";
 import type { GameSetup } from "./GameSetup";
+import type { HypothesisMap, HypothesisValue } from "./Hypothesis";
 import type { KnownCard } from "./InitialKnowledge";
+import type { Cell } from "./Knowledge";
 import type { GameSession } from "./Persistence";
 import type { SuggestionId } from "./Suggestion";
 
@@ -102,6 +104,8 @@ export type ClueAction =
     | { type: "removePlayer"; player: Player }
     | { type: "renamePlayer"; oldName: Player; newName: Player }
     | { type: "setUiMode"; mode: UiMode }
+    | { type: "setHypothesis"; cell: Cell; value: HypothesisValue }
+    | { type: "clearHypothesis"; cell: Cell }
     | { type: "replaceSession"; session: GameSession };
 
 export interface ClueState {
@@ -111,4 +115,12 @@ export interface ClueState {
     readonly suggestions: ReadonlyArray<DraftSuggestion>;
     readonly accusations: ReadonlyArray<DraftAccusation>;
     readonly uiMode: UiMode;
+    /**
+     * User-entered "what-if" assumptions, one per cell. Soft facts: the
+     * deducer runs a parallel "joint" deduction over `realFacts ∪
+     * hypotheses` so the user can see what their hunches would imply,
+     * without polluting the canonical fact set or raising the global
+     * contradiction banner. See {@link Hypothesis} for the model.
+     */
+    readonly hypotheses: HypothesisMap;
 }

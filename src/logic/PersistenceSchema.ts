@@ -4,17 +4,18 @@ import { Card, CardCategory, Player } from "./GameObjects";
 import { SuggestionId } from "./Suggestion";
 
 /**
- * Effect Schema definitions for the persisted session shape (v6).
+ * Effect Schema definitions for the persisted session shape.
  *
- * The app is pre-production, so there's a single on-disk format —
- * writes go to v6, reads only accept v6. If an older / malformed blob
- * shows up, decode returns `Result.Failure` and the caller falls back
- * to a fresh session. No migration chain, no legacy schemas.
+ * The current canonical version is v7 (adds `hypotheses`). Reads accept
+ * v7 first, then fall back to v6 (auto-lifting with `hypotheses: []`)
+ * so that users who roll back-and-forward between builds don't lose
+ * suggestion / accusation state. Writes always go to v7.
  *
- * v6 adds the `loggedAt: number` field to each suggestion + accusation,
- * recording the millisecond timestamp at which it was logged. Powers
- * the combined chronological prior-log UI in `SuggestionLogPanel` —
- * suggestions and accusations are interleaved by `loggedAt`.
+ * v6 added the `loggedAt: number` field to each suggestion + accusation,
+ * recording the millisecond timestamp at which it was logged.
+ *
+ * v7 adds `hypotheses: Array<{ owner, card, value }>` — per-cell what-if
+ * assumptions the user toggles on. See `src/logic/Hypothesis.ts`.
  *
  * Branded strings (Player, Card, CardCategory, SuggestionId,
  * AccusationId) are decoded straight into their nominal types via
@@ -78,15 +79,29 @@ const PersistedAccusationSchema = Schema.Struct({
 });
 
 /**
+ * Persisted owner: a single `player` field that's null when the cell
+ * belongs to the case file. Flat encoding (vs a discriminated `kind`
+ * tag) keeps the schema's `DecodingServices` channel clean — Schema's
+ * `Union` widens services to `unknown`, which incompatibilises the
+ * outer struct with `decodeUnknownResult`'s `Decoder<unknown>` constraint.
+ */
+const PersistedHypothesisSchema = Schema.Struct({
+    player: Schema.NullOr(PlayerSchema),
+    card: CardSchema,
+    value: Schema.Literals(["Y", "N"]),
+});
+
+/**
  * Convenience array wrappers for the share codec — the shares wire
  * format ships these as top-level JSON arrays rather than wrapped
- * inside a v6-style envelope.
+ * inside a versioned envelope.
  */
 export const PlayersArraySchema = Schema.Array(PlayerSchema);
 export const HandSizesArraySchema = Schema.Array(PersistedHandSizeSchema);
 export const HandsArraySchema = Schema.Array(PersistedHandSchema);
 export const SuggestionsArraySchema = Schema.Array(PersistedSuggestionSchema);
 export const AccusationsArraySchema = Schema.Array(PersistedAccusationSchema);
+export const HypothesesArraySchema = Schema.Array(PersistedHypothesisSchema);
 
 /**
  * Wire shape for the card-pack half of a share. The `name` field is
@@ -106,7 +121,7 @@ export const CardSetSchema = Schema.Struct({
 });
 
 /**
- * Canonical v6 session shape. The only version the decoder accepts.
+ * v6 session shape — kept for back-compat reads. v7 supersedes it.
  */
 const PersistedSessionV6Schema = Schema.Struct({
     version: Schema.Literal(6),
@@ -118,17 +133,37 @@ const PersistedSessionV6Schema = Schema.Struct({
 });
 
 /**
- * Result-returning decoder. Hands back `Result<session, SchemaError>` —
+ * Canonical v7 session shape. Adds `hypotheses` — per-cell what-if
+ * assumptions. See `src/logic/Hypothesis.ts`.
+ */
+const PersistedSessionV7Schema = Schema.Struct({
+    version: Schema.Literal(7),
+    setup: PersistedGameSetupSchema,
+    hands: Schema.Array(PersistedHandSchema),
+    handSizes: Schema.Array(PersistedHandSizeSchema),
+    suggestions: Schema.Array(PersistedSuggestionSchema),
+    accusations: Schema.Array(PersistedAccusationSchema),
+    hypotheses: HypothesesArraySchema,
+});
+
+/**
+ * Result-returning decoders. Hand back `Result<session, SchemaError>` —
  * callers decide whether to surface the error or fall back to a fresh
  * session.
  */
 export const decodeV6Unknown = Schema.decodeUnknownResult(
     PersistedSessionV6Schema,
 );
+export const decodeV7Unknown = Schema.decodeUnknownResult(
+    PersistedSessionV7Schema,
+);
 
 /**
- * Runtime type of a decoded v6 session — the branded, Schema-validated
- * payload `decodeV6Unknown` hands back. Callers construct the
+ * Runtime types of decoded sessions — the branded, Schema-validated
+ * payload `decodeV{6,7}Unknown` hand back. Callers construct the
  * GameSession domain value from this.
  */
 export type PersistedSessionV6 = Schema.Schema.Type<typeof PersistedSessionV6Schema>;
+export type PersistedSessionV7 = Schema.Schema.Type<typeof PersistedSessionV7Schema>;
+
+export type PersistedHypothesis = Schema.Schema.Type<typeof PersistedHypothesisSchema>;

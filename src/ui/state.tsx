@@ -31,6 +31,11 @@ import {
     newGameSetup,
 } from "../logic/GameSetup";
 import { HashMap } from "effect";
+import {
+    emptyHypotheses,
+    foldHypothesesInto,
+    type HypothesisMap,
+} from "../logic/Hypothesis";
 import { caseFileProgress } from "../logic/Recommender";
 import {
     caseFileSolved,
@@ -142,6 +147,7 @@ const initialState: ClueState = {
     suggestions: [],
     accusations: [],
     uiMode: "setup",
+    hypotheses: emptyHypotheses,
 };
 
 const reducer = (state: ClueState, action: ClueAction): ClueState => {
@@ -157,8 +163,9 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
 
         case "loadCardSet":
             // Swap the deck; keep the current player roster. Hand
-            // sizes, known cards, suggestions, and accusations
-            // reference card ids from the old deck and are discarded.
+            // sizes, known cards, suggestions, accusations, and
+            // hypotheses reference card ids from the old deck and are
+            // discarded.
             return {
                 ...state,
                 setup: GameSetup({
@@ -169,6 +176,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 handSizes: [],
                 suggestions: [],
                 accusations: [],
+                hypotheses: emptyHypotheses,
             };
 
         case "setSetup":
@@ -464,6 +472,22 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
             };
         }
 
+        case "setHypothesis":
+            return {
+                ...state,
+                hypotheses: HashMap.set(
+                    state.hypotheses,
+                    action.cell,
+                    action.value,
+                ),
+            };
+
+        case "clearHypothesis":
+            return {
+                ...state,
+                hypotheses: HashMap.remove(state.hypotheses, action.cell),
+            };
+
         case "replaceSession": {
             const { session } = action;
             return {
@@ -492,6 +516,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     accuser: a.accuser,
                     cards: Array.from(a.cards),
                 })),
+                hypotheses: session.hypotheses,
             };
         }
     }
@@ -512,6 +537,21 @@ interface ClueDerived {
     readonly deductionResult: DeductionResult;
     readonly provenance: Provenance | undefined;
     readonly footnotes: FootnoteMap;
+    /**
+     * Active hypothesis map (mirrored from `state.hypotheses` so
+     * components can read the canonical input alongside the
+     * `jointDeductionResult` it produced).
+     */
+    readonly hypotheses: HypothesisMap;
+    /**
+     * The joint deduction over `realFacts ∪ hypotheses`, when at least
+     * one hypothesis is active. `undefined` when no hypotheses are
+     * active (consumers can fall back to `deductionResult`). Failure
+     * branch represents either a fold-time direct conflict (a
+     * hypothesis disagreed with a known cell of `initialKnowledge`) or
+     * a runtime contradiction inside the deducer's fixed-point loop.
+     */
+    readonly jointDeductionResult: DeductionResult | undefined;
 }
 
 const deriveState = (
@@ -953,6 +993,24 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         [deduceLayer, initialKnowledge],
     );
 
+    // Joint deduction: real facts ∪ hypotheses. Sentinel-undefined when
+    // no hypotheses are active, so the common path skips the extra
+    // deduce call entirely. When hypotheses ARE active, this is a
+    // second `deduce` against an augmented initial knowledge — its
+    // failure does NOT feed the global contradiction banner (which
+    // reads `deductionResult` only); the cell renderer surfaces
+    // contradictions inline via the per-cell hypothesis status.
+    const jointDeductionResult = useMemo<DeductionResult | undefined>(() => {
+        if (HashMap.size(state.hypotheses) === 0) return undefined;
+        const folded = foldHypothesesInto(initialKnowledge, state.hypotheses);
+        if (Result.isFailure(folded)) return folded;
+        return TelemetryRuntime.runSync(
+            Effect.result(deduce(folded.success)).pipe(
+                Effect.provide(deduceLayer),
+            ),
+        );
+    }, [deduceLayer, initialKnowledge, state.hypotheses]);
+
     const { provenance, footnotes } = useMemo(
         () =>
             deriveState(
@@ -972,6 +1030,8 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             deductionResult,
             provenance,
             footnotes,
+            hypotheses: state.hypotheses,
+            jointDeductionResult,
         }),
         [
             suggestionsAsData,
@@ -980,6 +1040,8 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             deductionResult,
             provenance,
             footnotes,
+            state.hypotheses,
+            jointDeductionResult,
         ],
     );
 
@@ -1088,6 +1150,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             })),
             suggestions: suggestionsAsData,
             accusations: accusationsAsData,
+            hypotheses: state.hypotheses,
         };
         saveToLocalStorage(session);
         queryClient.setQueryData(gameSessionQueryKey, session);
@@ -1282,6 +1345,16 @@ const pruneSessionToSetup = (
     const cardIdSet = new Set(
         allCardEntries(setup).map(e => String(e.id)),
     );
+    let prunedHypotheses = state.hypotheses;
+    for (const [cell] of state.hypotheses) {
+        const cardOk = cardIdSet.has(String(cell.card));
+        const ownerOk =
+            cell.owner._tag === "CaseFile" ||
+            playerSet.has(String(cell.owner.player));
+        if (!cardOk || !ownerOk) {
+            prunedHypotheses = HashMap.remove(prunedHypotheses, cell);
+        }
+    }
     return {
         ...state,
         setup,
@@ -1315,5 +1388,6 @@ const pruneSessionToSetup = (
         accusations: state.accusations
             .filter(a => playerSet.has(String(a.accuser)))
             .filter(a => a.cards.every(c => cardIdSet.has(String(c)))),
+        hypotheses: prunedHypotheses,
     };
 };

@@ -1,15 +1,29 @@
-import { Result } from "effect";
+import { HashMap, Result } from "effect";
 import {
     Accusation,
     AccusationId,
     accusationCards,
     newAccusationId,
 } from "./Accusation";
-import { Card, Player } from "./GameObjects";
+import {
+    CaseFileOwner,
+    Card,
+    Player,
+    PlayerOwner,
+} from "./GameObjects";
 import { CardEntry, Category, GameSetup } from "./GameSetup";
 import {
+    emptyHypotheses,
+    type HypothesisMap,
+    type HypothesisValue,
+} from "./Hypothesis";
+import { Cell } from "./Knowledge";
+import {
     decodeV6Unknown,
+    decodeV7Unknown,
+    type PersistedHypothesis,
     type PersistedSessionV6,
+    type PersistedSessionV7,
 } from "./PersistenceSchema";
 import {
     newSuggestionId,
@@ -24,12 +38,12 @@ import {
  * the mutable inputs are serialized; derived knowledge is cheap to
  * recompute, so there's no need to persist it.
  *
- * The app is pre-production, so there's one on-disk format. If an
- * older / malformed blob ever shows up, decode returns undefined
- * and the caller falls back to a fresh session.
+ * v7 (current) adds `hypotheses` — per-cell what-if assumptions.
+ * v6 reads still work via {@link decodeV6Unknown}; they're auto-lifted
+ * to v7 with `hypotheses: []`. Writes always produce v7.
  */
-interface PersistedGameV6 {
-    readonly version: 6;
+interface PersistedGameV7 {
+    readonly version: 7;
     readonly setup: {
         readonly players: ReadonlyArray<string>;
         readonly categories: ReadonlyArray<{
@@ -64,9 +78,14 @@ interface PersistedGameV6 {
         readonly cards: ReadonlyArray<string>;
         readonly loggedAt: number;
     }>;
+    readonly hypotheses: ReadonlyArray<{
+        readonly player: string | null;
+        readonly card: string;
+        readonly value: "Y" | "N";
+    }>;
 }
 
-type PersistedGame = PersistedGameV6;
+type PersistedGame = PersistedGameV7;
 
 export interface GameSession {
     setup: GameSetup;
@@ -74,10 +93,37 @@ export interface GameSession {
     handSizes: ReadonlyArray<{ player: Player; size: number }>;
     suggestions: ReadonlyArray<Suggestion>;
     accusations: ReadonlyArray<Accusation>;
+    hypotheses: HypothesisMap;
 }
 
+const encodeHypotheses = (
+    hypotheses: HypothesisMap,
+): PersistedGameV7["hypotheses"] => {
+    const out: Array<PersistedGameV7["hypotheses"][number]> = [];
+    for (const [cell, value] of hypotheses) {
+        const player =
+            cell.owner._tag === "Player"
+                ? String(cell.owner.player)
+                : null;
+        out.push({ player, card: String(cell.card), value });
+    }
+    return out;
+};
+
+const decodeHypotheses = (
+    raw: ReadonlyArray<PersistedHypothesis>,
+): HypothesisMap => {
+    let m: HypothesisMap = emptyHypotheses;
+    for (const h of raw) {
+        const owner =
+            h.player !== null ? PlayerOwner(h.player) : CaseFileOwner();
+        m = HashMap.set(m, Cell(owner, h.card), h.value as HypothesisValue);
+    }
+    return m;
+};
+
 export const encodeSession = (session: GameSession): PersistedGame => ({
-    version: 6,
+    version: 7,
     setup: {
         players: session.setup.players.map(p => String(p)),
         categories: session.setup.categories.map(c => ({
@@ -112,14 +158,53 @@ export const encodeSession = (session: GameSession): PersistedGame => ({
         cards: accusationCards(a).map(c => String(c)),
         loggedAt: a.loggedAt,
     })),
+    hypotheses: encodeHypotheses(session.hypotheses),
+});
+
+const buildSessionFromV7 = (v7: PersistedSessionV7): GameSession => ({
+    setup: GameSetup({
+        players: v7.setup.players,
+        categories: v7.setup.categories.map(c => Category({
+            id: c.id,
+            name: c.name,
+            cards: c.cards.map(card => CardEntry({
+                id: card.id,
+                name: card.name,
+            })),
+        })),
+    }),
+    hands: v7.hands.map(h => ({ player: h.player, cards: h.cards })),
+    handSizes: v7.handSizes.map(h => ({
+        player: h.player,
+        size: h.size,
+    })),
+    suggestions: v7.suggestions.map(s => Suggestion({
+        id: s.id === undefined || s.id === SuggestionId("")
+            ? newSuggestionId()
+            : s.id,
+        suggester: s.suggester,
+        cards: s.cards,
+        nonRefuters: s.nonRefuters,
+        refuter: s.refuter === null ? undefined : s.refuter,
+        seenCard: s.seenCard === null ? undefined : s.seenCard,
+        loggedAt: s.loggedAt,
+    })),
+    accusations: v7.accusations.map(a => Accusation({
+        id: a.id === undefined || a.id === AccusationId("")
+            ? newAccusationId()
+            : a.id,
+        accuser: a.accuser,
+        cards: a.cards,
+        loggedAt: a.loggedAt,
+    })),
+    hypotheses: decodeHypotheses(v7.hypotheses),
 });
 
 /**
- * Convert a Schema-validated v6 payload into the domain GameSession.
- * Branded types already flow through the schema, so this is pure
- * construction — no Player(...) / Card(...) wrapping needed.
+ * Lift a v6 payload to v7 by attaching an empty hypothesis set.
+ * Forward-only and lossless — v7 is a strict superset of v6.
  */
-const buildSessionFromV6 = (v6: PersistedSessionV6): GameSession => ({
+const liftV6ToV7 = (v6: PersistedSessionV6): GameSession => ({
     setup: GameSetup({
         players: v6.setup.players,
         categories: v6.setup.categories.map(c => Category({
@@ -155,15 +240,19 @@ const buildSessionFromV6 = (v6: PersistedSessionV6): GameSession => ({
         cards: a.cards,
         loggedAt: a.loggedAt,
     })),
+    hypotheses: emptyHypotheses,
 });
 
 export const decodeSession = (data: unknown): GameSession | undefined => {
-    const decoded = decodeV6Unknown(data);
-    if (Result.isFailure(decoded)) return undefined;
-    return buildSessionFromV6(decoded.success);
+    const v7 = decodeV7Unknown(data);
+    if (Result.isSuccess(v7)) return buildSessionFromV7(v7.success);
+    const v6 = decodeV6Unknown(data);
+    if (Result.isSuccess(v6)) return liftV6ToV7(v6.success);
+    return undefined;
 };
 
-const STORAGE_KEY = "effect-clue.session.v6";
+const STORAGE_KEY = "effect-clue.session.v7";
+const LEGACY_STORAGE_KEY_V6 = "effect-clue.session.v6";
 
 export const saveToLocalStorage = (session: GameSession): void => {
     try {
@@ -176,9 +265,11 @@ export const saveToLocalStorage = (session: GameSession): void => {
 
 export const loadFromLocalStorage = (): GameSession | undefined => {
     try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
-        if (!raw) return undefined;
-        return decodeSession(JSON.parse(raw));
+        const rawV7 = window.localStorage.getItem(STORAGE_KEY);
+        if (rawV7) return decodeSession(JSON.parse(rawV7));
+        const rawV6 = window.localStorage.getItem(LEGACY_STORAGE_KEY_V6);
+        if (rawV6) return decodeSession(JSON.parse(rawV6));
+        return undefined;
     } catch {
         return undefined;
     }

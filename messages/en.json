@@ -74,7 +74,9 @@
             "updateAccusation": "editing Accusation #{number} by {player} ({cards})",
             "updateAccusationUnknown": "editing an accusation",
             "removeAccusation": "removing Accusation #{number} by {player} ({cards})",
-            "removeAccusationUnknown": "removing an accusation"
+            "removeAccusationUnknown": "removing an accusation",
+            "setHypothesis": "setting hypothesis: {owner} {value, select, Y {owns} other {doesn't own}} {card}",
+            "clearHypothesis": "clearing hypothesis on {owner} / {card}"
         }
     },
     "setup": {
@@ -124,9 +126,25 @@
         "title": "Deduction grid",
         "caseFileProgress": "Case file · {percent}% solved",
         "candidatesCount": "{count, plural, one {# candidate} other {# candidates}}",
-        "whyHeader": "Why this value:",
         "whyLine": "{index}. {headline}{iter, select, none {} other { (iter {iter})}}: {detail}",
         "footnoteLine": "Candidate for suggestion {labels} — refuter's unseen card could be here."
+    },
+    "hypothesis": {
+        "groupLabel": "Hypothesis",
+        "cellHeading": "{owner} / {card}",
+        "hypothesisLabel": "Hypothesis",
+        "hardFactsLabel": "Hard facts",
+        "helpText": "Have a hunch? Set it here to treat it like a soft deduction — we'll tell you when it's confirmed, plausible, or rejected.",
+        "optionOff": "Off",
+        "optionY": "Y",
+        "optionN": "N",
+        "shortcutHint": "Type ({y}, {n}, or {off}) to toggle.",
+        "statusConfirmed": "Confirmed by real facts — you can turn this hypothesis off.",
+        "statusDirectlyContradicted": "Contradicts a real fact — your hypothesis can't be true.",
+        "statusJointlyConflicts": "Conflicts with another hypothesis. These can't all be true together — drop one to resolve.",
+        "statusDerived": "This value follows from your active hypotheses:",
+        "statusDerivedSingular": "This value follows from your active hypothesis ({description}).",
+        "emptyHint": "Set a hypothesis to explore what would follow."
     },
     "reasons": {
         "suggestionHeadline": "Suggestion #{number}",
