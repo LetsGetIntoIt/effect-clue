@@ -37,19 +37,37 @@ const valueFromOption = (option: Option): HypothesisValue | undefined =>
 
 const baseButtonClass =
     "flex-1 px-3 py-1 text-[12px] font-semibold cursor-pointer " +
-    "border border-border bg-panel text-muted " +
+    "border-2 border-border bg-panel text-muted " +
     "transition-colors " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:z-10 " +
     "disabled:cursor-default disabled:opacity-50";
 
+// The `!` prefix forces these utilities to !important. Without it,
+// Tailwind's CSS source order has `.bg-panel` (from the base class)
+// win against `.bg-no-bg` and `.bg-row-header`, since `--color-panel`
+// is declared earlier in the @theme block than those tokens —
+// same-specificity ties go to the later rule, but here our overrides
+// come earlier. `bg-yes-bg` happens to be declared after `bg-panel`
+// so it wins naturally; the `!` on the other two just makes them
+// consistent.
+const SELECTED_Y_CLASSES = " bg-yes-bg text-yes !border-yes";
+const SELECTED_N_CLASSES = " !bg-no-bg text-no !border-no";
+const SELECTED_OFF_CLASSES = " !bg-row-header text-fg !border-muted";
+
+// Border-collapse helpers (extracted so the no-literal-string lint
+// rule reads them as code rather than UI text).
+const COLLAPSE_CLASS_FIRST = " relative";
+const COLLAPSE_CLASS_INNER = " -ml-[2px] relative";
+const STACK_CLASS_SELECTED = " z-[1]";
+
 const selectedClassFor = (option: Option): string => {
     switch (option) {
         case OPT_Y:
-            return " bg-yes-bg text-yes border-yes/40";
+            return SELECTED_Y_CLASSES;
         case OPT_N:
-            return " bg-no-bg text-no border-no/40";
+            return SELECTED_N_CLASSES;
         case OPT_OFF:
-            return " bg-bg text-fg border-fg/40";
+            return SELECTED_OFF_CLASSES;
     }
 };
 
@@ -129,12 +147,23 @@ export function HypothesisControl({
             >
                 {OPTIONS.map((option, idx) => {
                     const isSelected = current === option;
+                    // Border-collapse: pull each button after the
+                    // first 2px to the left so adjacent borders
+                    // overlap (no double-thick seam between buttons).
+                    // The selected button needs `z-10` so its
+                    // coloured border paints on top of its neighbours'
+                    // grey borders.
+                    const collapseClass =
+                        idx > 0 ? COLLAPSE_CLASS_INNER : COLLAPSE_CLASS_FIRST;
+                    const stackClass = isSelected ? STACK_CLASS_SELECTED : "";
                     const className =
                         baseButtonClass +
                         (isSelected ? selectedClassFor(option) : "") +
                         (isSelected && isContradicted
                             ? " ring-2 ring-danger ring-inset"
-                            : "");
+                            : "") +
+                        collapseClass +
+                        stackClass;
                     return (
                         <button
                             key={option}
