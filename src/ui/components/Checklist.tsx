@@ -2564,15 +2564,12 @@ const cellClass = (
 ): string => {
     let base = interactive ? `${CELL_BASE}${CELL_INTERACTIVE}` : CELL_BASE;
     if (highlighted) base += CELL_HIGHLIGHTED;
-    // Direct contradiction (real proves the hypothesis wrong) and
-    // joint conflict get a danger / warning halo so the user can spot
-    // them at a glance even when the cell value matches the real
-    // deduction. The popover surfaces the explanatory copy.
-    if (status.kind === "directlyContradicted") {
-        base += " ring-2 ring-danger ring-inset";
-    } else if (status.kind === "jointlyConflicts") {
-        base += " ring-2 ring-danger/60 ring-inset";
-    }
+    // Contradiction states are conveyed by the AlertIcon that
+    // replaces the central glyph (`directlyContradicted` and
+    // `jointlyConflicts` both render `<AlertIcon>`) and by the
+    // boxed status panel inside the popover, so no extra cell ring
+    // is needed here.
+    void status;
     // Pick the color tone from the displayed value (real wins; otherwise
     // the hypothesis or derived-from-hypothesis value).
     const tone: CellValue | undefined =
