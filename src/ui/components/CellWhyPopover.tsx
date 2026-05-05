@@ -43,22 +43,6 @@ export function CellWhyPopover({
 }: CellWhyPopoverProps) {
     const t = useTranslations("hypothesis");
 
-    const statusMessage = (() => {
-        switch (status.kind) {
-            case "off":
-            case "active":
-                return undefined;
-            case "confirmed":
-                return t("statusConfirmed");
-            case "directlyContradicted":
-                return t("statusDirectlyContradicted");
-            case "jointlyConflicts":
-                return t("statusJointlyConflicts");
-            case "derived":
-                return t("statusDerived");
-        }
-    })();
-
     const cardLabel =
         findCardEntry(setup, cell.card)?.name ?? String(cell.card);
 
@@ -78,6 +62,34 @@ export function CellWhyPopover({
             out.push(`${ownerLabel(c.owner)} / ${cardName} = ${v}`);
         }
         return out;
+    })();
+
+    // For a `derived` popover with exactly one active hypothesis,
+    // collapse the heading + bulleted list into a single inline
+    // sentence ("from your active hypothesis (Player 1 / Miss Scarlet
+    // = Y)."). Reads better when there's only one source to cite.
+    const useDerivedSingular =
+        status.kind === "derived" && activeHypothesisLabels.length === 1;
+    const renderListBelow = showHypothesisList && !useDerivedSingular;
+
+    const statusMessage = (() => {
+        switch (status.kind) {
+            case "off":
+            case "active":
+                return undefined;
+            case "confirmed":
+                return t("statusConfirmed");
+            case "directlyContradicted":
+                return t("statusDirectlyContradicted");
+            case "jointlyConflicts":
+                return t("statusJointlyConflicts");
+            case "derived":
+                return useDerivedSingular
+                    ? t("statusDerivedSingular", {
+                          description: activeHypothesisLabels[0]!,
+                      })
+                    : t("statusDerived");
+        }
     })();
 
     return (
@@ -110,7 +122,7 @@ export function CellWhyPopover({
                         {statusMessage}
                     </div>
                 )}
-                {showHypothesisList && activeHypothesisLabels.length > 0 && (
+                {renderListBelow && activeHypothesisLabels.length > 0 && (
                     <ul className="ml-3 list-disc text-[12px] text-muted">
                         {activeHypothesisLabels.map(label => (
                             <li key={label}>{label}</li>
