@@ -298,14 +298,21 @@ describe("Checklist — case-file deduction popover", () => {
         // column boundary; box-shadow doesn't. 3px width matches the
         // global *:focus-visible outline so it reads at the same
         // weight as every other focusable element on the page.
-        // Pinned via classes so a future regression to outline-* (or
-        // a thinner ring) trips the test.
-        expect(caseFileCell.className).toMatch(/focus-visible:ring-\[3px\]/);
-        expect(caseFileCell.className).toMatch(/focus-visible:ring-accent/);
-        expect(caseFileCell.className).toMatch(/focus-visible:outline-none/);
+        //
+        // The trigger is `:focus` (not `:focus-visible`) so the ring
+        // shows on touch/mouse activation too — that lets the user
+        // see which cell anchors the portaled popover. Pinned via
+        // classes so a regression to outline-* (or a thinner ring,
+        // or back to focus-visible-only) trips the test.
+        expect(caseFileCell.className).toMatch(/(?:^|\s)focus:ring-\[3px\]/);
+        expect(caseFileCell.className).toMatch(/(?:^|\s)focus:ring-accent/);
+        expect(caseFileCell.className).toMatch(/(?:^|\s)focus:outline-none/);
         expect(caseFileCell.className).not.toMatch(
-            /focus-visible:outline-1\b/,
+            /(?:^|\s)focus:outline-1\b/,
         );
+        // Hard regression: the focus ring must NOT be gated by
+        // :focus-visible (which excludes touch and mouse focus).
+        expect(caseFileCell.className).not.toMatch(/focus-visible:ring-/);
     });
 
     test("an undeduced case-file cell stays non-interactive (no popover affordance)", async () => {

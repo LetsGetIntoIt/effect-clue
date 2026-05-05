@@ -560,9 +560,12 @@ describe("Checklist — setup mode — scope of rendered controls", () => {
         expect(caseFileCell.getAttribute("aria-haspopup")).toBeNull();
         expect(caseFileCell.getAttribute("tabindex")).toBeNull();
         expect(caseFileCell.getAttribute("data-cell-col")).toBeNull();
-        // No focus-visible ring class either — the styling for
-        // interactive cells comes via CELL_INTERACTIVE which the gate
-        // skips for setup-mode case-file cells.
-        expect(caseFileCell.className).not.toMatch(/focus-visible:ring-1/);
+        // No focus ring class either — the styling for interactive
+        // cells comes via CELL_INTERACTIVE which the gate skips for
+        // setup-mode case-file cells. (The offset color
+        // `focus:ring-offset-*` is set per-tone unconditionally and
+        // is harmless without an actual `ring-*`.)
+        expect(caseFileCell.className).not.toMatch(/focus:ring-accent/);
+        expect(caseFileCell.className).not.toMatch(/focus:ring-\[/);
     });
 });
