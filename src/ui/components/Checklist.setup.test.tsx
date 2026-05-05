@@ -311,9 +311,13 @@ describe("Checklist — setup mode — player cell interactions", () => {
         );
         expect(checkbox).toBeDefined();
         if (!checkbox) return;
-        expect(checkbox.parentElement?.className).toContain("mx-auto");
-        expect(checkbox.parentElement?.parentElement?.parentElement?.className)
-            .toContain("mx-auto");
+        // The checkbox sits inside CellLayout's center slot — a flex
+        // wrapper with place-self-center that lands at the cell's
+        // horizontal + vertical midpoint.
+        const centerWrapper = checkbox.parentElement;
+        expect(centerWrapper?.className).toContain("place-self-center");
+        expect(centerWrapper?.className).toContain("col-start-2");
+        expect(centerWrapper?.className).toContain("flex");
     });
 });
 
