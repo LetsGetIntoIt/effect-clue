@@ -1,6 +1,6 @@
 "use client";
 
-import { Duration, Equal, Result } from "effect";
+import { Duration, Equal, HashMap, Result } from "effect";
 import {
     displayFor,
     statusFor,
@@ -259,6 +259,18 @@ export function Checklist() {
     const jointFailed =
         jointDeductionResult !== undefined &&
         Result.isFailure(jointDeductionResult);
+    // When the popover is open on a derived-from-hypothesis cell, we
+    // light up every direct-hypothesis cell so the user can see the
+    // assumption(s) that produced the value they're inspecting.
+    const popoverIsOnDerivedCell =
+        popoverCell !== null &&
+        statusFor(
+            popoverCell,
+            realKnowledge,
+            jointKnowledge,
+            hypotheses,
+            jointFailed,
+        ).kind === "derived";
 
     // Fire `why_tooltip_opened` whenever the popover transitions from
     // closed (or another cell) to open on a new cell. Cells are fresh
@@ -576,6 +588,15 @@ export function Checklist() {
      * hover-only today.
      */
     const cellIsHighlighted = (owner: Owner, card: Card): boolean => {
+        // Hypothesis cross-highlight: when the popover is open on a
+        // cell whose value follows from an active hypothesis, light up
+        // every cell the user has pinned a hypothesis on.
+        if (
+            popoverIsOnDerivedCell &&
+            HashMap.has(hypotheses, Cell(owner, card))
+        ) {
+            return true;
+        }
         if (activeSuggestionIndex === null && activeAccusationIndex === null) {
             return false;
         }
@@ -2335,15 +2356,21 @@ function useStablePlayerColumnKeys(
 // Discriminator constants for the cell's primary glyph slot. Module-
 // scope so the `no-literal-string` lint rule reads them as code, not
 // UI text. The matching presentation lives in `renderGlyphNode`.
+//
+// `questionDirect` vs `questionDerived` distinguishes a cell the user
+// pinned a hypothesis on (rendered bolder so it reads as the source)
+// from a cell whose `?` follows from one of those hypotheses.
 const GLYPH_YES = "yes" as const;
 const GLYPH_NO = "no" as const;
-const GLYPH_QUESTION = "question" as const;
+const GLYPH_QUESTION_DIRECT = "questionDirect" as const;
+const GLYPH_QUESTION_DERIVED = "questionDerived" as const;
 const GLYPH_ALERT = "alert" as const;
 const GLYPH_BLANK = "blank" as const;
 type GlyphKind =
     | typeof GLYPH_YES
     | typeof GLYPH_NO
-    | typeof GLYPH_QUESTION
+    | typeof GLYPH_QUESTION_DIRECT
+    | typeof GLYPH_QUESTION_DERIVED
     | typeof GLYPH_ALERT
     | typeof GLYPH_BLANK;
 
@@ -2366,8 +2393,9 @@ const glyphKindFor = (
             if (display.value === N) return GLYPH_NO;
             return GLYPH_BLANK;
         case "hypothesis":
+            return GLYPH_QUESTION_DIRECT;
         case "derived":
-            return GLYPH_QUESTION;
+            return GLYPH_QUESTION_DERIVED;
         case "blank":
             return GLYPH_BLANK;
     }
@@ -2379,7 +2407,13 @@ const renderGlyphNode = (kind: GlyphKind): ReactNode => {
             return "✓";
         case GLYPH_NO:
             return "·";
-        case GLYPH_QUESTION:
+        case GLYPH_QUESTION_DIRECT:
+            // Direct hypothesis cells render the "?" heavier than the
+            // surrounding cell weight (`font-semibold` on the <td>) so
+            // they read as the source the derived `?` cells follow
+            // from.
+            return <span className="font-extrabold">?</span>;
+        case GLYPH_QUESTION_DERIVED:
             return "?";
         case GLYPH_ALERT:
             return <AlertIcon size={14} className="text-danger" />;

@@ -140,7 +140,7 @@
         "statusConfirmed": "Confirmed by real facts. You can clear this hypothesis.",
         "statusDirectlyContradicted": "Contradicts a real fact — your hypothesis can't be true.",
         "statusJointlyConflicts": "Conflicts with another hypothesis. These can't all be true together — drop one to resolve.",
-        "statusDerived": "This value follows from one of your active hypotheses. Open a ‘?’ cell to see which.",
+        "statusDerived": "This value follows from your active hypotheses:",
         "emptyHint": "Set a hypothesis to explore what would follow."
     },
     "reasons": {

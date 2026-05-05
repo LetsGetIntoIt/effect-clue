@@ -62,10 +62,16 @@ export function CellWhyPopover({
     const cardLabel =
         findCardEntry(setup, cell.card)?.name ?? String(cell.card);
 
-    // For the joint-conflict copy, list every active hypothesis so the
-    // user can quickly see which assumptions are interacting.
+    // For derived + joint-conflict popovers, list every active
+    // hypothesis by name so the user knows which assumption(s) are
+    // shaping this cell. The deducer doesn't currently track per-cell
+    // provenance for hypotheses, so we list the full active set rather
+    // than narrowing to the specific subset that drove this value —
+    // good-enough until we wire up leave-one-out attribution.
+    const showHypothesisList =
+        status.kind === "jointlyConflicts" || status.kind === "derived";
     const activeHypothesisLabels: ReadonlyArray<string> = (() => {
-        if (status.kind !== "jointlyConflicts") return [];
+        if (!showHypothesisList) return [];
         const out: Array<string> = [];
         for (const [c, v] of hypotheses) {
             const cardName = findCardEntry(setup, c.card)?.name ?? String(c.card);
@@ -104,14 +110,13 @@ export function CellWhyPopover({
                         {statusMessage}
                     </div>
                 )}
-                {status.kind === "jointlyConflicts" &&
-                    activeHypothesisLabels.length > 0 && (
-                        <ul className="ml-3 list-disc text-[12px] text-muted">
-                            {activeHypothesisLabels.map(label => (
-                                <li key={label}>{label}</li>
-                            ))}
-                        </ul>
-                    )}
+                {showHypothesisList && activeHypothesisLabels.length > 0 && (
+                    <ul className="ml-3 list-disc text-[12px] text-muted">
+                        {activeHypothesisLabels.map(label => (
+                            <li key={label}>{label}</li>
+                        ))}
+                    </ul>
+                )}
                 {whyText !== undefined && (
                     <div className="flex flex-col gap-2 border-t border-border/50 pt-2">
                         <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">

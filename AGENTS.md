@@ -113,12 +113,28 @@ Claude's `next-dev` preview is the same chain wrapped in
 `.claude/launch.json`. The preview tooling does NOT seed `.env.local`,
 so the env step (1) above still applies before `preview_start`.
 
-Shutdown is part of the workflow. When you start `pnpm dev` from a
-shell session, stop that same session with Ctrl-C before finishing.
-Then run `pnpm db:down` so the Docker Postgres container is not left
-running after the agent/session is done. The only exception is an
-explicit user request to leave the preview running for handoff; in that
-case, say which server/database processes were intentionally left up.
+Leave the dev server up for the duration of a session. Once you've
+started `pnpm dev` (or `preview_start next-dev` for Claude), keep it
+running so the user can manually exercise the app between turns —
+don't stop it after each verification round just to "clean up". Many
+sessions make several preview-driven changes back-to-back; tearing
+down between them is wasted work and steals the user's ability to
+re-test what's already in flight.
+
+Tear it down only when:
+
+1. The user explicitly asks you to (handoff, end of session, etc.).
+2. Something is broken (port collision, hung process, env change that
+   needs `pnpm dev` restarted to pick up). Restart, don't just stop.
+3. The session is genuinely ending — your next reply is the last one,
+   the work is wrapped up, and there's no plausible reason for the
+   server to keep running.
+
+Teardown sequence when it does apply: stop the same `pnpm dev` shell
+session with Ctrl-C (Codex) or `preview_stop` (Claude), then
+`pnpm db:down` so the Docker Postgres container isn't left running.
+If you're explicitly leaving things up at the user's request, say
+which server / database processes were intentionally left up.
 
 ## Verification checks
 
