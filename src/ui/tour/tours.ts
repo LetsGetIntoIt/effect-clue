@@ -262,7 +262,12 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             anchor: "setup-start-playing",
             titleKey: "setup.start.title",
             bodyKey: "setup.start.body",
-            side: "top",
+            // This CTA sits near the top of Setup. Keeping the
+            // popover below the button avoids top-edge clipping when
+            // the tour scrolls back up from a deeper table step,
+            // especially on mobile where the header consumes a
+            // meaningful chunk of the viewport.
+            side: "bottom",
             align: "end",
         },
     ],

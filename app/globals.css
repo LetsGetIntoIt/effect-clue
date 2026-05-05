@@ -112,6 +112,41 @@
     --color-tour-bg-hover: #dbeafe;
     --color-tour-text: #1e3a8a;
     --tour-radius: 8px;
+
+    /*
+     * Z-index ladder.
+     *
+     * Keep every cross-component stacking value here so table
+     * stickies, app chrome, dialogs, and tours don't silently race
+     * each other through unrelated Tailwind literals.
+     *
+     * Ordering constraints:
+     * - Checklist hover/focus rings sit above neighboring body cells,
+     *   but below sticky first-column cells and sticky headers.
+     * - Sticky first-column cells sit above scrolled body cells, while
+     *   sticky table headers sit above both so column labels remain
+     *   readable during vertical scroll.
+     * - App chrome (page header / bottom nav) sits above the checklist
+     *   table, and dropdowns/tooltips sit above app chrome.
+     * - The contradiction banner sits above app chrome because headers
+     *   deliberately tuck under it.
+     * - Dialogs sit above page chrome and banners.
+     * - Tour UI sits above normal portaled menus/popovers so the tour
+     *   copy is never hidden by the thing it forced open.
+     */
+    --z-local-raised: 10;
+    --z-checklist-cell-hover: 20;
+    --z-checklist-cell-focus: 25;
+    --z-checklist-sticky-column: 30;
+    --z-checklist-sticky-header: 35;
+    --z-app-chrome: 40;
+    --z-popover: 50;
+    --z-contradiction-banner: 55;
+    --z-dialog-overlay: 60;
+    --z-dialog-content: 70;
+    --z-tour-backdrop: 80;
+    --z-tour-spotlight: 81;
+    --z-tour-popover: 90;
 }
 
 html,
@@ -211,4 +246,3 @@ h3 {
         border-radius: 3px;
     }
 }
-

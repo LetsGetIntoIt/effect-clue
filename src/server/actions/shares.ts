@@ -36,8 +36,8 @@ import {
     playersCodec,
     suggestionsCodec,
 } from "../../logic/ShareCodec";
-import { auth } from "../auth";
 import { SHARE_TTL } from "../shares/constants";
+import { ERR_SHARE_NOT_FOUND } from "../shares/errors";
 import { withServerAction } from "../withServerAction";
 
 /**
@@ -97,7 +97,6 @@ interface ShareSnapshot {
 }
 
 const ERR_SIGN_IN_REQUIRED = "sign_in_required_to_share";
-const ERR_SHARE_NOT_FOUND = "share_not_found";
 const ERR_MALFORMED_INPUT = "share_malformed_input";
 
 // Wire-format field names. Module-scope so they don't trip the
@@ -266,6 +265,7 @@ const validateInputShape = (input: unknown): CreateShareInput => {
  * navigate to / contact, not to a throwaway local identity.
  */
 const realUserId = async (): Promise<string | null> => {
+    const { auth } = await import("../auth");
     const session = await auth.api.getSession({
         headers: await headers(),
     });

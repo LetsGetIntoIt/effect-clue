@@ -360,7 +360,7 @@ export function PillPopover({
                             e.preventDefault();
                         }
                     }}
-                    className="z-50 min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[13px] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
+                    className="z-[var(--z-popover)] min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[13px] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
                 >
                     {disabled ? (
                         <div

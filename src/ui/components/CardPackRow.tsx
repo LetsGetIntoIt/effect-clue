@@ -393,12 +393,12 @@ export function CardPackRow() {
                     // `layout` prop drives the FLIP-style reposition when
                     // pack ordering changes.
                     const wrapperBase =
-                        "inline-flex items-center overflow-hidden rounded border text-[13px] transition-colors duration-200 ease-out";
+                        "inline-flex items-stretch overflow-hidden rounded border text-[13px] transition-colors duration-200 ease-out";
                     const wrapperTone = isActive
                         ? "border-accent bg-accent text-white"
                         : "border-border bg-white";
                     const loadBase =
-                        "cursor-pointer px-3 py-1 transition-colors duration-200 ease-out";
+                        "inline-flex cursor-pointer items-center px-3 py-1 transition-colors duration-200 ease-out";
                     const loadTone = isActive
                         ? "font-semibold"
                         : "hover:bg-hover";
@@ -410,7 +410,7 @@ export function CardPackRow() {
                     // Custom pills additionally append a trash-icon
                     // delete (destructive — paired with a confirm dialog).
                     const sharePillBase =
-                        "cursor-pointer border-l px-2 py-1 transition-colors duration-200 ease-out";
+                        "inline-flex cursor-pointer items-center border-l px-2 py-1 transition-colors duration-200 ease-out";
                     const sharePillTone = isActive
                         ? "border-white/40 text-white/80 hover:bg-white/15"
                         : "border-border text-muted hover:bg-hover hover:text-accent";

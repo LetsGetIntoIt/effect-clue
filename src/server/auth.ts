@@ -42,12 +42,12 @@ import { betterAuth } from "better-auth";
 import type { BaseURLConfig } from "better-auth";
 import { anonymous } from "better-auth/plugins";
 import { Pool } from "pg";
+import { googleProviderConfig } from "./authEnv";
 import { LOCAL_DATABASE_URL } from "./localDatabase";
 
 const isDev = process.env["NODE_ENV"] === "development";
 const isLocalRuntime = process.env["NODE_ENV"] !== "production";
 const AUTH_DEBUG_ON = "1";
-const GOOGLE_PROMPT_SELECT_ACCOUNT = "select_account" as const;
 const LOCAL_AUTH_PROTOCOL = "http" as const;
 const LOGGER_LEVEL_DEBUG = "debug" as const;
 const LOGGER_LEVEL_WARN = "warn" as const;
@@ -84,16 +84,6 @@ if (
     );
 }
 
-const requiredEnv = (name: string): string => {
-    const value = process.env[name];
-    if (value === undefined || value.trim() === "") {
-        throw new Error(
-            `${name} is required for Better Auth configuration.`,
-        );
-    }
-    return value;
-};
-
 const optionalEnv = (name: string): string | undefined => {
     const value = process.env[name];
     if (value === undefined || value.trim() === "") return undefined;
@@ -123,41 +113,6 @@ const requiredDatabaseUrl = (): string => {
         // eslint-disable-next-line i18next/no-literal-string -- developer-facing configuration error.
         "DATABASE_URL is required outside local development.",
     );
-};
-
-const googleProviderConfig = ():
-    | {
-          readonly google: {
-              readonly clientId: string;
-              readonly clientSecret: string;
-              readonly prompt: typeof GOOGLE_PROMPT_SELECT_ACCOUNT;
-          };
-      }
-    | undefined => {
-    const clientId = optionalEnv("GOOGLE_CLIENT_ID");
-    const clientSecret = optionalEnv("GOOGLE_CLIENT_SECRET");
-    if (clientId !== undefined && clientSecret !== undefined) {
-        return {
-            google: {
-                clientId,
-                clientSecret,
-                prompt: GOOGLE_PROMPT_SELECT_ACCOUNT,
-            },
-        };
-    }
-    if (
-        isLocalRuntime &&
-        clientId === undefined &&
-        clientSecret === undefined
-    ) {
-        return undefined;
-    }
-    if (clientId === undefined) {
-        requiredEnv("GOOGLE_CLIENT_ID");
-    } else {
-        requiredEnv("GOOGLE_CLIENT_SECRET");
-    }
-    return undefined;
 };
 
 const databaseUrl = requiredDatabaseUrl();

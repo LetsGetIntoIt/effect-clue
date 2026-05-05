@@ -5,17 +5,21 @@
  *   - First visit (no `lastVisitedAt`, no `lastDismissedAt`) shows.
  *   - Visited but never dismissed shows.
  *   - Dismissed within the window does NOT show.
- *   - Dismissed but >= window since the last visit shows again.
+ *   - Dismissed but >= window since the last visit / dismissal shows again.
  *   - Each per-screen storage key is independent (dismissing setup
  *     doesn't suppress checklist).
  */
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { act, render } from "@testing-library/react";
+import { useEffect } from "react";
 import { DateTime, Duration } from "effect";
 import { TelemetryRuntime } from "../../observability/runtime";
 import {
     computeShouldShowTour,
     TOUR_RE_ENGAGE_DURATION,
+    useTourGate,
 } from "./useTourGate";
+import { saveTourDismissed, type ScreenKey } from "./TourState";
 
 const now = DateTime.makeUnsafe(new Date("2026-04-29T00:00:00Z"));
 const FIVE_MIN = Duration.minutes(5);
@@ -71,15 +75,26 @@ describe("computeShouldShowTour", () => {
         expect(result).toBe(true);
     });
 
-    test("dismissed but no `lastVisitedAt` (rare): shows", () => {
-        // Defensive — saving a dismissed timestamp without a visit
-        // shouldn't happen via the hook, but if it ever does we
-        // re-show on the next visit so the user isn't permanently
-        // locked out.
+    test("dismissed but no `lastVisitedAt` (rare): does NOT show inside the window", () => {
+        // Legacy or defensive states may have only `lastDismissedAt`.
+        // A dismissal is still enough to lock the gate until the
+        // re-engage window expires.
         const fiveMinAgo = DateTime.subtractDuration(now, FIVE_MIN);
         const result = TelemetryRuntime.runSync(
             computeShouldShowTour(
                 { lastDismissedAt: fiveMinAgo },
+                now,
+                TOUR_RE_ENGAGE_DURATION,
+            ),
+        );
+        expect(result).toBe(false);
+    });
+
+    test("dismissed but no `lastVisitedAt` and stale: re-engages", () => {
+        const sixWeeksAgo = DateTime.subtractDuration(now, SIX_WEEKS);
+        const result = TelemetryRuntime.runSync(
+            computeShouldShowTour(
+                { lastDismissedAt: sixWeeksAgo },
                 now,
                 TOUR_RE_ENGAGE_DURATION,
             ),
@@ -99,21 +114,43 @@ describe("TOUR_RE_ENGAGE_DURATION", () => {
 describe("useTourGate (integration)", () => {
     beforeEach(() => {
         window.localStorage.clear();
-        vi.useFakeTimers();
-        vi.setSystemTime(new Date("2026-04-29T00:00:00Z"));
     });
 
     afterEach(() => {
-        vi.useRealTimers();
+        window.localStorage.clear();
     });
 
-    // The hook itself is integrated by `TourScreenGate` in
-    // `Clue.tsx`; the gate-logic surface is fully covered by the
-    // pure-Effect tests above. Storage round-trip is exercised by
-    // `TourState.test.ts` (loading + writing under the per-screen
-    // key, multi-screen isolation).
-    test("(placeholder)", () => {
-        expect(true).toBe(true);
+    function GateFiringProbe({
+        screen,
+        onFire,
+    }: {
+        readonly screen: ScreenKey;
+        readonly onFire: (screen: ScreenKey) => void;
+    }): null {
+        const { shouldShow } = useTourGate(screen);
+        useEffect(() => {
+            if (shouldShow) onFire(screen);
+        }, [shouldShow, screen, onFire]);
+        return null;
+    }
+
+    test("does not apply a stale show decision after the screen key changes", async () => {
+        const fired: Array<ScreenKey> = [];
+        const onFire = (screen: ScreenKey): void => {
+            fired.push(screen);
+        };
+        const { rerender } = render(
+            <GateFiringProbe screen="checklistSuggest" onFire={onFire} />,
+        );
+
+        await act(async () => {});
+        expect(fired).toEqual(["checklistSuggest"]);
+
+        saveTourDismissed("setup", DateTime.nowUnsafe());
+        rerender(<GateFiringProbe screen="setup" onFire={onFire} />);
+
+        await act(async () => {});
+        expect(fired).toEqual(["checklistSuggest"]);
     });
 });
 
@@ -122,8 +159,6 @@ describe("useTourGate (integration)", () => {
 // + `TOUR_RE_ENGAGE_DURATION` pair, so a parameterized assertion
 // pins the contract against future ScreenKey additions (M22's new
 // `firstSuggestion` is the first beneficiary).
-import type { ScreenKey } from "./TourState";
-
 describe("computeShouldShowTour — re-engage cadence per ScreenKey", () => {
     const screenKeys: ReadonlyArray<ScreenKey> = [
         "setup",

@@ -58,6 +58,7 @@ const TOP_LEVEL_PLAY = "play";
 // pulled out as constants so the i18next/no-literal-string lint rule
 // treats them as wire-format identifiers, not user copy.
 const COORDINATOR_PHASE_TOUR = "tour" as const;
+const COORDINATOR_PHASE_DONE = "done" as const;
 // ScreenKey discriminator for the M22 first-suggestion tour. Pulled
 // to module scope for the same i18next-lint reason.
 const FIRST_SUGGESTION_SCREEN_KEY = "firstSuggestion" as const;
@@ -224,7 +225,7 @@ function ClueShell({
             <main className="mx-auto flex min-w-max max-w-[1400px] flex-col gap-5 px-5 pb-24 [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+1.5rem)]">
                 <header
                     ref={headerRef}
-                    className="sticky top-[var(--contradiction-banner-offset,0px)] z-30 flex flex-wrap items-center justify-between gap-4 bg-bg py-2 [@media(min-width:800px)]:left-5 [@media(min-width:800px)]:max-w-[calc(100vw-2.5rem)]"
+                    className="sticky top-[var(--contradiction-banner-offset,0px)] z-[var(--z-app-chrome)] flex flex-wrap items-center justify-between gap-4 bg-bg py-2 [@media(min-width:800px)]:left-5 [@media(min-width:800px)]:max-w-[calc(100vw-2.5rem)]"
                 >
                     <h1 className="m-0 text-[36px] uppercase tracking-[0.08em] text-accent drop-shadow-sm">
                         {t("title")}
@@ -286,11 +287,21 @@ function TourScreenGate() {
     // useTourGate signature stays stable.
     const screenKey = useMemo(() => {
         if (!hydrated) return screenKeyForUiMode(state.uiMode);
+        // Setup has two possible tours: the foundational setup tour
+        // and the later sharing follow-up. Let the coordinator pick
+        // either during boot, but after boot only fire the primary
+        // screen tour on navigation. Otherwise a user who completes
+        // setup, completes Checklist & Suggest, and immediately
+        // returns to Game setup sees another tour in the same flow.
+        const candidates =
+            phase === COORDINATOR_PHASE_DONE && state.uiMode === UI_SETUP
+                ? [screenKeyForUiMode(state.uiMode)]
+                : screensForUiMode(state.uiMode);
         return pickFirstEligibleScreenKey(
-            screensForUiMode(state.uiMode),
+            candidates,
             DateTime.nowUnsafe(),
         );
-    }, [hydrated, state.uiMode]);
+    }, [hydrated, phase, state.uiMode]);
     const { shouldShow, dismiss } = useTourGate(screenKey, {
         enabled: hydrated,
     });
@@ -413,10 +424,10 @@ function FirstSuggestionTourGate() {
         firedRef.current = true;
         startTour(FIRST_SUGGESTION_SCREEN_KEY);
         // Persist BOTH timestamps so the gate returns false until
-        // the next 4-week re-engage window opens. Saving only
-        // `lastDismissedAt` would keep the gate eligible because
-        // the gate's "dismissed but never visited" branch returns
-        // true (a defensive "if state is incoherent, show again").
+        // the next 4-week re-engage window opens. `saveTourDismissed`
+        // also writes the visit timestamp, but the explicit visit
+        // write documents that this event-triggered tour was shown
+        // outside the usual screen-mount gate.
         saveTourVisited(FIRST_SUGGESTION_SCREEN_KEY, now);
         saveTourDismissed(FIRST_SUGGESTION_SCREEN_KEY, now);
     }, [state.suggestions.length, hydrated, activeScreen, phase, startTour]);
@@ -573,4 +584,3 @@ function ViewSkeleton() {
         </div>
     );
 }
-

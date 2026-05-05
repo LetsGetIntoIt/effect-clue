@@ -64,8 +64,10 @@ export const uiModeForScreenKey = (screen: ScreenKey): UiMode | undefined => {
  *
  * `TourScreenGate` walks this list and gates the FIRST tour whose
  * prerequisites are met AND whose own re-engage gate says "show". A
- * mode with no eligible tour returns its primary tour anyway so the
- * gate machinery still runs (and just decides not to show).
+ * dismissal without a visit timestamp still keeps the tour closed
+ * until the re-engage window expires. A mode with no eligible tour
+ * returns its primary tour anyway so the gate machinery still runs
+ * (and just decides not to show).
  */
 export const screensForUiMode = (mode: UiMode): ReadonlyArray<ScreenKey> => {
     if (mode === UI_MODE_SETUP) return [SETUP, SHARING];
@@ -96,8 +98,8 @@ export const pickFirstEligibleScreenKey = (
         if (!prereqsAllDismissed) continue;
         const state = loadTourState(candidate);
         if (state.lastDismissedAt === undefined) return candidate;
-        if (state.lastVisitedAt === undefined) return candidate;
-        const elapsed = DateTime.distance(state.lastVisitedAt, now);
+        const referenceAt = state.lastVisitedAt ?? state.lastDismissedAt;
+        const elapsed = DateTime.distance(referenceAt, now);
         if (Duration.isGreaterThan(elapsed, TOUR_RE_ENGAGE_DURATION)) {
             return candidate;
         }

@@ -9,6 +9,7 @@ export default defineConfig({
         include: [
             "src/**/__tests__/**/*.{ts,tsx}",
             "src/**/?(*.)+(spec|test).{ts,tsx}",
+            "scripts/**/?(*.)+(spec|test).mjs",
         ],
         clearMocks: true,
         coverage: {

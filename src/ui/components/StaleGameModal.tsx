@@ -135,10 +135,10 @@ export function StaleGameModal({
             }}
         >
             <Dialog.Portal>
-                <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
+                <Dialog.Overlay className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/40" />
                 <Dialog.Content
                     className={
-                        "fixed left-1/2 top-1/2 z-50 flex w-[min(92vw,480px)] flex-col "
+                        "fixed left-1/2 top-1/2 z-[var(--z-dialog-content)] flex w-[min(92vw,480px)] flex-col "
                         + "-translate-x-1/2 -translate-y-1/2 rounded-[var(--radius)] border border-border "
                         + "bg-panel shadow-[0_10px_28px_rgba(0,0,0,0.28)] focus:outline-none"
                     }

@@ -175,7 +175,7 @@ export function CardPackPicker({
                         inputRef.current?.focus();
                     }}
                     className={
-                        "z-50 w-[min(90vw,320px)] rounded-[var(--radius)] border border-border bg-panel " +
+                        "z-[var(--z-popover)] w-[min(90vw,320px)] rounded-[var(--radius)] border border-border bg-panel " +
                         "shadow-[0_6px_16px_rgba(0,0,0,0.18)] focus:outline-none"
                     }
                 >
@@ -253,7 +253,7 @@ export function CardPackPicker({
                                             {onSharePack ? (
                                                 <button
                                                     type="button"
-                                                    className="ml-1 cursor-pointer rounded px-2 py-0.5 text-muted hover:bg-white hover:text-accent"
+                                                    className="ml-1 inline-flex cursor-pointer items-center self-stretch rounded px-2 text-muted hover:bg-white hover:text-accent"
                                                     onClick={() =>
                                                         onSharePack(pack)
                                                     }

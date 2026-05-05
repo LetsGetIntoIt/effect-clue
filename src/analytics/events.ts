@@ -26,6 +26,10 @@
  *   PWA install         : installPrompted, installAccepted,
  *                         installDismissed, installCompleted,
  *                         appLaunchedStandalone
+ *   Sharing              : shareCreateStarted, shareCreated,
+ *                         shareLinkCopied, shareOpened,
+ *                         shareOpenFailed, shareImportStarted,
+ *                         shareImported, shareImportDismissed
  *   Performance signals : webVital, deducerRun
  *
  * Several of the splash / install / tour emitters layer PostHog
@@ -609,6 +613,8 @@ export const localPacksPushedOnSignIn = (props: {
     countPushed: number;
     countAlreadySynced: number;
     countRenamed: number;
+    countDeduped: number;
+    countPulled: number;
     countFailed: number;
 }): void => capture("local_packs_pushed_on_sign_in", props);
 
@@ -662,6 +668,11 @@ export const shareLinkCopied = (): void => capture("share_link_copied");
 export const shareOpened = (props: {
     shareIdHash: string;
 }): void => capture("share_opened", props);
+
+export const shareOpenFailed = (props: {
+    shareIdHash: string;
+    reason: "not_found_or_expired";
+}): void => capture("share_open_failed", props);
 
 export const shareImportStarted = (props: {
     shareIdHash: string;

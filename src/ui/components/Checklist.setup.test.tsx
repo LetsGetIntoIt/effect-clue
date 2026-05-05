@@ -109,6 +109,26 @@ describe("Checklist — setup mode — top-level structure", () => {
         // is hidden when `inSetup` is true.
         expect(screen.queryByText(/caseFileLabel/)).toBeNull();
     });
+
+    test("uses tokenized sticky z-index classes for the header and first column", async () => {
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitForSetupChecklist();
+
+        const thead = document.querySelector("thead");
+        expect(thead?.className).toContain(
+            "z-[var(--z-checklist-sticky-header)]",
+        );
+        const firstHeader = thead?.querySelector("th");
+        expect(firstHeader?.className).toContain("sticky left-0");
+        expect(firstHeader?.className).toContain(
+            "z-[var(--z-checklist-sticky-header)]",
+        );
+        const firstBodyHeader = document.querySelector("tbody th");
+        expect(firstBodyHeader?.className).toContain("sticky left-0");
+        expect(firstBodyHeader?.className).toContain(
+            "z-[var(--z-checklist-sticky-column)]",
+        );
+    });
 });
 
 describe("Checklist — setup mode — hand-size inputs", () => {
@@ -276,6 +296,24 @@ describe("Checklist — setup mode — player cell interactions", () => {
             // Classic 4-player × 21-card grid = 84 player body cells.
             expect(checkboxes.length).toBeGreaterThan(50);
         });
+    });
+
+    test("centers checkbox content within the player cells", async () => {
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitFor(() => {
+            expect(
+                document.querySelector<HTMLInputElement>("input[type='checkbox']"),
+            ).toBeInTheDocument();
+        });
+
+        const checkbox = document.querySelector<HTMLInputElement>(
+            "input[type='checkbox']",
+        );
+        expect(checkbox).toBeDefined();
+        if (!checkbox) return;
+        expect(checkbox.parentElement?.className).toContain("mx-auto");
+        expect(checkbox.parentElement?.parentElement?.parentElement?.className)
+            .toContain("mx-auto");
     });
 });
 

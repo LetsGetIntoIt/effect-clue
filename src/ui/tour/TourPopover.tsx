@@ -71,10 +71,16 @@ type VirtualElement = {
 const KEY_ESCAPE = "Escape" as const;
 // Analytics discriminator for tour dismissal via Esc keypress.
 const DISMISS_VIA_ESC = "esc" as const;
+const SCROLL_BEHAVIOR_AUTO: ScrollBehavior = "auto";
 // Attribute we add to the Radix Popover.Content so the keyboard
 // isolator can do an O(1) `popoverContent.contains(eventTarget)` check
 // to allow keyboard events that target the popover's own buttons.
 const POPOVER_CONTENT_ATTR = "data-tour-popover-content" as const;
+const TOUR_VIEWPORT_MARGIN = 48;
+const TOUR_STICKY_LEFT_GAP = 16;
+const TOUR_STICKY_LEFT_ATTR = "data-tour-sticky-left" as const;
+const SCROLL_AXIS_X = "x" as const;
+const SCROLL_AXIS_Y = "y" as const;
 
 // `findAnchorElements`, `resolveAnchorToken`, `resolvePopoverAnchorToken`,
 // `resolveSideAndAlign`, `unionRect`, and `pickPopoverRect` are now in
@@ -92,6 +98,81 @@ const fallbackVirtualRect = (): DOMRect => {
     const x = Math.max(w - 320, 16);
     const y = Math.max(h - 240, 16);
     return new DOMRect(x, y, 1, 1);
+};
+
+const clamp = (n: number, min: number, max: number): number =>
+    Math.min(max, Math.max(min, n));
+
+const getStickyLeftClearance = (
+    viewportHeight: number,
+    targetRect: DOMRect,
+): number => {
+    if (typeof document === "undefined") return TOUR_VIEWPORT_MARGIN;
+    let stickyRight = 0;
+    const stickyEls = document.querySelectorAll<HTMLElement>(
+        `[${TOUR_STICKY_LEFT_ATTR}]`,
+    );
+    for (const el of stickyEls) {
+        const rect = el.getBoundingClientRect();
+        const isVisible =
+            rect.width > 0
+            && rect.height > 0
+            && rect.left < TOUR_VIEWPORT_MARGIN
+            && rect.right > 0
+            && rect.top < viewportHeight
+            && rect.bottom > 0
+            && rect.top < targetRect.bottom
+            && rect.bottom > targetRect.top;
+        if (isVisible && rect.right > stickyRight) {
+            stickyRight = rect.right;
+        }
+    }
+    return stickyRight > 0
+        ? Math.max(TOUR_VIEWPORT_MARGIN, stickyRight + TOUR_STICKY_LEFT_GAP)
+        : TOUR_VIEWPORT_MARGIN;
+};
+
+const isPageScroller = (el: HTMLElement): boolean =>
+    typeof document !== "undefined"
+    && (el === document.body || el === document.documentElement);
+
+const pageMaxScroll = (axis: "x" | "y"): number => {
+    if (typeof document === "undefined" || typeof window === "undefined") {
+        return 0;
+    }
+    const body = document.body;
+    const html = document.documentElement;
+    const viewport = axis === "x" ? window.innerWidth : window.innerHeight;
+    const scrollSize = axis === "x"
+        ? Math.max(body.scrollWidth, html.scrollWidth)
+        : Math.max(body.scrollHeight, html.scrollHeight);
+    return Math.max(0, scrollSize - viewport);
+};
+
+const maxScroll = (el: HTMLElement, axis: "x" | "y"): number => {
+    if (isPageScroller(el)) return pageMaxScroll(axis);
+    return axis === "x"
+        ? Math.max(0, el.scrollWidth - el.clientWidth)
+        : Math.max(0, el.scrollHeight - el.clientHeight);
+};
+
+const currentScroll = (el: HTMLElement, axis: "x" | "y"): number => {
+    if (isPageScroller(el) && typeof window !== "undefined") {
+        return axis === "x"
+            ? Math.max(el.scrollLeft, window.scrollX)
+            : Math.max(el.scrollTop, window.scrollY);
+    }
+    return axis === "x" ? el.scrollLeft : el.scrollTop;
+};
+
+const scrollPage = (
+    el: HTMLElement,
+    opts: ScrollToOptions,
+): void => {
+    el.scrollTo(opts);
+    if (isPageScroller(el) && typeof window !== "undefined") {
+        window.scrollTo(opts);
+    }
 };
 
 export function TourPopover() {
@@ -174,16 +255,23 @@ export function TourPopover() {
             return;
         }
 
-        const scrollSpotlightIntoView = (rect: DOMRect): void => {
-            if (typeof window === "undefined") return;
-            const margin = 48;
+        const scrollSpotlightIntoView = (rect: DOMRect): boolean => {
+            if (typeof window === "undefined") return false;
             const vw = window.innerWidth;
             const vh = window.innerHeight;
+            const margin = TOUR_VIEWPORT_MARGIN;
+            const minVisibleLeft = clamp(
+                getStickyLeftClearance(vh, rect),
+                margin,
+                Math.max(margin, vw - margin),
+            );
+            const maxVisibleRight = vw - margin;
             const inViewVertical =
                 rect.top >= margin && rect.bottom <= vh - margin;
             const inViewHorizontal =
-                rect.left >= margin && rect.right <= vw - margin;
-            if (inViewVertical && inViewHorizontal) return;
+                rect.left >= minVisibleLeft
+                && rect.right <= maxVisibleRight;
+            if (inViewVertical && inViewHorizontal) return false;
             // The page splits scroll: vertical scroll lives on the
             // body when content overflows (the `min-w-max` <main> +
             // tall checklist make body's scrollHeight > clientHeight);
@@ -206,22 +294,15 @@ export function TourPopover() {
                 : rect.height + margin * 2 < vh
                     ? rect.top + rect.height / 2 - vh / 2
                     : rect.top - margin;
+            const unobscuredWidth = maxVisibleRight - minVisibleLeft;
             const dx = inViewHorizontal
                 ? 0
-                : rect.width + margin * 2 < vw
-                    ? rect.left + rect.width / 2 - vw / 2
-                    : rect.left - margin;
-            // Use `auto` (instantaneous) rather than `smooth`. The
-            // recompute fires multiple times per step (mutation
-            // observer + step-change effect + React re-renders all
-            // re-trigger it), and back-to-back smooth-scroll calls
-            // cancel each other before the animation can commit any
-            // movement — leaving body.scrollTop stuck at 0. Instant
-            // scroll matches the user's mental model anyway: the
-            // tour jumped to a new step, the page should already be
-            // showing what the step is about.
-            // eslint-disable-next-line i18next/no-literal-string -- ScrollBehavior enum
-            const behavior: ScrollBehavior = "auto";
+                : rect.width < unobscuredWidth
+                    ? rect.left
+                        + rect.width / 2
+                        - (minVisibleLeft + unobscuredWidth / 2)
+                    : rect.left - minVisibleLeft;
+            const behavior: ScrollBehavior = SCROLL_BEHAVIOR_AUTO;
             const body = document.body;
             const html = document.documentElement;
             // Pick whichever element is actually scrollable for each
@@ -233,18 +314,32 @@ export function TourPopover() {
                 body.scrollHeight > body.clientHeight ? body : html;
             const horizontalEl =
                 body.scrollWidth > body.clientWidth ? body : html;
+            let didScroll = false;
             if (dy !== 0) {
-                verticalEl.scrollTo({
-                    top: verticalEl.scrollTop + dy,
-                    behavior,
-                });
+                const currentTop = currentScroll(verticalEl, SCROLL_AXIS_Y);
+                const top = clamp(
+                    currentTop + dy,
+                    0,
+                    maxScroll(verticalEl, SCROLL_AXIS_Y),
+                );
+                if (top !== currentTop) {
+                    scrollPage(verticalEl, { top, behavior });
+                    didScroll = true;
+                }
             }
             if (dx !== 0) {
-                horizontalEl.scrollTo({
-                    left: horizontalEl.scrollLeft + dx,
-                    behavior,
-                });
+                const currentLeft = currentScroll(horizontalEl, SCROLL_AXIS_X);
+                const left = clamp(
+                    currentLeft + dx,
+                    0,
+                    maxScroll(horizontalEl, SCROLL_AXIS_X),
+                );
+                if (left !== currentLeft) {
+                    scrollPage(horizontalEl, { left, behavior });
+                    didScroll = true;
+                }
             }
+            return didScroll;
         };
 
         const recompute = (): void => {
@@ -315,7 +410,26 @@ export function TourPopover() {
             virtualElementRef.current = {
                 getBoundingClientRect: popoverMeasure,
             };
-            const measured = spotlightMeasure();
+            let measured = spotlightMeasure();
+            // Auto-scroll at most once per step so anchors below the
+            // fold (or off to the side on a horizontally-scrolling
+            // page) come into view. This is deliberately instant:
+            // tour popover positioning depends on stable viewport
+            // geometry, and smooth scrolling leaves the spotlight and
+            // Radix popper measuring a moving target.
+            const scrollTracker = scrolledForStepRef.current;
+            if (
+                scrollTracker.screen !== activeScreen ||
+                scrollTracker.step !== stepIndex
+            ) {
+                scrolledForStepRef.current = {
+                    screen: activeScreen,
+                    step: stepIndex,
+                };
+                if (scrollSpotlightIntoView(measured)) {
+                    measured = spotlightMeasure();
+                }
+            }
             setSpotlight(measured);
             // Bump the Radix-remount key only when the union rect
             // changed enough to matter (sub-pixel jitter doesn't
@@ -328,26 +442,6 @@ export function TourPopover() {
                 lastUnionKeyRef.current = unionKey;
                 setAnchorTick(n => n + 1);
             }
-            // Auto-scroll once per step so anchors below the fold
-            // (or off to the side on a horizontally-scrolling page)
-            // come into view. Subsequent recomputes don't re-scroll;
-            // the user is in control once they start interacting.
-            const scrollTracker = scrolledForStepRef.current;
-            if (
-                scrollTracker.screen !== activeScreen ||
-                scrollTracker.step !== stepIndex
-            ) {
-                scrolledForStepRef.current = {
-                    screen: activeScreen,
-                    step: stepIndex,
-                };
-            }
-            // Always re-check whether the spotlight is in view: the
-            // page may have reflowed (e.g. menu opened, image
-            // loaded) since we last checked. The fn no-ops when the
-            // rect is comfortably inside the viewport, and `auto`
-            // scroll is idempotent at the same target.
-            scrollSpotlightIntoView(measured);
         };
 
         recompute();
@@ -433,7 +527,12 @@ export function TourPopover() {
                 if (t !== undefined) window.clearTimeout(t);
             }
         };
-    }, [activeScreen, stepIndex, currentStep, state.uiMode]);
+    }, [
+        activeScreen,
+        stepIndex,
+        currentStep,
+        state.uiMode,
+    ]);
 
     // While a tour is active, the page beneath the veil should be
     // keyboard-inert. App-level shortcuts (`⌘K`, `⌘Z`, the per-tab
@@ -531,7 +630,7 @@ export function TourPopover() {
                 with content. */}
             <div
                 aria-hidden
-                className="fixed inset-0 z-40"
+                className="fixed inset-0 z-[var(--z-tour-backdrop)]"
             />
             {/* Spotlight: a transparent box sized to the anchor with
                 a giant `box-shadow` painting darkness OUTSIDE the box.
@@ -559,14 +658,14 @@ export function TourPopover() {
                             "0 0 0 9999px rgba(0,0,0,0.45), 0 0 0 2px var(--color-tour-accent)",
                         borderRadius: "var(--tour-radius)",
                         pointerEvents: "auto",
-                        zIndex: 41,
+                        zIndex: "var(--z-tour-spotlight)",
                     }}
                     className="tour-spotlight transition-all"
                 />
             ) : (
                 <div
                     aria-hidden
-                    className="fixed inset-0 z-40 bg-black/45"
+                    className="fixed inset-0 z-[var(--z-tour-backdrop)] bg-black/45"
                 />
             )}
             {/* Key the entire Popover.Root tree on the active step
@@ -588,11 +687,9 @@ export function TourPopover() {
                         align={resolvedAlign}
                         sideOffset={14}
                         collisionPadding={24}
-                        // The tour floats above the backdrop (z-40)
-                        // AND above any popover/menu the active step
-                        // might trigger to open (the overflow menu
-                        // content uses z-50). Bumped to z-60 so the
-                        // tour copy stays visible. The
+                        // The tour floats above the backdrop and
+                        // above any popover/menu the active step
+                        // might trigger to open. The
                         // `max-h-[calc(100vh-32px)] overflow-y-auto`
                         // pair caps the popover at viewport height
                         // so a tall popover (long body copy + 4-line
@@ -602,7 +699,7 @@ export function TourPopover() {
                         // resolve the popper to a y-coord with the
                         // bottom edge below the viewport.
                         className={
-                            "z-[60] w-[min(92vw,360px)] max-h-[calc(100vh-32px)] overflow-y-auto rounded-[var(--tour-radius)] " +
+                            "z-[var(--z-tour-popover)] w-[min(92vw,360px)] max-h-[calc(100vh-32px)] overflow-y-auto rounded-[var(--tour-radius)] " +
                             "border-2 border-[var(--color-tour-border)] " +
                             "bg-[var(--color-tour-bg)] text-[var(--color-tour-text)] " +
                             "shadow-[0_10px_28px_rgba(30,64,175,0.28)] focus:outline-none"

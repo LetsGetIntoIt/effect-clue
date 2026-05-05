@@ -73,7 +73,7 @@ function ContradictionBody({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -16, opacity: 0 }}
             transition={transition}
-            className="fixed inset-x-0 top-0 z-50 border-b border-danger-border bg-panel/95 shadow-lg backdrop-blur-sm"
+            className="fixed inset-x-0 top-0 z-[var(--z-contradiction-banner)] border-b border-danger-border bg-panel/95 shadow-lg backdrop-blur-sm"
         >
             <div className="mx-auto max-w-[1400px] px-5 pt-3">
                 <ContradictionBanner trace={trace} />

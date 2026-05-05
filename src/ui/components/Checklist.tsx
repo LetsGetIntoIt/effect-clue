@@ -408,6 +408,7 @@ export function Checklist() {
                 undefined,
                 tableEntryTransition,
             ),
+            "mx-auto",
         );
 
     // Handle ⌘J / ⌘H focus requests: locate a cell by (row,col) and
@@ -700,9 +701,12 @@ export function Checklist() {
             )}
             <div className="-mx-4 px-4">
             <table className="w-full border-separate border-spacing-0 border-t border-l border-border text-[13px]">
-                <thead className="sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))] z-20 bg-row-header">
+                <thead className="sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))] z-[var(--z-checklist-sticky-header)] bg-row-header">
                     <tr>
-                        <th className="border-r border-b border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted">
+                        <th
+                            className={`${STICKY_FIRST_COL_HEADER} border-r border-b border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted`}
+                            data-tour-sticky-left=""
+                        >
                             {inSetup || !hasKeyboard ? null : label("global.gotoChecklist")}
                         </th>
                         <AnimatePresence initial={false} mode={MOTION_SYNC}>
@@ -764,7 +768,8 @@ export function Checklist() {
                     {inSetup && (
                         <tr>
                             <th
-                                className="whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-left font-semibold"
+                                className={`${STICKY_FIRST_COL_HEADER} whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-left font-semibold`}
+                                data-tour-sticky-left=""
                                 // The setup tour's "Set hand sizes"
                                 // step highlights the row label cell
                                 // alongside every player's input so
@@ -872,8 +877,8 @@ export function Checklist() {
                                 {...tableRowMotionProps}
                             >
                                 <motion.th
-                                    colSpan={cardSpan}
-                                    className="overflow-hidden border-r border-b border-border bg-category-header p-0 text-left text-[11px] uppercase tracking-[0.05em] text-white"
+                                    className={`${STICKY_FIRST_COL} overflow-hidden border-r border-b border-border bg-category-header p-0 text-left text-[11px] uppercase tracking-[0.05em] text-white`}
+                                    data-tour-sticky-left=""
                                     exit={cellExitTone}
                                 >
                                     {renderRowReveal(
@@ -948,6 +953,10 @@ export function Checklist() {
                                         ),
                                     )}
                                 </motion.th>
+                                <td
+                                    colSpan={cardSpan - 1}
+                                    className="border-r border-b border-border bg-category-header"
+                                />
                             </motion.tr>,
                             ...category.cards.map(entry => {
                                 const cardRowIdx =
@@ -958,7 +967,8 @@ export function Checklist() {
                                     {...tableRowMotionProps}
                                 >
                                     <motion.th
-                                        className="w-px overflow-hidden whitespace-nowrap border-r border-b border-border p-0 text-left font-normal"
+                                        className={`${STICKY_FIRST_COL} w-px overflow-hidden whitespace-nowrap border-r border-b border-border bg-panel p-0 text-left font-normal`}
+                                        data-tour-sticky-left=""
                                         exit={cellExitTone}
                                     >
                                         {renderRowReveal(
@@ -1444,8 +1454,8 @@ export function Checklist() {
                                           {...tableRowMotionProps}
                                       >
                                           <motion.th
-                                              colSpan={cardSpan}
-                                              className="overflow-hidden border-r border-b border-border bg-row-alt p-0 text-left"
+                                              className={`${STICKY_FIRST_COL} overflow-hidden border-r border-b border-border bg-row-alt p-0 text-left`}
+                                              data-tour-sticky-left=""
                                               exit={cellExitTone}
                                           >
                                               {renderRowReveal(
@@ -1465,6 +1475,10 @@ export function Checklist() {
                                                   </div>,
                                               )}
                                           </motion.th>
+                                          <td
+                                              colSpan={cardSpan - 1}
+                                              className="border-r border-b border-border bg-row-alt"
+                                          />
                                       </motion.tr>,
                                   ]
                                 : []),
@@ -1473,8 +1487,8 @@ export function Checklist() {
                     {inSetup && (
                         <motion.tr key="add-category" {...tableRowMotionProps}>
                             <motion.th
-                                colSpan={cardSpan}
-                                className="overflow-hidden border-r border-b border-border bg-row-alt p-0 text-left"
+                                className={`${STICKY_FIRST_COL} overflow-hidden border-r border-b border-border bg-row-alt p-0 text-left`}
+                                data-tour-sticky-left=""
                                 exit={cellExitTone}
                             >
                                 {renderRowReveal(
@@ -1491,6 +1505,10 @@ export function Checklist() {
                                     </div>,
                                 )}
                             </motion.th>
+                            <td
+                                colSpan={cardSpan - 1}
+                                className="border-r border-b border-border bg-row-alt"
+                            />
                         </motion.tr>
                     )}
                     </AnimatePresence>
@@ -2267,23 +2285,24 @@ const ADD_PLAYER_COLUMN_KEY = "add-player-col";
 const CELL_BASE =
     "border-r border-b border-border text-center font-semibold relative overflow-hidden";
 const CELL_CONTENT =
-    "flex h-full w-9 min-w-9 items-center justify-center px-2 py-1";
+    "mx-auto flex h-full w-9 min-w-9 items-center justify-center px-2 py-1";
+
+const STICKY_FIRST_COL =
+    "sticky left-0 z-[var(--z-checklist-sticky-column)]";
+
+const STICKY_FIRST_COL_HEADER =
+    "sticky left-0 z-[var(--z-checklist-sticky-header)]";
 
 // Z-index ladder for the checklist:
-//   - sticky <thead>            : z-20 (anchored at top during scroll)
-//   - body cell hover ring      : z-30 (above thead so the hover ring
-//                                 doesn't get clipped when the cell is
-//                                 near the top of the viewport)
-//   - cross-pane highlight ring : z-30 (same reason)
-//   - body cell focus-visible   : z-40 (above hover so a hovered ring
-//                                 doesn't obscure the focused outline,
-//                                 and well above any neighboring cell
-//                                 painted in document order)
-// Without these bumps, a hovered cell sitting under the sticky thead
-// got its top ring sheared off, and a focused cell's right/bottom
-// outline was painted over by its neighbors (each cell has
-// position:relative, so without z-index escape they stack in DOM
-// order and the right neighbour wins).
+//   - body cell hover ring      : --z-checklist-cell-hover
+//   - body cell focus-visible   : --z-checklist-cell-focus
+//   - sticky first column       : --z-checklist-sticky-column
+//   - sticky <thead>            : --z-checklist-sticky-header
+// The body-cell z-index escape keeps rings from being painted under
+// neighboring cells in document order. The sticky first column and
+// sticky header deliberately sit higher so horizontal / vertical
+// scroll never hides the card/category labels or column labels under
+// an active body cell.
 //
 // Focus indicator: `ring-[3px] ring-offset-2` (box-shadow) instead of
 // `outline-3 outline-offset-2`. Outlines on `<td>` cells in
@@ -2305,10 +2324,10 @@ const CELL_CONTENT =
 // Without that match the offset would render as a solid panel band
 // and the focus indicator would look like a thick double-ring.
 const CELL_INTERACTIVE =
-    " cursor-pointer hover:z-30 hover:rounded-[2px] hover:ring-2 hover:ring-accent/30 focus-visible:z-40 focus-visible:ring-[3px] focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:rounded-[2px] focus-visible:outline-none";
+    " cursor-pointer hover:z-[var(--z-checklist-cell-hover)] hover:rounded-[2px] hover:ring-2 hover:ring-accent/30 focus-visible:z-[var(--z-checklist-cell-focus)] focus-visible:ring-[3px] focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:rounded-[2px] focus-visible:outline-none";
 
 const CELL_HIGHLIGHTED =
-    " z-30 ring-2 ring-accent ring-offset-1 ring-offset-panel";
+    " z-[var(--z-checklist-cell-hover)] ring-2 ring-accent ring-offset-1 ring-offset-panel";
 
 const cellClass = (
     value: CellValue | undefined,
