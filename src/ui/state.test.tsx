@@ -23,6 +23,12 @@ import {
 import { cardByName } from "../logic/test-utils/CardByName";
 import { ClueProvider, useClue } from "./state";
 import { TestQueryClientProvider } from "../test-utils/queryClient";
+import {
+    loadCardPackUsage,
+    recordCardPackUse,
+} from "../logic/CardPackUsage";
+import { CARD_SETS } from "../logic/GameSetup";
+import { DateTime } from "effect";
 
 // -----------------------------------------------------------------------
 // The `reducer` and `initialState` are module-private in state.tsx — the
@@ -93,6 +99,30 @@ describe("setup-side actions", () => {
         // by reference — but it has the same shape (3 categories for the
         // classic deck).
         expect(result.current.state.setup.categories).toHaveLength(3);
+    });
+
+    test("newGame stamps Classic as the most-recently-used card pack", () => {
+        // Pre-seed the recency map so a non-Classic pack is "most
+        // recent" — mirrors the user having clicked Master Detective
+        // (or a custom pack) before hitting New game. Without the
+        // dispatch wrapper's stamp, the pill row would resolve its
+        // active match to that stale entry, find the live setup no
+        // longer matches it, and leave no pill highlighted.
+        recordCardPackUse("master-detective");
+        const { result } = renderClue();
+        act(() => result.current.dispatch({ type: "newGame" }));
+        const usage = loadCardPackUsage();
+        const classicId = CARD_SETS[0]!.id;
+        const classicAt = usage.get(classicId);
+        const masterAt = usage.get("master-detective");
+        expect(classicAt).toBeDefined();
+        // Classic strictly beats master-detective: it must be the
+        // most-recent entry so `activeMatch` in CardPackRow lights
+        // up the Classic pill.
+        expect(masterAt).toBeDefined();
+        expect(
+            DateTime.toEpochMillis(classicAt!),
+        ).toBeGreaterThanOrEqual(DateTime.toEpochMillis(masterAt!));
     });
 
     test("setUiMode changes uiMode and bypasses the undo history", () => {
