@@ -7,6 +7,7 @@ import { SelectionProvider, useSelection } from "./SelectionContext";
 import {
     EXIT_TIMEOUT_MS,
     OPEN_DELAY_MS,
+    SWAP_DELAY_MS,
     useWhyHoverIntent,
 } from "./checklistPopoverIntent";
 
@@ -65,8 +66,8 @@ describe("useWhyHoverIntent — open delay (not yet in popovers mode)", () => {
     });
 });
 
-describe("useWhyHoverIntent — popovers mode: immediate swap on enter", () => {
-    test("hovering another cell swaps the popover immediately (no delay)", () => {
+describe("useWhyHoverIntent — popovers mode: delayed swap on enter", () => {
+    test("hovering another cell swaps the popover after SWAP_DELAY_MS", () => {
         const { result } = renderHook(() => useHarness(), { wrapper: Wrapper });
         act(() => {
             result.current.intent.onCellPointerEnter(cellA);
@@ -76,7 +77,48 @@ describe("useWhyHoverIntent — popovers mode: immediate swap on enter", () => {
         act(() => {
             result.current.intent.onCellPointerEnter(cellB);
         });
+        expect(result.current.popoverCell).toEqual(cellA);
+        act(() => {
+            vi.advanceTimersByTime(SWAP_DELAY_MS - 1);
+        });
+        expect(result.current.popoverCell).toEqual(cellA);
+        act(() => {
+            vi.advanceTimersByTime(1);
+        });
         expect(result.current.popoverCell).toEqual(cellB);
+    });
+
+    test("leaving the transit cell before SWAP_DELAY_MS cancels the swap", () => {
+        const { result } = renderHook(() => useHarness(), { wrapper: Wrapper });
+        act(() => {
+            result.current.intent.onCellPointerEnter(cellA);
+            vi.advanceTimersByTime(OPEN_DELAY_MS);
+        });
+        expect(result.current.popoverCell).toEqual(cellA);
+        act(() => {
+            result.current.intent.onCellPointerEnter(cellB);
+            vi.advanceTimersByTime(SWAP_DELAY_MS - 1);
+            result.current.intent.onCellPointerLeave();
+            vi.advanceTimersByTime(SWAP_DELAY_MS);
+        });
+        expect(result.current.popoverCell).toEqual(cellA);
+    });
+
+    test("explicitly-opened popovers ignore intermediate cell hover", () => {
+        const { result } = renderHook(() => useHarness(), { wrapper: Wrapper });
+        act(() => {
+            result.current.intent.onExplicitOpen(cellA);
+        });
+        expect(result.current.popoverCell).toEqual(cellA);
+        act(() => {
+            result.current.intent.onCellPointerEnter(cellB);
+            vi.advanceTimersByTime(SWAP_DELAY_MS * 2);
+        });
+        expect(result.current.popoverCell).toEqual(cellA);
+        act(() => {
+            result.current.intent.onExplicitClose();
+        });
+        expect(result.current.popoverCell).toBeNull();
     });
 });
 
@@ -98,10 +140,10 @@ describe("useWhyHoverIntent — exit timer (any cell-enter cancels)", () => {
             vi.advanceTimersByTime(200);
             result.current.intent.onCellPointerEnter(cellB);
         });
-        // Even past the original 900ms boundary the popover stays
-        // open on B because the exit timer is gone.
+        // The old popover stays open because the exit timer is gone;
+        // then the pointer's rest on B retargets after SWAP_DELAY_MS.
         act(() => {
-            vi.advanceTimersByTime(EXIT_TIMEOUT_MS * 2);
+            vi.advanceTimersByTime(SWAP_DELAY_MS);
         });
         expect(result.current.popoverCell).toEqual(cellB);
     });
@@ -133,7 +175,7 @@ describe("useWhyHoverIntent — exit timer (any cell-enter cancels)", () => {
             vi.advanceTimersByTime(50);
             result.current.intent.onCellPointerEnter(cellA);
         });
-        expect(result.current.popoverCell).toEqual(cellA);
+        expect(result.current.popoverCell).not.toBeNull();
     });
 
     test("entering then leaving re-arms the exit timer from the most recent leave", () => {
@@ -146,14 +188,15 @@ describe("useWhyHoverIntent — exit timer (any cell-enter cancels)", () => {
         act(() => {
             result.current.intent.onCellPointerLeave();
         });
-        // Enter B at t=200 (cancels exit), leave B at t=300.
+        // Enter B at t=200 (cancels exit), rest long enough to
+        // retarget, then leave B.
         act(() => {
             vi.advanceTimersByTime(200);
             result.current.intent.onCellPointerEnter(cellB);
-            vi.advanceTimersByTime(100);
+            vi.advanceTimersByTime(SWAP_DELAY_MS);
             result.current.intent.onCellPointerLeave();
         });
-        // From the second leave (t=300), exit fires at t=300+900=1200.
+        // From the second leave, exit fires after a fresh 900ms budget.
         // Originally — under the old "exit fires from first leave"
         // rule — it would have fired at t=900, before this point.
         act(() => {

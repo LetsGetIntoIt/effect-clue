@@ -103,6 +103,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ClueProvider } from "../state";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
 import { ShareCreateModal, pickProgressLabelKey } from "./ShareCreateModal";
+import { DEFAULT_SETUP } from "../../logic/GameSetup";
+import { PlayerOwner } from "../../logic/GameObjects";
+import { CellHypothesis } from "../../logic/Hypothesis";
+import { encodeSession } from "../../logic/Persistence";
+import { Y } from "../../logic/Knowledge";
 
 const mountModal = (
     variant: "pack" | "invite" | "transfer",
@@ -124,6 +129,30 @@ const findCta = (): HTMLButtonElement => {
     ) as HTMLButtonElement | null;
     if (!el) throw new Error("Share CTA not found");
     return el;
+};
+
+const seedSessionWithHypothesis = (): void => {
+    const player = DEFAULT_SETUP.players[0]!;
+    const card = DEFAULT_SETUP.categories[0]!.cards[0]!.id;
+    window.localStorage.setItem(
+        "effect-clue.session.v7",
+        JSON.stringify(
+            encodeSession({
+                setup: DEFAULT_SETUP,
+                hands: [],
+                handSizes: [],
+                suggestions: [],
+                accusations: [],
+                hypotheses: [
+                    CellHypothesis({
+                        owner: PlayerOwner(player),
+                        card,
+                        value: Y,
+                    }),
+                ],
+            }),
+        ),
+    );
 };
 
 beforeEach(() => {
@@ -287,9 +316,10 @@ describe("ShareCreateModal — wire payload by variant", () => {
         expect(payload.suggestionsData).toBeUndefined();
         expect(payload.accusationsData).toBeUndefined();
         expect(payload.knownCardsData).toBeUndefined();
+        expect(payload.hypothesesData).toBeUndefined();
     });
 
-    test("transfer variant sends kind: 'transfer' with all six fields", async () => {
+    test("transfer variant sends kind: 'transfer' and omits empty hypothesis data", async () => {
         mockSession = {
             data: { user: { id: "u1", isAnonymous: false } },
         };
@@ -308,6 +338,25 @@ describe("ShareCreateModal — wire payload by variant", () => {
         expect(payload.knownCardsData).toBeTypeOf("string");
         expect(payload.suggestionsData).toBeTypeOf("string");
         expect(payload.accusationsData).toBeTypeOf("string");
+        expect(payload.hypothesesData).toBeUndefined();
+    });
+
+    test("transfer variant includes hypothesis data when present", async () => {
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: false } },
+        };
+        seedSessionWithHypothesis();
+        mountModal("transfer");
+        await act(async () => {});
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await waitFor(() => {
+            expect(createShareMock).toHaveBeenCalled();
+        });
+        const payload = createShareMock.mock.calls[0]?.[0];
+        expect(payload.kind).toBe("transfer");
+        expect(payload.hypothesesData).toBeTypeOf("string");
     });
 });
 

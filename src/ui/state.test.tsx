@@ -3,7 +3,7 @@ import { HashMap } from "effect";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import { Player } from "../logic/GameObjects";
+import { Player, PlayerOwner } from "../logic/GameObjects";
 import { CLASSIC_SETUP_3P, DEFAULT_SETUP } from "../logic/GameSetup";
 import { KnownCard } from "../logic/InitialKnowledge";
 import type { GameSession } from "../logic/Persistence";
@@ -47,6 +47,97 @@ const silenceConsoleError = () => vi.spyOn(console, "error").mockImplementation(
 
 beforeEach(() => {
     window.localStorage.clear();
+});
+
+describe("hypothesis actions", () => {
+    test("setHypothesis creates, updates, and clears one hypothesis per cell", () => {
+        const { result } = renderClue();
+        const knife = cardByName(DEFAULT_SETUP, "Knife");
+        const owner = PlayerOwner(Player("Player 1"));
+
+        act(() =>
+            result.current.dispatch({
+                type: "setHypothesis",
+                owner,
+                card: knife,
+                value: Y_VAL,
+            }),
+        );
+        expect(result.current.state.hypotheses).toHaveLength(1);
+        expect(result.current.state.hypotheses[0]?.value).toBe(Y_VAL);
+        expect(result.current.derived.hypothesisEvaluations[0]?.status).toBe(
+            "plausible",
+        );
+
+        act(() =>
+            result.current.dispatch({
+                type: "setHypothesis",
+                owner,
+                card: knife,
+                value: N_VAL,
+            }),
+        );
+        expect(result.current.state.hypotheses).toHaveLength(1);
+        expect(result.current.state.hypotheses[0]?.value).toBe(N_VAL);
+
+        act(() =>
+            result.current.dispatch({
+                type: "setHypothesis",
+                owner,
+                card: knife,
+                value: undefined,
+            }),
+        );
+        expect(result.current.state.hypotheses).toEqual([]);
+    });
+
+    test("hypothesis changes participate in undo and redo", () => {
+        const { result } = renderClue();
+        const knife = cardByName(DEFAULT_SETUP, "Knife");
+        const owner = PlayerOwner(Player("Player 1"));
+
+        act(() =>
+            result.current.dispatch({
+                type: "setHypothesis",
+                owner,
+                card: knife,
+                value: Y_VAL,
+            }),
+        );
+        expect(result.current.canUndo).toBe(true);
+        expect(result.current.state.hypotheses).toHaveLength(1);
+
+        act(() => result.current.undo());
+        expect(result.current.state.hypotheses).toEqual([]);
+        expect(result.current.canRedo).toBe(true);
+
+        act(() => result.current.redo());
+        expect(result.current.state.hypotheses[0]?.value).toBe(Y_VAL);
+    });
+
+    test("setup pruning removes hypotheses for deleted players or cards", () => {
+        const { result } = renderClue();
+        const knife = cardByName(DEFAULT_SETUP, "Knife");
+        const owner = PlayerOwner(Player("Player 1"));
+
+        act(() =>
+            result.current.dispatch({
+                type: "setHypothesis",
+                owner,
+                card: knife,
+                value: Y_VAL,
+            }),
+        );
+        expect(result.current.state.hypotheses).toHaveLength(1);
+
+        act(() =>
+            result.current.dispatch({
+                type: "removePlayer",
+                player: Player("Player 1"),
+            }),
+        );
+        expect(result.current.state.hypotheses).toEqual([]);
+    });
 });
 
 describe("useClue — context wiring", () => {

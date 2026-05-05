@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { CLASSIC_SETUP_3P } from "./GameSetup";
-import { Player } from "./GameObjects";
+import { Player, PlayerOwner } from "./GameObjects";
+import { CellHypothesis } from "./Hypothesis";
+import { Y } from "./Knowledge";
 import { cardByName } from "./test-utils/CardByName";
 import {
     Accusation,
@@ -16,7 +18,8 @@ import {
     type GameSession,
 } from "./Persistence";
 
-const STORAGE_KEY = "effect-clue.session.v6";
+const STORAGE_KEY = "effect-clue.session.v7";
+const LEGACY_STORAGE_KEY_V6 = "effect-clue.session.v6";
 
 const setup = CLASSIC_SETUP_3P;
 const A = Player("Anisha");
@@ -142,6 +145,21 @@ describe("encode/decode — rich sessions", () => {
         expect(decoded?.accusations[1]?.accuser).toBe(B);
     });
 
+    test("round-trips hypotheses", () => {
+        const decoded = decodeSession(encodeSession({
+            ...minimalSession,
+            hypotheses: [
+                CellHypothesis({
+                    owner: PlayerOwner(A),
+                    card: KNIFE,
+                    value: Y,
+                }),
+            ],
+        }));
+        expect(decoded?.hypotheses).toHaveLength(1);
+        expect(decoded?.hypotheses?.[0]?.value).toBe(Y);
+    });
+
     test("generates a fresh AccusationId when the persisted id is the empty sentinel", () => {
         const encoded = encodeSession({
             ...minimalSession,
@@ -186,11 +204,39 @@ describe("saveToLocalStorage / loadFromLocalStorage", () => {
         expect(loaded?.handSizes).toHaveLength(3);
     });
 
-    test("save writes under the v6-scoped storage key", () => {
+    test("save writes under the v7-scoped storage key", () => {
         saveToLocalStorage(minimalSession);
         const raw = window.localStorage.getItem(STORAGE_KEY);
         expect(raw).not.toBeNull();
-        expect(JSON.parse(raw as string).version).toBe(6);
+        expect(JSON.parse(raw as string).version).toBe(7);
+    });
+
+    test("load accepts legacy v6 sessions and normalizes hypotheses to empty", () => {
+        window.localStorage.setItem(
+            LEGACY_STORAGE_KEY_V6,
+            JSON.stringify({
+                version: 6,
+                setup: {
+                    players: setup.players.map(p => String(p)),
+                    categories: setup.categories.map(c => ({
+                        id: String(c.id),
+                        name: c.name,
+                        cards: c.cards.map(card => ({
+                            id: String(card.id),
+                            name: card.name,
+                        })),
+                    })),
+                },
+                hands: [],
+                handSizes: [],
+                suggestions: [],
+                accusations: [],
+            }),
+        );
+
+        const loaded = loadFromLocalStorage();
+        expect(loaded).toBeDefined();
+        expect(loaded?.hypotheses).toEqual([]);
     });
 
     test("load returns undefined when the key is missing", () => {
@@ -232,4 +278,3 @@ describe("saveToLocalStorage / loadFromLocalStorage", () => {
         expect(loaded?.handSizes[0]?.size).toBe(99);
     });
 });
-

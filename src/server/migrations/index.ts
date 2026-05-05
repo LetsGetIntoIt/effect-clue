@@ -21,6 +21,7 @@ import migration0003 from "./0003_card_packs";
 import migration0004 from "./0004_shares";
 import migration0005 from "./0005_share_expiry_backfill";
 import migration0006 from "./0006_shares_owner_required";
+import migration0007 from "./0007_share_hypotheses";
 
 export const migrations: Record<
     string,
@@ -32,4 +33,5 @@ export const migrations: Record<
     "0004_shares": migration0004,
     "0005_share_expiry_backfill": migration0005,
     "0006_shares_owner_required": migration0006,
+    "0007_share_hypotheses": migration0007,
 };

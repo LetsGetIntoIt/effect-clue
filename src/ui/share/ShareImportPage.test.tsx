@@ -84,6 +84,7 @@ import { CARD_SETS } from "../../logic/GameSetup";
 import {
     cardPackCodec,
     handSizesCodec,
+    hypothesesCodec,
     knownCardsCodec,
     playersCodec,
     suggestionsCodec,
@@ -176,6 +177,13 @@ const ACCUSATIONS_PAYLOAD = Schema.encodeSync(accusationsCodec)([
         loggedAt: 3,
     },
 ]);
+const HYPOTHESES_PAYLOAD = Schema.encodeSync(hypothesesCodec)([
+    {
+        owner: { _tag: "Player", player: Player("Alice") },
+        card: Card("card-pam"),
+        value: "Y",
+    },
+]);
 
 interface SnapshotOverrides {
     cardPackData?: string | null;
@@ -184,6 +192,7 @@ interface SnapshotOverrides {
     knownCardsData?: string | null;
     suggestionsData?: string | null;
     accusationsData?: string | null;
+    hypothesesData?: string | null;
     ownerName?: string | null;
     ownerIsAnonymous?: boolean | null;
 }
@@ -196,6 +205,7 @@ const buildSnapshot = (overrides: SnapshotOverrides) => ({
     knownCardsData: null,
     suggestionsData: null,
     accusationsData: null,
+    hypothesesData: null,
     ownerName: null,
     ownerIsAnonymous: null,
     ...overrides,
@@ -364,7 +374,7 @@ describe("ShareImportPage — bullet list", () => {
         ).toBeNull();
     });
 
-    test("transfer share → all 6 bullets present with counts", () => {
+    test("transfer share → progress bullets present with counts", () => {
         renderImportPage(
             buildSnapshot({
                     cardPackData: CUSTOM_PACK_PAYLOAD,
@@ -373,6 +383,7 @@ describe("ShareImportPage — bullet list", () => {
                     knownCardsData: KNOWN_CARDS_PAYLOAD,
                     suggestionsData: SUGGESTIONS_PAYLOAD,
                     accusationsData: ACCUSATIONS_PAYLOAD,
+                    hypothesesData: HYPOTHESES_PAYLOAD,
             }),
         );
         const knownBullet = document.querySelector(
@@ -388,6 +399,10 @@ describe("ShareImportPage — bullet list", () => {
             "[data-share-import-bullet='accusations']",
         );
         expect(accuBullet?.textContent).toContain("\"count\":1");
+        const hypothesesBullet = document.querySelector(
+            "[data-share-import-bullet='hypotheses']",
+        );
+        expect(hypothesesBullet?.textContent).toContain("\"count\":1");
     });
 
     test("more than 4 player names → uses overflow copy with '+N more'", () => {

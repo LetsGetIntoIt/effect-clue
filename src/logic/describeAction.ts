@@ -5,7 +5,7 @@ import {
     categoryOfCard,
     findCardEntry,
 } from "./GameSetup";
-import type { Card } from "./GameObjects";
+import { ownerLabel, type Card } from "./GameObjects";
 import type { GameSetup } from "./GameSetup";
 import type { ClueAction, ClueState } from "./ClueState";
 
@@ -192,6 +192,17 @@ export const describeAction = (
                 cards: joinCardNames(setup, prior.cards),
             });
         }
+        case "setHypothesis":
+            return action.value === undefined
+                ? t("actions.clearHypothesis", {
+                      owner: ownerLabel(action.owner),
+                      card: cardName(setup, action.card),
+                  })
+                : t("actions.setHypothesis", {
+                      owner: ownerLabel(action.owner),
+                      card: cardName(setup, action.card),
+                      value: action.value,
+                  });
         // Non-undoable actions — should never reach the describer
         // because the history reducer bypasses them.
         case "setSetup":

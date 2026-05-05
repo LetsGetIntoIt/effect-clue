@@ -30,6 +30,13 @@ import {
     N,
     Y,
 } from "../../logic/Knowledge";
+import {
+    findEvaluationForCell,
+    findHypothesisForCell,
+    type CellHypothesis,
+    type HypothesisEvaluation,
+    type HypothesisStatus,
+} from "../../logic/Hypothesis";
 import { footnotesForCell } from "../../logic/Footnotes";
 import { KnownCard } from "../../logic/InitialKnowledge";
 import {
@@ -216,6 +223,7 @@ export function Checklist() {
     const tSetup = useTranslations("setup");
     const tShare = useTranslations("share");
     const tReasons = useTranslations("reasons");
+    const tHypotheses = useTranslations("hypotheses");
     const { openInvitePlayer } = useShareContext();
     const hasKeyboard = useHasKeyboard();
     const { state, dispatch, derived } = useClue();
@@ -223,13 +231,14 @@ export function Checklist() {
         activeSuggestionIndex,
         activeAccusationIndex,
         popoverCell,
-        setPopoverCell,
     } = useSelection();
     const {
         onCellPointerEnter,
         onCellPointerLeave,
         onGridLeave,
         cancelExitTimer,
+        onExplicitOpen,
+        onExplicitClose,
     } = useWhyHoverIntent();
     const confirm = useConfirm();
     const inSetup = state.uiMode === "setup";
@@ -238,6 +247,7 @@ export function Checklist() {
     const result = derived.deductionResult;
     const footnotes = derived.footnotes;
     const provenance = derived.provenance;
+    const hypothesisEvaluations = derived.hypothesisEvaluations;
     const suggestions = derived.suggestionsAsData;
     const accusations = derived.accusationsAsData;
 
@@ -1108,6 +1118,19 @@ export function Checklist() {
                                         // opens the deduction-chain popover.
                                         const playInteractive =
                                             !inSetup && isPlayerCell;
+                                        const thisCellForHover = Cell(
+                                            owner,
+                                            entry.id,
+                                        );
+                                        const hypothesis = findHypothesisForCell(
+                                            state.hypotheses,
+                                            thisCellForHover,
+                                        );
+                                        const hypothesisEvaluation =
+                                            findEvaluationForCell(
+                                                hypothesisEvaluations,
+                                                thisCellForHover,
+                                            );
                                         const tooltipText = buildCellTitle({
                                             provenance,
                                             suggestions,
@@ -1119,7 +1142,22 @@ export function Checklist() {
                                             tDeduce: t,
                                             tReasons,
                                         });
-                                        const tooltipContent = tooltipText ? (
+                                        const tooltipContent = !inSetup ? (
+                                            <CellPopoverContent
+                                                whyText={tooltipText}
+                                                hypothesis={hypothesis}
+                                                evaluation={hypothesisEvaluation}
+                                                tHypotheses={tHypotheses}
+                                                onSetHypothesis={value =>
+                                                    dispatch({
+                                                        type: "setHypothesis",
+                                                        owner,
+                                                        card: entry.id,
+                                                        value,
+                                                    })
+                                                }
+                                            />
+                                        ) : tooltipText ? (
                                             <div className="whitespace-pre-line">
                                                 {tooltipText}
                                             </div>
@@ -1159,9 +1197,7 @@ export function Checklist() {
                                         // not exploring the deduction
                                         // chain.
                                         const popoverInteractive =
-                                            tooltipContent !== undefined
-                                            && !inSetup
-                                            && (playInteractive || !isPlayerCell);
+                                            !inSetup;
                                         const tdClassName = cellClass(
                                             value,
                                             setupInteractive
@@ -1169,9 +1205,16 @@ export function Checklist() {
                                                 || popoverInteractive,
                                             isHighlighted,
                                         );
-                                        const thisCellForHover = Cell(
-                                            owner,
-                                            entry.id,
+                                        const renderedCellContent = (
+                                            <>
+                                                {renderTableCellContent(cellContent)}
+                                                {!inSetup && hypothesis !== undefined ? (
+                                                    <HypothesisBadge
+                                                        hypothesis={hypothesis}
+                                                        evaluation={hypothesisEvaluation}
+                                                    />
+                                                ) : null}
+                                            </>
                                         );
                                         // Hover handlers are provided for
                                         // every cell so the grid-leave /
@@ -1308,7 +1351,7 @@ export function Checklist() {
                                                     }}
                                                     {...hoverHandlers}
                                                 >
-                                                    {renderTableCellContent(cellContent)}
+                                                    {renderedCellContent}
                                                 </motion.td>
                                             );
                                         } else if (popoverInteractive) {
@@ -1346,7 +1389,8 @@ export function Checklist() {
                                                 <InfoPopover
                                                     key={ownerCellKey}
                                                     content={tooltipContent}
-                                                    variant="accent"
+                                                    variant="default"
+                                                    maxWidthPx={360}
                                                     open={isOpen}
                                                     onOpenChange={open => {
                                                         if (open) {
@@ -1360,14 +1404,11 @@ export function Checklist() {
                                                             // in-flight
                                                             // exit
                                                             // timer.
-                                                            cancelExitTimer();
-                                                            setPopoverCell(
+                                                            onExplicitOpen(
                                                                 thisCell,
                                                             );
                                                         } else {
-                                                            setPopoverCell(
-                                                                null,
-                                                            );
+                                                            onExplicitClose();
                                                         }
                                                     }}
                                                     onContentPointerEnter={
@@ -1385,6 +1426,16 @@ export function Checklist() {
                                                         role="button"
                                                         tabIndex={0}
                                                         aria-haspopup={ARIA_HASPOPUP_DIALOG}
+                                                        aria-label={tHypotheses(
+                                                            "cellAria",
+                                                            {
+                                                                owner:
+                                                                    ownerLabel(
+                                                                        owner,
+                                                                    ),
+                                                                card: entry.name,
+                                                            },
+                                                        )}
                                                         data-cell-row={rowIdx}
                                                         data-cell-col={colIdx}
                                                         {...firstCellAnchorAttr}
@@ -1408,7 +1459,7 @@ export function Checklist() {
                                                         }}
                                                         {...hoverHandlers}
                                                     >
-                                                        {renderTableCellContent(cellContent)}
+                                                        {renderedCellContent}
                                                     </motion.td>
                                                 </InfoPopover>
                                             );
@@ -1432,7 +1483,7 @@ export function Checklist() {
                                                     onKeyDown={onGridArrowKey}
                                                     {...hoverHandlers}
                                                 >
-                                                    {renderTableCellContent(cellContent)}
+                                                    {renderedCellContent}
                                                 </motion.td>
                                             );
                                         } else {
@@ -1445,7 +1496,7 @@ export function Checklist() {
                                                     {...firstCellAnchorAttr}
                                                     {...hoverHandlers}
                                                 >
-                                                    {renderTableCellContent(cellContent)}
+                                                    {renderedCellContent}
                                                 </motion.td>
                                             );
                                         }
@@ -1962,6 +2013,176 @@ const buildCellTitle = (args: {
     return parts.length > 0 ? parts.join("\n") : undefined;
 };
 
+function CellPopoverContent({
+    whyText,
+    hypothesis,
+    evaluation,
+    tHypotheses,
+    onSetHypothesis,
+}: {
+    readonly whyText: string | undefined;
+    readonly hypothesis: CellHypothesis | undefined;
+    readonly evaluation: HypothesisEvaluation | undefined;
+    readonly tHypotheses: ReturnType<typeof useTranslations<"hypotheses">>;
+    readonly onSetHypothesis: (value: CellValue | undefined) => void;
+}) {
+    const selected = hypothesis?.value;
+    const statusText = hypothesisStatusText(
+        hypothesis,
+        evaluation,
+        tHypotheses,
+    );
+    return (
+        <div className="min-w-60 space-y-2">
+            <div className="whitespace-pre-line">
+                {whyText ?? tHypotheses("noDeductionYet")}
+            </div>
+            <div className="border-t border-border/70 pt-2">
+                <div className="mb-1.5 flex items-center justify-between gap-3">
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">
+                        {tHypotheses("label")}
+                    </span>
+                    <div
+                        role="group"
+                        aria-label={tHypotheses("controlAria")}
+                        className="inline-flex overflow-hidden rounded-[var(--radius)] border border-border bg-white"
+                    >
+                        <HypothesisOptionButton
+                            label={tHypotheses("off")}
+                            active={selected === undefined}
+                            onClick={() => onSetHypothesis(undefined)}
+                        />
+                        <HypothesisOptionButton
+                            label={Y}
+                            active={selected === Y}
+                            onClick={() => onSetHypothesis(Y)}
+                        />
+                        <HypothesisOptionButton
+                            label={N}
+                            active={selected === N}
+                            onClick={() => onSetHypothesis(N)}
+                        />
+                    </div>
+                </div>
+                <div className="text-[12px] leading-snug text-muted">
+                    {statusText}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function HypothesisOptionButton({
+    label,
+    active,
+    onClick,
+}: {
+    readonly label: string;
+    readonly active: boolean;
+    readonly onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            aria-pressed={active}
+            onClick={onClick}
+            className={
+                "cursor-pointer border-0 border-r border-border px-2 py-1 text-[12px] font-semibold last:border-r-0 " +
+                (active
+                    ? "bg-accent text-white"
+                    : "bg-white text-[#2a1f12] hover:bg-hover")
+            }
+        >
+            {label}
+        </button>
+    );
+}
+
+const hypothesisStatusText = (
+    hypothesis: CellHypothesis | undefined,
+    evaluation: HypothesisEvaluation | undefined,
+    tHypotheses: ReturnType<typeof useTranslations<"hypotheses">>,
+): string => {
+    if (hypothesis === undefined) return tHypotheses("statusOff");
+    if (evaluation === undefined) return tHypotheses("statusPending");
+    switch (evaluation.status) {
+        case "verified":
+            return tHypotheses("statusVerified", {
+                value: hypothesis.value,
+            });
+        case "falsified":
+            return tHypotheses("statusFalsified", {
+                value: hypothesis.value,
+            });
+        case "blocked":
+            return tHypotheses("statusBlocked");
+        case "plausible":
+            return tHypotheses("statusPlausible", {
+                value: hypothesis.value,
+                count: evaluation.impactCount,
+            });
+    }
+};
+
+function HypothesisBadge({
+    hypothesis,
+    evaluation,
+}: {
+    readonly hypothesis: CellHypothesis;
+    readonly evaluation: HypothesisEvaluation | undefined;
+}) {
+    const status: HypothesisStatus =
+        evaluation?.status ?? HYPOTHESIS_STATUS_PLAUSIBLE;
+    const glyph =
+        status === "verified"
+            ? `${hypothesis.value}✓`
+            : status === "falsified"
+                ? `${hypothesis.value}×`
+                : status === "blocked"
+                    ? `${hypothesis.value}!`
+                    : `${hypothesis.value}?`;
+    const tone =
+        status === "verified"
+            ? "border-yes-bg bg-yes-bg text-yes"
+            : status === "falsified"
+                ? "border-danger-border bg-danger-bg text-danger"
+                : status === "blocked"
+                    ? "border-border bg-row-alt text-muted"
+                    : "border-warning-border bg-warning-bg text-warning";
+    return (
+        <span
+            aria-hidden
+            className={
+                "pointer-events-none absolute right-0.5 top-0.5 rounded border px-0.5 text-[9px] leading-[11px] " +
+                tone
+            }
+        >
+            {glyph}
+        </span>
+    );
+}
+
+const hypothesisSummaryText = (
+    evaluations: ReadonlyArray<HypothesisEvaluation>,
+    tHypotheses: ReturnType<typeof useTranslations<"hypotheses">>,
+): string | undefined => {
+    if (evaluations.length === 0) return undefined;
+    const counts = new Map<HypothesisStatus, number>();
+    for (const evaluation of evaluations) {
+        counts.set(
+            evaluation.status,
+            (counts.get(evaluation.status) ?? 0) + 1,
+        );
+    }
+    const parts: string[] = [];
+    for (const status of HYPOTHESIS_SUMMARY_ORDER) {
+        const count = counts.get(status) ?? 0;
+        if (count === 0) continue;
+        parts.push(tHypotheses(`summary.${status}`, { count }));
+    }
+    return tHypotheses("summaryLine", { parts: parts.join(" · ") });
+};
+
 // Motion-only constants (non user-facing). The "unsolved" color
 // is the app's body ink; motion can't animate "inherit" so we
 // resolve it here.
@@ -1983,6 +2204,8 @@ const TABLE_ROW_ENTRY_DURATION = Duration.millis(300);
 const TABLE_DANGER_FADE_DURATION = Duration.millis(120);
 const TABLE_DANGER_HOLD_DURATION = Duration.millis(240);
 const TABLE_COLLAPSE_DURATION = Duration.millis(180);
+const CASE_FILE_WIGGLE_RESET_DELAY = Duration.millis(700);
+const CASE_FILE_CELEBRATE_RESET_DELAY = Duration.millis(900);
 const TABLE_REDUCED_DANGER_FADE_MS = Duration.toMillis(
     Duration.millis(80),
 );
@@ -2011,12 +2234,24 @@ const TABLE_COLUMN_HIDDEN = { maxWidth: 0, opacity: 0 } as const;
 const TABLE_COLUMN_VISIBLE = { maxWidth: CELL_EXPAND_CAP_PX, opacity: 1 } as const;
 const STYLE_OVERFLOW_HIDDEN = { overflow: "hidden" } as const;
 const STYLE_COLUMN_CELL_VISIBLE = { maxWidth: CELL_EXPAND_CAP_PX } as const;
+const HYPOTHESIS_STATUS_PLAUSIBLE: HypothesisStatus = "plausible";
+const HYPOTHESIS_SUMMARY_ORDER: ReadonlyArray<HypothesisStatus> = [
+    "plausible",
+    "verified",
+    "falsified",
+    "blocked",
+];
 
 function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
     const t = useTranslations("deduce");
-    const { state } = useClue();
+    const tHypotheses = useTranslations("hypotheses");
+    const { state, derived } = useClue();
     const setup = state.setup;
     const progress = caseFileProgress(setup, knowledge);
+    const hypothesisSummary = hypothesisSummaryText(
+        derived.hypothesisEvaluations,
+        tHypotheses,
+    );
     const headerRef = useRef<HTMLDivElement>(null);
     const fireConfetti = useConfetti();
     const wiggleTransition = useReducedTransition(T_WIGGLE);
@@ -2057,7 +2292,10 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
         prevSolvedRef.current = new Map(solvedByCategory);
         if (newlySolved.length === 0) return;
         setWigglingIds(new Set(newlySolved));
-        const timeout = setTimeout(() => setWigglingIds(new Set()), 700);
+        const timeout = setTimeout(
+            () => setWigglingIds(new Set()),
+            Duration.toMillis(CASE_FILE_WIGGLE_RESET_DELAY),
+        );
         return () => clearTimeout(timeout);
     }, [solvedByCategory]);
 
@@ -2075,7 +2313,10 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
         if (allSolved && !wasAllSolvedRef.current) {
             setIsCelebrating(true);
             fireConfetti(headerRef.current);
-            const timeout = setTimeout(() => setIsCelebrating(false), 900);
+            const timeout = setTimeout(
+                () => setIsCelebrating(false),
+                Duration.toMillis(CASE_FILE_CELEBRATE_RESET_DELAY),
+            );
             wasAllSolvedRef.current = true;
             return () => clearTimeout(timeout);
         }
@@ -2127,6 +2368,11 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
                     />
                 </div>
             </div>
+            {hypothesisSummary !== undefined ? (
+                <div className="mb-2.5 text-[12px] text-muted">
+                    {hypothesisSummary}
+                </div>
+            ) : null}
             <div
                 className="grid gap-2"
                 style={{

@@ -60,6 +60,7 @@ interface ShareSnapshot {
     readonly knownCardsData: string | null;
     readonly suggestionsData: string | null;
     readonly accusationsData: string | null;
+    readonly hypothesesData: string | null;
     readonly ownerName: string | null;
     readonly ownerIsAnonymous: boolean | null;
 }
@@ -237,11 +238,12 @@ export function ShareImportPage({
     const hasKnown = snapshot.knownCardsData !== null;
     const hasSugg = snapshot.suggestionsData !== null;
     const hasAccu = snapshot.accusationsData !== null;
+    const hasHypotheses = snapshot.hypothesesData !== null;
     const isEmpty = !hasPack && !hasPlayers;
     const receiveFlow: ReceiveFlow =
         !hasPlayers
             ? RECEIVE_FLOW_PACK
-            : hasKnown || hasSugg || hasAccu
+            : hasKnown || hasSugg || hasAccu || hasHypotheses
                 ? RECEIVE_FLOW_TRANSFER
                 : RECEIVE_FLOW_INVITE;
 
@@ -266,6 +268,13 @@ export function ShareImportPage({
         () =>
             hasAccu ? countJsonArrayItems(snapshot.accusationsData!) : null,
         [hasAccu, snapshot.accusationsData],
+    );
+    const hypothesesCount = useMemo(
+        () =>
+            hasHypotheses
+                ? countJsonArrayItems(snapshot.hypothesesData!)
+                : null,
+        [hasHypotheses, snapshot.hypothesesData],
     );
 
     useEffect(() => {
@@ -463,6 +472,14 @@ export function ShareImportPage({
                                         <li data-share-import-bullet="accusations">
                                             {t("importIncludesAccusations", {
                                                 count: accuCount,
+                                            })}
+                                        </li>
+                                    ) : null}
+                                    {hasHypotheses &&
+                                    hypothesesCount !== null ? (
+                                        <li data-share-import-bullet="hypotheses">
+                                            {t("importIncludesHypotheses", {
+                                                count: hypothesesCount,
                                             })}
                                         </li>
                                     ) : null}

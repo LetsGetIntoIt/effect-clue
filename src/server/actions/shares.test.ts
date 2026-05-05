@@ -21,6 +21,7 @@ import {
     accusationsCodec,
     cardPackCodec,
     handSizesCodec,
+    hypothesesCodec,
     knownCardsCodec,
     playersCodec,
     suggestionsCodec,
@@ -41,6 +42,7 @@ interface RecordedInsert {
     readonly knownCardsData: string | null;
     readonly suggestionsData: string | null;
     readonly accusationsData: string | null;
+    readonly hypothesesData: string | null;
 }
 const recordedInserts: RecordedInsert[] = [];
 
@@ -179,6 +181,13 @@ const SAMPLE_ACCUSATIONS = JSON.stringify([
         loggedAt: 1_700_000_000_000,
     },
 ]);
+const SAMPLE_HYPOTHESES = JSON.stringify([
+    {
+        owner: { _tag: "Player", player: Player("Alice") },
+        card: Card("card-scarlet"),
+        value: "Y",
+    },
+]);
 
 /** Verify a JSON string round-trips through its codec — used in the
  * smoke tests below to make sure SAMPLE_* are valid before we hand
@@ -202,6 +211,7 @@ assertRoundTrips("handSizes", SAMPLE_HAND_SIZES, handSizesCodec);
 assertRoundTrips("knownCards", SAMPLE_KNOWN_CARDS, knownCardsCodec);
 assertRoundTrips("suggestions", SAMPLE_SUGGESTIONS, suggestionsCodec);
 assertRoundTrips("accusations", SAMPLE_ACCUSATIONS, accusationsCodec);
+assertRoundTrips("hypotheses", SAMPLE_HYPOTHESES, hypothesesCodec);
 
 /**
  * Mirror of the action's own column projection. Used by the test
@@ -234,6 +244,10 @@ const projectInsert = (id: string, input: unknown): RecordedInsert => {
         accusationsData:
             kind === "invite" || kind === "transfer"
                 ? ((obj["accusationsData"] as string | undefined) ?? null)
+                : null,
+        hypothesesData:
+            kind === "transfer"
+                ? ((obj["hypothesesData"] as string | undefined) ?? null)
                 : null,
     };
 };
@@ -282,6 +296,7 @@ describe("createShare — universal sign-in", () => {
             knownCardsData: SAMPLE_KNOWN_CARDS,
             suggestionsData: SAMPLE_SUGGESTIONS,
             accusationsData: SAMPLE_ACCUSATIONS,
+            hypothesesData: SAMPLE_HYPOTHESES,
         });
         expect(result).toBeInstanceOf(Error);
         expect((result as Error).message).toContain(
@@ -345,9 +360,10 @@ describe("createShare — kind dispatch (signed-in)", () => {
         expect(insert.suggestionsData).toBe(SAMPLE_SUGGESTIONS);
         expect(insert.accusationsData).toBe(SAMPLE_ACCUSATIONS);
         expect(insert.knownCardsData).toBeNull();
+        expect(insert.hypothesesData).toBeNull();
     });
 
-    test("kind: transfer → all six columns populated", async () => {
+    test("kind: transfer → all transfer columns populated", async () => {
         setMockSession(SIGNED_IN);
         await callCreateShare({
             kind: "transfer",
@@ -357,6 +373,7 @@ describe("createShare — kind dispatch (signed-in)", () => {
             knownCardsData: SAMPLE_KNOWN_CARDS,
             suggestionsData: SAMPLE_SUGGESTIONS,
             accusationsData: SAMPLE_ACCUSATIONS,
+            hypothesesData: SAMPLE_HYPOTHESES,
         });
         const insert = recordedInserts[0]!;
         expect(insert.cardPackData).toBe(SAMPLE_PACK);
@@ -365,6 +382,7 @@ describe("createShare — kind dispatch (signed-in)", () => {
         expect(insert.knownCardsData).toBe(SAMPLE_KNOWN_CARDS);
         expect(insert.suggestionsData).toBe(SAMPLE_SUGGESTIONS);
         expect(insert.accusationsData).toBe(SAMPLE_ACCUSATIONS);
+        expect(insert.hypothesesData).toBe(SAMPLE_HYPOTHESES);
     });
 });
 

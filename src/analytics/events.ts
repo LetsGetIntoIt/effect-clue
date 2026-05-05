@@ -15,9 +15,10 @@
  *                         priorSuggestionEdited
  *   Solve outcome       : caseFileSolved (deducer narrowed every category
  *                         to exactly one candidate), gameAbandoned
- *   Feature usage       : whyTooltipOpened, checklistRowClicked,
- *                         undoUsed, redoUsed, settingsOpened,
- *                         languageChanged, localstorageCleared
+ *   Feature usage       : whyTooltipOpened, hypothesisChanged,
+ *                         checklistRowClicked, undoUsed, redoUsed,
+ *                         settingsOpened, languageChanged,
+ *                         localstorageCleared
  *   Onboarding / splash : splashScreenViewed, splashScreenDismissed,
  *                         youtubeEmbedPlayed, aboutLinkClicked
  *   Onboarding tour     : tourStarted, tourStepAdvanced, tourStepViewed,
@@ -221,6 +222,14 @@ export const whyTooltipOpened = (props: {
     /** See `deductionRevealed.categoryName` — same free-form rationale. */
     categoryName: string;
 }): void => capture("why_tooltip_opened", props);
+
+export const hypothesisChanged = (props: {
+    /** See `deductionRevealed.categoryName` — same free-form rationale. */
+    categoryName: string;
+    selectedValue: "Y" | "N" | "off";
+    status: "verified" | "falsified" | "plausible" | "blocked" | "off";
+    impactCount: number;
+}): void => capture("hypothesis_changed", props);
 
 export const checklistRowClicked = (props: {
     cardType: "suspect" | "weapon" | "room";

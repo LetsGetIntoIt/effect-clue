@@ -60,7 +60,7 @@ vi.mock("motion/react", () => {
     };
 });
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Clue } from "../Clue";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
 import { seedOnboardingDismissed } from "../../test-utils/onboardingSeed";
@@ -130,6 +130,63 @@ describe("Checklist — deduce mode — cell affordances", () => {
         }
         // At least one body cell exists.
         expect(bodyCells.length).toBeGreaterThan(0);
+    });
+
+    test("blank play cells open a hypothesis control and render a badge without the contradiction banner", async () => {
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitForDeduceChecklist();
+        const cell = document.querySelector<HTMLElement>(
+            "[data-cell-row='0'][data-cell-col='0']",
+        );
+        expect(cell).not.toBeNull();
+
+        fireEvent.click(cell!);
+        await screen.findByText("noDeductionYet");
+        fireEvent.click(screen.getByRole("button", { name: "Y" }));
+
+        await waitFor(() => {
+            const updatedCell = document.querySelector<HTMLElement>(
+                "[data-cell-row='0'][data-cell-col='0']",
+            );
+            expect(updatedCell?.textContent).toContain("Y?");
+        });
+        expect(screen.queryByText("bannerTitle")).toBeNull();
+    });
+
+    test("moving from a cell into the hypothesis popover keeps it open so its buttons are clickable", async () => {
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitForDeduceChecklist();
+        const cell = document.querySelector<HTMLElement>(
+            "[data-cell-row='0'][data-cell-col='0']",
+        );
+        const transitCell = document.querySelector<HTMLElement>(
+            "[data-cell-row='1'][data-cell-col='0']",
+        );
+        const checklist = document.getElementById("checklist");
+        expect(cell).not.toBeNull();
+        expect(transitCell).not.toBeNull();
+        expect(checklist).not.toBeNull();
+
+        fireEvent.click(cell!);
+        const contentText = await screen.findByText("noDeductionYet");
+        const content = contentText.closest<HTMLElement>(
+            '[data-popover-zone="checklist"]',
+        );
+        expect(content).not.toBeNull();
+
+        fireEvent.pointerLeave(cell!, { relatedTarget: content });
+        fireEvent.pointerEnter(transitCell!, { relatedTarget: cell });
+        fireEvent.pointerLeave(transitCell!, { relatedTarget: content });
+        fireEvent.mouseLeave(checklist!, { relatedTarget: content });
+        fireEvent.pointerEnter(content!, { relatedTarget: cell });
+        fireEvent.click(screen.getByRole("button", { name: "Y" }));
+
+        await waitFor(() => {
+            const updatedCell = document.querySelector<HTMLElement>(
+                "[data-cell-row='0'][data-cell-col='0']",
+            );
+            expect(updatedCell?.textContent).toContain("Y?");
+        });
     });
 });
 
@@ -308,38 +365,20 @@ describe("Checklist — case-file deduction popover", () => {
         );
     });
 
-    test("an undeduced case-file cell stays non-interactive (no popover affordance)", async () => {
-        // Same session as above, but deuce-mode renders just the
-        // empty checklist by default — no deductions firing. Look at
-        // a row whose case-file cell has no value: it should NOT
-        // expose role=button or aria-haspopup.
-        // Reuse the empty fresh state by doing nothing extra.
+    test("an undeduced case-file cell exposes the hypothesis popover affordance", async () => {
+        // Empty checklist: no deduction has fired yet, but play-mode
+        // cells still open the contextual popover so the user can add
+        // a hypothesis.
         render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForDeduceChecklist();
-        const allBodyCells = Array.from(
-            document.querySelectorAll<HTMLElement>("[data-cell-row][data-cell-col]"),
+        const rowCells = Array.from(
+            document.querySelectorAll<HTMLElement>("[data-cell-row='0']"),
         );
-        // The case-file column won't advertise data-cell-col when
-        // there's no deduction (it falls back to the plain-td path).
-        // Check: at least one row exists with NO data-cell-col on its
-        // last cell — i.e. the case-file column for an empty state.
-        const lastTrs = Array.from(document.querySelectorAll<HTMLElement>("tr"));
-        const anyRowWithUndeducedCaseFile = lastTrs.some(tr => {
-            const tds = Array.from(tr.querySelectorAll("td"));
-            const last = tds[tds.length - 1];
-            // Plain td case-file cell — no data-cell-col set, no
-            // role attribute.
-            return (
-                last !== undefined
-                && last.getAttribute("data-cell-col") === null
-                && last.getAttribute("role") === null
-            );
-        });
-        expect(anyRowWithUndeducedCaseFile).toBe(true);
-        // Sanity: the body cells we DID find still cover the player
-        // columns (so the assertion above isn't accidentally passing
-        // because of a totally empty grid).
-        expect(allBodyCells.length).toBeGreaterThan(0);
+        const caseFileCell = rowCells[rowCells.length - 1];
+        expect(caseFileCell).toBeDefined();
+        expect(caseFileCell?.getAttribute("role")).toBe("button");
+        expect(caseFileCell?.getAttribute("aria-haspopup")).toBe("dialog");
+        expect(caseFileCell?.getAttribute("data-cell-col")).not.toBeNull();
     });
 });
 

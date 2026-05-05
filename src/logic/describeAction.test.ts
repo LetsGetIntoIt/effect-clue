@@ -72,6 +72,7 @@ const baseState: ClueState = {
     ],
     suggestions: [],
     accusations: [],
+    hypotheses: [],
     uiMode: "checklist",
 };
 

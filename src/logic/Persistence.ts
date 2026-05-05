@@ -8,8 +8,14 @@ import {
 import { Card, Player } from "./GameObjects";
 import { CardEntry, Category, GameSetup } from "./GameSetup";
 import {
-    decodeV6Unknown,
+    CellHypothesis,
+    ownerFromPersisted,
+} from "./Hypothesis";
+import {
+    decodePersistedSessionUnknown,
+    type PersistedSession,
     type PersistedSessionV6,
+    type PersistedSessionV7,
 } from "./PersistenceSchema";
 import {
     newSuggestionId,
@@ -28,8 +34,8 @@ import {
  * older / malformed blob ever shows up, decode returns undefined
  * and the caller falls back to a fresh session.
  */
-interface PersistedGameV6 {
-    readonly version: 6;
+interface PersistedGameV7 {
+    readonly version: 7;
     readonly setup: {
         readonly players: ReadonlyArray<string>;
         readonly categories: ReadonlyArray<{
@@ -64,9 +70,16 @@ interface PersistedGameV6 {
         readonly cards: ReadonlyArray<string>;
         readonly loggedAt: number;
     }>;
+    readonly hypotheses: ReadonlyArray<{
+        readonly owner:
+            | { readonly _tag: "Player"; readonly player: string }
+            | { readonly _tag: "CaseFile" };
+        readonly card: string;
+        readonly value: "Y" | "N";
+    }>;
 }
 
-type PersistedGame = PersistedGameV6;
+type PersistedGame = PersistedGameV7;
 
 export interface GameSession {
     setup: GameSetup;
@@ -74,10 +87,11 @@ export interface GameSession {
     handSizes: ReadonlyArray<{ player: Player; size: number }>;
     suggestions: ReadonlyArray<Suggestion>;
     accusations: ReadonlyArray<Accusation>;
+    hypotheses?: ReadonlyArray<CellHypothesis>;
 }
 
 export const encodeSession = (session: GameSession): PersistedGame => ({
-    version: 6,
+    version: 7,
     setup: {
         players: session.setup.players.map(p => String(p)),
         categories: session.setup.categories.map(c => ({
@@ -112,6 +126,17 @@ export const encodeSession = (session: GameSession): PersistedGame => ({
         cards: accusationCards(a).map(c => String(c)),
         loggedAt: a.loggedAt,
     })),
+    hypotheses: (session.hypotheses ?? []).map(h => ({
+        owner:
+            h.owner._tag === "Player"
+                ? {
+                      _tag: "Player",
+                      player: String(h.owner.player),
+                  }
+                : { _tag: "CaseFile" },
+        card: String(h.card),
+        value: h.value,
+    })),
 });
 
 /**
@@ -119,7 +144,9 @@ export const encodeSession = (session: GameSession): PersistedGame => ({
  * Branded types already flow through the schema, so this is pure
  * construction — no Player(...) / Card(...) wrapping needed.
  */
-const buildSessionFromV6 = (v6: PersistedSessionV6): GameSession => ({
+const buildSessionBase = (
+    v6: PersistedSessionV6 | PersistedSessionV7,
+): GameSession => ({
     setup: GameSetup({
         players: v6.setup.players,
         categories: v6.setup.categories.map(c => Category({
@@ -155,15 +182,33 @@ const buildSessionFromV6 = (v6: PersistedSessionV6): GameSession => ({
         cards: a.cards,
         loggedAt: a.loggedAt,
     })),
+    hypotheses: [],
 });
 
-export const decodeSession = (data: unknown): GameSession | undefined => {
-    const decoded = decodeV6Unknown(data);
-    if (Result.isFailure(decoded)) return undefined;
-    return buildSessionFromV6(decoded.success);
+const buildHypothesesFromV7 = (
+    v7: PersistedSessionV7,
+): ReadonlyArray<CellHypothesis> =>
+    v7.hypotheses.map(h => CellHypothesis({
+        owner: ownerFromPersisted(h.owner),
+        card: h.card,
+        value: h.value,
+    }));
+
+const buildSessionFromPersisted = (session: PersistedSession): GameSession => {
+    const base = buildSessionBase(session);
+    return session.version === 7
+        ? { ...base, hypotheses: buildHypothesesFromV7(session) }
+        : base;
 };
 
-const STORAGE_KEY = "effect-clue.session.v6";
+export const decodeSession = (data: unknown): GameSession | undefined => {
+    const decoded = decodePersistedSessionUnknown(data);
+    if (Result.isFailure(decoded)) return undefined;
+    return buildSessionFromPersisted(decoded.success);
+};
+
+const STORAGE_KEY = "effect-clue.session.v7";
+const LEGACY_STORAGE_KEY_V6 = "effect-clue.session.v6";
 
 export const saveToLocalStorage = (session: GameSession): void => {
     try {
@@ -176,7 +221,9 @@ export const saveToLocalStorage = (session: GameSession): void => {
 
 export const loadFromLocalStorage = (): GameSession | undefined => {
     try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
+        const raw =
+            window.localStorage.getItem(STORAGE_KEY) ??
+            window.localStorage.getItem(LEGACY_STORAGE_KEY_V6);
         if (!raw) return undefined;
         return decodeSession(JSON.parse(raw));
     } catch {

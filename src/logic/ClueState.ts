@@ -1,8 +1,10 @@
 import type { AccusationId } from "./Accusation";
 import type { CardSet } from "./CardSet";
-import type { Card, CardCategory, Player } from "./GameObjects";
+import type { Card, CardCategory, Owner, Player } from "./GameObjects";
 import type { GameSetup } from "./GameSetup";
+import type { CellHypothesis } from "./Hypothesis";
 import type { KnownCard } from "./InitialKnowledge";
+import type { CellValue } from "./Knowledge";
 import type { GameSession } from "./Persistence";
 import type { SuggestionId } from "./Suggestion";
 
@@ -98,6 +100,12 @@ export type ClueAction =
     | { type: "addAccusation"; accusation: DraftAccusation }
     | { type: "updateAccusation"; accusation: DraftAccusation }
     | { type: "removeAccusation"; id: AccusationId }
+    | {
+          type: "setHypothesis";
+          owner: Owner;
+          card: Card;
+          value: CellValue | undefined;
+      }
     | { type: "addPlayer" }
     | { type: "removePlayer"; player: Player }
     | { type: "renamePlayer"; oldName: Player; newName: Player }
@@ -110,5 +118,6 @@ export interface ClueState {
     readonly knownCards: ReadonlyArray<KnownCard>;
     readonly suggestions: ReadonlyArray<DraftSuggestion>;
     readonly accusations: ReadonlyArray<DraftAccusation>;
+    readonly hypotheses: ReadonlyArray<CellHypothesis>;
     readonly uiMode: UiMode;
 }

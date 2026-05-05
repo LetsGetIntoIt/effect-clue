@@ -25,6 +25,7 @@ import {
     accusationsCodec,
     cardPackCodec,
     handSizesCodec,
+    hypothesesCodec,
     knownCardsCodec,
     playersCodec,
     suggestionsCodec,
@@ -84,6 +85,7 @@ const sampleSnapshot = (overrides: {
     knownCards?: boolean;
     suggestions?: boolean;
     accusations?: boolean;
+    hypotheses?: boolean;
 }): ShareSnapshotForHydration => ({
     cardPackData:
         overrides.cardPack !== false
@@ -134,6 +136,16 @@ const sampleSnapshot = (overrides: {
                       accuser: Player("Alice"),
                       cards: [Card("card-scarlet")],
                       loggedAt: 1_700_000_000_000,
+                  },
+              ])
+            : null,
+    hypothesesData:
+        overrides.hypotheses === true
+            ? Schema.encodeSync(hypothesesCodec)([
+                  {
+                      owner: { _tag: "Player", player: Player("Alice") },
+                      card: Card("card-scarlet"),
+                      value: "Y",
                   },
               ])
             : null,
@@ -200,7 +212,7 @@ describe("buildSessionFromSnapshot — variant shapes", () => {
         expect(session.hands).toEqual([]);
     });
 
-    test("transfer snapshot → all six slices populated", () => {
+    test("transfer snapshot → all slices populated, including hypotheses", () => {
         const session = apply(
             sampleSnapshot({
                 cardPack: true,
@@ -209,6 +221,7 @@ describe("buildSessionFromSnapshot — variant shapes", () => {
                 knownCards: true,
                 suggestions: true,
                 accusations: true,
+                hypotheses: true,
             }),
         );
         expect(session.setup.players.length).toBe(2);
@@ -217,6 +230,8 @@ describe("buildSessionFromSnapshot — variant shapes", () => {
         expect(session.hands[0]!.cards[0]).toBe(Card("card-scarlet"));
         expect(session.suggestions.length).toBe(1);
         expect(session.accusations.length).toBe(1);
+        expect(session.hypotheses).toHaveLength(1);
+        expect(session.hypotheses?.[0]?.value).toBe("Y");
     });
 
     test("empty snapshot (no pack) → falls back to receiver pack + receiver players + blank slices", () => {
@@ -343,6 +358,7 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
             handSizes: [{ player: Player("Original-Receiver-1"), size: 1 }],
             suggestions: [],
             accusations: [],
+            hypotheses: [],
         };
         saveToLocalStorage(currentSession);
 

@@ -4,12 +4,13 @@ import { Card, CardCategory, Player } from "./GameObjects";
 import { SuggestionId } from "./Suggestion";
 
 /**
- * Effect Schema definitions for the persisted session shape (v6).
+ * Effect Schema definitions for persisted session shapes.
  *
- * The app is pre-production, so there's a single on-disk format —
- * writes go to v6, reads only accept v6. If an older / malformed blob
- * shows up, decode returns `Result.Failure` and the caller falls back
- * to a fresh session. No migration chain, no legacy schemas.
+ * The app is pre-production, so we keep the migration surface narrow:
+ * writes go to the latest version, reads accept the latest version
+ * plus the immediately-previous format needed for in-place upgrades.
+ * If an older / malformed blob shows up, decode returns
+ * `Result.Failure` and the caller falls back to a fresh session.
  *
  * v6 adds the `loggedAt: number` field to each suggestion + accusation,
  * recording the millisecond timestamp at which it was logged. Powers
@@ -77,6 +78,22 @@ const PersistedAccusationSchema = Schema.Struct({
     loggedAt: Schema.Number,
 });
 
+const PersistedOwnerSchema = Schema.Union([
+    Schema.Struct({
+        _tag: Schema.Literal("Player"),
+        player: PlayerSchema,
+    }),
+    Schema.Struct({
+        _tag: Schema.Literal("CaseFile"),
+    }),
+]);
+
+const PersistedHypothesisSchema = Schema.Struct({
+    owner: PersistedOwnerSchema,
+    card: CardSchema,
+    value: Schema.Literals(["Y", "N"]),
+});
+
 /**
  * Convenience array wrappers for the share codec — the shares wire
  * format ships these as top-level JSON arrays rather than wrapped
@@ -87,6 +104,7 @@ export const HandSizesArraySchema = Schema.Array(PersistedHandSizeSchema);
 export const HandsArraySchema = Schema.Array(PersistedHandSchema);
 export const SuggestionsArraySchema = Schema.Array(PersistedSuggestionSchema);
 export const AccusationsArraySchema = Schema.Array(PersistedAccusationSchema);
+export const HypothesesArraySchema = Schema.Array(PersistedHypothesisSchema);
 
 /**
  * Wire shape for the card-pack half of a share. The `name` field is
@@ -106,7 +124,8 @@ export const CardSetSchema = Schema.Struct({
 });
 
 /**
- * Canonical v6 session shape. The only version the decoder accepts.
+ * Legacy v6 session shape. The v7 decoder path normalizes this to
+ * `hypotheses: []` so older saved games hydrate without data loss.
  */
 const PersistedSessionV6Schema = Schema.Struct({
     version: Schema.Literal(6),
@@ -117,6 +136,21 @@ const PersistedSessionV6Schema = Schema.Struct({
     accusations: Schema.Array(PersistedAccusationSchema),
 });
 
+const PersistedSessionV7Schema = Schema.Struct({
+    version: Schema.Literal(7),
+    setup: PersistedGameSetupSchema,
+    hands: Schema.Array(PersistedHandSchema),
+    handSizes: Schema.Array(PersistedHandSizeSchema),
+    suggestions: Schema.Array(PersistedSuggestionSchema),
+    accusations: Schema.Array(PersistedAccusationSchema),
+    hypotheses: Schema.Array(PersistedHypothesisSchema),
+});
+
+const PersistedSessionSchema = Schema.Union([
+    PersistedSessionV7Schema,
+    PersistedSessionV6Schema,
+]);
+
 /**
  * Result-returning decoder. Hands back `Result<session, SchemaError>` —
  * callers decide whether to surface the error or fall back to a fresh
@@ -126,9 +160,15 @@ export const decodeV6Unknown = Schema.decodeUnknownResult(
     PersistedSessionV6Schema,
 );
 
+export const decodePersistedSessionUnknown = Schema.decodeUnknownResult(
+    PersistedSessionSchema,
+);
+
 /**
  * Runtime type of a decoded v6 session — the branded, Schema-validated
  * payload `decodeV6Unknown` hands back. Callers construct the
  * GameSession domain value from this.
  */
 export type PersistedSessionV6 = Schema.Schema.Type<typeof PersistedSessionV6Schema>;
+export type PersistedSessionV7 = Schema.Schema.Type<typeof PersistedSessionV7Schema>;
+export type PersistedSession = Schema.Schema.Type<typeof PersistedSessionSchema>;

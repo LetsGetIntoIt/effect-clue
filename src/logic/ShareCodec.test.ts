@@ -21,6 +21,7 @@ import {
     accusationsCodec,
     cardPackCodec,
     handSizesCodec,
+    hypothesesCodec,
     knownCardsCodec,
     playersCodec,
     suggestionsCodec,
@@ -183,6 +184,28 @@ describe("accusationsCodec", () => {
         expect(Result.isSuccess(decoded)).toBe(true);
         if (Result.isSuccess(decoded)) {
             expect(decoded.success[0]!.accuser).toBe(Player("Alice"));
+        }
+    });
+});
+
+describe("hypothesesCodec", () => {
+    test("round-trips a cell hypothesis in the persisted shape", () => {
+        const hypotheses = [
+            {
+                owner: { _tag: "Player" as const, player: Player("Alice") },
+                card: Card("card-scarlet"),
+                value: "Y" as const,
+            },
+        ];
+        const encoded = encode(hypothesesCodec)(hypotheses);
+        const decoded = decode(hypothesesCodec)(encoded);
+        expect(Result.isSuccess(decoded)).toBe(true);
+        if (Result.isSuccess(decoded)) {
+            expect(decoded.success[0]!.owner).toEqual({
+                _tag: "Player",
+                player: Player("Alice"),
+            });
+            expect(decoded.success[0]!.value).toBe("Y");
         }
     });
 });

@@ -42,7 +42,7 @@
         "redoAria": "Redo",
         "redoTitle": "Redo (⌘⇧Z / Ctrl+Shift+Z)",
         "newGame": "New game{shortcut}",
-        "newGameConfirm": "Start a new game? This will clear all players, cards, known hands, and suggestions from your current game."
+        "newGameConfirm": "Start a new game? This will clear all players, cards, known hands, suggestions, and hypotheses from your current game."
     },
     "history": {
         "undoTooltip": "Undo: {description}",
@@ -74,7 +74,9 @@
             "updateAccusation": "editing Accusation #{number} by {player} ({cards})",
             "updateAccusationUnknown": "editing an accusation",
             "removeAccusation": "removing Accusation #{number} by {player} ({cards})",
-            "removeAccusationUnknown": "removing an accusation"
+            "removeAccusationUnknown": "removing an accusation",
+            "setHypothesis": "setting a hypothesis that {owner} has {card} = {value}",
+            "clearHypothesis": "clearing the hypothesis for {owner} / {card}"
         }
     },
     "setup": {
@@ -127,6 +129,26 @@
         "whyHeader": "Why this value:",
         "whyLine": "{index}. {headline}{iter, select, none {} other { (iter {iter})}}: {detail}",
         "footnoteLine": "Candidate for suggestion {labels} — refuter's unseen card could be here."
+    },
+    "hypotheses": {
+        "label": "Hypothesis",
+        "off": "Off",
+        "controlAria": "Hypothesis value",
+        "cellAria": "Open notes for {owner} / {card}",
+        "noDeductionYet": "No deduction yet.",
+        "statusOff": "Off",
+        "statusPending": "Checking…",
+        "statusVerified": "{value} is verified by the current evidence.",
+        "statusFalsified": "{value} is falsified by the current evidence.",
+        "statusBlocked": "Resolve the current contradiction first.",
+        "statusPlausible": "{value} is plausible and would reveal {count, plural, =0 {no other cells} one {# other cell} other {# other cells}}.",
+        "summaryLine": "Hypotheses: {parts}",
+        "summary": {
+            "plausible": "{count, plural, one {# plausible} other {# plausible}}",
+            "verified": "{count, plural, one {# verified} other {# verified}}",
+            "falsified": "{count, plural, one {# falsified} other {# falsified}}",
+            "blocked": "{count, plural, one {# blocked} other {# blocked}}"
+        }
     },
     "reasons": {
         "suggestionHeadline": "Suggestion #{number}",
@@ -337,6 +359,7 @@
         "importIncludesKnownCards": "Known cards ({count})",
         "importIncludesSuggestions": "Suggestions ({count})",
         "importIncludesAccusations": "Accusations ({count})",
+        "importIncludesHypotheses": "Hypotheses ({count})",
         "importEmpty": "This share is empty — nothing to import.",
         "missingTitle": "Oops, we couldn't solve this one",
         "missingBody": "This share link doesn't exist, or it expired. Ask your friend to send a new one.",

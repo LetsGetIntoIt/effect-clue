@@ -1,5 +1,5 @@
 /**
- * Effect-Schema codecs for the six wire fields that flow through
+ * Effect-Schema codecs for the wire fields that flow through
  * the M9 share path.
  *
  * The shares feature serialises sub-slices of a `GameSession` to
@@ -24,6 +24,7 @@ import {
     CardSetSchema,
     HandSizesArraySchema,
     HandsArraySchema,
+    HypothesesArraySchema,
     PlayersArraySchema,
     SuggestionsArraySchema,
 } from "./PersistenceSchema";
@@ -34,3 +35,4 @@ export const handSizesCodec = Schema.fromJsonString(HandSizesArraySchema);
 export const knownCardsCodec = Schema.fromJsonString(HandsArraySchema);
 export const suggestionsCodec = Schema.fromJsonString(SuggestionsArraySchema);
 export const accusationsCodec = Schema.fromJsonString(AccusationsArraySchema);
+export const hypothesesCodec = Schema.fromJsonString(HypothesesArraySchema);

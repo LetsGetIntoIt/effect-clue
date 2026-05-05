@@ -37,6 +37,7 @@ import {
     deductionRevealed,
     gameSetupStarted,
     gameStarted,
+    hypothesisChanged,
 } from "../analytics/events";
 import {
     claimCaseFileSolved,
@@ -46,7 +47,7 @@ import {
     setupDurationMs,
     startSetup,
 } from "../analytics/gameSession";
-import type { Cell, CellValue, Knowledge } from "../logic/Knowledge";
+import { Cell, type CellValue, type Knowledge } from "../logic/Knowledge";
 import { chainFor } from "../logic/Provenance";
 import {
     buildInitialKnowledge,
@@ -70,6 +71,17 @@ import {
     loadFromLocalStorage,
     saveToLocalStorage,
 } from "../logic/Persistence";
+import {
+    cellOfHypothesis,
+    evaluateHypotheses,
+    findEvaluationForCell,
+    hypothesisKey,
+    pruneHypothesesToSetup,
+    renamePlayerInHypotheses,
+    setHypothesisForCell,
+    type CellHypothesis,
+    type HypothesisEvaluation,
+} from "../logic/Hypothesis";
 import {
     loadGameLifecycleState,
     markGameCreated,
@@ -141,6 +153,7 @@ const initialState: ClueState = {
     knownCards: [],
     suggestions: [],
     accusations: [],
+    hypotheses: [],
     uiMode: "setup",
 };
 
@@ -169,6 +182,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 handSizes: [],
                 suggestions: [],
                 accusations: [],
+                hypotheses: [],
             };
 
         case "setSetup":
@@ -380,6 +394,17 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 ),
             };
 
+        case "setHypothesis": {
+            const nextHypotheses = setHypothesisForCell(
+                state.hypotheses,
+                Cell(action.owner, action.card),
+                action.value,
+            );
+            return nextHypotheses === state.hypotheses
+                ? state
+                : { ...state, hypotheses: nextHypotheses };
+        }
+
         case "addPlayer": {
             const existing = new Set(
                 state.setup.players.map(p => String(p)),
@@ -409,6 +434,11 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 ),
                 handSizes: state.handSizes.filter(
                     ([p]) => p !== action.player,
+                ),
+                hypotheses: state.hypotheses.filter(
+                    h =>
+                        h.owner._tag !== "Player" ||
+                        h.owner.player !== action.player,
                 ),
                 suggestions: state.suggestions
                     .filter(s => s.suggester !== action.player)
@@ -446,6 +476,11 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                         (p === oldName
                             ? ([newName, size] as const)
                             : ([p, size] as const)),
+                ),
+                hypotheses: renamePlayerInHypotheses(
+                    state.hypotheses,
+                    oldName,
+                    newName,
                 ),
                 suggestions: state.suggestions.map(s => ({
                     ...s,
@@ -492,6 +527,10 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     accuser: a.accuser,
                     cards: Array.from(a.cards),
                 })),
+                hypotheses: pruneHypothesesToSetup(
+                    session.setup,
+                    session.hypotheses ?? [],
+                ),
             };
         }
     }
@@ -512,6 +551,7 @@ interface ClueDerived {
     readonly deductionResult: DeductionResult;
     readonly provenance: Provenance | undefined;
     readonly footnotes: FootnoteMap;
+    readonly hypothesisEvaluations: ReadonlyArray<HypothesisEvaluation>;
 }
 
 const deriveState = (
@@ -763,8 +803,14 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         gameStartedRef.current =
             state.knownCards.length > 0
             || state.suggestions.length > 0
-            || state.accusations.length > 0;
-    }, [state.knownCards, state.suggestions, state.accusations]);
+            || state.accusations.length > 0
+            || state.hypotheses.length > 0;
+    }, [
+        state.knownCards,
+        state.suggestions,
+        state.accusations,
+        state.hypotheses,
+    ]);
 
     // Keyboard bindings wired via the central keyMap module. Each
     // useGlobalShortcut installs one window keydown listener that only
@@ -964,6 +1010,28 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         [suggestionsAsData, initialKnowledge, deductionResult, deduceLayer],
     );
 
+    const hypothesisEvaluations = useMemo(
+        () =>
+            TelemetryRuntime.runSync(
+                evaluateHypotheses({
+                    setup: state.setup,
+                    suggestions: suggestionsAsData,
+                    accusations: accusationsAsData,
+                    initialKnowledge,
+                    factualResult: deductionResult,
+                    hypotheses: state.hypotheses,
+                }),
+            ),
+        [
+            state.setup,
+            state.hypotheses,
+            suggestionsAsData,
+            accusationsAsData,
+            initialKnowledge,
+            deductionResult,
+        ],
+    );
+
     const derived: ClueDerived = useMemo(
         () => ({
             suggestionsAsData,
@@ -972,6 +1040,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             deductionResult,
             provenance,
             footnotes,
+            hypothesisEvaluations,
         }),
         [
             suggestionsAsData,
@@ -980,6 +1049,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             deductionResult,
             provenance,
             footnotes,
+            hypothesisEvaluations,
         ],
     );
 
@@ -1088,6 +1158,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             })),
             suggestions: suggestionsAsData,
             accusations: accusationsAsData,
+            hypotheses: state.hypotheses,
         };
         saveToLocalStorage(session);
         queryClient.setQueryData(gameSessionQueryKey, session);
@@ -1185,11 +1256,70 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         state.suggestions.length,
     ]);
 
+    const prevHypothesesForAnalyticsRef =
+        useRef<ReadonlyArray<ReturnType<typeof hypothesisSnapshot>> | null>(
+            null,
+        );
+    useEffect(() => {
+        if (!hydrated) return;
+        const current = state.hypotheses.map(hypothesisSnapshot);
+        const prev = prevHypothesesForAnalyticsRef.current;
+        prevHypothesesForAnalyticsRef.current = current;
+        if (prev === null) return;
+
+        const prevByKey = new Map(prev.map(h => [h.key, h.value] as const));
+        const currentByKey = new Map(
+            current.map(h => [h.key, h.value] as const),
+        );
+        const changedKeys = new Set([
+            ...prevByKey.keys(),
+            ...currentByKey.keys(),
+        ]);
+        for (const key of changedKeys) {
+            const previousValue = prevByKey.get(key);
+            const currentValue = currentByKey.get(key);
+            if (previousValue === currentValue) continue;
+
+            const hypothesis = state.hypotheses.find(
+                h => hypothesisKey(h) === key,
+            );
+            const cell =
+                hypothesis !== undefined ? cellOfHypothesis(hypothesis) : null;
+            const card =
+                hypothesis?.card ?? prev.find(h => h.key === key)?.card;
+            const catId =
+                card === undefined
+                    ? undefined
+                    : categoryOfCard(state.setup.cardSet, card);
+            const evaluation =
+                cell === null
+                    ? undefined
+                    : findEvaluationForCell(
+                          derived.hypothesisEvaluations,
+                          cell,
+                      );
+            hypothesisChanged({
+                categoryName: catId
+                    ? resolveCategoryName(state.setup.cardSet, catId)
+                    : "",
+                selectedValue: currentValue ?? "off",
+                status: evaluation?.status ?? "off",
+                impactCount: evaluation?.impactCount ?? 0,
+            });
+        }
+    }, [
+        hydrated,
+        state.hypotheses,
+        state.setup.cardSet,
+        derived.hypothesisEvaluations,
+    ]);
+
     const hasGameData = useCallback((): boolean => {
         if (state.knownCards.length > 0) return true;
         if (state.handSizes.length > 0) return true;
         if (state.suggestions.length > 0) return true;
         if (state.accusations.length > 0) return true;
+        if (state.hypotheses.length > 0) return true;
         const players = state.setup.players;
         if (players.length !== DEFAULT_SETUP.players.length) return true;
         for (let i = 0; i < players.length; i++) {
@@ -1266,6 +1396,12 @@ const groupKnownCardsByPlayer = (
     return Array.from(by.entries(), ([player, cards]) => ({ player, cards }));
 };
 
+const hypothesisSnapshot = (hypothesis: CellHypothesis) => ({
+    key: hypothesisKey(hypothesis),
+    card: hypothesis.card,
+    value: hypothesis.value,
+});
+
 /**
  * When the user edits the setup (e.g. removes a card), filter out
  * references to players/cards that no longer exist. Suggestions whose
@@ -1315,5 +1451,6 @@ const pruneSessionToSetup = (
         accusations: state.accusations
             .filter(a => playerSet.has(String(a.accuser)))
             .filter(a => a.cards.every(c => cardIdSet.has(String(c)))),
+        hypotheses: pruneHypothesesToSetup(setup, state.hypotheses),
     };
 };

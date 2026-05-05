@@ -24,7 +24,7 @@
  *
  * Persistence side effects: the share landing page intentionally sits
  * outside the play shell, so it must not call `useClue()`. Instead it
- * writes the decoded session directly to the v6 persistence slot; the
+ * writes the decoded session directly to the current persistence slot; the
  * next `/play` mount reads it through the normal `<ClueProvider>`
  * hydration path.
  */
@@ -53,10 +53,15 @@ import {
     accusationsCodec,
     cardPackCodec,
     handSizesCodec,
+    hypothesesCodec,
     knownCardsCodec,
     playersCodec,
     suggestionsCodec,
 } from "../../logic/ShareCodec";
+import {
+    CellHypothesis,
+    ownerFromPersisted,
+} from "../../logic/Hypothesis";
 import { newSuggestionId, Suggestion } from "../../logic/Suggestion";
 
 export interface ShareSnapshotForHydration {
@@ -66,6 +71,7 @@ export interface ShareSnapshotForHydration {
     readonly knownCardsData: string | null;
     readonly suggestionsData: string | null;
     readonly accusationsData: string | null;
+    readonly hypothesesData?: string | null;
 }
 
 // Wire-format field names. Module-scope so they don't trip the
@@ -77,6 +83,7 @@ const F_HAND_SIZES_DATA = "handSizesData";
 const F_KNOWN_CARDS_DATA = "knownCardsData";
 const F_SUGGESTIONS_DATA = "suggestionsData";
 const F_ACCUSATIONS_DATA = "accusationsData";
+const F_HYPOTHESES_DATA = "hypothesesData";
 
 const DECODE_ERROR_PREFIX = "share snapshot decode failed: ";
 
@@ -235,12 +242,28 @@ export const buildSessionFromSnapshot = (
               )
             : [];
 
+    const hypotheses =
+        snapshot.hypothesesData != null
+            ? decodeField(
+                  F_HYPOTHESES_DATA,
+                  snapshot.hypothesesData,
+                  hypothesesCodec,
+              ).map((h) =>
+                  CellHypothesis({
+                      owner: ownerFromPersisted(h.owner),
+                      card: h.card,
+                      value: h.value,
+                  }),
+              )
+            : [];
+
     return {
         setup,
         hands,
         handSizes,
         suggestions,
         accusations,
+        hypotheses,
     };
 };
 

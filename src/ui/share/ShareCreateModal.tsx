@@ -10,8 +10,9 @@
  *                   any. Entries: setup pane, overflow menu.
  *   - "transfer"  — move this game to another device. Sends
  *                   everything (pack + players + hand sizes + known
- *                   cards + suggestions + accusations). Renders the
- *                   privacy warning. Entry: overflow menu only.
+ *                   cards + suggestions + accusations + hypotheses).
+ *                   Renders the privacy warning. Entry: overflow
+ *                   menu only.
  *
  * Universal sign-in: the server requires every share to have an
  * authenticated, non-anonymous owner regardless of variant. The CTA
@@ -59,10 +60,12 @@ import {
     accusationsCodec,
     cardPackCodec,
     handSizesCodec,
+    hypothesesCodec,
     knownCardsCodec,
     playersCodec,
     suggestionsCodec,
 } from "../../logic/ShareCodec";
+import { ownerToPersisted } from "../../logic/Hypothesis";
 import {
     createShare,
     type CreateShareInput,
@@ -234,6 +237,14 @@ const projectAccusation = (a: GameSession["accusations"][number]) => ({
     loggedAt: a.loggedAt,
 });
 
+const projectHypothesis = (
+    h: NonNullable<GameSession["hypotheses"]>[number],
+) => ({
+    owner: ownerToPersisted(h.owner),
+    card: h.card,
+    value: h.value,
+});
+
 /**
  * Build the wire payload for a `pack` share — pack only, no game
  * state. Used by the card-pack-row and per-pack-picker entries.
@@ -281,26 +292,36 @@ const buildInviteInput = (
 
 /**
  * Build the wire payload for a `transfer` share — everything,
- * including known cards. Same projection as invite plus knownCards.
+ * including known cards and private hypotheses when any exist.
  */
 const buildTransferInput = (
     session: GameSession,
     packName: string | undefined,
-): CreateShareInput => ({
-    kind: VARIANT_TRANSFER,
-    cardPackData: Schema.encodeSync(cardPackCodec)(
-        projectCardSet(session.setup.cardSet, packName),
-    ),
-    playersData: Schema.encodeSync(playersCodec)(session.setup.players),
-    handSizesData: Schema.encodeSync(handSizesCodec)(session.handSizes),
-    knownCardsData: Schema.encodeSync(knownCardsCodec)(session.hands),
-    suggestionsData: Schema.encodeSync(suggestionsCodec)(
-        session.suggestions.map(projectSuggestion),
-    ),
-    accusationsData: Schema.encodeSync(accusationsCodec)(
-        session.accusations.map(projectAccusation),
-    ),
-});
+): CreateShareInput => {
+    const hypotheses = session.hypotheses ?? [];
+    return {
+        kind: VARIANT_TRANSFER,
+        cardPackData: Schema.encodeSync(cardPackCodec)(
+            projectCardSet(session.setup.cardSet, packName),
+        ),
+        playersData: Schema.encodeSync(playersCodec)(session.setup.players),
+        handSizesData: Schema.encodeSync(handSizesCodec)(session.handSizes),
+        knownCardsData: Schema.encodeSync(knownCardsCodec)(session.hands),
+        suggestionsData: Schema.encodeSync(suggestionsCodec)(
+            session.suggestions.map(projectSuggestion),
+        ),
+        accusationsData: Schema.encodeSync(accusationsCodec)(
+            session.accusations.map(projectAccusation),
+        ),
+        ...(hypotheses.length > 0
+            ? {
+                  hypothesesData: Schema.encodeSync(hypothesesCodec)(
+                      hypotheses.map(projectHypothesis),
+                  ),
+              }
+            : {}),
+    };
+};
 
 interface ShareCreateModalProps {
     readonly open: boolean;
@@ -423,6 +444,7 @@ export function ShareCreateModal({
             })),
             suggestions: derived.suggestionsAsData,
             accusations: derived.accusationsAsData,
+            hypotheses: state.hypotheses,
         };
         if (variant === VARIANT_INVITE) {
             return buildInviteInput(
@@ -439,6 +461,7 @@ export function ShareCreateModal({
         forcedCardPackLabel,
         includeProgress,
         state.handSizes,
+        state.hypotheses,
         state.knownCards,
         state.setup,
         variant,

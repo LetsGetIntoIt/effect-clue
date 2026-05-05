@@ -28,7 +28,7 @@ just summarises what's in the link.
 |---|---|---|---|
 | `pack` | Card-pack row in Setup ("Share this pack" button), per-pack share icon in the "All card packs" picker | Card pack only | Picker entry passes `forcedCardPack` so the share contains the *picked* pack rather than the live setup pack |
 | `invite` | Setup pane near the Start playing CTA, overflow menu ("Invite a player") | Card pack + players + hand sizes; optional checkbox adds suggestions + accusations together when at least one of either has been logged | Checkbox is hidden when neither suggestions nor accusations exist. Label adapts to what's there: "Include all N prior suggestions and M failed accusations", "Include all N prior suggestions", or "Include all M prior failed accusations" |
-| `transfer` | Overflow menu only ("Continue on another device") | Everything: card pack + players + hand sizes + known cards + suggestions + accusations | Renders a prominent privacy warning above the CTA — this link discloses your hand |
+| `transfer` | Overflow menu only ("Continue on another device") | Everything: card pack + players + hand sizes + known cards + suggestions + accusations + hypotheses | Renders a prominent privacy warning above the CTA — this link discloses your hand and solver hunches |
 
 The flow taxonomy intentionally hides the underlying column structure
 from the user. Earlier versions of the modal exposed four toggles
@@ -84,7 +84,7 @@ type CreateShareInput =
   | { kind: "invite"; cardPackData; playersData; handSizesData;
       suggestionsData?; accusationsData? }     // pair both or neither
   | { kind: "transfer"; cardPackData; playersData; handSizesData;
-      knownCardsData; suggestionsData; accusationsData };
+      knownCardsData; suggestionsData; accusationsData; hypothesesData? };
 ```
 
 The server whitelists the fields each `kind` is allowed to carry.
@@ -114,7 +114,7 @@ kind is a wire-and-server change, not a schema change.
 
 ## Effect-Schema-validated wire format
 
-All six wire fields round-trip through Effect `Schema` codecs in
+All share wire fields round-trip through Effect `Schema` codecs in
 [src/logic/ShareCodec.ts](../src/logic/ShareCodec.ts):
 
 ```ts
@@ -124,6 +124,7 @@ export const handSizesCodec   = Schema.fromJsonString(...);
 export const knownCardsCodec  = Schema.fromJsonString(...);
 export const suggestionsCodec = Schema.fromJsonString(...);
 export const accusationsCodec = Schema.fromJsonString(...);
+export const hypothesesCodec = Schema.fromJsonString(...);
 ```
 
 Each codec packages "JSON-string ↔ schema-validated object" into one
@@ -167,7 +168,7 @@ to detect built-ins — the `name` is informational, not authoritative.
      `Card pack: Master Detective` or `Card pack: My Office (custom)`,
      `Players (4): Alice, Bob, Carol, Dana`,
      `Hand sizes`,
-     `Known cards (12)`, etc.
+     `Known cards (12)`, `Hypotheses (3)`, etc.
    - One CTA matched to the inferred receive flow.
 5. Click:
    - Pack-only → decodes `cardPackData`, writes a new custom card pack,
@@ -191,12 +192,14 @@ renders an empty-state message and disables Import.
 
 Migration history:
 - [0004_shares.ts](../src/server/migrations/0004_shares.ts) — initial
-  table with the six nullable snapshot columns + nullable `owner_id`.
+  table with the original six nullable snapshot columns + nullable `owner_id`.
 - [0005_share_expiry_backfill.ts](../src/server/migrations/0005_share_expiry_backfill.ts)
   — sets `expires_at` on legacy rows that pre-dated TTL, plus an
   index for the cron cleanup.
 - [0006_shares_owner_required.ts](../src/server/migrations/0006_shares_owner_required.ts)
   — tightens `owner_id` to `NOT NULL` (M22 universal sign-in).
+- [0007_share_hypotheses.ts](../src/server/migrations/0007_share_hypotheses.ts)
+  — adds nullable `snapshot_hypotheses_data` for transfer shares.
 
 Schema (post-0006):
 
@@ -210,6 +213,7 @@ shares (
   snapshot_known_cards_data   TEXT,
   snapshot_suggestions_data   TEXT,
   snapshot_accusations_data   TEXT,
+  snapshot_hypotheses_data    TEXT,         -- transfer-only JSON-encoded hypotheses
   created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at                  TIMESTAMPTZ,  -- NOW() + SHARE_TTL on insert
   -- index: shares_owner_id_idx, shares_expires_at_idx

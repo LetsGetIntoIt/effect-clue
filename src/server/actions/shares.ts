@@ -32,6 +32,7 @@ import {
     accusationsCodec,
     cardPackCodec,
     handSizesCodec,
+    hypothesesCodec,
     knownCardsCodec,
     playersCodec,
     suggestionsCodec,
@@ -70,6 +71,7 @@ export type CreateShareInput =
           readonly knownCardsData: string;
           readonly suggestionsData: string;
           readonly accusationsData: string;
+          readonly hypothesesData?: string;
       };
 
 interface CreateShareResult {
@@ -84,6 +86,7 @@ interface ShareSnapshot {
     readonly knownCardsData: string | null;
     readonly suggestionsData: string | null;
     readonly accusationsData: string | null;
+    readonly hypothesesData: string | null;
     /**
      * Display name of the share's owner — populated via `LEFT JOIN
      * "user"` in `getShare`. `null` when:
@@ -112,6 +115,7 @@ const F_HAND_SIZES_DATA = "handSizesData";
 const F_KNOWN_CARDS_DATA = "knownCardsData";
 const F_SUGGESTIONS_DATA = "suggestionsData";
 const F_ACCUSATIONS_DATA = "accusationsData";
+const F_HYPOTHESES_DATA = "hypothesesData";
 
 const SUFFIX_UNEXPECTED_FIELD = "unexpected_field";
 const SUFFIX_SUGGESTIONS_PAIR = "suggestions_pair";
@@ -152,6 +156,7 @@ const ALLOWED_KEYS_FOR: Record<string, ReadonlySet<string>> = {
         F_KNOWN_CARDS_DATA,
         F_SUGGESTIONS_DATA,
         F_ACCUSATIONS_DATA,
+        F_HYPOTHESES_DATA,
     ]),
 };
 
@@ -241,12 +246,16 @@ const validateInputShape = (input: unknown): CreateShareInput => {
     const knownCardsData = requireString(F_KNOWN_CARDS_DATA);
     const suggestionsData = requireString(F_SUGGESTIONS_DATA);
     const accusationsData = requireString(F_ACCUSATIONS_DATA);
+    const hypothesesData = optionalString(F_HYPOTHESES_DATA);
     validateJsonField(F_CARD_PACK_DATA, cardPackData, cardPackCodec);
     validateJsonField(F_PLAYERS_DATA, playersData, playersCodec);
     validateJsonField(F_HAND_SIZES_DATA, handSizesData, handSizesCodec);
     validateJsonField(F_KNOWN_CARDS_DATA, knownCardsData, knownCardsCodec);
     validateJsonField(F_SUGGESTIONS_DATA, suggestionsData, suggestionsCodec);
     validateJsonField(F_ACCUSATIONS_DATA, accusationsData, accusationsCodec);
+    if (hypothesesData !== undefined) {
+        validateJsonField(F_HYPOTHESES_DATA, hypothesesData, hypothesesCodec);
+    }
     return {
         kind,
         cardPackData,
@@ -255,6 +264,7 @@ const validateInputShape = (input: unknown): CreateShareInput => {
         knownCardsData,
         suggestionsData,
         accusationsData,
+        ...(hypothesesData !== undefined ? { hypothesesData } : {}),
     };
 };
 
@@ -294,7 +304,7 @@ export async function createShare(
     // INTERVAL receives a clean integer.
     const ttlHours = Math.floor(Duration.toHours(SHARE_TTL));
 
-    // Project the validated input into the six DB columns. Fields the
+    // Project the validated input into the snapshot DB columns. Fields the
     // kind doesn't carry get NULL — the column nullability pattern is
     // the receive-side discriminator (no `kind` column in the table).
     const cardPackData =
@@ -325,6 +335,10 @@ export async function createShare(
             : validated.kind === "invite"
                 ? (validated.accusationsData ?? null)
                 : null;
+    const hypothesesData =
+        validated.kind === "transfer"
+            ? (validated.hypothesesData ?? null)
+            : null;
 
     return withServerAction(
         Effect.gen(function* () {
@@ -338,6 +352,7 @@ export async function createShare(
                     snapshot_known_cards_data,
                     snapshot_suggestions_data,
                     snapshot_accusations_data,
+                    snapshot_hypotheses_data,
                     expires_at
                 ) VALUES (
                     ${id}, ${ownerId},
@@ -347,6 +362,7 @@ export async function createShare(
                     ${knownCardsData},
                     ${suggestionsData},
                     ${accusationsData},
+                    ${hypothesesData},
                     NOW() + (${ttlHours} || ' hours')::INTERVAL
                 )
             `;
@@ -369,6 +385,7 @@ export async function getShare(input: {
                 snapshot_known_cards_data: string | null;
                 snapshot_suggestions_data: string | null;
                 snapshot_accusations_data: string | null;
+                snapshot_hypotheses_data: string | null;
                 owner_id: string | null;
                 owner_name: string | null;
                 owner_is_anonymous: boolean | null;
@@ -380,6 +397,7 @@ export async function getShare(input: {
                        s.snapshot_known_cards_data,
                        s.snapshot_suggestions_data,
                        s.snapshot_accusations_data,
+                       s.snapshot_hypotheses_data,
                        s.owner_id,
                        u.name AS owner_name,
                        u.is_anonymous AS owner_is_anonymous
@@ -413,6 +431,7 @@ export async function getShare(input: {
                 knownCardsData: row.snapshot_known_cards_data,
                 suggestionsData: row.snapshot_suggestions_data,
                 accusationsData: row.snapshot_accusations_data,
+                hypothesesData: row.snapshot_hypotheses_data,
                 ownerName,
                 ownerIsAnonymous,
             };
