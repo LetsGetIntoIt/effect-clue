@@ -18,45 +18,12 @@
  * space-separated `data-tour-anchor` values.
  */
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { forwardRef, createElement, type ReactNode } from "react";
-
-const motionMock = vi.hoisted(() => ({ reducedMotion: false }));
+import { createElement, type ReactNode } from "react";
 
 vi.mock("next-intl", () => {
     const t = (key: string, values?: Record<string, unknown>): string =>
         values ? `${key}:${JSON.stringify(values)}` : key;
     return { useTranslations: () => t };
-});
-
-// Minimal `motion/react` mock so jsdom doesn't trip on Framer's rAF.
-vi.mock("motion/react", () => {
-    const motion = new Proxy(
-        {},
-        {
-            get: (_t, tag: string) =>
-                forwardRef(
-                    (
-                        props: Record<string, unknown>,
-                        ref: React.Ref<HTMLElement>,
-                    ) => {
-                        const {
-                            initial: _i,
-                            animate: _a,
-                            exit: _e,
-                            transition: _tr,
-                            variants: _v,
-                            ...rest
-                        } = props;
-                        return createElement(tag, { ...rest, ref });
-                    },
-                ),
-        },
-    );
-    return {
-        motion,
-        AnimatePresence: ({ children }: { children: ReactNode }) => children,
-        useReducedMotion: () => motionMock.reducedMotion,
-    };
 });
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -66,7 +33,6 @@ import { TourProvider, useTour } from "./TourProvider";
 import { TourPopover } from "./TourPopover";
 
 beforeEach(() => {
-    motionMock.reducedMotion = false;
     Object.defineProperty(window, "scrollX", {
         configurable: true,
         value: 0,
@@ -538,7 +504,7 @@ describe("TourPopover — veil isolation", () => {
         expect(document.body.style.overflow).toBe(before);
     });
 
-    test("out-of-view anchors use native smooth body scroll", () => {
+    test("out-of-view anchors use instant body scroll", () => {
         let api!: ReturnType<typeof useTour>;
         Object.defineProperty(window, "innerHeight", {
             configurable: true,
@@ -579,7 +545,7 @@ describe("TourPopover — veil isolation", () => {
         act(() => api.startTour("setup"));
 
         expect(bodyScrollTo).toHaveBeenCalledWith(
-            expect.objectContaining({ behavior: "smooth" }),
+            expect.objectContaining({ behavior: "auto" }),
         );
     });
 
@@ -630,7 +596,7 @@ describe("TourPopover — veil isolation", () => {
 
         expect(bodyScrollTo).toHaveBeenCalledWith(
             expect.objectContaining({
-                behavior: "smooth",
+                behavior: "auto",
                 left: 0,
             }),
         );
@@ -741,51 +707,6 @@ describe("TourPopover — veil isolation", () => {
         );
     });
 
-    test("out-of-view anchors use instant scroll for reduced motion", () => {
-        motionMock.reducedMotion = true;
-        let api!: ReturnType<typeof useTour>;
-        Object.defineProperty(window, "innerHeight", {
-            configurable: true,
-            value: 500,
-        });
-        Object.defineProperty(window, "innerWidth", {
-            configurable: true,
-            value: 500,
-        });
-        Object.defineProperty(document.body, "scrollHeight", {
-            configurable: true,
-            value: 2000,
-        });
-        Object.defineProperty(document.body, "clientHeight", {
-            configurable: true,
-            value: 500,
-        });
-        const bodyScrollTo = vi.fn();
-        document.body.scrollTo = bodyScrollTo;
-
-        render(
-            <Harness
-                anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
-                ]}
-            >
-                {c => {
-                    api = c;
-                    return null;
-                }}
-            </Harness>,
-            { wrapper: TestQueryClientProvider },
-        );
-        const anchor = screen.getByTestId("card-pack");
-        anchor.getBoundingClientRect = () =>
-            new DOMRect(100, 1000, 100, 100);
-
-        act(() => api.startTour("setup"));
-
-        expect(bodyScrollTo).toHaveBeenCalledWith(
-            expect.objectContaining({ behavior: "auto" }),
-        );
-    });
 });
 
 // -----------------------------------------------------------------------

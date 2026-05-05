@@ -81,6 +81,12 @@ describe("TOURS — setup tour", () => {
         expect(step.sideByViewport?.desktop.side).toBe("left");
         expect(step.sideByViewport?.mobile.side).toBe("top");
     });
+
+    test("setup-start-playing keeps the popover below the near-top CTA", () => {
+        const step = findStep(TOURS.setup, "setup-start-playing");
+        expect(step.side).toBe("bottom");
+        expect(step.align).toBe("end");
+    });
 });
 
 describe("TOURS — checklistSuggest tour", () => {

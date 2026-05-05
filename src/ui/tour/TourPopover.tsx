@@ -42,7 +42,6 @@
 "use client";
 
 import * as Popover from "@radix-ui/react-popover";
-import { useReducedMotion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { XIcon } from "../components/Icons";
@@ -73,7 +72,6 @@ const KEY_ESCAPE = "Escape" as const;
 // Analytics discriminator for tour dismissal via Esc keypress.
 const DISMISS_VIA_ESC = "esc" as const;
 const SCROLL_BEHAVIOR_AUTO: ScrollBehavior = "auto";
-const SCROLL_BEHAVIOR_SMOOTH: ScrollBehavior = "smooth";
 // Attribute we add to the Radix Popover.Content so the keyboard
 // isolator can do an O(1) `popoverContent.contains(eventTarget)` check
 // to allow keyboard events that target the popover's own buttons.
@@ -191,7 +189,6 @@ export function TourPopover() {
         dismissTour,
     } = useTour();
     const { state, dispatch } = useClue();
-    const prefersReducedMotion = useReducedMotion();
 
     // The virtualRef passed into Radix Popover. Each step recomputes
     // it via the effect below.
@@ -305,9 +302,7 @@ export function TourPopover() {
                         + rect.width / 2
                         - (minVisibleLeft + unobscuredWidth / 2)
                     : rect.left - minVisibleLeft;
-            const behavior: ScrollBehavior = prefersReducedMotion
-                ? SCROLL_BEHAVIOR_AUTO
-                : SCROLL_BEHAVIOR_SMOOTH;
+            const behavior: ScrollBehavior = SCROLL_BEHAVIOR_AUTO;
             const body = document.body;
             const html = document.documentElement;
             // Pick whichever element is actually scrollable for each
@@ -415,7 +410,26 @@ export function TourPopover() {
             virtualElementRef.current = {
                 getBoundingClientRect: popoverMeasure,
             };
-            const measured = spotlightMeasure();
+            let measured = spotlightMeasure();
+            // Auto-scroll at most once per step so anchors below the
+            // fold (or off to the side on a horizontally-scrolling
+            // page) come into view. This is deliberately instant:
+            // tour popover positioning depends on stable viewport
+            // geometry, and smooth scrolling leaves the spotlight and
+            // Radix popper measuring a moving target.
+            const scrollTracker = scrolledForStepRef.current;
+            if (
+                scrollTracker.screen !== activeScreen ||
+                scrollTracker.step !== stepIndex
+            ) {
+                scrolledForStepRef.current = {
+                    screen: activeScreen,
+                    step: stepIndex,
+                };
+                if (scrollSpotlightIntoView(measured)) {
+                    measured = spotlightMeasure();
+                }
+            }
             setSpotlight(measured);
             // Bump the Radix-remount key only when the union rect
             // changed enough to matter (sub-pixel jitter doesn't
@@ -427,23 +441,6 @@ export function TourPopover() {
             if (unionKey !== lastUnionKeyRef.current) {
                 lastUnionKeyRef.current = unionKey;
                 setAnchorTick(n => n + 1);
-            }
-            // Auto-scroll at most once per step so anchors below the
-            // fold (or off to the side on a horizontally-scrolling
-            // page) come into view. Native smooth scroll emits scroll
-            // events while it moves; avoiding repeated calls here
-            // keeps the browser's own animation from being cancelled
-            // and restarted by our tracking recomputes.
-            const scrollTracker = scrolledForStepRef.current;
-            if (
-                scrollTracker.screen !== activeScreen ||
-                scrollTracker.step !== stepIndex
-            ) {
-                scrolledForStepRef.current = {
-                    screen: activeScreen,
-                    step: stepIndex,
-                };
-                scrollSpotlightIntoView(measured);
             }
         };
 
@@ -535,7 +532,6 @@ export function TourPopover() {
         stepIndex,
         currentStep,
         state.uiMode,
-        prefersReducedMotion,
     ]);
 
     // While a tour is active, the page beneath the veil should be
