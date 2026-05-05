@@ -15,8 +15,10 @@ import {
     saveToLocalStorage,
     type GameSession,
 } from "./Persistence";
+import { emptyHypotheses } from "./Hypothesis";
 
-const STORAGE_KEY = "effect-clue.session.v6";
+const STORAGE_KEY = "effect-clue.session.v7";
+const LEGACY_STORAGE_KEY_V6 = "effect-clue.session.v6";
 
 const setup = CLASSIC_SETUP_3P;
 const A = Player("Anisha");
@@ -38,6 +40,7 @@ const minimalSession: GameSession = {
     ],
     suggestions: [],
     accusations: [],
+    hypotheses: emptyHypotheses,
 };
 
 const richSession = (): GameSession => ({
@@ -89,6 +92,7 @@ const richSession = (): GameSession => ({
             cards: [MUSTARD, KNIFE, KITCHEN],
         }),
     ],
+    hypotheses: emptyHypotheses,
 });
 
 describe("encode/decode — rich sessions", () => {
@@ -186,11 +190,29 @@ describe("saveToLocalStorage / loadFromLocalStorage", () => {
         expect(loaded?.handSizes).toHaveLength(3);
     });
 
-    test("save writes under the v6-scoped storage key", () => {
+    test("save writes under the v7-scoped storage key", () => {
         saveToLocalStorage(minimalSession);
         const raw = window.localStorage.getItem(STORAGE_KEY);
         expect(raw).not.toBeNull();
-        expect(JSON.parse(raw as string).version).toBe(6);
+        expect(JSON.parse(raw as string).version).toBe(7);
+    });
+
+    test("loads a v6 blob (no hypotheses field) and lifts to v7 with empty hypotheses", () => {
+        const v6Payload = {
+            version: 6,
+            setup: { players: ["Anisha"], categories: [] },
+            hands: [],
+            handSizes: [],
+            suggestions: [],
+            accusations: [],
+        };
+        window.localStorage.setItem(
+            LEGACY_STORAGE_KEY_V6,
+            JSON.stringify(v6Payload),
+        );
+        const loaded = loadFromLocalStorage();
+        expect(loaded).toBeDefined();
+        expect(loaded?.hypotheses).toBeDefined();
     });
 
     test("load returns undefined when the key is missing", () => {

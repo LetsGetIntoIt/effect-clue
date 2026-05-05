@@ -60,6 +60,7 @@ interface ShareSnapshot {
     readonly knownCardsData: string | null;
     readonly suggestionsData: string | null;
     readonly accusationsData: string | null;
+    readonly hypothesesData: string | null;
     readonly ownerName: string | null;
     readonly ownerIsAnonymous: boolean | null;
 }

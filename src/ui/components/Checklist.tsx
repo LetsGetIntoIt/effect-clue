@@ -1,6 +1,14 @@
 "use client";
 
 import { Duration, Equal, Result } from "effect";
+import {
+    displayFor,
+    statusFor,
+    type CellDisplay,
+    type HypothesisStatus,
+    type HypothesisValue,
+} from "../../logic/Hypothesis";
+import { CellWhyPopover, hypothesisValueFor } from "./CellWhyPopover";
 import { useTranslations } from "next-intl";
 import { playerAdded, whyTooltipOpened } from "../../analytics/events";
 import {
@@ -240,6 +248,17 @@ export function Checklist() {
     const provenance = derived.provenance;
     const suggestions = derived.suggestionsAsData;
     const accusations = derived.accusationsAsData;
+    const hypotheses = derived.hypotheses;
+    const jointDeductionResult = derived.jointDeductionResult;
+    const realKnowledge = Result.isSuccess(result) ? result.success : undefined;
+    const jointKnowledge =
+        jointDeductionResult !== undefined &&
+        Result.isSuccess(jointDeductionResult)
+            ? jointDeductionResult.success
+            : undefined;
+    const jointFailed =
+        jointDeductionResult !== undefined &&
+        Result.isFailure(jointDeductionResult);
 
     // Fire `why_tooltip_opened` whenever the popover transitions from
     // closed (or another cell) to open on a new cell. Cells are fresh
@@ -1068,9 +1087,25 @@ export function Checklist() {
                                             owner,
                                             entry.id,
                                         );
+                                        const cellRef = Cell(owner, entry.id);
+                                        const hypothesisValue = hypothesisValueFor(
+                                            hypotheses,
+                                            cellRef,
+                                        );
+                                        const hypothesisStatus = statusFor(
+                                            cellRef,
+                                            realKnowledge,
+                                            jointKnowledge,
+                                            hypotheses,
+                                            jointFailed,
+                                        );
+                                        const display = displayFor(
+                                            value,
+                                            hypothesisStatus,
+                                        );
                                         const footnoteNumbers = footnotesForCell(
                                             footnotes,
-                                            Cell(owner, entry.id),
+                                            cellRef,
                                         );
                                         const isPlayerCell = owner._tag === "Player";
                                         const isHighlighted = cellIsHighlighted(
@@ -1119,11 +1154,6 @@ export function Checklist() {
                                             tDeduce: t,
                                             tReasons,
                                         });
-                                        const tooltipContent = tooltipText ? (
-                                            <div className="whitespace-pre-line">
-                                                {tooltipText}
-                                            </div>
-                                        ) : undefined;
                                         const cellContent = setupCheckbox ? (
                                             <input
                                                 type="checkbox"
@@ -1135,7 +1165,7 @@ export function Checklist() {
                                             />
                                         ) : (
                                             <>
-                                                <AnimatedCellGlyph value={value} />
+                                                <AnimatedCellGlyph display={display} />
                                                 {footnoteNumbers.length > 0 &&
                                                     value === undefined && (
                                                         <sup className="ml-0.5 text-[9px] font-normal text-accent">
@@ -1158,16 +1188,22 @@ export function Checklist() {
                                         // setup is for entering inputs,
                                         // not exploring the deduction
                                         // chain.
+                                        // Drop the deduction-content gate so the
+                                        // popover opens on every play-mode player
+                                        // cell (and play-mode case-file cell). Even
+                                        // a blank cell now hosts the hypothesis
+                                        // control via `<CellWhyPopover>`, so the
+                                        // popover always has something to show.
                                         const popoverInteractive =
-                                            tooltipContent !== undefined
-                                            && !inSetup
+                                            !inSetup
                                             && (playInteractive || !isPlayerCell);
                                         const tdClassName = cellClass(
-                                            value,
+                                            display,
                                             setupInteractive
                                                 || playInteractive
                                                 || popoverInteractive,
                                             isHighlighted,
+                                            hypothesisStatus,
                                         );
                                         const thisCellForHover = Cell(
                                             owner,
@@ -1342,11 +1378,37 @@ export function Checklist() {
                                                 popoverCell,
                                                 thisCell,
                                             );
+                                            const popoverBody = (
+                                                <CellWhyPopover
+                                                    cell={thisCell}
+                                                    setup={setup}
+                                                    status={hypothesisStatus}
+                                                    hypotheses={hypotheses}
+                                                    hypothesisValue={hypothesisValue}
+                                                    onHypothesisChange={(
+                                                        next: HypothesisValue | undefined,
+                                                    ) => {
+                                                        if (next === undefined) {
+                                                            dispatch({
+                                                                type: "clearHypothesis",
+                                                                cell: thisCell,
+                                                            });
+                                                        } else {
+                                                            dispatch({
+                                                                type: "setHypothesis",
+                                                                cell: thisCell,
+                                                                value: next,
+                                                            });
+                                                        }
+                                                    }}
+                                                    whyText={tooltipText}
+                                                />
+                                            );
                                             cell = (
                                                 <InfoPopover
                                                     key={ownerCellKey}
-                                                    content={tooltipContent}
-                                                    variant="accent"
+                                                    content={popoverBody}
+                                                    variant="default"
                                                     open={isOpen}
                                                     onOpenChange={open => {
                                                         if (open) {
@@ -2272,17 +2334,33 @@ const cellLabel = (value: CellValue | undefined): string => {
     return "";
 };
 
+const displayGlyph = (display: CellDisplay): string => {
+    switch (display.tag) {
+        case "real":
+            return cellLabel(display.value);
+        case "hypothesis":
+        case "derived":
+            return "?";
+        case "blank":
+            return "";
+    }
+};
+
 /**
- * Cell Y/N/blank glyph with a short pop-in/out as the value changes.
+ * Cell Y/N/?/blank glyph with a short pop-in/out as the value changes.
  * Using `AnimatePresence` keyed on the glyph means each state swap
  * renders a fresh `<motion.span>` that scales in while the outgoing
  * one scales out — the tween is fast (120ms) so the cell still feels
  * snappy, not animated-heavy. The cell background transition stays
  * in CSS (`transition-colors`) so motion only owns the glyph.
  */
-function AnimatedCellGlyph({ value }: { readonly value: CellValue | undefined }) {
+function AnimatedCellGlyph({
+    display,
+}: {
+    readonly display: CellDisplay;
+}) {
     const transition = useReducedTransition(T_FAST);
-    const glyph = cellLabel(value);
+    const glyph = displayGlyph(display);
     return (
         <AnimatePresence mode={MOTION_POP_LAYOUT} initial={false}>
             {glyph !== "" && (
@@ -2350,16 +2428,37 @@ const CELL_HIGHLIGHTED =
     " z-[var(--z-checklist-cell-hover)] ring-2 ring-accent ring-offset-1 ring-offset-panel";
 
 const cellClass = (
-    value: CellValue | undefined,
+    display: CellDisplay,
     interactive: boolean,
     highlighted: boolean,
+    status: HypothesisStatus,
 ): string => {
     let base = interactive ? `${CELL_BASE}${CELL_INTERACTIVE}` : CELL_BASE;
     if (highlighted) base += CELL_HIGHLIGHTED;
-    // Bg + matching ring-offset color so the focus ring's offset
-    // blends into the cell's own background (mimics the transparent
-    // gap of the outline-based indicator we replaced).
-    if (value === Y) return `${base} bg-yes-bg text-yes focus-visible:ring-offset-yes-bg`;
-    if (value === N) return `${base} bg-no-bg text-no focus-visible:ring-offset-no-bg`;
+    // Direct contradiction (real proves the hypothesis wrong) and
+    // joint conflict get a danger / warning halo so the user can spot
+    // them at a glance even when the cell value matches the real
+    // deduction. The popover surfaces the explanatory copy.
+    if (status.kind === "directlyContradicted") {
+        base += " ring-2 ring-danger ring-inset";
+    } else if (status.kind === "jointlyConflicts") {
+        base += " ring-2 ring-danger/60 ring-inset";
+    }
+    // Pick the color tone from the displayed value (real wins; otherwise
+    // the hypothesis or derived-from-hypothesis value).
+    const tone: CellValue | undefined =
+        display.tag === "real"
+            ? display.value
+            : display.tag === "hypothesis"
+              ? display.value
+              : display.tag === "derived"
+                ? display.value
+                : undefined;
+    if (tone === Y) {
+        return `${base} bg-yes-bg text-yes focus-visible:ring-offset-yes-bg`;
+    }
+    if (tone === N) {
+        return `${base} bg-no-bg text-no focus-visible:ring-offset-no-bg`;
+    }
     return `${base} bg-white focus-visible:ring-offset-white`;
 };

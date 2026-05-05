@@ -55,10 +55,12 @@ import {
     suggestionCards,
     suggestionNonRefuters,
 } from "../../logic/Suggestion";
+import type { Card, Player } from "../../logic/GameObjects";
 import {
     accusationsCodec,
     cardPackCodec,
     handSizesCodec,
+    hypothesesCodec,
     knownCardsCodec,
     playersCodec,
     suggestionsCodec,
@@ -280,8 +282,33 @@ const buildInviteInput = (
 };
 
 /**
+ * Project the in-memory hypothesis HashMap into the wire shape for
+ * sharing. The wire codec re-applies branded types on decode, so the
+ * sender doesn't have to brand on the way out — encodeSync accepts
+ * plain strings and the receiver gets back proper Player/Card brands.
+ */
+type ProjectedHypothesis = {
+    readonly player: Player | null;
+    readonly card: Card;
+    readonly value: "Y" | "N";
+};
+
+const projectHypotheses = (
+    hypotheses: GameSession["hypotheses"],
+): ReadonlyArray<ProjectedHypothesis> => {
+    const out: Array<ProjectedHypothesis> = [];
+    for (const [cell, value] of hypotheses) {
+        const player =
+            cell.owner._tag === "Player" ? cell.owner.player : null;
+        out.push({ player, card: cell.card, value });
+    }
+    return out;
+};
+
+/**
  * Build the wire payload for a `transfer` share — everything,
- * including known cards. Same projection as invite plus knownCards.
+ * including known cards and the user's active hypotheses (transfer is
+ * the "move my game to another device" flow, same user).
  */
 const buildTransferInput = (
     session: GameSession,
@@ -299,6 +326,9 @@ const buildTransferInput = (
     ),
     accusationsData: Schema.encodeSync(accusationsCodec)(
         session.accusations.map(projectAccusation),
+    ),
+    hypothesesData: Schema.encodeSync(hypothesesCodec)(
+        projectHypotheses(session.hypotheses),
     ),
 });
 
@@ -423,6 +453,7 @@ export function ShareCreateModal({
             })),
             suggestions: derived.suggestionsAsData,
             accusations: derived.accusationsAsData,
+            hypotheses: state.hypotheses,
         };
         if (variant === VARIANT_INVITE) {
             return buildInviteInput(

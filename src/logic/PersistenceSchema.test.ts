@@ -1,25 +1,28 @@
 import { describe, expect, test } from "vitest";
 import { Result } from "effect";
 import { CLASSIC_SETUP_3P } from "./GameSetup";
+import { emptyHypotheses } from "./Hypothesis";
 import { decodeSession, encodeSession } from "./Persistence";
 import { decodeV6Unknown } from "./PersistenceSchema";
 import { Player } from "./GameObjects";
 
 /**
- * The app is pre-production — v6 is the only on-disk format, so
- * there's only one round-trip to cover. Anything that doesn't parse
- * as v6 returns undefined and the caller starts a fresh session.
+ * v7 is the canonical on-disk format; v6 reads still work via a
+ * read-side fallback (auto-lifted with empty hypotheses). Anything
+ * that doesn't parse as either returns undefined and the caller
+ * starts a fresh session.
  */
-describe("Schema-backed v6 persistence", () => {
-    test("encode produces version: 6 and round-trips through decode", () => {
+describe("Schema-backed persistence", () => {
+    test("encode produces version: 7 and round-trips through decode", () => {
         const encoded = encodeSession({
             setup: CLASSIC_SETUP_3P,
             hands: [],
             handSizes: [{ player: Player("Anisha"), size: 6 }],
             suggestions: [],
             accusations: [],
+            hypotheses: emptyHypotheses,
         });
-        expect(encoded.version).toBe(6);
+        expect(encoded.version).toBe(7);
 
         const decoded = decodeSession(encoded);
         expect(decoded).toBeDefined();

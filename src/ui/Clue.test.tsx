@@ -239,6 +239,9 @@ describe("Clue — URL-based view hydration", () => {
         // — the smart-default path in `ClueProvider` flips uiMode to
         // "checklist" when hydration finds suggestions but no explicit
         // view param.
+        const { emptyHypotheses } = await import(
+            "../logic/Hypothesis"
+        );
         const { saveToLocalStorage } = await import(
             "../logic/Persistence"
         );
@@ -267,6 +270,7 @@ describe("Clue — URL-based view hydration", () => {
                 }),
             ],
             accusations: [],
+            hypotheses: emptyHypotheses,
         });
         render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {

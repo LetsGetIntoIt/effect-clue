@@ -8,6 +8,7 @@ import type {
 } from "./ClueState";
 import { AccusationId } from "./Accusation";
 import { Card, CardCategory, Player } from "./GameObjects";
+import { emptyHypotheses } from "./Hypothesis";
 import { GameSetup, CardEntry, Category } from "./GameSetup";
 import { KnownCard } from "./InitialKnowledge";
 import { SuggestionId } from "./Suggestion";
@@ -73,6 +74,7 @@ const baseState: ClueState = {
     suggestions: [],
     accusations: [],
     uiMode: "checklist",
+    hypotheses: emptyHypotheses,
 };
 
 const accusationA: DraftAccusation = {

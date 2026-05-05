@@ -196,6 +196,7 @@ const buildSnapshot = (overrides: SnapshotOverrides) => ({
     knownCardsData: null,
     suggestionsData: null,
     accusationsData: null,
+    hypothesesData: null,
     ownerName: null,
     ownerIsAnonymous: null,
     ...overrides,

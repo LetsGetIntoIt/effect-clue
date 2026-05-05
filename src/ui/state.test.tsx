@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { Player } from "../logic/GameObjects";
 import { CLASSIC_SETUP_3P, DEFAULT_SETUP } from "../logic/GameSetup";
+import { emptyHypotheses } from "../logic/Hypothesis";
 import { KnownCard } from "../logic/InitialKnowledge";
 import type { GameSession } from "../logic/Persistence";
 import { CaseFileOwner } from "../logic/GameObjects";
@@ -543,6 +544,7 @@ describe("replaceSession", () => {
                 }),
             ],
             accusations: [],
+            hypotheses: emptyHypotheses,
         };
         act(() => result.current.dispatch({ type: "replaceSession", session }));
         expect(result.current.state.setup).toBe(CLASSIC_SETUP_3P);
@@ -564,6 +566,7 @@ describe("replaceSession", () => {
                 handSizes: [],
                 suggestions: [],
                 accusations: [],
+                hypotheses: emptyHypotheses,
             },
         }));
         // Even though state changed, canUndo remains false for the
@@ -759,6 +762,7 @@ describe("accusations end-to-end", () => {
                     ],
                     suggestions: [],
                     accusations: [],
+                    hypotheses: emptyHypotheses,
                 },
             }),
         );
@@ -856,6 +860,7 @@ describe("accusations end-to-end", () => {
                     ],
                     suggestions: [],
                     accusations: [],
+                    hypotheses: emptyHypotheses,
                 },
             }),
         );

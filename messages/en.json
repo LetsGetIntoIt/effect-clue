@@ -74,7 +74,9 @@
             "updateAccusation": "editing Accusation #{number} by {player} ({cards})",
             "updateAccusationUnknown": "editing an accusation",
             "removeAccusation": "removing Accusation #{number} by {player} ({cards})",
-            "removeAccusationUnknown": "removing an accusation"
+            "removeAccusationUnknown": "removing an accusation",
+            "setHypothesis": "setting hypothesis: {owner} {value, select, Y {owns} other {doesn't own}} {card}",
+            "clearHypothesis": "clearing hypothesis on {owner} / {card}"
         }
     },
     "setup": {
@@ -127,6 +129,18 @@
         "whyHeader": "Why this value:",
         "whyLine": "{index}. {headline}{iter, select, none {} other { (iter {iter})}}: {detail}",
         "footnoteLine": "Candidate for suggestion {labels} — refuter's unseen card could be here."
+    },
+    "hypothesis": {
+        "groupLabel": "Hypothesis",
+        "sectionLabel": "Hypothesis · {owner} / {card}",
+        "optionOff": "—",
+        "optionY": "Y",
+        "optionN": "N",
+        "statusConfirmed": "Confirmed by real facts. You can clear this hypothesis.",
+        "statusDirectlyContradicted": "Contradicts a real fact — your hypothesis can't be true.",
+        "statusJointlyConflicts": "Conflicts with another hypothesis. These can't all be true together — drop one to resolve.",
+        "statusDerived": "This value follows from one of your active hypotheses. Open a ‘?’ cell to see which.",
+        "emptyHint": "Set a hypothesis to explore what would follow."
     },
     "reasons": {
         "suggestionHeadline": "Suggestion #{number}",
