@@ -192,35 +192,34 @@ export function CardPackRow() {
     const showSaveAsActive = activeMatch === undefined;
 
     /**
-     * The custom pack the user most-recently loaded, regardless of
-     * whether the live deck still matches its contents. This is the
-     * pack the user is conceptually "editing" — when `activeMatch`
-     * is undefined but `loadedCustomPack` is defined, the deck has
-     * diverged from the loaded pack and the save action should
-     * default to "Update [pack name]" instead of creating a new pack.
-     *
-     * Classic doesn't qualify: it's a built-in, not user-owned, so
-     * editing the Classic deck always produces a new custom pack.
+     * The user-owned pack most-recently loaded, regardless of whether
+     * the live deck still matches its contents. Built-ins never qualify:
+     * when a built-in deck diverges, the only available save action is
+     * saving a new custom pack.
      */
     const loadedCustomPack = useMemo<DisplayPack | undefined>(() => {
-        let candidateId: string | undefined;
+        let candidate: DisplayPack | undefined;
         let mostRecent: DateTime.Utc | undefined;
         for (const [id, at] of usage.entries()) {
-            if (id === classic.id) continue;
+            const pack = otherPacks.find(p => p.id === id);
+            if (!pack?.isCustom) continue;
             if (
                 !mostRecent ||
                 DateTime.toEpochMillis(at) > DateTime.toEpochMillis(mostRecent)
             ) {
                 mostRecent = at;
-                candidateId = id;
+                candidate = pack;
             }
         }
-        if (!candidateId) return undefined;
-        return otherPacks.find(p => p.id === candidateId);
-    }, [otherPacks, usage, classic.id]);
+        return candidate;
+    }, [otherPacks, usage]);
 
     const canUpdateLoadedPack =
         showSaveAsActive && loadedCustomPack !== undefined;
+    const saveButtonLabel =
+        showSaveAsActive && !canUpdateLoadedPack
+            ? t("saveAsNewCardPack")
+            : t("saveAsCardPack");
 
     /**
      * Sorted alphabetically with Classic pinned first; this is what
@@ -534,7 +533,7 @@ export function CardPackRow() {
                         ? t("updateCardPack", {
                               label: loadedCustomPack.label,
                           })
-                        : t("saveAsCardPack")}
+                        : saveButtonLabel}
                 </button>
                 {canUpdateLoadedPack ? (
                     <button
