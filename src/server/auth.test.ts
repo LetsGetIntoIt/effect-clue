@@ -21,6 +21,10 @@ const importAuthWithEnv = async (
     }));
     vi.doMock("better-auth/plugins", () => ({
         anonymous: () => "anonymous-plugin",
+        oAuthProxy: (opts?: { readonly productionURL?: string }) => ({
+            id: "oauth-proxy-plugin",
+            opts: opts ?? {},
+        }),
     }));
     vi.doMock("pg", () => ({
         Pool: class Pool {
@@ -43,6 +47,7 @@ const importAuthWithEnv = async (
                   readonly allowedHosts: ReadonlyArray<string>;
                   readonly protocol: string;
               };
+        readonly trustedOrigins: ReadonlyArray<string>;
         readonly socialProviders: {
             readonly google: {
                 readonly clientId: string;
@@ -51,7 +56,13 @@ const importAuthWithEnv = async (
             };
         };
         readonly logger: { readonly level: string };
-        readonly plugins: ReadonlyArray<string>;
+        readonly plugins: ReadonlyArray<
+            | string
+            | {
+                  readonly id: string;
+                  readonly opts: { readonly productionURL?: string };
+              }
+        >;
     };
 };
 
@@ -69,7 +80,42 @@ describe("better-auth config", () => {
             clientSecret: "google-secret",
             prompt: "select_account",
         });
-        expect(config.plugins).toEqual(["anonymous-plugin"]);
+        expect(config.plugins).toEqual([
+            "anonymous-plugin",
+            { id: "oauth-proxy-plugin", opts: {} },
+        ]);
+    });
+
+    test("oAuthProxy plugin reads productionURL from BETTER_AUTH_PRODUCTION_URL", async () => {
+        const config = await importAuthWithEnv({
+            BETTER_AUTH_URL: "https://winclue-pr-42.vercel.app",
+            BETTER_AUTH_PRODUCTION_URL: "https://winclue.vercel.app",
+            GOOGLE_CLIENT_ID: "google-id",
+            GOOGLE_CLIENT_SECRET: "google-secret",
+        });
+
+        expect(config.plugins).toEqual([
+            "anonymous-plugin",
+            {
+                id: "oauth-proxy-plugin",
+                opts: { productionURL: "https://winclue.vercel.app" },
+            },
+        ]);
+    });
+
+    test("trustedOrigins includes production aliases, preview wildcard, and localhost", async () => {
+        const config = await importAuthWithEnv({
+            BETTER_AUTH_URL: "https://example.test",
+            GOOGLE_CLIENT_ID: "google-id",
+            GOOGLE_CLIENT_SECRET: "google-secret",
+        });
+
+        expect(config.trustedOrigins).toEqual([
+            "https://winclue.vercel.app",
+            "https://effect-clue.vercel.app",
+            "https://effect-clue-*-lets-get-into-it.vercel.app",
+            "http://localhost:*",
+        ]);
     });
 
     test("fails fast when Google client id is missing", async () => {
