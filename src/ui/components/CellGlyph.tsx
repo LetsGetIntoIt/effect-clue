@@ -4,7 +4,6 @@ import {
     type HypothesisStatus,
 } from "../../logic/Hypothesis";
 import { N, Y } from "../../logic/Knowledge";
-import { AlertIcon } from "./Icons";
 
 // Discriminator constants for the cell's primary glyph slot. Module-
 // scope so the `no-literal-string` lint rule reads them as code, not
@@ -20,28 +19,21 @@ import { AlertIcon } from "./Icons";
 const GLYPH_YES = "yes" as const;
 const GLYPH_NO = "no" as const;
 const GLYPH_QUESTION = "question" as const;
-const GLYPH_ALERT = "alert" as const;
 export const GLYPH_BLANK = "blank" as const;
 type GlyphKind =
     | typeof GLYPH_YES
     | typeof GLYPH_NO
     | typeof GLYPH_QUESTION
-    | typeof GLYPH_ALERT
     | typeof GLYPH_BLANK;
 
+// Rejected hypotheses (directly contradicted or jointly conflicting)
+// no longer override the center glyph — the cell keeps showing its
+// real-only deduced value, and the corner `HypothesisBadge` carries
+// the X icon + bounce animation that flags the conflict.
 export const glyphKindFor = (
     display: CellDisplay,
-    status: HypothesisStatus,
+    _status: HypothesisStatus,
 ): GlyphKind => {
-    // Contradicted hypotheses (directly or jointly) replace whatever
-    // glyph would have rendered with the alert icon, so the conflict
-    // reads at a glance.
-    if (
-        status.kind === "directlyContradicted" ||
-        status.kind === "jointlyConflicts"
-    ) {
-        return GLYPH_ALERT;
-    }
     switch (display.tag) {
         case "real":
             if (display.value === Y) return GLYPH_YES;
@@ -63,8 +55,6 @@ export const renderGlyphNode = (kind: GlyphKind): ReactNode => {
             return "·";
         case GLYPH_QUESTION:
             return "?";
-        case GLYPH_ALERT:
-            return <AlertIcon size={14} className="text-danger" />;
         case GLYPH_BLANK:
             return null;
     }

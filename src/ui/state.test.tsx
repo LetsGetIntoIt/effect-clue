@@ -8,7 +8,7 @@ import { CLASSIC_SETUP_3P, DEFAULT_SETUP } from "../logic/GameSetup";
 import { emptyHypotheses } from "../logic/Hypothesis";
 import { KnownCard } from "../logic/InitialKnowledge";
 import type { GameSession } from "../logic/Persistence";
-import { CaseFileOwner } from "../logic/GameObjects";
+import { CaseFileOwner, PlayerOwner } from "../logic/GameObjects";
 import { Cell, getCell, N as N_VAL, Y as Y_VAL } from "../logic/Knowledge";
 import { Result } from "effect";
 import {
@@ -703,6 +703,204 @@ describe("derived values", () => {
         }));
         const after = HashMap.size(result.current.derived.initialKnowledge.checklist);
         expect(after).toBeGreaterThan(before);
+    });
+
+    test("derived.hypothesisConflict is `jointly-conflicting` when individually-plausible hypotheses jointly fail", () => {
+        // Scenario: A owns Knife (Y) AND B owns Knife (Y). Each
+        // hypothesis alone is fine — neither contradicts any real
+        // fact (knownCards is empty). Together they violate "every
+        // card has exactly one owner".
+        const { result } = renderClue();
+        const setup = CLASSIC_SETUP_3P;
+        const A = Player("Anisha");
+        const B = Player("Bob");
+        const KNIFE = cardByName(setup, "Knife");
+
+        act(() => {
+            result.current.dispatch({
+                type: "replaceSession",
+                session: {
+                    setup,
+                    hands: [],
+                    handSizes: [],
+                    suggestions: [],
+                    accusations: [],
+                    hypotheses: emptyHypotheses,
+                } satisfies GameSession,
+            });
+        });
+        expect(result.current.derived.hypothesisConflict).toBeUndefined();
+
+        // First hypothesis: A owns Knife. Plausible alone.
+        act(() => {
+            result.current.dispatch({
+                type: "setHypothesis",
+                cell: Cell(PlayerOwner(A), KNIFE),
+                value: Y_VAL,
+            });
+        });
+        expect(result.current.derived.hypothesisConflict).toBeUndefined();
+
+        // Second hypothesis: B also owns Knife. Now jointly conflicts.
+        act(() => {
+            result.current.dispatch({
+                type: "setHypothesis",
+                cell: Cell(PlayerOwner(B), KNIFE),
+                value: Y_VAL,
+            });
+        });
+        const conflict = result.current.derived.hypothesisConflict;
+        expect(conflict).toBeDefined();
+        expect(conflict?.kind).toBe("jointly-conflicting");
+        expect(conflict?.entries.length).toBe(2);
+        // Real-only deduction is still fine.
+        expect(
+            Result.isSuccess(result.current.derived.deductionResult),
+        ).toBe(true);
+
+        // Removing one hypothesis resolves the joint conflict.
+        act(() => {
+            result.current.dispatch({
+                type: "clearHypothesis",
+                cell: Cell(PlayerOwner(B), KNIFE),
+            });
+        });
+        expect(result.current.derived.hypothesisConflict).toBeUndefined();
+    });
+
+    test("derived.hypothesisConflict is `directly-contradicted` for a single hypothesis that conflicts with a known fact", () => {
+        // Single hypothesis that disagrees with a known card. The
+        // banner still fires (so the user has a one-click "Turn off"
+        // path), but with the directly-contradicted variant — copy is
+        // about the conflict with a known fact, not "these can't all
+        // be true together".
+        const { result } = renderClue();
+        const setup = CLASSIC_SETUP_3P;
+        const A = Player("Anisha");
+        const KNIFE = cardByName(setup, "Knife");
+
+        act(() => {
+            result.current.dispatch({
+                type: "replaceSession",
+                session: {
+                    setup,
+                    hands: [{ player: A, cards: [KNIFE] }],
+                    handSizes: [],
+                    suggestions: [],
+                    accusations: [],
+                    hypotheses: emptyHypotheses,
+                } satisfies GameSession,
+            });
+        });
+
+        // Hypothesis: Anisha does NOT own Knife — directly contradicts.
+        act(() => {
+            result.current.dispatch({
+                type: "setHypothesis",
+                cell: Cell(PlayerOwner(A), KNIFE),
+                value: N_VAL,
+            });
+        });
+
+        const conflict = result.current.derived.hypothesisConflict;
+        expect(conflict).toBeDefined();
+        expect(conflict?.kind).toBe("directly-contradicted");
+        expect(conflict?.entries.length).toBe(1);
+        expect(conflict?.entries[0]?.cell).toEqual(Cell(PlayerOwner(A), KNIFE));
+        expect(conflict?.entries[0]?.value).toBe(N_VAL);
+    });
+
+    test("derived.hypothesisConflict prefers `directly-contradicted` and lists ONLY contradicted hypotheses when both kinds coexist", () => {
+        // Two hypotheses: one directly contradicts a real fact, the
+        // other is plausible alone. The banner takes the
+        // directly-contradicted path (fix that first) and lists only
+        // the contradicted entry — the still-plausible hypothesis
+        // doesn't belong in this banner copy.
+        const { result } = renderClue();
+        const setup = CLASSIC_SETUP_3P;
+        const A = Player("Anisha");
+        const B = Player("Bob");
+        const KNIFE = cardByName(setup, "Knife");
+        const KITCHEN = cardByName(setup, "Kitchen");
+
+        act(() => {
+            result.current.dispatch({
+                type: "replaceSession",
+                session: {
+                    setup,
+                    hands: [{ player: A, cards: [KNIFE] }],
+                    handSizes: [],
+                    suggestions: [],
+                    accusations: [],
+                    hypotheses: emptyHypotheses,
+                } satisfies GameSession,
+            });
+        });
+
+        // First: Anisha doesn't own Knife — directly contradicts.
+        act(() => {
+            result.current.dispatch({
+                type: "setHypothesis",
+                cell: Cell(PlayerOwner(A), KNIFE),
+                value: N_VAL,
+            });
+        });
+        // Second: Bob owns Kitchen — plausible alone.
+        act(() => {
+            result.current.dispatch({
+                type: "setHypothesis",
+                cell: Cell(PlayerOwner(B), KITCHEN),
+                value: Y_VAL,
+            });
+        });
+
+        const conflict = result.current.derived.hypothesisConflict;
+        expect(conflict).toBeDefined();
+        expect(conflict?.kind).toBe("directly-contradicted");
+        // Only the directly-contradicted entry — not Bob's Kitchen.
+        expect(conflict?.entries.length).toBe(1);
+        expect(conflict?.entries[0]?.cell).toEqual(Cell(PlayerOwner(A), KNIFE));
+    });
+
+    test("derived.hypothesisConflict is undefined when individually-plausible hypotheses are also jointly consistent", () => {
+        // Sanity-check the success path: two hypotheses, individually
+        // and jointly fine. No banner.
+        const { result } = renderClue();
+        const setup = CLASSIC_SETUP_3P;
+        const A = Player("Anisha");
+        const B = Player("Bob");
+        const KNIFE = cardByName(setup, "Knife");
+        const KITCHEN = cardByName(setup, "Kitchen");
+
+        act(() => {
+            result.current.dispatch({
+                type: "replaceSession",
+                session: {
+                    setup,
+                    hands: [],
+                    handSizes: [],
+                    suggestions: [],
+                    accusations: [],
+                    hypotheses: emptyHypotheses,
+                } satisfies GameSession,
+            });
+        });
+        act(() => {
+            result.current.dispatch({
+                type: "setHypothesis",
+                cell: Cell(PlayerOwner(A), KNIFE),
+                value: Y_VAL,
+            });
+        });
+        act(() => {
+            result.current.dispatch({
+                type: "setHypothesis",
+                cell: Cell(PlayerOwner(B), KITCHEN),
+                value: Y_VAL,
+            });
+        });
+
+        expect(result.current.derived.hypothesisConflict).toBeUndefined();
     });
 });
 

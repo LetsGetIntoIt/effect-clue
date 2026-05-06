@@ -1296,9 +1296,22 @@ export function Checklist() {
                                             hypotheses,
                                             jointFailed,
                                         );
+                                        // Setup mode is for entering known
+                                        // facts — hypotheses shouldn't tint
+                                        // cells, drive corner badges, or show
+                                        // lightbulb leads. Forcing the
+                                        // status to "off" makes `displayFor`
+                                        // return the real value (or blank),
+                                        // and the topLeft / topRight slots
+                                        // below skip the chip + badge in
+                                        // setup outright.
+                                        const effectiveStatus: HypothesisStatus =
+                                            inSetup
+                                                ? { kind: "off" }
+                                                : hypothesisStatus;
                                         const display = displayFor(
                                             value,
-                                            hypothesisStatus,
+                                            effectiveStatus,
                                         );
                                         const footnoteNumbers = footnotesForCell(
                                             footnotes,
@@ -1351,7 +1364,8 @@ export function Checklist() {
                                             tReasons,
                                         });
                                         const showChip =
-                                            footnoteNumbers.length > 0
+                                            !inSetup
+                                            && footnoteNumbers.length > 0
                                             && value === undefined;
                                         const topLeft = showChip ? (
                                             <span
@@ -1371,11 +1385,20 @@ export function Checklist() {
                                         // hypothesised N shows a red badge
                                         // against a green cell, making the
                                         // disagreement visible at a glance.
+                                        // The cell's rejected-badge pulse
+                                        // stays on whether or not the popover
+                                        // is open — the matching popover
+                                        // status-box badge also pulses, so the
+                                        // cell and popover read together when
+                                        // the user is looking at one or the
+                                        // other.
                                         const topRight =
+                                            !inSetup &&
                                             hypothesisValue !== undefined ? (
                                                 <HypothesisBadge
                                                     value={hypothesisValue}
                                                     status={hypothesisStatus}
+                                                    animated
                                                 />
                                             ) : null;
                                         const center = setupCheckbox ? (
@@ -2770,11 +2793,11 @@ const cellClass = (
 ): string => {
     let base = interactive ? `${CELL_BASE}${CELL_INTERACTIVE}` : CELL_BASE;
     if (highlighted) base += CELL_HIGHLIGHTED;
-    // Contradiction states are conveyed by the AlertIcon that
-    // replaces the central glyph (`directlyContradicted` and
-    // `jointlyConflicts` both render `<AlertIcon>`) and by the
-    // boxed status panel inside the popover, so no extra cell ring
-    // is needed here.
+    // Contradiction states are conveyed by the X glyph + bounce on
+    // the corner `HypothesisBadge` (`directlyContradicted` and
+    // `jointlyConflicts` both flip the badge into rejected mode) and
+    // by the boxed status panel inside the popover, so no extra
+    // cell ring is needed here.
     void status;
     // Pick the color tone from the displayed value (real wins; otherwise
     // the hypothesis or derived-from-hypothesis value).

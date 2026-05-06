@@ -231,35 +231,6 @@ export function UserIcon({ className, size = 18 }: IconProps) {
 
 
 /**
- * Filled triangle with an exclamation mark — used to flag a hypothesis
- * cell whose state is contradicted (either directly by a real fact, or
- * jointly by another hypothesis). `currentColor` lets the parent style
- * the tone (typically `text-danger`).
- */
-export function AlertIcon({ className, size = 14 }: IconProps) {
-    return (
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width={size}
-            height={size}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            focusable="false"
-            className={className}
-        >
-            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-            <line x1="12" y1="9" x2="12" y2="13" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-        </svg>
-    );
-}
-
-/**
  * Lightbulb — paired with the per-cell "candidate for suggestion N"
  * footnote affordance so the same glyph appears in the cell chip and
  * the why-popover explanation, tying them together visually.

@@ -30,7 +30,7 @@ describe("HypothesisBadge", () => {
         );
     });
 
-    test("renders the question glyph when directly contradicted", () => {
+    test("renders the X glyph when directly contradicted", () => {
         const { container } = render(
             <HypothesisBadge
                 value={Y}
@@ -41,20 +41,121 @@ describe("HypothesisBadge", () => {
                 }}
             />,
         );
-        expect(findBadge(container).getAttribute("data-glyph")).toBe(
-            "question",
-        );
+        expect(findBadge(container).getAttribute("data-glyph")).toBe("x");
     });
 
-    test("renders the question glyph when jointly conflicting", () => {
+    test("renders the X glyph when jointly conflicting", () => {
         const { container } = render(
             <HypothesisBadge
                 value={Y}
                 status={{ kind: "jointlyConflicts", value: Y }}
             />,
         );
-        expect(findBadge(container).getAttribute("data-glyph")).toBe(
-            "question",
+        expect(findBadge(container).getAttribute("data-glyph")).toBe("x");
+    });
+
+    test("rejected badges tone to text-danger", () => {
+        const { container: directly } = render(
+            <HypothesisBadge
+                value={Y}
+                status={{
+                    kind: "directlyContradicted",
+                    hypothesis: Y,
+                    real: N,
+                }}
+            />,
+        );
+        expect(findBadge(directly).getAttribute("class") ?? "").toContain(
+            "text-danger",
+        );
+
+        const { container: joint } = render(
+            <HypothesisBadge
+                value={N}
+                status={{ kind: "jointlyConflicts", value: N }}
+            />,
+        );
+        expect(findBadge(joint).getAttribute("class") ?? "").toContain(
+            "text-danger",
+        );
+    });
+
+    test("rejected badges with `animated` include motion-safe:animate-pulse", () => {
+        const { container: directly } = render(
+            <HypothesisBadge
+                value={Y}
+                status={{
+                    kind: "directlyContradicted",
+                    hypothesis: Y,
+                    real: N,
+                }}
+                animated
+            />,
+        );
+        expect(findBadge(directly).getAttribute("class") ?? "").toContain(
+            "motion-safe:animate-pulse",
+        );
+
+        const { container: joint } = render(
+            <HypothesisBadge
+                value={N}
+                status={{ kind: "jointlyConflicts", value: N }}
+                animated
+            />,
+        );
+        expect(findBadge(joint).getAttribute("class") ?? "").toContain(
+            "motion-safe:animate-pulse",
+        );
+    });
+
+    test("rejected badges WITHOUT `animated` are static (no animation class)", () => {
+        const { container: directly } = render(
+            <HypothesisBadge
+                value={Y}
+                status={{
+                    kind: "directlyContradicted",
+                    hypothesis: Y,
+                    real: N,
+                }}
+            />,
+        );
+        expect(findBadge(directly).getAttribute("class") ?? "").not.toContain(
+            "animate-",
+        );
+
+        const { container: joint } = render(
+            <HypothesisBadge
+                value={N}
+                status={{ kind: "jointlyConflicts", value: N }}
+                animated={false}
+            />,
+        );
+        expect(findBadge(joint).getAttribute("class") ?? "").not.toContain(
+            "animate-",
+        );
+    });
+
+    test("non-rejected badges never animate, even with `animated` true", () => {
+        const { container: active } = render(
+            <HypothesisBadge
+                value={Y}
+                status={{ kind: "active", value: Y }}
+                animated
+            />,
+        );
+        expect(findBadge(active).getAttribute("class") ?? "").not.toContain(
+            "animate-",
+        );
+
+        const { container: confirmed } = render(
+            <HypothesisBadge
+                value={Y}
+                status={{ kind: "confirmed", value: Y }}
+                animated
+            />,
+        );
+        expect(findBadge(confirmed).getAttribute("class") ?? "").not.toContain(
+            "animate-",
         );
     });
 

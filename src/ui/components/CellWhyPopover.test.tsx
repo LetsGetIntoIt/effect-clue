@@ -250,8 +250,8 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
         expect(screen.getByText("statusConfirmed")).toBeInTheDocument();
     });
 
-    test("directly contradicted: short selectedHelpContradicted + long statusDirectlyContradicted box", () => {
-        render(
+    test("directly contradicted: short selectedHelpContradicted + long statusDirectlyContradicted box with animated X badge", () => {
+        const { container } = render(
             <CellWhyPopover
                 {...baseProps}
                 hypothesisValue="N"
@@ -265,6 +265,19 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
         );
         expect(screen.getByText(/^selectedHelpContradicted:/)).toBeInTheDocument();
         expect(screen.getByText("statusDirectlyContradicted")).toBeInTheDocument();
+
+        // The status box embeds an `<HypothesisBadge animated>` so the
+        // pulse moves into the popover when it opens. Two badges total
+        // in the popover (the short help row and the status box); the
+        // status-box one should carry the ping class.
+        const xBadges = container.querySelectorAll('svg[data-glyph="x"]');
+        expect(xBadges.length).toBe(2);
+        const animatedXBadges = Array.from(xBadges).filter(svg =>
+            (svg.getAttribute("class") ?? "").includes(
+                "motion-safe:animate-pulse",
+            ),
+        );
+        expect(animatedXBadges.length).toBe(1);
     });
 
     test("jointly conflicts: short selectedHelpJointlyConflicts + long statusJointlyConflicts box with bullets", () => {
