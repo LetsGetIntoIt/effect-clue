@@ -10,6 +10,11 @@ import {
 } from "../../logic/Hypothesis";
 import { CellLayout } from "./CellLayout";
 import { CellWhyPopover, hypothesisValueFor } from "./CellWhyPopover";
+import {
+    GLYPH_BLANK,
+    glyphKindFor,
+    renderGlyphNode,
+} from "./CellGlyph";
 
 // Analytics enum tag for the "no hypothesis" baseline. Module-scope
 // so the `no-literal-string` lint rule reads it as code, not UI text.
@@ -86,7 +91,7 @@ import { useConfetti } from "../hooks/useConfetti";
 import { useShareContext } from "../share/ShareProvider";
 import { CardPackRow } from "./CardPackRow";
 import { ShareIcon } from "./ShareIcon";
-import { AlertIcon, Envelope, LightbulbIcon } from "./Icons";
+import { Envelope, LightbulbIcon } from "./Icons";
 import { HypothesisBadge } from "./HypothesisBadge";
 import { InfoPopover } from "./InfoPopover";
 
@@ -1342,7 +1347,6 @@ export function Checklist() {
                                             setup,
                                             owner,
                                             card: entry.id,
-                                            footnoteNumbers,
                                             tDeduce: t,
                                             tReasons,
                                         });
@@ -1638,7 +1642,8 @@ export function Checklist() {
                                                         }
                                                     }}
                                                     whyText={cellWhy.chainText}
-                                                    footnoteText={cellWhy.footnoteText}
+                                                    footnoteNumbers={footnoteNumbers}
+                                                    display={display}
                                                 />
                                             );
                                             cell = (
@@ -2275,10 +2280,8 @@ const resolveReasonCopy = (
 };
 
 interface CellWhy {
-    /** "Hard facts" deduction chain — rendered as plain text in the popover. */
+    /** "Deductions" chain — rendered as plain text in the popover. */
     readonly chainText: string | undefined;
-    /** Footnote candidate-for-suggestion line — rendered with a lightbulb icon. */
-    readonly footnoteText: string | undefined;
 }
 
 const buildCellWhy = (args: {
@@ -2288,7 +2291,6 @@ const buildCellWhy = (args: {
     setup: ReturnType<typeof useClue>["state"]["setup"];
     owner: Owner;
     card: Card;
-    footnoteNumbers: ReadonlyArray<number>;
     tDeduce: ReturnType<typeof useTranslations<"deduce">>;
     tReasons: ReturnType<typeof useTranslations<"reasons">>;
 }): CellWhy => {
@@ -2299,17 +2301,9 @@ const buildCellWhy = (args: {
         setup,
         owner,
         card,
-        footnoteNumbers,
         tDeduce,
         tReasons,
     } = args;
-
-    const footnoteText =
-        footnoteNumbers.length > 0
-            ? tDeduce("footnoteLine", {
-                  labels: footnoteNumbers.map(n => `#${n}`).join(", "),
-              })
-            : undefined;
 
     const chain = provenance
         ? chainFor(provenance, Cell(owner, card))
@@ -2331,13 +2325,12 @@ const buildCellWhy = (args: {
         });
     });
 
-    // The "Why this value:" prefix used to lead the chain text, but the
-    // popover now renders a "Hard facts" section heading above it
-    // (parallel to the "Hypothesis" heading), so the prefix is
-    // redundant here.
+    // The popover now renders a "Deductions" section heading above
+    // this chain (with a glyph that mirrors the cell), so we don't
+    // repeat the value in the prefix.
     const chainText = chainLines.length > 0 ? chainLines.join("\n") : undefined;
 
-    return { chainText, footnoteText };
+    return { chainText };
 };
 
 // Motion-only constants (non user-facing). The "unsolved" color
@@ -2644,65 +2637,10 @@ function useStablePlayerColumnKeys(
     }, [players]);
 }
 
-// Discriminator constants for the cell's primary glyph slot. Module-
-// scope so the `no-literal-string` lint rule reads them as code, not
-// UI text. The matching presentation lives in `renderGlyphNode`.
-//
-// Direct-hypothesis cells use the same "?" glyph as derived cells —
-// the visual distinction lives in a separate corner badge rendered
-// alongside the glyph (see `cellContent` below).
-const GLYPH_YES = "yes" as const;
-const GLYPH_NO = "no" as const;
-const GLYPH_QUESTION = "question" as const;
-const GLYPH_ALERT = "alert" as const;
-const GLYPH_BLANK = "blank" as const;
-type GlyphKind =
-    | typeof GLYPH_YES
-    | typeof GLYPH_NO
-    | typeof GLYPH_QUESTION
-    | typeof GLYPH_ALERT
-    | typeof GLYPH_BLANK;
-
-const glyphKindFor = (
-    display: CellDisplay,
-    status: HypothesisStatus,
-): GlyphKind => {
-    // Contradicted hypotheses (directly or jointly) replace whatever
-    // glyph would have rendered with the alert icon, so the conflict
-    // reads at a glance.
-    if (
-        status.kind === "directlyContradicted" ||
-        status.kind === "jointlyConflicts"
-    ) {
-        return GLYPH_ALERT;
-    }
-    switch (display.tag) {
-        case "real":
-            if (display.value === Y) return GLYPH_YES;
-            if (display.value === N) return GLYPH_NO;
-            return GLYPH_BLANK;
-        case "hypothesis":
-        case "derived":
-            return GLYPH_QUESTION;
-        case "blank":
-            return GLYPH_BLANK;
-    }
-};
-
-const renderGlyphNode = (kind: GlyphKind): ReactNode => {
-    switch (kind) {
-        case GLYPH_YES:
-            return "✓";
-        case GLYPH_NO:
-            return "·";
-        case GLYPH_QUESTION:
-            return "?";
-        case GLYPH_ALERT:
-            return <AlertIcon size={14} className="text-danger" />;
-        case GLYPH_BLANK:
-            return null;
-    }
-};
+// Glyph helpers (`glyphKindFor`, `renderGlyphNode`, `GLYPH_*`) are
+// shared with `CellWhyPopover`'s mini glyph box so the popover renders
+// the same icon as the live cell for any given (display, status).
+// They live in `./CellGlyph`.
 
 /**
  * Cell glyph with a short pop-in/out as the value changes.
