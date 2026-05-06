@@ -524,7 +524,7 @@ export function CardPackRow() {
                     >
                         <button
                             type="button"
-                            className="inline-flex cursor-pointer items-center gap-1 rounded border border-border bg-white px-3 py-1 text-[13px] transition-colors duration-200 ease-out hover:bg-hover"
+                            className="inline-flex cursor-pointer items-center gap-1 rounded border border-border bg-white px-3.5 py-2 text-[13px] transition-colors duration-200 ease-out hover:bg-hover"
                             title={t("allCardPacksPillTitle")}
                             aria-haspopup="listbox"
                             aria-expanded={pickerOpen}
@@ -540,7 +540,7 @@ export function CardPackRow() {
                 <button
                     type="button"
                     className={
-                        "cursor-pointer rounded border border-dashed px-3 py-1 text-[13px] transition-colors duration-200 ease-out " +
+                        "cursor-pointer rounded border border-dashed px-3.5 py-2 text-[13px] transition-colors duration-200 ease-out " +
                         (showSaveAsActive
                             ? "border-accent bg-accent font-semibold text-white"
                             : "border-border bg-white text-muted hover:bg-hover hover:text-accent")
@@ -566,7 +566,7 @@ export function CardPackRow() {
                 {canUpdateLoadedPack ? (
                     <button
                         type="button"
-                        className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent"
+                        className="cursor-pointer rounded border border-border bg-white px-3.5 py-2 text-[13px] text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent"
                         onClick={onSaveAsNewCardSet}
                         title={t("saveAsCardPackTitle")}
                     >
