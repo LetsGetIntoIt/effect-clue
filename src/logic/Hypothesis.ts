@@ -181,8 +181,12 @@ export const displayFor = (
  * placed a hypothesis on, paired with the value they chose. The
  * banner copy doesn't need the real value; that's available via
  * `statusFor` for any cell that wants it.
+ *
+ * Not exported: callers receive these via `HypothesisConflict.entries`.
+ * If a future caller needs the named shape on its own, export it
+ * then; today it would be dead surface area.
  */
-export interface HypothesisConflictEntry {
+interface HypothesisConflictEntry {
     readonly cell: Cell;
     readonly value: HypothesisValue;
 }

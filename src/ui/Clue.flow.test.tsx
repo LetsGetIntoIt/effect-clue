@@ -106,7 +106,6 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { saveToLocalStorage } from "../logic/Persistence";
 import { emptyHypotheses } from "../logic/Hypothesis";
-import { Player } from "../logic/GameObjects";
 import { CLASSIC_SETUP_3P } from "../logic/GameSetup";
 import { Clue } from "./Clue";
 import { TestQueryClientProvider } from "../test-utils/queryClient";
@@ -273,5 +272,22 @@ describe("Clue — full user-journey umbrella", () => {
                 document.querySelector("[data-accusation-row='0']"),
             ).toBeInTheDocument();
         });
+
+        // 10. Submitting an accusation flips the host back to
+        //    suggestion mode (SuggestionLogPanel.tsx:302's
+        //    `setMode(SUGGESTION_MODE)`). After submit, the next
+        //    thing the user types is a regular suggestion, so the
+        //    suggester pill must be present and the accuser pill gone.
+        //    SuggestionLogPanel.modeToggle.test.tsx#submitting-an-
+        //    accusation-flips-back simulates this via a tab click;
+        //    here we exercise the real form-submit path.
+        await waitFor(() => {
+            expect(
+                document.querySelector("[data-pill-id='suggester']"),
+            ).toBeInTheDocument();
+        });
+        expect(
+            document.querySelector("[data-pill-id='accuser']"),
+        ).toBeNull();
     });
 });

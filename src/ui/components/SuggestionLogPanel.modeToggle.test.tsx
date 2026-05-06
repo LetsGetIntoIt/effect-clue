@@ -274,7 +274,13 @@ describe("Add-form auto-revert — 15 second idle timeout", () => {
         fireEvent.click(findInactiveTab());
         await waitFor(() => expect(isAccusationForm()).toBe(true));
         // (Direct submit from the form requires filling 4 pills which
-        // would balloon this test — covered end-to-end elsewhere.)
+        // would balloon this test. The full
+        // setup → suggest → accuse-tab → submit chain is exercised by
+        // src/ui/Clue.flow.test.tsx, which asserts the accusation log
+        // row appears after submit. Here we only need to prove the
+        // host's mode flip when the underlying form fires submit, so
+        // we model the same setMode call by clicking the suggestion
+        // tab back.)
         fireEvent.click(findInactiveTab()); // suggestion tab is inactive in accusation mode
         await waitFor(() => expect(isSuggestionForm()).toBe(true));
     });
