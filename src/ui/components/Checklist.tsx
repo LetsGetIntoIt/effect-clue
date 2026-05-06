@@ -8,6 +8,7 @@ import {
     type HypothesisStatus,
     type HypothesisValue,
 } from "../../logic/Hypothesis";
+import { CellLayout } from "./CellLayout";
 import { CellWhyPopover, hypothesisValueFor } from "./CellWhyPopover";
 
 // Analytics enum tag for the "no hypothesis" baseline. Module-scope
@@ -85,7 +86,7 @@ import { useConfetti } from "../hooks/useConfetti";
 import { useShareContext } from "../share/ShareProvider";
 import { CardPackRow } from "./CardPackRow";
 import { ShareIcon } from "./ShareIcon";
-import { AlertIcon, Envelope } from "./Icons";
+import { AlertIcon, Envelope, LightbulbIcon } from "./Icons";
 import { HypothesisBadge } from "./HypothesisBadge";
 import { InfoPopover } from "./InfoPopover";
 
@@ -598,10 +599,14 @@ export function Checklist() {
     const renderColumnReveal = (children: ReactNode, className?: string) => (
         renderDimensionReveal(TABLE_AXIS_COLUMN, children, className)
     );
+    // Body cells pass a `<CellLayout />` here, which already provides
+    // the grid container — so this helper just wraps the content in
+    // the row/column reveal animations. Empty cells (e.g. the setup-
+    // mode add-player case-file slot) pass `null`.
     const renderTableCellContent = (children: ReactNode) =>
         renderColumnReveal(
             renderRowReveal(
-                <div className={CELL_CONTENT}>{children}</div>,
+                children,
                 undefined,
                 tableEntryTransition,
             ),
@@ -1330,7 +1335,7 @@ export function Checklist() {
                                         // opens the deduction-chain popover.
                                         const playInteractive =
                                             !inSetup && isPlayerCell;
-                                        const tooltipText = buildCellTitle({
+                                        const cellWhy = buildCellWhy({
                                             provenance,
                                             suggestions,
                                             accusations,
@@ -1341,7 +1346,35 @@ export function Checklist() {
                                             tDeduce: t,
                                             tReasons,
                                         });
-                                        const cellContent = setupCheckbox ? (
+                                        const showChip =
+                                            footnoteNumbers.length > 0
+                                            && value === undefined;
+                                        const topLeft = showChip ? (
+                                            <span
+                                                aria-hidden
+                                                className="inline-flex items-center gap-[2px] rounded-[3px] border border-accent/40 px-[3px] py-px text-[10px] font-semibold leading-none text-accent tabular-nums"
+                                            >
+                                                <LightbulbIcon size={9} />
+                                                {footnoteNumbers.join(",")}
+                                            </span>
+                                        ) : null;
+                                        // Corner badge marking the cell as
+                                        // the source of a hypothesis (vs. a
+                                        // cell whose value follows from one).
+                                        // Tone reflects the HYPOTHESIS value,
+                                        // not the cell's displayed value: a
+                                        // cell that's been deduced Y but
+                                        // hypothesised N shows a red badge
+                                        // against a green cell, making the
+                                        // disagreement visible at a glance.
+                                        const topRight =
+                                            hypothesisValue !== undefined ? (
+                                                <HypothesisBadge
+                                                    value={hypothesisValue}
+                                                    status={hypothesisStatus}
+                                                />
+                                            ) : null;
+                                        const center = setupCheckbox ? (
                                             <input
                                                 type="checkbox"
                                                 aria-hidden
@@ -1351,26 +1384,17 @@ export function Checklist() {
                                                 readOnly
                                             />
                                         ) : (
-                                            <>
-                                                <AnimatedCellGlyph
-                                                    display={display}
-                                                    status={hypothesisStatus}
-                                                />
-                                                {footnoteNumbers.length > 0 &&
-                                                    value === undefined && (
-                                                        <sup className="ml-0.5 text-[9px] font-normal text-accent">
-                                                            {footnoteNumbers.join(
-                                                                ",",
-                                                            )}
-                                                        </sup>
-                                                    )}
-                                                {hypothesisValue !== undefined && (
-                                                    <HypothesisBadge
-                                                        value={hypothesisValue}
-                                                        status={hypothesisStatus}
-                                                    />
-                                                )}
-                                            </>
+                                            <AnimatedCellGlyph
+                                                display={display}
+                                                status={hypothesisStatus}
+                                            />
+                                        );
+                                        const cellContent = (
+                                            <CellLayout
+                                                topLeft={topLeft}
+                                                topRight={topRight}
+                                                center={center}
+                                            />
                                         );
                                         // A cell needs the interactive
                                         // ring style when the user can
@@ -1613,7 +1637,8 @@ export function Checklist() {
                                                             });
                                                         }
                                                     }}
-                                                    whyText={tooltipText}
+                                                    whyText={cellWhy.chainText}
+                                                    footnoteText={cellWhy.footnoteText}
                                                 />
                                             );
                                             cell = (
@@ -2249,7 +2274,14 @@ const resolveReasonCopy = (
     }
 };
 
-const buildCellTitle = (args: {
+interface CellWhy {
+    /** "Hard facts" deduction chain — rendered as plain text in the popover. */
+    readonly chainText: string | undefined;
+    /** Footnote candidate-for-suggestion line — rendered with a lightbulb icon. */
+    readonly footnoteText: string | undefined;
+}
+
+const buildCellWhy = (args: {
     provenance: Provenance | undefined;
     suggestions: ReadonlyArray<Suggestion>;
     accusations: ReadonlyArray<Accusation>;
@@ -2259,7 +2291,7 @@ const buildCellTitle = (args: {
     footnoteNumbers: ReadonlyArray<number>;
     tDeduce: ReturnType<typeof useTranslations<"deduce">>;
     tReasons: ReturnType<typeof useTranslations<"reasons">>;
-}): string | undefined => {
+}): CellWhy => {
     const {
         provenance,
         suggestions,
@@ -2272,7 +2304,7 @@ const buildCellTitle = (args: {
         tReasons,
     } = args;
 
-    const footnoteLine =
+    const footnoteText =
         footnoteNumbers.length > 0
             ? tDeduce("footnoteLine", {
                   labels: footnoteNumbers.map(n => `#${n}`).join(", "),
@@ -2303,11 +2335,9 @@ const buildCellTitle = (args: {
     // popover now renders a "Hard facts" section heading above it
     // (parallel to the "Hypothesis" heading), so the prefix is
     // redundant here.
-    const parts: string[] = [];
-    if (chainLines.length > 0) parts.push(...chainLines);
-    if (footnoteLine) parts.push(footnoteLine);
+    const chainText = chainLines.length > 0 ? chainLines.join("\n") : undefined;
 
-    return parts.length > 0 ? parts.join("\n") : undefined;
+    return { chainText, footnoteText };
 };
 
 // Motion-only constants (non user-facing). The "unsolved" color
@@ -2711,11 +2741,16 @@ function AnimatedCellGlyph({
 }
 
 const ADD_PLAYER_COLUMN_KEY = "add-player-col";
+// `align-top` (vertical-align: top) anchors the row/column reveal
+// motion.div — and thus CellLayout's grid — to the cell's top edge.
+// Table-cell percentage-height inheritance is unreliable (CSS spec
+// treats `height: 100%` on a td as a min-height rather than a real
+// height), so we can't make the inner wrappers stretch to fill;
+// instead, we let them content-size and pin them to the top so the
+// corner badges in CellLayout's row 1 sit at the cell's true top
+// edge with the grid's 2px padding as their corner inset.
 const CELL_BASE =
-    "border-r border-b border-border text-center font-semibold relative overflow-hidden";
-const CELL_CONTENT =
-    "mx-auto flex h-full w-9 min-w-9 items-center justify-center px-2 py-1";
-
+    "border-r border-b border-border text-center font-semibold relative overflow-hidden align-top";
 const STICKY_FIRST_COL =
     "sticky left-0 z-[var(--z-checklist-sticky-column)]";
 

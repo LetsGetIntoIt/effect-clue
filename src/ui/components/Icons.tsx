@@ -259,6 +259,34 @@ export function AlertIcon({ className, size = 14 }: IconProps) {
     );
 }
 
+/**
+ * Lightbulb — paired with the per-cell "candidate for suggestion N"
+ * footnote affordance so the same glyph appears in the cell chip and
+ * the why-popover explanation, tying them together visually.
+ */
+export function LightbulbIcon({ className, size = 14 }: IconProps) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+            className={className}
+        >
+            <path d="M9 18h6" />
+            <path d="M10 22h4" />
+            <path d="M15.09 14a5 5 0 1 0-6.18 0c.55.45 1.09 1.21 1.09 2v2h4v-2c0-.79.54-1.55 1.09-2z" />
+        </svg>
+    );
+}
+
 /** Arrow leaving a frame — paired with links that open in a new tab. */
 export function ExternalLinkIcon({ className, size = 14 }: IconProps) {
     return (

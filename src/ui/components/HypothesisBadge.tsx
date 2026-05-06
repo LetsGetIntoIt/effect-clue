@@ -15,19 +15,32 @@ interface HypothesisBadgeProps {
 // Glyph reflects the resolved status — a check mark when the
 // hypothesis has been confirmed by real facts, a question mark while
 // it's still active, jointly conflicting, or directly contradicted.
+//
+// Positioning is the caller's responsibility. The badge sits in the
+// `topRight` slot of `CellLayout`, which handles corner placement and
+// the `auto`-column mirror trick that keeps the central glyph centered.
 export function HypothesisBadge({ value, status }: HypothesisBadgeProps) {
     const tone = value === Y ? "text-yes" : "text-no";
     const confirmed = status.kind === "confirmed";
+    // ViewBox is "3 3 18 18" so the visible rounded square fills the
+    // SVG's bounding box edge-to-edge. Without this, the rect at
+    // (3,3) inside a "0 0 24 24" viewBox renders ~2px inside the SVG
+    // box, leaving a phantom transparent border that makes the
+    // badge sit visually further from the cell corner than the
+    // footnote chip on the opposite side. Inner glyph coordinates
+    // (?/check) stay at their original 24x24-relative positions
+    // because the viewBox shift translates them — they still center
+    // inside the rect.
     return (
         <svg
             xmlns="http://www.w3.org/2000/svg"
             width={14}
             height={14}
-            viewBox="0 0 24 24"
+            viewBox="3 3 18 18"
             aria-hidden="true"
             focusable="false"
             data-glyph={confirmed ? "check" : "question"}
-            className={`absolute right-0.5 top-0.5 ${tone}`}
+            className={tone}
         >
             <rect
                 x="3"

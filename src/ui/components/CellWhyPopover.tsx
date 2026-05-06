@@ -11,7 +11,7 @@ import type {
     HypothesisValue,
 } from "../../logic/Hypothesis";
 import { HashMap } from "effect";
-import { AlertIcon, CheckIcon } from "./Icons";
+import { AlertIcon, CheckIcon, LightbulbIcon } from "./Icons";
 import { HypothesisControl } from "./HypothesisControl";
 
 interface CellWhyPopoverProps {
@@ -23,6 +23,14 @@ interface CellWhyPopoverProps {
     readonly onHypothesisChange: (next: HypothesisValue | undefined) => void;
     /** Multi-line "why" chain text rendered below the control, when present. */
     readonly whyText: string | undefined;
+    /**
+     * "Candidate for suggestion #N — refuter's unseen card could be here."
+     * Rendered with the same lightbulb glyph as the in-cell footnote chip
+     * so users can match the chip to its explanation. Independent of
+     * `whyText`: a blank cell can be a refuter-candidate without having a
+     * deduction chain.
+     */
+    readonly footnoteText: string | undefined;
 }
 
 /**
@@ -41,6 +49,7 @@ export function CellWhyPopover({
     hypothesisValue,
     onHypothesisChange,
     whyText,
+    footnoteText,
 }: CellWhyPopoverProps) {
     const t = useTranslations("hypothesis");
 
@@ -144,17 +153,28 @@ export function CellWhyPopover({
                         card: cardLabel,
                     })}
                 </div>
-                {whyText !== undefined && (
+                {(whyText !== undefined || footnoteText !== undefined) && (
                     <div className="flex flex-col gap-2">
                         <div className="text-[11px] font-semibold uppercase tracking-wide text-fg">
                             {t("hardFactsLabel")}
                         </div>
-                        <div className="whitespace-pre-line">{whyText}</div>
+                        {whyText !== undefined && (
+                            <div className="whitespace-pre-line">{whyText}</div>
+                        )}
+                        {footnoteText !== undefined && (
+                            <div className="flex items-start gap-1.5 text-accent">
+                                <LightbulbIcon
+                                    size={14}
+                                    className="mt-[2px] flex-shrink-0"
+                                />
+                                <span>{footnoteText}</span>
+                            </div>
+                        )}
                     </div>
                 )}
                 <div
                     className={
-                        whyText !== undefined
+                        whyText !== undefined || footnoteText !== undefined
                             ? "flex flex-col gap-2 border-t border-border pt-3"
                             : "flex flex-col gap-2"
                     }
@@ -178,11 +198,13 @@ export function CellWhyPopover({
                             ))}
                         </ul>
                     )}
-                    {whyText === undefined && status.kind === "off" && (
-                        <div className="text-[12px] text-muted">
-                            {t("emptyHint")}
-                        </div>
-                    )}
+                    {whyText === undefined &&
+                        footnoteText === undefined &&
+                        status.kind === "off" && (
+                            <div className="text-[12px] text-muted">
+                                {t("emptyHint")}
+                            </div>
+                        )}
                 </div>
             </div>
         </div>
