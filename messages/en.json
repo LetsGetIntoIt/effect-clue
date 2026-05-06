@@ -10,7 +10,8 @@
         "info": "More info",
         "infoGlyph": "ⓘ",
         "close": "Close",
-        "back": "Back"
+        "back": "Back",
+        "save": "Save"
     },
     "bottomNav": {
         "ariaLabel": "Primary navigation",
@@ -87,6 +88,10 @@
         "loadCustomCardSetTitle": "Load card pack \"{label}\"",
         "deleteCustomCardSetTitle": "Delete card pack \"{label}\"",
         "deleteCustomCardSetAria": "Delete card pack {label}",
+        "renamePackTitle": "Rename card pack \"{label}\"",
+        "renamePackAria": "Rename card pack {label}",
+        "renamePackDialogTitle": "Rename card pack",
+        "renamePackInputLabel": "Card pack name",
         "saveAsCardPack": "+ Save as card pack",
         "saveAsCardPackTitle": "Save the current cards as a reusable card pack",
         "saveAsCardPackPrompt": "Save this card pack. Name it:",
@@ -95,7 +100,6 @@
         "saveAsNewCardPack": "+ Save as new pack",
         "sharePackTitle": "Share {label} with a friend",
         "sharePackAria": "Share card pack {label}",
-        "deleteCustomCardSetConfirm": "Delete card pack \"{label}\"?",
         "allCardPacksPill": "All card packs",
         "allCardPacksPillTitle": "Show every saved card pack",
         "cardPackSearchAria": "Search card packs",
@@ -390,7 +394,16 @@
         "myCardPacksTitle": "My card packs",
         "myCardPacksLoading": "Loading card packs…",
         "myCardPacksEmpty": "No synced card packs yet.",
-        "myCardPacksError": "Couldn’t load card packs."
+        "myCardPacksError": "Couldn’t load card packs.",
+        "renamePackTitle": "Rename card pack \"{label}\"",
+        "renamePackAria": "Rename card pack {label}",
+        "renamePackDialogTitle": "Rename card pack",
+        "renamePackInputLabel": "New name",
+        "sharePackTitle": "Share {label} with a friend",
+        "sharePackAria": "Share card pack {label}",
+        "deletePackTitle": "Delete card pack \"{label}\"",
+        "deletePackAria": "Delete card pack {label}",
+        "deletePackConfirm": "Delete card pack \"{label}\"?"
     },
     "installPrompt": {
         "title": "Install Clue Solver",

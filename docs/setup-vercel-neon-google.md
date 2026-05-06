@@ -100,6 +100,55 @@ In local development, leaving it blank lets Better Auth derive the
 actual `localhost` host and port from the incoming request, so Next's
 automatic port fallback keeps working when 3000 is already occupied.
 
+## 4b. `BETTER_AUTH_PRODUCTION_URL` (OAuth proxy for previews)
+
+Vercel preview hostnames are dynamic per branch and per deploy, and
+Google explicitly does not allow wildcards in **Authorized redirect
+URIs**. That means a fresh preview's
+`https://winclue-git-<branch>.vercel.app/api/auth/callback/google`
+won't be in Google's allowlist — clicking the sign-in button on a
+preview either silently fails or returns a `redirect_uri_mismatch`.
+
+Better Auth ships an [`oAuthProxy`](https://better-auth.com/docs/plugins/oauth-proxy)
+plugin to fix this without touching Google: previews send Google
+the **production** redirect URI, Google calls back to production,
+production encrypts the user's profile with `BETTER_AUTH_SECRET`
+and 302's the encrypted blob to the preview, the preview decrypts
+and writes the session into its own DB. Production is unchanged —
+the plugin is a no-op when the request URL matches `productionURL`.
+
+Per environment:
+
+| Environment | Value |
+| --- | --- |
+| Production | `https://winclue.vercel.app` (same as `BETTER_AUTH_URL`) |
+| Preview    | `https://winclue.vercel.app` (literal — **NOT** `$VERCEL_URL`) |
+| Development | Leave blank — proxy is a no-op locally |
+
+Operational notes:
+
+- `BETTER_AUTH_SECRET` must be the same value across Production and
+  Preview (already required by the existing setup); the proxy uses it
+  to encrypt and decrypt the in-flight profile.
+- The plugin's `trustedOrigins` (configured in `src/server/auth.ts`)
+  matches the production aliases (`winclue.vercel.app`,
+  `effect-clue.vercel.app`), the preview wildcard
+  (`effect-clue-*-lets-get-into-it.vercel.app` — Vercel's project
+  name is `effect-clue`; the `winclue` host is just an alias), and
+  `http://localhost:*`. If the Vercel team slug ever changes, update
+  the wildcard in that file or production will start rejecting the
+  proxy hop with `Invalid origin` 403s.
+- Previews should write to a separate DB from production — the proxy
+  creates the user/session row on the preview side. Vercel's Neon
+  integration provisions a per-environment branch automatically when
+  enabled; verify this in the Vercel project's Storage tab if you
+  haven't already.
+- After this is wired, the only Google **Authorized redirect URI** you
+  need for the deployed app is the single production callback. Earlier
+  iterations of step 5 told you to add specific preview-deploy
+  callback URLs as they came up; that's no longer necessary and you
+  can remove any preview-specific entries from Google.
+
 ## 5. Google OAuth client
 
 Required in every environment — `pnpm dev` exits at startup if either
@@ -130,8 +179,6 @@ out of production bundles, see CI assertion below.
    - `https://winclue.vercel.app`
    - Any localhost ports you use for local Google OAuth, e.g.
      `http://localhost:3000`
-   - Specific Vercel preview URLs as needed (Google may reject
-     wildcards).
 4. **Authorized redirect URIs** — add the exact callback URL for each
    environment:
    - `https://winclue.vercel.app/api/auth/callback/google`
@@ -140,8 +187,11 @@ out of production bundles, see CI assertion below.
      Next may auto-select another port when 3000 is occupied; either
      add that exact callback too, or free/pin port 3000 before testing
      Google OAuth locally.
-   - Specific preview-deploy URLs as they come up. Wildcards are not
-     supported here.
+
+   You do **not** need to add Vercel preview URLs here — the
+   `oAuthProxy` plugin (step 4b) routes preview OAuth through the
+   production callback above, so a single registered URL covers every
+   preview deploy.
 5. Capture `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Add both to
    all three Vercel envs.
 

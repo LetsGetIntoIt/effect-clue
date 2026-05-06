@@ -211,6 +211,7 @@ Copy [env.example](env.example) to `.env.local`. All third-party integrations ar
 | `DATABASE_URL_UNPOOLED` | Direct (non-pooler) Postgres URL. Reserved for migration runs that need a stable session. |
 | `BETTER_AUTH_SECRET` | Server-only secret for session JWT signing. Generate with `openssl rand -hex 32`. |
 | `BETTER_AUTH_URL` | Public URL of the deployed app. Leave blank in local dev so auth follows the actual auto-selected localhost port. |
+| `BETTER_AUTH_PRODUCTION_URL` | Stable production URL the [`oAuthProxy`](https://better-auth.com/docs/plugins/oauth-proxy) plugin routes Google OAuth through, so Vercel previews don't need their own OAuth client. Set to the production URL on **both** Production and Preview (literal `https://winclue.vercel.app`, not `$VERCEL_URL`); leave blank in local dev. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth client. **Required in every environment** — `pnpm dev` exits at startup if either is empty. Use a localhost-scoped client locally (see "Google OAuth — local dev" above); previews/production use a separate client in Vercel env vars. |
 
 In CI/production, the build job needs `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` to upload source maps. Production also needs the DB and auth vars wired in Vercel — see [docs/setup-vercel-neon-google.md](docs/setup-vercel-neon-google.md).

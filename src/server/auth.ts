@@ -40,7 +40,7 @@ import "server-only";
 
 import { betterAuth } from "better-auth";
 import type { BaseURLConfig } from "better-auth";
-import { anonymous } from "better-auth/plugins";
+import { anonymous, oAuthProxy } from "better-auth/plugins";
 import { Pool } from "pg";
 import { googleProviderConfig } from "./authEnv";
 import { LOCAL_DATABASE_URL } from "./localDatabase";
@@ -119,6 +119,36 @@ const databaseUrl = requiredDatabaseUrl();
 const baseURL = requiredBaseURL();
 const secret = process.env["BETTER_AUTH_SECRET"] ?? "";
 const socialProviders = googleProviderConfig();
+// Stable production URL used by the OAuth proxy plugin: every Vercel
+// preview deployment routes its OAuth round-trip through this URL so
+// only the production callback needs to be registered with Google.
+// Optional in local dev — the plugin is a no-op when `productionURL`
+// is undefined or matches `baseURL`.
+const productionURL = optionalEnv("BETTER_AUTH_PRODUCTION_URL");
+
+/**
+ * Origins (preview hosts, localhost) that production accepts as valid
+ * redirect targets when handing the encrypted OAuth profile back from
+ * the proxy hop. Better Auth supports glob wildcards for the host
+ * portion since 1.5 — patterns are matched against the full origin.
+ *
+ * Vercel preview hostnames for this project follow the pattern
+ * `effect-clue-{branch-or-hash}-lets-get-into-it.vercel.app` (the
+ * project name is `effect-clue`; `winclue.vercel.app` is just the
+ * production alias). The wildcard below matches both the
+ * git-branch and the deployment-hash variants.
+ *
+ * Keep this list in sync with the Vercel project's actual URLs. If
+ * the team slug ever changes, update the wildcard accordingly —
+ * production will start returning "Invalid origin" 403s on previews
+ * the moment a preview URL stops matching.
+ */
+const trustedOrigins: Array<string> = [
+    "https://winclue.vercel.app",
+    "https://effect-clue.vercel.app",
+    "https://effect-clue-*-lets-get-into-it.vercel.app",
+    "http://localhost:*",
+];
 
 /**
  * The better-auth pool is a *separate* pg pool from the one
@@ -135,6 +165,7 @@ export const auth = betterAuth({
     database: authPool,
     secret,
     baseURL,
+    trustedOrigins,
     emailAndPassword: {
         enabled: isDev,
     },
@@ -192,6 +223,21 @@ export const auth = betterAuth({
                     },
                 },
             },
+        }),
+        // Vercel preview deploys can't register a stable OAuth
+        // callback URL with Google (preview hosts are dynamic per
+        // branch / per deploy). The proxy plugin pivots OAuth
+        // callbacks through `productionURL` — Google calls back to
+        // production, production encrypts the profile with
+        // `BETTER_AUTH_SECRET` and redirects the encrypted blob to
+        // the preview, the preview decrypts and writes the session
+        // to its own DB. The plugin is a no-op when `currentURL`
+        // (auto-derived from the request / `VERCEL_URL`) matches
+        // `productionURL`, so production behaviour is unchanged.
+        // See `docs/setup-vercel-neon-google.md` for the per-env
+        // env-var setup that makes this work end-to-end.
+        oAuthProxy({
+            ...(productionURL !== undefined ? { productionURL } : {}),
         }),
     ],
 });

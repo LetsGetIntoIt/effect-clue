@@ -24,12 +24,20 @@ import {
     signInFailed,
     signInStarted,
 } from "../../analytics/events";
-import { getMyCardPacks } from "../../server/actions/packs";
+import {
+    getMyCardPacks,
+    type PersistedCardPack,
+} from "../../server/actions/packs";
 import {
     useCustomCardPacks,
 } from "../../data/customCardPacks";
+import { decodeServerPack } from "../../data/cardPacksSync";
+import type { CardSet } from "../../logic/CardSet";
+import type { CustomCardSet } from "../../logic/CustomCardSets";
 import { useSession } from "../hooks/useSession";
-import { XIcon } from "../components/Icons";
+import { PencilIcon, TrashIcon, XIcon } from "../components/Icons";
+import { ShareIcon } from "../components/ShareIcon";
+import { useCardPackActions } from "../components/cardPackActions";
 import { AccountAvatar } from "./AccountAvatar";
 import { authClient } from "./authClient";
 import { DevSignInForm } from "./DevSignInForm";
@@ -41,25 +49,55 @@ export const myCardPacksQueryKey = (userId: string | undefined) =>
     ["my-card-packs", userId] as const;
 const SIGN_IN_FROM_MENU: SignInFromContext = "menu";
 
-interface CardPackListItem {
+/**
+ * A card pack as rendered in the modal. Carries the live `CardSet`
+ * so the per-row Share / Edit / Delete actions don't have to lazily
+ * decode `cardSetData` on click. `clientGeneratedId` is the
+ * cross-device-stable identity (equals the local id; matches a server
+ * row's `client_generated_id` column). `source` tracks which side of
+ * the merge the entry came from so dedupe logic outside this module
+ * can reason about it if needed.
+ */
+interface DisplayPack {
     readonly id: string;
-    readonly clientGeneratedId?: string;
+    readonly clientGeneratedId: string;
     readonly label: string;
+    readonly cardSet: CardSet;
+    readonly source: "server" | "local";
 }
 
 export const mergeCardPacks = (
-    localPacks: ReadonlyArray<CardPackListItem>,
-    serverPacks: ReadonlyArray<CardPackListItem>,
-): ReadonlyArray<CardPackListItem> => {
+    localPacks: ReadonlyArray<CustomCardSet>,
+    serverPacks: ReadonlyArray<PersistedCardPack>,
+): ReadonlyArray<DisplayPack> => {
     const serverClientIds = new Set(
-        serverPacks
-            .map((pack) => pack.clientGeneratedId)
-            .filter((id): id is string => id !== undefined),
+        serverPacks.map((pack) => pack.clientGeneratedId),
     );
-    return [
-        ...serverPacks,
-        ...localPacks.filter((pack) => !serverClientIds.has(pack.id)),
-    ];
+    const decodedServer: ReadonlyArray<DisplayPack> = serverPacks.flatMap(
+        (pack) => {
+            const decoded = decodeServerPack(pack);
+            if (decoded === null) return [];
+            return [
+                {
+                    id: pack.id,
+                    clientGeneratedId: pack.clientGeneratedId,
+                    label: pack.label,
+                    cardSet: decoded.cardSet,
+                    source: "server" as const,
+                },
+            ];
+        },
+    );
+    const localOnly: ReadonlyArray<DisplayPack> = localPacks
+        .filter((pack) => !serverClientIds.has(pack.id))
+        .map((pack) => ({
+            id: pack.id,
+            clientGeneratedId: pack.id,
+            label: pack.label,
+            cardSet: pack.cardSet,
+            source: "local" as const,
+        }));
+    return [...decodedServer, ...localOnly];
 };
 
 export function AccountModal({
@@ -86,6 +124,7 @@ export function AccountModal({
         localCardPacks.data ?? [],
         myCardPacks.data ?? [],
     );
+    const { sharePack, renamePack, deletePack } = useCardPackActions();
 
     const callbackURL = (): string => {
         const qs = searchParams.toString();
@@ -191,9 +230,44 @@ export function AccountModal({
                                             {packs.map((pack) => (
                                                 <li
                                                     key={pack.id}
-                                                    className="truncate rounded bg-row-alt px-2 py-1"
+                                                    className="flex items-stretch overflow-hidden rounded border border-border bg-row-alt"
                                                 >
-                                                    {pack.label}
+                                                    <span className="flex-1 truncate self-center px-3 py-2">
+                                                        {pack.label}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            sharePack(pack)
+                                                        }
+                                                        className="inline-flex cursor-pointer items-center border-l border-border px-2.5 py-1.5 text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent"
+                                                        title={t("sharePackTitle", { label: pack.label })}
+                                                        aria-label={t("sharePackAria", { label: pack.label })}
+                                                    >
+                                                        <ShareIcon size={14} />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            void renamePack(pack)
+                                                        }
+                                                        className="inline-flex cursor-pointer items-center border-l border-border px-2.5 py-1.5 text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent"
+                                                        title={t("renamePackTitle", { label: pack.label })}
+                                                        aria-label={t("renamePackAria", { label: pack.label })}
+                                                    >
+                                                        <PencilIcon size={14} />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            void deletePack(pack)
+                                                        }
+                                                        className="inline-flex cursor-pointer items-center border-l border-border px-2.5 py-1.5 text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-danger"
+                                                        title={t("deletePackTitle", { label: pack.label })}
+                                                        aria-label={t("deletePackAria", { label: pack.label })}
+                                                    >
+                                                        <TrashIcon size={14} />
+                                                    </button>
                                                 </li>
                                             ))}
                                         </ul>

@@ -15,6 +15,7 @@ import { PlayLayout } from "./components/PlayLayout";
 import { Toolbar } from "./components/Toolbar";
 import { TooltipProvider } from "./components/Tooltip";
 import { ConfirmProvider, useConfirm } from "./hooks/useConfirm";
+import { PromptProvider } from "./hooks/usePrompt";
 import { useSplashGate } from "./hooks/useSplashGate";
 import { SelectionProvider } from "./SelectionContext";
 import { useGlobalShortcut } from "./keyMap";
@@ -147,9 +148,11 @@ export function Clue() {
         <TooltipProvider delayDuration={150} skipDelayDuration={50}>
           <ClueProvider>
            <ConfirmProvider>
+           <PromptProvider>
            <SelectionProvider>
             <CoordinatedShell headerRef={headerRef} />
            </SelectionProvider>
+           </PromptProvider>
            </ConfirmProvider>
           </ClueProvider>
         </TooltipProvider>
