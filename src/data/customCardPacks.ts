@@ -39,6 +39,13 @@ import {
     type CustomCardSet,
 } from "../logic/CustomCardSets";
 import { TelemetryRuntime } from "../observability/runtime";
+import {
+    deleteCardPack as deleteCardPackServer,
+    saveCardPack as saveCardPackServer,
+    type PersistedCardPack,
+} from "../server/actions/packs";
+import { useSession } from "../ui/hooks/useSession";
+import { myCardPacksQueryKey } from "../ui/account/AccountModal";
 
 export const customCardPacksQueryKey = ["custom-card-packs"] as const;
 
@@ -144,6 +151,94 @@ export function useDeleteCardPack(): UseMutationResult<void, Error, string> {
             queryClient.setQueryData<ReadonlyArray<CustomCardSet>>(
                 customCardPacksQueryKey,
                 (old) => old?.filter((p) => p.id !== id) ?? [],
+            );
+        },
+    });
+}
+
+interface SaveCardPackOnServerInput {
+    readonly clientGeneratedId: string;
+    readonly label: string;
+    readonly cardSet: CardSet;
+}
+
+const saveOnServerEffect = Effect.fn("rq.customPacks.saveOnServer")(function* (
+    input: SaveCardPackOnServerInput,
+) {
+    return yield* Effect.promise(() => saveCardPackServer(input));
+});
+
+const deleteOnServerEffect = Effect.fn("rq.customPacks.deleteOnServer")(
+    function* (idOrClientGeneratedId: string) {
+        yield* Effect.promise(() =>
+            deleteCardPackServer({ idOrClientGeneratedId }),
+        );
+    },
+);
+
+/**
+ * Write-side hook for the user's *server-stored* card-pack library.
+ * UPSERTs the pack on the server (keyed by `(owner_id, client_generated_id)`)
+ * and refreshes the `myCardPacksQueryKey` cache so the AccountModal's
+ * pack list updates immediately. Pairs with `useSaveCardPack` (local
+ * storage) — call both when a synced pack is being mutated.
+ */
+export function useSaveCardPackOnServer(): UseMutationResult<
+    PersistedCardPack,
+    Error,
+    SaveCardPackOnServerInput
+> {
+    const queryClient = useQueryClient();
+    const session = useSession();
+    const userId = session.data?.user.id;
+    return useMutation({
+        mutationFn: (input: SaveCardPackOnServerInput) =>
+            TelemetryRuntime.runPromise(saveOnServerEffect(input)),
+        onSuccess: (savedPack) => {
+            queryClient.setQueryData<ReadonlyArray<PersistedCardPack>>(
+                myCardPacksQueryKey(userId),
+                (old) => {
+                    if (!old) return [savedPack];
+                    const idx = old.findIndex(
+                        (p) =>
+                            p.id === savedPack.id ||
+                            p.clientGeneratedId === savedPack.clientGeneratedId,
+                    );
+                    if (idx === -1) return [savedPack, ...old];
+                    const next = [...old];
+                    next[idx] = savedPack;
+                    return next;
+                },
+            );
+        },
+    });
+}
+
+/**
+ * Owner-scoped delete on the server, keyed by either the server-minted
+ * `id` or the `client_generated_id`. Pairs with `useDeleteCardPack`
+ * (local storage).
+ */
+export function useDeleteCardPackOnServer(): UseMutationResult<
+    void,
+    Error,
+    string
+> {
+    const queryClient = useQueryClient();
+    const session = useSession();
+    const userId = session.data?.user.id;
+    return useMutation({
+        mutationFn: (idOrClientGeneratedId: string) =>
+            TelemetryRuntime.runPromise(
+                deleteOnServerEffect(idOrClientGeneratedId),
+            ),
+        onSuccess: (_void, arg) => {
+            queryClient.setQueryData<ReadonlyArray<PersistedCardPack>>(
+                myCardPacksQueryKey(userId),
+                (old) =>
+                    old?.filter(
+                        (p) => p.id !== arg && p.clientGeneratedId !== arg,
+                    ) ?? [],
             );
         },
     });

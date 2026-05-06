@@ -40,18 +40,57 @@ vi.mock("./authClient", () => ({
 }));
 
 const getMyCardPacksMock = vi.fn();
+const saveCardPackMock = vi.fn();
+const deleteCardPackMock = vi.fn();
 vi.mock("../../server/actions/packs", () => ({
     getMyCardPacks: () => getMyCardPacksMock(),
+    saveCardPack: (input: unknown) => saveCardPackMock(input),
+    deleteCardPack: (input: unknown) => deleteCardPackMock(input),
 }));
 
+const openShareCardPackMock = vi.fn();
+vi.mock("../share/ShareProvider", () => ({
+    useShareContext: () => ({
+        open: false,
+        openShareCardPack: (opts: unknown) => openShareCardPackMock(opts),
+        openInvitePlayer: () => {},
+        openContinueOnAnotherDevice: () => {},
+    }),
+    ShareProvider: ({ children }: { readonly children: React.ReactNode }) =>
+        children,
+}));
+
+import * as React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AccountModal, mergeCardPacks } from "./AccountModal";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
+import { ConfirmProvider } from "../hooks/useConfirm";
+import { PromptProvider } from "../hooks/usePrompt";
+
+const Wrappers = ({ children }: { readonly children: React.ReactNode }) => (
+    <TestQueryClientProvider>
+        <ConfirmProvider>
+            <PromptProvider>{children}</PromptProvider>
+        </ConfirmProvider>
+    </TestQueryClientProvider>
+);
 
 const renderModal = () =>
     render(<AccountModal open={true} onClose={() => {}} />, {
-        wrapper: TestQueryClientProvider,
+        wrapper: Wrappers,
     });
+
+// A minimal-but-decodable `cardSetData` for `decodeServerPack`. Empty
+// categories array is enough — the decoder only requires the shape,
+// not non-empty contents.
+const EMPTY_CARD_SET_DATA = JSON.stringify({ categories: [] });
+
+const officeCategory = {
+    id: "category-tv",
+    name: "TV Shows",
+    cards: [{ id: "card-office", name: "The Office" }],
+};
+const officeCardSetData = JSON.stringify({ categories: [officeCategory] });
 
 beforeEach(() => {
     window.localStorage.clear();
@@ -62,6 +101,23 @@ beforeEach(() => {
     refetchMock.mockResolvedValue(undefined);
     getMyCardPacksMock.mockReset();
     getMyCardPacksMock.mockResolvedValue([]);
+    saveCardPackMock.mockReset();
+    saveCardPackMock.mockImplementation(async (input: unknown) => {
+        const i = input as {
+            clientGeneratedId: string;
+            label: string;
+            cardSet: unknown;
+        };
+        return {
+            id: `server-${i.clientGeneratedId}`,
+            clientGeneratedId: i.clientGeneratedId,
+            label: i.label,
+            cardSetData: JSON.stringify(i.cardSet),
+        };
+    });
+    deleteCardPackMock.mockReset();
+    deleteCardPackMock.mockResolvedValue(undefined);
+    openShareCardPackMock.mockReset();
 });
 
 describe("AccountModal — Better Auth client calls", () => {
@@ -111,7 +167,7 @@ describe("AccountModal — Better Auth client calls", () => {
                 id: "pack-1",
                 clientGeneratedId: "custom-1",
                 label: "Office Edition",
-                cardSetData: "{}",
+                cardSetData: officeCardSetData,
             },
         ]);
 
@@ -154,25 +210,267 @@ describe("AccountModal — Better Auth client calls", () => {
     });
 });
 
-describe("mergeCardPacks", () => {
-    test("dedupes server packs that came from local clientGeneratedId", () => {
-        expect(
-            mergeCardPacks(
-                [{ id: "custom-1", label: "Local name" }],
-                [
-                    {
-                        id: "server-1",
-                        clientGeneratedId: "custom-1",
-                        label: "Server name",
-                    },
-                ],
-            ),
-        ).toEqual([
+describe("AccountModal — pack row actions", () => {
+    const signInAlice = () => {
+        mockSessionData = {
+            user: {
+                id: "u1",
+                email: "alice@example.test",
+                name: "Alice",
+                image: null,
+                isAnonymous: false,
+            },
+            session: { expiresAt: "2030-01-01T00:00:00.000Z" },
+        };
+    };
+
+    test("share button calls openShareCardPack with the decoded card set", async () => {
+        signInAlice();
+        getMyCardPacksMock.mockResolvedValue([
             {
-                id: "server-1",
+                id: "pack-1",
                 clientGeneratedId: "custom-1",
-                label: "Server name",
+                label: "Office Edition",
+                cardSetData: officeCardSetData,
             },
         ]);
+        renderModal();
+        await waitFor(() => {
+            expect(screen.getByText("Office Edition")).toBeInTheDocument();
+        });
+        fireEvent.click(
+            screen.getByLabelText(
+                'sharePackAria:{"label":"Office Edition"}',
+            ),
+        );
+        expect(openShareCardPackMock).toHaveBeenCalledTimes(1);
+        const opts = openShareCardPackMock.mock.calls[0]?.[0] as {
+            packLabel: string;
+            forcedCardPack: { categories: ReadonlyArray<unknown> };
+        };
+        expect(opts.packLabel).toBe("Office Edition");
+        expect(opts.forcedCardPack.categories).toHaveLength(1);
+    });
+
+    test("rename mirrors to both server and local for a synced pack", async () => {
+        signInAlice();
+        // Local copy mirrors the server pack — same `clientGeneratedId`.
+        window.localStorage.setItem(
+            "effect-clue.custom-presets.v1",
+            JSON.stringify({
+                version: 1,
+                presets: [
+                    {
+                        id: "custom-1",
+                        label: "Office Edition",
+                        categories: [
+                            { id: "category-tv", name: "TV Shows", cards: [
+                                { id: "card-office", name: "The Office" },
+                            ] },
+                        ],
+                    },
+                ],
+            }),
+        );
+        getMyCardPacksMock.mockResolvedValue([
+            {
+                id: "pack-1",
+                clientGeneratedId: "custom-1",
+                label: "Office Edition",
+                cardSetData: officeCardSetData,
+            },
+        ]);
+        renderModal();
+        await waitFor(() => {
+            expect(screen.getByText("Office Edition")).toBeInTheDocument();
+        });
+        fireEvent.click(
+            screen.getByLabelText(
+                'renamePackAria:{"label":"Office Edition"}',
+            ),
+        );
+        // Prompt dialog renders.
+        const input = (await screen.findByDisplayValue(
+            "Office Edition",
+        )) as HTMLInputElement;
+        fireEvent.change(input, { target: { value: "Dunder Mifflin" } });
+        fireEvent.click(screen.getByRole("button", { name: "save" }));
+
+        await waitFor(() => {
+            expect(saveCardPackMock).toHaveBeenCalledTimes(1);
+        });
+        const serverArg = saveCardPackMock.mock.calls[0]?.[0] as {
+            clientGeneratedId: string;
+            label: string;
+        };
+        expect(serverArg.clientGeneratedId).toBe("custom-1");
+        expect(serverArg.label).toBe("Dunder Mifflin");
+        // Local mutation also fired — the localStorage entry now has
+        // the new label (synchronous rewrite via `saveCustomCardSet`).
+        const raw = window.localStorage.getItem(
+            "effect-clue.custom-presets.v1",
+        );
+        expect(raw).toContain("Dunder Mifflin");
+    });
+
+    test("rename of a local-only pack does NOT call the server", async () => {
+        signInAlice();
+        window.localStorage.setItem(
+            "effect-clue.custom-presets.v1",
+            JSON.stringify({
+                version: 1,
+                presets: [
+                    {
+                        id: "custom-local-only",
+                        label: "Local-only",
+                        categories: [],
+                    },
+                ],
+            }),
+        );
+        // No matching server pack returned.
+        getMyCardPacksMock.mockResolvedValue([]);
+        renderModal();
+        await waitFor(() => {
+            expect(screen.getByText("Local-only")).toBeInTheDocument();
+        });
+        fireEvent.click(
+            screen.getByLabelText(
+                'renamePackAria:{"label":"Local-only"}',
+            ),
+        );
+        const input = (await screen.findByDisplayValue(
+            "Local-only",
+        )) as HTMLInputElement;
+        fireEvent.change(input, { target: { value: "Renamed" } });
+        fireEvent.click(screen.getByRole("button", { name: "save" }));
+
+        await waitFor(() => {
+            const raw = window.localStorage.getItem(
+                "effect-clue.custom-presets.v1",
+            );
+            expect(raw).toContain("Renamed");
+        });
+        expect(saveCardPackMock).not.toHaveBeenCalled();
+    });
+
+    test("rename Cancel performs no mutation", async () => {
+        signInAlice();
+        getMyCardPacksMock.mockResolvedValue([
+            {
+                id: "pack-1",
+                clientGeneratedId: "custom-1",
+                label: "Office Edition",
+                cardSetData: officeCardSetData,
+            },
+        ]);
+        renderModal();
+        await waitFor(() => {
+            expect(screen.getByText("Office Edition")).toBeInTheDocument();
+        });
+        fireEvent.click(
+            screen.getByLabelText(
+                'renamePackAria:{"label":"Office Edition"}',
+            ),
+        );
+        await screen.findByDisplayValue("Office Edition");
+        fireEvent.click(screen.getByRole("button", { name: "cancel" }));
+        expect(saveCardPackMock).not.toHaveBeenCalled();
+    });
+
+    test("delete fires both server and local mutations after confirm", async () => {
+        signInAlice();
+        window.localStorage.setItem(
+            "effect-clue.custom-presets.v1",
+            JSON.stringify({
+                version: 1,
+                presets: [
+                    {
+                        id: "custom-1",
+                        label: "Office Edition",
+                        categories: [
+                            { id: "category-tv", name: "TV Shows", cards: [
+                                { id: "card-office", name: "The Office" },
+                            ] },
+                        ],
+                    },
+                ],
+            }),
+        );
+        getMyCardPacksMock.mockResolvedValue([
+            {
+                id: "pack-1",
+                clientGeneratedId: "custom-1",
+                label: "Office Edition",
+                cardSetData: officeCardSetData,
+            },
+        ]);
+        renderModal();
+        await waitFor(() => {
+            expect(screen.getByText("Office Edition")).toBeInTheDocument();
+        });
+        fireEvent.click(
+            screen.getByLabelText(
+                'deletePackAria:{"label":"Office Edition"}',
+            ),
+        );
+        const confirmBtn = await screen.findByRole("button", { name: "confirm" });
+        fireEvent.click(confirmBtn);
+
+        await waitFor(() => {
+            expect(deleteCardPackMock).toHaveBeenCalledTimes(1);
+        });
+        expect(deleteCardPackMock.mock.calls[0]?.[0]).toEqual({
+            idOrClientGeneratedId: "pack-1",
+        });
+        // Local entry removed.
+        const raw = window.localStorage.getItem(
+            "effect-clue.custom-presets.v1",
+        );
+        expect(raw).not.toContain("Office Edition");
+    });
+});
+
+describe("mergeCardPacks", () => {
+    test("dedupes server packs that came from local clientGeneratedId", () => {
+        const merged = mergeCardPacks(
+            [
+                {
+                    id: "custom-1",
+                    label: "Local name",
+                    cardSet: { categories: [] } as never,
+                },
+            ],
+            [
+                {
+                    id: "server-1",
+                    clientGeneratedId: "custom-1",
+                    label: "Server name",
+                    cardSetData: EMPTY_CARD_SET_DATA,
+                },
+            ],
+        );
+        expect(merged).toHaveLength(1);
+        expect(merged[0]).toMatchObject({
+            id: "server-1",
+            clientGeneratedId: "custom-1",
+            label: "Server name",
+            source: "server",
+        });
+    });
+
+    test("drops server packs with malformed cardSetData", () => {
+        const merged = mergeCardPacks(
+            [],
+            [
+                {
+                    id: "broken",
+                    clientGeneratedId: "broken",
+                    label: "Broken",
+                    cardSetData: "not-json",
+                },
+            ],
+        );
+        expect(merged).toHaveLength(0);
     });
 });

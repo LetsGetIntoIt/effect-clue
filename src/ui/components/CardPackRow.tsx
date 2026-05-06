@@ -24,15 +24,14 @@ import { CARD_SETS } from "../../logic/GameSetup";
 import { CustomCardSet } from "../../logic/CustomCardSets";
 import {
     useCustomCardPacks,
-    useDeleteCardPack,
     useSaveCardPack,
 } from "../../data/customCardPacks";
 import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 import { CardPackPicker, type PickerPack } from "./CardPackPicker";
-import { SearchIcon, TrashIcon } from "./Icons";
+import { PencilIcon, SearchIcon, TrashIcon } from "./Icons";
 import { ShareIcon } from "./ShareIcon";
-import { useShareContext } from "../share/ShareProvider";
+import { useCardPackActions } from "./cardPackActions";
 
 const RECENT_LIMIT = 3;
 const SURFACE_BUDGET = 1 + RECENT_LIMIT; // Classic + 3 recents = 4 pills before the dropdown.
@@ -109,10 +108,9 @@ export function CardPackRow() {
     const customPacks = customPacksQuery.data ?? [];
     const usage = usageQuery.data ?? new Map();
     const savePackMutation = useSaveCardPack();
-    const deletePackMutation = useDeleteCardPack();
     const recordUseMutation = useRecordCardPackUse();
     const forgetUseMutation = useForgetCardPackUse();
-    const { openShareCardPack } = useShareContext();
+    const cardPackActions = useCardPackActions();
     const [pickerOpen, setPickerOpen] = useState(false);
 
     // The Classic id is the first entry in CARD_SETS and is the
@@ -321,16 +319,17 @@ export function CardPackRow() {
         recordUseMutation.mutate(newPack.id);
     };
 
+    const toActionTarget = (pack: DisplayPack) => ({
+        clientGeneratedId: pack.id,
+        label: pack.label,
+        cardSet: pack.cardSet,
+    });
+
     const onDeleteCustomPack = async (pack: DisplayPack) => {
-        if (
-            !(await confirm({
-                message: t("deleteCustomCardSetConfirm", {
-                    label: pack.label,
-                }),
-            }))
-        )
-            return;
-        deletePackMutation.mutate(pack.id);
+        const ok = await cardPackActions.deletePack(toActionTarget(pack));
+        if (!ok) return;
+        // Recency map is per-id, so its entry only needs cleanup on
+        // confirmed deletes — keep this co-located with the action.
         forgetUseMutation.mutate(pack.id);
     };
 
@@ -340,16 +339,22 @@ export function CardPackRow() {
         void onDeleteCustomPack(pack);
     };
 
+    const onRenameCustomPack = (pack: DisplayPack) =>
+        void cardPackActions.renamePack(toActionTarget(pack));
+
+    const onRenameFromPicker = (picked: PickerPack) => {
+        const pack = findDisplayPack(picked.id);
+        if (!pack || !pack.isCustom) return;
+        onRenameCustomPack(pack);
+    };
+
     const onSharePill = (pack: DisplayPack) => {
         // Per-pack share is always pack-only (Flow 1): the surface
         // pill / picker row is a content-management surface, not a
         // game-state one. The clicked pack overrides the live setup
         // pack so the share contains exactly what the user clicked,
         // regardless of which pack is active in the table below.
-        openShareCardPack({
-            forcedCardPack: pack.cardSet,
-            packLabel: pack.label,
-        });
+        cardPackActions.sharePack(toActionTarget(pack));
     };
 
     const onSharePackFromPicker = (picked: PickerPack) => {
@@ -396,8 +401,14 @@ export function CardPackRow() {
                     const wrapperTone = isActive
                         ? "border-accent bg-accent text-white"
                         : "border-border bg-white";
+                    // Pills sized for comfortable mobile tap targets:
+                    // the label is the primary "select this pack" hit
+                    // area (largest), and the icon buttons stay
+                    // visually subordinate but grow proportionally
+                    // with the bigger pill so they remain reliably
+                    // tappable on touch devices.
                     const loadBase =
-                        "inline-flex cursor-pointer items-center px-3 py-1 transition-colors duration-200 ease-out";
+                        "inline-flex cursor-pointer items-center px-3.5 py-2 transition-colors duration-200 ease-out";
                     const loadTone = isActive
                         ? "font-semibold"
                         : "hover:bg-hover";
@@ -406,10 +417,11 @@ export function CardPackRow() {
                     // affordance is reachable on every pack pill —
                     // not just on the active one (which is what the
                     // bottom-row "Share this pack" button targets).
-                    // Custom pills additionally append a trash-icon
-                    // delete (destructive — paired with a confirm dialog).
+                    // Custom pills additionally append a pencil-icon
+                    // rename and a trash-icon delete (destructive —
+                    // paired with a confirm dialog).
                     const sharePillBase =
-                        "inline-flex cursor-pointer items-center border-l px-2 py-1 transition-colors duration-200 ease-out";
+                        "inline-flex cursor-pointer items-center border-l px-2.5 py-1.5 transition-colors duration-200 ease-out";
                     const sharePillTone = isActive
                         ? "border-white/40 text-white/80 hover:bg-white/15"
                         : "border-border text-muted hover:bg-hover hover:text-accent";
@@ -454,8 +466,23 @@ export function CardPackRow() {
                                     ? { "data-tour-anchor": "setup-share-pack-pill" }
                                     : {})}
                             >
-                                <ShareIcon size={12} />
+                                <ShareIcon size={14} />
                             </button>
+                            {pack.isCustom ? (
+                                <button
+                                    type="button"
+                                    className={`${sharePillBase} ${sharePillTone}`}
+                                    onClick={() => onRenameCustomPack(pack)}
+                                    title={t("renamePackTitle", {
+                                        label: pack.label,
+                                    })}
+                                    aria-label={t("renamePackAria", {
+                                        label: pack.label,
+                                    })}
+                                >
+                                    <PencilIcon size={14} />
+                                </button>
+                            ) : null}
                             {pack.isCustom ? (
                                 <button
                                     type="button"
@@ -468,7 +495,7 @@ export function CardPackRow() {
                                         label: pack.label,
                                     })}
                                 >
-                                    <TrashIcon size={12} />
+                                    <TrashIcon size={14} />
                                 </button>
                             ) : null}
                         </motion.span>
@@ -491,6 +518,7 @@ export function CardPackRow() {
                         packs={pickerPacks}
                         onSelect={onSelectFromPicker}
                         onDeleteCustomPack={onDeleteFromPicker}
+                        onRenameCustomPack={onRenameFromPicker}
                         onSharePack={onSharePackFromPicker}
                         activeMatchId={activeMatch?.id}
                     >

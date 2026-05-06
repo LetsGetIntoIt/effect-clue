@@ -11,7 +11,7 @@ import {
     useState,
 } from "react";
 import { ShareIcon } from "./ShareIcon";
-import { TrashIcon } from "./Icons";
+import { PencilIcon, TrashIcon } from "./Icons";
 
 /**
  * Pack-shaped record consumed by the picker. Custom packs carry
@@ -32,6 +32,12 @@ interface CardPackPickerProps {
     readonly packs: ReadonlyArray<PickerPack>;
     readonly onSelect: (pack: PickerPack) => void;
     readonly onDeleteCustomPack: (pack: PickerPack) => void;
+    /**
+     * Per-row rename for custom packs. Built-ins don't surface this —
+     * the picker only renders the pencil button when both
+     * `onRenameCustomPack` is provided AND `pack.isCustom` is true.
+     */
+    readonly onRenameCustomPack?: (pack: PickerPack) => void;
     /**
      * Optional per-row "Share this pack" handler. When provided, every
      * pack row gets a small share-icon button alongside the delete one.
@@ -77,6 +83,7 @@ export function CardPackPicker({
     packs,
     onSelect,
     onDeleteCustomPack,
+    onRenameCustomPack,
     onSharePack,
     activeMatchId,
     children,
@@ -231,7 +238,7 @@ export function CardPackPicker({
                                                 isActiveMatch ? "true" : undefined
                                             }
                                             className={
-                                                "flex items-center justify-between rounded px-2 py-1 text-[13px] " +
+                                                "flex items-stretch justify-between rounded px-2 py-1.5 text-[13px] " +
                                                 (isHighlighted ? "bg-hover " : "") +
                                                 (isActiveMatch
                                                     ? "border-l-2 border-accent text-accent font-semibold"
@@ -241,7 +248,7 @@ export function CardPackPicker({
                                         >
                                             <button
                                                 type="button"
-                                                className="flex-1 cursor-pointer truncate text-left"
+                                                className="flex-1 cursor-pointer truncate self-center text-left py-1"
                                                 onClick={() => select(pack)}
                                                 title={t("loadCustomCardSetTitle", {
                                                     label: pack.label,
@@ -253,7 +260,7 @@ export function CardPackPicker({
                                             {onSharePack ? (
                                                 <button
                                                     type="button"
-                                                    className="ml-1 inline-flex cursor-pointer items-center self-stretch rounded px-2 text-muted hover:bg-white hover:text-accent"
+                                                    className="ml-1 inline-flex cursor-pointer items-center self-stretch rounded px-2.5 text-muted hover:bg-white hover:text-accent"
                                                     onClick={() =>
                                                         onSharePack(pack)
                                                     }
@@ -266,13 +273,32 @@ export function CardPackPicker({
                                                         { label: pack.label },
                                                     )}
                                                 >
-                                                    <ShareIcon size={13} />
+                                                    <ShareIcon size={15} />
+                                                </button>
+                                            ) : null}
+                                            {pack.isCustom && onRenameCustomPack ? (
+                                                <button
+                                                    type="button"
+                                                    className="ml-1 inline-flex cursor-pointer items-center self-stretch rounded px-2.5 text-muted hover:bg-white hover:text-accent"
+                                                    onClick={() =>
+                                                        onRenameCustomPack(pack)
+                                                    }
+                                                    title={t(
+                                                        "renamePackTitle",
+                                                        { label: pack.label },
+                                                    )}
+                                                    aria-label={t(
+                                                        "renamePackAria",
+                                                        { label: pack.label },
+                                                    )}
+                                                >
+                                                    <PencilIcon size={15} />
                                                 </button>
                                             ) : null}
                                             {pack.isCustom ? (
                                                 <button
                                                     type="button"
-                                                    className="ml-1 cursor-pointer rounded px-2 py-0.5 text-muted hover:bg-white hover:text-danger"
+                                                    className="ml-1 inline-flex cursor-pointer items-center self-stretch rounded px-2.5 text-muted hover:bg-white hover:text-danger"
                                                     onClick={() =>
                                                         onDeleteCustomPack(pack)
                                                     }
@@ -285,7 +311,7 @@ export function CardPackPicker({
                                                         { label: pack.label },
                                                     )}
                                                 >
-                                                    <TrashIcon size={13} />
+                                                    <TrashIcon size={15} />
                                                 </button>
                                             ) : null}
                                         </li>

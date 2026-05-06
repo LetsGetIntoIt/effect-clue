@@ -61,7 +61,7 @@ const emptyPushResult: PushResult = {
     countFailed: 0,
 };
 
-const decodeServerPack = (
+export const decodeServerPack = (
     pack: PersistedCardPack,
 ): CustomCardSet | null => {
     try {

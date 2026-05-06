@@ -26,6 +26,7 @@ vi.mock("../../analytics/posthog", () => ({
 
 import { ClueProvider, useClue } from "../state";
 import { ConfirmProvider } from "../hooks/useConfirm";
+import { PromptProvider } from "../hooks/usePrompt";
 import { CardPackRow } from "./CardPackRow";
 import {
     saveCustomCardSet,
@@ -56,9 +57,11 @@ const seedCustomPacks = (labels: ReadonlyArray<string>): ReadonlyArray<CustomCar
 const renderRow = () =>
     render(
         <ConfirmProvider>
-            <ClueProvider>
-                <CardPackRow />
-            </ClueProvider>
+            <PromptProvider>
+                <ClueProvider>
+                    <CardPackRow />
+                </ClueProvider>
+            </PromptProvider>
         </ConfirmProvider>,
         { wrapper: TestQueryClientProvider },
     );
@@ -92,10 +95,12 @@ function MutateButton() {
 const renderRowWithMutate = () =>
     render(
         <ConfirmProvider>
-            <ClueProvider>
-                <CardPackRow />
-                <MutateButton />
-            </ClueProvider>
+            <PromptProvider>
+                <ClueProvider>
+                    <CardPackRow />
+                    <MutateButton />
+                </ClueProvider>
+            </PromptProvider>
         </ConfirmProvider>,
         { wrapper: TestQueryClientProvider },
     );
@@ -378,10 +383,12 @@ describe("CardPackRow dropdown reflects active pack", () => {
         seedCustomPacks(["Alpha", "Beta", "Gamma"]); // 5 packs total
         render(
             <ConfirmProvider>
-                <ClueProvider>
-                    <CardPackRow />
-                    <MutateButton />
-                </ClueProvider>
+                <PromptProvider>
+                    <ClueProvider>
+                        <CardPackRow />
+                        <MutateButton />
+                    </ClueProvider>
+                </PromptProvider>
             </ConfirmProvider>,
             { wrapper: TestQueryClientProvider },
         );
@@ -435,10 +442,12 @@ describe("CardPackRow destructive-data confirmation", () => {
         seedCustomPacks(["Alpha"]); // 3 packs total: Classic + Master + Alpha
         render(
             <ConfirmProvider>
-                <ClueProvider>
-                    <CardPackRow />
-                    <SeedKnownCardButton />
-                </ClueProvider>
+                <PromptProvider>
+                    <ClueProvider>
+                        <CardPackRow />
+                        <SeedKnownCardButton />
+                    </ClueProvider>
+                </PromptProvider>
             </ConfirmProvider>,
             { wrapper: TestQueryClientProvider },
         );
@@ -466,10 +475,12 @@ describe("CardPackRow destructive-data confirmation", () => {
         const user = userEvent.setup();
         render(
             <ConfirmProvider>
-                <ClueProvider>
-                    <CardPackRow />
-                    <SeedKnownCardButton />
-                </ClueProvider>
+                <PromptProvider>
+                    <ClueProvider>
+                        <CardPackRow />
+                        <SeedKnownCardButton />
+                    </ClueProvider>
+                </PromptProvider>
             </ConfirmProvider>,
             { wrapper: TestQueryClientProvider },
         );
@@ -492,10 +503,12 @@ describe("CardPackRow destructive-data confirmation", () => {
         const user = userEvent.setup();
         render(
             <ConfirmProvider>
-                <ClueProvider>
-                    <CardPackRow />
-                    <SeedKnownCardButton />
-                </ClueProvider>
+                <PromptProvider>
+                    <ClueProvider>
+                        <CardPackRow />
+                        <SeedKnownCardButton />
+                    </ClueProvider>
+                </PromptProvider>
             </ConfirmProvider>,
             { wrapper: TestQueryClientProvider },
         );
