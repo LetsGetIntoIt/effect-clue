@@ -38,11 +38,16 @@ import {
 import { cardPackUsageQueryKey } from "../data/cardPackUsage";
 import { HashMap } from "effect";
 import {
+    computeHypothesisConflict,
     emptyHypotheses,
     foldHypothesesInto,
+    type HypothesisConflict,
     type HypothesisMap,
-    type HypothesisValue,
 } from "../logic/Hypothesis";
+
+// Re-export for ContradictionBanner (which historically imports from
+// "../state"). The type itself moved to ./logic/Hypothesis.
+export type { HypothesisConflict };
 import { caseFileProgress } from "../logic/Recommender";
 import {
     caseFileSolved,
@@ -58,7 +63,7 @@ import {
     setupDurationMs,
     startSetup,
 } from "../analytics/gameSession";
-import { getCell, type Cell, type CellValue, type Knowledge } from "../logic/Knowledge";
+import { type Cell, type CellValue, type Knowledge } from "../logic/Knowledge";
 import { chainFor } from "../logic/Provenance";
 import {
     buildInitialKnowledge,
@@ -580,21 +585,6 @@ interface ClueDerived {
     readonly hypothesisConflict: HypothesisConflict | undefined;
 }
 
-interface HypothesisConflictEntry {
-    readonly cell: Cell;
-    readonly value: HypothesisValue;
-}
-
-export type HypothesisConflict =
-    | {
-          readonly kind: "directly-contradicted";
-          readonly entries: ReadonlyArray<HypothesisConflictEntry>;
-      }
-    | {
-          readonly kind: "jointly-conflicting";
-          readonly entries: ReadonlyArray<HypothesisConflictEntry>;
-      };
-
 const deriveState = (
     suggestionsAsData: ReadonlyArray<Suggestion>,
     initialKnowledge: Knowledge,
@@ -1080,47 +1070,15 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         [suggestionsAsData, initialKnowledge, deductionResult, deduceLayer],
     );
 
-    // Hypothesis-conflict banner: surfaces ANY rejected hypothesis the
-    // user needs to address. Categorises into two mutually-exclusive
-    // kinds so the banner copy can distinguish them:
-    //
-    //   - `directly-contradicted`: at least one hypothesis disagrees
-    //     with a real fact. The banner lists ONLY the contradicted
-    //     hypotheses; other (still-plausible) hypotheses don't belong
-    //     in this variant. We pick this kind whenever any hypothesis
-    //     is directly contradicted, even if a joint conflict could
-    //     also be argued — fixing the directly-contradicted ones
-    //     comes first, and the user can re-evaluate after.
-    //   - `jointly-conflicting`: every hypothesis is individually
-    //     plausible, but the joint deduction over their union fails.
-    //     The banner lists ALL active hypotheses since the conflict
-    //     is in their interaction.
-    //
-    // Real-deduction failure still wins precedence; this returns
-    // `undefined` when `deductionResult` itself is a failure.
-    const hypothesisConflict: HypothesisConflict | undefined = useMemo(() => {
-        if (jointDeductionResult === undefined) return undefined;
-        if (Result.isSuccess(jointDeductionResult)) return undefined;
-        if (Result.isFailure(deductionResult)) return undefined;
-        const realKnowledge = deductionResult.success;
-        const directlyContradicted: Array<HypothesisConflictEntry> = [];
-        const allEntries: Array<HypothesisConflictEntry> = [];
-        for (const [cell, value] of state.hypotheses) {
-            allEntries.push({ cell, value });
-            const real = getCell(realKnowledge, cell);
-            if (real !== undefined && real !== value) {
-                directlyContradicted.push({ cell, value });
-            }
-        }
-        if (directlyContradicted.length > 0) {
-            return {
-                kind: "directly-contradicted",
-                entries: directlyContradicted,
-            };
-        }
-        if (allEntries.length === 0) return undefined;
-        return { kind: "jointly-conflicting", entries: allEntries };
-    }, [deductionResult, jointDeductionResult, state.hypotheses]);
+    const hypothesisConflict = useMemo(
+        () =>
+            computeHypothesisConflict(
+                deductionResult,
+                jointDeductionResult,
+                state.hypotheses,
+            ),
+        [deductionResult, jointDeductionResult, state.hypotheses],
+    );
 
     const derived: ClueDerived = useMemo(
         () => ({

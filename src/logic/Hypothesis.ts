@@ -175,3 +175,87 @@ export const displayFor = (
     }
     return { tag: "blank" };
 };
+
+/**
+ * One row of the hypothesis-conflict banner — a cell the user has
+ * placed a hypothesis on, paired with the value they chose. The
+ * banner copy doesn't need the real value; that's available via
+ * `statusFor` for any cell that wants it.
+ */
+export interface HypothesisConflictEntry {
+    readonly cell: Cell;
+    readonly value: HypothesisValue;
+}
+
+/**
+ * Aggregated state of "do the user's hypotheses cause a contradiction
+ * the banner should surface?". Two mutually-exclusive kinds:
+ *
+ * - `directly-contradicted`: at least one hypothesis disagrees with a
+ *   real fact. Entries list ONLY the contradicted hypotheses; the
+ *   user fixes those first and can re-evaluate after.
+ * - `jointly-conflicting`: every hypothesis is individually plausible,
+ *   but their union fails to deduce. Entries list ALL active
+ *   hypotheses since the conflict is in their interaction.
+ *
+ * `undefined` means "no banner" — either no hypotheses, the joint
+ * deduction succeeded, or the real-only deduction itself is failing
+ * (which has its own banner via the deduction-result path).
+ */
+export type HypothesisConflict =
+    | {
+          readonly kind: "directly-contradicted";
+          readonly entries: ReadonlyArray<HypothesisConflictEntry>;
+      }
+    | {
+          readonly kind: "jointly-conflicting";
+          readonly entries: ReadonlyArray<HypothesisConflictEntry>;
+      };
+
+/**
+ * Aggregate the per-cell hypothesis state into a single banner-level
+ * verdict. Pure; preferred over inlining inside React renders so it
+ * can be unit-tested directly.
+ *
+ * Precedence (in order; first match wins):
+ *
+ *  1. No joint deduction yet (no active hypotheses) → no banner.
+ *  2. Joint deduction succeeded → no banner (hypotheses are coherent).
+ *  3. Real-only deduction is itself failing → defer to the global
+ *     contradiction banner; suppress this one.
+ *  4. Any hypothesis directly contradicts a real-fact cell →
+ *     `directly-contradicted` (entries: only contradicted ones).
+ *  5. Hypotheses exist but the union fails → `jointly-conflicting`
+ *     (entries: all active hypotheses).
+ *  6. Empty hypothesis map → no banner (defensive; shouldn't reach
+ *     here given step 1).
+ */
+export const computeHypothesisConflict = (
+    deductionResult: Result.Result<Knowledge, ContradictionTrace>,
+    jointDeductionResult:
+        | Result.Result<Knowledge, ContradictionTrace>
+        | undefined,
+    hypotheses: HypothesisMap,
+): HypothesisConflict | undefined => {
+    if (jointDeductionResult === undefined) return undefined;
+    if (Result.isSuccess(jointDeductionResult)) return undefined;
+    if (Result.isFailure(deductionResult)) return undefined;
+    const realKnowledge = deductionResult.success;
+    const directlyContradicted: Array<HypothesisConflictEntry> = [];
+    const allEntries: Array<HypothesisConflictEntry> = [];
+    for (const [cell, value] of hypotheses) {
+        allEntries.push({ cell, value });
+        const real = getCell(realKnowledge, cell);
+        if (real !== undefined && real !== value) {
+            directlyContradicted.push({ cell, value });
+        }
+    }
+    if (directlyContradicted.length > 0) {
+        return {
+            kind: "directly-contradicted",
+            entries: directlyContradicted,
+        };
+    }
+    if (allEntries.length === 0) return undefined;
+    return { kind: "jointly-conflicting", entries: allEntries };
+};
