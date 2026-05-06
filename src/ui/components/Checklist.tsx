@@ -682,7 +682,7 @@ export function Checklist() {
     const addPlayerHeaderCell = (
         <motion.th
             key={ADD_PLAYER_COLUMN_KEY}
-            className="w-px overflow-hidden whitespace-nowrap border-r border-b border-border bg-row-header p-0 text-center"
+            className={`${COLUMN_HEADER_STACK} w-px overflow-hidden whitespace-nowrap border-r border-b border-border bg-row-header p-0 text-center`}
             initial={TABLE_COLUMN_HIDDEN}
             animate={TABLE_COLUMN_VISIBLE}
             exit={columnCellExit}
@@ -717,7 +717,7 @@ export function Checklist() {
     const addPlayerEmptyCell = (
         <motion.td
             key={ADD_PLAYER_COLUMN_KEY}
-            className="overflow-hidden border-r border-b border-border"
+            className={`${COLUMN_HEADER_STACK} overflow-hidden border-r border-b border-border`}
             initial={TABLE_COLUMN_HIDDEN}
             animate={TABLE_COLUMN_VISIBLE}
             exit={columnCellExit}
@@ -960,7 +960,7 @@ export function Checklist() {
                             const cell = (
                                 <motion.th
                                     key={ownerKey(owner, playerColumnKeys)}
-                                    className="overflow-hidden border-r border-b border-border bg-row-header p-0 text-center align-top font-semibold"
+                                    className={`${COLUMN_HEADER_STACK} overflow-hidden border-r border-b border-border bg-row-header p-0 text-center align-top font-semibold`}
                                     initial={TABLE_COLUMN_HIDDEN}
                                     animate={TABLE_COLUMN_VISIBLE}
                                     exit={columnCellExit}
@@ -992,7 +992,7 @@ export function Checklist() {
                     {inSetup && (
                         <tr>
                             <th
-                                className={`${STICKY_FIRST_COL_HEADER} whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-left font-semibold`}
+                                className={`${STICKY_FIRST_COL} whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-left font-semibold`}
                                 data-tour-sticky-left=""
                                 // The setup tour's "Set hand sizes"
                                 // step highlights the row label cell
@@ -1009,7 +1009,7 @@ export function Checklist() {
                                     cell = (
                                         <motion.td
                                             key={ownerKey(owner, playerColumnKeys)}
-                                            className="overflow-hidden border-r border-b border-border"
+                                            className={`${COLUMN_HEADER_STACK} overflow-hidden border-r border-b border-border`}
                                             initial={TABLE_COLUMN_HIDDEN}
                                             animate={TABLE_COLUMN_VISIBLE}
                                             exit={columnCellExit}
@@ -1029,7 +1029,7 @@ export function Checklist() {
                                     cell = (
                                         <motion.td
                                             key={ownerKey(owner, playerColumnKeys)}
-                                            className="overflow-hidden border-r border-b border-border p-0 text-center"
+                                            className={`${COLUMN_HEADER_STACK} overflow-hidden border-r border-b border-border p-0 text-center`}
                                             initial={TABLE_COLUMN_HIDDEN}
                                             animate={TABLE_COLUMN_VISIBLE}
                                             exit={columnCellExit}
@@ -2731,7 +2731,12 @@ function AnimatedCellGlyph({
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.5, opacity: 0 }}
                     transition={transition}
-                    className="inline-flex items-center justify-center"
+                    // p-1 gives the glyph a 4px gutter so it doesn't
+                    // visually crash into the corner badges when the
+                    // cell is tight. The setup-mode checkbox renders
+                    // through a separate code path and intentionally
+                    // skips this padding.
+                    className="inline-flex items-center justify-center p-1"
                 >
                     {renderGlyphNode(kind)}
                 </motion.span>
@@ -2755,18 +2760,29 @@ const STICKY_FIRST_COL =
     "sticky left-0 z-[var(--z-checklist-sticky-column)]";
 
 const STICKY_FIRST_COL_HEADER =
-    "sticky left-0 z-[var(--z-checklist-sticky-header)]";
+    "sticky left-0 z-[var(--z-checklist-sticky-top-left)]";
+
+// `relative z-[sticky-header]` on every non-corner thead cell so they
+// escape document-order layering and stack above the top-left cell
+// within the thead's stacking context. Without this, the top-left's
+// own `z-[sticky-top-left]` (positive z, step 7 of the thead context)
+// would render over non-positioned siblings (step 3) — i.e. the
+// player-name cells would slide UNDER the top-left during horizontal
+// scroll, the opposite of the desired behavior.
+const COLUMN_HEADER_STACK =
+    "relative z-[var(--z-checklist-sticky-header)]";
 
 // Z-index ladder for the checklist:
 //   - body cell hover ring      : --z-checklist-cell-hover
 //   - body cell focus           : --z-checklist-cell-focus
+//   - sticky top-left cell      : --z-checklist-sticky-top-left
+//   - sticky <thead> + cols     : --z-checklist-sticky-header
 //   - sticky first column       : --z-checklist-sticky-column
-//   - sticky <thead>            : --z-checklist-sticky-header
-// The body-cell z-index escape keeps rings from being painted under
-// neighboring cells in document order. The sticky first column and
-// sticky header deliberately sit higher so horizontal / vertical
-// scroll never hides the card/category labels or column labels under
-// an active body cell.
+// Row headers (body's sticky first column) sit at the top of the
+// ladder so they render over content cells during horizontal scroll.
+// Column headers (thead column-name cells) sit in the middle so they
+// overlap the top-left corner cell during horizontal scroll. The
+// top-left corner sits at the bottom of the three sticky tiers.
 //
 // Focus indicator: `ring-[3px] ring-offset-2` (box-shadow) instead of
 // `outline-3 outline-offset-2`. Outlines on `<td>` cells in

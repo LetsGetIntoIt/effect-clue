@@ -121,7 +121,7 @@ describe("Checklist — setup mode — top-level structure", () => {
         const firstHeader = thead?.querySelector("th");
         expect(firstHeader?.className).toContain("sticky left-0");
         expect(firstHeader?.className).toContain(
-            "z-[var(--z-checklist-sticky-header)]",
+            "z-[var(--z-checklist-sticky-top-left)]",
         );
         const firstBodyHeader = document.querySelector("tbody th");
         expect(firstBodyHeader?.className).toContain("sticky left-0");

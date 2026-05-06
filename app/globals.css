@@ -123,9 +123,18 @@
      * Ordering constraints:
      * - Checklist hover/focus rings sit above neighboring body cells,
      *   but below sticky first-column cells and sticky headers.
-     * - Sticky first-column cells sit above scrolled body cells, while
-     *   sticky table headers sit above both so column labels remain
-     *   readable during vertical scroll.
+     * - Sticky body first-column cells (row headers — card category
+     *   and card names) sit highest so they render over any content
+     *   cells they pass during horizontal scroll.
+     * - Sticky table headers (column headers — player names and hand
+     *   sizes) sit in the middle so non-corner header cells render
+     *   over the top-left cell as they slide left during horizontal
+     *   scroll. Non-corner header cells need explicit `relative
+     *   z-[var(--z-checklist-sticky-header)]` to escape document-order
+     *   layering and stack above the top-left within the thead's
+     *   stacking context.
+     * - The top-left corner cell sits lowest of the three sticky tiers
+     *   so column-header cells overlap it cleanly.
      * - App chrome (page header / bottom nav) sits above the checklist
      *   table, and dropdowns/tooltips sit above app chrome.
      * - The contradiction banner sits above app chrome because headers
@@ -137,8 +146,9 @@
     --z-local-raised: 10;
     --z-checklist-cell-hover: 20;
     --z-checklist-cell-focus: 25;
-    --z-checklist-sticky-column: 30;
-    --z-checklist-sticky-header: 35;
+    --z-checklist-sticky-top-left: 30;
+    --z-checklist-sticky-header: 33;
+    --z-checklist-sticky-column: 36;
     --z-app-chrome: 40;
     --z-popover: 50;
     --z-contradiction-banner: 55;
