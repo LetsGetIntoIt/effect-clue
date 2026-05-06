@@ -1,3 +1,10 @@
+// This file tests `runDeduce` (the public deduction API). Several
+// scenarios here intentionally mirror tests in `Rules.test.ts`, which
+// exercise the same rule mechanisms in isolation — the duplication is
+// load-bearing: it catches pipeline-wiring regressions where a rule
+// gets refactored but the deducer's pipeline silently drops it. If you
+// delete coverage from one layer, delete or replace it in the other.
+
 import { describe, expect, test } from "vitest";
 import { HashMap, Result } from "effect";
 import { CaseFileOwner, Player, PlayerOwner } from "./GameObjects";

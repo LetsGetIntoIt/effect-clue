@@ -1,3 +1,9 @@
+// This file tests rule MECHANISMS in isolation. The same scenarios are
+// repeated in `Deducer.test.ts` at the `runDeduce` layer to catch
+// pipeline-wiring regressions. If you delete coverage from one layer,
+// delete or replace it in the other — they're a deliberate two-layer
+// pattern, not duplication.
+
 import { describe, expect, test } from "vitest";
 import { Card, CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
 import { cardIdsInCategory, CLASSIC_SETUP_3P } from "./GameSetup";

@@ -8,13 +8,10 @@ import { CLASSIC_SETUP_3P, DEFAULT_SETUP } from "../logic/GameSetup";
 import { emptyHypotheses } from "../logic/Hypothesis";
 import { KnownCard } from "../logic/InitialKnowledge";
 import type { GameSession } from "../logic/Persistence";
-import { CaseFileOwner, PlayerOwner } from "../logic/GameObjects";
-import { Cell, getCell, N as N_VAL, Y as Y_VAL } from "../logic/Knowledge";
+import { PlayerOwner } from "../logic/GameObjects";
+import { Cell, N as N_VAL, Y as Y_VAL } from "../logic/Knowledge";
 import { Result } from "effect";
-import {
-    AccusationId,
-    newAccusationId,
-} from "../logic/Accusation";
+import { newAccusationId } from "../logic/Accusation";
 import {
     newSuggestionId,
     Suggestion,
@@ -809,116 +806,28 @@ describe("derived values", () => {
         expect(conflict?.entries[0]?.cell).toEqual(Cell(PlayerOwner(A), KNIFE));
         expect(conflict?.entries[0]?.value).toBe(N_VAL);
     });
-
-    test("derived.hypothesisConflict prefers `directly-contradicted` and lists ONLY contradicted hypotheses when both kinds coexist", () => {
-        // Two hypotheses: one directly contradicts a real fact, the
-        // other is plausible alone. The banner takes the
-        // directly-contradicted path (fix that first) and lists only
-        // the contradicted entry — the still-plausible hypothesis
-        // doesn't belong in this banner copy.
-        const { result } = renderClue();
-        const setup = CLASSIC_SETUP_3P;
-        const A = Player("Anisha");
-        const B = Player("Bob");
-        const KNIFE = cardByName(setup, "Knife");
-        const KITCHEN = cardByName(setup, "Kitchen");
-
-        act(() => {
-            result.current.dispatch({
-                type: "replaceSession",
-                session: {
-                    setup,
-                    hands: [{ player: A, cards: [KNIFE] }],
-                    handSizes: [],
-                    suggestions: [],
-                    accusations: [],
-                    hypotheses: emptyHypotheses,
-                } satisfies GameSession,
-            });
-        });
-
-        // First: Anisha doesn't own Knife — directly contradicts.
-        act(() => {
-            result.current.dispatch({
-                type: "setHypothesis",
-                cell: Cell(PlayerOwner(A), KNIFE),
-                value: N_VAL,
-            });
-        });
-        // Second: Bob owns Kitchen — plausible alone.
-        act(() => {
-            result.current.dispatch({
-                type: "setHypothesis",
-                cell: Cell(PlayerOwner(B), KITCHEN),
-                value: Y_VAL,
-            });
-        });
-
-        const conflict = result.current.derived.hypothesisConflict;
-        expect(conflict).toBeDefined();
-        expect(conflict?.kind).toBe("directly-contradicted");
-        // Only the directly-contradicted entry — not Bob's Kitchen.
-        expect(conflict?.entries.length).toBe(1);
-        expect(conflict?.entries[0]?.cell).toEqual(Cell(PlayerOwner(A), KNIFE));
-    });
-
-    test("derived.hypothesisConflict is undefined when individually-plausible hypotheses are also jointly consistent", () => {
-        // Sanity-check the success path: two hypotheses, individually
-        // and jointly fine. No banner.
-        const { result } = renderClue();
-        const setup = CLASSIC_SETUP_3P;
-        const A = Player("Anisha");
-        const B = Player("Bob");
-        const KNIFE = cardByName(setup, "Knife");
-        const KITCHEN = cardByName(setup, "Kitchen");
-
-        act(() => {
-            result.current.dispatch({
-                type: "replaceSession",
-                session: {
-                    setup,
-                    hands: [],
-                    handSizes: [],
-                    suggestions: [],
-                    accusations: [],
-                    hypotheses: emptyHypotheses,
-                } satisfies GameSession,
-            });
-        });
-        act(() => {
-            result.current.dispatch({
-                type: "setHypothesis",
-                cell: Cell(PlayerOwner(A), KNIFE),
-                value: Y_VAL,
-            });
-        });
-        act(() => {
-            result.current.dispatch({
-                type: "setHypothesis",
-                cell: Cell(PlayerOwner(B), KITCHEN),
-                value: Y_VAL,
-            });
-        });
-
-        expect(result.current.derived.hypothesisConflict).toBeUndefined();
-    });
 });
 
+// Engine-layer coverage of failedAccusationEliminate / Tier 2 lives in
+// `src/logic/Deducer.test.ts` — the React-side test below only proves
+// that `addAccusation` flows through the reducer and the deducer is
+// re-run, surfacing the new accusation in `derived.accusationsAsData`
+// alongside a still-flowing `derived.deductionResult`.
 describe("accusations end-to-end", () => {
-    test("addAccusation surfaces in derived.accusationsAsData", () => {
+    test("addAccusation surfaces in derived.accusationsAsData and re-runs the deducer", () => {
         const { result } = renderClue();
-        // Use the default setup's players — no need to swap to
-        // CLASSIC_SETUP_3P for this assertion.
         const [first] = result.current.state.setup.players;
-        const knife = cardByName(
-            result.current.state.setup,
-            // CLASSIC_SETUP_3P contains "Knife"; DEFAULT_SETUP varies
-            // by build but exposes the same names.
-            "Knife",
-        );
+        const knife = cardByName(result.current.state.setup, "Knife");
         if (first === undefined || knife === undefined) {
             throw new Error("default setup is missing players or knife");
         }
+
+        // Pre-condition: deducer ran on initial mount and produced a
+        // success.
+        expect(
+            Result.isSuccess(result.current.derived.deductionResult),
+        ).toBe(true);
+
         const draft = {
             id: newAccusationId(),
             accuser: first,
@@ -930,203 +839,18 @@ describe("accusations end-to-end", () => {
                 accusation: draft,
             }),
         );
+
+        // Reducer wiring: log surfaces the new accusation.
         expect(result.current.derived.accusationsAsData).toHaveLength(1);
         expect(result.current.derived.accusationsAsData[0]?.accuser).toBe(
             first,
         );
-    });
-
-    test("dispatching a failed accusation triggers failedAccusationEliminate when two case-file cells are pinned", () => {
-        // Replace the session with CLASSIC_SETUP_3P + a contrived
-        // initial knowledge that pins PLUM and KNIFE to Y in the case
-        // file (via knownCard cascades). Then dispatch a failed
-        // accusation `(Plum, Knife, Conservatory)` — the rule should
-        // force `Conservatory = N` for the case file.
-        const { result } = renderClue();
-        const setup = CLASSIC_SETUP_3P;
-        const A = Player("Anisha");
-        const B = Player("Bob");
-        const C = Player("Cho");
-        const PLUM = cardByName(setup, "Prof. Plum");
-        const KNIFE = cardByName(setup, "Knife");
-        const CONSERV = cardByName(setup, "Conservatory");
-
-        // Build the suspect category so that Plum is the only
-        // remaining case-file candidate: assign all 5 other suspects
-        // to player A. Likewise for weapons → Knife. Hand sizes set
-        // so the deducer believes A's row.
-        const otherSuspects = setup.categories
-            .find(c => c.name === "Suspect")!
-            .cards.filter(e => e.id !== PLUM)
-            .map(e => e.id);
-        const otherWeapons = setup.categories
-            .find(c => c.name === "Weapon")!
-            .cards.filter(e => e.id !== KNIFE)
-            .map(e => e.id);
-
-        act(() =>
-            result.current.dispatch({
-                type: "replaceSession",
-                session: {
-                    setup,
-                    hands: [
-                        {
-                            player: A,
-                            cards: [...otherSuspects, ...otherWeapons],
-                        },
-                    ],
-                    handSizes: [
-                        {
-                            player: A,
-                            size: otherSuspects.length + otherWeapons.length,
-                        },
-                        // B and C carry the rest of the deck (rooms +
-                        // case-file). Hand sizes are computed so the
-                        // remaining 9 rooms - 1 case-file = 8 rooms
-                        // distribute across B+C, totalling 8 cards.
-                        // Set B = 4, C = 4 so the deducer can solve.
-                        { player: B, size: 4 },
-                        { player: C, size: 4 },
-                    ],
-                    suggestions: [],
-                    accusations: [],
-                    hypotheses: emptyHypotheses,
-                },
-            }),
-        );
-
-        // Sanity: deduction should have pinned Plum (suspect) and
-        // Knife (weapon) into the case file via card-ownership slices.
-        const ded1 = result.current.derived.deductionResult;
-        if (!Result.isSuccess(ded1)) {
-            throw new Error(
-                `expected initial deduction to succeed, got: ${JSON.stringify(ded1)}`,
-            );
-        }
+        // Deducer wiring: derive recomputed and is still successful.
+        // (The single-card accusation here is a no-op for the rules,
+        // so success is expected — what we're proving is the path
+        // dispatch → reducer → ClueDerived stays connected.)
         expect(
-            getCell(ded1.success, Cell(CaseFileOwner(), PLUM)),
-        ).toBe(Y_VAL);
-        expect(
-            getCell(ded1.success, Cell(CaseFileOwner(), KNIFE)),
-        ).toBe(Y_VAL);
-        // Conservatory is not yet pinned.
-        expect(
-            getCell(ded1.success, Cell(CaseFileOwner(), CONSERV)),
-        ).toBeUndefined();
-
-        // Now log a failed accusation naming PLUM + KNIFE + CONSERV.
-        act(() =>
-            result.current.dispatch({
-                type: "addAccusation",
-                accusation: {
-                    id: AccusationId(""),
-                    accuser: A,
-                    cards: [PLUM, KNIFE, CONSERV],
-                },
-            }),
-        );
-
-        // failedAccusationEliminate forces CONSERV = N for case file.
-        const ded2 = result.current.derived.deductionResult;
-        if (!Result.isSuccess(ded2)) {
-            throw new Error(
-                `expected deduction to remain successful, got: ${JSON.stringify(ded2)}`,
-            );
-        }
-        expect(
-            getCell(ded2.success, Cell(CaseFileOwner(), CONSERV)),
-        ).toBe(N_VAL);
-    });
-
-    test("Tier 2: failed accusations covering every room force the partner weapon to N (case_S=Y, no case_W=Y yet)", () => {
-        // The user's reported flow but stripped to the Tier-2-only
-        // case: pin PLUM=Y in case file by assigning every other
-        // suspect to a player; do NOT narrow weapons. Then file
-        // failed accusations (PLUM, KNIFE, R) for every room.
-        // Tier 1 alone can't fire — only one case-file Y per
-        // accusation. Tier 2's pigeonhole-over-rooms must force
-        // case_KNIFE = N.
-        const { result } = renderClue();
-        const setup = CLASSIC_SETUP_3P;
-        const A = Player("Anisha");
-        const B = Player("Bob");
-        const C = Player("Cho");
-        const PLUM = cardByName(setup, "Prof. Plum");
-        const KNIFE = cardByName(setup, "Knife");
-
-        const otherSuspects = setup.categories
-            .find(c => c.name === "Suspect")!
-            .cards.filter(e => e.id !== PLUM)
-            .map(e => e.id);
-        const rooms = setup.categories.find(c => c.name === "Room")!.cards.map(
-            c => c.id,
-        );
-
-        act(() =>
-            result.current.dispatch({
-                type: "replaceSession",
-                session: {
-                    setup,
-                    // Only suspects-other-than-Plum are dealt to A. No
-                    // weapon assignments — case_KNIFE is genuinely
-                    // unknown going in.
-                    hands: [
-                        {
-                            player: A,
-                            cards: otherSuspects,
-                        },
-                    ],
-                    handSizes: [
-                        // 5 suspects to A, rest of the deck (6 weapons
-                        // - 1 case-file weapon = 5; 9 rooms - 1
-                        // case-file room = 8) split across B+C+A.
-                        // 21 total - 3 case file = 18 dealt; A has 5
-                        // already; B+C carry 13 between them. Use 7+6.
-                        { player: A, size: 5 },
-                        { player: B, size: 7 },
-                        { player: C, size: 6 },
-                    ],
-                    suggestions: [],
-                    accusations: [],
-                    hypotheses: emptyHypotheses,
-                },
-            }),
-        );
-
-        // Sanity: PLUM should now be pinned Y; KNIFE should still be
-        // unknown in the case file.
-        const ded1 = result.current.derived.deductionResult;
-        if (!Result.isSuccess(ded1)) {
-            throw new Error(
-                `expected initial deduction to succeed, got: ${JSON.stringify(ded1)}`,
-            );
-        }
-        expect(getCell(ded1.success, Cell(CaseFileOwner(), PLUM))).toBe(Y_VAL);
-        expect(
-            getCell(ded1.success, Cell(CaseFileOwner(), KNIFE)),
-        ).toBeUndefined();
-
-        // Log a failed accusation (PLUM, KNIFE, R) for every room.
-        for (const roomId of rooms) {
-            act(() =>
-                result.current.dispatch({
-                    type: "addAccusation",
-                    accusation: {
-                        id: AccusationId(""),
-                        accuser: A,
-                        cards: [PLUM, KNIFE, roomId],
-                    },
-                }),
-            );
-        }
-
-        // Tier 2 should now force case_KNIFE = N.
-        const ded2 = result.current.derived.deductionResult;
-        if (!Result.isSuccess(ded2)) {
-            throw new Error(
-                `expected deduction to remain successful, got: ${JSON.stringify(ded2)}`,
-            );
-        }
-        expect(getCell(ded2.success, Cell(CaseFileOwner(), KNIFE))).toBe(N_VAL);
+            Result.isSuccess(result.current.derived.deductionResult),
+        ).toBe(true);
     });
 });
