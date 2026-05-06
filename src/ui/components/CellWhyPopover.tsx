@@ -12,7 +12,7 @@ import {
     type HypothesisValue,
 } from "../../logic/Hypothesis";
 import { HashMap } from "effect";
-import { AlertIcon, CheckIcon, LightbulbIcon } from "./Icons";
+import { CheckIcon, LightbulbIcon } from "./Icons";
 import { HypothesisControl } from "./HypothesisControl";
 import { HypothesisBadge } from "./HypothesisBadge";
 import {
@@ -132,9 +132,20 @@ export function CellWhyPopover({
         }
     })();
 
-    const statusBox = longStatusMessage === undefined ? null : isContradicted ? (
+    const statusBox = longStatusMessage === undefined ? null : isContradicted &&
+      hypothesisValue !== undefined ? (
         <div className="flex items-start gap-2 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-2 text-[12px] text-danger">
-            <AlertIcon size={14} className="mt-[1px] flex-shrink-0" />
+            <span className="mt-[1px] flex-shrink-0">
+                {/* `animated` is true here so the pulse moves into the
+                    popover whenever it's open — the matching cell
+                    badge stops animating while the popover is
+                    visible (see Checklist's `isPopoverOnThisCell`). */}
+                <HypothesisBadge
+                    value={hypothesisValue}
+                    status={status}
+                    animated
+                />
+            </span>
             <div className="flex flex-col gap-1">
                 <span>{longStatusMessage}</span>
                 {isJointConflict && activeHypothesisLabels.length > 0 && (
@@ -146,7 +157,7 @@ export function CellWhyPopover({
                 )}
             </div>
         </div>
-    ) : (
+    ) : isContradicted ? null : (
         // Confirmed — mirror the contradiction panel in success palette.
         <div className="flex items-start gap-2 rounded-[var(--radius)] border border-yes/40 bg-yes-bg p-2 text-[12px] text-yes">
             <CheckIcon size={14} className="mt-[1px] flex-shrink-0" />

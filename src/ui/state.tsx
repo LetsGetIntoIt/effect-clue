@@ -41,6 +41,7 @@ import {
     emptyHypotheses,
     foldHypothesesInto,
     type HypothesisMap,
+    type HypothesisValue,
 } from "../logic/Hypothesis";
 import { caseFileProgress } from "../logic/Recommender";
 import {
@@ -57,7 +58,7 @@ import {
     setupDurationMs,
     startSetup,
 } from "../analytics/gameSession";
-import type { Cell, CellValue, Knowledge } from "../logic/Knowledge";
+import { getCell, type Cell, type CellValue, type Knowledge } from "../logic/Knowledge";
 import { chainFor } from "../logic/Provenance";
 import {
     buildInitialKnowledge,
@@ -558,7 +559,41 @@ interface ClueDerived {
      * a runtime contradiction inside the deducer's fixed-point loop.
      */
     readonly jointDeductionResult: DeductionResult | undefined;
+    /**
+     * Categorised data for the hypothesis-conflict banner, set when
+     * the real-only deduction succeeds but at least one active
+     * hypothesis is rejected. `kind` distinguishes the two failure
+     * modes the banner copy distinguishes:
+     *
+     *   - `directly-contradicted`: at least one hypothesis disagrees
+     *     with a real fact. `entries` lists those hypotheses (only
+     *     the contradicted ones — other plausible hypotheses don't
+     *     belong in this banner).
+     *   - `jointly-conflicting`: every hypothesis is individually
+     *     plausible against the real-only knowledge, but their union
+     *     is unsatisfiable. `entries` lists ALL active hypotheses
+     *     since the conflict is in their interaction.
+     *
+     * Real-deduction failure still wins precedence — when
+     * `deductionResult` itself is a failure, this is `undefined`.
+     */
+    readonly hypothesisConflict: HypothesisConflict | undefined;
 }
+
+interface HypothesisConflictEntry {
+    readonly cell: Cell;
+    readonly value: HypothesisValue;
+}
+
+export type HypothesisConflict =
+    | {
+          readonly kind: "directly-contradicted";
+          readonly entries: ReadonlyArray<HypothesisConflictEntry>;
+      }
+    | {
+          readonly kind: "jointly-conflicting";
+          readonly entries: ReadonlyArray<HypothesisConflictEntry>;
+      };
 
 const deriveState = (
     suggestionsAsData: ReadonlyArray<Suggestion>,
@@ -1045,6 +1080,48 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         [suggestionsAsData, initialKnowledge, deductionResult, deduceLayer],
     );
 
+    // Hypothesis-conflict banner: surfaces ANY rejected hypothesis the
+    // user needs to address. Categorises into two mutually-exclusive
+    // kinds so the banner copy can distinguish them:
+    //
+    //   - `directly-contradicted`: at least one hypothesis disagrees
+    //     with a real fact. The banner lists ONLY the contradicted
+    //     hypotheses; other (still-plausible) hypotheses don't belong
+    //     in this variant. We pick this kind whenever any hypothesis
+    //     is directly contradicted, even if a joint conflict could
+    //     also be argued — fixing the directly-contradicted ones
+    //     comes first, and the user can re-evaluate after.
+    //   - `jointly-conflicting`: every hypothesis is individually
+    //     plausible, but the joint deduction over their union fails.
+    //     The banner lists ALL active hypotheses since the conflict
+    //     is in their interaction.
+    //
+    // Real-deduction failure still wins precedence; this returns
+    // `undefined` when `deductionResult` itself is a failure.
+    const hypothesisConflict: HypothesisConflict | undefined = useMemo(() => {
+        if (jointDeductionResult === undefined) return undefined;
+        if (Result.isSuccess(jointDeductionResult)) return undefined;
+        if (Result.isFailure(deductionResult)) return undefined;
+        const realKnowledge = deductionResult.success;
+        const directlyContradicted: Array<HypothesisConflictEntry> = [];
+        const allEntries: Array<HypothesisConflictEntry> = [];
+        for (const [cell, value] of state.hypotheses) {
+            allEntries.push({ cell, value });
+            const real = getCell(realKnowledge, cell);
+            if (real !== undefined && real !== value) {
+                directlyContradicted.push({ cell, value });
+            }
+        }
+        if (directlyContradicted.length > 0) {
+            return {
+                kind: "directly-contradicted",
+                entries: directlyContradicted,
+            };
+        }
+        if (allEntries.length === 0) return undefined;
+        return { kind: "jointly-conflicting", entries: allEntries };
+    }, [deductionResult, jointDeductionResult, state.hypotheses]);
+
     const derived: ClueDerived = useMemo(
         () => ({
             suggestionsAsData,
@@ -1055,6 +1132,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             footnotes,
             hypotheses: state.hypotheses,
             jointDeductionResult,
+            hypothesisConflict,
         }),
         [
             suggestionsAsData,
@@ -1065,6 +1143,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             footnotes,
             state.hypotheses,
             jointDeductionResult,
+            hypothesisConflict,
         ],
     );
 

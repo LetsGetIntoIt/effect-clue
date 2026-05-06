@@ -2,12 +2,20 @@
 
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import { Card, Player } from "../../logic/GameObjects";
+import { Card, Player, ownerLabel } from "../../logic/GameObjects";
 import { GameSetup, cardName, categoryName } from "../../logic/GameSetup";
 import { ContradictionTrace } from "../../logic/Deducer";
 import { DraftAccusation, DraftSuggestion } from "../../logic/ClueState";
-import { useClue } from "../state";
+import type { Cell } from "../../logic/Knowledge";
+import { useClue, type HypothesisConflict } from "../state";
 import { useSelection } from "../SelectionContext";
+
+// i18n key tags hoisted to module scope so the `no-literal-string`
+// lint rule reads them as code identifiers, not UI text.
+const KEY_DIRECT_TITLE = "directBannerTitle" as const;
+const KEY_DIRECT_HELP = "directBannerHelp" as const;
+const KEY_JOINT_TITLE = "jointBannerTitle" as const;
+const KEY_JOINT_HELP = "jointBannerHelp" as const;
 
 /**
  * Structured contradiction display + one-click quick-fix buttons. Reads
@@ -558,3 +566,107 @@ function OffendingAccusationRow({
         </li>
     );
 }
+
+/**
+ * Contradiction banner variant for any rejected-hypothesis state.
+ * Two flavours, distinguished by `conflict.kind`:
+ *
+ *   - `directly-contradicted`: at least one hypothesis disagrees with
+ *     a real fact. The banner lists ONLY the contradicted hypotheses
+ *     (other still-plausible ones don't belong here) and asks the user
+ *     to turn the rejected hypothesis off.
+ *   - `jointly-conflicting`: every hypothesis is individually
+ *     plausible against the real-only knowledge but their union is
+ *     unsatisfiable. The banner lists ALL active hypotheses since the
+ *     conflict is in their interaction.
+ *
+ * Both share the row layout (sorted by `(ownerLabel, cardName)` for
+ * stable order) and the per-row "Turn off" CTA dispatching
+ * `clearHypothesis`. Only the title + help text change.
+ */
+export function JointHypothesisContradictionBanner({
+    conflict,
+}: {
+    readonly conflict: HypothesisConflict;
+}) {
+    const t = useTranslations("contradictions");
+    const { state, dispatch } = useClue();
+    const setup = state.setup;
+    const isDirect = conflict.kind === "directly-contradicted";
+
+    interface Row {
+        readonly cell: Cell;
+        readonly ownerName: string;
+        readonly cardLabel: string;
+        readonly value: string;
+    }
+
+    const rows: ReadonlyArray<Row> = (() => {
+        const collected: Array<Row> = conflict.entries.map(entry => ({
+            cell: entry.cell,
+            ownerName: ownerLabel(entry.cell.owner),
+            cardLabel: cardName(setup, entry.cell.card),
+            value: entry.value,
+        }));
+        collected.sort((a, b) => {
+            const byOwner = a.ownerName.localeCompare(b.ownerName);
+            return byOwner !== 0
+                ? byOwner
+                : a.cardLabel.localeCompare(b.cardLabel);
+        });
+        return collected;
+    })();
+
+    const titleKey = isDirect ? KEY_DIRECT_TITLE : KEY_JOINT_TITLE;
+    const helpKey = isDirect ? KEY_DIRECT_HELP : KEY_JOINT_HELP;
+
+    return (
+        <div className="mb-3 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-3 text-[13px] text-danger">
+            <div className="mb-2">
+                <div className="font-semibold">
+                    {t(titleKey, { count: rows.length })}
+                </div>
+                <div className="text-[12px] opacity-80">
+                    {t(helpKey, { count: rows.length })}
+                </div>
+            </div>
+            {rows.length > 0 && (
+                <ul className="m-0 flex list-none flex-col gap-2 pl-0">
+                    {rows.map(row => {
+                        const key = `${row.ownerName}/${row.cardLabel}/${row.value}`;
+                        return (
+                            <li
+                                key={key}
+                                className="flex items-center justify-between gap-2 rounded border border-danger-border bg-white/40 p-2"
+                            >
+                                <span>
+                                    {t.rich("jointHypothesisRow", {
+                                        owner: row.ownerName,
+                                        card: row.cardLabel,
+                                        value: row.value,
+                                        strong: chunks => (
+                                            <strong>{chunks}</strong>
+                                        ),
+                                    })}
+                                </span>
+                                <button
+                                    type="button"
+                                    className="cursor-pointer rounded border border-danger-border bg-white px-2 py-0.5 text-[12px] text-danger hover:bg-danger-bg"
+                                    onClick={() =>
+                                        dispatch({
+                                            type: "clearHypothesis",
+                                            cell: row.cell,
+                                        })
+                                    }
+                                >
+                                    {t("jointHypothesisTurnOff")}
+                                </button>
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+        </div>
+    );
+}
+

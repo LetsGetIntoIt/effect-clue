@@ -4,24 +4,61 @@ import type {
     HypothesisValue,
 } from "../../logic/Hypothesis";
 
+// `data-glyph` discriminator constants hoisted to module scope so the
+// `no-literal-string` lint rule reads them as code, not UI text. Tests
+// assert on these too — keep them in sync.
+const GLYPH_X = "x" as const;
+const GLYPH_CHECK = "check" as const;
+const GLYPH_QUESTION = "question" as const;
+
 interface HypothesisBadgeProps {
     value: HypothesisValue;
     status: HypothesisStatus;
+    /**
+     * When `true`, a rejected badge (directlyContradicted /
+     * jointlyConflicts) gets a `motion-safe:animate-pulse` to draw the
+     * user's eye. Defaults to `false` so the badge is static
+     * everywhere except where it's specifically meant to call for
+     * attention (the cell, and the open popover — both can pulse at
+     * the same time). The contradiction banner doesn't render the
+     * badge at all today; the prop's `false` default is the future-
+     * proof guard if that changes.
+     */
+    animated?: boolean;
 }
 
-// Tone reflects the HYPOTHESIS value, not the cell's displayed value:
-// a cell that's been deduced Y but hypothesised N shows a red badge
-// against a green cell, making the disagreement visible at a glance.
-// Glyph reflects the resolved status — a check mark when the
-// hypothesis has been confirmed by real facts, a question mark while
-// it's still active, jointly conflicting, or directly contradicted.
+// Tone and glyph reflect the resolved status:
+//   - confirmed: tone = the (Y/N) hypothesis value's color, glyph = ✓.
+//   - rejected (directlyContradicted / jointlyConflicts): tone = danger
+//     red, glyph = X. Pulses with `motion-safe:animate-pulse` when
+//     `animated` is true; static otherwise.
+//   - active / off / derived: tone = the hypothesis value's color,
+//     glyph = ?.
 //
 // Positioning is the caller's responsibility. The badge sits in the
 // `topRight` slot of `CellLayout`, which handles corner placement and
 // the `auto`-column mirror trick that keeps the central glyph centered.
-export function HypothesisBadge({ value, status }: HypothesisBadgeProps) {
-    const tone = value === Y ? "text-yes" : "text-no";
+export function HypothesisBadge({
+    value,
+    status,
+    animated = false,
+}: HypothesisBadgeProps) {
+    const rejected =
+        status.kind === "directlyContradicted" ||
+        status.kind === "jointlyConflicts";
     const confirmed = status.kind === "confirmed";
+    const tone = rejected ? "text-danger" : value === Y ? "text-yes" : "text-no";
+    const glyphAttr = rejected
+        ? GLYPH_X
+        : confirmed
+          ? GLYPH_CHECK
+          : GLYPH_QUESTION;
+    // `motion-safe:` so users with `prefers-reduced-motion: reduce`
+    // see a static badge — same accessibility contract as the rest of
+    // the app's `useReducedTransition` wrappers. Animation only applies
+    // to rejected badges that are explicitly `animated`.
+    const className =
+        rejected && animated ? `${tone} motion-safe:animate-pulse` : tone;
     // ViewBox is "3 3 18 18" so the visible rounded square fills the
     // SVG's bounding box edge-to-edge. Without this, the rect at
     // (3,3) inside a "0 0 24 24" viewBox renders ~2px inside the SVG
@@ -39,8 +76,8 @@ export function HypothesisBadge({ value, status }: HypothesisBadgeProps) {
             viewBox="3 3 18 18"
             aria-hidden="true"
             focusable="false"
-            data-glyph={confirmed ? "check" : "question"}
-            className={tone}
+            data-glyph={glyphAttr}
+            className={className}
         >
             <rect
                 x="3"
@@ -50,7 +87,28 @@ export function HypothesisBadge({ value, status }: HypothesisBadgeProps) {
                 rx="3"
                 fill="currentColor"
             />
-            {confirmed ? (
+            {rejected ? (
+                <>
+                    <line
+                        x1="8"
+                        y1="8"
+                        x2="16"
+                        y2="16"
+                        stroke="white"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                    />
+                    <line
+                        x1="16"
+                        y1="8"
+                        x2="8"
+                        y2="16"
+                        stroke="white"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                    />
+                </>
+            ) : confirmed ? (
                 <polyline
                     points="7 12 11 16 17 8"
                     fill="none"
