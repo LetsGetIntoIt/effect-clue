@@ -58,7 +58,7 @@ import {
 } from "../server/actions/packs";
 import { useSession } from "../ui/hooks/useSession";
 import { trackInFlight } from "./cardPacksInFlight";
-import { decodeServerPack } from "./serverPackCodec";
+import { decodeServerPack, encodeCardSet } from "./serverPackCodec";
 
 export const customCardPacksQueryKey = ["custom-card-packs"] as const;
 export const myCardPacksQueryKey = (userId: string | undefined) =>
@@ -221,7 +221,15 @@ interface SaveCardPackOnServerInput {
 const saveOnServerEffect = Effect.fn("rq.customPacks.saveOnServer")(function* (
     input: SaveCardPackOnServerInput,
 ) {
-    const promise = saveCardPackServer(input);
+    // Encode the CardSet to a JSON string here on the client. The
+    // server action's wire shape takes `cardSetData: string` because
+    // a `Data.Class` instance does not survive Next.js RSC argument
+    // serialisation. See `serverPackCodec.ts`.
+    const promise = saveCardPackServer({
+        clientGeneratedId: input.clientGeneratedId,
+        label: input.label,
+        cardSetData: encodeCardSet(input.cardSet),
+    });
     trackInFlight(promise);
     return yield* Effect.promise(() => promise);
 });
