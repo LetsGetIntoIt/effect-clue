@@ -997,7 +997,7 @@ export function Checklist() {
                     {inSetup && (
                         <tr>
                             <th
-                                className={`${STICKY_FIRST_COL} whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-left font-semibold`}
+                                className={`${STICKY_FIRST_COL_HEADER} whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-left font-semibold`}
                                 data-tour-sticky-left=""
                                 // The setup tour's "Set hand sizes"
                                 // step highlights the row label cell
@@ -1014,7 +1014,7 @@ export function Checklist() {
                                     cell = (
                                         <motion.td
                                             key={ownerKey(owner, playerColumnKeys)}
-                                            className={`${COLUMN_HEADER_STACK} overflow-hidden border-r border-b border-border`}
+                                            className={`${COLUMN_HEADER_STACK_HANDSIZE} overflow-hidden border-r border-b border-border`}
                                             initial={TABLE_COLUMN_HIDDEN}
                                             animate={TABLE_COLUMN_VISIBLE}
                                             exit={columnCellExit}
@@ -1034,7 +1034,7 @@ export function Checklist() {
                                     cell = (
                                         <motion.td
                                             key={ownerKey(owner, playerColumnKeys)}
-                                            className={`${COLUMN_HEADER_STACK} overflow-hidden border-r border-b border-border p-0 text-center`}
+                                            className={`${COLUMN_HEADER_STACK_HANDSIZE} overflow-hidden border-r border-b border-border p-0 text-center`}
                                             initial={TABLE_COLUMN_HIDDEN}
                                             animate={TABLE_COLUMN_VISIBLE}
                                             exit={columnCellExit}
@@ -2723,27 +2723,38 @@ const STICKY_FIRST_COL =
 const STICKY_FIRST_COL_HEADER =
     "sticky left-0 z-[var(--z-checklist-sticky-top-left)]";
 
-// `relative z-[sticky-header]` on every non-corner thead cell so they
-// escape document-order layering and stack above the top-left cell
-// within the thead's stacking context. Without this, the top-left's
-// own `z-[sticky-top-left]` (positive z, step 7 of the thead context)
-// would render over non-positioned siblings (step 3) — i.e. the
-// player-name cells would slide UNDER the top-left during horizontal
-// scroll, the opposite of the desired behavior.
+// `relative z-[…]` on every non-corner thead cell so they escape
+// document-order layering and stack within the thead's stacking
+// context above the sticky-left first-column cells. Without this,
+// the sticky-left cells' own positive z-index (step 7 of the thead
+// context) would render over non-positioned siblings (step 3) — i.e.
+// the player-name cells would slide UNDER the top-left and hand-size
+// label during horizontal scroll, the opposite of the desired
+// behavior. Player-name headers and hand-size inputs use different
+// values so the inputs tuck under the hand-size label while the
+// player names cover both.
 const COLUMN_HEADER_STACK =
     "relative z-[var(--z-checklist-sticky-header)]";
 
-// Z-index ladder for the checklist:
-//   - body cell hover ring      : --z-checklist-cell-hover
-//   - body cell focus           : --z-checklist-cell-focus
-//   - sticky top-left cell      : --z-checklist-sticky-top-left
-//   - sticky <thead> + cols     : --z-checklist-sticky-header
-//   - sticky first column       : --z-checklist-sticky-column
-// Row headers (body's sticky first column) sit at the top of the
-// ladder so they render over content cells during horizontal scroll.
-// Column headers (thead column-name cells) sit in the middle so they
-// overlap the top-left corner cell during horizontal scroll. The
-// top-left corner sits at the bottom of the three sticky tiers.
+const COLUMN_HEADER_STACK_HANDSIZE =
+    "relative z-[var(--z-checklist-sticky-handsize-input)]";
+
+// Z-index ladder for the checklist (bottom → top):
+//   - body cell hover ring       : --z-checklist-cell-hover
+//   - body cell focus            : --z-checklist-cell-focus
+//   - sticky body first column   : --z-checklist-sticky-column
+//     (card category + card name cells)
+//   - sticky hand-size inputs    : --z-checklist-sticky-handsize-input
+//   - sticky top-left cells      : --z-checklist-sticky-top-left
+//     (top-left corner + the hand-size label cell, which is also
+//     sticky-left in the thead)
+//   - sticky player-name headers : --z-checklist-sticky-header
+// The body's sticky first column sits at the bottom of the sticky
+// tiers so the entire thead — player names, hand-size label, and
+// hand-size inputs — covers it during scroll. Within the thead the
+// hand-size inputs tuck under the hand-size label, and the player
+// names cover both the hand-size label and the top-left corner as
+// they slide left during horizontal scroll.
 //
 // Focus indicator: `ring-[3px] ring-offset-2` (box-shadow) instead of
 // `outline-3 outline-offset-2`. Outlines on `<td>` cells in
