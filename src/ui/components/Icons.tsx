@@ -133,6 +133,29 @@ export function CheckIcon({ className, size = 18 }: IconProps) {
     );
 }
 
+/** Clipboard — paired with copy-to-clipboard affordances. */
+export function ClipboardIcon({ className, size = 14 }: IconProps) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+            className={className}
+        >
+            <rect x="8" y="2" width="8" height="4" rx="1" />
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+        </svg>
+    );
+}
+
 /** Right-pointing arrow — paired with primary "get started" CTAs. */
 export function ArrowRightIcon({ className, size = 18 }: IconProps) {
     return (

@@ -64,6 +64,22 @@ export default [
         },
         rules: {
             "@typescript-eslint/no-explicit-any": "error",
+            // `dangerouslySetInnerHTML` is the only React escape hatch
+            // that lets a string become live HTML, so we keep it
+            // contained to a single purpose-built component
+            // (`src/ui/share/QrCodeSvg.tsx`) where the safety argument
+            // can be reviewed in one place. Adding a second usage
+            // requires adding a second purpose-built component +
+            // override below — the friction is the point.
+            "no-restricted-syntax": [
+                "error",
+                {
+                    selector:
+                        "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+                    message:
+                        "dangerouslySetInnerHTML is restricted. Wrap raw-HTML rendering in a purpose-built component (see src/ui/share/QrCodeSvg.tsx) so the safety review lives in one place. If you genuinely need a new one, add a colocated override in eslint.config.mjs.",
+                },
+            ],
             "i18next/no-literal-string": [
                 "error",
                 {
@@ -268,6 +284,16 @@ export default [
                     },
                 },
             ],
+        },
+    },
+    {
+        // The single approved home for `dangerouslySetInnerHTML`.
+        // Adding a second one means adding another override here AND
+        // documenting the safety argument inline in that file — the
+        // ban above ensures it can't slip in unnoticed.
+        files: ["src/ui/share/QrCodeSvg.tsx"],
+        rules: {
+            "no-restricted-syntax": "off",
         },
     },
     {
