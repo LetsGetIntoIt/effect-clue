@@ -255,13 +255,27 @@ Use these four icons consistently — picking the wrong glyph mis-signals what t
 
 If you need a glyph that doesn't fit one of these, add it to `src/ui/components/Icons.tsx` (or `ShareIcon.tsx` for share variants) — don't reach for an emoji or a literal character (`×`, `→`, etc.) that might be misread.
 
-## Sharing
+## Sharing and sync docs
 
-If you touch anything in `src/ui/share/`, `src/server/actions/shares.ts`, `src/logic/ShareCodec.ts`, or any `shares` DB column, walk through [docs/shares.md](docs/shares.md) first. Three rules drive the design and shouldn't be loosened without a deliberate change to the doc:
+Two docs in `docs/` cover how user data leaves the device:
 
-- **Universal sign-in.** Every share requires a real, non-anonymous user. The check lives at the top of `createShare` and the DB enforces it via `owner_id NOT NULL`. Don't reintroduce per-flow auth conditionals.
+- [docs/shares-and-sync.md](docs/shares-and-sync.md) — the sharing UX, the kind-discriminated wire contract, and the seven Effect-Schema-validated wire fields (cardPack / players / handSizes / knownCards / suggestions / accusations / hypotheses). Hypotheses are `transfer`-only.
+- [docs/card-pack-sync.md](docs/card-pack-sync.md) — the deep dive on how localStorage and the server stay in sync once the user is signed in: per-pack metadata (`unsyncedSince`, `lastSyncedSnapshot`), tombstones, the `<CardPacksSync />` reconcile loop, the `flushPendingChanges` logout chokepoint, and four "life of a card pack" timelines.
+
+**Whenever you touch sync-or-share code, update the corresponding doc as part of the same change.** This is non-negotiable — these systems have enough subtlety (auth gating, conflict resolution, in-flight registry, tombstones, the four-quadrant pack-state matrix) that drift between the code and the doc will burn the next person to come in.
+
+The triggering paths:
+
+- **Sharing**: anything in `src/ui/share/`, `src/server/actions/shares.ts`, `src/logic/ShareCodec.ts`, the `shares` DB columns. Touches → update `docs/shares-and-sync.md`.
+- **Card-pack sync**: `src/data/cardPacksSync.tsx`, `src/data/customCardPacks.ts`, `src/data/cardPacksInFlight.ts`, `src/data/serverPackCodec.ts`, `src/logic/CustomCardSets.ts`, `src/logic/CardPackTombstones.ts`, `src/server/actions/packs.ts`, `src/ui/account/AccountProvider.tsx`, `src/ui/account/LogoutWarningModal.tsx`, `src/ui/components/cardPackActions.ts`. Touches → update `docs/card-pack-sync.md` (and `docs/shares-and-sync.md` if the change crosses into the sharing wire format).
+
+The three rules from `docs/shares-and-sync.md` that govern sharing and shouldn't be loosened without a deliberate change to the doc:
+
+- **Universal sign-in.** Every share requires a real, non-anonymous user. The check lives at the top of `createShare` and the DB enforces it via `owner_id NOT NULL`. Don't reintroduce per-flow auth conditionals. The same gate (`useSignedInUserId` / `requireSignedInUser`) governs server-side card-pack mirroring.
 - **Kind-based wire contract.** `createShare`'s input is a discriminated union by `kind`. The server whitelists fields per kind and rejects anything extraneous. Don't expose the column structure to the client; add new flows by adding new kinds.
-- **Effect-Schema-validated wire format.** All six wire fields go through codecs in `src/logic/ShareCodec.ts`. Don't add a new wire field with a raw `JSON.stringify` / `JSON.parse` — write a codec, route both sender and receiver through it.
+- **Effect-Schema-validated wire format.** All seven wire fields go through codecs in `src/logic/ShareCodec.ts`. Don't add a new wire field with a raw `JSON.stringify` / `JSON.parse` — write a codec, route both sender and receiver through it.
+
+The card-pack sync architecture has its own load-bearing invariants that `docs/card-pack-sync.md` covers in depth — the four-quadrant pack-state matrix (`unsyncedSince` × `lastSyncedSnapshot`), the conflict-resolution rules (local-wins when `unsyncedSince` is set, otherwise server-wins), the always-tombstone-when-signed-in delete policy, and the `clearAccountTiedLocalState` keys list. Read the doc before changing those.
 
 ## Tests
 
@@ -365,6 +379,27 @@ When I ask you to "rebase on/against latest origin/main" (or "latest remote main
 7. Verify in the `next-dev` preview if anything we changed is observable in the browser.
 8. Amend the rebased commit only if your fixes belong to it (style cleanup, conflict resolution). Otherwise stack a new commit.
 9. If the rebase required substantial reworking, **tell me before pushing or merging** so I can re-test before it ships.
+10. **Always report the rebase status when you're done.** Don't push or merge without it — I read this report to decide whether the rebase is safe to ship. The report goes in your reply to me and covers, in order:
+    - **Conflicts encountered.** List every file that conflicted and one sentence on what kind of conflict it was (overlapping function rename, divergent imports, semantic clash between two new features that both modify the same hook, etc.).
+    - **How each was resolved.** What you kept from upstream, what you kept from our branch, and any structural change you had to make beyond a mechanical merge (e.g. "renamed our internal `decodeServerPack` to `decodeForReconcile` so upstream's exported `decodeServerPack` could keep its name").
+    - **Major code changes upstream that might affect us.** Skim the 10ish upstream commits and call out anything that touches code paths we rely on, even if it didn't conflict — new hooks we should now route through, removed patterns we should follow, schema changes, new infra. Three sentences max per item, but don't omit anything that a human reviewer should know about.
+    - **Tests that changed.** Tests added by upstream that we modified (and why), tests of ours that needed updating (and why).
+    - **Pre-commit results.** typecheck / lint / test / knip / i18n:check status. List the test count if it shifted.
+    - **Manual verification status.** Whether you ran the `next-dev` preview, what scenarios you walked, what worked, what didn't, and whether the in-tool browser was available. If you couldn't verify, say so explicitly — don't gloss over it.
+    - **Commit list after the rebase.** The output of `git log --oneline -<N>` covering at least our new commits + the upstream HEAD they sit on.
+    - **Safety estimate.** A one-line confidence call on whether the rebase introduced no functional regressions, on a rough "low / medium / high" scale, with one sentence explaining what would shift the estimate. This is the line I read first when deciding whether to push.
+
+    Sample shape (paraphrase, don't copy verbatim):
+
+    > **Rebase report**
+    > - Conflicts: 3 files. `messages/en.json` (additive, both sides added new sibling keys), `src/data/customCardPacks.ts` (we restructured the file; upstream added two new hooks at the bottom), `src/data/cardPacksSync.tsx` (upstream exported a function we'd internally renamed).
+    > - Resolutions: kept our shape and slotted upstream's two hooks at the bottom; renamed our internal helper from `decodeServerPack` to `decodeForReconcile` so upstream's exported `decodeServerPack` keeps its name; merged the two i18n key sets.
+    > - Major upstream changes that might affect us: …
+    > - Tests: …
+    > - Pre-commit: typecheck ✓ / lint ✓ / test ✓ (1180 passed, +XX from previous) / knip ✓ / i18n:check ✓.
+    > - Manual verification: …
+    > - Commits: <`git log --oneline -5` snippet>.
+    > - Safety: **medium** — pre-commit is green but the unified-vs-split mutation-hook architectural call needs a real-browser walkthrough before push.
 
 ## Commit message format
 

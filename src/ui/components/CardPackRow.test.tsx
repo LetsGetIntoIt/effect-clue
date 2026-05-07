@@ -54,6 +54,30 @@ const makeCardSet = (id: string) =>
 const seedCustomPacks = (labels: ReadonlyArray<string>): ReadonlyArray<CustomCardSet> =>
     labels.map(label => saveCustomCardSet(label, makeCardSet(label)));
 
+/**
+ * Type a value into the open `usePrompt` Radix dialog and submit
+ * (or pass `null` to cancel). The "+ Save as card pack" / "+ Save
+ * as new pack" flows used to call `window.prompt`; they now open
+ * the same dialog primitive the rename action does.
+ */
+const submitPromptWith = async (
+    user: ReturnType<typeof userEvent.setup>,
+    value: string | null,
+) => {
+    if (value === null) {
+        const cancelBtn = await screen.findByRole("button", { name: "cancel" });
+        await user.click(cancelBtn);
+        return;
+    }
+    const input = await screen.findByRole("textbox");
+    await user.clear(input);
+    if (value.length > 0) {
+        await user.type(input, value);
+    }
+    const saveBtn = screen.getByRole("button", { name: "save" });
+    await user.click(saveBtn);
+};
+
 const renderRow = () =>
     render(
         <ConfirmProvider>
@@ -625,13 +649,10 @@ describe("CardPackRow save-as-pack activates the new pack", () => {
             document.querySelectorAll("[data-card-pack-active='true']"),
         ).toHaveLength(0);
         // Save the current configuration.
-        const promptSpy = vi
-            .spyOn(window, "prompt")
-            .mockReturnValue("My New Pack");
         await user.click(
             screen.getByRole("button", { name: "saveAsNewCardPack" }),
         );
-        promptSpy.mockRestore();
+        await submitPromptWith(user, "My New Pack");
         // Save should no longer be active.
         expect(
             document.querySelector("[data-card-pack-save-active='true']"),
@@ -647,13 +668,10 @@ describe("CardPackRow save-as-pack activates the new pack", () => {
     test("the saved pack appears on the surface row immediately", async () => {
         const user = userEvent.setup();
         renderRow(); // 2 packs to start (Classic + Master)
-        const promptSpy = vi
-            .spyOn(window, "prompt")
-            .mockReturnValue("Brand New");
         await user.click(
             screen.getByRole("button", { name: "saveAsCardPack" }),
         );
-        promptSpy.mockRestore();
+        await submitPromptWith(user, "Brand New");
         const labels = surfaceLabels();
         expect(labels).toContain("Brand New");
     });
@@ -661,13 +679,10 @@ describe("CardPackRow save-as-pack activates the new pack", () => {
     test("saving records a usage entry for the new pack", async () => {
         const user = userEvent.setup();
         renderRow();
-        const promptSpy = vi
-            .spyOn(window, "prompt")
-            .mockReturnValue("Recorded");
         await user.click(
             screen.getByRole("button", { name: "saveAsCardPack" }),
         );
-        promptSpy.mockRestore();
+        await submitPromptWith(user, "Recorded");
         const usage = JSON.parse(
             window.localStorage.getItem(
                 "effect-clue.card-pack-usage.v1",
@@ -708,13 +723,10 @@ describe("CardPackRow save-as-pack activates the new pack", () => {
             screen.getAllByRole("button", { name: "saveAsNewCardPack" }),
         ).toHaveLength(1);
 
-        const promptSpy = vi
-            .spyOn(window, "prompt")
-            .mockReturnValue("Master Fork");
         await user.click(
             screen.getByRole("button", { name: "saveAsNewCardPack" }),
         );
-        promptSpy.mockRestore();
+        await submitPromptWith(user, "Master Fork");
 
         const presets = JSON.parse(
             window.localStorage.getItem(
@@ -763,13 +775,10 @@ describe("CardPackRow save-as-pack activates the new pack", () => {
         // so it shouldn't pollute the deck-swap analytics funnel.
         const user = userEvent.setup();
         renderRow();
-        const promptSpy = vi
-            .spyOn(window, "prompt")
-            .mockReturnValue("No Analytics");
         await user.click(
             screen.getByRole("button", { name: "saveAsCardPack" }),
         );
-        promptSpy.mockRestore();
+        await submitPromptWith(user, "No Analytics");
         const events = captureCalls.map(c => c.event);
         expect(events).not.toContain("cards_dealt");
         expect(events).not.toContain("card_pack_selected");
@@ -779,11 +788,10 @@ describe("CardPackRow save-as-pack activates the new pack", () => {
         const user = userEvent.setup();
         renderRowWithMutate();
         await user.click(screen.getByTestId("mutate")); // Save now active
-        const promptSpy = vi.spyOn(window, "prompt").mockReturnValue(null);
         await user.click(
             screen.getByRole("button", { name: "saveAsNewCardPack" }),
         );
-        promptSpy.mockRestore();
+        await submitPromptWith(user, null);
         // Save still active; no pack-pill activation.
         expect(
             document.querySelector("[data-card-pack-save-active='true']"),
@@ -794,14 +802,21 @@ describe("CardPackRow save-as-pack activates the new pack", () => {
     });
 
     test("an empty / whitespace-only label is treated as cancel", async () => {
+        // The Save button in `usePrompt` is disabled when the
+        // trimmed input is empty, so cancelling is the only path
+        // out — exactly the behavior this test pins.
         const user = userEvent.setup();
         renderRowWithMutate();
         await user.click(screen.getByTestId("mutate"));
-        const promptSpy = vi.spyOn(window, "prompt").mockReturnValue("   ");
         await user.click(
             screen.getByRole("button", { name: "saveAsNewCardPack" }),
         );
-        promptSpy.mockRestore();
+        const input = await screen.findByRole("textbox");
+        await user.clear(input);
+        await user.type(input, "   ");
+        const saveBtn = screen.getByRole("button", { name: "save" });
+        expect(saveBtn).toBeDisabled();
+        await user.click(screen.getByRole("button", { name: "cancel" }));
         // Nothing was saved; Save pill stays active.
         const presets = JSON.parse(
             window.localStorage.getItem(

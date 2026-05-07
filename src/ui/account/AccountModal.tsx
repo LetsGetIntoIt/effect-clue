@@ -29,9 +29,10 @@ import {
     type PersistedCardPack,
 } from "../../server/actions/packs";
 import {
+    myCardPacksQueryKey,
     useCustomCardPacks,
 } from "../../data/customCardPacks";
-import { decodeServerPack } from "../../data/cardPacksSync";
+import { decodeServerPack } from "../../data/serverPackCodec";
 import type { CardSet } from "../../logic/CardSet";
 import type { CustomCardSet } from "../../logic/CustomCardSets";
 import { useSession } from "../hooks/useSession";
@@ -45,8 +46,6 @@ import { DevSignInForm } from "./DevSignInForm";
 const isDev = process.env.NODE_ENV === "development";
 
 const PROVIDER_GOOGLE = "google" as const;
-export const myCardPacksQueryKey = (userId: string | undefined) =>
-    ["my-card-packs", userId] as const;
 const SIGN_IN_FROM_MENU: SignInFromContext = "menu";
 
 /**
@@ -70,9 +69,15 @@ export const mergeCardPacks = (
     localPacks: ReadonlyArray<CustomCardSet>,
     serverPacks: ReadonlyArray<PersistedCardPack>,
 ): ReadonlyArray<DisplayPack> => {
-    const serverClientIds = new Set(
-        serverPacks.map((pack) => pack.clientGeneratedId),
-    );
+    // The continuous reconcile in `CardPacksSync` swaps local ids
+    // for server ids once a pack has been pulled, so the local
+    // `id` may equal EITHER a server `id` OR a server
+    // `clientGeneratedId`. Track both to catch every pair-match.
+    const serverIdentities = new Set<string>();
+    for (const pack of serverPacks) {
+        serverIdentities.add(pack.id);
+        serverIdentities.add(pack.clientGeneratedId);
+    }
     const decodedServer: ReadonlyArray<DisplayPack> = serverPacks.flatMap(
         (pack) => {
             const decoded = decodeServerPack(pack);
@@ -89,7 +94,7 @@ export const mergeCardPacks = (
         },
     );
     const localOnly: ReadonlyArray<DisplayPack> = localPacks
-        .filter((pack) => !serverClientIds.has(pack.id))
+        .filter((pack) => !serverIdentities.has(pack.id))
         .map((pack) => ({
             id: pack.id,
             clientGeneratedId: pack.id,

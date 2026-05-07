@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { CardSet } from "../logic/CardSet";
+import { DateTime } from "effect";
+import { cardSetEquals, CardSet } from "../logic/CardSet";
 import { Card, CardCategory } from "../logic/GameObjects";
 import { CardEntry, Category } from "../logic/GameSetup";
 import type { CustomCardSet } from "../logic/CustomCardSets";
@@ -102,5 +103,107 @@ describe("reconcileCardPacks", () => {
             { id: "server-1", label: "Office (2)" },
         ]);
         expect(result.idMap.get("local-1")).toBe("server-1");
+    });
+
+    test("server-only packs land with lastSyncedSnapshot populated", () => {
+        const result = reconcileCardPacks(
+            [],
+            [serverPack("server-1", "other-client", "Office", "Rope")],
+        );
+        expect(result.packs[0]?.lastSyncedSnapshot).toBeDefined();
+        expect(result.packs[0]?.lastSyncedSnapshot?.label).toBe("Office");
+        expect(
+            cardSetEquals(
+                result.packs[0]!.lastSyncedSnapshot!.cardSet,
+                makeCardSet("Rope"),
+            ),
+        ).toBe(true);
+        expect(result.packs[0]?.unsyncedSince).toBeUndefined();
+    });
+
+    test("paired-and-matching content clears unsyncedSince and sets snapshot", () => {
+        const local: CustomCardSet = {
+            ...localPack("local-1", "Office", "Rope"),
+            unsyncedSince: DateTime.makeUnsafe("2026-04-22T12:00:00Z"),
+        };
+        const result = reconcileCardPacks(
+            [local],
+            [serverPack("server-1", "local-1", "Office", "Rope")],
+        );
+        expect(result.packs[0]?.id).toBe("server-1");
+        expect(result.packs[0]?.unsyncedSince).toBeUndefined();
+        expect(result.packs[0]?.lastSyncedSnapshot?.label).toBe("Office");
+    });
+
+    test("conflict with unsyncedSince — local wins on label/cardSet", () => {
+        const local: CustomCardSet = {
+            ...localPack("local-1", "Office Updated", "Rope"),
+            unsyncedSince: DateTime.makeUnsafe("2026-04-22T12:00:00Z"),
+            lastSyncedSnapshot: {
+                label: "Office",
+                cardSet: makeCardSet("Rope"),
+            },
+        };
+        const result = reconcileCardPacks(
+            [local],
+            // Server has a newer "Mansion" version (other device)
+            [serverPack("server-1", "local-1", "Mansion", "Pipe")],
+        );
+        expect(result.packs[0]?.id).toBe("server-1");
+        expect(result.packs[0]?.label).toBe("Office Updated");
+        expect(
+            cardSetEquals(
+                result.packs[0]!.cardSet,
+                makeCardSet("Rope"),
+            ),
+        ).toBe(true);
+        // unsyncedSince retained — user still has unflushed local edits.
+        expect(result.packs[0]?.unsyncedSince).toBeDefined();
+        // Baseline refreshed to the new server view.
+        expect(result.packs[0]?.lastSyncedSnapshot?.label).toBe("Mansion");
+    });
+
+    test("conflict without unsyncedSince — server wins (rename / other device)", () => {
+        const local = localPack("local-1", "Office", "Rope");
+        const result = reconcileCardPacks(
+            [local],
+            [serverPack("server-1", "local-1", "Office (renamed)", "Rope")],
+        );
+        expect(result.packs[0]?.label).toBe("Office (renamed)");
+        expect(result.packs[0]?.unsyncedSince).toBeUndefined();
+        expect(result.packs[0]?.lastSyncedSnapshot?.label).toBe(
+            "Office (renamed)",
+        );
+    });
+
+    test("tombstone filter drops server packs by id and clientGeneratedId", () => {
+        const result = reconcileCardPacks(
+            [],
+            [
+                serverPack("server-1", "other-client", "Office", "Rope"),
+                serverPack("server-2", "local-1", "Mansion", "Pipe"),
+            ],
+            new Set(["server-1", "local-1"]),
+        );
+        expect(result.packs).toEqual([]);
+    });
+
+    test("tombstone filter drops local packs by id", () => {
+        const result = reconcileCardPacks(
+            [localPack("local-1", "Office", "Rope")],
+            [],
+            new Set(["local-1"]),
+        );
+        expect(result.packs).toEqual([]);
+    });
+
+    test("local-only pack preserves its sync metadata across reconcile", () => {
+        const local: CustomCardSet = {
+            ...localPack("local-1", "Office", "Rope"),
+            unsyncedSince: DateTime.makeUnsafe("2026-04-22T12:00:00Z"),
+        };
+        const result = reconcileCardPacks([local], []);
+        expect(result.packs[0]?.unsyncedSince).toBeDefined();
+        expect(result.packs[0]?.id).toBe("local-1");
     });
 });

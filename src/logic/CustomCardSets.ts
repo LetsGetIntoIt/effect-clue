@@ -13,8 +13,13 @@
  * The on-disk payload goes through `Schema`: malformed blobs are
  * rejected with a structured error rather than silently ignored, and
  * branded ids (Card, CardCategory) flow through the decoder directly.
+ *
+ * Sync metadata: each pack carries optional `unsyncedSince` and
+ * `lastSyncedSnapshot` fields used by the sign-in / continuous
+ * reconcile pipeline (see [`src/data/cardPacksSync.tsx`]). They are
+ * additive — old payloads without them still decode.
  */
-import { Result, Schema } from "effect";
+import { DateTime, Result, Schema } from "effect";
 import { CardSet } from "./CardSet";
 import { Card, CardCategory } from "./GameObjects";
 import { CardEntry, Category } from "./GameSetup";
@@ -35,10 +40,24 @@ const PersistedCategorySchema = Schema.Struct({
     cards: Schema.Array(PersistedCardEntrySchema),
 });
 
+/**
+ * Last-known server-side view of a pack. Set when a pull arrives or
+ * a push confirms; never mutated by local edits, so it remains a
+ * stable diff baseline across multiple offline edits and powers the
+ * "what changed" copy in `LogoutWarningModal`.
+ */
+const PersistedSnapshotSchema = Schema.Struct({
+    label: Schema.String,
+    categories: Schema.Array(PersistedCategorySchema),
+});
+
 const PersistedCustomCardSetSchema = Schema.Struct({
     id: Schema.String,
     label: Schema.String,
     categories: Schema.Array(PersistedCategorySchema),
+    /** Epoch millis at the storage edge; `DateTime.Utc` in memory. */
+    unsyncedSince: Schema.optional(Schema.Number),
+    lastSyncedSnapshot: Schema.optional(PersistedSnapshotSchema),
 });
 
 /**
@@ -58,6 +77,15 @@ const decodeUnknown = Schema.decodeUnknownResult(
 const encode = Schema.encodeSync(PersistedCustomCardSetsSchema);
 
 /**
+ * Snapshot of the server's last-known view of a pack. Drives the
+ * "what changed" diff in the logout warning UI.
+ */
+export interface CardPackSnapshot {
+    readonly label: string;
+    readonly cardSet: CardSet;
+}
+
+/**
  * Runtime-shape card pack as consumed by the UI. Stores a `CardSet`
  * — the deck half of a game — so callers can compose a fresh
  * `GameSetup` with whatever `PlayerSet` the current game already
@@ -67,6 +95,17 @@ export interface CustomCardSet {
     readonly id: string;
     readonly label: string;
     readonly cardSet: CardSet;
+    /**
+     * Set on every local mutation while signed in; cleared by a
+     * server roundtrip confirmation. Absent ⇒ pack is in sync.
+     */
+    readonly unsyncedSince?: DateTime.Utc | undefined;
+    /**
+     * Server's last-known view of this pack — set by pulls and by
+     * successful pushes. Absent ⇒ the server has never acknowledged
+     * this pack (a local-only creation).
+     */
+    readonly lastSyncedSnapshot?: CardPackSnapshot | undefined;
 }
 
 // Historical key — retains the `custom-presets` path so users who
@@ -74,11 +113,50 @@ export interface CustomCardSet {
 // code-level names changed.
 const STORAGE_KEY = "effect-clue.custom-presets.v1";
 
+const TOMBSTONES_KEY = "effect-clue.deleted-packs.v1";
+const USAGE_KEY = "effect-clue.card-pack-usage.v1";
+
+interface PersistedCategoryShape {
+    readonly id: CardCategory;
+    readonly name: string;
+    readonly cards: ReadonlyArray<{
+        readonly id: Card;
+        readonly name: string;
+    }>;
+}
+
+const decodePersistedCategories = (
+    cats: ReadonlyArray<PersistedCategoryShape>,
+): CardSet =>
+    CardSet({
+        categories: cats.map(c => Category({
+            id: c.id,
+            name: c.name,
+            cards: c.cards.map(card => CardEntry({
+                id: card.id,
+                name: card.name,
+            })),
+        })),
+    });
+
+const encodePersistedCategories = (
+    cardSet: CardSet,
+): ReadonlyArray<PersistedCategoryShape> =>
+    cardSet.categories.map(c => ({
+        id: c.id,
+        name: c.name,
+        cards: c.cards.map(card => ({
+            id: card.id,
+            name: card.name,
+        })),
+    }));
+
 /**
  * Read all user-saved card packs from localStorage. Returns an
  * empty array if the key is missing or the payload doesn't decode.
  */
 export const loadCustomCardSets = (): ReadonlyArray<CustomCardSet> => {
+    if (typeof window === "undefined") return [];
     try {
         const raw = window.localStorage.getItem(STORAGE_KEY);
         if (!raw) return [];
@@ -87,16 +165,18 @@ export const loadCustomCardSets = (): ReadonlyArray<CustomCardSet> => {
         return decoded.success.presets.map(p => ({
             id: p.id,
             label: p.label,
-            cardSet: CardSet({
-                categories: p.categories.map(c => Category({
-                    id: c.id,
-                    name: c.name,
-                    cards: c.cards.map(card => CardEntry({
-                        id: card.id,
-                        name: card.name,
-                    })),
-                })),
-            }),
+            cardSet: decodePersistedCategories(p.categories),
+            unsyncedSince: p.unsyncedSince !== undefined
+                ? DateTime.makeUnsafe(p.unsyncedSince)
+                : undefined,
+            lastSyncedSnapshot: p.lastSyncedSnapshot !== undefined
+                ? {
+                    label: p.lastSyncedSnapshot.label,
+                    cardSet: decodePersistedCategories(
+                        p.lastSyncedSnapshot.categories,
+                    ),
+                }
+                : undefined,
         }));
     } catch {
         return [];
@@ -104,20 +184,25 @@ export const loadCustomCardSets = (): ReadonlyArray<CustomCardSet> => {
 };
 
 const writeAll = (packs: ReadonlyArray<CustomCardSet>): void => {
+    if (typeof window === "undefined") return;
     try {
         const encoded = encode({
             version: 1,
             presets: packs.map(p => ({
                 id: p.id,
                 label: p.label,
-                categories: p.cardSet.categories.map(c => ({
-                    id: c.id,
-                    name: c.name,
-                    cards: c.cards.map(card => ({
-                        id: card.id,
-                        name: card.name,
-                    })),
-                })),
+                categories: encodePersistedCategories(p.cardSet),
+                unsyncedSince: p.unsyncedSince !== undefined
+                    ? DateTime.toEpochMillis(p.unsyncedSince)
+                    : undefined,
+                lastSyncedSnapshot: p.lastSyncedSnapshot !== undefined
+                    ? {
+                        label: p.lastSyncedSnapshot.label,
+                        categories: encodePersistedCategories(
+                            p.lastSyncedSnapshot.cardSet,
+                        ),
+                    }
+                    : undefined,
             })),
         });
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(encoded));
@@ -134,6 +219,10 @@ const writeAll = (packs: ReadonlyArray<CustomCardSet>): void => {
  * recency map and any other id-based references stay valid. If
  * `existingId` doesn't match any saved pack, falls back to insert
  * (so a stale id from an evicted pack still produces a save).
+ *
+ * Returns the persisted pack with sync metadata preserved when
+ * updating in place — caller decides whether to mark it unsynced via
+ * [`markPackUnsynced`] after the fact.
  */
 export const saveCustomCardSet = (
     label: string,
@@ -144,7 +233,14 @@ export const saveCustomCardSet = (
     if (existingId !== undefined) {
         const matchIdx = packs.findIndex(p => p.id === existingId);
         if (matchIdx !== -1) {
-            const updated: CustomCardSet = { id: existingId, label, cardSet };
+            const previous = packs[matchIdx]!;
+            const updated: CustomCardSet = {
+                id: existingId,
+                label,
+                cardSet,
+                unsyncedSince: previous.unsyncedSince,
+                lastSyncedSnapshot: previous.lastSyncedSnapshot,
+            };
             const next = [...packs];
             next[matchIdx] = updated;
             writeAll(next);
@@ -173,4 +269,78 @@ export const replaceCustomCardSets = (
     packs: ReadonlyArray<CustomCardSet>,
 ): void => {
     writeAll(packs);
+};
+
+/**
+ * Mark a pack as having local changes the server hasn't seen yet.
+ * Stamps `unsyncedSince` with the current `DateTime.now`. No-op if
+ * the pack id isn't found.
+ */
+export const markPackUnsynced = (id: string): void => {
+    const packs = loadCustomCardSets();
+    const idx = packs.findIndex(p => p.id === id);
+    if (idx === -1) return;
+    const next = [...packs];
+    next[idx] = {
+        ...packs[idx]!,
+        unsyncedSince: DateTime.nowUnsafe(),
+    };
+    writeAll(next);
+};
+
+/**
+ * Confirm a server roundtrip for a pack. Swaps the local id for the
+ * server's canonical id (if different), refreshes the
+ * `lastSyncedSnapshot` to the server's view, and clears
+ * `unsyncedSince`. Returns the updated pack, or `undefined` if no
+ * pack matched `localId`.
+ *
+ * Caller is responsible for `remapCardPackUsageIds` when the id
+ * changes.
+ */
+export const markPackSynced = (
+    localId: string,
+    serverRow: {
+        readonly id: string;
+        readonly label: string;
+        readonly cardSet: CardSet;
+    },
+): CustomCardSet | undefined => {
+    const packs = loadCustomCardSets();
+    const idx = packs.findIndex(p => p.id === localId);
+    if (idx === -1) return undefined;
+    const previous = packs[idx]!;
+    const updated: CustomCardSet = {
+        id: serverRow.id,
+        label: previous.label,
+        cardSet: previous.cardSet,
+        unsyncedSince: undefined,
+        lastSyncedSnapshot: {
+            label: serverRow.label,
+            cardSet: serverRow.cardSet,
+        },
+    };
+    const next = [...packs];
+    next[idx] = updated;
+    writeAll(next);
+    return updated;
+};
+
+/**
+ * Clear every account-tied localStorage key. Called as part of
+ * [`requestSignOut`] once a sign-out is committed (either because
+ * sync confirmed everything or because the user chose
+ * "sign out anyway"). Deliberately scoped: tour state, splash state,
+ * install-prompt state, in-progress game state are NOT account-tied
+ * and remain untouched.
+ */
+export const clearAccountTiedLocalState = (): void => {
+    if (typeof window === "undefined") return;
+    try {
+        window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem(TOMBSTONES_KEY);
+        window.localStorage.removeItem(USAGE_KEY);
+    } catch {
+        // Private mode, quota — non-fatal.
+    }
 };

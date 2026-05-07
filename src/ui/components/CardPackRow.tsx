@@ -22,11 +22,9 @@ import {
 } from "../../data/cardPackUsage";
 import { CARD_SETS } from "../../logic/GameSetup";
 import { CustomCardSet } from "../../logic/CustomCardSets";
-import {
-    useCustomCardPacks,
-    useSaveCardPack,
-} from "../../data/customCardPacks";
+import { useCustomCardPacks } from "../../data/customCardPacks";
 import { useConfirm } from "../hooks/useConfirm";
+import { usePrompt } from "../hooks/usePrompt";
 import { useClue } from "../state";
 import { CardPackPicker, type PickerPack } from "./CardPackPicker";
 import { PencilIcon, SearchIcon, TrashIcon } from "./Icons";
@@ -107,10 +105,11 @@ export function CardPackRow() {
     const usageQuery = useCardPackUsage();
     const customPacks = customPacksQuery.data ?? [];
     const usage = usageQuery.data ?? new Map();
-    const savePackMutation = useSaveCardPack();
     const recordUseMutation = useRecordCardPackUse();
     const forgetUseMutation = useForgetCardPackUse();
     const cardPackActions = useCardPackActions();
+    const prompt = usePrompt();
+    const tCommon = useTranslations("common");
     const [pickerOpen, setPickerOpen] = useState(false);
 
     // The Classic id is the first entry in CARD_SETS and is the
@@ -281,7 +280,7 @@ export function CardPackRow() {
         // same as the loaded pack (no prompt) so "Update MyDeck"
         // doesn't surprise the user with a label-rename dialog.
         if (canUpdateLoadedPack && loadedCustomPack !== undefined) {
-            const updated = await savePackMutation.mutateAsync({
+            const updated = await cardPackActions.savePack({
                 label: loadedCustomPack.label,
                 cardSet: setup.cardSet,
                 existingId: loadedCustomPack.id,
@@ -289,9 +288,14 @@ export function CardPackRow() {
             recordUseMutation.mutate(updated.id);
             return;
         }
-        const label = window.prompt(t("saveAsCardPackPrompt"));
-        if (!label || !label.trim()) return;
-        const newPack = await savePackMutation.mutateAsync({
+        const label = await prompt({
+            title: t("saveAsCardPackDialogTitle"),
+            label: t("saveAsCardPackInputLabel"),
+            initialValue: "",
+            confirmLabel: tCommon("save"),
+        });
+        if (label === null || label.trim().length === 0) return;
+        const newPack = await cardPackActions.savePack({
             label: label.trim(),
             cardSet: setup.cardSet,
         });
@@ -310,9 +314,14 @@ export function CardPackRow() {
      * `existingId`).
      */
     const onSaveAsNewCardSet = async () => {
-        const label = window.prompt(t("saveAsCardPackPrompt"));
-        if (!label || !label.trim()) return;
-        const newPack = await savePackMutation.mutateAsync({
+        const label = await prompt({
+            title: t("saveAsCardPackDialogTitle"),
+            label: t("saveAsCardPackInputLabel"),
+            initialValue: "",
+            confirmLabel: tCommon("save"),
+        });
+        if (label === null || label.trim().length === 0) return;
+        const newPack = await cardPackActions.savePack({
             label: label.trim(),
             cardSet: setup.cardSet,
         });
