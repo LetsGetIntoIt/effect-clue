@@ -195,25 +195,27 @@ to detect built-ins — the `name` is informational, not authoritative.
      side)* below.
 5. Click:
    - Pack-only → decodes `cardPackData` and routes through
-     `saveOrRecognisePack`. Built-in packs (matched by structural
-     equality against `CARD_SETS`) just stamp the built-in id as
-     most-recently-used; custom packs are added to the local
-     `customCardSets` registry and stamped as MRU. The pack is NOT
-     auto-loaded into the live setup; instead a follow-up confirm
-     dialog asks "Card pack {label} saved. Would you like to start a
-     new game with this pack?" with cancel "Not now" (default focus)
-     and confirm "Start new game with this pack". When the receiver
-     has a game in progress, the standard overwrite warning is
-     appended to the message. "Start new game" calls
-     `applyShareSnapshotToLocalStorage` with the same pack-only
+     `saveOrRecognisePack`. Built-in packs (matched by `cardSetEquals`
+     against `CARD_SETS`) just stamp the built-in id as
+     most-recently-used; existing custom packs whose contents match
+     are likewise recognised (no duplicate library entry); only
+     genuinely new decks are appended to the local `customCardSets`
+     registry. The pack is NOT auto-loaded into the live setup;
+     instead a follow-up confirm dialog asks "Card pack {label} saved.
+     Would you like to start a new game with this pack?" with cancel
+     "Not now" (default focus) and confirm "Start new game with this
+     pack". When the receiver has a game in progress, the standard
+     overwrite warning is appended to the message. "Start new game"
+     calls `applyShareSnapshotToLocalStorage` with the same pack-only
      snapshot, which clears game state and uses the imported deck.
    - Invite / transfer → standard "Start a new game?" confirm fires
      first when there's persisted game data; on accept,
      `useApplyShareSnapshot()` decodes each wire field via the codec,
      builds a `GameSession`, writes the new state to `localStorage`,
      AND also routes through `saveOrRecognisePack` so the imported
-     deck appears in `customCardSets` and lights up the active pill
-     in `CardPackRow` once the user lands on `/play`.
+     deck appears in the local registry (or recognises an existing
+     match) and lights up the active pill in `CardPackRow` once the
+     user lands on `/play`.
 6. Router pushes to `/play`.
 
 **Hydration semantics:** the share is the new game. Sections present

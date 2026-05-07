@@ -370,6 +370,135 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
         expect(loadFromLocalStorage()).toEqual(currentSession);
     });
 
+    test("recognises an existing custom pack with same content AND label", async () => {
+        const { saveCustomCardSet, loadCustomCardSets } = await import(
+            "../../logic/CustomCardSets"
+        );
+        // Pre-seed an existing custom pack with the same structural
+        // contents AND the same label as what the share carries
+        // (SHARE_PACK is "Classic" with the two-card Suspect category).
+        // Wire-format ids may differ — content equality is via
+        // cardSetEquals, label equality is exact-string.
+        const existing = saveCustomCardSet(
+            "Classic",
+            CardSet({
+                categories: [
+                    Category({
+                        id: CardCategory("local-suspect"),
+                        name: "Suspect",
+                        cards: [
+                            CardEntry({
+                                id: Card("local-scarlet"),
+                                name: "Miss Scarlet",
+                            }),
+                            CardEntry({
+                                id: Card("local-mustard"),
+                                name: "Colonel Mustard",
+                            }),
+                        ],
+                    }),
+                ],
+            }),
+        );
+
+        const result = saveCardPackFromSnapshot(
+            sampleSnapshot({ cardPack: true }),
+        );
+
+        expect(result.kind).toBe("recognised");
+        if (result.kind !== "recognised") return;
+        expect(result.id).toBe(existing.id);
+        expect(result.label).toBe("Classic");
+        expect(loadCustomCardSets()).toHaveLength(1);
+        expect(loadCardPackUsage().has(existing.id)).toBe(true);
+    });
+
+    test("does NOT recognise an existing custom pack when contents match but the label differs", async () => {
+        const { saveCustomCardSet, loadCustomCardSets } = await import(
+            "../../logic/CustomCardSets"
+        );
+        // Same content as the wire payload, different label. Users
+        // distinguish two structurally-identical decks by label, so
+        // we treat them as separate packs — the import goes through
+        // the `saved` branch and the user ends up with both entries
+        // in their library.
+        saveCustomCardSet(
+            "My Renamed Classic",
+            CardSet({
+                categories: [
+                    Category({
+                        id: CardCategory("local-suspect"),
+                        name: "Suspect",
+                        cards: [
+                            CardEntry({
+                                id: Card("local-scarlet"),
+                                name: "Miss Scarlet",
+                            }),
+                            CardEntry({
+                                id: Card("local-mustard"),
+                                name: "Colonel Mustard",
+                            }),
+                        ],
+                    }),
+                ],
+            }),
+        );
+
+        const result = saveCardPackFromSnapshot(
+            sampleSnapshot({ cardPack: true }),
+        );
+
+        expect(result.kind).toBe("saved");
+        if (result.kind !== "saved") return;
+        expect(result.pack.label).toBe("Classic");
+        // Two distinct entries in the library — same shape, different
+        // labels.
+        expect(loadCustomCardSets()).toHaveLength(2);
+    });
+
+    test("when multiple existing customs match content+label, prefers the most-recently-used", async () => {
+        const { saveCustomCardSet } = await import(
+            "../../logic/CustomCardSets"
+        );
+        const { recordCardPackUse } = await import(
+            "../../logic/CardPackUsage"
+        );
+        const matchingCardSet = CardSet({
+            categories: [
+                Category({
+                    id: CardCategory("local-suspect"),
+                    name: "Suspect",
+                    cards: [
+                        CardEntry({
+                            id: Card("local-scarlet"),
+                            name: "Miss Scarlet",
+                        }),
+                        CardEntry({
+                            id: Card("local-mustard"),
+                            name: "Colonel Mustard",
+                        }),
+                    ],
+                }),
+            ],
+        });
+        // Both packs carry the same label as the wire payload
+        // ("Classic") — saveCustomCardSet does not enforce label
+        // uniqueness, so this is a real (if rare) state.
+        const older = saveCustomCardSet("Classic", matchingCardSet);
+        recordCardPackUse(older.id);
+        await new Promise((r) => setTimeout(r, 5));
+        const newer = saveCustomCardSet("Classic", matchingCardSet);
+        recordCardPackUse(newer.id);
+
+        const result = saveCardPackFromSnapshot(
+            sampleSnapshot({ cardPack: true }),
+        );
+
+        expect(result.kind).toBe("recognised");
+        if (result.kind !== "recognised") return;
+        expect(result.id).toBe(newer.id);
+    });
+
     test("recognises a built-in pack instead of duplicating it", () => {
         // The receiver-side detection compares structurally against
         // CARD_SETS, so a snapshot whose wire deck matches built-in

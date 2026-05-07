@@ -478,11 +478,15 @@ T+3m   The next React Query focus fires. applyServerSnapshot runs.
   invite/transfer share (or "Start new game with this pack" from a
   pack-only share), `useApplyShareSnapshot.applyShareSnapshotToLocalStorage`
   calls `saveOrRecognisePack` after writing the GameSession. Built-in
-  packs are recognised (just `recordCardPackUse(builtIn.id)`); custom
-  packs are appended to `customCardSets` and stamped MRU. Sign-in is
-  required to receive any share, so the user is signed in by the time
-  the pack lands locally — `CardPacksSync`'s post-`/play` mount picks
-  it up and pushes to the server like any other local create.
+  packs are recognised (just `recordCardPackUse(builtIn.id)`);
+  existing custom packs whose contents structurally match (per
+  `cardSetEquals`) are also recognised — receiving the same shared
+  deck twice doesn't accumulate duplicates in the library; only
+  genuinely new decks are appended to `customCardSets` and stamped
+  MRU. Sign-in is required to receive any share, so the user is
+  signed in by the time the pack lands locally — `CardPacksSync`'s
+  post-`/play` mount picks it up and pushes to the server like any
+  other local create.
 - **Race: save in flight at sign-out.** `flushPendingChanges` calls
   `drainInFlight()` first. The in-flight save settles (either
   clearing `unsyncedSince` on success or retaining it on failure),

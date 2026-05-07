@@ -30,7 +30,7 @@
  */
 "use client";
 
-import { Result, Schema } from "effect";
+import { DateTime, Result, Schema } from "effect";
 import { Accusation, newAccusationId } from "../../logic/Accusation";
 import {
     cardSetEquals,
@@ -56,10 +56,14 @@ import {
     type GameSession,
 } from "../../logic/Persistence";
 import {
+    loadCustomCardSets,
     saveCustomCardSet,
     type CustomCardSet,
 } from "../../logic/CustomCardSets";
-import { recordCardPackUse } from "../../logic/CardPackUsage";
+import {
+    loadCardPackUsage,
+    recordCardPackUse,
+} from "../../logic/CardPackUsage";
 import { PlayerSet } from "../../logic/PlayerSet";
 import {
     accusationsCodec,
@@ -286,11 +290,12 @@ export const buildSessionFromSnapshot = (
 
 /**
  * Distinct outcome of `saveOrRecognisePack`. `recognised` means the
- * snapshot's pack matched a built-in by structural equality, so we
- * just stamped the built-in id as MRU; nothing was added to the
- * custom-pack list. `saved` means the pack was new (or didn't match
- * any built-in) and was persisted to `customCardSets` plus stamped
- * MRU. `none` means the snapshot has no pack at all (defensive — the
+ * snapshot's pack matched something already in the user's library —
+ * either a built-in (`CARD_SETS`) or a saved custom pack — by
+ * structural equality, so we just stamped that pack's id as MRU and
+ * left the registry alone. `saved` means the pack was structurally
+ * new and was persisted to `customCardSets` plus stamped MRU.
+ * `none` means the snapshot has no pack at all (defensive — the
  * receive page gates Import out of that branch).
  */
 export type RecognisedPackResult =
@@ -327,13 +332,36 @@ const decodeAndBuildCardSet = (
 
 /**
  * Persist the snapshot's pack into the local card-pack registry and
- * mark it as the most-recently-used pack. When the decoded pack
- * matches one of `CARD_SETS` by structural equality, skip the custom
- * write and just stamp the built-in id as MRU — otherwise we'd seed
- * a duplicate Classic / Master Detective into the user's library on
- * every received share. Used by both the pack-only receive flow and
- * the invite/transfer flow so the post-import pill resolution lights
- * up the right pack.
+ * mark it as the most-recently-used pack. Two short-circuits before
+ * we'd otherwise duplicate-write:
+ *
+ *   1. Built-in match: when the decoded deck structurally equals one
+ *      of `CARD_SETS` (Classic / Master Detective), stamp that id as
+ *      MRU and return — receiving Classic shouldn't seed a "Classic"
+ *      copy into the user's customCardSets every time. The wire-name
+ *      is ignored for built-ins; they're identified by content.
+ *   2. Existing custom-pack match: when the decoded deck structurally
+ *      equals a pack the user already has saved AND carries the same
+ *      label, stamp the existing id and return. The name has to match
+ *      because users distinguish two structurally-identical decks by
+ *      label ("Mike's Office" vs "The Office Pack" with the same
+ *      cards are deliberately separate packs); duplicating content
+ *      across labels is a feature, not a bug. Without the name match
+ *      we'd incorrectly fold one into the other on re-import.
+ *
+ * Content equality is `cardSetEquals` — the same name-based
+ * structural comparison `CardPackRow` uses to decide which pack pill
+ * is active. IDs aren't compared (the wire-format IDs from a sender
+ * may differ from the receiver's local IDs even for content-identical
+ * packs). Label equality is exact-string (no trim/case-folding) for
+ * the same reason: users see the label they chose, so any character
+ * difference is meaningful.
+ *
+ * Tie-breaker when multiple existing custom packs match content+label
+ * (rare — would mean the user saved the same pack twice under the
+ * same name): pick the most-recently-used one, falling back to the
+ * first match. Keeps the active-pill resolution stable across
+ * re-imports.
  */
 const saveOrRecognisePack = (
     snapshot: ShareSnapshotForHydration,
@@ -347,9 +375,55 @@ const saveOrRecognisePack = (
         recordCardPackUse(builtIn.id);
         return { kind: "recognised", id: builtIn.id, label: builtIn.label };
     }
+    const existing = pickExistingCustomMatch(decoded.cardSet, decoded.name);
+    if (existing !== undefined) {
+        recordCardPackUse(existing.id);
+        return {
+            kind: "recognised",
+            id: existing.id,
+            label: existing.label,
+        };
+    }
     const savedPack = saveCustomCardSet(decoded.name, decoded.cardSet);
     recordCardPackUse(savedPack.id);
     return { kind: "saved", pack: savedPack };
+};
+
+/**
+ * Find a saved custom pack whose contents structurally match
+ * `cardSet` AND whose label exactly matches `label`. When more than
+ * one matches, prefer the most-recently-used; when none has been
+ * used (or usage map is empty), the first match wins.
+ */
+const pickExistingCustomMatch = (
+    cardSet: CardSet,
+    label: string,
+): CustomCardSet | undefined => {
+    const candidates = loadCustomCardSets().filter(
+        (p) => p.label === label && cardSetEquals(p.cardSet, cardSet),
+    );
+    if (candidates.length === 0) return undefined;
+    if (candidates.length === 1) return candidates[0];
+    const usage = loadCardPackUsage();
+    let best = candidates[0]!;
+    let bestAt: number | undefined = epochOf(usage, best.id);
+    for (let i = 1; i < candidates.length; i += 1) {
+        const c = candidates[i]!;
+        const at = epochOf(usage, c.id);
+        if (at !== undefined && (bestAt === undefined || at > bestAt)) {
+            best = c;
+            bestAt = at;
+        }
+    }
+    return best;
+};
+
+const epochOf = (
+    usage: ReturnType<typeof loadCardPackUsage>,
+    id: string,
+): number | undefined => {
+    const at = usage.get(id);
+    return at === undefined ? undefined : DateTime.toEpochMillis(at);
 };
 
 /**
