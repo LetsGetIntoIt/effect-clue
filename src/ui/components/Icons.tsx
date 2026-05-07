@@ -281,6 +281,62 @@ export function LightbulbIcon({ className, size = 14 }: IconProps) {
     );
 }
 
+/**
+ * Three stacked rectangles — a deck of cards. Used in the account
+ * modal's "My card packs" list to indicate a pack is fully synced.
+ */
+export function CardStackIcon({ className, size = 14 }: IconProps) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+            className={className}
+        >
+            <rect x="7" y="9" width="13" height="12" rx="1.5" />
+            <path d="M5 7h13" />
+            <path d="M3 5h13" />
+        </svg>
+    );
+}
+
+/**
+ * Two curved arrows forming a circle — the standard refresh / sync
+ * glyph. Used in the account modal to indicate a pack has pending
+ * changes (and, with `animate-spin`, that a sync is in progress).
+ */
+export function RefreshIcon({ className, size = 14 }: IconProps) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+            className={className}
+        >
+            <polyline points="20 4 20 10 14 10" />
+            <polyline points="4 20 4 14 10 14" />
+            <path d="M20 10a8 8 0 0 0-14.93-2" />
+            <path d="M4 14a8 8 0 0 0 14.93 2" />
+        </svg>
+    );
+}
+
 /** Arrow leaving a frame — paired with links that open in a new tab. */
 export function ExternalLinkIcon({ className, size = 14 }: IconProps) {
     return (

@@ -11,19 +11,34 @@
  * Lives in its own file to avoid a circular import between
  * `customCardPacks.ts` (which produces Promises) and
  * `cardPacksSync.tsx` (which drains them).
+ *
+ * Also exposes a thin pub/sub layer (`subscribeToInFlight`,
+ * `getInFlightCount`, `useIsSyncingCardPacks`) so UI can render
+ * "syncing" affordances driven by the same set.
  */
 
+import { useSyncExternalStore } from "react";
+
 const inFlight = new Set<Promise<unknown>>();
+const listeners = new Set<() => void>();
+
+const notify = (): void => {
+    for (const fn of listeners) {
+        fn();
+    }
+};
 
 /**
  * Add a Promise to the registry; auto-removes it on settle.
  */
 export const trackInFlight = <T>(promise: Promise<T>): Promise<T> => {
     inFlight.add(promise);
+    notify();
     promise
         .catch(() => undefined)
         .finally(() => {
             inFlight.delete(promise);
+            notify();
         });
     return promise;
 };
@@ -37,4 +52,34 @@ export const drainInFlight = async (): Promise<void> => {
     while (inFlight.size > 0) {
         await Promise.allSettled([...inFlight]);
     }
+};
+
+/**
+ * Subscribe to changes in the in-flight registry. Returns an
+ * unsubscribe function. Used by `useIsSyncingCardPacks`.
+ */
+export const subscribeToInFlight = (fn: () => void): (() => void) => {
+    listeners.add(fn);
+    return () => {
+        listeners.delete(fn);
+    };
+};
+
+/** Current size of the in-flight registry. */
+export const getInFlightCount = (): number => inFlight.size;
+
+const getServerSnapshot = (): number => 0;
+
+/**
+ * React hook: `true` whenever any card-pack save / delete is in
+ * flight. Combine with `myCardPacks.isFetching` (the React Query for
+ * the server pull) to get a complete "is syncing" signal.
+ */
+export const useIsSyncingCardPacks = (): boolean => {
+    const count = useSyncExternalStore(
+        subscribeToInFlight,
+        getInFlightCount,
+        getServerSnapshot,
+    );
+    return count > 0;
 };
