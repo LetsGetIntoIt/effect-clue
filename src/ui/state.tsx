@@ -447,6 +447,26 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 ),
             };
 
+        case "movePlayer": {
+            const i = state.setup.players.indexOf(action.player);
+            if (i === -1) return state;
+            const target = action.direction === "left" ? i - 1 : i + 1;
+            if (target < 0 || target >= state.setup.players.length) return state;
+            const players = [...state.setup.players];
+            const a = players[i];
+            const b = players[target];
+            if (a === undefined || b === undefined) return state;
+            players[i] = b;
+            players[target] = a;
+            return {
+                ...state,
+                setup: GameSetup({
+                    players,
+                    categories: state.setup.categories,
+                }),
+            };
+        }
+
         case "renamePlayer": {
             if (action.oldName === action.newName) return state;
             const { oldName, newName } = action;

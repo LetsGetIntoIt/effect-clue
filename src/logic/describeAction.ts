@@ -73,6 +73,11 @@ export const describeAction = (
                 oldName: String(action.oldName),
                 newName: String(action.newName),
             });
+        case "movePlayer":
+            return t("actions.movePlayer", {
+                player: String(action.player),
+                direction: action.direction,
+            });
         case "addCategory":
             return t("actions.addCategory", {
                 name: nextNumbered(

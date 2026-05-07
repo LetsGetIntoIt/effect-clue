@@ -91,7 +91,7 @@ import { useConfetti } from "../hooks/useConfetti";
 import { useShareContext } from "../share/ShareProvider";
 import { CardPackRow } from "./CardPackRow";
 import { ShareIcon } from "./ShareIcon";
-import { Envelope, LightbulbIcon } from "./Icons";
+import { ChevronLeftIcon, ChevronRightIcon, Envelope, LightbulbIcon } from "./Icons";
 import { HypothesisBadge } from "./HypothesisBadge";
 import { InfoPopover } from "./InfoPopover";
 
@@ -966,6 +966,7 @@ export function Checklist() {
                                 <motion.th
                                     key={ownerKey(owner, playerColumnKeys)}
                                     className={`${COLUMN_HEADER_STACK} overflow-hidden border-r border-b border-border bg-row-header p-0 text-center align-top font-semibold`}
+                                    layout={LAYOUT_POSITION}
                                     initial={TABLE_COLUMN_HIDDEN}
                                     animate={TABLE_COLUMN_VISIBLE}
                                     exit={columnCellExit}
@@ -980,6 +981,10 @@ export function Checklist() {
                                                     allPlayers={setup.players}
                                                     colIdx={ownerIdx}
                                                     bounds={bounds}
+                                                    index={setup.players.indexOf(
+                                                        owner.player,
+                                                    )}
+                                                    playerCount={setup.players.length}
                                                 />
                                             ) : (
                                                 ownerLabel(owner)
@@ -1015,6 +1020,7 @@ export function Checklist() {
                                         <motion.td
                                             key={ownerKey(owner, playerColumnKeys)}
                                             className={`${COLUMN_HEADER_STACK_HANDSIZE} overflow-hidden border-r border-b border-border`}
+                                            layout={LAYOUT_POSITION}
                                             initial={TABLE_COLUMN_HIDDEN}
                                             animate={TABLE_COLUMN_VISIBLE}
                                             exit={columnCellExit}
@@ -1035,6 +1041,7 @@ export function Checklist() {
                                         <motion.td
                                             key={ownerKey(owner, playerColumnKeys)}
                                             className={`${COLUMN_HEADER_STACK_HANDSIZE} overflow-hidden border-r border-b border-border p-0 text-center`}
+                                            layout={LAYOUT_POSITION}
                                             initial={TABLE_COLUMN_HIDDEN}
                                             animate={TABLE_COLUMN_VISIBLE}
                                             exit={columnCellExit}
@@ -1557,6 +1564,7 @@ export function Checklist() {
                                                 <motion.td
                                                     key={ownerCellKey}
                                                     className={tdClassName}
+                                                    layout={LAYOUT_POSITION}
                                                     exit={columnCellExit}
                                                     style={STYLE_COLUMN_CELL_VISIBLE}
                                                     role="button"
@@ -1741,6 +1749,7 @@ export function Checklist() {
                                                             }
                                                         }}
                                                         className={tdClassName}
+                                                        layout={LAYOUT_POSITION}
                                                         exit={columnCellExit}
                                                         style={STYLE_COLUMN_CELL_VISIBLE}
                                                         role="button"
@@ -1822,6 +1831,7 @@ export function Checklist() {
                                                 <motion.td
                                                     key={ownerCellKey}
                                                     className={tdClassName}
+                                                    layout={LAYOUT_POSITION}
                                                     exit={columnCellExit}
                                                     style={STYLE_COLUMN_CELL_VISIBLE}
                                                     tabIndex={0}
@@ -1840,6 +1850,7 @@ export function Checklist() {
                                                 <motion.td
                                                     key={ownerCellKey}
                                                     className={tdClassName}
+                                                    layout={LAYOUT_POSITION}
                                                     exit={columnCellExit}
                                                     style={STYLE_COLUMN_CELL_VISIBLE}
                                                     {...firstCellAnchorAttr}
@@ -2037,11 +2048,15 @@ function PlayerNameInput({
     allPlayers,
     colIdx,
     bounds,
+    index,
+    playerCount,
 }: {
     player: Player;
     allPlayers: ReadonlyArray<Player>;
     colIdx: number;
     bounds: GridBounds;
+    index: number;
+    playerCount: number;
 }) {
     const t = useTranslations("setup");
     const { state, dispatch } = useClue();
@@ -2102,39 +2117,87 @@ function PlayerNameInput({
         dispatch({ type: "removePlayer", player });
     };
 
+    const canMoveLeft = index > 0;
+    const canMoveRight = index < playerCount - 1;
+    const arrowClass =
+        "flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent text-fg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
     return (
         <div className="flex flex-col items-stretch gap-0.5">
-            <div className="flex items-center gap-1">
-                <input
-                    type="text"
-                    className="box-border min-w-0 flex-1 rounded border border-border px-1.5 py-1 text-[12px]"
-                    value={editing}
-                    data-cell-row={-2}
-                    data-cell-col={colIdx}
-                    onFocus={() => rememberChecklistCell(-2, colIdx)}
-                    onChange={e => {
-                        setEditing(e.currentTarget.value);
-                        setError("");
-                    }}
-                    onBlur={commit}
-                    onKeyDown={e => {
-                        navigateGrid(e, -2, colIdx, bounds, {
-                            isTextInput: true,
-                        });
-                        if (e.defaultPrevented) return;
-                        if (e.key === "Enter") commit();
-                    }}
-                />
-                <button
-                    type="button"
-                    className="cursor-pointer rounded border-none bg-accent px-2 py-1 text-[12px] font-semibold leading-none text-white hover:bg-accent-hover"
-                    aria-label={t("removePlayerTitle", {
-                        player: String(player),
-                    })}
-                    onClick={onRemove}
-                >
-                    &times;
-                </button>
+            <div
+                className={`flex items-center gap-9 ${
+                    playerCount > 1 ? "justify-between" : "justify-center"
+                }`}
+            >
+                {playerCount > 1 && (
+                    <button
+                        type="button"
+                        className={arrowClass}
+                        disabled={!canMoveLeft}
+                        aria-label={t("movePlayerLeftTitle", {
+                            player: String(player),
+                        })}
+                        onClick={() =>
+                            dispatch({
+                                type: "movePlayer",
+                                player,
+                                direction: "left",
+                            })
+                        }
+                    >
+                        <ChevronLeftIcon size={16} />
+                    </button>
+                )}
+                <div className="flex min-w-0 items-center gap-1">
+                    <input
+                        type="text"
+                        className="box-border w-28 min-w-0 max-w-full rounded border border-border px-1.5 py-1 text-[12px]"
+                        value={editing}
+                        data-cell-row={-2}
+                        data-cell-col={colIdx}
+                        onFocus={() => rememberChecklistCell(-2, colIdx)}
+                        onChange={e => {
+                            setEditing(e.currentTarget.value);
+                            setError("");
+                        }}
+                        onBlur={commit}
+                        onKeyDown={e => {
+                            navigateGrid(e, -2, colIdx, bounds, {
+                                isTextInput: true,
+                            });
+                            if (e.defaultPrevented) return;
+                            if (e.key === "Enter") commit();
+                        }}
+                    />
+                    <button
+                        type="button"
+                        className="shrink-0 cursor-pointer rounded border-none bg-accent px-2 py-1 text-[12px] font-semibold leading-none text-white hover:bg-accent-hover"
+                        aria-label={t("removePlayerTitle", {
+                            player: String(player),
+                        })}
+                        onClick={onRemove}
+                    >
+                        &times;
+                    </button>
+                </div>
+                {playerCount > 1 && (
+                    <button
+                        type="button"
+                        className={arrowClass}
+                        disabled={!canMoveRight}
+                        aria-label={t("movePlayerRightTitle", {
+                            player: String(player),
+                        })}
+                        onClick={() =>
+                            dispatch({
+                                type: "movePlayer",
+                                player,
+                                direction: "right",
+                            })
+                        }
+                    >
+                        <ChevronRightIcon size={16} />
+                    </button>
+                )}
             </div>
             {error && (
                 <span className="whitespace-nowrap text-[11px] text-danger">
@@ -2368,10 +2431,11 @@ const ARIA_HASPOPUP_DIALOG = "dialog";
 const MOTION_SYNC: "sync" = "sync";
 const MOTION_WAIT: "wait" = "wait";
 const MOTION_POP_LAYOUT: "popLayout" = "popLayout";
+const LAYOUT_POSITION: "position" = "position";
 const TABLE_AXIS_ROW = "row";
 const TABLE_AXIS_COLUMN = "column";
 type TableAnimationAxis = typeof TABLE_AXIS_ROW | typeof TABLE_AXIS_COLUMN;
-const CELL_EXPAND_CAP_PX = 200;
+const CELL_EXPAND_CAP_PX = 320;
 const TABLE_ENTRY_DURATION = Duration.millis(220);
 const TABLE_ROW_ENTRY_DURATION = Duration.millis(300);
 const TABLE_DANGER_FADE_DURATION = Duration.millis(120);
