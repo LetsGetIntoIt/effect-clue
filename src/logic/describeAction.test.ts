@@ -114,6 +114,23 @@ describe("describeAction — specific tooltips", () => {
         ).toBe("renaming player Player 1 to Kapil");
     });
 
+    test("movePlayer names the player and direction", () => {
+        expect(
+            describe_({
+                type: "movePlayer",
+                player: Player("Player 2"),
+                direction: "left",
+            }),
+        ).toBe("moving Player 2 left");
+        expect(
+            describe_({
+                type: "movePlayer",
+                player: Player("Player 2"),
+                direction: "right",
+            }),
+        ).toBe("moving Player 2 right");
+    });
+
     test("addCategory names the next generated category", () => {
         expect(describe_({ type: "addCategory" })).toBe("adding category Category 1");
     });

@@ -549,6 +549,111 @@ describe("player roster", () => {
         }));
         expect(result.current.state).toBe(before);
     });
+
+    test("movePlayer left swaps adjacent players", () => {
+        const { result } = renderClue();
+        // DEFAULT_SETUP starts with Player 1..4. Move Player 3 left → [P1, P3, P2, P4].
+        const p3 = Player("Player 3");
+        act(() => result.current.dispatch({
+            type: "movePlayer",
+            player: p3,
+            direction: "left",
+        }));
+        const names = result.current.state.setup.players.map(p => String(p));
+        expect(names).toEqual(["Player 1", "Player 3", "Player 2", "Player 4"]);
+    });
+
+    test("movePlayer right swaps adjacent players", () => {
+        const { result } = renderClue();
+        const p2 = Player("Player 2");
+        act(() => result.current.dispatch({
+            type: "movePlayer",
+            player: p2,
+            direction: "right",
+        }));
+        const names = result.current.state.setup.players.map(p => String(p));
+        expect(names).toEqual(["Player 1", "Player 3", "Player 2", "Player 4"]);
+    });
+
+    test("movePlayer left at leftmost is a no-op", () => {
+        const { result } = renderClue();
+        const before = result.current.state;
+        act(() => result.current.dispatch({
+            type: "movePlayer",
+            player: Player("Player 1"),
+            direction: "left",
+        }));
+        expect(result.current.state).toBe(before);
+    });
+
+    test("movePlayer right at rightmost is a no-op", () => {
+        const { result } = renderClue();
+        const before = result.current.state;
+        const last = result.current.state.setup.players[
+            result.current.state.setup.players.length - 1
+        ];
+        act(() => result.current.dispatch({
+            type: "movePlayer",
+            player: last as Player,
+            direction: "right",
+        }));
+        expect(result.current.state).toBe(before);
+    });
+
+    test("movePlayer with unknown player is a no-op", () => {
+        const { result } = renderClue();
+        const before = result.current.state;
+        act(() => result.current.dispatch({
+            type: "movePlayer",
+            player: Player("Nobody"),
+            direction: "left",
+        }));
+        expect(result.current.state).toBe(before);
+    });
+
+    test("movePlayer preserves knownCards, handSizes, and suggestions by name", () => {
+        const { result } = renderClue();
+        const p1 = Player("Player 1");
+        const p2 = Player("Player 2");
+        const knife = cardByName(CLASSIC_SETUP_3P, "Knife");
+        const suspect = cardByName(CLASSIC_SETUP_3P, "Col. Mustard");
+        const room = cardByName(CLASSIC_SETUP_3P, "Kitchen");
+        act(() => {
+            result.current.dispatch({
+                type: "addKnownCard",
+                card: KnownCard({ player: p1, card: knife }),
+            });
+            result.current.dispatch({
+                type: "setHandSize",
+                player: p1,
+                size: 5,
+            });
+            result.current.dispatch({
+                type: "addSuggestion",
+                suggestion: {
+                    id: newSuggestionId(),
+                    suggester: p1,
+                    cards: [suspect, knife, room],
+                    nonRefuters: [p2],
+                    refuter: p2,
+                },
+            });
+        });
+        act(() => result.current.dispatch({
+            type: "movePlayer",
+            player: p1,
+            direction: "right",
+        }));
+        // Order swapped: P2 is now first.
+        expect(result.current.state.setup.players[0]).toBe(p2);
+        expect(result.current.state.setup.players[1]).toBe(p1);
+        // All references stay attached to the same player by name.
+        expect(result.current.state.knownCards[0]?.player).toBe(p1);
+        expect(result.current.state.handSizes.find(([p]) => p === p1)?.[1]).toBe(5);
+        expect(result.current.state.suggestions[0]?.suggester).toBe(p1);
+        expect(result.current.state.suggestions[0]?.refuter).toBe(p2);
+        expect(result.current.state.suggestions[0]?.nonRefuters).toEqual([p2]);
+    });
 });
 
 describe("replaceSession", () => {

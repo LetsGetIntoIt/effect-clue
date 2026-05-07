@@ -103,6 +103,7 @@ export type ClueAction =
     | { type: "addPlayer" }
     | { type: "removePlayer"; player: Player }
     | { type: "renamePlayer"; oldName: Player; newName: Player }
+    | { type: "movePlayer"; player: Player; direction: "left" | "right" }
     | { type: "setUiMode"; mode: UiMode }
     | { type: "setHypothesis"; cell: Cell; value: HypothesisValue }
     | { type: "clearHypothesis"; cell: Cell }
