@@ -40,7 +40,7 @@ export const accusationsCodec = Schema.fromJsonString(AccusationsArraySchema);
  * Hypotheses codec — only used by the `transfer` share kind ("move my
  * game to another device"). `pack` and `invite` shares deliberately
  * omit hypotheses since those flows go to other people; hypotheses are
- * personal scratchwork. See `docs/shares.md` for the kind-discriminated
- * wire-format rule.
+ * personal scratchwork. See `docs/shares-and-sync.md` for the
+ * kind-discriminated wire-format rule.
  */
 export const hypothesesCodec = Schema.fromJsonString(HypothesesArraySchema);

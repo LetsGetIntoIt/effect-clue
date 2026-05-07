@@ -1,8 +1,17 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { DateTime } from "effect";
 import { CardSet, CardEntry, Category } from "./CardSet";
 import {
+    addTombstone,
+    loadTombstones,
+} from "./CardPackTombstones";
+import {
+    clearAccountTiedLocalState,
     deleteCustomCardSet,
     loadCustomCardSets,
+    markPackSynced,
+    markPackUnsynced,
+    replaceCustomCardSets,
     saveCustomCardSet,
 } from "./CustomCardSets";
 import { Card, CardCategory } from "./GameObjects";
@@ -164,5 +173,140 @@ describe("deleteCustomCardSet", () => {
     test("on an empty store is a no-op", () => {
         deleteCustomCardSet("anything");
         expect(loadCustomCardSets()).toEqual([]);
+    });
+});
+
+describe("markPackUnsynced", () => {
+    beforeEach(() => window.localStorage.clear());
+
+    test("stamps unsyncedSince on a pack that exists", () => {
+        const saved = saveCustomCardSet("A", makePack());
+        markPackUnsynced(saved.id);
+        const loaded = loadCustomCardSets();
+        expect(loaded[0]?.unsyncedSince).toBeDefined();
+    });
+
+    test("is a no-op when the id doesn't match", () => {
+        saveCustomCardSet("A", makePack());
+        markPackUnsynced("nonexistent");
+        const loaded = loadCustomCardSets();
+        expect(loaded[0]?.unsyncedSince).toBeUndefined();
+    });
+
+    test("does NOT mutate other packs", () => {
+        const a = saveCustomCardSet("A", makePack());
+        const b = saveCustomCardSet("B", makePack());
+        markPackUnsynced(a.id);
+        const loaded = loadCustomCardSets();
+        expect(loaded.find(p => p.id === a.id)?.unsyncedSince).toBeDefined();
+        expect(loaded.find(p => p.id === b.id)?.unsyncedSince).toBeUndefined();
+    });
+});
+
+describe("markPackSynced", () => {
+    beforeEach(() => window.localStorage.clear());
+
+    test("swaps id, sets snapshot, clears unsyncedSince", () => {
+        const saved = saveCustomCardSet("Office", makePack());
+        markPackUnsynced(saved.id);
+        const result = markPackSynced(saved.id, {
+            id: "server-1",
+            label: "Office",
+            cardSet: makePack(),
+        });
+        expect(result?.id).toBe("server-1");
+        expect(result?.unsyncedSince).toBeUndefined();
+        expect(result?.lastSyncedSnapshot?.label).toBe("Office");
+        const loaded = loadCustomCardSets();
+        expect(loaded[0]?.id).toBe("server-1");
+    });
+
+    test("returns undefined when the local id doesn't match", () => {
+        saveCustomCardSet("A", makePack());
+        const result = markPackSynced("nonexistent", {
+            id: "server-1",
+            label: "A",
+            cardSet: makePack(),
+        });
+        expect(result).toBeUndefined();
+    });
+
+    test("preserves the local label / cardSet (server snapshot is separate)", () => {
+        const saved = saveCustomCardSet("My Office", makePack());
+        const result = markPackSynced(saved.id, {
+            id: "server-1",
+            label: "Server Office",
+            cardSet: makePack(),
+        });
+        expect(result?.label).toBe("My Office");
+        expect(result?.lastSyncedSnapshot?.label).toBe("Server Office");
+    });
+});
+
+describe("replaceCustomCardSets metadata round-trip", () => {
+    beforeEach(() => window.localStorage.clear());
+
+    test("preserves unsyncedSince and lastSyncedSnapshot", () => {
+        replaceCustomCardSets([
+            {
+                id: "server-1",
+                label: "Office",
+                cardSet: makePack(),
+                unsyncedSince: DateTime.makeUnsafe("2026-04-22T12:00:00Z"),
+                lastSyncedSnapshot: {
+                    label: "Office",
+                    cardSet: makePack(),
+                },
+            },
+        ]);
+        const loaded = loadCustomCardSets();
+        expect(loaded).toHaveLength(1);
+        expect(DateTime.toEpochMillis(loaded[0]!.unsyncedSince!)).toBe(
+            DateTime.toEpochMillis(
+                DateTime.makeUnsafe("2026-04-22T12:00:00Z"),
+            ),
+        );
+        expect(loaded[0]?.lastSyncedSnapshot?.label).toBe("Office");
+    });
+});
+
+describe("clearAccountTiedLocalState", () => {
+    beforeEach(() => window.localStorage.clear());
+
+    test("clears card-pack, tombstones, and usage keys", () => {
+        saveCustomCardSet("Office", makePack());
+        addTombstone({
+            id: "server-1",
+            label: "Mansion",
+            deletedAt: DateTime.makeUnsafe("2026-04-22T12:00:00Z"),
+        });
+        window.localStorage.setItem(
+            "effect-clue.card-pack-usage.v1",
+            JSON.stringify({ version: 1, entries: [] }),
+        );
+        clearAccountTiedLocalState();
+        expect(loadCustomCardSets()).toEqual([]);
+        expect(loadTombstones()).toEqual([]);
+        expect(
+            window.localStorage.getItem("effect-clue.card-pack-usage.v1"),
+        ).toBeNull();
+    });
+
+    test("does NOT clear non-account-tied keys", () => {
+        // Game state, splash, tour, install — all kept.
+        const survivors = [
+            "effect-clue.session.v7",
+            "effect-clue.splash.v1",
+            "effect-clue.tour.setup.v1",
+            "effect-clue.install-prompt.v1",
+        ];
+        for (const key of survivors) {
+            window.localStorage.setItem(key, "x");
+        }
+        saveCustomCardSet("Office", makePack());
+        clearAccountTiedLocalState();
+        for (const key of survivors) {
+            expect(window.localStorage.getItem(key)).toBe("x");
+        }
     });
 });

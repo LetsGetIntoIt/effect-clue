@@ -94,7 +94,8 @@
         "renamePackInputLabel": "Card pack name",
         "saveAsCardPack": "+ Save as card pack",
         "saveAsCardPackTitle": "Save the current cards as a reusable card pack",
-        "saveAsCardPackPrompt": "Save this card pack. Name it:",
+        "saveAsCardPackDialogTitle": "Save card pack",
+        "saveAsCardPackInputLabel": "Card pack name",
         "updateCardPack": "Update {label}",
         "updateCardPackTitle": "Save your edits to {label} (in place)",
         "saveAsNewCardPack": "+ Save as new pack",
@@ -403,7 +404,21 @@
         "sharePackAria": "Share card pack {label}",
         "deletePackTitle": "Delete card pack \"{label}\"",
         "deletePackAria": "Delete card pack {label}",
-        "deletePackConfirm": "Delete card pack \"{label}\"?"
+        "deletePackConfirm": "Delete card pack \"{label}\"?",
+        "logoutWarning": {
+            "title": "Unsynced card pack changes",
+            "ledeOffline": "You’re offline, so these card pack changes haven’t been saved to your account yet. If you sign out now, they’ll be lost.",
+            "ledeServerError": "We couldn’t reach the server to save these card pack changes. If you sign out now, they’ll be lost.",
+            "createdHeading": "{count, plural, one {# new card pack} other {# new card packs}}",
+            "modifiedHeading": "{count, plural, one {# edited card pack} other {# edited card packs}}",
+            "deletedHeading": "{count, plural, one {# pending deletion} other {# pending deletions}}",
+            "tagRenamed": "renamed",
+            "tagCardsChanged": "cards changed",
+            "stayLoggedIn": "Stay logged in",
+            "tryAgain": "Try again",
+            "tryingAgain": "Trying…",
+            "signOutAnyway": "Sign out anyway"
+        }
     },
     "installPrompt": {
         "title": "Install Clue Solver",

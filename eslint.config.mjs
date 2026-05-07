@@ -134,6 +134,13 @@ export default [
                             // tracing span — internal observability key,
                             // never user copy.
                             "Effect\\.fn",
+                            // `Effect.logError("module.operation failed", {cause})`
+                            // — same observability story as `Effect.fn`,
+                            // the leading string is an internal log key.
+                            "Effect\\.logError",
+                            "Effect\\.logWarning",
+                            "Effect\\.logInfo",
+                            "Effect\\.logDebug",
                             // `window.open(url, targetName, features)`
                             // takes the route, the named-tab target, and
                             // a features list — none of them user copy.
