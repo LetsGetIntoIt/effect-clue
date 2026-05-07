@@ -26,7 +26,7 @@
 "use client";
 
 import { Result, Schema } from "effect";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
@@ -36,21 +36,31 @@ import {
     shareImported,
     shareOpened,
     shareImportStarted,
+    signInFailed,
+    signInStarted,
     type ShareDismissVia,
+    type SignInFromContext,
 } from "../../analytics/events";
 import { cardSetEquals } from "../../logic/CardSet";
 import { CARD_SETS } from "../../logic/GameSetup";
 import { cardPackCodec, playersCodec } from "../../logic/ShareCodec";
 import { customCardPacksQueryKey } from "../../data/customCardPacks";
 import { cardPackUsageQueryKey } from "../../data/cardPackUsage";
+import { authClient } from "../account/authClient";
+import { useSession } from "../hooks/useSession";
 import { XIcon } from "../components/Icons";
 import { useConfirm } from "../hooks/useConfirm";
 import {
     hasPersistedGameData,
     saveCardPackFromSnapshot,
     useApplyShareSnapshot,
+    type RecognisedPackResult,
 } from "./useApplyShareSnapshot";
 import { hashShareId } from "./shareAnalytics";
+import {
+    consumePendingImportIntent,
+    savePendingImportIntent,
+} from "./pendingImport";
 
 interface ShareSnapshot {
     readonly id: string;
@@ -67,6 +77,15 @@ interface ShareSnapshot {
 
 const VIA_X: ShareDismissVia = "x_button";
 const VIA_BACKDROP: ShareDismissVia = "backdrop";
+
+// Sign-in is now required to receive any share. The CTA on the
+// receive modal kicks off Better Auth's social sign-in directly —
+// there's no AccountProvider mounted on this route, so we don't
+// reuse the AccountModal sign-in flow. After OAuth lands the user
+// back here, an effect consumes a sessionStorage intent and auto-
+// fires the import.
+const SOCIAL_SIGN_IN_PROVIDER = "google" as const;
+const SIGN_IN_FROM_RECEIVE: SignInFromContext = "share_import";
 
 // How many player names to spell out in the "Players" bullet before
 // collapsing the rest to "+N more". Mirrors the inline-name budget on
@@ -227,10 +246,13 @@ export function ShareImportPage({
     const tCommon = useTranslations("common");
     const router = useRouter();
     const queryClient = useQueryClient();
+    const session = useSession();
     const [open, setOpen] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const applySnapshot = useApplyShareSnapshot();
     const confirm = useConfirm();
+    const isAnonymous =
+        !session.data?.user || session.data.user.isAnonymous;
 
     const hasPack = snapshot.cardPackData !== null;
     const hasPlayers = snapshot.playersData !== null;
@@ -273,27 +295,91 @@ export function ShareImportPage({
         shareOpened({ shareIdHash: hashShareId(snapshot.id) });
     }, [snapshot.id]);
 
-    const onImport = async (): Promise<void> => {
-        if (receiveFlow !== RECEIVE_FLOW_PACK && hasPersistedGameData()) {
-            const ok = await confirm({
-                message: tToolbar("newGameConfirm"),
-            });
-            if (!ok) return;
-        }
+    /**
+     * User-facing label of the just-saved-or-recognised pack. Used in
+     * the "Card pack X saved" confirm dialog. Empty string when the
+     * sender shipped an unnamed custom pack — the dialog falls back
+     * to a label-free copy variant in that case.
+     */
+    const pickPackResultLabel = (result: RecognisedPackResult): string => {
+        if (result.kind === "saved") return result.pack.label;
+        if (result.kind === "recognised") return result.label;
+        return "";
+    };
+
+    const performImport = async (): Promise<void> => {
         setSubmitting(true);
         shareImportStarted({ shareIdHash: hashShareId(snapshot.id) });
         try {
             if (receiveFlow === RECEIVE_FLOW_PACK) {
-                saveCardPackFromSnapshot(snapshot);
+                const result = saveCardPackFromSnapshot(snapshot);
                 await queryClient.invalidateQueries({
                     queryKey: customCardPacksQueryKey,
                 });
                 await queryClient.invalidateQueries({
                     queryKey: cardPackUsageQueryKey,
                 });
-            } else {
-                applySnapshot(snapshot);
+                shareImported({
+                    shareIdHash: hashShareId(snapshot.id),
+                    hadPack: hasPack,
+                    hadPlayers: hasPlayers,
+                    hadKnownCards: hasKnown,
+                    hadSuggestions: hasSugg,
+                    triggeredNewGame: false,
+                    savedPackToAccount: false,
+                });
+                // Pack-only flow: ask whether to start a new game with
+                // the just-saved pack. Default focus on "Not now" (the
+                // Radix AlertDialog auto-focuses Cancel) so a user
+                // who just wanted to file the pack away doesn't
+                // accidentally clear their in-progress game.
+                const inProgress = hasPersistedGameData();
+                const label = pickPackResultLabel(result);
+                const baseMsg =
+                    label !== ""
+                        ? t("packSavedPrompt", { label })
+                        : t("packSavedPromptUnnamed");
+                const message = inProgress
+                    ? `${baseMsg} ${tToolbar("newGameConfirm")}`
+                    : baseMsg;
+                const startNew = await confirm({
+                    title:
+                        label !== ""
+                            ? t("packSavedTitle", { label })
+                            : t("packSavedTitleUnnamed"),
+                    message,
+                    cancelLabel: tCommon("notNow"),
+                    confirmLabel: t("startNewGameWithPack"),
+                    destructive: inProgress,
+                });
+                if (startNew) {
+                    // Reuse `applyShareSnapshotToLocalStorage` with the
+                    // pack-only snapshot — null fields hydrate as
+                    // empty/cleared, preserving the existing player
+                    // set. This is also where the ongoing-game
+                    // "warning" really takes effect (we already showed
+                    // it as part of the message above).
+                    applySnapshot(snapshot);
+                }
+                router.push("/play");
+                return;
             }
+
+            // Invite / transfer: prompt for overwrite-game confirmation
+            // first; if accepted, hydrate everything and go.
+            if (hasPersistedGameData()) {
+                const ok = await confirm({
+                    message: tToolbar("newGameConfirm"),
+                });
+                if (!ok) return;
+            }
+            applySnapshot(snapshot);
+            await queryClient.invalidateQueries({
+                queryKey: customCardPacksQueryKey,
+            });
+            await queryClient.invalidateQueries({
+                queryKey: cardPackUsageQueryKey,
+            });
             shareImported({
                 shareIdHash: hashShareId(snapshot.id),
                 hadPack: hasPack,
@@ -308,6 +394,54 @@ export function ShareImportPage({
             setSubmitting(false);
         }
     };
+
+    const onSignInToImport = async (): Promise<void> => {
+        // Stamp the intent BEFORE redirect so the post-OAuth mount can
+        // recognise this exact share and auto-fire the import. Saved
+        // even on failure — better-auth's redirect is opaque, so we
+        // can't reliably clean up here, and a stale entry is rejected
+        // by `consumePendingImportIntent`'s shareId + age check.
+        savePendingImportIntent({ shareId: snapshot.id, t: Date.now() });
+        signInStarted({
+            provider: SOCIAL_SIGN_IN_PROVIDER,
+            from: SIGN_IN_FROM_RECEIVE,
+        });
+        const result = await authClient.signIn.social({
+            provider: SOCIAL_SIGN_IN_PROVIDER,
+            callbackURL: window.location.pathname,
+        });
+        if (result.error !== null) {
+            signInFailed({
+                provider: SOCIAL_SIGN_IN_PROVIDER,
+                reason: result.error.code ?? String(result.error.status),
+            });
+        }
+    };
+
+    const onImport = useCallback(async (): Promise<void> => {
+        if (isAnonymous) {
+            await onSignInToImport();
+            return;
+        }
+        await performImport();
+    }, [isAnonymous]);
+
+    /**
+     * Auto-import after OAuth lands the user back here. Guarded by a
+     * single sessionStorage entry that the user themselves wrote when
+     * clicking "Sign in to import". Runs at most once per mount —
+     * `autoImportRanRef` rejects re-entry under React StrictMode (or
+     * any future re-mount). A drive-by malicious URL doesn't trigger
+     * this branch because no intent was ever written.
+     */
+    const autoImportRanRef = useRef(false);
+    useEffect(() => {
+        if (autoImportRanRef.current) return;
+        if (isAnonymous) return;
+        if (!consumePendingImportIntent(snapshot.id)) return;
+        autoImportRanRef.current = true;
+        void performImport();
+    }, [isAnonymous, snapshot.id]);
 
     const close = (via: ShareDismissVia): void => {
         shareImportDismissed({
@@ -487,7 +621,9 @@ export function ShareImportPage({
                             >
                                 {submitting
                                     ? t("importing")
-                                    : t(ACTION_KEY_FOR[receiveFlow])}
+                                    : isAnonymous
+                                        ? t("signInToImport")
+                                        : t(ACTION_KEY_FOR[receiveFlow])}
                             </button>
                         </div>
                     </Dialog.Content>

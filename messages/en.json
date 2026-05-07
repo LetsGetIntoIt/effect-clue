@@ -11,7 +11,8 @@
         "infoGlyph": "ⓘ",
         "close": "Close",
         "back": "Back",
-        "save": "Save"
+        "save": "Save",
+        "notNow": "Not now"
     },
     "bottomNav": {
         "ariaLabel": "Primary navigation",
@@ -379,7 +380,13 @@
         "importActionPack": "Import this pack",
         "importActionInvite": "Start this game",
         "importActionTransfer": "Continue this game",
-        "importing": "Importing…"
+        "importing": "Importing…",
+        "signInToImport": "Sign in to import",
+        "packSavedTitle": "Card pack \"{label}\" saved",
+        "packSavedTitleUnnamed": "Card pack saved",
+        "packSavedPrompt": "Would you like to start a new game with \"{label}\"?",
+        "packSavedPromptUnnamed": "Would you like to start a new game with this pack?",
+        "startNewGameWithPack": "Start new game with this pack"
     },
     "account": {
         "titleSignedOut": "Sign in to Clue Solver",

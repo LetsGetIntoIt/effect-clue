@@ -19,7 +19,7 @@ import { Card, CardCategory, Player } from "../../logic/GameObjects";
 import { emptyHypotheses } from "../../logic/Hypothesis";
 import { newAccusationId } from "../../logic/Accusation";
 import { newSuggestionId } from "../../logic/Suggestion";
-import { GameSetup } from "../../logic/GameSetup";
+import { CARD_SETS, GameSetup } from "../../logic/GameSetup";
 import { CardSet, CardEntry, Category } from "../../logic/CardSet";
 import { PlayerSet } from "../../logic/PlayerSet";
 import {
@@ -354,15 +354,58 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
         };
         saveToLocalStorage(currentSession);
 
-        const savedPack = saveCardPackFromSnapshot(
+        const result = saveCardPackFromSnapshot(
             sampleSnapshot({ cardPack: true }),
         );
 
-        expect(savedPack.label).toBe("Classic");
-        expect(savedPack.cardSet.categories[0]!.name).toBe("Suspect");
-        expect(loadCustomCardSets()).toContainEqual(savedPack);
-        expect(loadCardPackUsage().has(savedPack.id)).toBe(true);
+        // SHARE_PACK is a custom pack carrying the wire `name: "Classic"`
+        // but a structurally different deck from the built-in Classic, so
+        // `saveOrRecognisePack` falls through to the `saved` branch.
+        expect(result.kind).toBe("saved");
+        if (result.kind !== "saved") return;
+        expect(result.pack.label).toBe("Classic");
+        expect(result.pack.cardSet.categories[0]!.name).toBe("Suspect");
+        expect(loadCustomCardSets()).toContainEqual(result.pack);
+        expect(loadCardPackUsage().has(result.pack.id)).toBe(true);
         expect(loadFromLocalStorage()).toEqual(currentSession);
+    });
+
+    test("recognises a built-in pack instead of duplicating it", () => {
+        // The receiver-side detection compares structurally against
+        // CARD_SETS, so a snapshot whose wire deck matches built-in
+        // Classic deduplicates: nothing in customCardSets, but the
+        // built-in id is recorded as MRU so the active pill resolves
+        // correctly post-import.
+        const builtInClassic = CARD_SETS[0]!;
+        const wirePack = {
+            name: builtInClassic.label,
+            categories: builtInClassic.cardSet.categories.map((c) => ({
+                id: c.id,
+                name: c.name,
+                cards: c.cards.map((card) => ({
+                    id: card.id,
+                    name: card.name,
+                })),
+            })),
+        };
+        const snapshot: ShareSnapshotForHydration = {
+            cardPackData: Schema.encodeSync(cardPackCodec)(wirePack),
+            playersData: null,
+            handSizesData: null,
+            knownCardsData: null,
+            suggestionsData: null,
+            accusationsData: null,
+            hypothesesData: null,
+        };
+
+        const result = saveCardPackFromSnapshot(snapshot);
+
+        expect(result.kind).toBe("recognised");
+        if (result.kind !== "recognised") return;
+        expect(result.id).toBe(builtInClassic.id);
+        expect(result.label).toBe(builtInClassic.label);
+        expect(loadCustomCardSets()).toEqual([]);
+        expect(loadCardPackUsage().has(builtInClassic.id)).toBe(true);
     });
 
     test("missing cardPackData throws without touching saved packs", () => {
@@ -378,6 +421,44 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
             }),
         ).toThrow(ShareSnapshotDecodeError);
         expect(loadCustomCardSets()).toEqual([]);
+    });
+});
+
+describe("applyShareSnapshotToLocalStorage — pack save side effect", () => {
+    test("invite/transfer hydration also feeds the imported pack into the local registry", () => {
+        const snapshot = sampleSnapshot({
+            cardPack: true,
+            players: true,
+            handSizes: true,
+        });
+        const session = applyShareSnapshotToLocalStorage(snapshot);
+
+        // GameSession is the imported game.
+        expect(session.setup.cardSet.categories[0]!.name).toBe("Suspect");
+        // The pack is also saved + marked MRU so CardPackRow's pill
+        // resolution can light it up post-import.
+        const saved = loadCustomCardSets();
+        expect(saved).toHaveLength(1);
+        expect(saved[0]!.label).toBe("Classic");
+        expect(loadCardPackUsage().has(saved[0]!.id)).toBe(true);
+    });
+
+    test("snapshots without a pack don't touch the local pack registry", () => {
+        const snapshot: ShareSnapshotForHydration = {
+            cardPackData: null,
+            playersData: Schema.encodeSync(playersCodec)([
+                Player("Alice"),
+                Player("Bob"),
+            ]),
+            handSizesData: null,
+            knownCardsData: null,
+            suggestionsData: null,
+            accusationsData: null,
+            hypothesesData: null,
+        };
+        applyShareSnapshotToLocalStorage(snapshot);
+        expect(loadCustomCardSets()).toEqual([]);
+        expect(loadCardPackUsage().size).toBe(0);
     });
 });
 

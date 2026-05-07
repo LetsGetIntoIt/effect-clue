@@ -309,6 +309,86 @@ describe("ShareCreateModal — wire payload by variant", () => {
         expect(payload.suggestionsData).toBeTypeOf("string");
         expect(payload.accusationsData).toBeTypeOf("string");
     });
+
+    test("invite variant embeds the loaded custom pack's name on the wire", async () => {
+        // Pre-seed localStorage with a session whose live deck matches
+        // a saved custom pack (with structurally distinct contents
+        // from any built-in, so the built-in branch in
+        // resolvePackLabel doesn't short-circuit). The modal's label
+        // backfill should then embed "Pack X" in cardPack.name so the
+        // receive modal renders "Card pack: Pack X (custom)" instead
+        // of the unnamed branch.
+        const { saveCustomCardSet } = await import(
+            "../../logic/CustomCardSets"
+        );
+        const { recordCardPackUse } = await import(
+            "../../logic/CardPackUsage"
+        );
+        const { saveToLocalStorage } = await import(
+            "../../logic/Persistence"
+        );
+        const { GameSetup } = await import("../../logic/GameSetup");
+        const { PlayerSet } = await import("../../logic/PlayerSet");
+        const { CardSet, Category, CardEntry } = await import(
+            "../../logic/CardSet"
+        );
+        const { Player, Card, CardCategory } = await import(
+            "../../logic/GameObjects"
+        );
+        const { emptyHypotheses } = await import("../../logic/Hypothesis");
+
+        const distinctDeck = CardSet({
+            categories: [
+                Category({
+                    id: CardCategory("category-distinct"),
+                    name: "Distinct",
+                    cards: [
+                        CardEntry({
+                            id: Card("card-distinct-1"),
+                            name: "Distinct 1",
+                        }),
+                        CardEntry({
+                            id: Card("card-distinct-2"),
+                            name: "Distinct 2",
+                        }),
+                    ],
+                }),
+            ],
+        });
+        const saved = saveCustomCardSet("Pack X", distinctDeck);
+        recordCardPackUse(saved.id);
+        saveToLocalStorage({
+            setup: GameSetup({
+                cardSet: distinctDeck,
+                playerSet: PlayerSet({
+                    players: [Player("Alice"), Player("Bob")],
+                }),
+            }),
+            hands: [],
+            handSizes: [
+                { player: Player("Alice"), size: 1 },
+                { player: Player("Bob"), size: 1 },
+            ],
+            suggestions: [],
+            accusations: [],
+            hypotheses: emptyHypotheses,
+        });
+
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: false } },
+        };
+        mountModal("invite");
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await waitFor(() => {
+            expect(createShareMock).toHaveBeenCalled();
+        });
+        const payload = createShareMock.mock.calls[0]?.[0];
+        expect(payload.kind).toBe("invite");
+        const decoded = JSON.parse(payload.cardPackData);
+        expect(decoded.name).toBe("Pack X");
+    });
 });
 
 describe("ShareCreateModal — copy existing share URL", () => {

@@ -33,11 +33,12 @@
 import { Result, Schema } from "effect";
 import { Accusation, newAccusationId } from "../../logic/Accusation";
 import {
+    cardSetEquals,
     CardSet,
     CardEntry,
     Category,
 } from "../../logic/CardSet";
-import { DEFAULT_SETUP, GameSetup } from "../../logic/GameSetup";
+import { CARD_SETS, DEFAULT_SETUP, GameSetup } from "../../logic/GameSetup";
 import { HashMap } from "effect";
 import {
     CaseFileOwner,
@@ -283,12 +284,28 @@ export const buildSessionFromSnapshot = (
     };
 };
 
-export const saveCardPackFromSnapshot = (
+/**
+ * Distinct outcome of `saveOrRecognisePack`. `recognised` means the
+ * snapshot's pack matched a built-in by structural equality, so we
+ * just stamped the built-in id as MRU; nothing was added to the
+ * custom-pack list. `saved` means the pack was new (or didn't match
+ * any built-in) and was persisted to `customCardSets` plus stamped
+ * MRU. `none` means the snapshot has no pack at all (defensive — the
+ * receive page gates Import out of that branch).
+ */
+export type RecognisedPackResult =
+    | { readonly kind: "saved"; readonly pack: CustomCardSet }
+    | {
+          readonly kind: "recognised";
+          readonly id: string;
+          readonly label: string;
+      }
+    | { readonly kind: "none" };
+
+const decodeAndBuildCardSet = (
     snapshot: ShareSnapshotForHydration,
-): CustomCardSet => {
-    if (snapshot.cardPackData === null) {
-        throw new ShareSnapshotDecodeError(F_CARD_PACK_DATA);
-    }
+): { readonly cardSet: CardSet; readonly name: string } | null => {
+    if (snapshot.cardPackData === null) return null;
     const decoded = decodeField(
         F_CARD_PACK_DATA,
         snapshot.cardPackData,
@@ -305,12 +322,49 @@ export const saveCardPackFromSnapshot = (
             }),
         ),
     });
-    const savedPack = saveCustomCardSet(
-        decoded.name ?? "",
-        cardSet,
+    return { cardSet, name: decoded.name ?? "" };
+};
+
+/**
+ * Persist the snapshot's pack into the local card-pack registry and
+ * mark it as the most-recently-used pack. When the decoded pack
+ * matches one of `CARD_SETS` by structural equality, skip the custom
+ * write and just stamp the built-in id as MRU — otherwise we'd seed
+ * a duplicate Classic / Master Detective into the user's library on
+ * every received share. Used by both the pack-only receive flow and
+ * the invite/transfer flow so the post-import pill resolution lights
+ * up the right pack.
+ */
+const saveOrRecognisePack = (
+    snapshot: ShareSnapshotForHydration,
+): RecognisedPackResult => {
+    const decoded = decodeAndBuildCardSet(snapshot);
+    if (decoded === null) return { kind: "none" };
+    const builtIn = CARD_SETS.find((s) =>
+        cardSetEquals(decoded.cardSet, s.cardSet),
     );
+    if (builtIn !== undefined) {
+        recordCardPackUse(builtIn.id);
+        return { kind: "recognised", id: builtIn.id, label: builtIn.label };
+    }
+    const savedPack = saveCustomCardSet(decoded.name, decoded.cardSet);
     recordCardPackUse(savedPack.id);
-    return savedPack;
+    return { kind: "saved", pack: savedPack };
+};
+
+/**
+ * Pack-only receive flow: persists the pack and returns the saved
+ * descriptor (or null when the snapshot's pack matches a built-in).
+ * Callers that need the user-facing label can read it from either
+ * branch — see `pickPackResultLabel` in `ShareImportPage`.
+ */
+export const saveCardPackFromSnapshot = (
+    snapshot: ShareSnapshotForHydration,
+): RecognisedPackResult => {
+    if (snapshot.cardPackData === null) {
+        throw new ShareSnapshotDecodeError(F_CARD_PACK_DATA);
+    }
+    return saveOrRecognisePack(snapshot);
 };
 
 export const applyShareSnapshotToLocalStorage = (
@@ -323,6 +377,10 @@ export const applyShareSnapshotToLocalStorage = (
         currentSession?.setup.playerSet ?? DEFAULT_SETUP.playerSet,
     );
     saveToLocalStorage(session);
+    // Invite/transfer also feeds the imported pack into the local
+    // card-pack registry so `CardPackRow` can light its pill up post-
+    // import. Built-ins are recognised, not duplicated.
+    if (snapshot.cardPackData !== null) saveOrRecognisePack(snapshot);
     return session;
 };
 
