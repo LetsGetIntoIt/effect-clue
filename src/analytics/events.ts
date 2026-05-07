@@ -676,7 +676,19 @@ export const signInFailed = (props: {
     reason: string;
 }): void => capture("sign_in_failed", props);
 
-export const signOut = (): void => capture("sign_out");
+export const signOut = (props?: {
+    /**
+     * True when the user clicked "Sign out anyway" in the unsynced-
+     * changes warning. Lets us alert on cases where local card-pack
+     * edits were intentionally discarded.
+     */
+    discardedUnsyncedChanges?: boolean;
+    unsyncedCounts?: {
+        created: number;
+        modified: number;
+        deleted: number;
+    };
+}): void => capture("sign_out", props);
 
 // ── Server-side card packs (M8) ───────────────────────────────────────────
 
@@ -688,6 +700,20 @@ export const localPacksPushedOnSignIn = (props: {
     countPulled: number;
     countFailed: number;
 }): void => capture("local_packs_pushed_on_sign_in", props);
+
+export const cardPackSaveSyncFailed = (props: {
+    reason: string;
+}): void => capture("card_pack_save_sync_failed", props);
+
+export const cardPackDeleteSyncFailed = (props: {
+    reason: string;
+}): void => capture("card_pack_delete_sync_failed", props);
+
+export const cardPackPullReconciled = (props: {
+    countPulled: number;
+    countTombstonesFlushed: number;
+    countConflicts: number;
+}): void => capture("card_pack_pull_reconciled", props);
 
 export const cardPackSaved = (props: {
     isFirstTime: boolean;

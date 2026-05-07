@@ -4,7 +4,6 @@ import { useTranslations } from "next-intl";
 import {
     aboutLinkClicked,
     gameSetupStarted,
-    signOut as signOutEvent,
 } from "../../analytics/events";
 import { startSetup } from "../../analytics/gameSession";
 import { describeAction } from "../../logic/describeAction";
@@ -17,7 +16,6 @@ import { useTour } from "../tour/TourProvider";
 import { screenKeyForUiMode } from "../tour/screenKey";
 import { AccountAvatar } from "../account/AccountAvatar";
 import { useAccountContext } from "../account/AccountProvider";
-import { authClient } from "../account/authClient";
 import { useShareContext } from "../share/ShareProvider";
 import { useSession } from "../hooks/useSession";
 import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
@@ -96,7 +94,7 @@ export function Toolbar() {
     const tourForcesMenuOpen = currentStep?.anchor === "overflow-menu";
     const { installable, openModal: openInstallModal } =
         useInstallPromptContext();
-    const { openModal: openAccountModal } = useAccountContext();
+    const { openModal: openAccountModal, requestSignOut } = useAccountContext();
     const { openInvitePlayer, openContinueOnAnotherDevice } =
         useShareContext();
     const session = useSession();
@@ -110,9 +108,9 @@ export function Toolbar() {
             openAccountModal();
             return;
         }
-        await authClient.signOut();
-        signOutEvent();
-        await session.refetch();
+        // Provider owns the flush-then-warn-then-commit dance, the
+        // `sign_out` event emission, and the session refetch.
+        await requestSignOut();
     };
 
     const undoTooltip = nextUndo

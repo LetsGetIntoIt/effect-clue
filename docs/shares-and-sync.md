@@ -1,10 +1,26 @@
-# Sharing — UX, server, and DB end-to-end
+# Sharing and sync — UX, server, and DB end-to-end
 
 > **Read this first** if you're touching anything in `src/ui/share/`,
-> `src/server/actions/shares.ts`, `src/logic/ShareCodec.ts`, or any
-> `shares` DB column. Three load-bearing rules drive the whole
-> design — see *Universal sign-in*, *Kind-based wire contract*, and
-> *Effect-Schema-validated wire format* below.
+> `src/server/actions/shares.ts`, `src/logic/ShareCodec.ts`, any
+> `shares` DB column, or the card-pack sync pipeline
+> (`src/data/cardPacksSync.tsx`, `src/data/customCardPacks.ts`,
+> `src/server/actions/packs.ts`, `src/logic/CustomCardSets.ts`,
+> `src/logic/CardPackTombstones.ts`). Three load-bearing rules drive
+> the sharing design — see *Universal sign-in*, *Kind-based wire
+> contract*, and *Effect-Schema-validated wire format* below. The
+> card-pack sync architecture has its own deep-dive in
+> [card-pack-sync.md](./card-pack-sync.md) — start there if you're
+> touching mutation hooks, the reconcile loop, the logout flush,
+> tombstones, or the unsynced-changes warning.
+>
+> Sharing and sync share infrastructure: both are auth-gated, both
+> use `useSession` / `requireSignedInUser` plumbing, and both touch
+> the same `card_packs` server-side rows when a transferred game's
+> card pack happens to also be in the sender's synced library. Where
+> they differ is the wire shape and the lifecycle — sharing emits
+> ephemeral one-shot snapshots that the receiver imports; sync
+> maintains a continuously-reconciled mirror of the user's library
+> across every device they sign in on.
 
 ## What sharing is
 
@@ -27,8 +43,8 @@ just summarises what's in the link.
 | Variant | Entry points | What ships | Notes |
 |---|---|---|---|
 | `pack` | Card-pack row in Setup ("Share this pack" button), per-pack share icon in the "All card packs" picker | Card pack only | Picker entry passes `forcedCardPack` so the share contains the *picked* pack rather than the live setup pack |
-| `invite` | Setup pane near the Start playing CTA, overflow menu ("Invite a player") | Card pack + players + hand sizes; optional checkbox adds suggestions + accusations together when at least one of either has been logged | Checkbox is hidden when neither suggestions nor accusations exist. Label adapts to what's there: "Include all N prior suggestions and M failed accusations", "Include all N prior suggestions", or "Include all M prior failed accusations" |
-| `transfer` | Overflow menu only ("Continue on another device") | Everything: card pack + players + hand sizes + known cards + suggestions + accusations | Renders a prominent privacy warning above the CTA — this link discloses your hand |
+| `invite` | Setup pane near the Start playing CTA, overflow menu ("Invite a player") | Card pack + players + hand sizes; optional checkbox adds suggestions + accusations together when at least one of either has been logged | Checkbox is hidden when neither suggestions nor accusations exist. Label adapts to what's there: "Include all N prior suggestions and M failed accusations", "Include all N prior suggestions", or "Include all M prior failed accusations". **No hypotheses** — they're personal scratch notes; another player shouldn't see them. |
+| `transfer` | Overflow menu only ("Continue on another device") | Everything: card pack + players + hand sizes + known cards + suggestions + accusations + **hypotheses** | Renders a prominent privacy warning above the CTA — this link discloses your hand AND your in-progress hunches |
 
 The flow taxonomy intentionally hides the underlying column structure
 from the user. Earlier versions of the modal exposed four toggles
@@ -84,8 +100,13 @@ type CreateShareInput =
   | { kind: "invite"; cardPackData; playersData; handSizesData;
       suggestionsData?; accusationsData? }     // pair both or neither
   | { kind: "transfer"; cardPackData; playersData; handSizesData;
-      knownCardsData; suggestionsData; accusationsData };
+      knownCardsData; suggestionsData; accusationsData;
+      hypothesesData };                        // transfer-only
 ```
+
+The hypotheses field is `transfer`-only by design — hypotheses are
+the user's private scratch notes about who-might-own-what, and an
+`invite` share goes to *another* player who shouldn't see them.
 
 The server whitelists the fields each `kind` is allowed to carry.
 A `kind: "pack"` request with an extraneous `playersData` is
@@ -114,7 +135,7 @@ kind is a wire-and-server change, not a schema change.
 
 ## Effect-Schema-validated wire format
 
-All six wire fields round-trip through Effect `Schema` codecs in
+All seven wire fields round-trip through Effect `Schema` codecs in
 [src/logic/ShareCodec.ts](../src/logic/ShareCodec.ts):
 
 ```ts
@@ -124,6 +145,7 @@ export const handSizesCodec   = Schema.fromJsonString(...);
 export const knownCardsCodec  = Schema.fromJsonString(...);
 export const suggestionsCodec = Schema.fromJsonString(...);
 export const accusationsCodec = Schema.fromJsonString(...);
+export const hypothesesCodec  = Schema.fromJsonString(...);
 ```
 
 Each codec packages "JSON-string ↔ schema-validated object" into one
@@ -197,8 +219,10 @@ Migration history:
   index for the cron cleanup.
 - [0006_shares_owner_required.ts](../src/server/migrations/0006_shares_owner_required.ts)
   — tightens `owner_id` to `NOT NULL` (M22 universal sign-in).
+- [0007_shares_hypotheses.ts](../src/server/migrations/0007_shares_hypotheses.ts)
+  — adds `snapshot_hypotheses_data` for the `transfer` kind.
 
-Schema (post-0006):
+Schema (post-0007):
 
 ```sql
 shares (
@@ -210,6 +234,7 @@ shares (
   snapshot_known_cards_data   TEXT,
   snapshot_suggestions_data   TEXT,
   snapshot_accusations_data   TEXT,
+  snapshot_hypotheses_data    TEXT,         -- JSON-encoded Hypotheses; transfer-only
   created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at                  TIMESTAMPTZ,  -- NOW() + SHARE_TTL on insert
   -- index: shares_owner_id_idx, shares_expires_at_idx
@@ -262,3 +287,57 @@ Surfaced from `createShare` / `getShare`:
 | `ERR_SIGN_IN_REQUIRED` | `sign_in_required_to_share` | Caller is anonymous (no session OR isAnonymous=true). Modal catches and slides into the inline sign-in step. |
 | `ERR_MALFORMED_INPUT` | `share_malformed_input[:<detail>]` | Input shape didn't validate — wrong kind, missing required field, extraneous field, bad codec, or suggestion/accusation pairing violation. The optional `:<detail>` suffix names which check failed. |
 | `ERR_SHARE_NOT_FOUND` | `share_not_found` | `getShare` couldn't find a row for the id (or it has expired). Receive page renders a 404. |
+
+## Card-pack sync (separate from sharing)
+
+Sync is the other half of "the user's data follows them across
+devices." Whereas sharing is one-shot — a sender produces a snapshot
+URL, a receiver imports it once — sync is **continuous**: every
+mutation a signed-in user makes to their card-pack library propagates
+to the server, every device's React Query refetch pulls the latest
+view back, and a localStorage mirror keeps things working offline.
+
+The sync architecture is intentionally larger than sharing's because
+it has to handle:
+
+- A signed-in mutation that has to reach every other device the user
+  is logged in on.
+- An anonymous-era pack that gets attached to an account on sign-in.
+- Two devices each holding offline edits to the same pack at the
+  same time (last-flush wins on the server; local-wins during
+  reconcile when the local edit is newer than the last sync).
+- Logout: the packs are tied to the account, not the device, so the
+  device's localStorage is cleared. If there are unsynced edits, the
+  user is warned before discarding them.
+- Offline deletes (tombstones) so a deleted pack can't resurrect on
+  the next pull.
+
+**See [card-pack-sync.md](./card-pack-sync.md) for the full
+architecture, the conflict-resolution rules, and the four
+"life of a card pack" timelines that walk through the full state
+machine.**
+
+### Where sync and sharing intersect
+
+- **`pack`-kind shares vs. sync.** A `pack` share is a sender-driven
+  snapshot — it does not modify either user's `card_packs` rows. The
+  receiver imports it via the local-only `saveCustomCardSet` flow,
+  which then triggers their own sync push if they're signed in.
+- **`transfer`-kind shares vs. sync.** A transfer ships the sender's
+  card pack as part of the snapshot. On the receiver's side, the
+  `useApplyShareSnapshot` hook treats it the same as any other game
+  load — it doesn't go through the sync hooks. If the receiver wants
+  the pack saved permanently, they have to save it from the Setup
+  pane afterward.
+- **Auth.** Both systems share `requireSignedInUser` (server) and
+  `useSignedInUserId` (client) for the gate. A user signed in via
+  the anonymous plugin counts as **not** signed in for both — neither
+  share-create nor card-pack-server-mirror runs.
+
+### Updating the docs
+
+This file is the canonical reference for both systems. **Per
+[CLAUDE.md → Sharing and sync docs](../CLAUDE.md), any change that
+touches code in those areas should also update this doc and (for
+card-pack sync changes) [card-pack-sync.md](./card-pack-sync.md).**
+The list of triggering paths is at the top of this file.

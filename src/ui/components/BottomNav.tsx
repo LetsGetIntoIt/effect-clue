@@ -6,7 +6,6 @@ import { useTranslations } from "next-intl";
 import { ReactNode, useState } from "react";
 import {
     aboutLinkClicked,
-    signOut as signOutEvent,
 } from "../../analytics/events";
 import { describeAction } from "../../logic/describeAction";
 import { routes } from "../../routes";
@@ -19,7 +18,6 @@ import { useTour } from "../tour/TourProvider";
 import { screenKeyForUiMode } from "../tour/screenKey";
 import { AccountAvatar } from "../account/AccountAvatar";
 import { useAccountContext } from "../account/AccountProvider";
-import { authClient } from "../account/authClient";
 import { useShareContext } from "../share/ShareProvider";
 import { useSession } from "../hooks/useSession";
 import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
@@ -276,7 +274,7 @@ function BottomOverflowMenu({
     const tourForcesMenuOpen = currentStep?.anchor === "overflow-menu";
     const { installable, openModal: openInstallModal } =
         useInstallPromptContext();
-    const { openModal: openAccountModal } = useAccountContext();
+    const { openModal: openAccountModal, requestSignOut } = useAccountContext();
     const { openInvitePlayer, openContinueOnAnotherDevice } =
         useShareContext();
     const session = useSession();
@@ -290,9 +288,9 @@ function BottomOverflowMenu({
             openAccountModal();
             return;
         }
-        await authClient.signOut();
-        signOutEvent();
-        await session.refetch();
+        // Provider owns the flush-then-warn-then-commit dance, the
+        // `sign_out` event emission, and the session refetch.
+        await requestSignOut();
     };
     return (
         <li>

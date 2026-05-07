@@ -313,7 +313,15 @@ describe("AccountModal — pack row actions", () => {
         expect(raw).toContain("Dunder Mifflin");
     });
 
-    test("rename of a local-only pack does NOT call the server", async () => {
+    test("rename of a local-only pack while signed in mirrors to server", async () => {
+        // The pack is in localStorage but `getMyCardPacks` doesn't
+        // return it yet — that's the "anon-era pack waiting for
+        // first reconcile" case OR a brand-new pack created while
+        // signed in but offline. Per the Flow 1 invariant in
+        // `docs/shares-and-sync.md`, a signed-in mutation pushes to
+        // the server even for a pack the server hasn't seen yet —
+        // the unified `useSaveCardPack` handles the upsert and the
+        // localStorage `lastSyncedSnapshot` stamp.
         signInAlice();
         window.localStorage.setItem(
             "effect-clue.custom-presets.v1",
@@ -328,7 +336,6 @@ describe("AccountModal — pack row actions", () => {
                 ],
             }),
         );
-        // No matching server pack returned.
         getMyCardPacksMock.mockResolvedValue([]);
         renderModal();
         await waitFor(() => {
@@ -351,7 +358,15 @@ describe("AccountModal — pack row actions", () => {
             );
             expect(raw).toContain("Renamed");
         });
-        expect(saveCardPackMock).not.toHaveBeenCalled();
+        await waitFor(() => {
+            expect(saveCardPackMock).toHaveBeenCalledTimes(1);
+        });
+        const serverArg = saveCardPackMock.mock.calls[0]?.[0] as {
+            clientGeneratedId: string;
+            label: string;
+        };
+        expect(serverArg.clientGeneratedId).toBe("custom-local-only");
+        expect(serverArg.label).toBe("Renamed");
     });
 
     test("rename Cancel performs no mutation", async () => {
@@ -420,6 +435,10 @@ describe("AccountModal — pack row actions", () => {
         await waitFor(() => {
             expect(deleteCardPackMock).toHaveBeenCalledTimes(1);
         });
+        // The orchestrator passes the server's canonical `id` to
+        // `deleteCardPackOnServer`. Server action's `WHERE id = $1
+        // OR client_generated_id = $1` would accept either, but the
+        // server id is the more direct key.
         expect(deleteCardPackMock.mock.calls[0]?.[0]).toEqual({
             idOrClientGeneratedId: "pack-1",
         });
@@ -472,5 +491,38 @@ describe("mergeCardPacks", () => {
             ],
         );
         expect(merged).toHaveLength(0);
+    });
+
+    test("dedupes when local id has been swapped to server id by reconcile", () => {
+        // Post-reconcile state: the local pack's `id` is the server's
+        // `id` (the swap happens in `markPackSynced` after a
+        // successful push or pull). The server pack's
+        // `clientGeneratedId` is the original `custom-…` id. If
+        // `mergeCardPacks` only checked against
+        // `clientGeneratedId`, the same pack would render twice —
+        // once from `decodedServer` and once from `localOnly`.
+        const merged = mergeCardPacks(
+            [
+                {
+                    id: "server-1",
+                    label: "Mansion",
+                    cardSet: { categories: [] } as never,
+                },
+            ],
+            [
+                {
+                    id: "server-1",
+                    clientGeneratedId: "custom-mansion",
+                    label: "Mansion",
+                    cardSetData: EMPTY_CARD_SET_DATA,
+                },
+            ],
+        );
+        expect(merged).toHaveLength(1);
+        expect(merged[0]).toMatchObject({
+            id: "server-1",
+            clientGeneratedId: "custom-mansion",
+            source: "server",
+        });
     });
 });
