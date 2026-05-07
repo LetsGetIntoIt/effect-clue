@@ -77,8 +77,21 @@ CTA logic collapses to a single rule:
 - Anonymous (no session OR `isAnonymous: true`) → CTA reads
   "Sign in or create account to share" and clicking it slides into
   the inline sign-in step.
-- Signed-in non-anonymous → CTA reads "Copy link" and clicking it
-  fires `createShare` immediately.
+- Signed-in non-anonymous → CTA reads "Generate link" and walks the
+  user through a deliberate three-click flow:
+  1. **Generate link** → fires `createShare`. The URL appears inside
+     the white box and a QR SVG is generated client-side via
+     [lean-qr](https://github.com/davidje13/lean-qr) so the
+     "Show QR code" reveal under the input is instant. The OS
+     clipboard is **not** touched here.
+  2. **Copy link** → writes the URL to the clipboard. Either this
+     bottom CTA or the inline "Copy link" button next to the URL
+     advances the modal — both run the same copy helper.
+  3. **Done** → closes the modal.
+  The inline button always reads "Copy link"; only its leading icon
+  swaps (clipboard → check → clipboard) for ~15 seconds after the
+  most recent copy. QR is one-way reveal — once shown it stays shown
+  for the open modal session.
 
 After the inline sign-in completes, `pendingRetryRef` re-fires
 `createShare` automatically — the user doesn't have to click the

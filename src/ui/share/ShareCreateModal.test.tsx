@@ -237,12 +237,12 @@ describe("ShareCreateModal — universal sign-in CTA", () => {
         expect(findCta().textContent).toContain("signInToShare");
     });
 
-    test("signed-in non-anon user sees 'Copy link'", () => {
+    test("signed-in non-anon user sees 'Generate link'", () => {
         mockSession = {
             data: { user: { id: "u1", isAnonymous: false } },
         };
         mountModal("pack");
-        expect(findCta().textContent).toContain("copyLink");
+        expect(findCta().textContent).toContain("generateLink");
     });
 });
 
@@ -391,8 +391,84 @@ describe("ShareCreateModal — wire payload by variant", () => {
     });
 });
 
-describe("ShareCreateModal — copy existing share URL", () => {
-    test("successful create stores the URL and recopy does not create another share", async () => {
+describe("ShareCreateModal — Generate → Copy → Done CTA", () => {
+    test("first CTA click generates the link without auto-copying", async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, "clipboard", {
+            configurable: true,
+            value: { writeText },
+        });
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: false } },
+        };
+        mountModal("pack");
+
+        expect(findCta().textContent).toContain("generateLink");
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await waitFor(() => {
+            expect(createShareMock).toHaveBeenCalledTimes(1);
+        });
+        expect(
+            document.querySelector("[data-share-created-url]"),
+        ).not.toBeNull();
+        // Generation must NOT auto-copy. The user has to click the
+        // CTA again (or the inline button) to copy.
+        expect(writeText).not.toHaveBeenCalled();
+        expect(findCta().textContent).toContain("copyLink");
+    });
+
+    test("CTA cycles Generate → Copy → Done and the third click closes", async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, "clipboard", {
+            configurable: true,
+            value: { writeText },
+        });
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: false } },
+        };
+        const onClose = vi.fn();
+        render(
+            <ClueProvider>
+                <ShareCreateModal
+                    open={true}
+                    onClose={onClose}
+                    variant="pack"
+                />
+            </ClueProvider>,
+            { wrapper: TestQueryClientProvider },
+        );
+
+        // Generate.
+        expect(findCta().textContent).toContain("generateLink");
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await waitFor(() => {
+            expect(createShareMock).toHaveBeenCalledTimes(1);
+        });
+
+        // Copy (via the bottom CTA, second click).
+        expect(findCta().textContent).toContain("copyLink");
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await waitFor(() => {
+            expect(writeText).toHaveBeenCalledTimes(1);
+        });
+
+        // Done (third click closes the modal).
+        expect(findCta().textContent).toContain("done");
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        expect(onClose).toHaveBeenCalled();
+        // Generation only happened once across the whole cycle.
+        expect(createShareMock).toHaveBeenCalledTimes(1);
+    });
+
+    test("inline copy button flips the bottom CTA to 'Done'", async () => {
         const writeText = vi.fn().mockResolvedValue(undefined);
         Object.defineProperty(navigator, "clipboard", {
             configurable: true,
@@ -409,24 +485,162 @@ describe("ShareCreateModal — copy existing share URL", () => {
         await waitFor(() => {
             expect(createShareMock).toHaveBeenCalledTimes(1);
         });
-        expect(
-            document.querySelector("[data-share-created-url]"),
-        ).not.toBeNull();
-        expect(writeText).toHaveBeenCalledTimes(1);
+        expect(findCta().textContent).toContain("copyLink");
 
-        const copyButton = document.querySelector(
+        const inlineCopy = document.querySelector(
             "[data-share-copy-existing]",
         ) as HTMLButtonElement | null;
-        expect(copyButton).not.toBeNull();
+        expect(inlineCopy).not.toBeNull();
         await act(async () => {
-            fireEvent.click(copyButton!);
+            fireEvent.click(inlineCopy!);
         });
 
-        expect(createShareMock).toHaveBeenCalledTimes(1);
-        expect(writeText).toHaveBeenCalledTimes(2);
+        await waitFor(() => {
+            expect(writeText).toHaveBeenCalledTimes(1);
+        });
+        expect(findCta().textContent).toContain("done");
         expect(
             document.querySelector("[data-share-copy-check]"),
         ).not.toBeNull();
+    });
+
+    test("inline copy icon reverts from check to clipboard after 15s", async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        try {
+            const writeText = vi.fn().mockResolvedValue(undefined);
+            Object.defineProperty(navigator, "clipboard", {
+                configurable: true,
+                value: { writeText },
+            });
+            mockSession = {
+                data: { user: { id: "u1", isAnonymous: false } },
+            };
+            mountModal("pack");
+
+            await act(async () => {
+                fireEvent.click(findCta());
+            });
+            await waitFor(() => {
+                expect(createShareMock).toHaveBeenCalledTimes(1);
+            });
+
+            // Default state: clipboard icon, no check.
+            expect(
+                document.querySelector("[data-share-copy-clipboard]"),
+            ).not.toBeNull();
+            expect(
+                document.querySelector("[data-share-copy-check]"),
+            ).toBeNull();
+
+            const inlineCopy = document.querySelector(
+                "[data-share-copy-existing]",
+            ) as HTMLButtonElement;
+            await act(async () => {
+                fireEvent.click(inlineCopy);
+            });
+            await waitFor(() => {
+                expect(writeText).toHaveBeenCalledTimes(1);
+            });
+
+            // After copy: check shown, clipboard hidden.
+            expect(
+                document.querySelector("[data-share-copy-check]"),
+            ).not.toBeNull();
+
+            // Just shy of 15s: still shown.
+            await act(async () => {
+                vi.advanceTimersByTime(14_900);
+            });
+            expect(
+                document.querySelector("[data-share-copy-check]"),
+            ).not.toBeNull();
+
+            // Past 15s: reverted.
+            await act(async () => {
+                vi.advanceTimersByTime(200);
+            });
+            await waitFor(() => {
+                expect(
+                    document.querySelector("[data-share-copy-check]"),
+                ).toBeNull();
+            });
+            expect(
+                document.querySelector("[data-share-copy-clipboard]"),
+            ).not.toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});
+
+describe("ShareCreateModal — QR code", () => {
+    test("Show QR code button is present after the link is generated", async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, "clipboard", {
+            configurable: true,
+            value: { writeText },
+        });
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: false } },
+        };
+        mountModal("invite");
+
+        // Initially hidden — no link yet.
+        expect(
+            document.querySelector("[data-share-show-qr]"),
+        ).toBeNull();
+
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await waitFor(() => {
+            expect(createShareMock).toHaveBeenCalledTimes(1);
+        });
+
+        expect(
+            document.querySelector("[data-share-show-qr]"),
+        ).not.toBeNull();
+        // QR canvas not yet rendered (one-way reveal pending click).
+        expect(document.querySelector("[data-share-qr]")).toBeNull();
+    });
+
+    test("Clicking 'Show QR code' reveals the SVG and removes the link (one-way reveal)", async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, "clipboard", {
+            configurable: true,
+            value: { writeText },
+        });
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: false } },
+        };
+        mountModal("invite");
+
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await waitFor(() => {
+            expect(createShareMock).toHaveBeenCalledTimes(1);
+        });
+
+        const showQr = document.querySelector(
+            "[data-share-show-qr]",
+        ) as HTMLButtonElement | null;
+        expect(showQr).not.toBeNull();
+
+        await act(async () => {
+            fireEvent.click(showQr!);
+        });
+
+        const qr = document.querySelector(
+            "[data-share-qr]",
+        ) as HTMLDivElement | null;
+        expect(qr).not.toBeNull();
+        // SVG markup was injected and contains an actual <svg> root.
+        expect(qr!.querySelector("svg")).not.toBeNull();
+        // Show button is gone — one-way reveal.
+        expect(
+            document.querySelector("[data-share-show-qr]"),
+        ).toBeNull();
     });
 });
 

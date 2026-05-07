@@ -29,7 +29,9 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { DateTime, Schema } from "effect";
+import { DateTime, Duration, Schema } from "effect";
+import { generate } from "lean-qr";
+import { toSvgSource } from "lean-qr/extras/svg";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -41,6 +43,7 @@ import {
     shareCreateStarted,
     shareCreated,
     shareLinkCopied,
+    shareQrCodeShown,
 } from "../../analytics/events";
 import {
     cardSetEquals,
@@ -74,7 +77,8 @@ import { useSession } from "../hooks/useSession";
 import { authClient } from "../account/authClient";
 import { DevSignInForm } from "../account/DevSignInForm";
 import { T_STANDARD, useReducedTransition } from "../motion";
-import { CheckIcon, XIcon } from "../components/Icons";
+import { CheckIcon, ClipboardIcon, XIcon } from "../components/Icons";
+import { QrCodeSvg } from "./QrCodeSvg";
 import { useCardPackUsage } from "../../data/cardPackUsage";
 import { useCustomCardPacks } from "../../data/customCardPacks";
 import {
@@ -168,15 +172,23 @@ export const pickProgressLabelKey = (
 };
 const PACK_INCLUDES_HEADER_KEY = "packIncludesHeader";
 const PACK_CATEGORY_ITEM_KEY = "packCategoryItem";
-const COPIED_KEY = "copied";
 const CREATING_KEY = "creating";
 const SIGN_IN_TO_SHARE_KEY = "signInToShare";
+const GENERATE_LINK_KEY = "generateLink";
 const COPY_LINK_KEY = "copyLink";
+const DONE_KEY = "done";
+const SHOW_QR_CODE_KEY = "showQrCode";
+const QR_ARIA_LABEL_KEY = "qrAriaLabel";
 const COPY_FALLBACK_KEY = "copyFallback";
 const ERROR_GENERIC_KEY = "errorGeneric";
 const LINK_EXPIRES_IN_KEY = "linkExpiresIn";
 const TTL_KEY = "ttl";
 const SHARE_URL_ARIA_KEY = "shareUrlAria";
+
+// How long the inline copy button shows the check icon after a copy
+// before reverting back to the clipboard glyph. Matches the user's
+// expectation of "about 15 seconds".
+const INLINE_CHECK_VISIBLE = Duration.seconds(15);
 
 const ERR_SIGN_IN_REQUIRED_MSG = "sign_in_required_to_share";
 
@@ -389,14 +401,30 @@ export function ShareCreateModal({
     useEffect(() => {
         if (open && !prevOpenRef.current) {
             setIncludeProgress(false);
-            setCopied(false);
+            setHasCopied(false);
+            setInlineCheckUntil(null);
             setShareUrl(null);
+            setQrSvg(null);
+            setQrShown(false);
         }
         prevOpenRef.current = open;
     }, [open]);
     const [submitting, setSubmitting] = useState(false);
-    const [copied, setCopied] = useState(false);
+    // Sticky-once-true within the modal session: drives the bottom-CTA
+    // transition from "Copy link" → "Done". Set by either the bottom
+    // CTA or the inline copy button (per the user-confirmed spec).
+    const [hasCopied, setHasCopied] = useState(false);
+    // Drives the inline button's icon swap. When non-null, the inline
+    // button shows a check; otherwise it shows a clipboard. Cleared by
+    // a timer ~15s after the most recent copy.
+    const [inlineCheckUntil, setInlineCheckUntil] =
+        useState<DateTime.Utc | null>(null);
     const [shareUrl, setShareUrl] = useState<string | null>(null);
+    // QR SVG markup, generated synchronously when the share URL lands
+    // so the "Show QR code" reveal is instant. One-way reveal — once
+    // shown, stays shown until the modal closes.
+    const [qrSvg, setQrSvg] = useState<string | null>(null);
+    const [qrShown, setQrShown] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     // The pack the share will contain. Picker entry overrides; setup
@@ -497,21 +525,53 @@ export function ShareCreateModal({
         variant,
     ]);
 
-    const copyShareUrl = useCallback(async (url: string): Promise<void> => {
-        try {
-            if (typeof navigator !== "undefined" && navigator.clipboard) {
-                await navigator.clipboard.writeText(url);
-                shareLinkCopied();
-                setCopied(true);
-                return;
+    /**
+     * Low-level write — pushes to the OS clipboard. Returns true on
+     * success so callers can decide whether to flip UI state. Falls
+     * back to `window.prompt` when the clipboard API is unavailable
+     * (older browsers, sandboxed iframes); the prompt fallback is
+     * counted as a non-success — the user has to copy by hand and
+     * we don't have any way to detect that.
+     */
+    const writeUrlToClipboard = useCallback(
+        async (url: string): Promise<boolean> => {
+            try {
+                if (
+                    typeof navigator !== "undefined" &&
+                    navigator.clipboard
+                ) {
+                    await navigator.clipboard.writeText(url);
+                    return true;
+                }
+            } catch {
+                // Fall through to prompt fallback.
             }
-        } catch {
-            // Fall through to the prompt fallback below.
-        }
-        if (typeof window !== "undefined") {
-            window.prompt(t(COPY_FALLBACK_KEY), url);
-        }
-    }, [t]);
+            if (typeof window !== "undefined") {
+                window.prompt(t(COPY_FALLBACK_KEY), url);
+            }
+            return false;
+        },
+        [t],
+    );
+
+    /**
+     * Copy the URL and flip UI state. Either entry point — the bottom
+     * CTA's "Copy link" path or the inline button next to the URL —
+     * runs through here so they share the same hasCopied + check-icon
+     * behavior.
+     */
+    const copyAndMarkCopied = useCallback(
+        async (url: string): Promise<void> => {
+            const ok = await writeUrlToClipboard(url);
+            if (!ok) return;
+            shareLinkCopied();
+            setHasCopied(true);
+            setInlineCheckUntil(
+                DateTime.addDuration(DateTime.nowUnsafe(), INLINE_CHECK_VISIBLE),
+            );
+        },
+        [writeUrlToClipboard],
+    );
 
     const createFromPayload = useCallback(async (
         payload: CreateShareInput,
@@ -532,7 +592,19 @@ export function ShareCreateModal({
                     ? `${globalThis.location.origin}${SHARE_BASE_PATH}${result.id}`
                     : `${SHARE_BASE_PATH}${result.id}`;
             setShareUrl(url);
-            await copyShareUrl(url);
+            // Pre-generate the QR so the "Show QR code" reveal is
+            // instant. lean-qr's encode is sub-millisecond for URLs of
+            // this length, so doing it inline keeps the state updates
+            // batched in one render.
+            try {
+                const code = generate(url);
+                setQrSvg(toSvgSource(code, { on: "#2a1f12", off: "#ffffff" }));
+            } catch {
+                // QR is a nice-to-have — never block the share flow on
+                // a QR encoding failure. The modal still works as a
+                // copyable-link UI without it.
+                setQrSvg(null);
+            }
         } catch (e) {
             const msg = String(e);
             if (msg.includes(ERR_SIGN_IN_REQUIRED_MSG)) {
@@ -546,11 +618,24 @@ export function ShareCreateModal({
         } finally {
             setSubmitting(false);
         }
-    }, [copyShareUrl, t]);
+    }, [t]);
 
+    /**
+     * Bottom-CTA dispatcher — drives the four-state machine
+     * (Generate → Copy → Done) plus the anonymous "Sign in" branch.
+     *
+     *   1. hasCopied  → close the modal (CTA reads "Done")
+     *   2. shareUrl   → copy the existing URL (CTA reads "Copy link")
+     *   3. needsSignIn → slide to sign-in step
+     *   4. else       → generate the share via createShare
+     */
     const onCreate = async (): Promise<void> => {
+        if (hasCopied) {
+            close();
+            return;
+        }
         if (shareUrl !== null) {
-            await copyShareUrl(shareUrl);
+            await copyAndMarkCopied(shareUrl);
             return;
         }
         if (needsSignIn) {
@@ -621,6 +706,26 @@ export function ShareCreateModal({
         }
     };
 
+    // Revert the inline button's check icon back to the clipboard
+    // glyph after the configured delay. The timer always runs from
+    // "now" to `inlineCheckUntil` — repeated copies push the deadline
+    // forward and the prior timer is cleared by this effect's
+    // cleanup.
+    useEffect(() => {
+        if (inlineCheckUntil === null) return;
+        const remainingMs = Duration.toMillis(
+            DateTime.distance(DateTime.nowUnsafe(), inlineCheckUntil),
+        );
+        if (remainingMs <= 0) {
+            setInlineCheckUntil(null);
+            return;
+        }
+        const handle = setTimeout(() => {
+            setInlineCheckUntil(null);
+        }, remainingMs);
+        return () => clearTimeout(handle);
+    }, [inlineCheckUntil]);
+
     const resumedRef = useRef<PendingShareIntent | null>(null);
     useEffect(() => {
         if (!open || resumeIntent === undefined) return;
@@ -640,8 +745,11 @@ export function ShareCreateModal({
     };
 
     const close = (): void => {
-        setCopied(false);
+        setHasCopied(false);
+        setInlineCheckUntil(null);
         setShareUrl(null);
+        setQrSvg(null);
+        setQrShown(false);
         setError(null);
         setStep(STEP_TOGGLES);
         setDirection(1);
@@ -652,13 +760,15 @@ export function ShareCreateModal({
     const titleKey = TITLE_KEY_FOR[variant];
     const descriptionKey = DESCRIPTION_KEY_FOR[variant];
 
-    const ctaLabel = copied
-        ? t(COPIED_KEY)
-        : submitting
-            ? t(CREATING_KEY)
-            : needsSignIn
-                ? t(SIGN_IN_TO_SHARE_KEY)
-                : t(COPY_LINK_KEY);
+    const ctaLabel = submitting
+        ? t(CREATING_KEY)
+        : needsSignIn && shareUrl === null
+            ? t(SIGN_IN_TO_SHARE_KEY)
+            : shareUrl === null
+                ? t(GENERATE_LINK_KEY)
+                : !hasCopied
+                    ? t(COPY_LINK_KEY)
+                    : t(DONE_KEY);
 
     return (
         <Dialog.Root open={open} onOpenChange={(next) => !next && close()}>
@@ -666,8 +776,17 @@ export function ShareCreateModal({
                 <Dialog.Overlay className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/40" />
                 <Dialog.Content
                     className={
-                        "fixed left-1/2 top-1/2 z-[var(--z-dialog-content)] flex w-[min(92vw,480px)] flex-col " +
-                        "-translate-x-1/2 -translate-y-1/2 rounded-[var(--radius)] border border-border " +
+                        // `max-h` + `overflow-y-auto` is a safety net so
+                        // the modal never extends past the visible
+                        // viewport. The QR canvas inside `QrCodeSvg`
+                        // already self-caps its size against
+                        // `100dvh - 24rem`, so on any reasonable screen
+                        // the QR sits naturally and the scroll never
+                        // triggers; the cap here just covers edge
+                        // cases (very short landscape phones, an
+                        // unusually long pack-includes list, etc.).
+                        "fixed left-1/2 top-1/2 z-[var(--z-dialog-content)] flex max-h-[calc(100dvh-2rem)] w-[min(92vw,480px)] flex-col " +
+                        "-translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[var(--radius)] border border-border " +
                         "bg-panel shadow-[0_10px_28px_rgba(0,0,0,0.28)] focus:outline-none"
                     }
                 >
@@ -772,52 +891,114 @@ export function ShareCreateModal({
                                     </div>
                                     {shareUrl !== null ? (
                                         <div
-                                            className="mx-5 mt-3 flex min-w-0 items-center gap-2 rounded-[var(--radius)] border border-border bg-white p-2"
+                                            className="mx-5 mt-3 flex min-w-0 flex-col gap-2 rounded-[var(--radius)] border border-border bg-white p-2"
                                             data-share-created-url
                                         >
-                                            <input
-                                                readOnly
-                                                value={shareUrl}
-                                                aria-label={t(SHARE_URL_ARIA_KEY)}
-                                                className="min-w-0 flex-1 rounded border border-border bg-panel px-2 py-1 text-[12px] text-muted"
-                                                onFocus={(e) =>
-                                                    e.currentTarget.select()
-                                                }
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    void copyShareUrl(shareUrl)
-                                                }
-                                                className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-[var(--radius)] border border-border bg-white px-2 py-1 text-[12px] font-semibold text-accent hover:bg-hover"
-                                                data-share-copy-existing
-                                            >
-                                                <AnimatePresence initial={false}>
-                                                    {copied ? (
-                                                        <motion.span
-                                                            key="check"
-                                                            initial={{
-                                                                scale: 0.6,
-                                                                opacity: 0,
-                                                            }}
-                                                            animate={{
-                                                                scale: 1,
-                                                                opacity: 1,
-                                                            }}
-                                                            exit={{
-                                                                scale: 0.6,
-                                                                opacity: 0,
-                                                            }}
-                                                            transition={transition}
-                                                            className="inline-flex"
-                                                            data-share-copy-check
-                                                        >
-                                                            <CheckIcon size={14} />
-                                                        </motion.span>
-                                                    ) : null}
-                                                </AnimatePresence>
-                                                {t(COPY_LINK_KEY)}
-                                            </button>
+                                            <div className="flex min-w-0 items-center gap-2">
+                                                <input
+                                                    readOnly
+                                                    value={shareUrl}
+                                                    aria-label={t(SHARE_URL_ARIA_KEY)}
+                                                    className="min-w-0 flex-1 rounded border border-border bg-panel px-2 py-1 text-[12px] text-muted"
+                                                    onFocus={(e) =>
+                                                        e.currentTarget.select()
+                                                    }
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        void copyAndMarkCopied(
+                                                            shareUrl,
+                                                        )
+                                                    }
+                                                    className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-[var(--radius)] border border-border bg-white px-2 py-1 text-[12px] font-semibold text-accent hover:bg-hover"
+                                                    data-share-copy-existing
+                                                >
+                                                    <AnimatePresence
+                                                        initial={false}
+                                                        mode={PRESENCE_WAIT_MODE}
+                                                    >
+                                                        {inlineCheckUntil !==
+                                                        null ? (
+                                                            <motion.span
+                                                                key="check"
+                                                                initial={{
+                                                                    scale: 0.6,
+                                                                    opacity: 0,
+                                                                }}
+                                                                animate={{
+                                                                    scale: 1,
+                                                                    opacity: 1,
+                                                                }}
+                                                                exit={{
+                                                                    scale: 0.6,
+                                                                    opacity: 0,
+                                                                }}
+                                                                transition={
+                                                                    transition
+                                                                }
+                                                                className="inline-flex"
+                                                                data-share-copy-check
+                                                            >
+                                                                <CheckIcon
+                                                                    size={14}
+                                                                />
+                                                            </motion.span>
+                                                        ) : (
+                                                            <motion.span
+                                                                key="clipboard"
+                                                                initial={{
+                                                                    scale: 0.6,
+                                                                    opacity: 0,
+                                                                }}
+                                                                animate={{
+                                                                    scale: 1,
+                                                                    opacity: 1,
+                                                                }}
+                                                                exit={{
+                                                                    scale: 0.6,
+                                                                    opacity: 0,
+                                                                }}
+                                                                transition={
+                                                                    transition
+                                                                }
+                                                                className="inline-flex"
+                                                                data-share-copy-clipboard
+                                                            >
+                                                                <ClipboardIcon
+                                                                    size={14}
+                                                                />
+                                                            </motion.span>
+                                                        )}
+                                                    </AnimatePresence>
+                                                    {t(COPY_LINK_KEY)}
+                                                </button>
+                                            </div>
+                                            {qrSvg !== null && !qrShown ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setQrShown(true);
+                                                        shareQrCodeShown({
+                                                            kind: variant,
+                                                        });
+                                                    }}
+                                                    className="cursor-pointer self-start border-none bg-transparent p-0 text-[12px] font-semibold text-accent underline hover:text-accent-hover"
+                                                    data-share-show-qr
+                                                >
+                                                    {t(SHOW_QR_CODE_KEY)}
+                                                </button>
+                                            ) : null}
+                                            {qrShown && qrSvg !== null ? (
+                                                <QrCodeSvg
+                                                    svgSource={qrSvg}
+                                                    ariaLabel={t(
+                                                        QR_ARIA_LABEL_KEY,
+                                                        { url: shareUrl },
+                                                    )}
+                                                    dataAttribute="data-share-qr"
+                                                />
+                                            ) : null}
                                         </div>
                                     ) : null}
                                 </motion.div>

@@ -27,9 +27,10 @@
  *                         installDismissed, installCompleted,
  *                         appLaunchedStandalone
  *   Sharing              : shareCreateStarted, shareCreated,
- *                         shareLinkCopied, shareOpened,
- *                         shareOpenFailed, shareImportStarted,
- *                         shareImported, shareImportDismissed
+ *                         shareLinkCopied, shareQrCodeShown,
+ *                         shareOpened, shareOpenFailed,
+ *                         shareImportStarted, shareImported,
+ *                         shareImportDismissed
  *   Performance signals : webVital, deducerRun
  *
  * Several of the splash / install / tour emitters layer PostHog
@@ -761,6 +762,10 @@ export const shareCreated = (props: {
 }): void => capture("share_created", props);
 
 export const shareLinkCopied = (): void => capture("share_link_copied");
+
+export const shareQrCodeShown = (props: {
+    kind: "pack" | "invite" | "transfer";
+}): void => capture("share_qr_code_shown", props);
 
 export const shareOpened = (props: {
     shareIdHash: string;
