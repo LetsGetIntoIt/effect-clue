@@ -29,7 +29,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { Schema } from "effect";
+import { DateTime, Schema } from "effect";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -75,10 +75,13 @@ import { authClient } from "../account/authClient";
 import { DevSignInForm } from "../account/DevSignInForm";
 import { T_STANDARD, useReducedTransition } from "../motion";
 import { CheckIcon, XIcon } from "../components/Icons";
+import { useCardPackUsage } from "../../data/cardPackUsage";
+import { useCustomCardPacks } from "../../data/customCardPacks";
 import {
     savePendingShareIntent,
     type PendingShareIntent,
 } from "./pendingShare";
+import { resolveActivePackLabel } from "./resolveActivePackLabel";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -370,6 +373,10 @@ export function ShareCreateModal({
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const session = useSession();
+    const customPacksQuery = useCustomCardPacks();
+    const usageQuery = useCardPackUsage();
+    const customPacks = customPacksQuery.data ?? [];
+    const usage = usageQuery.data ?? new Map<string, DateTime.Utc>();
     const transition = useReducedTransition(T_STANDARD);
     const [step, setStep] = useState<Step>(STEP_TOGGLES);
     const [direction, setDirection] = useState<1 | -1>(1);
@@ -395,8 +402,18 @@ export function ShareCreateModal({
     // The pack the share will contain. Picker entry overrides; setup
     // and overflow-menu entries use the live setup's pack.
     const activeCardSet = forcedCardPack ?? state.setup.cardSet;
+    // Invite/transfer openers don't pass a label (they don't know which
+    // saved pack the live deck came from). Backfill from the
+    // most-recently-used custom pack whose contents still match — same
+    // resolution `CardPackRow` uses to pick the active pill.
+    const resolvedCustomLabel = resolveActivePackLabel(
+        activeCardSet,
+        customPacks,
+        usage,
+        forcedCardPackLabel,
+    );
     const { label: activeCardSetLabel, isCustom: cardSetIsCustom } =
-        resolvePackLabel(activeCardSet, forcedCardPackLabel);
+        resolvePackLabel(activeCardSet, resolvedCustomLabel);
 
     const suggestionsCount = derived.suggestionsAsData.length;
     const accusationsCount = derived.accusationsAsData.length;
@@ -419,12 +436,17 @@ export function ShareCreateModal({
         v === VARIANT_INVITE ? includeProgress : v === VARIANT_TRANSFER;
 
     const buildPayload = useCallback((): CreateShareInput => {
+        // `wirePackName` is what lands in the wire's optional
+        // cardPack `name` field. For pack variants opened from the
+        // picker, the caller's label wins. For invite/transfer (no
+        // explicit label), `resolvedCustomLabel` recovers the loaded
+        // custom pack's name so the receive modal can render it.
+        // Built-in packs don't need it (the receiver auto-detects
+        // built-ins by structural equality), but it's harmless to
+        // pass either way; `projectCardSet` drops empty strings.
+        const wirePackName = activeCardSetLabel;
         if (variant === VARIANT_PACK) {
-            // Pack variant: only the pack ships. The forcedCardPack
-            // path (per-pack share from picker) overrides the live
-            // setup pack — the share contains the picked pack, not
-            // whatever's currently loaded.
-            return buildPackInput(activeCardSet, forcedCardPackLabel);
+            return buildPackInput(activeCardSet, wirePackName);
         }
 
         // Invite + transfer variants ship the live game's data.
@@ -458,16 +480,16 @@ export function ShareCreateModal({
         if (variant === VARIANT_INVITE) {
             return buildInviteInput(
                 gameSession,
-                forcedCardPackLabel,
+                wirePackName,
                 includeProgress,
             );
         }
-        return buildTransferInput(gameSession, forcedCardPackLabel);
+        return buildTransferInput(gameSession, wirePackName);
     }, [
         activeCardSet,
+        activeCardSetLabel,
         derived.accusationsAsData,
         derived.suggestionsAsData,
-        forcedCardPackLabel,
         includeProgress,
         state.handSizes,
         state.knownCards,

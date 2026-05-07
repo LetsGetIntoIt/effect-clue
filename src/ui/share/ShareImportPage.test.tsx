@@ -1,18 +1,23 @@
 /**
- * Tests for the M22 receive-page redesign. The previous version only
- * had analytics-fire smoke checks (the actual import was a TODO).
- * Now the page renders a sender + bullet-list summary and actually
- * hydrates on Import, so the test covers:
+ * Tests for the M22 receive-page redesign + the post-M22 share-receive
+ * polish (sign-in gate, "Use it now?" prompt for pack-only saves,
+ * pack pill activation after invite/transfer). The page renders a
+ * sender + bullet-list summary, requires sign-in to import, hydrates
+ * on Import, and surfaces a confirm dialog for the pack-save branch.
  *
+ * Coverage:
  *   - Sender line — present for non-anonymous senders, absent for
  *     anonymous senders (server-side `ownerName === null`).
- *   - Bullet list reflects exactly which slices the snapshot carries:
- *     pack name + custom flag, players + count, hand sizes, known
- *     cards / suggestions / accusations counts.
+ *   - Bullet list reflects exactly which slices the snapshot carries.
  *   - Empty-share defensive branch shows the empty-state copy and
  *     disables the Import CTA.
- *   - Import click invokes the hydration hook with the snapshot and
- *     routes to /play.
+ *   - Import click behaviour — branches by receive flow (pack-only
+ *     → save + confirm; invite/transfer → confirm-then-hydrate when
+ *     the receiver has a game in progress).
+ *   - Sign-in gate — anonymous users see "Sign in to import" and the
+ *     CTA kicks off social sign-in; auto-import only fires when a
+ *     matching sessionStorage intent is present (malicious-URL
+ *     defence).
  */
 import { Schema } from "effect";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -42,6 +47,30 @@ vi.mock("./useApplyShareSnapshot", () => ({
         saveCardPackFromSnapshotMock(snapshot),
 }));
 
+const consumePendingImportIntentMock = vi.fn();
+const savePendingImportIntentMock = vi.fn();
+vi.mock("./pendingImport", () => ({
+    consumePendingImportIntent: (id: string) =>
+        consumePendingImportIntentMock(id),
+    savePendingImportIntent: (intent: unknown) =>
+        savePendingImportIntentMock(intent),
+}));
+
+const signInSocialMock = vi.fn();
+vi.mock("../account/authClient", () => ({
+    authClient: {
+        signIn: { social: (args: unknown) => signInSocialMock(args) },
+    },
+}));
+
+let mockSessionUser: {
+    id: string;
+    isAnonymous: boolean;
+} | null = { id: "test-user", isAnonymous: false };
+vi.mock("../hooks/useSession", () => ({
+    useSession: () => ({ data: { user: mockSessionUser } }),
+}));
+
 const invalidateQueriesMock = vi.fn();
 vi.mock("@tanstack/react-query", async () => {
     const actual = await vi.importActual<typeof import("@tanstack/react-query")>(
@@ -60,6 +89,8 @@ const sharedAnalytics = {
     shareImported: vi.fn(),
     shareImportDismissed: vi.fn(),
     shareOpened: vi.fn(),
+    signInStarted: vi.fn(),
+    signInFailed: vi.fn(),
 };
 vi.mock("../../analytics/events", () => ({
     shareImportStarted: (...args: unknown[]) =>
@@ -70,6 +101,10 @@ vi.mock("../../analytics/events", () => ({
         sharedAnalytics.shareImportDismissed(...args),
     shareOpened: (...args: unknown[]) =>
         sharedAnalytics.shareOpened(...args),
+    signInStarted: (...args: unknown[]) =>
+        sharedAnalytics.signInStarted(...args),
+    signInFailed: (...args: unknown[]) =>
+        sharedAnalytics.signInFailed(...args),
 }));
 
 import {
@@ -204,15 +239,27 @@ const buildSnapshot = (overrides: SnapshotOverrides) => ({
 
 beforeEach(() => {
     mockHasPersistedGameData = false;
+    mockSessionUser = { id: "test-user", isAnonymous: false };
     routerPushMock.mockReset();
     applyMock.mockReset();
     saveCardPackFromSnapshotMock.mockReset();
+    saveCardPackFromSnapshotMock.mockReturnValue({
+        kind: "saved",
+        pack: { id: "pack-1", label: "My Office", cardSet: { categories: [] } },
+    });
     invalidateQueriesMock.mockReset();
     invalidateQueriesMock.mockResolvedValue(undefined);
+    consumePendingImportIntentMock.mockReset();
+    consumePendingImportIntentMock.mockReturnValue(false);
+    savePendingImportIntentMock.mockReset();
+    signInSocialMock.mockReset();
+    signInSocialMock.mockResolvedValue({ error: null });
     sharedAnalytics.shareImportStarted.mockReset();
     sharedAnalytics.shareImported.mockReset();
     sharedAnalytics.shareImportDismissed.mockReset();
     sharedAnalytics.shareOpened.mockReset();
+    sharedAnalytics.signInStarted.mockReset();
+    sharedAnalytics.signInFailed.mockReset();
 });
 
 const renderImportPage = (snapshot: ReturnType<typeof buildSnapshot>) =>
@@ -421,8 +468,8 @@ describe("ShareImportPage — empty share guard", () => {
 });
 
 describe("ShareImportPage — import action", () => {
-    test("pack-only import saves a card pack and does not overwrite current game", async () => {
-        mockHasPersistedGameData = true;
+    test("pack-only import saves pack, then asks 'Use it now?' (no game in progress)", async () => {
+        mockHasPersistedGameData = false;
         const snapshot = buildSnapshot({
             cardPackData: CUSTOM_PACK_PAYLOAD,
         });
@@ -436,13 +483,58 @@ describe("ShareImportPage — import action", () => {
         await waitFor(() => {
             expect(saveCardPackFromSnapshotMock).toHaveBeenCalledWith(snapshot);
         });
-        expect(screen.queryByText("newGameConfirm")).not.toBeInTheDocument();
+        // Use-it-now confirm fires; "newGameConfirm" is NOT appended
+        // because there's no game in progress.
+        const dialog = await screen.findByRole("alertdialog");
+        expect(dialog.textContent).toContain("packSavedPrompt");
+        expect(dialog.textContent).not.toContain("newGameConfirm");
+        // "Not now" cancels the prompt; pack stays saved but live
+        // setup isn't touched.
+        fireEvent.click(within(dialog).getByText("notNow"));
+
+        await waitFor(() => {
+            expect(routerPushMock).toHaveBeenCalledWith("/play");
+        });
         expect(applyMock).not.toHaveBeenCalled();
-        expect(routerPushMock).toHaveBeenCalledWith("/play");
         expect(invalidateQueriesMock).toHaveBeenCalledTimes(2);
     });
 
-    test("clicking Import calls the hydration hook with the snapshot, then routes to /play", () => {
+    test("pack-only with game in progress → 'Use it now?' message includes overwrite warning", async () => {
+        mockHasPersistedGameData = true;
+        const snapshot = buildSnapshot({
+            cardPackData: CUSTOM_PACK_PAYLOAD,
+        });
+        renderImportPage(snapshot);
+
+        fireEvent.click(
+            document.querySelector("[data-share-import-cta]")!,
+        );
+
+        const dialog = await screen.findByRole("alertdialog");
+        expect(dialog.textContent).toContain("packSavedPrompt");
+        expect(dialog.textContent).toContain("newGameConfirm");
+    });
+
+    test("pack-only 'Start new game' → applies snapshot and routes to /play", async () => {
+        mockHasPersistedGameData = false;
+        const snapshot = buildSnapshot({
+            cardPackData: CUSTOM_PACK_PAYLOAD,
+        });
+        renderImportPage(snapshot);
+
+        fireEvent.click(
+            document.querySelector("[data-share-import-cta]")!,
+        );
+        const dialog = await screen.findByRole("alertdialog");
+        fireEvent.click(within(dialog).getByText("startNewGameWithPack"));
+
+        await waitFor(() => {
+            expect(applyMock).toHaveBeenCalledWith(snapshot);
+            expect(routerPushMock).toHaveBeenCalledWith("/play");
+        });
+    });
+
+    test("invite-style import calls applySnapshot and routes to /play (clean game state)", async () => {
         const snapshot = buildSnapshot({
             cardPackData: CLASSIC_PACK_PAYLOAD,
             playersData: PLAYERS_PAYLOAD_TWO,
@@ -456,8 +548,10 @@ describe("ShareImportPage — import action", () => {
         ) as HTMLButtonElement;
         expect(cta.textContent).toBe("importActionInvite");
         fireEvent.click(cta);
-        expect(applyMock).toHaveBeenCalledWith(snapshot);
-        expect(routerPushMock).toHaveBeenCalledWith("/play");
+        await waitFor(() => {
+            expect(applyMock).toHaveBeenCalledWith(snapshot);
+            expect(routerPushMock).toHaveBeenCalledWith("/play");
+        });
         expect(sharedAnalytics.shareImported).toHaveBeenCalledWith(
             expect.objectContaining({
                 hadPack: true,
@@ -509,5 +603,68 @@ describe("ShareImportPage — import action", () => {
 
         expect(applyMock).not.toHaveBeenCalled();
         expect(routerPushMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("ShareImportPage — sign-in gate", () => {
+    test("anonymous user → CTA reads 'Sign in to import' and click stamps intent + kicks off OAuth", async () => {
+        mockSessionUser = { id: "anon", isAnonymous: true };
+        const snapshot = buildSnapshot({ cardPackData: CUSTOM_PACK_PAYLOAD });
+        renderImportPage(snapshot);
+
+        const cta = document.querySelector(
+            "[data-share-import-cta]",
+        ) as HTMLButtonElement;
+        expect(cta.textContent).toBe("signInToImport");
+
+        fireEvent.click(cta);
+
+        await waitFor(() => {
+            expect(savePendingImportIntentMock).toHaveBeenCalledWith(
+                expect.objectContaining({ shareId: snapshot.id }),
+            );
+            expect(signInSocialMock).toHaveBeenCalledWith(
+                expect.objectContaining({ provider: "google" }),
+            );
+        });
+        // No actual import happened — that fires after OAuth lands the
+        // user back here with a real session.
+        expect(saveCardPackFromSnapshotMock).not.toHaveBeenCalled();
+        expect(applyMock).not.toHaveBeenCalled();
+    });
+
+    test("anonymous → no logged-out user can be tricked into auto-import (no sessionStorage intent)", () => {
+        mockSessionUser = { id: "anon", isAnonymous: true };
+        consumePendingImportIntentMock.mockReturnValue(false);
+        const snapshot = buildSnapshot({ cardPackData: CUSTOM_PACK_PAYLOAD });
+        renderImportPage(snapshot);
+        // Render alone must not auto-fire any imports.
+        expect(saveCardPackFromSnapshotMock).not.toHaveBeenCalled();
+        expect(applyMock).not.toHaveBeenCalled();
+    });
+
+    test("signed-in user with matching pendingImport intent → auto-imports on mount", async () => {
+        mockSessionUser = { id: "test-user", isAnonymous: false };
+        consumePendingImportIntentMock.mockReturnValue(true);
+        const snapshot = buildSnapshot({ cardPackData: CUSTOM_PACK_PAYLOAD });
+        renderImportPage(snapshot);
+
+        await waitFor(() => {
+            expect(consumePendingImportIntentMock).toHaveBeenCalledWith(
+                snapshot.id,
+            );
+            expect(saveCardPackFromSnapshotMock).toHaveBeenCalled();
+        });
+    });
+
+    test("signed-in user without pendingImport intent → renders modal idle (malicious-URL safe)", () => {
+        mockSessionUser = { id: "test-user", isAnonymous: false };
+        consumePendingImportIntentMock.mockReturnValue(false);
+        const snapshot = buildSnapshot({ cardPackData: CUSTOM_PACK_PAYLOAD });
+        renderImportPage(snapshot);
+        // No auto-import without an explicit intent — the user (or a
+        // malicious sender) sending the URL alone can't kick off import.
+        expect(saveCardPackFromSnapshotMock).not.toHaveBeenCalled();
+        expect(applyMock).not.toHaveBeenCalled();
     });
 });

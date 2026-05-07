@@ -190,24 +190,65 @@ to detect built-ins — the `name` is informational, not authoritative.
      `Players (4): Alice, Bob, Carol, Dana`,
      `Hand sizes`,
      `Known cards (12)`, etc.
-   - One CTA matched to the inferred receive flow.
+   - One CTA matched to the inferred receive flow. **Anonymous users
+     get "Sign in to import" instead** — see *Universal sign-in (receive
+     side)* below.
 5. Click:
-   - Pack-only → decodes `cardPackData`, writes a new custom card pack,
-     records the pack as most-recently-used, invalidates the card-pack
-     queries, and routes to `/play`. It does not call the game-session
-     hydration path or overwrite the current game.
-   - Invite / transfer → `useApplyShareSnapshot()` decodes each wire
-     field via the codec, builds a `GameSession`, and writes the new
-     state to `localStorage`.
+   - Pack-only → decodes `cardPackData` and routes through
+     `saveOrRecognisePack`. Built-in packs (matched by `cardSetEquals`
+     against `CARD_SETS`) just stamp the built-in id as
+     most-recently-used; existing custom packs whose contents match
+     are likewise recognised (no duplicate library entry); only
+     genuinely new decks are appended to the local `customCardSets`
+     registry. The pack is NOT auto-loaded into the live setup;
+     instead a follow-up confirm dialog asks "Card pack {label} saved.
+     Would you like to start a new game with this pack?" with cancel
+     "Not now" (default focus) and confirm "Start new game with this
+     pack". When the receiver has a game in progress, the standard
+     overwrite warning is appended to the message. "Start new game"
+     calls `applyShareSnapshotToLocalStorage` with the same pack-only
+     snapshot, which clears game state and uses the imported deck.
+   - Invite / transfer → standard "Start a new game?" confirm fires
+     first when there's persisted game data; on accept,
+     `useApplyShareSnapshot()` decodes each wire field via the codec,
+     builds a `GameSession`, writes the new state to `localStorage`,
+     AND also routes through `saveOrRecognisePack` so the imported
+     deck appears in the local registry (or recognises an existing
+     match) and lights up the active pill in `CardPackRow` once the
+     user lands on `/play`.
 6. Router pushes to `/play`.
 
 **Hydration semantics:** the share is the new game. Sections present
 in the snapshot replace the matching slice; sections absent are
 blanked (because they may reference cards from the receiver's old
-pack). Pack-only shares bypass hydration entirely and add only the
-card pack. Defensive empty-share branch (no card pack — unreachable
-from the new sender flows but possible for legacy / direct API calls)
-renders an empty-state message and disables Import.
+pack). Pack-only shares stash the pack in the local registry and ask
+before swapping it into the live setup. Defensive empty-share branch
+(no card pack — unreachable from the new sender flows but possible
+for legacy / direct API calls) renders an empty-state message and
+disables Import.
+
+## Universal sign-in (receive side)
+
+Just like creating a share, **receiving a share requires a non-
+anonymous account**. The CTA on the receive modal reads
+"Sign in to import" for anonymous users; click → save a sessionStorage
+intent (`effect-clue.pending-import.v1`, see
+[src/ui/share/pendingImport.ts](../src/ui/share/pendingImport.ts))
+keyed by the current `shareId` and a fresh epoch-millis timestamp,
+then call `authClient.signIn.social({ provider, callbackURL:
+window.location.pathname })`. After OAuth lands the user back on
+`/share/{id}`, `ShareImportPage`'s `useEffect` consumes the intent and
+auto-fires the same `performImport` path that the button would have.
+
+The malicious-URL safety property is what justifies the auto-import:
+a third party who sends a `/share/{id}` URL has no way to populate
+sessionStorage on the recipient's tab, so an idle visit never
+auto-imports — the modal renders normally and waits for explicit
+user action. The `consumePendingImportIntent` helper enforces three
+checks: (1) the stored shareId matches the current page's, (2) the
+saved timestamp is within `Duration.minutes(10)` of now, and (3)
+single-use — `consume` always clears the entry, so a successful
+import can't be replayed by a follow-up share's auto-import path.
 
 ## DB representation
 
@@ -284,7 +325,7 @@ Surfaced from `createShare` / `getShare`:
 
 | Constant | Wire string | Cause |
 |---|---|---|
-| `ERR_SIGN_IN_REQUIRED` | `sign_in_required_to_share` | Caller is anonymous (no session OR isAnonymous=true). Modal catches and slides into the inline sign-in step. |
+| `ERR_SIGN_IN_REQUIRED` | `sign_in_required_to_share` | Caller is anonymous (no session OR isAnonymous=true). The create-side modal catches this and slides into the inline sign-in step; the receive side gates the import button entirely (CTA reads "Sign in to import") so this server error doesn't surface. |
 | `ERR_MALFORMED_INPUT` | `share_malformed_input[:<detail>]` | Input shape didn't validate — wrong kind, missing required field, extraneous field, bad codec, or suggestion/accusation pairing violation. The optional `:<detail>` suffix names which check failed. |
 | `ERR_SHARE_NOT_FOUND` | `share_not_found` | `getShare` couldn't find a row for the id (or it has expired). Receive page renders a 404. |
 
@@ -322,13 +363,17 @@ machine.**
 - **`pack`-kind shares vs. sync.** A `pack` share is a sender-driven
   snapshot — it does not modify either user's `card_packs` rows. The
   receiver imports it via the local-only `saveCustomCardSet` flow,
-  which then triggers their own sync push if they're signed in.
-- **`transfer`-kind shares vs. sync.** A transfer ships the sender's
-  card pack as part of the snapshot. On the receiver's side, the
-  `useApplyShareSnapshot` hook treats it the same as any other game
-  load — it doesn't go through the sync hooks. If the receiver wants
-  the pack saved permanently, they have to save it from the Setup
-  pane afterward.
+  which then triggers their own sync push (via `CardPacksSync`) once
+  the user is back on `/play` — sign-in is required to receive any
+  share, so the user is always signed in by the time the pack lands
+  in the local registry.
+- **`invite` and `transfer`-kind shares vs. sync.** Both of these
+  ship the sender's card pack as part of the snapshot.
+  `useApplyShareSnapshot` hydrates the GameSession AND routes the
+  pack through `saveOrRecognisePack`, which writes it to
+  `customCardSets` (or recognises it as a built-in and skips the
+  duplicate write). The same `CardPacksSync` mirror picks it up
+  post-`/play` mount.
 - **Auth.** Both systems share `requireSignedInUser` (server) and
   `useSignedInUserId` (client) for the gate. A user signed in via
   the anonymous plugin counts as **not** signed in for both — neither

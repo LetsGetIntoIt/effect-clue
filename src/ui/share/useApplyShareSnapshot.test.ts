@@ -19,7 +19,7 @@ import { Card, CardCategory, Player } from "../../logic/GameObjects";
 import { emptyHypotheses } from "../../logic/Hypothesis";
 import { newAccusationId } from "../../logic/Accusation";
 import { newSuggestionId } from "../../logic/Suggestion";
-import { GameSetup } from "../../logic/GameSetup";
+import { CARD_SETS, GameSetup } from "../../logic/GameSetup";
 import { CardSet, CardEntry, Category } from "../../logic/CardSet";
 import { PlayerSet } from "../../logic/PlayerSet";
 import {
@@ -354,15 +354,187 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
         };
         saveToLocalStorage(currentSession);
 
-        const savedPack = saveCardPackFromSnapshot(
+        const result = saveCardPackFromSnapshot(
             sampleSnapshot({ cardPack: true }),
         );
 
-        expect(savedPack.label).toBe("Classic");
-        expect(savedPack.cardSet.categories[0]!.name).toBe("Suspect");
-        expect(loadCustomCardSets()).toContainEqual(savedPack);
-        expect(loadCardPackUsage().has(savedPack.id)).toBe(true);
+        // SHARE_PACK is a custom pack carrying the wire `name: "Classic"`
+        // but a structurally different deck from the built-in Classic, so
+        // `saveOrRecognisePack` falls through to the `saved` branch.
+        expect(result.kind).toBe("saved");
+        if (result.kind !== "saved") return;
+        expect(result.pack.label).toBe("Classic");
+        expect(result.pack.cardSet.categories[0]!.name).toBe("Suspect");
+        expect(loadCustomCardSets()).toContainEqual(result.pack);
+        expect(loadCardPackUsage().has(result.pack.id)).toBe(true);
         expect(loadFromLocalStorage()).toEqual(currentSession);
+    });
+
+    test("recognises an existing custom pack with same content AND label", async () => {
+        const { saveCustomCardSet, loadCustomCardSets } = await import(
+            "../../logic/CustomCardSets"
+        );
+        // Pre-seed an existing custom pack with the same structural
+        // contents AND the same label as what the share carries
+        // (SHARE_PACK is "Classic" with the two-card Suspect category).
+        // Wire-format ids may differ — content equality is via
+        // cardSetEquals, label equality is exact-string.
+        const existing = saveCustomCardSet(
+            "Classic",
+            CardSet({
+                categories: [
+                    Category({
+                        id: CardCategory("local-suspect"),
+                        name: "Suspect",
+                        cards: [
+                            CardEntry({
+                                id: Card("local-scarlet"),
+                                name: "Miss Scarlet",
+                            }),
+                            CardEntry({
+                                id: Card("local-mustard"),
+                                name: "Colonel Mustard",
+                            }),
+                        ],
+                    }),
+                ],
+            }),
+        );
+
+        const result = saveCardPackFromSnapshot(
+            sampleSnapshot({ cardPack: true }),
+        );
+
+        expect(result.kind).toBe("recognised");
+        if (result.kind !== "recognised") return;
+        expect(result.id).toBe(existing.id);
+        expect(result.label).toBe("Classic");
+        expect(loadCustomCardSets()).toHaveLength(1);
+        expect(loadCardPackUsage().has(existing.id)).toBe(true);
+    });
+
+    test("does NOT recognise an existing custom pack when contents match but the label differs", async () => {
+        const { saveCustomCardSet, loadCustomCardSets } = await import(
+            "../../logic/CustomCardSets"
+        );
+        // Same content as the wire payload, different label. Users
+        // distinguish two structurally-identical decks by label, so
+        // we treat them as separate packs — the import goes through
+        // the `saved` branch and the user ends up with both entries
+        // in their library.
+        saveCustomCardSet(
+            "My Renamed Classic",
+            CardSet({
+                categories: [
+                    Category({
+                        id: CardCategory("local-suspect"),
+                        name: "Suspect",
+                        cards: [
+                            CardEntry({
+                                id: Card("local-scarlet"),
+                                name: "Miss Scarlet",
+                            }),
+                            CardEntry({
+                                id: Card("local-mustard"),
+                                name: "Colonel Mustard",
+                            }),
+                        ],
+                    }),
+                ],
+            }),
+        );
+
+        const result = saveCardPackFromSnapshot(
+            sampleSnapshot({ cardPack: true }),
+        );
+
+        expect(result.kind).toBe("saved");
+        if (result.kind !== "saved") return;
+        expect(result.pack.label).toBe("Classic");
+        // Two distinct entries in the library — same shape, different
+        // labels.
+        expect(loadCustomCardSets()).toHaveLength(2);
+    });
+
+    test("when multiple existing customs match content+label, prefers the most-recently-used", async () => {
+        const { saveCustomCardSet } = await import(
+            "../../logic/CustomCardSets"
+        );
+        const { recordCardPackUse } = await import(
+            "../../logic/CardPackUsage"
+        );
+        const matchingCardSet = CardSet({
+            categories: [
+                Category({
+                    id: CardCategory("local-suspect"),
+                    name: "Suspect",
+                    cards: [
+                        CardEntry({
+                            id: Card("local-scarlet"),
+                            name: "Miss Scarlet",
+                        }),
+                        CardEntry({
+                            id: Card("local-mustard"),
+                            name: "Colonel Mustard",
+                        }),
+                    ],
+                }),
+            ],
+        });
+        // Both packs carry the same label as the wire payload
+        // ("Classic") — saveCustomCardSet does not enforce label
+        // uniqueness, so this is a real (if rare) state.
+        const older = saveCustomCardSet("Classic", matchingCardSet);
+        recordCardPackUse(older.id);
+        await new Promise((r) => setTimeout(r, 5));
+        const newer = saveCustomCardSet("Classic", matchingCardSet);
+        recordCardPackUse(newer.id);
+
+        const result = saveCardPackFromSnapshot(
+            sampleSnapshot({ cardPack: true }),
+        );
+
+        expect(result.kind).toBe("recognised");
+        if (result.kind !== "recognised") return;
+        expect(result.id).toBe(newer.id);
+    });
+
+    test("recognises a built-in pack instead of duplicating it", () => {
+        // The receiver-side detection compares structurally against
+        // CARD_SETS, so a snapshot whose wire deck matches built-in
+        // Classic deduplicates: nothing in customCardSets, but the
+        // built-in id is recorded as MRU so the active pill resolves
+        // correctly post-import.
+        const builtInClassic = CARD_SETS[0]!;
+        const wirePack = {
+            name: builtInClassic.label,
+            categories: builtInClassic.cardSet.categories.map((c) => ({
+                id: c.id,
+                name: c.name,
+                cards: c.cards.map((card) => ({
+                    id: card.id,
+                    name: card.name,
+                })),
+            })),
+        };
+        const snapshot: ShareSnapshotForHydration = {
+            cardPackData: Schema.encodeSync(cardPackCodec)(wirePack),
+            playersData: null,
+            handSizesData: null,
+            knownCardsData: null,
+            suggestionsData: null,
+            accusationsData: null,
+            hypothesesData: null,
+        };
+
+        const result = saveCardPackFromSnapshot(snapshot);
+
+        expect(result.kind).toBe("recognised");
+        if (result.kind !== "recognised") return;
+        expect(result.id).toBe(builtInClassic.id);
+        expect(result.label).toBe(builtInClassic.label);
+        expect(loadCustomCardSets()).toEqual([]);
+        expect(loadCardPackUsage().has(builtInClassic.id)).toBe(true);
     });
 
     test("missing cardPackData throws without touching saved packs", () => {
@@ -378,6 +550,44 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
             }),
         ).toThrow(ShareSnapshotDecodeError);
         expect(loadCustomCardSets()).toEqual([]);
+    });
+});
+
+describe("applyShareSnapshotToLocalStorage — pack save side effect", () => {
+    test("invite/transfer hydration also feeds the imported pack into the local registry", () => {
+        const snapshot = sampleSnapshot({
+            cardPack: true,
+            players: true,
+            handSizes: true,
+        });
+        const session = applyShareSnapshotToLocalStorage(snapshot);
+
+        // GameSession is the imported game.
+        expect(session.setup.cardSet.categories[0]!.name).toBe("Suspect");
+        // The pack is also saved + marked MRU so CardPackRow's pill
+        // resolution can light it up post-import.
+        const saved = loadCustomCardSets();
+        expect(saved).toHaveLength(1);
+        expect(saved[0]!.label).toBe("Classic");
+        expect(loadCardPackUsage().has(saved[0]!.id)).toBe(true);
+    });
+
+    test("snapshots without a pack don't touch the local pack registry", () => {
+        const snapshot: ShareSnapshotForHydration = {
+            cardPackData: null,
+            playersData: Schema.encodeSync(playersCodec)([
+                Player("Alice"),
+                Player("Bob"),
+            ]),
+            handSizesData: null,
+            knownCardsData: null,
+            suggestionsData: null,
+            accusationsData: null,
+            hypothesesData: null,
+        };
+        applyShareSnapshotToLocalStorage(snapshot);
+        expect(loadCustomCardSets()).toEqual([]);
+        expect(loadCardPackUsage().size).toBe(0);
     });
 });
 
