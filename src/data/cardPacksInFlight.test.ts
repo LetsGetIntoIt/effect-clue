@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { drainInFlight, trackInFlight } from "./cardPacksInFlight";
+import {
+    drainInFlight,
+    getInFlightCount,
+    subscribeToInFlight,
+    trackInFlight,
+} from "./cardPacksInFlight";
 
 /**
  * Build a "deferred" Promise — a Promise plus its resolve/reject
@@ -143,5 +148,49 @@ describe("trackInFlight + drainInFlight", () => {
         await tick();
         // Drain should be a no-op now.
         await drainInFlight();
+    });
+});
+
+describe("subscribeToInFlight + getInFlightCount", () => {
+    test("getInFlightCount reflects the registry size", async () => {
+        const a = deferred<string>();
+        const b = deferred<string>();
+        const baseline = getInFlightCount();
+
+        trackInFlight(a.promise);
+        expect(getInFlightCount()).toBe(baseline + 1);
+
+        trackInFlight(b.promise);
+        expect(getInFlightCount()).toBe(baseline + 2);
+
+        a.resolve("a");
+        b.resolve("b");
+        await drainInFlight();
+        expect(getInFlightCount()).toBe(baseline);
+    });
+
+    test("subscribeToInFlight notifies on track and on settle", async () => {
+        const events: number[] = [];
+        const unsubscribe = subscribeToInFlight(() => {
+            events.push(getInFlightCount());
+        });
+
+        const baseline = getInFlightCount();
+        const a = deferred<string>();
+        trackInFlight(a.promise);
+        expect(events).toEqual([baseline + 1]);
+
+        a.resolve("a");
+        await drainInFlight();
+        expect(events).toEqual([baseline + 1, baseline]);
+
+        unsubscribe();
+
+        const b = deferred<string>();
+        trackInFlight(b.promise);
+        b.resolve("b");
+        await drainInFlight();
+        // No additional events after unsubscribe.
+        expect(events).toEqual([baseline + 1, baseline]);
     });
 });

@@ -62,6 +62,7 @@ vi.mock("../share/ShareProvider", () => ({
 
 import * as React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { DateTime } from "effect";
 import { AccountModal, mergeCardPacks } from "./AccountModal";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
 import { ConfirmProvider } from "../hooks/useConfirm";
@@ -528,6 +529,198 @@ describe("mergeCardPacks", () => {
             id: "server-1",
             clientGeneratedId: "custom-mansion",
             source: "server",
+        });
+    });
+
+    test("server-source pack picks up unsyncedSince from its local copy", () => {
+        const stamp = DateTime.nowUnsafe();
+        const merged = mergeCardPacks(
+            [
+                {
+                    id: "server-1",
+                    label: "Mansion",
+                    cardSet: { categories: [] } as never,
+                    unsyncedSince: stamp,
+                },
+            ],
+            [
+                {
+                    id: "server-1",
+                    clientGeneratedId: "custom-mansion",
+                    label: "Mansion",
+                    cardSetData: EMPTY_CARD_SET_DATA,
+                },
+            ],
+        );
+        expect(merged).toHaveLength(1);
+        expect(merged[0]?.unsyncedSince).toBe(stamp);
+    });
+
+    test("server-source pack matched by clientGeneratedId picks up unsyncedSince", () => {
+        // Pre-reconcile state: local id is still the original
+        // `custom-…` id, server pack has both `id` and
+        // `clientGeneratedId`. The lookup should match by
+        // `clientGeneratedId`.
+        const stamp = DateTime.nowUnsafe();
+        const merged = mergeCardPacks(
+            [
+                {
+                    id: "custom-1",
+                    label: "Local",
+                    cardSet: { categories: [] } as never,
+                    unsyncedSince: stamp,
+                },
+            ],
+            [
+                {
+                    id: "server-1",
+                    clientGeneratedId: "custom-1",
+                    label: "Server",
+                    cardSetData: EMPTY_CARD_SET_DATA,
+                },
+            ],
+        );
+        expect(merged).toHaveLength(1);
+        expect(merged[0]?.unsyncedSince).toBe(stamp);
+    });
+
+    test("server-source pack with no local copy has unsyncedSince undefined", () => {
+        const merged = mergeCardPacks(
+            [],
+            [
+                {
+                    id: "server-1",
+                    clientGeneratedId: "custom-1",
+                    label: "Server-only",
+                    cardSetData: EMPTY_CARD_SET_DATA,
+                },
+            ],
+        );
+        expect(merged).toHaveLength(1);
+        expect(merged[0]?.unsyncedSince).toBeUndefined();
+    });
+
+    test("local-only pack preserves its unsyncedSince", () => {
+        const stamp = DateTime.nowUnsafe();
+        const merged = mergeCardPacks(
+            [
+                {
+                    id: "custom-local",
+                    label: "Local-only",
+                    cardSet: { categories: [] } as never,
+                    unsyncedSince: stamp,
+                },
+            ],
+            [],
+        );
+        expect(merged).toHaveLength(1);
+        expect(merged[0]).toMatchObject({
+            source: "local",
+            unsyncedSince: stamp,
+        });
+    });
+});
+
+describe("AccountModal — Sync now button", () => {
+    const signInAlice = () => {
+        mockSessionData = {
+            user: {
+                id: "u1",
+                email: "alice@example.test",
+                name: "Alice",
+                image: null,
+                isAnonymous: false,
+            },
+            session: { expiresAt: "2030-01-01T00:00:00.000Z" },
+        };
+    };
+
+    test("renders the Sync now button when signed in", async () => {
+        signInAlice();
+        renderModal();
+        // The button starts in "syncing" state while the initial
+        // React Query fetch is in flight, then settles to "syncNow".
+        expect(
+            await screen.findByRole("button", { name: "syncNow" }),
+        ).toBeInTheDocument();
+    });
+
+    test("clicking Sync now refetches getMyCardPacks", async () => {
+        signInAlice();
+        getMyCardPacksMock.mockResolvedValue([]);
+        renderModal();
+        const button = await screen.findByRole("button", { name: "syncNow" });
+        expect(getMyCardPacksMock).toHaveBeenCalledTimes(1);
+        fireEvent.click(button);
+        await waitFor(() => {
+            expect(getMyCardPacksMock).toHaveBeenCalledTimes(2);
+        });
+    });
+
+    test("synced pack rows show the synced aria-label", async () => {
+        signInAlice();
+        // Pack with `lastSyncedSnapshot` set and no `unsyncedSince` —
+        // i.e. fully synced.
+        window.localStorage.setItem(
+            "effect-clue.custom-presets.v1",
+            JSON.stringify({
+                version: 1,
+                presets: [
+                    {
+                        id: "pack-1",
+                        label: "Office Edition",
+                        categories: [],
+                        lastSyncedSnapshot: {
+                            id: "pack-1",
+                            label: "Office Edition",
+                            categories: [],
+                        },
+                    },
+                ],
+            }),
+        );
+        getMyCardPacksMock.mockResolvedValue([
+            {
+                id: "pack-1",
+                clientGeneratedId: "pack-1",
+                label: "Office Edition",
+                cardSetData: officeCardSetData,
+            },
+        ]);
+        renderModal();
+        await waitFor(() => {
+            expect(
+                screen.getByLabelText(
+                    'packSyncedAria:{"label":"Office Edition"}',
+                ),
+            ).toBeInTheDocument();
+        });
+    });
+
+    test("pack with unsyncedSince shows the pending aria-label", async () => {
+        signInAlice();
+        window.localStorage.setItem(
+            "effect-clue.custom-presets.v1",
+            JSON.stringify({
+                version: 1,
+                presets: [
+                    {
+                        id: "custom-pending",
+                        label: "Pending Pack",
+                        categories: [],
+                        unsyncedSince: 1735689600000,
+                    },
+                ],
+            }),
+        );
+        getMyCardPacksMock.mockResolvedValue([]);
+        renderModal();
+        await waitFor(() => {
+            expect(
+                screen.getByLabelText(
+                    'packPendingAria:{"label":"Pending Pack"}',
+                ),
+            ).toBeInTheDocument();
         });
     });
 });

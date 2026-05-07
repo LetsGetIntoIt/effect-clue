@@ -16,9 +16,10 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import { DateTime } from "effect";
 import { useTranslations } from "next-intl";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     type SignInFromContext,
     signInFailed,
@@ -32,11 +33,19 @@ import {
     myCardPacksQueryKey,
     useCustomCardPacks,
 } from "../../data/customCardPacks";
+import { useIsSyncingCardPacks } from "../../data/cardPacksInFlight";
+import { flushPendingChanges } from "../../data/cardPacksSync";
 import { decodeServerPack } from "../../data/serverPackCodec";
 import type { CardSet } from "../../logic/CardSet";
 import type { CustomCardSet } from "../../logic/CustomCardSets";
 import { useSession } from "../hooks/useSession";
-import { PencilIcon, TrashIcon, XIcon } from "../components/Icons";
+import {
+    CardStackIcon,
+    PencilIcon,
+    RefreshIcon,
+    TrashIcon,
+    XIcon,
+} from "../components/Icons";
 import { ShareIcon } from "../components/ShareIcon";
 import { useCardPackActions } from "../components/cardPackActions";
 import { AccountAvatar } from "./AccountAvatar";
@@ -63,6 +72,7 @@ interface DisplayPack {
     readonly label: string;
     readonly cardSet: CardSet;
     readonly source: "server" | "local";
+    readonly unsyncedSince: DateTime.Utc | undefined;
 }
 
 export const mergeCardPacks = (
@@ -78,10 +88,17 @@ export const mergeCardPacks = (
         serverIdentities.add(pack.id);
         serverIdentities.add(pack.clientGeneratedId);
     }
+    const localById = new Map<string, CustomCardSet>();
+    for (const pack of localPacks) {
+        localById.set(pack.id, pack);
+    }
     const decodedServer: ReadonlyArray<DisplayPack> = serverPacks.flatMap(
         (pack) => {
             const decoded = decodeServerPack(pack);
             if (decoded === null) return [];
+            const local =
+                localById.get(pack.id) ??
+                localById.get(pack.clientGeneratedId);
             return [
                 {
                     id: pack.id,
@@ -89,6 +106,7 @@ export const mergeCardPacks = (
                     label: pack.label,
                     cardSet: decoded.cardSet,
                     source: "server" as const,
+                    unsyncedSince: local?.unsyncedSince,
                 },
             ];
         },
@@ -101,6 +119,7 @@ export const mergeCardPacks = (
             label: pack.label,
             cardSet: pack.cardSet,
             source: "local" as const,
+            unsyncedSince: pack.unsyncedSince,
         }));
     return [...decodedServer, ...localOnly];
 };
@@ -130,6 +149,16 @@ export function AccountModal({
         myCardPacks.data ?? [],
     );
     const { sharePack, renamePack, deletePack } = useCardPackActions();
+    const queryClient = useQueryClient();
+    const isInFlight = useIsSyncingCardPacks();
+    const isSyncing = isInFlight || myCardPacks.isFetching;
+
+    const handleSyncNow = async (): Promise<void> => {
+        await flushPendingChanges();
+        await queryClient.invalidateQueries({
+            queryKey: myCardPacksQueryKey(user?.id),
+        });
+    };
 
     const callbackURL = (): string => {
         const qs = searchParams.toString();
@@ -215,9 +244,33 @@ export function AccountModal({
                                     </div>
                                 </div>
                                 <section className="rounded-[var(--radius)] border border-border bg-white px-3 py-2">
-                                    <h3 className="m-0 text-[13px] font-semibold text-accent">
-                                        {t("myCardPacksTitle")}
-                                    </h3>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <h3 className="m-0 text-[13px] font-semibold text-accent">
+                                            {t("myCardPacksTitle")}
+                                        </h3>
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleSyncNow()}
+                                            disabled={isSyncing}
+                                            className="inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--radius)] border border-border bg-white px-2 py-1 text-[12px] text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent disabled:cursor-not-allowed"
+                                        >
+                                            <RefreshIcon
+                                                size={12}
+                                                className={
+                                                    isSyncing
+                                                        ? "animate-spin"
+                                                        : ""
+                                                }
+                                            />
+                                            <span>
+                                                {t(
+                                                    isSyncing
+                                                        ? "syncing"
+                                                        : "syncNow",
+                                                )}
+                                            </span>
+                                        </button>
+                                    </div>
                                     {myCardPacks.isPending && packs.length === 0 ? (
                                         <div className="mt-2 text-[12px] text-muted">
                                             {t("myCardPacksLoading")}
@@ -232,11 +285,44 @@ export function AccountModal({
                                         </div>
                                     ) : (
                                         <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0 text-[13px]">
-                                            {packs.map((pack) => (
+                                            {packs.map((pack) => {
+                                                const hasPending =
+                                                    pack.unsyncedSince !==
+                                                    undefined;
+                                                return (
                                                 <li
                                                     key={pack.id}
                                                     className="flex items-stretch overflow-hidden rounded border border-border bg-row-alt"
                                                 >
+                                                    <span
+                                                        className="flex items-center self-stretch border-r border-border px-2.5 text-muted"
+                                                        title={t(
+                                                            hasPending
+                                                                ? "packPendingTitle"
+                                                                : "packSyncedTitle",
+                                                        )}
+                                                        aria-label={t(
+                                                            hasPending
+                                                                ? "packPendingAria"
+                                                                : "packSyncedAria",
+                                                            { label: pack.label },
+                                                        )}
+                                                    >
+                                                        {hasPending ? (
+                                                            <RefreshIcon
+                                                                size={14}
+                                                                className={
+                                                                    isSyncing
+                                                                        ? "animate-spin"
+                                                                        : ""
+                                                                }
+                                                            />
+                                                        ) : (
+                                                            <CardStackIcon
+                                                                size={14}
+                                                            />
+                                                        )}
+                                                    </span>
                                                     <span className="flex-1 truncate self-center px-3 py-2">
                                                         {pack.label}
                                                     </span>
@@ -274,7 +360,8 @@ export function AccountModal({
                                                         <TrashIcon size={14} />
                                                     </button>
                                                 </li>
-                                            ))}
+                                                );
+                                            })}
                                         </ul>
                                     )}
                                 </section>
