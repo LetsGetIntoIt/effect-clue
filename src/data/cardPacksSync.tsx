@@ -69,7 +69,7 @@ import {
     customCardPacksQueryKey,
     myCardPacksQueryKey,
 } from "./customCardPacks";
-import { decodeServerPack } from "./serverPackCodec";
+import { decodeServerPack, encodeCardSet } from "./serverPackCodec";
 
 // ── Reconcile ────────────────────────────────────────────────────────────────
 
@@ -291,7 +291,7 @@ const signInPushEffect = Effect.fn("data.cardPacks.signInPush")(function* (
         packs: packs.map(p => ({
             clientGeneratedId: p.id,
             label: p.label,
-            cardSet: p.cardSet,
+            cardSetData: encodeCardSet(p.cardSet),
         })),
     });
     trackInFlight(promise);
@@ -561,7 +561,7 @@ export const flushPendingChanges = async (): Promise<FlushResult> => {
             const promise = saveCardPack({
                 clientGeneratedId: pack.id,
                 label: pack.label,
-                cardSet: pack.cardSet,
+                cardSetData: encodeCardSet(pack.cardSet),
             });
             trackInFlight(promise);
             const serverRow = await promise;

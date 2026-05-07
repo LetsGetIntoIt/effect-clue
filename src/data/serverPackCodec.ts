@@ -1,9 +1,17 @@
 /**
- * Decoder for the server's `PersistedCardPack` wire format. The
- * `cardSetData` column is a JSON-encoded `CardSet` produced by
- * `JSON.stringify` inside `saveCardPack`; this module deserialises
- * the whole row into the domain `CustomCardSet` shape used
- * throughout the UI.
+ * Codec for the server's `PersistedCardPack` wire format. The
+ * `cardSetData` column is a JSON-encoded `CardSet`; this module
+ * owns both `encodeCardSet` (client → server) and `decodeCardSet`
+ * (server → client) so the wire shape is pinned in one place.
+ *
+ * Why a hand-rolled JSON projection instead of `JSON.stringify(cardSet)`:
+ * `CardSet` is an Effect `Data.Class` instance. Passing it directly
+ * across a Next.js `"use server"` RSC boundary doesn't preserve the
+ * class — it arrives `undefined` and the server-side stringify
+ * silently produces a NULL `card_set_data`. Encoding to a plain JSON
+ * string on the client avoids the class-instance-on-the-wire problem
+ * entirely, and keeps the wire format independent of any future
+ * extra fields on `CardSet`.
  *
  * Lives in its own file so the reconcile pipeline
  * ([`cardPacksSync.tsx`]), the mutation hooks
@@ -19,7 +27,19 @@ import { Card, CardCategory } from "../logic/GameObjects";
 import { CardEntry, Category } from "../logic/GameSetup";
 import type { PersistedCardPack } from "../server/actions/packs";
 
-const decodeCardSet = (raw: string): CardSet | null => {
+export const encodeCardSet = (cardSet: CardSet): string =>
+    JSON.stringify({
+        categories: cardSet.categories.map((c) => ({
+            id: c.id,
+            name: c.name,
+            cards: c.cards.map((card) => ({
+                id: card.id,
+                name: card.name,
+            })),
+        })),
+    });
+
+export const decodeCardSet = (raw: string): CardSet | null => {
     try {
         const parsed: unknown = JSON.parse(raw);
         if (

@@ -156,6 +156,15 @@ describe("flushPendingChanges", () => {
         const result = await flushPendingChanges();
         expect(result.ok).toBe(true);
         expect(saveCardPackMock).toHaveBeenCalledTimes(1);
+        // Pins the regression class: `cardSetData` must be a JSON
+        // string at the server-action boundary, not a `CardSet`
+        // class instance (those don't survive Next.js RSC
+        // serialisation).
+        expect(saveCardPackMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+                cardSetData: expect.any(String),
+            }),
+        );
         const persisted = loadCustomCardSets();
         expect(persisted[0]?.id).toBe("server-1");
         expect(persisted[0]?.unsyncedSince).toBeUndefined();

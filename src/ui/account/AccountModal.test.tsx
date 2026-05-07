@@ -106,13 +106,13 @@ beforeEach(() => {
         const i = input as {
             clientGeneratedId: string;
             label: string;
-            cardSet: unknown;
+            cardSetData: string;
         };
         return {
             id: `server-${i.clientGeneratedId}`,
             clientGeneratedId: i.clientGeneratedId,
             label: i.label,
-            cardSetData: JSON.stringify(i.cardSet),
+            cardSetData: i.cardSetData,
         };
     });
     deleteCardPackMock.mockReset();
@@ -302,9 +302,14 @@ describe("AccountModal — pack row actions", () => {
         const serverArg = saveCardPackMock.mock.calls[0]?.[0] as {
             clientGeneratedId: string;
             label: string;
+            cardSetData: unknown;
         };
         expect(serverArg.clientGeneratedId).toBe("custom-1");
         expect(serverArg.label).toBe("Dunder Mifflin");
+        // Pins the regression class: `cardSetData` is a JSON string
+        // (Effect `Data.Class` instances do not survive Next.js RSC
+        // argument serialisation, so we encode client-side).
+        expect(typeof serverArg.cardSetData).toBe("string");
         // Local mutation also fired — the localStorage entry now has
         // the new label (synchronous rewrite via `saveCustomCardSet`).
         const raw = window.localStorage.getItem(
