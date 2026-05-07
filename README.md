@@ -128,11 +128,13 @@ This is a localhost-scoped client — keeping the values out of any
 tracked file (including `env.example`) avoids GitHub's secret-scanning
 push protection and the "secrets in repo" footgun.
 
-If you're working on Better Auth / sharing changes against a fully-
-provisioned environment instead, follow [docs/setup-vercel-neon-google.md](docs/setup-vercel-neon-google.md)
-to wire up Vercel + Neon, then `vercel env pull .env.local` to seed
-the file (this also pulls a Neon `DATABASE_URL` that overrides the
-Docker default).
+If you're deploying to a fully-provisioned environment, follow
+[docs/setup-vercel-neon-google.md](docs/setup-vercel-neon-google.md)
+to wire up Vercel + Neon. Production env vars live in the Vercel
+dashboard — **do not** run `vercel env pull .env.local`, as that
+overwrites the local Docker `DATABASE_URL` with the production URL
+and parks a long-lived `VERCEL_OIDC_TOKEN` on disk. Local dev should
+always default to the local Docker Postgres.
 
 #### Worktrees inherit `.env.local`
 
@@ -207,7 +209,7 @@ Copy [env.example](env.example) to `.env.local`. All third-party integrations ar
 
 | Variable | Used for |
 | --- | --- |
-| `DATABASE_URL` | Postgres connection string. Local Docker default committed in [env.example](env.example); Neon URL for previews/production. |
+| `DATABASE_URL` | Postgres connection string. Local Docker default committed in [env.example](env.example); a Vercel-provisioned URL is wired in the Vercel dashboard for previews/production. |
 | `DATABASE_URL_UNPOOLED` | Direct (non-pooler) Postgres URL. Reserved for migration runs that need a stable session. |
 | `BETTER_AUTH_SECRET` | Server-only secret for session JWT signing. Generate with `openssl rand -hex 32`. |
 | `BETTER_AUTH_URL` | Public URL of the deployed app. Leave blank in local dev so auth follows the actual auto-selected localhost port. |
