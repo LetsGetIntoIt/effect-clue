@@ -138,6 +138,40 @@
         "startPlaying": "Start playing →{shortcut}",
         "continuePlaying": "Continue playing →{shortcut}"
     },
+    "setupWizard": {
+        "heading": "Set up your game",
+        "subheading": "Walk through each step in order. You can come back to anything by clicking it.",
+        "stepCounter": "Step {step} of {total}",
+        "next": "Next",
+        "skip": "Skip",
+        "newGame": "Start over",
+        "players": {
+            "title": "Who's playing?",
+            "turnOrderHint": "Enter players in turn order — the first player you list will be dealt first.",
+            "summary": "{count, plural, one {# player} other {# players}}: {names}",
+            "summaryEmpty": "No players yet",
+            "validationMin": "Add at least two players to continue."
+        },
+        "identity": {
+            "title": "Which player are you?",
+            "helperText": "Optional — set this to enable My Cards and refute hints later. Skipping is fine; you can set it from setup later.",
+            "noPlayersHint": "Add players first to pick yourself.",
+            "summary": "You: {player}",
+            "summarySkipped": "Skipped"
+        },
+        "handSizes": {
+            "title": "How many cards does each player have?",
+            "noPlayersHint": "Add players first to set hand sizes.",
+            "handSizeAria": "Hand size for {player}",
+            "summary": "Total: {total} {total, plural, one {card} other {cards}}",
+            "summaryPartial": "Some hand sizes are still blank",
+            "summaryNoPlayers": "No players yet",
+            "mismatch": "Hand sizes total {total} but should total {expected}.",
+            "adjustDealingTitle": "Adjust dealing",
+            "firstDealtLegend": "Who was dealt the first card?",
+            "firstDealtAuto": "Automatic — first player in turn order"
+        }
+    },
     "deduce": {
         "title": "Deduction grid",
         "caseFileProgress": "Case file · {percent}% solved",
