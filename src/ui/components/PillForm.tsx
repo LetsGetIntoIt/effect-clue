@@ -311,7 +311,7 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                 clearInputsLabel !== undefined);
 
         const submitButtonClass =
-            "rounded border-none px-3 py-2 text-[13px] " +
+            "min-h-[44px] rounded border-none px-4 py-2.5 text-[15px] " +
             (canSubmit
                 ? "cursor-pointer bg-accent text-white"
                 : "cursor-not-allowed bg-unknown-bg text-muted/70");
@@ -376,7 +376,7 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                     {onCancel !== undefined && (
                         <button
                             type="button"
-                            className="cursor-pointer rounded border border-border bg-white px-3 py-2 text-[13px]"
+                            className="min-h-[44px] cursor-pointer rounded border border-border bg-white px-4 py-2.5 text-[15px]"
                             onClick={onCancel}
                         >
                             {cancelLabel ?? null}
