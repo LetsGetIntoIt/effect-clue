@@ -1,11 +1,16 @@
 import { describe, expect, test } from "vitest";
 import { isValidElement } from "react";
+import { render } from "@testing-library/react";
 import { N, Y } from "../../logic/Knowledge";
 import type {
     CellDisplay,
     HypothesisStatus,
 } from "../../logic/Hypothesis";
-import { glyphKindFor, renderGlyphNode } from "./CellGlyph";
+import {
+    glyphKindFor,
+    ProseChecklistIcon,
+    renderGlyphNode,
+} from "./CellGlyph";
 import { CheckIcon, XIcon } from "./Icons";
 
 describe("glyphKindFor", () => {
@@ -86,5 +91,68 @@ describe("renderGlyphNode", () => {
 
     test("blank renders as null", () => {
         expect(renderGlyphNode("blank")).toBeNull();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// `<ProseChecklistIcon>` is the prose-context chip — the thing that goes
+// inline in popover help text and (eventually) contradiction prose. The
+// chip's tone (Y vs N) and its inner glyph (icon vs "?") are independent
+// axes:
+//
+//   value="Y", isHypothesis=false → green chip with ✓
+//   value="N", isHypothesis=false → red chip with ×
+//   value="Y", isHypothesis=true  → green chip with "?"  (hypothetical Y)
+//   value="N", isHypothesis=true  → red chip with "?"    (hypothetical N)
+//
+// All four combinations matter — the live grid uses the same convention
+// for derived/hypothesis cells, where the tone marks "what value would
+// this be if the hypothesis holds" and the "?" marks "but it's not
+// confirmed yet."
+// ---------------------------------------------------------------------------
+describe("ProseChecklistIcon", () => {
+    test("Y / not-hypothesis renders a green chip with a CheckIcon", () => {
+        const { container } = render(<ProseChecklistIcon value={Y} />);
+        const chip = container.firstElementChild as HTMLElement;
+        expect(chip.className).toMatch(/bg-yes-bg/);
+        expect(chip.className).toMatch(/text-yes/);
+        expect(chip.querySelector("svg")).not.toBeNull();
+        // Checkmark polyline (CheckIcon) — distinct from the X's two lines.
+        expect(chip.querySelector("svg polyline")).not.toBeNull();
+    });
+
+    test("N / not-hypothesis renders a red chip with an XIcon", () => {
+        const { container } = render(<ProseChecklistIcon value={N} />);
+        const chip = container.firstElementChild as HTMLElement;
+        expect(chip.className).toMatch(/bg-no-bg/);
+        expect(chip.className).toMatch(/text-no/);
+        // X icon: two crossed lines.
+        expect(chip.querySelectorAll("svg line").length).toBe(2);
+    });
+
+    test("Y / isHypothesis renders a green chip with a '?' glyph (no icon)", () => {
+        const { container } = render(
+            <ProseChecklistIcon value={Y} isHypothesis />,
+        );
+        const chip = container.firstElementChild as HTMLElement;
+        expect(chip.className).toMatch(/bg-yes-bg/);
+        expect(chip.querySelector("svg")).toBeNull();
+        expect(chip.textContent).toBe("?");
+    });
+
+    test("N / isHypothesis renders a red chip with a '?' glyph (no icon)", () => {
+        const { container } = render(
+            <ProseChecklistIcon value={N} isHypothesis />,
+        );
+        const chip = container.firstElementChild as HTMLElement;
+        expect(chip.className).toMatch(/bg-no-bg/);
+        expect(chip.querySelector("svg")).toBeNull();
+        expect(chip.textContent).toBe("?");
+    });
+
+    test("chip is aria-hidden in all variants", () => {
+        const { container } = render(<ProseChecklistIcon value={Y} />);
+        const chip = container.firstElementChild as HTMLElement;
+        expect(chip.getAttribute("aria-hidden")).not.toBeNull();
     });
 });

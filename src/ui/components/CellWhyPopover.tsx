@@ -251,6 +251,7 @@ export function CellWhyPopover({
                                                                   value={
                                                                       status.value
                                                                   }
+                                                                  isHypothesis
                                                               />
                                                           ),
                                                           description:
@@ -263,6 +264,7 @@ export function CellWhyPopover({
                                                               value={
                                                                   status.value
                                                               }
+                                                              isHypothesis
                                                           />
                                                       ),
                                                   })}

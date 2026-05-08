@@ -131,12 +131,21 @@ export const cellToneBgClass = (display: CellDisplay): string => {
  * (e.g. "Hypothesis: Y — plausible so far"), so the chip is
  * `aria-hidden`. Callers wanting screen-reader text should keep the
  * value name elsewhere in the sentence.
+ *
+ * `isHypothesis` mirrors the live grid's hypothesis/derived cells:
+ * the chip keeps the Y or N tone (so the user can read "this would
+ * be Y" vs "this would be N" at a glance) but swaps the icon for a
+ * "?" — exactly like a derived cell in the grid. Pass true wherever
+ * the prose describes a hypothetical or derived value rather than a
+ * known fact.
  */
 export function ProseChecklistIcon({
     value,
+    isHypothesis = false,
     className,
 }: {
     readonly value: CellValue;
+    readonly isHypothesis?: boolean;
     readonly className?: string;
 }) {
     return (
@@ -144,7 +153,7 @@ export function ProseChecklistIcon({
             aria-hidden
             className={`inline-flex h-5 w-5 flex-shrink-0 items-center justify-center ${CELL_BORDER_CLASS} text-[12px] font-semibold leading-none ${cellToneClassForValue(value)} ${className ?? ""}`}
         >
-            {cellGlyphIcon(value)}
+            {isHypothesis ? "?" : cellGlyphIcon(value)}
         </span>
     );
 }
