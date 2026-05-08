@@ -5,7 +5,7 @@ import { newAccusationId } from "../../logic/Accusation";
 import type { Card } from "../../logic/GameObjects";
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     accusationFormOpened,
     accusationLogged,
@@ -152,6 +152,20 @@ function AddSuggestion() {
     const accusationFormRef = useRef<AccusationFormHandle>(null);
 
     const [mode, setMode] = useState<Mode>(SUGGESTION_MODE);
+    // Tracks whether the *active* form has any pill filled. Drives the
+    // section header's conditional copy ("Add a suggestion" vs "Add a
+    // suggestion or accusation") and the right-aligned X button.
+    // Each form mirrors its empty-vs-non-empty state into this via
+    // `onHasAnyInputChange`; the inactive form is unmounted by
+    // `AnimatePresence`, so only the active form drives the value.
+    const [hasAnyInput, setHasAnyInput] = useState(false);
+    const handleClearInputs = useCallback(() => {
+        if (mode === SUGGESTION_MODE) {
+            suggestionFormRef.current?.clearInputs();
+        } else {
+            accusationFormRef.current?.clearInputs();
+        }
+    }, [mode]);
     const [pendingFocus, setPendingFocus] = useState<{
         readonly target: Mode;
         readonly clear: boolean;
@@ -246,7 +260,12 @@ function AddSuggestion() {
             onKeyDown={onWrapperActivity}
             onFocus={onWrapperActivity}
         >
-            <AddFormTabHeader mode={mode} setMode={setMode} />
+            <AddFormTabHeader
+                mode={mode}
+                setMode={setMode}
+                hasAnyInput={hasAnyInput}
+                onClearInputs={handleClearInputs}
+            />
             <AnimatePresence mode={PRESENCE_WAIT_MODE} initial={false}>
                 {mode === SUGGESTION_MODE ? (
                     <FormSlide key="suggestion" direction={-1}>
@@ -254,6 +273,8 @@ function AddSuggestion() {
                             ref={suggestionFormRef}
                             setup={state.setup}
                             showHeader={false}
+                            showClearInputs={false}
+                            onHasAnyInputChange={setHasAnyInput}
                             pendingDraft={state.pendingSuggestion}
                             onPendingDraftChange={draft =>
                                 dispatch({
@@ -293,6 +314,7 @@ function AddSuggestion() {
                             ref={accusationFormRef}
                             setup={state.setup}
                             showHeader={false}
+                            onHasAnyInputChange={setHasAnyInput}
                             onSubmit={draft => {
                                 dispatch({
                                     type: "addAccusation",
@@ -325,14 +347,22 @@ function AddSuggestion() {
     function AddFormTabHeader({
         mode,
         setMode,
+        hasAnyInput,
+        onClearInputs,
     }: {
         readonly mode: Mode;
         readonly setMode: (m: Mode) => void;
+        readonly hasAnyInput: boolean;
+        readonly onClearInputs: () => void;
     }): React.ReactElement {
         const hasKeyboard = useHasKeyboard();
         const tabIndicatorTransition = useReducedTransition({
             ...T_STANDARD,
             duration: 0.22,
+        });
+        const titleTransition = useReducedTransition({
+            ...T_STANDARD,
+            duration: 0.18,
         });
         const onTabKeyDown = (
             e: React.KeyboardEvent<HTMLButtonElement>,
@@ -354,9 +384,41 @@ function AddSuggestion() {
             setMode(next);
         };
 
+        // Three render states the user perceives:
+        //   - empty: both tabs visible, "Add a [suggestion] or [accusation]"
+        //   - suggesting (active form has any pill filled): "Add a [suggestion]" + X
+        //   - accusing  (active form has any pill filled): "Add an [accusation]" + X
+        // Each visible piece is its own `motion.span` with `layout`, so
+        // when siblings come/go (the inactive tab + " or " connector
+        // collapse out, the X fades in) the active tab slides smoothly
+        // to its new position rather than crossfading. Pieces that
+        // mount/unmount go through `<AnimatePresence>`.
+        const showSuggestionTab = !hasAnyInput || mode === SUGGESTION_MODE;
+        const showAccusationTab = !hasAnyInput || mode === ACCUSATION_MODE;
+        const showConnector = !hasAnyInput;
+        const articleKey:
+            | "addTitleArticleA"
+            | "addTitleArticleAn" =
+            hasAnyInput && mode === ACCUSATION_MODE
+                // eslint-disable-next-line i18next/no-literal-string -- ICU template key
+                ? "addTitleArticleAn"
+                // eslint-disable-next-line i18next/no-literal-string -- ICU template key
+                : "addTitleArticleA";
+        const tabRichHandlers = {
+            suggestionKey: label("global.gotoPlay"),
+            accusationKey: label("global.gotoAccusation"),
+            kbd: hasKeyboard
+                ? (chunks: React.ReactNode) => (
+                      <span className="ml-0.5 font-normal text-muted">
+                          {chunks}
+                      </span>
+                  )
+                : () => null,
+        };
+
         return (
             <h3
-                className={`${SECTION_TITLE} leading-[1.5]`}
+                className={`${SECTION_TITLE} leading-[1.5] mb-3 flex items-center justify-between gap-2`}
                 // Tour anchor: the wrap-up step of the
                 // checklist+suggest tour anchors its popover here
                 // (rather than the full form below) so the popover
@@ -364,47 +426,118 @@ function AddSuggestion() {
                 // form sits at the bottom of the panel.
                 data-tour-anchor="suggest-add-form-header"
             >
-                {t.rich("addTitle", {
-                    suggestionKey: label("global.gotoPlay"),
-                    accusationKey: label("global.gotoAccusation"),
-                    suggestionTab: chunks => (
-                        <TabButton
-                            isActive={mode === SUGGESTION_MODE}
-                            indicatorTransition={tabIndicatorTransition}
-                            onClick={() => setMode(SUGGESTION_MODE)}
-                            onKeyDown={onTabKeyDown}
+                <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                    <AnimatePresence
+                        // eslint-disable-next-line i18next/no-literal-string -- AnimatePresence mode value
+                        mode="popLayout"
+                        initial={false}
+                    >
+                        <motion.span
+                            key={articleKey}
+                            layout
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={titleTransition}
                         >
-                            {chunks}
-                        </TabButton>
-                    ),
-                    accusationTab: chunks => (
-                        <TabButton
-                            isActive={mode === ACCUSATION_MODE}
-                            indicatorTransition={tabIndicatorTransition}
-                            onClick={() => {
-                                setMode(ACCUSATION_MODE);
-                                accusationFormOpened({
-                                    source: "toggle_link",
-                                });
-                            }}
-                            onKeyDown={onTabKeyDown}
+                            {t(articleKey)}
+                        </motion.span>
+                        {showSuggestionTab && (
+                            <motion.span
+                                key="suggestion-tab"
+                                // `layoutId` (instead of `layout`)
+                                // tracks the tab's position across
+                                // mount/unmount cycles — when the
+                                // tab re-mounts after the inactive
+                                // sibling went away, it slides from
+                                // its last-known position.
+                                layoutId="suggestion-tab"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={titleTransition}
+                            >
+                                <TabButton
+                                    isActive={mode === SUGGESTION_MODE}
+                                    indicatorTransition={
+                                        tabIndicatorTransition
+                                    }
+                                    onClick={() => setMode(SUGGESTION_MODE)}
+                                    onKeyDown={onTabKeyDown}
+                                >
+                                    {t.rich(
+                                        "addTitleSuggestionTab",
+                                        tabRichHandlers,
+                                    )}
+                                </TabButton>
+                            </motion.span>
+                        )}
+                        {showConnector && (
+                            <motion.span
+                                key="connector"
+                                layout
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={titleTransition}
+                            >
+                                {t("addTitleConnector")}
+                            </motion.span>
+                        )}
+                        {showAccusationTab && (
+                            <motion.span
+                                key="accusation-tab"
+                                layoutId="accusation-tab"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={titleTransition}
+                            >
+                                <TabButton
+                                    isActive={mode === ACCUSATION_MODE}
+                                    indicatorTransition={
+                                        tabIndicatorTransition
+                                    }
+                                    onClick={() => {
+                                        setMode(ACCUSATION_MODE);
+                                        accusationFormOpened({
+                                            source: "toggle_link",
+                                        });
+                                    }}
+                                    onKeyDown={onTabKeyDown}
+                                >
+                                    {t.rich(
+                                        "addTitleAccusationTab",
+                                        tabRichHandlers,
+                                    )}
+                                </TabButton>
+                            </motion.span>
+                        )}
+                    </AnimatePresence>
+                </span>
+                <AnimatePresence initial={false}>
+                    {hasAnyInput && (
+                        <motion.button
+                            key="clear-inputs"
+                            type="button"
+                            aria-label={t("clearInputs")}
+                            onClick={onClearInputs}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={titleTransition}
+                            // Visually fits the heading line-height —
+                            // the icon is the only content; an
+                            // invisible `before:` pseudo-element
+                            // extends the hit target outward to a
+                            // mobile-friendly ~40px without inflating
+                            // the header's intrinsic height.
+                            className="relative inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm border-none bg-transparent p-0.5 text-muted hover:text-accent before:absolute before:inset-[-10px] before:content-['']"
                         >
-                            {chunks}
-                        </TabButton>
-                    ),
-                    // Shortcut hint inside each tab. Stays muted on
-                    // both active + inactive variants — text colour
-                    // doesn't change with state any more, only the
-                    // outline does. Hidden entirely on touch-only
-                    // devices where the user can't act on it.
-                    kbd: hasKeyboard
-                        ? chunks => (
-                              <span className="ml-0.5 font-normal text-muted">
-                                  {chunks}
-                              </span>
-                          )
-                        : () => null,
-                })}
+                            <XIcon size={16} />
+                        </motion.button>
+                    )}
+                </AnimatePresence>
             </h3>
         );
     }

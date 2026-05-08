@@ -219,7 +219,7 @@ describe("Clue — full user-journey umbrella", () => {
             document.querySelectorAll<HTMLElement>(
                 'button[role="tab"][aria-selected="false"]',
             ),
-        ).find(el => el.textContent?.includes("[chunk:accusationTab]"));
+        ).find(el => el.textContent?.includes("AccusationTab"));
         if (!accusationTab) throw new Error("accusation tab missing");
         await user.click(accusationTab);
         await waitFor(() => {

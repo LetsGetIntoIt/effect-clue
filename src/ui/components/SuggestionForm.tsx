@@ -51,6 +51,11 @@ import {
  */
 export interface SuggestionFormHandle {
     readonly focusFirstPill: (options?: { readonly clear?: boolean }) => void;
+    /**
+     * Reset every pill to empty. Used by the section-header X button
+     * (in `AddSuggestion`) to clear the form without re-mounting it.
+     */
+    readonly clearInputs: () => void;
 }
 
 interface SuggestionFormProps {
@@ -111,6 +116,12 @@ interface SuggestionFormProps {
     readonly onPendingDraftChange?: (
         draft: PendingSuggestionDraft | null,
     ) => void;
+    /**
+     * Notify the parent whenever the form transitions between empty
+     * and "has at least one filled slot." Drives the section-header
+     * "Add a suggestion / accusation" copy + clear-inputs X button.
+     */
+    readonly onHasAnyInputChange?: (hasAnyInput: boolean) => void;
 }
 
 /**
@@ -164,6 +175,7 @@ export const SuggestionForm = forwardRef<
         afterSubmit,
         pendingDraft,
         onPendingDraftChange,
+        onHasAnyInputChange,
     },
     ref,
 ): React.ReactElement {
@@ -495,6 +507,17 @@ export const SuggestionForm = forwardRef<
         setOpenPillId(null);
     }, [setup]);
 
+    // Mirror the empty-vs-non-empty boolean to the parent. Held behind
+    // a ref (matching the `onPendingDraftChange` pattern) so the effect
+    // doesn't re-fire when the callback's identity changes.
+    const onHasAnyInputChangeRef = useRef(onHasAnyInputChange);
+    useEffect(() => {
+        onHasAnyInputChangeRef.current = onHasAnyInputChange;
+    });
+    useEffect(() => {
+        onHasAnyInputChangeRef.current?.(hasAnyInput);
+    }, [hasAnyInput]);
+
     // Imperative handle: callers (e.g. AddSuggestion wiring up the
     // global Cmd+K shortcut) drive focus through `focusFirstPill`. The
     // form itself stays oblivious to global keyboard bindings.
@@ -505,8 +528,9 @@ export const SuggestionForm = forwardRef<
                 if (clear === true) setForm(emptyFormState(setup));
                 setOpenPillId(PILL_SUGGESTER);
             },
+            clearInputs: onClearInputs,
         }),
-        [setup],
+        [setup, onClearInputs],
     );
 
     // Per-pill clear callbacks for the optional pills. Wired into the
