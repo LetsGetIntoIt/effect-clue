@@ -24,17 +24,17 @@ describe("glyphKindFor", () => {
         expect(glyphKindFor(display, { kind: "off" })).toBe("no");
     });
 
-    test("hypothesis → 'question'", () => {
+    test("hypothesis Y → 'derivedYes' (parens-wrapped check, post-?-removal)", () => {
         const display: CellDisplay = { tag: "hypothesis", value: Y };
         expect(glyphKindFor(display, { kind: "active", value: Y })).toBe(
-            "question",
+            "derivedYes",
         );
     });
 
-    test("derived → 'question'", () => {
+    test("derived N → 'derivedNo' (parens-wrapped X, post-?-removal)", () => {
         const display: CellDisplay = { tag: "derived", value: N };
         expect(glyphKindFor(display, { kind: "derived", value: N })).toBe(
-            "question",
+            "derivedNo",
         );
     });
 
@@ -85,8 +85,24 @@ describe("renderGlyphNode", () => {
         ).toBe(XIcon);
     });
 
-    test("question renders as ?", () => {
-        expect(renderGlyphNode("question")).toBe("?");
+    test("derivedYes renders a parens-wrapped CheckIcon", () => {
+        const { container } = render(<>{renderGlyphNode("derivedYes")}</>);
+        // The wrapper holds "(", a CheckIcon SVG, and ")" — the bare
+        // text content must include both parens, and the SVG must be
+        // a CheckIcon (polyline points "20 6 9 17 4 12").
+        expect(container.textContent).toBe("()");
+        const svg = container.querySelector("svg");
+        expect(svg).not.toBeNull();
+        expect(svg?.querySelector("polyline")).not.toBeNull();
+    });
+
+    test("derivedNo renders a parens-wrapped XIcon", () => {
+        const { container } = render(<>{renderGlyphNode("derivedNo")}</>);
+        expect(container.textContent).toBe("()");
+        const svg = container.querySelector("svg");
+        expect(svg).not.toBeNull();
+        // X icon: two crossed lines.
+        expect(svg?.querySelectorAll("line").length).toBe(2);
     });
 
     test("blank renders as null", () => {
@@ -95,42 +111,43 @@ describe("renderGlyphNode", () => {
 });
 
 // ---------------------------------------------------------------------------
-// `<ProseChecklistIcon>` is the prose-context chip — the thing that goes
-// inline in popover help text and (eventually) contradiction prose. The
-// chip's tone (Y vs N) and its inner glyph (icon vs "?") are independent
-// axes:
+// `<ProseChecklistIcon>` is the prose-context chip. Three independent axes:
 //
-//   value="Y", isHypothesis=false → green chip with ✓
-//   value="N", isHypothesis=false → red chip with ×
-//   value="Y", isHypothesis=true  → green chip with "?"  (hypothetical Y)
-//   value="N", isHypothesis=true  → red chip with "?"    (hypothetical N)
+//   value: "Y" | "N"                — tone (green / red)
+//   isHypothesis: boolean           — swaps the icon for "?", to
+//                                     mark "this cell IS a hypothesis"
+//   isHypothesisDependent: boolean  — wraps the icon in `(` `)`, to
+//                                     mark "this cell's value follows
+//                                     from a hypothesis on another"
+//   invertedStyle: boolean          — dark fill + light glyph, no
+//                                     border
 //
-// All four combinations matter — the live grid uses the same convention
-// for derived/hypothesis cells, where the tone marks "what value would
-// this be if the hypothesis holds" and the "?" marks "but it's not
-// confirmed yet."
+// `isHypothesis` and `isHypothesisDependent` are mutually exclusive
+// in practice; `isHypothesis` wins if both are passed.
 // ---------------------------------------------------------------------------
 describe("ProseChecklistIcon", () => {
-    test("Y / not-hypothesis renders a green chip with a CheckIcon", () => {
+    test("Y / default renders a green chip with a bare CheckIcon", () => {
         const { container } = render(<ProseChecklistIcon value={Y} />);
         const chip = container.firstElementChild as HTMLElement;
         expect(chip.className).toMatch(/bg-yes-bg/);
         expect(chip.className).toMatch(/text-yes/);
         expect(chip.querySelector("svg")).not.toBeNull();
-        // Checkmark polyline (CheckIcon) — distinct from the X's two lines.
+        // Checkmark polyline — distinct from the X's two lines.
         expect(chip.querySelector("svg polyline")).not.toBeNull();
+        // No parens / question mark around the icon in default rendering.
+        expect(chip.textContent).toBe("");
     });
 
-    test("N / not-hypothesis renders a red chip with an XIcon", () => {
+    test("N / default renders a red chip with a bare XIcon", () => {
         const { container } = render(<ProseChecklistIcon value={N} />);
         const chip = container.firstElementChild as HTMLElement;
         expect(chip.className).toMatch(/bg-no-bg/);
         expect(chip.className).toMatch(/text-no/);
-        // X icon: two crossed lines.
         expect(chip.querySelectorAll("svg line").length).toBe(2);
+        expect(chip.textContent).toBe("");
     });
 
-    test("Y / isHypothesis renders a green chip with a '?' glyph (no icon)", () => {
+    test("Y / isHypothesis renders a green chip with a '?' (no icon)", () => {
         const { container } = render(
             <ProseChecklistIcon value={Y} isHypothesis />,
         );
@@ -140,12 +157,47 @@ describe("ProseChecklistIcon", () => {
         expect(chip.textContent).toBe("?");
     });
 
-    test("N / isHypothesis renders a red chip with a '?' glyph (no icon)", () => {
+    test("N / isHypothesis renders a red chip with a '?' (no icon)", () => {
         const { container } = render(
             <ProseChecklistIcon value={N} isHypothesis />,
         );
         const chip = container.firstElementChild as HTMLElement;
         expect(chip.className).toMatch(/bg-no-bg/);
+        expect(chip.querySelector("svg")).toBeNull();
+        expect(chip.textContent).toBe("?");
+    });
+
+    test("Y / isHypothesisDependent renders a green chip with a parens-wrapped CheckIcon", () => {
+        const { container } = render(
+            <ProseChecklistIcon value={Y} isHypothesisDependent />,
+        );
+        const chip = container.firstElementChild as HTMLElement;
+        expect(chip.className).toMatch(/bg-yes-bg/);
+        // The icon is still there — just wrapped in parens.
+        expect(chip.querySelector("svg polyline")).not.toBeNull();
+        expect(chip.textContent).toBe("()");
+    });
+
+    test("N / isHypothesisDependent renders a red chip with a parens-wrapped XIcon", () => {
+        const { container } = render(
+            <ProseChecklistIcon value={N} isHypothesisDependent />,
+        );
+        const chip = container.firstElementChild as HTMLElement;
+        expect(chip.className).toMatch(/bg-no-bg/);
+        expect(chip.querySelectorAll("svg line").length).toBe(2);
+        expect(chip.textContent).toBe("()");
+    });
+
+    test("isHypothesis wins when both flags are passed (defensive)", () => {
+        const { container } = render(
+            <ProseChecklistIcon
+                value={Y}
+                isHypothesis
+                isHypothesisDependent
+            />,
+        );
+        const chip = container.firstElementChild as HTMLElement;
+        // "?" rendered, no SVG, no parens.
         expect(chip.querySelector("svg")).toBeNull();
         expect(chip.textContent).toBe("?");
     });
@@ -156,7 +208,7 @@ describe("ProseChecklistIcon", () => {
         expect(chip.getAttribute("aria-hidden")).not.toBeNull();
     });
 
-    test("Y / invertedStyle uses the dark Y bg with white text", () => {
+    test("Y / invertedStyle uses the dark Y bg with white text and no border", () => {
         const { container } = render(
             <ProseChecklistIcon value={Y} invertedStyle />,
         );
@@ -166,9 +218,12 @@ describe("ProseChecklistIcon", () => {
         // The inverted variant must NOT also carry the light-bg
         // classes — that would compound and confuse the cascade.
         expect(chip.className).not.toMatch(/bg-yes-bg/);
+        // Border dropped because the dark fill already separates the
+        // chip from its surroundings.
+        expect(chip.className).not.toMatch(/\bborder\b/);
     });
 
-    test("N / invertedStyle uses the dark N bg with white text", () => {
+    test("N / invertedStyle uses the dark N bg with white text and no border", () => {
         const { container } = render(
             <ProseChecklistIcon value={N} invertedStyle />,
         );
@@ -176,6 +231,7 @@ describe("ProseChecklistIcon", () => {
         expect(chip.className).toMatch(/bg-no\b/);
         expect(chip.className).toMatch(/text-white/);
         expect(chip.className).not.toMatch(/bg-no-bg/);
+        expect(chip.className).not.toMatch(/\bborder\b/);
     });
 
     test("invertedStyle composes with isHypothesis (dark bg, '?' glyph)", () => {
@@ -187,5 +243,20 @@ describe("ProseChecklistIcon", () => {
         expect(chip.className).toMatch(/text-white/);
         expect(chip.querySelector("svg")).toBeNull();
         expect(chip.textContent).toBe("?");
+    });
+
+    test("invertedStyle composes with isHypothesisDependent (dark bg, parens-wrapped icon)", () => {
+        const { container } = render(
+            <ProseChecklistIcon
+                value={Y}
+                invertedStyle
+                isHypothesisDependent
+            />,
+        );
+        const chip = container.firstElementChild as HTMLElement;
+        expect(chip.className).toMatch(/bg-yes\b/);
+        expect(chip.className).toMatch(/text-white/);
+        expect(chip.querySelector("svg polyline")).not.toBeNull();
+        expect(chip.textContent).toBe("()");
     });
 });

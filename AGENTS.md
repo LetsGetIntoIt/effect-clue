@@ -246,9 +246,15 @@ When a layout change makes any of the requirements above fail, prefer fixing in 
 
 ## Icons
 
-Use these four icons consistently — picking the wrong glyph mis-signals what the button does and creates ambiguity for users on touch devices where there's no tooltip.
+Use these icons consistently — picking the wrong glyph mis-signals what the affordance does and creates ambiguity for users on touch devices where there's no tooltip.
 
-- **`XIcon`** — non-destructive cancel / dismiss / close. Modal close buttons, dismiss-this-banner, exit-out-of-flow. Never use for delete.
+- **`XIcon`** — two roles, both legitimate:
+  1. **Non-destructive cancel / dismiss / close.** Modal close buttons, dismiss-this-banner, clear-inputs, exit-out-of-flow. Never use for delete.
+  2. **The "N" value of a checklist cell** (`CellGlyph`'s `GLYPH_NO`). The grid uses XIcon to mark "this owner does not have this card" — the visual partner of `CheckIcon` for "Y".
+
+  Because XIcon now also carries a *value* meaning in cells, **do not use it to flag errors / problems / contradictions**. Reach for `AlertIcon` instead. Reusing X for a problem signal would conflate "this cell is N" with "something went wrong" — two unrelated meanings sharing one glyph.
+- **`CheckIcon`** — the "Y" value of a checklist cell (`GLYPH_YES`), and inline confirmations ("confirmed", "saved"). Pair with `XIcon` for value semantics; pair with success copy for confirmations.
+- **`AlertIcon`** — triangular warning glyph, used wherever the UI flags a problem the user needs to attend to. Contradictions, validation failures, hypothesis conflicts. Pulses (`motion-safe:animate-pulse`) when the surface is asking for immediate attention. Not for delete (that's `TrashIcon`); not for close (that's `XIcon`).
 - **`TrashIcon`** — destructive delete / remove / discard. Always pair with a confirm dialog (or undo affordance) when the action is irreversible.
 - **`ShareIcon`** — any "share this with someone" action. Renders the platform-aware glyph internally (Apple share-sheet on iOS / macOS, Material 3-node graph elsewhere) — callers don't need to handle the platform split.
 - **`ExternalLinkIcon`** — links that open a new tab or navigate outside the app.

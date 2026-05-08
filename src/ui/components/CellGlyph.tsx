@@ -17,8 +17,13 @@ import { CheckIcon, XIcon } from "./Icons";
 
 /** Background + text color for a Y-toned surface. */
 export const CELL_TONE_Y_CLASS = "bg-yes-bg text-yes";
-/** Background + text color for an N-toned surface. */
-export const CELL_TONE_N_CLASS = "bg-no-bg text-no";
+/**
+ * Background + text color for an N-toned surface in prose contexts
+ * (popover chips, contradiction banners). The live grid uses the
+ * lighter `text-no-cell` instead — see the override in
+ * `Checklist.cellClass` for the rationale.
+ */
+const CELL_TONE_N_CLASS = "bg-no-bg text-no";
 /** Background + text color for a no-value (blank / unknown) surface. */
 export const CELL_TONE_NEUTRAL_CLASS = "bg-white";
 
@@ -41,8 +46,11 @@ const cellToneClassForValue = (
 // scope so the `no-literal-string` lint rule reads them as code, not
 // UI text. The matching presentation lives in `renderGlyphNode`.
 //
-// Direct-hypothesis cells use the same "?" glyph as derived cells —
-// the visual distinction lives in a separate corner badge.
+// Hypothesis-tagged and derived cells render the same Y/N icon a
+// real cell would — but wrapped in parentheses, so the user can tell
+// at a glance "this value isn't real, it depends on a hypothesis."
+// The tone (green/red) is the same; the parens carry the
+// "hypothetical" semantics that a bare "?" used to.
 //
 // Only `GLYPH_BLANK` is exported because callers need it to short-
 // circuit "render nothing" branches; the rest are internal — the
@@ -50,18 +58,26 @@ const cellToneClassForValue = (
 // alone, keeping the public surface narrow.
 const GLYPH_YES = "yes" as const;
 const GLYPH_NO = "no" as const;
-const GLYPH_QUESTION = "question" as const;
+const GLYPH_DERIVED_YES = "derivedYes" as const;
+const GLYPH_DERIVED_NO = "derivedNo" as const;
 export const GLYPH_BLANK = "blank" as const;
 type GlyphKind =
     | typeof GLYPH_YES
     | typeof GLYPH_NO
-    | typeof GLYPH_QUESTION
+    | typeof GLYPH_DERIVED_YES
+    | typeof GLYPH_DERIVED_NO
     | typeof GLYPH_BLANK;
 
 // Rejected hypotheses (directly contradicted or jointly conflicting)
 // no longer override the center glyph — the cell keeps showing its
-// real-only deduced value, and the corner `HypothesisBadge` carries
-// the X icon + bounce animation that flags the conflict.
+// real-only deduced value, and the popover's status box carries the
+// alert icon + pulse animation that flags the conflict.
+//
+// Hypothesis-tagged and derived cells share the parens-wrapped
+// rendering: `(✓)` / `(✗)`. Tone still tracks the value (green for Y,
+// red for N) — the parens are the visible "this is hypothetical, not
+// real" cue, replacing the old `?` glyph that left the user
+// guessing at color alone to read which side of Y/N the cell was on.
 export const glyphKindFor = (
     display: CellDisplay,
     _status: HypothesisStatus,
@@ -73,20 +89,49 @@ export const glyphKindFor = (
             return GLYPH_BLANK;
         case "hypothesis":
         case "derived":
-            return GLYPH_QUESTION;
+            return display.value === Y ? GLYPH_DERIVED_YES : GLYPH_DERIVED_NO;
         case "blank":
             return GLYPH_BLANK;
     }
 };
 
-export const renderGlyphNode = (kind: GlyphKind): ReactNode => {
+/**
+ * `compact: true` renders the parens-wrapped variants at a smaller
+ * size — just enough to fit inside a 20px-wide chip box (the popover's
+ * deduction-section mini-cell). The default leaves the parens variant
+ * at the full cell-icon size so the live grid looks consistent with
+ * its bare counterparts.
+ */
+export const renderGlyphNode = (
+    kind: GlyphKind,
+    opts: { readonly compact?: boolean } = {},
+): ReactNode => {
+    const compact = opts.compact ?? false;
     switch (kind) {
         case GLYPH_YES:
             return <CheckIcon size={CELL_ICON_SIZE_PX} />;
         case GLYPH_NO:
             return <XIcon size={CELL_ICON_SIZE_PX} />;
-        case GLYPH_QUESTION:
-            return "?";
+        case GLYPH_DERIVED_YES:
+            return compact ? (
+                <span className="inline-flex items-center text-[10px] leading-none">
+                    (<CheckIcon size={10} />)
+                </span>
+            ) : (
+                <span className="inline-flex items-center">
+                    (<CheckIcon size={CELL_ICON_SIZE_PX} />)
+                </span>
+            );
+        case GLYPH_DERIVED_NO:
+            return compact ? (
+                <span className="inline-flex items-center text-[10px] leading-none">
+                    (<XIcon size={10} />)
+                </span>
+            ) : (
+                <span className="inline-flex items-center">
+                    (<XIcon size={CELL_ICON_SIZE_PX} />)
+                </span>
+            );
         case GLYPH_BLANK:
             return null;
     }
@@ -104,11 +149,14 @@ const cellGlyphIcon = (value: CellValue, iconClass: string): ReactNode =>
         <XIcon className={iconClass} />
     );
 
-// Tone class for any container that should match a cell's background
-// (the live cell, the popover's mini-glyph box). Mirrors the tone
-// branch in `cellClass`: real/hypothesis/derived all paint Y green,
-// N red, anything else white.
-export const cellToneBgClass = (display: CellDisplay): string => {
+// Tone class for any container that should match a cell's appearance
+// — same bg AND text color the live grid uses. Mirrors `cellClass`'s
+// branch: real/hypothesis/derived all paint Y green, N red, anything
+// else neutral white. The text color matters because inner glyph
+// SVGs use `currentColor`; without it the icon inherits the
+// surrounding `text-fg` and reads dark/black instead of tone-red /
+// tone-green.
+export const cellToneClass = (display: CellDisplay): string => {
     const tone =
         display.tag === "real"
             ? display.value
@@ -117,8 +165,8 @@ export const cellToneBgClass = (display: CellDisplay): string => {
               : display.tag === "derived"
                 ? display.value
                 : undefined;
-    if (tone === Y) return CELL_TONE_Y_CLASS.split(" ")[0]!;
-    if (tone === N) return CELL_TONE_N_CLASS.split(" ")[0]!;
+    if (tone === Y) return CELL_TONE_Y_CLASS;
+    if (tone === N) return CELL_TONE_N_CLASS;
     return CELL_TONE_NEUTRAL_CLASS;
 };
 
@@ -133,19 +181,31 @@ export const cellToneBgClass = (display: CellDisplay): string => {
  * `aria-hidden`. Callers wanting screen-reader text should keep the
  * value name elsewhere in the sentence.
  *
- * `isHypothesis` mirrors the live grid's hypothesis/derived cells:
- * the chip keeps the Y or N tone (so the user can read "this would
- * be Y" vs "this would be N" at a glance) but swaps the icon for a
- * "?" — exactly like a derived cell in the grid. Pass true wherever
- * the prose describes a hypothetical or derived value rather than a
- * known fact.
+ * Two orthogonal "this isn't a real fact" cues, distinguishing the
+ * cell's relationship to a hypothesis:
+ *
+ * - `isHypothesis` is for cells the user has DIRECTLY hypothesized
+ *   on. The chip swaps the icon for a "?" (still on the value's
+ *   tone) — same convention as before the parens reframe.
+ *
+ * - `isHypothesisDependent` is for cells whose value follows from a
+ *   hypothesis on another cell. The chip keeps its icon but wraps it
+ *   in parentheses — `(✓)` / `(✗)` — making the "derived from a
+ *   hypothesis" relationship visible without losing the value.
+ *
+ * Mutually exclusive at the call site. If both are passed,
+ * `isHypothesis` wins (a directly-hypothesized cell is a special
+ * case of the more general "depends on a hypothesis" relationship,
+ * but it deserves the more emphatic "?" cue).
  *
  * `invertedStyle` swaps the chip from "light tone bg + dark glyph"
  * (the cell-grid look) to "dark tone bg + light glyph" — the right
  * variant when the chip needs to stand OUT against the cell's own
  * tone-tinted background, e.g. the cell's top-right hypothesis badge
  * sitting on a `bg-yes-bg` cell, or the matching standalone badge
- * inside the popover that pairs with it.
+ * inside the popover that pairs with it. Inverted chips drop the
+ * border because the dark fill already separates them from the
+ * surrounding surface.
  */
 const CELL_TONE_INVERTED_Y_CLASS = "bg-yes text-white";
 const CELL_TONE_INVERTED_N_CLASS = "bg-no text-white";
@@ -158,11 +218,13 @@ const invertedToneClassForValue = (
 export function ProseChecklistIcon({
     value,
     isHypothesis = false,
+    isHypothesisDependent = false,
     invertedStyle = false,
     className,
 }: {
     readonly value: CellValue;
     readonly isHypothesis?: boolean;
+    readonly isHypothesisDependent?: boolean;
     readonly invertedStyle?: boolean;
     readonly className?: string;
 }) {
@@ -174,17 +236,36 @@ export function ProseChecklistIcon({
     // ~70% of the chip via `h-[0.7em] w-[0.7em]` so its stroke
     // weight reads at the same density as a glyph in the surrounding
     // text.
+    //
+    // `mx-px` is a 1px horizontal gap — when the chip lands inline
+    // inside prose ("Hypothesis: <chip> — confirmed.") it reads as
+    // a separate token rather than being glued to neighbouring
+    // letters.
     const toneClass = invertedStyle
         ? invertedToneClassForValue(value)
         : cellToneClassForValue(value);
+    const borderClass = invertedStyle ? "" : CELL_BORDER_CLASS;
+    const innerGlyph = isHypothesis ? (
+        "?"
+    ) : isHypothesisDependent ? (
+        // Parens + icon need to fit a chip box that's only ~1.1em
+        // wide. Shrink the inner content so the closing `)` doesn't
+        // clip past the chip's right edge: scale parens down to
+        // 0.7em (relative to the chip's font-size), and the icon
+        // scales with the inner span via `h-[1em] w-[1em]` (ending
+        // up ~70% of a default-sized icon).
+        <span className="inline-flex items-center leading-none text-[0.7em]">
+            ({cellGlyphIcon(value, "h-[1em] w-[1em]")})
+        </span>
+    ) : (
+        cellGlyphIcon(value, "h-[0.7em] w-[0.7em]")
+    );
     return (
         <span
             aria-hidden
-            className={`inline-flex h-[1.1em] w-[1.1em] flex-shrink-0 items-center justify-center ${CELL_BORDER_CLASS} font-semibold leading-none ${toneClass} ${className ?? ""}`}
+            className={`mx-px inline-flex h-[1.1em] w-[1.1em] flex-shrink-0 items-center justify-center ${borderClass} font-semibold leading-none ${toneClass} ${className ?? ""}`}
         >
-            {isHypothesis
-                ? "?"
-                : cellGlyphIcon(value, "h-[0.7em] w-[0.7em]")}
+            {innerGlyph}
         </span>
     );
 }

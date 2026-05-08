@@ -11,7 +11,6 @@ import {
 import { CellLayout } from "./CellLayout";
 import { CellWhyPopover, hypothesisValueFor } from "./CellWhyPopover";
 import {
-    CELL_TONE_N_CLASS,
     CELL_TONE_NEUTRAL_CLASS,
     CELL_TONE_Y_CLASS,
     GLYPH_BLANK,
@@ -2874,11 +2873,10 @@ const cellClass = (
 ): string => {
     let base = interactive ? `${CELL_BASE}${CELL_INTERACTIVE}` : CELL_BASE;
     if (highlighted) base += CELL_HIGHLIGHTED;
-    // Contradiction states are conveyed by the X glyph + bounce on
-    // the corner `HypothesisBadge` (`directlyContradicted` and
-    // `jointlyConflicts` both flip the badge into rejected mode) and
-    // by the boxed status panel inside the popover, so no extra
-    // cell ring is needed here.
+    // Contradiction states are conveyed by the alert icon + pulse on
+    // the popover's status box (`directlyContradicted` and
+    // `jointlyConflicts` both surface there), so no extra cell ring
+    // is needed here.
     void status;
     // Pick the color tone from the displayed value (real wins; otherwise
     // the hypothesis or derived-from-hypothesis value).
@@ -2894,7 +2892,12 @@ const cellClass = (
         return `${base} ${CELL_TONE_Y_CLASS} focus:ring-offset-yes-bg`;
     }
     if (tone === N) {
-        return `${base} ${CELL_TONE_N_CLASS} focus:ring-offset-no-bg`;
+        // Live-grid override: use the softened `--color-no-cell`
+        // instead of the full-strength `--color-no` so a wall of N
+        // cells reads less aggressively. The popover / prose chip
+        // version of CELL_TONE_N_CLASS still uses the strong red
+        // (intentional — chips are inline, not at a wall scale).
+        return `${base} bg-no-bg text-no-cell focus:ring-offset-no-bg`;
     }
     return `${base} ${CELL_TONE_NEUTRAL_CLASS} focus:ring-offset-white`;
 };

@@ -145,11 +145,14 @@ describe("CellWhyPopover - Deductions section", () => {
         );
         // Deductions heading shows.
         expect(screen.getByText("deductionsLabel")).toBeInTheDocument();
-        // Question-mark glyph on Y-tone tile.
-        const glyphBox = container.querySelector('[data-glyph="question"]');
+        // Y-tone tile renders the parens-wrapped CheckIcon (post-M4
+        // cell-glyph rework — derived cells don't show "?" anymore).
+        const glyphBox = container.querySelector('[data-glyph="derivedYes"]');
         expect(glyphBox).not.toBeNull();
         expect(glyphBox?.className).toMatch(/bg-yes-bg/);
-        expect(glyphBox?.textContent).toBe("?");
+        // Parens around the icon, no "?" text.
+        expect(glyphBox?.textContent).toBe("()");
+        expect(glyphBox?.querySelector("svg polyline")).not.toBeNull();
 
         // Singular "this follows from" line carries the hypothesis
         // label and (post-M4) renders the cell's derived value as a
@@ -337,18 +340,19 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
         expect(helpSpan).toBeDefined();
         expect(screen.getByText("statusDirectlyContradicted")).toBeInTheDocument();
 
-        // The status box still embeds an `<HypothesisBadge animated>`
-        // so the pulse cue stays for rejection (the help-row badge
-        // moved to ProseChecklistIcon, which is static). Exactly one
-        // X badge SVG now, and it's the animated status-box one.
-        const xBadges = container.querySelectorAll('svg[data-glyph="x"]');
-        expect(xBadges.length).toBe(1);
-        const animatedXBadges = Array.from(xBadges).filter(svg =>
+        // The status box now renders the (triangle) AlertIcon —
+        // not an X — because X is reserved for the cell's "doesn't
+        // own" semantic. The icon pulses to flag attention. The
+        // help-row badge above is a static ProseChecklistIcon (no
+        // SVG-with-the-pulse class).
+        const pulsingSvgs = Array.from(
+            container.querySelectorAll("svg"),
+        ).filter(svg =>
             (svg.getAttribute("class") ?? "").includes(
                 "motion-safe:animate-pulse",
             ),
         );
-        expect(animatedXBadges.length).toBe(1);
+        expect(pulsingSvgs.length).toBe(1);
     });
 
     test("jointly conflicts: short selectedHelpJointlyConflicts + long statusJointlyConflicts box with bullets", () => {

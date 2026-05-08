@@ -12,11 +12,10 @@ import {
     type HypothesisValue,
 } from "../../logic/Hypothesis";
 import { HashMap } from "effect";
-import { CheckIcon, LightbulbIcon } from "./Icons";
+import { AlertIcon, CheckIcon, LightbulbIcon } from "./Icons";
 import { HypothesisControl } from "./HypothesisControl";
-import { HypothesisBadge } from "./HypothesisBadge";
 import {
-    cellToneBgClass,
+    cellToneClass,
     glyphKindFor,
     ProseChecklistIcon,
     renderGlyphNode,
@@ -112,7 +111,9 @@ export function CellWhyPopover({
     //   - Leads shows when there's at least one footnote number.
     //   - Hypothesis is always shown (the toggle is its content).
     const showDeductions =
-        whyText !== undefined || status.kind === "derived";
+        whyText !== undefined ||
+        status.kind === "derived" ||
+        display.tag === "hypothesis";
     const showLeads = footnoteNumbers.length > 0;
 
     // Long-form status box (rendered below the toggle) for the kinds
@@ -135,18 +136,17 @@ export function CellWhyPopover({
 
     const statusBox = longStatusMessage === undefined ? null : isContradicted &&
       hypothesisValue !== undefined ? (
+        // Contradiction state — alert (triangle) icon, NOT an X.
+        // The cell-grid uses X for "doesn't own", so reusing X for a
+        // problem signal here would conflate two unrelated meanings.
+        // The pulse animation moves into the popover whenever it's
+        // open — the matching cell badge stops animating while the
+        // popover is visible (see Checklist's `isPopoverOnThisCell`).
         <div className="flex items-start gap-2 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-2 text-[12px] text-danger">
-            <span className="mt-[1px] flex-shrink-0">
-                {/* `animated` is true here so the pulse moves into the
-                    popover whenever it's open — the matching cell
-                    badge stops animating while the popover is
-                    visible (see Checklist's `isPopoverOnThisCell`). */}
-                <HypothesisBadge
-                    value={hypothesisValue}
-                    status={status}
-                    animated
-                />
-            </span>
+            <AlertIcon
+                size={14}
+                className="mt-[1px] flex-shrink-0 motion-safe:animate-pulse"
+            />
             <div className="flex flex-col gap-1">
                 <span>{longStatusMessage}</span>
                 {isJointConflict && activeHypothesisLabels.length > 0 && (
@@ -197,12 +197,12 @@ export function CellWhyPopover({
             }
         })();
         // Two chips on this row, with different roles:
-        //   - The leading badge mirrors the cell's top-right inset
-        //     badge — same `invertedStyle` (dark tone + white glyph)
-        //     so the popover reads as "this is what's pinned in the
-        //     corner of the cell." `isHypothesis` follows the cell-
-        //     grid semantic: confirmed cells get the icon, everything
-        //     else (active / derived / rejected) gets "?".
+        //   - The leading badge is the inverted "?" variant —
+        //     dark tone + white "?" — matching the deductions
+        //     section's 20×20 leading icon size. For confirmed cells
+        //     (where the hypothesis matches reality) we drop the "?"
+        //     and just show the concrete icon, since the value isn't
+        //     hypothetical at that point.
         //   - The inline-prose chip is about the user's chosen value,
         //     not its hypothesis state — always shows the concrete
         //     icon for Y / N. Default (light) style so it reads as
@@ -214,6 +214,7 @@ export function CellWhyPopover({
                     value={hypothesisValue}
                     isHypothesis={badgeIsHypothesis}
                     invertedStyle
+                    className="!h-5 !w-5 text-[20px]"
                 />
                 <span>
                     {t.rich(shortKey, {
@@ -246,10 +247,13 @@ export function CellWhyPopover({
                         <div className="flex items-start gap-2">
                             <span
                                 aria-hidden
-                                className={`inline-flex h-5 w-5 flex-shrink-0 items-center justify-center border border-border text-[12px] font-semibold leading-none ${cellToneBgClass(display)}`}
+                                className={`inline-flex h-5 w-5 flex-shrink-0 items-center justify-center border border-border text-[12px] font-semibold leading-none ${cellToneClass(display)}`}
                                 data-glyph={glyphKindFor(display, status)}
                             >
-                                {renderGlyphNode(glyphKindFor(display, status))}
+                                {renderGlyphNode(
+                                    glyphKindFor(display, status),
+                                    { compact: true },
+                                )}
                             </span>
                             <div className="flex flex-col gap-1">
                                 {whyText !== undefined && (
@@ -300,6 +304,19 @@ export function CellWhyPopover({
                                             )}
                                     </div>
                                 )}
+                                {display.tag === "hypothesis" &&
+                                    status.kind !== "derived" && (
+                                        // Cell directly carries a user
+                                        // hypothesis (real-only didn't
+                                        // conclude). The leftmost chip
+                                        // already shows the parens-
+                                        // wrapped icon; this line just
+                                        // names what the leading badge
+                                        // is communicating.
+                                        <div className="text-[12px] text-muted">
+                                            {t("statusActiveHypothesisCell")}
+                                        </div>
+                                    )}
                             </div>
                         </div>
                     </div>
