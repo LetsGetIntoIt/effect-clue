@@ -60,7 +60,17 @@ function DesktopPlayLayout() {
     return (
         <div className="grid grid-cols-[minmax(0,1fr)_minmax(320px,420px)] items-start gap-5">
             <Checklist />
-            <div className="sticky right-5 top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px)+1.5rem)] max-h-[calc(100dvh-var(--contradiction-banner-offset,0px)-var(--header-offset,0px)-3rem)] min-w-0 overflow-y-auto">
+            {/* The M10 swap-discoverability tour anchors here to
+                spotlight the entire suggest column on desktop, mirror
+                of `desktop-checklist-area` on the Checklist side. The
+                anchor is intentionally on the sticky outer wrapper
+                (not on `<SuggestionLogPanel>` itself) so the
+                spotlight covers the visible viewport-pinned region
+                even after vertical scroll. */}
+            <div
+                data-tour-anchor="desktop-suggest-area"
+                className="sticky right-5 top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px)+1.5rem)] max-h-[calc(100dvh-var(--contradiction-banner-offset,0px)-var(--header-offset,0px)-3rem)] min-w-0 overflow-y-auto"
+            >
                 <SuggestionLogPanel />
             </div>
         </div>

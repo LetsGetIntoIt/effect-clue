@@ -502,6 +502,10 @@
             }
         },
         "checklist": {
+            "intro": {
+                "title": "Checklist — read deductions",
+                "body": "This half is where the solver shows what it's figured out. Cells fill in as facts come in."
+            },
             "cell": {
                 "title": "Each cell is a deduction",
                 "body": "Y means a player holds that card; N means they don't. The solver runs after every change and fills in everything it can derive."
@@ -509,13 +513,13 @@
             "caseFile": {
                 "title": "The case file",
                 "body": "When the solver narrows a category to a single suspect / weapon / room, the case-file column shows it — that's your accusation."
-            },
-            "gotoSuggest": {
-                "title": "Tap Suggest to log a suggestion",
-                "body": "Suggestions live on the Suggest pane. Tap the tab to switch over and log the first one."
             }
         },
         "suggest": {
+            "intro": {
+                "title": "Suggest — log suggestions",
+                "body": "The other half logs suggestions you observe. Both halves work together — on desktop side-by-side, on mobile via the tabs at the bottom."
+            },
             "addForm": {
                 "title": "Add the first suggestion of the game to get started!",
                 "body": "After adding, switch to the checklist to see updated deductions."

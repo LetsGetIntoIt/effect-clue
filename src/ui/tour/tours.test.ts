@@ -90,33 +90,58 @@ describe("TOURS — setup tour", () => {
 });
 
 describe("TOURS — checklistSuggest tour", () => {
-    test("has the expected step list including the mobile-only Suggest-tab step", () => {
+    test("has the expected six steps in declaration order", () => {
+        // M10 added the two intro steps that establish the "two
+        // halves" mental model (Checklist + Suggest) before drilling
+        // into individual content. The older mobile-only
+        // `bottom-nav-suggest` wayfinding step was folded into the
+        // new Suggest intro — both viewports now run the same step
+        // count.
         expect(TOURS.checklistSuggest.map(s => s.anchor)).toEqual([
+            "desktop-checklist-area",
             "checklist-cell",
             "checklist-case-file",
-            "bottom-nav-suggest", // mobile-only — `viewport: "mobile"` filters it on desktop
+            "desktop-suggest-area",
             "suggest-prior-log",
             "suggest-add-form",
         ]);
     });
 
-    test("bottom-nav-suggest is mobile-only (filtered out on desktop)", () => {
-        const step = findStep(TOURS.checklistSuggest, "bottom-nav-suggest");
-        expect(step.viewport).toBe("mobile");
-        // The step requires `checklist` uiMode so the BottomNav's
-        // Suggest tab is the natural CTA — switching to suggest is
-        // the user's next action.
-        expect(step.requiredUiMode).toBe("checklist");
+    test("intro steps use viewport-conditional anchors + popoverAnchor", () => {
+        // The Checklist + Suggest intros spotlight large regions
+        // (whole column on desktop, BottomNav tab on mobile) but pin
+        // the popover to a smaller element on desktop so it doesn't
+        // get pushed off-screen.
+        const checklistIntro = findStep(
+            TOURS.checklistSuggest,
+            "desktop-checklist-area",
+        );
+        expect(checklistIntro.anchorByViewport).toEqual({
+            mobile: "bottom-nav-checklist",
+            desktop: "desktop-checklist-area",
+        });
+        expect(checklistIntro.popoverAnchor).toBe("checklist-case-file");
+
+        const suggestIntro = findStep(
+            TOURS.checklistSuggest,
+            "desktop-suggest-area",
+        );
+        expect(suggestIntro.anchorByViewport).toEqual({
+            mobile: "bottom-nav-suggest",
+            desktop: "desktop-suggest-area",
+        });
+        expect(suggestIntro.popoverAnchor).toBe("suggest-add-form-header");
     });
 
-    test("no other step is viewport-locked", () => {
-        // Only the Suggest-tab step is viewport-conditional today.
-        // If you add another viewport-locked step, update this
+    test("no step is viewport-locked", () => {
+        // After the M10 intro steps replaced the older mobile-only
+        // wayfinding step, every step in the tour runs on both
+        // viewports. If you add a viewport-locked step, update this
         // assertion AND walk both breakpoints.
         const lockedSteps = TOURS.checklistSuggest.filter(
             s => s.viewport !== undefined && s.viewport !== "both",
         );
-        expect(lockedSteps.map(s => s.anchor)).toEqual(["bottom-nav-suggest"]);
+        expect(lockedSteps).toEqual([]);
     });
 
     test("suggest-add-form spotlight covers the whole form, popover sits outside via sideByViewport", () => {
@@ -136,12 +161,11 @@ describe("TOURS — checklistSuggest tour", () => {
         expect(step.finishLabelKey).toBe("startPlaying");
     });
 
-    test("every step except the mobile-only one has a requiredUiMode", () => {
-        // The driver dispatches `setUiMode` to land on the right pane
-        // before each step renders on mobile (since panes don't
-        // co-exist on mobile). The mobile-only Suggest-tab step
-        // explicitly stays on the checklist pane (the user is about
-        // to switch panes themselves).
+    test("every step has a requiredUiMode", () => {
+        // The driver dispatches `setUiMode` to land on the right
+        // pane before each step renders on mobile (since panes don't
+        // co-exist on mobile). On desktop the dispatch is a no-op
+        // since both panes render side-by-side.
         for (const step of TOURS.checklistSuggest) {
             expect(step.requiredUiMode).toBeDefined();
         }

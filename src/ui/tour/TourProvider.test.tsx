@@ -164,25 +164,20 @@ describe("TourProvider — persistence on close", () => {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe("TourProvider — viewport filter", () => {
-    test("checklistSuggest exposes 4 steps on desktop (mobile-only step filtered)", () => {
+    test("checklistSuggest exposes the same 6 steps on desktop and mobile (no viewport-locked steps post-M10)", () => {
+        // M10 collapsed the older mobile-only `bottom-nav-suggest`
+        // wayfinding step into the new Suggest intro step, which
+        // runs on both viewports. The tour is now the same length
+        // on either breakpoint.
         stubMatchMedia(true); // desktop
         const api = mount();
         act(() => api.current().startTour("checklistSuggest"));
-        expect(api.current().steps?.length).toBe(4);
-        // The mobile-only `bottom-nav-suggest` step is excluded.
-        expect(
-            api.current().steps?.map(s => s.anchor),
-        ).not.toContain("bottom-nav-suggest");
-    });
+        expect(api.current().steps?.length).toBe(6);
 
-    test("checklistSuggest exposes 5 steps on mobile (mobile-only step included)", () => {
         stubMatchMedia(false); // mobile
-        const api = mount();
-        act(() => api.current().startTour("checklistSuggest"));
-        expect(api.current().steps?.length).toBe(5);
-        expect(
-            api.current().steps?.map(s => s.anchor),
-        ).toContain("bottom-nav-suggest");
+        const api2 = mount();
+        act(() => api2.current().startTour("checklistSuggest"));
+        expect(api2.current().steps?.length).toBe(6);
     });
 
     test("setup tour has the same 6 steps at both breakpoints (no viewport-locked steps)", () => {
@@ -197,22 +192,20 @@ describe("TourProvider — viewport filter", () => {
         expect(api2.current().steps?.length).toBe(6);
     });
 
-    test("isLastStep is computed from the post-filter list", () => {
-        stubMatchMedia(true); // desktop — 4 steps
+    test("isLastStep is true on the final step of checklistSuggest", () => {
+        stubMatchMedia(true); // desktop — 6 steps
         const api = mount();
         act(() => api.current().startTour("checklistSuggest"));
-        // Step 0 of 4: not last.
+        // Step 0 of 6: not last.
         expect(api.current().isLastStep).toBe(false);
-        // Walk to step 3 (the wrap-up `suggest-add-form`).
+        // Walk to step 5 (the wrap-up `suggest-add-form`).
         act(() => api.current().nextStep());
         act(() => api.current().nextStep());
         act(() => api.current().nextStep());
-        // Step 3 of 4 (0-indexed) IS the last on desktop.
+        act(() => api.current().nextStep());
+        act(() => api.current().nextStep());
+        // Step 5 of 6 (0-indexed) IS the last.
         expect(api.current().isLastStep).toBe(true);
-        // Without the filter, step 3 would be the mobile-only
-        // `bottom-nav-suggest` and isLastStep would be false at this
-        // point — pinning isLastStep at desktop step 3 confirms the
-        // filter is wiring through.
     });
 });
 
