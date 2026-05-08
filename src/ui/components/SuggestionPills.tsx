@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { Card, Player } from "../../logic/GameObjects";
 import type { GameSetup } from "../../logic/GameSetup";
+import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { T_FAST, T_SPRING_SOFT, useReducedTransition } from "../motion";
 
 const MOTION_POP_LAYOUT: "popLayout" = "popLayout";
@@ -586,6 +587,7 @@ export function MultiSelectList({
         opts?: { advance: boolean },
     ) => void;
 }): React.ReactElement {
+    const hasKeyboard = useHasKeyboard();
     const [toggled, setToggled] = useState<ReadonlyArray<Player>>(selected);
     const [focusedIdx, setFocusedIdx] = useState(0);
     const listRef = useRef<HTMLUListElement>(null);
@@ -752,7 +754,7 @@ export function MultiSelectList({
                 })}
             </ul>
             <div className="mt-1 flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-muted">
-                <span>{commitHint}</span>
+                {hasKeyboard ? <span>{commitHint}</span> : <span />}
                 <button
                     type="button"
                     className="cursor-pointer rounded border border-border bg-white px-2 py-0.5 text-[11px]"

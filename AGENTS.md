@@ -3,6 +3,10 @@
 This is the shared agent instruction file. `AGENTS.md` is the real file for
 Codex, and `CLAUDE.md` is a symlink to it for Claude Code.
 
+## Updating this file
+
+When a section here changes, **rewrite the whole section cohesively** — don't append a "Update:" / "Note:" / "(post-N)" patch to the bottom. The section should read as if it had always been written that way, with old guidance pruned and new guidance woven in. A future reader skims this file top-to-bottom; layered amendments turn it into a changelog instead of a spec.
+
 ## Package manager
 
 Use `pnpm` for everything. Never `npm`, `yarn`, or `bun`.

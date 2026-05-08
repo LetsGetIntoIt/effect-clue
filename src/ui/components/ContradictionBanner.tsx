@@ -9,6 +9,8 @@ import { DraftAccusation, DraftSuggestion } from "../../logic/ClueState";
 import type { Cell } from "../../logic/Knowledge";
 import { useClue, type HypothesisConflict } from "../state";
 import { useSelection } from "../SelectionContext";
+import type { CellValue } from "../../logic/Knowledge";
+import { ProseChecklistIcon } from "./CellGlyph";
 
 // i18n key tags hoisted to module scope so the `no-literal-string`
 // lint rule reads them as code identifiers, not UI text.
@@ -598,7 +600,7 @@ export function JointHypothesisContradictionBanner({
         readonly cell: Cell;
         readonly ownerName: string;
         readonly cardLabel: string;
-        readonly value: string;
+        readonly value: CellValue;
     }
 
     const rows: ReadonlyArray<Row> = (() => {
@@ -643,7 +645,11 @@ export function JointHypothesisContradictionBanner({
                                     {t.rich("jointHypothesisRow", {
                                         owner: row.ownerName,
                                         card: row.cardLabel,
-                                        value: row.value,
+                                        chip: () => (
+                                            <ProseChecklistIcon
+                                                value={row.value}
+                                            />
+                                        ),
                                         strong: chunks => (
                                             <strong>{chunks}</strong>
                                         ),

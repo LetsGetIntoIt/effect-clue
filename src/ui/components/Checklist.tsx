@@ -265,6 +265,7 @@ export function Checklist() {
     const result = derived.deductionResult;
     const footnotes = derived.footnotes;
     const provenance = derived.provenance;
+    const jointProvenance = derived.jointProvenance;
     const suggestions = derived.suggestionsAsData;
     const accusations = derived.accusationsAsData;
     const hypotheses = derived.hypotheses;
@@ -1362,8 +1363,20 @@ export function Checklist() {
                                         // opens the deduction-chain popover.
                                         const playInteractive =
                                             !inSetup && isPlayerCell;
+                                        // Derived cells (value follows
+                                        // from a hypothesis, not from real
+                                        // facts alone) chain through joint
+                                        // provenance so the chain text
+                                        // includes the hypothesis as a
+                                        // "Given" step. All other cells
+                                        // chain through real-only
+                                        // provenance.
                                         const cellWhy = buildCellWhy({
-                                            provenance,
+                                            provenance:
+                                                hypothesisStatus.kind ===
+                                                "derived"
+                                                    ? jointProvenance
+                                                    : provenance,
                                             suggestions,
                                             accusations,
                                             setup,
@@ -1406,10 +1419,7 @@ export function Checklist() {
                                             hypothesisValue !== undefined ? (
                                                 <ProseChecklistIcon
                                                     value={hypothesisValue}
-                                                    isHypothesis={
-                                                        hypothesisStatus.kind !==
-                                                        "confirmed"
-                                                    }
+                                                    isHypothesis
                                                     invertedStyle
                                                 />
                                             ) : null;

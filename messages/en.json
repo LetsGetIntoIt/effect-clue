@@ -156,8 +156,8 @@
         "statusConfirmed": "Confirmed by real facts — you can turn this hypothesis off.",
         "statusDirectlyContradicted": "Contradicts a real fact — your hypothesis can't be true.",
         "statusJointlyConflicts": "Conflicts with another hypothesis. These can't all be true together — drop one to resolve.",
-        "statusDerived": "This value <chip></chip> follows from your active hypotheses:",
-        "statusDerivedSingular": "This value <chip></chip> follows from your active hypothesis ({description}).",
+        "statusDerived": "Based on your active hypotheses.",
+        "statusDerivedSingular": "Based on your active hypothesis.",
         "statusActiveHypothesisCell": "This is an active hypothesis.",
         "emptyHint": "Set a hypothesis to explore what would follow."
     },
@@ -333,7 +333,7 @@
         "directBannerHelp": "{count, plural, one {This hypothesis disagrees with what the deducer has already proven. Turn it off to keep exploring.} other {Each of these hypotheses disagrees with what the deducer has already proven. Turn them off to keep exploring.}}",
         "jointBannerTitle": "{count, plural, one {Conflicting hypothesis} other {Conflicting hypotheses}}",
         "jointBannerHelp": "These hypotheses can't all be true together. Turn one off to keep exploring — until you do, the checklist hides everything that would have followed from them.",
-        "jointHypothesisRow": "<strong>{owner}</strong> / <strong>{card}</strong> = <strong>{value}</strong>",
+        "jointHypothesisRow": "<strong>{owner}</strong> / <strong>{card}</strong> <chip></chip>",
         "jointHypothesisTurnOff": "Turn off"
     },
     "share": {

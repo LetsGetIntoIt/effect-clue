@@ -1,16 +1,12 @@
 "use client";
 
-import * as RadixPopover from "@radix-ui/react-popover";
 import { LayoutGroup, motion } from "motion/react";
 import { useTranslations } from "next-intl";
-import { ReactNode, useState } from "react";
 import {
     aboutLinkClicked,
 } from "../../analytics/events";
-import { describeAction } from "../../logic/describeAction";
 import { routes } from "../../routes";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
-import { useLongPress } from "../hooks/useLongPress";
 import { useClue } from "../state";
 import { shortcutSuffix } from "../keyMap";
 import { T_SPRING_SOFT, T_STANDARD, useReducedTransition } from "../motion";
@@ -20,7 +16,7 @@ import { AccountAvatar } from "../account/AccountAvatar";
 import { useAccountContext } from "../account/AccountProvider";
 import { useShareContext } from "../share/ShareProvider";
 import { useSession } from "../hooks/useSession";
-import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
+import { ExternalLinkIcon } from "./Icons";
 import { useInstallPromptContext } from "./InstallPromptProvider";
 import type { InstallPromptTrigger } from "../../analytics/events";
 import { OverflowMenu } from "./OverflowMenu";
@@ -31,42 +27,22 @@ const TRIGGER_MENU: InstallPromptTrigger = "menu";
 /**
  * Mobile-only fixed-bottom navigation. Shown only under 800px — the
  * desktop header `Toolbar` covers the same affordances above that
- * breakpoint. Five slots, left to right:
+ * breakpoint. Three slots, left to right:
  *
- *   [Checklist] [Suggest] [Undo] [Redo] [⋯]
+ *   [Checklist] [Suggest] [⋯]
  *
  * The first two mirror the desktop Play grid split: on mobile the
  * grid collapses to a single visible pane, chosen by `uiMode`. The
- * overflow menu exposes everything else from the desktop Toolbar —
- * Game setup (the Setup tab), Share link, and New game.
+ * overflow menu exposes everything else — Undo / Redo (which on
+ * desktop stay top-level in the header Toolbar; the smaller mobile
+ * footprint pushes them into the menu instead), Game setup (the
+ * Setup tab), and the rest of the desktop Toolbar's items.
  */
 export function BottomNav() {
-    const { state, dispatch, canUndo, canRedo, undo, redo, nextUndo, nextRedo } =
-        useClue();
+    const { state, dispatch } = useClue();
     const t = useTranslations("bottomNav");
-    const tToolbar = useTranslations("toolbar");
-    const tHistory = useTranslations("history");
     const hasKeyboard = useHasKeyboard();
     const mode = state.uiMode;
-
-    const undoPreview = nextUndo
-        ? tHistory("undoTooltip", {
-              description: describeAction(
-                  nextUndo.action,
-                  nextUndo.previousState,
-                  tHistory,
-              ),
-          })
-        : undefined;
-    const redoPreview = nextRedo
-        ? tHistory("redoTooltip", {
-              description: describeAction(
-                  nextRedo.action,
-                  nextRedo.previousState,
-                  tHistory,
-              ),
-          })
-        : undefined;
 
     return (
         <nav
@@ -100,20 +76,6 @@ export function BottomNav() {
                     }
                 />
                 </LayoutGroup>
-                <NavIconItem
-                    label={tToolbar("undoAria")}
-                    icon={<UndoIcon size={20} />}
-                    onClick={undo}
-                    disabled={!canUndo}
-                    preview={undoPreview}
-                />
-                <NavIconItem
-                    label={tToolbar("redoAria")}
-                    icon={<RedoIcon size={20} />}
-                    onClick={redo}
-                    disabled={!canRedo}
-                    preview={redoPreview}
-                />
                 <BottomOverflowMenu
                     setupActive={mode === "setup"}
                     onSetup={() =>
@@ -184,73 +146,16 @@ function NavTabItem({
 }
 
 /**
- * Icon-only slot (Undo / Redo). `icon` is a ReactNode (the inline-SVG
- * components from Icons.tsx); `aria-label` carries the real name for
- * screen readers. On touch devices a long-press (~500 ms) reveals
- * `preview` in a popover without firing the primary `onClick` — users
- * can see what they're about to reverse before committing.
- */
-function NavIconItem({
-    label,
-    icon,
-    onClick,
-    disabled,
-    preview,
-}: {
-    readonly label: string;
-    readonly icon: ReactNode;
-    readonly onClick: () => void;
-    readonly disabled: boolean;
-    readonly preview?: string | undefined;
-}) {
-    const [previewOpen, setPreviewOpen] = useState(false);
-    const longPress = useLongPress(() => {
-        if (disabled || !preview) return;
-        setPreviewOpen(true);
-    });
-
-    return (
-        <li>
-            <RadixPopover.Root open={previewOpen} onOpenChange={setPreviewOpen}>
-                <RadixPopover.Trigger
-                    type="button"
-                    aria-label={label}
-                    onClick={onClick}
-                    disabled={disabled}
-                    className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-[var(--radius)] border-none bg-transparent text-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 touch-manipulation"
-                    style={{ WebkitTouchCallout: "none" }}
-                    {...longPress}
-                >
-                    {icon}
-                </RadixPopover.Trigger>
-                <RadixPopover.Portal>
-                    <RadixPopover.Content
-                        side="top"
-                        sideOffset={6}
-                        collisionPadding={8}
-                        onOpenAutoFocus={e => e.preventDefault()}
-                        className="z-[var(--z-popover)] max-w-[280px] rounded-[var(--radius)] border border-border bg-panel px-3 py-2 text-[12px] leading-snug shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
-                    >
-                        {preview ?? label}
-                        <RadixPopover.Arrow
-                            className="fill-panel stroke-border"
-                            strokeWidth={0.5}
-                        />
-                    </RadixPopover.Content>
-                </RadixPopover.Portal>
-            </RadixPopover.Root>
-        </li>
-    );
-}
-
-/**
  * Trailing overflow slot — thin wrapper around the shared `OverflowMenu`
  * with mobile-specific trigger styling (icon slot, ~12 tall/wide) and
  * `side="top"` so the popover opens upward above the fixed nav. The
- * menu items mirror the desktop Toolbar: Game setup (switches to Setup
- * mode) and New game. New game reuses `useToolbarActions` so the
- * mobile flow is identical to the desktop. The Share item was dropped
- * in M3 and M9 will reintroduce it.
+ * menu items mirror the desktop Toolbar — Undo / Redo first (greyed
+ * when there's no history), then Game setup, New game, etc. Undo /
+ * Redo live top-level on desktop's header Toolbar but the mobile
+ * footprint pushes them into the menu so the bottom row stays clean.
+ * New game reuses `useToolbarActions` so the mobile flow is identical
+ * to the desktop. The Share item was dropped in M3 and M9 will
+ * reintroduce it.
  */
 function BottomOverflowMenu({
     setupActive,
@@ -266,7 +171,7 @@ function BottomOverflowMenu({
     const tAccount = useTranslations("account");
     const tShare = useTranslations("share");
     const hasKeyboard = useHasKeyboard();
-    const { state } = useClue();
+    const { state, canUndo, canRedo, undo, redo } = useClue();
     const { onNewGame } = useToolbarActions();
     const { restartTourForScreen, currentStep } = useTour();
     // Force this menu open while the "Everything else lives here" tour
@@ -306,6 +211,30 @@ function BottomOverflowMenu({
                 // on for the tour. Hide above the 800px breakpoint.
                 contentClassName="[@media(min-width:800px)]:hidden"
                 items={[
+                    // Group 0: History. One row split 50/50 so the
+                    // pair reads as two halves of the same affordance
+                    // instead of two unrelated rows. Greyed out when
+                    // there's nothing to act on. Desktop's Toolbar
+                    // keeps these top-level; on mobile the screen
+                    // real estate pushes them into the menu instead.
+                    {
+                        type: "split",
+                        left: {
+                            label: tToolbar("undo", {
+                                shortcut: shortcutSuffix("global.undo", hasKeyboard),
+                            }),
+                            onClick: undo,
+                            disabled: !canUndo,
+                        },
+                        right: {
+                            label: tToolbar("redo", {
+                                shortcut: shortcutSuffix("global.redo", hasKeyboard),
+                            }),
+                            onClick: redo,
+                            disabled: !canRedo,
+                        },
+                    },
+                    { type: "divider" },
                     // Group 1: Game
                     {
                         label: t("gameSetup", {

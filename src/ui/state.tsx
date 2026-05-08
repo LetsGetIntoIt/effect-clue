@@ -619,6 +619,14 @@ interface ClueDerived {
     readonly initialKnowledge: Knowledge;
     readonly deductionResult: DeductionResult;
     readonly provenance: Provenance | undefined;
+    /**
+     * Provenance against `realFacts ∪ hypotheses`. Used to render the
+     * deduction chain in the cell-why popover for `derived` cells —
+     * cells whose value follows from the user's hypotheses but isn't
+     * proven by real facts alone. `undefined` when no hypotheses are
+     * active or the joint deduction failed.
+     */
+    readonly jointProvenance: Provenance | undefined;
     readonly footnotes: FootnoteMap;
     /**
      * Active hypothesis map (mirrored from `state.hypotheses` so
@@ -1138,6 +1146,28 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         );
     }, [deduceLayer, initialKnowledge, state.hypotheses]);
 
+    // Joint provenance — same shape as `provenance`, but computed
+    // against `realFacts ∪ hypotheses`. Used by the cell popover to
+    // explain `derived` cells (cells whose value follows from the
+    // user's hypotheses but isn't proven by real facts alone). The
+    // hypothesis cells themselves appear as `initial-known-card`
+    // entries in the chain — that's a slight abuse of the "you
+    // marked this" copy, but the popover's preamble ("Based on your
+    // active hypothesis(es).") sets context so the chain reads
+    // correctly. `undefined` when no hypotheses are active or the
+    // joint deduction failed.
+    const jointProvenance = useMemo<Provenance | undefined>(() => {
+        if (HashMap.size(state.hypotheses) === 0) return undefined;
+        const folded = foldHypothesesInto(initialKnowledge, state.hypotheses);
+        if (Result.isFailure(folded)) return undefined;
+        const traced = TelemetryRuntime.runSync(
+            Effect.result(deduceWithExplanations(folded.success)).pipe(
+                Effect.provide(deduceLayer),
+            ),
+        );
+        return Result.isSuccess(traced) ? traced.success.provenance : undefined;
+    }, [deduceLayer, initialKnowledge, state.hypotheses]);
+
     const { provenance, footnotes } = useMemo(
         () =>
             deriveState(
@@ -1166,6 +1196,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             initialKnowledge,
             deductionResult,
             provenance,
+            jointProvenance,
             footnotes,
             hypotheses: state.hypotheses,
             jointDeductionResult,
@@ -1177,6 +1208,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             initialKnowledge,
             deductionResult,
             provenance,
+            jointProvenance,
             footnotes,
             state.hypotheses,
             jointDeductionResult,
