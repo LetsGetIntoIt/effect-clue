@@ -139,14 +139,31 @@ export const cellToneBgClass = (display: CellDisplay): string => {
  * "?" — exactly like a derived cell in the grid. Pass true wherever
  * the prose describes a hypothetical or derived value rather than a
  * known fact.
+ *
+ * `invertedStyle` swaps the chip from "light tone bg + dark glyph"
+ * (the cell-grid look) to "dark tone bg + light glyph" — the right
+ * variant when the chip needs to stand OUT against the cell's own
+ * tone-tinted background, e.g. the cell's top-right hypothesis badge
+ * sitting on a `bg-yes-bg` cell, or the matching standalone badge
+ * inside the popover that pairs with it.
  */
+const CELL_TONE_INVERTED_Y_CLASS = "bg-yes text-white";
+const CELL_TONE_INVERTED_N_CLASS = "bg-no text-white";
+
+const invertedToneClassForValue = (
+    value: CellValue,
+): typeof CELL_TONE_INVERTED_Y_CLASS | typeof CELL_TONE_INVERTED_N_CLASS =>
+    value === Y ? CELL_TONE_INVERTED_Y_CLASS : CELL_TONE_INVERTED_N_CLASS;
+
 export function ProseChecklistIcon({
     value,
     isHypothesis = false,
+    invertedStyle = false,
     className,
 }: {
     readonly value: CellValue;
     readonly isHypothesis?: boolean;
+    readonly invertedStyle?: boolean;
     readonly className?: string;
 }) {
     // Sized in em — the chip's box, its border-radius via the
@@ -157,10 +174,13 @@ export function ProseChecklistIcon({
     // ~70% of the chip via `h-[0.7em] w-[0.7em]` so its stroke
     // weight reads at the same density as a glyph in the surrounding
     // text.
+    const toneClass = invertedStyle
+        ? invertedToneClassForValue(value)
+        : cellToneClassForValue(value);
     return (
         <span
             aria-hidden
-            className={`inline-flex h-[1.1em] w-[1.1em] flex-shrink-0 items-center justify-center ${CELL_BORDER_CLASS} font-semibold leading-none ${cellToneClassForValue(value)} ${className ?? ""}`}
+            className={`inline-flex h-[1.1em] w-[1.1em] flex-shrink-0 items-center justify-center ${CELL_BORDER_CLASS} font-semibold leading-none ${toneClass} ${className ?? ""}`}
         >
             {isHypothesis
                 ? "?"

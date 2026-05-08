@@ -155,4 +155,37 @@ describe("ProseChecklistIcon", () => {
         const chip = container.firstElementChild as HTMLElement;
         expect(chip.getAttribute("aria-hidden")).not.toBeNull();
     });
+
+    test("Y / invertedStyle uses the dark Y bg with white text", () => {
+        const { container } = render(
+            <ProseChecklistIcon value={Y} invertedStyle />,
+        );
+        const chip = container.firstElementChild as HTMLElement;
+        expect(chip.className).toMatch(/bg-yes\b/);
+        expect(chip.className).toMatch(/text-white/);
+        // The inverted variant must NOT also carry the light-bg
+        // classes — that would compound and confuse the cascade.
+        expect(chip.className).not.toMatch(/bg-yes-bg/);
+    });
+
+    test("N / invertedStyle uses the dark N bg with white text", () => {
+        const { container } = render(
+            <ProseChecklistIcon value={N} invertedStyle />,
+        );
+        const chip = container.firstElementChild as HTMLElement;
+        expect(chip.className).toMatch(/bg-no\b/);
+        expect(chip.className).toMatch(/text-white/);
+        expect(chip.className).not.toMatch(/bg-no-bg/);
+    });
+
+    test("invertedStyle composes with isHypothesis (dark bg, '?' glyph)", () => {
+        const { container } = render(
+            <ProseChecklistIcon value={Y} invertedStyle isHypothesis />,
+        );
+        const chip = container.firstElementChild as HTMLElement;
+        expect(chip.className).toMatch(/bg-yes\b/);
+        expect(chip.className).toMatch(/text-white/);
+        expect(chip.querySelector("svg")).toBeNull();
+        expect(chip.textContent).toBe("?");
+    });
 });

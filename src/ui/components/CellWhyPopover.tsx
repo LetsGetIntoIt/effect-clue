@@ -196,17 +196,24 @@ export function CellWhyPopover({
                     return KEY_HELP_ACTIVE;
             }
         })();
-        // The badge before the prose: same chip the prose uses
-        // inline, so the user reads "this glyph and that glyph mean
-        // the same thing." `isHypothesis` follows the cell-grid
-        // semantic — confirmed cells render with the icon, anything
-        // else (active / derived / rejected) renders with "?".
+        // Two chips on this row, with different roles:
+        //   - The leading badge mirrors the cell's top-right inset
+        //     badge — same `invertedStyle` (dark tone + white glyph)
+        //     so the popover reads as "this is what's pinned in the
+        //     corner of the cell." `isHypothesis` follows the cell-
+        //     grid semantic: confirmed cells get the icon, everything
+        //     else (active / derived / rejected) gets "?".
+        //   - The inline-prose chip is about the user's chosen value,
+        //     not its hypothesis state — always shows the concrete
+        //     icon for Y / N. Default (light) style so it reads as
+        //     part of the sentence rather than as another badge.
         const badgeIsHypothesis = status.kind !== "confirmed";
         return (
             <div className="flex items-center gap-2 text-[12px] leading-snug text-fg">
                 <ProseChecklistIcon
                     value={hypothesisValue}
                     isHypothesis={badgeIsHypothesis}
+                    invertedStyle
                 />
                 <span>
                     {t.rich(shortKey, {
@@ -214,7 +221,6 @@ export function CellWhyPopover({
                         chip: () => (
                             <ProseChecklistIcon
                                 value={hypothesisValue}
-                                isHypothesis={badgeIsHypothesis}
                             />
                         ),
                     })}
@@ -263,7 +269,6 @@ export function CellWhyPopover({
                                                                   value={
                                                                       status.value
                                                                   }
-                                                                  isHypothesis
                                                               />
                                                           ),
                                                           description:
@@ -276,7 +281,6 @@ export function CellWhyPopover({
                                                               value={
                                                                   status.value
                                                               }
-                                                              isHypothesis
                                                           />
                                                       ),
                                                   })}

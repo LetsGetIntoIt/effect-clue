@@ -1411,6 +1411,7 @@ export function Checklist() {
                                                         hypothesisStatus.kind !==
                                                         "confirmed"
                                                     }
+                                                    invertedStyle
                                                 />
                                             ) : null;
                                         const center = setupCheckbox ? (

@@ -277,16 +277,22 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
             container.querySelectorAll("span"),
         ).find(s => (s.textContent ?? "").includes("selectedHelpActive:"));
         expect(helpSpan).toBeDefined();
-        // value=Y chip rendered inline.
+        // value=Y inline-prose chip is the default (light) style.
         expect(helpSpan?.querySelector("span.bg-yes-bg")).not.toBeNull();
 
-        // The leading badge (the standalone chip beside the prose) is
-        // also a ProseChecklistIcon — no more `data-glyph` SVG. Two
-        // chips total in the help row when active: the standalone +
-        // the inline-prose one.
+        // The leading badge (standalone chip beside the prose) uses
+        // the inverted style — dark Y bg, white glyph — so it visually
+        // matches the cell's top-right inset badge.
         const helpRow = helpSpan?.parentElement as HTMLElement;
-        const chips = helpRow.querySelectorAll("span.bg-yes-bg, span.bg-no-bg");
-        expect(chips.length).toBe(2);
+        const invertedChips = helpRow.querySelectorAll(
+            "span.bg-yes:not(.bg-yes-bg), span.bg-no:not(.bg-no-bg)",
+        );
+        expect(invertedChips.length).toBe(1);
+        // Plus the inline-prose chip in default (light) style.
+        const lightChips = helpRow.querySelectorAll(
+            "span.bg-yes-bg, span.bg-no-bg",
+        );
+        expect(lightChips.length).toBe(1);
 
         // No long-form status panel for "active".
         expect(screen.queryByText("statusConfirmed")).toBeNull();
