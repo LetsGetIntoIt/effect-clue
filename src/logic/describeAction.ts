@@ -217,6 +217,7 @@ export const describeAction = (
         case "setSetup":
         case "setUiMode":
         case "replaceSession":
+        case "setPendingSuggestion":
             return t("unknownAction");
     }
 };

@@ -6,16 +6,23 @@ import { SuggestionId } from "./Suggestion";
 /**
  * Effect Schema definitions for the persisted session shape.
  *
- * The current canonical version is v7 (adds `hypotheses`). Reads accept
- * v7 first, then fall back to v6 (auto-lifting with `hypotheses: []`)
- * so that users who roll back-and-forward between builds don't lose
- * suggestion / accusation state. Writes always go to v7.
+ * The current canonical version is v8 (adds `pendingSuggestion`). Reads
+ * accept v8 first, then fall back to v7 (auto-lifting with
+ * `pendingSuggestion: null`), then v6 (auto-lifting with `hypotheses:
+ * []` and `pendingSuggestion: null`), so that users who roll
+ * back-and-forward between builds don't lose suggestion / accusation
+ * state. Writes always go to v8.
  *
  * v6 added the `loggedAt: number` field to each suggestion + accusation,
  * recording the millisecond timestamp at which it was logged.
  *
  * v7 adds `hypotheses: Array<{ owner, card, value }>` — per-cell what-if
  * assumptions the user toggles on. See `src/logic/Hypothesis.ts`.
+ *
+ * v8 adds `pendingSuggestion`: the user's in-flight new-suggestion
+ * draft, persisted so it survives mobile tab swaps (which unmount the
+ * suggestion form) and full-page reloads. See
+ * `src/logic/ClueState.ts`'s `PendingSuggestionDraft`.
  *
  * Branded strings (Player, Card, CardCategory, SuggestionId,
  * AccusationId) are decoded straight into their nominal types via
@@ -92,6 +99,38 @@ const PersistedHypothesisSchema = Schema.Struct({
 });
 
 /**
+ * Persisted shape of `PendingSuggestionDraft`. Each optional slot has
+ * three runtime states: `null` ("not decided"), `Nobody` (explicit
+ * "no one"), or a concrete Player/Card. They round-trip through a
+ * pair of flat fields per slot — `*Decided` and `*IsNobody` — alongside
+ * the value field, mirroring the flat encoding pattern that
+ * `PersistedHypothesisSchema` uses to keep the decoder's
+ * `DecodingServices` channel clean.
+ *
+ *   decided=false                 -> null ("not decided")
+ *   decided=true, isNobody=true   -> Nobody
+ *   decided=true, isNobody=false  -> the Player/Card/array value
+ *
+ * This avoids `Schema.Union`, whose AST widens the surrounding struct's
+ * services to `unknown` and breaks the v8 decoder's `Decoder<unknown>`
+ * constraint.
+ */
+const PersistedPendingSuggestionSchema = Schema.Struct({
+    id: Schema.String,
+    suggester: Schema.NullOr(PlayerSchema),
+    cards: Schema.Array(Schema.NullOr(CardSchema)),
+    nonRefutersDecided: Schema.Boolean,
+    nonRefutersIsNobody: Schema.Boolean,
+    nonRefuters: Schema.Array(PlayerSchema),
+    refuterDecided: Schema.Boolean,
+    refuterIsNobody: Schema.Boolean,
+    refuter: Schema.NullOr(PlayerSchema),
+    seenCardDecided: Schema.Boolean,
+    seenCardIsNobody: Schema.Boolean,
+    seenCard: Schema.NullOr(CardSchema),
+});
+
+/**
  * Convenience array wrappers for the share codec — the shares wire
  * format ships these as top-level JSON arrays rather than wrapped
  * inside a versioned envelope.
@@ -133,8 +172,7 @@ const PersistedSessionV6Schema = Schema.Struct({
 });
 
 /**
- * Canonical v7 session shape. Adds `hypotheses` — per-cell what-if
- * assumptions. See `src/logic/Hypothesis.ts`.
+ * v7 session shape — kept for back-compat reads. v8 supersedes it.
  */
 const PersistedSessionV7Schema = Schema.Struct({
     version: Schema.Literal(7),
@@ -144,6 +182,22 @@ const PersistedSessionV7Schema = Schema.Struct({
     suggestions: Schema.Array(PersistedSuggestionSchema),
     accusations: Schema.Array(PersistedAccusationSchema),
     hypotheses: HypothesesArraySchema,
+});
+
+/**
+ * Canonical v8 session shape. Adds `pendingSuggestion` — the user's
+ * in-flight new-suggestion draft. Encoded as `null` when no draft
+ * exists; otherwise the persisted form-state shape.
+ */
+const PersistedSessionV8Schema = Schema.Struct({
+    version: Schema.Literal(8),
+    setup: PersistedGameSetupSchema,
+    hands: Schema.Array(PersistedHandSchema),
+    handSizes: Schema.Array(PersistedHandSizeSchema),
+    suggestions: Schema.Array(PersistedSuggestionSchema),
+    accusations: Schema.Array(PersistedAccusationSchema),
+    hypotheses: HypothesesArraySchema,
+    pendingSuggestion: Schema.NullOr(PersistedPendingSuggestionSchema),
 });
 
 /**
@@ -157,13 +211,20 @@ export const decodeV6Unknown = Schema.decodeUnknownResult(
 export const decodeV7Unknown = Schema.decodeUnknownResult(
     PersistedSessionV7Schema,
 );
+export const decodeV8Unknown = Schema.decodeUnknownResult(
+    PersistedSessionV8Schema,
+);
 
 /**
  * Runtime types of decoded sessions — the branded, Schema-validated
- * payload `decodeV{6,7}Unknown` hand back. Callers construct the
+ * payload `decodeV{6,7,8}Unknown` hand back. Callers construct the
  * GameSession domain value from this.
  */
 export type PersistedSessionV6 = Schema.Schema.Type<typeof PersistedSessionV6Schema>;
 export type PersistedSessionV7 = Schema.Schema.Type<typeof PersistedSessionV7Schema>;
+export type PersistedSessionV8 = Schema.Schema.Type<typeof PersistedSessionV8Schema>;
 
 export type PersistedHypothesis = Schema.Schema.Type<typeof PersistedHypothesisSchema>;
+export type PersistedPendingSuggestion = Schema.Schema.Type<
+    typeof PersistedPendingSuggestionSchema
+>;

@@ -285,6 +285,8 @@ export const buildSessionFromSnapshot = (
         suggestions,
         accusations,
         hypotheses,
+        // Drafts are local-only; the receiver enters their own.
+        pendingSuggestion: null,
     };
 };
 

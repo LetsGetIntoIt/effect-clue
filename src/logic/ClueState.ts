@@ -37,6 +37,38 @@ export interface DraftSuggestion {
 }
 
 /**
+ * Marker for an explicit "Nobody" choice on optional suggestion-form
+ * slots — distinct from `null` ("not yet decided"). Structurally
+ * identical to the UI-layer `Nobody` constant in `SuggestionPills.tsx`,
+ * so values constructed in either place are mutually assignable.
+ */
+interface PendingNobody {
+    readonly kind: "nobody";
+}
+
+/**
+ * Mid-flight new-suggestion form state, persisted in `ClueState` so it
+ * survives mobile tab swaps (where `SuggestionLogPanel` and the form
+ * underneath unmount) and full-page reloads.
+ *
+ * Mirrors the form-internal `FormState` shape one-to-one. Lives in the
+ * logic layer so persistence and the reducer don't have to import
+ * across the UI boundary.
+ *
+ * Only used for the new-suggestion flow; the edit-existing flow keeps
+ * its own component-local buffer because edits already have a saved
+ * source-of-truth in `state.suggestions`.
+ */
+export interface PendingSuggestionDraft {
+    readonly id: string;
+    readonly suggester: Player | null;
+    readonly cards: ReadonlyArray<Card | null>;
+    readonly nonRefuters: ReadonlyArray<Player> | PendingNobody | null;
+    readonly refuter: Player | PendingNobody | null;
+    readonly seenCard: Card | PendingNobody | null;
+}
+
+/**
  * UI-level shape of a failed accusation that hasn't been converted to a
  * Data.Class record yet. Mirrors `DraftSuggestion` but carries only the
  * accuser and the named triple — no refuter / seen card, since a failed
@@ -107,7 +139,8 @@ export type ClueAction =
     | { type: "setUiMode"; mode: UiMode }
     | { type: "setHypothesis"; cell: Cell; value: HypothesisValue }
     | { type: "clearHypothesis"; cell: Cell }
-    | { type: "replaceSession"; session: GameSession };
+    | { type: "replaceSession"; session: GameSession }
+    | { type: "setPendingSuggestion"; draft: PendingSuggestionDraft | null };
 
 export interface ClueState {
     readonly setup: GameSetup;
@@ -124,4 +157,15 @@ export interface ClueState {
      * contradiction banner. See {@link Hypothesis} for the model.
      */
     readonly hypotheses: HypothesisMap;
+    /**
+     * In-progress new-suggestion form state. Persisted so the form
+     * survives mobile tab swaps (which unmount `SuggestionLogPanel`)
+     * and full-page reloads. `null` means "no draft in flight" — the
+     * form mounts empty.
+     *
+     * Only the new-suggestion flow reads/writes this; the
+     * edit-existing flow keeps its own component-local buffer because
+     * edits already have a saved source-of-truth in `suggestions`.
+     */
+    readonly pendingSuggestion: PendingSuggestionDraft | null;
 }

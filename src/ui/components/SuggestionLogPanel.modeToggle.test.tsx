@@ -169,9 +169,10 @@ beforeEach(() => {
 describe("Add-form tab toggle — click", () => {
     test("the suggestion tab is active by default; the form is the suggestion form", async () => {
         await mountClue();
-        // The active tab text contains [chunk:suggestionTab] (from the
-        // smart rich-text mock).
-        expect(findActiveTab().textContent).toContain("suggestionTab");
+        // The active tab renders the addTitleSuggestionTab i18n key
+        // (mirrored back as text by the mock-`t.rich`).
+        expect(findActiveTab().textContent).toContain("SuggestionTab");
+        expect(findActiveTab().textContent).not.toContain("AccusationTab");
         expect(isSuggestionForm()).toBe(true);
         expect(isAccusationForm()).toBe(false);
     });

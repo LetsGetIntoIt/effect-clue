@@ -10,7 +10,10 @@ import {
     useRef,
     useState,
 } from "react";
-import type { DraftSuggestion } from "../../logic/ClueState";
+import type {
+    DraftSuggestion,
+    PendingSuggestionDraft,
+} from "../../logic/ClueState";
 import type { GameSetup } from "../../logic/GameSetup";
 import { categoryOfCard } from "../../logic/GameSetup";
 import type { Card, Player } from "../../logic/GameObjects";
@@ -48,6 +51,11 @@ import {
  */
 export interface SuggestionFormHandle {
     readonly focusFirstPill: (options?: { readonly clear?: boolean }) => void;
+    /**
+     * Reset every pill to empty. Used by the section-header X button
+     * (in `AddSuggestion`) to clear the form without re-mounting it.
+     */
+    readonly clearInputs: () => void;
 }
 
 interface SuggestionFormProps {
@@ -92,6 +100,28 @@ interface SuggestionFormProps {
      * context after the form unmounts.
      */
     readonly afterSubmit?: () => void;
+    /**
+     * Persisted draft to seed from on mount, and to mirror back to
+     * via `onPendingDraftChange` on every change. New-suggestion
+     * flow only — the edit-existing flow already has a saved
+     * source-of-truth in `state.suggestions` and ignores both fields.
+     *
+     * Both must be provided together: passing `pendingDraft` without
+     * `onPendingDraftChange` would seed a draft that the form then
+     * silently mutates locally without persisting. Passing the
+     * callback alone is allowed — it just means the form starts
+     * empty and writes its first state through.
+     */
+    readonly pendingDraft?: PendingSuggestionDraft | null;
+    readonly onPendingDraftChange?: (
+        draft: PendingSuggestionDraft | null,
+    ) => void;
+    /**
+     * Notify the parent whenever the form transitions between empty
+     * and "has at least one filled slot." Drives the section-header
+     * "Add a suggestion / accusation" copy + clear-inputs X button.
+     */
+    readonly onHasAnyInputChange?: (hasAnyInput: boolean) => void;
 }
 
 /**
@@ -143,6 +173,9 @@ export const SuggestionForm = forwardRef<
         submitLabel,
         keyboardScopeRef,
         afterSubmit,
+        pendingDraft,
+        onPendingDraftChange,
+        onHasAnyInputChange,
     },
     ref,
 ): React.ReactElement {
@@ -153,11 +186,25 @@ export const SuggestionForm = forwardRef<
     const hasKeyboard = useHasKeyboard();
 
     // --- Form state ----------------------------------------------------
-    const [form, setForm] = useState<FormState>(() =>
-        suggestion !== undefined
-            ? formStateFromDraft(suggestion, setup)
-            : emptyFormState(setup),
-    );
+    const isEditFlow = suggestion !== undefined;
+    const [form, setForm] = useState<FormState>(() => {
+        if (suggestion !== undefined) {
+            return formStateFromDraft(suggestion, setup);
+        }
+        // New-suggestion flow: seed from a persisted pending draft when
+        // the parent supplies one and it's structurally compatible
+        // with the current setup (same number of card slots; ref-only
+        // shape match — the reducer drops the whole draft on setup
+        // changes, so getting here with a stale draft is rare).
+        if (
+            pendingDraft !== undefined
+            && pendingDraft !== null
+            && pendingDraft.cards.length === setup.categories.length
+        ) {
+            return pendingDraft;
+        }
+        return emptyFormState(setup);
+    });
 
     // Re-seed when the suggestion prop changes (covers the "edit
     // different row" case without remounting the whole component).
@@ -171,6 +218,32 @@ export const SuggestionForm = forwardRef<
                 : emptyFormState(setup),
         );
     }, [suggestion, setup]);
+
+    // Mirror new-suggestion form state into the parent on every change
+    // so a mount/unmount cycle (mobile tab swap, full reload) survives.
+    // Edit flow has its own saved source-of-truth and skips the mirror.
+    //
+    // The callback is held behind a ref so a non-memoized parent
+    // doesn't re-run the effect every render — the mirror should fire
+    // when `form` changes, not when `onPendingDraftChange`'s identity
+    // does.
+    const onPendingDraftChangeRef = useRef(onPendingDraftChange);
+    useEffect(() => {
+        onPendingDraftChangeRef.current = onPendingDraftChange;
+    });
+    const initialMirrorRef = useRef(true);
+    useEffect(() => {
+        if (isEditFlow) return;
+        if (initialMirrorRef.current) {
+            initialMirrorRef.current = false;
+            return;
+        }
+        // Mirror null when the form is back to its empty default —
+        // submit-success and "× Clear inputs" both reset the form,
+        // and we don't want a stale empty draft re-seeding the next
+        // mount.
+        onPendingDraftChangeRef.current?.(isEmptyFormState(form) ? null : form);
+    }, [form, isEditFlow]);
 
     // --- Pill sequence for auto-advance -------------------------------
     //
@@ -434,6 +507,17 @@ export const SuggestionForm = forwardRef<
         setOpenPillId(null);
     }, [setup]);
 
+    // Mirror the empty-vs-non-empty boolean to the parent. Held behind
+    // a ref (matching the `onPendingDraftChange` pattern) so the effect
+    // doesn't re-fire when the callback's identity changes.
+    const onHasAnyInputChangeRef = useRef(onHasAnyInputChange);
+    useEffect(() => {
+        onHasAnyInputChangeRef.current = onHasAnyInputChange;
+    });
+    useEffect(() => {
+        onHasAnyInputChangeRef.current?.(hasAnyInput);
+    }, [hasAnyInput]);
+
     // Imperative handle: callers (e.g. AddSuggestion wiring up the
     // global Cmd+K shortcut) drive focus through `focusFirstPill`. The
     // form itself stays oblivious to global keyboard bindings.
@@ -444,8 +528,9 @@ export const SuggestionForm = forwardRef<
                 if (clear === true) setForm(emptyFormState(setup));
                 setOpenPillId(PILL_SUGGESTER);
             },
+            clearInputs: onClearInputs,
         }),
-        [setup],
+        [setup, onClearInputs],
     );
 
     // Per-pill clear callbacks for the optional pills. Wired into the
@@ -671,14 +756,16 @@ export const SuggestionForm = forwardRef<
 
 // ---- Form state -------------------------------------------------------
 
-export interface FormState {
-    readonly id: string;
-    readonly suggester: Player | null;
-    readonly cards: ReadonlyArray<Card | null>;
-    readonly nonRefuters: ReadonlyArray<Player> | Nobody | null;
-    readonly refuter: Player | Nobody | null;
-    readonly seenCard: Card | Nobody | null;
-}
+/**
+ * Form-internal shape — alias of the persistable
+ * `PendingSuggestionDraft` so the form's local state can be lifted
+ * directly into `ClueState` without a translation layer. Structurally
+ * identical to a record of `Player | Card | Nobody | null` slots; the
+ * UI-layer `Nobody` constant from `SuggestionPills` is a structural
+ * match for the `{ kind: "nobody" }` shape declared in the logic
+ * layer's `PendingSuggestionDraft`.
+ */
+export type FormState = PendingSuggestionDraft;
 
 const emptyFormState = (setup: GameSetup): FormState => ({
     id: String(newSuggestionId()),
@@ -688,6 +775,18 @@ const emptyFormState = (setup: GameSetup): FormState => ({
     refuter: null,
     seenCard: null,
 });
+
+/**
+ * True when every value-bearing slot of the form is unfilled. Used to
+ * decide whether to mirror the form back to the parent as a real
+ * draft or as `null` (no draft in flight).
+ */
+const isEmptyFormState = (f: FormState): boolean =>
+    f.suggester === null
+    && f.cards.every(c => c === null)
+    && f.nonRefuters === null
+    && f.refuter === null
+    && f.seenCard === null;
 
 const formStateFromDraft = (
     s: DraftSuggestion,

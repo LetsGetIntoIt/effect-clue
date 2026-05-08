@@ -44,6 +44,11 @@ import {
  */
 export interface AccusationFormHandle {
     readonly focusFirstPill: (options?: { readonly clear?: boolean }) => void;
+    /**
+     * Reset every pill to empty. Used by the section-header X button
+     * (in `AddSuggestion`) to clear the form without re-mounting it.
+     */
+    readonly clearInputs: () => void;
 }
 
 interface AccusationFormProps {
@@ -62,6 +67,12 @@ interface AccusationFormProps {
      * Cmd+Enter from anywhere in the row commits the draft.
      */
     readonly keyboardScopeRef?: React.RefObject<HTMLElement | null>;
+    /**
+     * Notify the parent whenever the form transitions between empty
+     * and "has at least one filled slot." Drives the section-header
+     * "Add a suggestion / accusation" copy + clear-inputs X button.
+     */
+    readonly onHasAnyInputChange?: (hasAnyInput: boolean) => void;
 }
 
 /**
@@ -93,6 +104,7 @@ export const AccusationForm = forwardRef<
         showHeader = true,
         submitLabel,
         keyboardScopeRef,
+        onHasAnyInputChange,
     },
     ref,
 ): React.ReactElement {
@@ -142,6 +154,11 @@ export const AccusationForm = forwardRef<
         [pillSequence],
     );
 
+    const onClearInputs = useCallback(() => {
+        setForm(emptyFormState(setup));
+        setOpenPillId(null);
+    }, [setup]);
+
     useImperativeHandle(
         ref,
         () => ({
@@ -149,12 +166,25 @@ export const AccusationForm = forwardRef<
                 if (clear) setForm(emptyFormState(setup));
                 pillFormRef.current?.focusFirstPill();
             },
+            clearInputs: onClearInputs,
         }),
-        [setup],
+        [setup, onClearInputs],
     );
 
     const draft = useMemo(() => buildDraftFromForm(form), [form]);
     const canSubmit = draft !== null;
+
+    // Mirror has-any-input to the parent. Held behind a ref so the
+    // effect doesn't re-fire when the callback's identity changes.
+    const hasAnyInput =
+        form.accuser !== null || form.cards.some(c => c !== null);
+    const onHasAnyInputChangeRef = useRef(onHasAnyInputChange);
+    useEffect(() => {
+        onHasAnyInputChangeRef.current = onHasAnyInputChange;
+    });
+    useEffect(() => {
+        onHasAnyInputChangeRef.current?.(hasAnyInput);
+    }, [hasAnyInput]);
 
     const onSubmitClick = useCallback(() => {
         if (draft === null) return;

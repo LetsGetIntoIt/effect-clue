@@ -17,7 +17,8 @@ import {
 } from "./Persistence";
 import { emptyHypotheses } from "./Hypothesis";
 
-const STORAGE_KEY = "effect-clue.session.v7";
+const STORAGE_KEY = "effect-clue.session.v8";
+const LEGACY_STORAGE_KEY_V7 = "effect-clue.session.v7";
 const LEGACY_STORAGE_KEY_V6 = "effect-clue.session.v6";
 
 const setup = CLASSIC_SETUP_3P;
@@ -41,6 +42,7 @@ const minimalSession: GameSession = {
     suggestions: [],
     accusations: [],
     hypotheses: emptyHypotheses,
+    pendingSuggestion: null,
 };
 
 const richSession = (): GameSession => ({
@@ -93,6 +95,7 @@ const richSession = (): GameSession => ({
         }),
     ],
     hypotheses: emptyHypotheses,
+    pendingSuggestion: null,
 });
 
 describe("encode/decode — rich sessions", () => {
@@ -190,11 +193,30 @@ describe("saveToLocalStorage / loadFromLocalStorage", () => {
         expect(loaded?.handSizes).toHaveLength(3);
     });
 
-    test("save writes under the v7-scoped storage key", () => {
+    test("save writes under the v8-scoped storage key", () => {
         saveToLocalStorage(minimalSession);
         const raw = window.localStorage.getItem(STORAGE_KEY);
         expect(raw).not.toBeNull();
-        expect(JSON.parse(raw as string).version).toBe(7);
+        expect(JSON.parse(raw as string).version).toBe(8);
+    });
+
+    test("loads a v7 blob (no pendingSuggestion field) and lifts to v8 with null draft", () => {
+        const v7Payload = {
+            version: 7,
+            setup: { players: ["Anisha"], categories: [] },
+            hands: [],
+            handSizes: [],
+            suggestions: [],
+            accusations: [],
+            hypotheses: [],
+        };
+        window.localStorage.setItem(
+            LEGACY_STORAGE_KEY_V7,
+            JSON.stringify(v7Payload),
+        );
+        const loaded = loadFromLocalStorage();
+        expect(loaded).toBeDefined();
+        expect(loaded?.pendingSuggestion).toBeNull();
     });
 
     test("loads a v6 blob (no hypotheses field) and lifts to v7 with empty hypotheses", () => {
@@ -252,6 +274,114 @@ describe("saveToLocalStorage / loadFromLocalStorage", () => {
         const loaded = loadFromLocalStorage();
         expect(loaded?.handSizes).toHaveLength(1);
         expect(loaded?.handSizes[0]?.size).toBe(99);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// pendingSuggestion round-trip (M2)
+//
+// Each optional slot has three runtime states (null / Nobody / value).
+// The persisted form uses paired `*Decided` + `*IsNobody` flags so they
+// all round-trip without `Schema.Union`. Each combination is exercised
+// here to make sure the encoder + decoder agree on every distinguishable
+// state.
+// ---------------------------------------------------------------------------
+describe("pendingSuggestion round-trip", () => {
+    const NOBODY_DRAFT = { kind: "nobody" as const };
+
+    test("null pendingSuggestion round-trips as null", () => {
+        const decoded = decodeSession(encodeSession(minimalSession));
+        expect(decoded?.pendingSuggestion).toBeNull();
+    });
+
+    test("a draft with all optional slots undecided round-trips", () => {
+        const session: GameSession = {
+            ...minimalSession,
+            pendingSuggestion: {
+                id: "draft-1",
+                suggester: A,
+                cards: [MUSTARD, KNIFE, KITCHEN],
+                nonRefuters: null,
+                refuter: null,
+                seenCard: null,
+            },
+        };
+        const decoded = decodeSession(encodeSession(session));
+        expect(decoded?.pendingSuggestion).toEqual(session.pendingSuggestion);
+    });
+
+    test("a draft with explicit-Nobody slots round-trips Nobody markers, not null", () => {
+        const session: GameSession = {
+            ...minimalSession,
+            pendingSuggestion: {
+                id: "draft-2",
+                suggester: A,
+                cards: [MUSTARD, KNIFE, KITCHEN],
+                nonRefuters: NOBODY_DRAFT,
+                refuter: NOBODY_DRAFT,
+                seenCard: NOBODY_DRAFT,
+            },
+        };
+        const decoded = decodeSession(encodeSession(session));
+        // Each slot decodes back to a Nobody marker, not null and not a value.
+        expect(decoded?.pendingSuggestion?.nonRefuters).toEqual(NOBODY_DRAFT);
+        expect(decoded?.pendingSuggestion?.refuter).toEqual(NOBODY_DRAFT);
+        expect(decoded?.pendingSuggestion?.seenCard).toEqual(NOBODY_DRAFT);
+    });
+
+    test("a draft with concrete values in optional slots round-trips them faithfully", () => {
+        const session: GameSession = {
+            ...minimalSession,
+            pendingSuggestion: {
+                id: "draft-3",
+                suggester: A,
+                cards: [MUSTARD, KNIFE, KITCHEN],
+                nonRefuters: [B, C],
+                refuter: B,
+                seenCard: KNIFE,
+            },
+        };
+        const decoded = decodeSession(encodeSession(session));
+        expect(decoded?.pendingSuggestion?.nonRefuters).toEqual([B, C]);
+        expect(decoded?.pendingSuggestion?.refuter).toBe(B);
+        expect(decoded?.pendingSuggestion?.seenCard).toBe(KNIFE);
+    });
+
+    test("a partially-filled draft round-trips with null cards preserved", () => {
+        const session: GameSession = {
+            ...minimalSession,
+            pendingSuggestion: {
+                id: "draft-4",
+                suggester: null,
+                cards: [MUSTARD, null, KITCHEN],
+                nonRefuters: null,
+                refuter: null,
+                seenCard: null,
+            },
+        };
+        const decoded = decodeSession(encodeSession(session));
+        expect(decoded?.pendingSuggestion?.suggester).toBeNull();
+        expect(decoded?.pendingSuggestion?.cards).toEqual([
+            MUSTARD,
+            null,
+            KITCHEN,
+        ]);
+    });
+
+    test("v7 sessions (no pendingSuggestion field) load with null draft", () => {
+        // Hand-craft a v7 payload — no `pendingSuggestion` key at all.
+        const v7Payload = {
+            version: 7,
+            setup: { players: ["Anisha"], categories: [] },
+            hands: [],
+            handSizes: [],
+            suggestions: [],
+            accusations: [],
+            hypotheses: [],
+        };
+        const decoded = decodeSession(v7Payload);
+        expect(decoded).toBeDefined();
+        expect(decoded?.pendingSuggestion).toBeNull();
     });
 });
 
