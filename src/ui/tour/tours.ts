@@ -273,6 +273,32 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
     ],
     checklistSuggest: [
         {
+            // M10 — swap-discoverability intro. Establish the "two
+            // halves" mental model before drilling into either side.
+            // Mobile spotlight points at the BottomNav Checklist tab
+            // (the swap target the user is currently on); desktop
+            // spotlight covers the entire Checklist column. The
+            // popover anchor falls back to a small element at the
+            // top of the column on desktop (so the popover doesn't
+            // get pushed off-screen against a wide column) — same
+            // pattern as `firstSuggestion`.
+            anchor: "desktop-checklist-area",
+            anchorByViewport: {
+                mobile: "bottom-nav-checklist",
+                desktop: "desktop-checklist-area",
+            },
+            popoverAnchor: "checklist-case-file",
+            titleKey: "checklist.intro.title",
+            bodyKey: "checklist.intro.body",
+            side: "bottom",
+            align: "start",
+            sideByViewport: {
+                mobile: { side: "top", align: "center" },
+                desktop: { side: "bottom", align: "start" },
+            },
+            requiredUiMode: "checklist",
+        },
+        {
             anchor: "checklist-cell",
             titleKey: "checklist.cell.title",
             bodyKey: "checklist.cell.body",
@@ -289,19 +315,32 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             requiredUiMode: "checklist",
         },
         {
-            // Mobile-only: on a narrow layout the checklist and
-            // suggest panes don't co-exist, so we have to hand the
-            // user the wayfinding cue ("tap Suggest to log a
-            // suggestion") before the next step actually flips
-            // them over to that pane. Skipped on desktop where
-            // both panes are visible at the same time.
-            anchor: "bottom-nav-suggest",
-            titleKey: "checklist.gotoSuggest.title",
-            bodyKey: "checklist.gotoSuggest.body",
+            // M10 — swap-discoverability second half. Mirror of the
+            // intro step but spotlights the Suggest side. Mobile
+            // anchor is the BottomNav Suggest tab (still visible
+            // while the user is on checklist mode); desktop anchor
+            // covers the sticky right column. Popover anchor on
+            // desktop is the suggest form header — small element
+            // at the top of the column for stable popover placement.
+            //
+            // Replaces the older mobile-only `gotoSuggest` wayfinding
+            // step. The auto-swap to suggest pane still happens on
+            // the NEXT step's `requiredUiMode: "suggest"` transition.
+            anchor: "desktop-suggest-area",
+            anchorByViewport: {
+                mobile: "bottom-nav-suggest",
+                desktop: "desktop-suggest-area",
+            },
+            popoverAnchor: "suggest-add-form-header",
+            titleKey: "suggest.intro.title",
+            bodyKey: "suggest.intro.body",
             side: "top",
             align: "center",
+            sideByViewport: {
+                mobile: { side: "top", align: "center" },
+                desktop: { side: "bottom", align: "end" },
+            },
             requiredUiMode: "checklist",
-            viewport: "mobile",
         },
         {
             // The user sees the suggestion log BEFORE we point at
