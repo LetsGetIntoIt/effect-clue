@@ -165,6 +165,8 @@ const initialState: ClueState = {
     uiMode: "setup",
     hypotheses: emptyHypotheses,
     pendingSuggestion: null,
+    selfPlayerId: null,
+    firstDealtPlayerId: null,
 };
 
 const reducer = (state: ClueState, action: ClueAction): ClueState => {
@@ -459,6 +461,17 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 // The in-flight draft may reference the removed player
                 // in any of its slots; drop it rather than partial-prune.
                 pendingSuggestion: null,
+                // Identity references must follow the player set: a
+                // dangling `selfPlayerId` would gate UI on a non-
+                // existent player. Same for `firstDealtPlayerId`.
+                selfPlayerId:
+                    state.selfPlayerId === action.player
+                        ? null
+                        : state.selfPlayerId,
+                firstDealtPlayerId:
+                    state.firstDealtPlayerId === action.player
+                        ? null
+                        : state.firstDealtPlayerId,
             };
 
         case "movePlayer": {
@@ -538,6 +551,17 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     accuser: a.accuser === oldName ? newName : a.accuser,
                 })),
                 pendingSuggestion: renamedPending,
+                // Identity references follow the rename so a user
+                // who set themselves as "Alice" stays identified as
+                // "Alice" after a typo fix.
+                selfPlayerId:
+                    state.selfPlayerId === oldName
+                        ? newName
+                        : state.selfPlayerId,
+                firstDealtPlayerId:
+                    state.firstDealtPlayerId === oldName
+                        ? newName
+                        : state.firstDealtPlayerId,
             };
         }
 
@@ -589,11 +613,86 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 // Imported sessions don't carry a draft. Drop any
                 // local in-flight draft so the new game starts clean.
                 pendingSuggestion: session.pendingSuggestion ?? null,
+                // Localstorage round-trip carries identity through
+                // (so a reload preserves "I'm Alice"), but the share
+                // wire format does NOT — receivers pick their own.
+                // The codec defaults missing fields to null so this
+                // works for both paths.
+                selfPlayerId: session.selfPlayerId ?? null,
+                firstDealtPlayerId: session.firstDealtPlayerId ?? null,
             };
         }
 
         case "setPendingSuggestion":
             return { ...state, pendingSuggestion: action.draft };
+
+        case "setSelfPlayer":
+            return { ...state, selfPlayerId: action.player };
+
+        case "setFirstDealtPlayer":
+            return { ...state, firstDealtPlayerId: action.player };
+
+        case "reorderPlayers": {
+            // Validate the input is a permutation of the current
+            // player list — otherwise the action is a malformed
+            // bulk-replace and we'd silently drop or invent players.
+            const current = state.setup.players;
+            const next = action.players;
+            if (next.length !== current.length) return state;
+            const currentSet = new Set(current as ReadonlyArray<Player>);
+            for (const p of next) {
+                if (!currentSet.has(p)) return state;
+            }
+            // Same set, possibly reordered. Accept.
+            return {
+                ...state,
+                setup: GameSetup({
+                    players: next,
+                    categories: state.setup.categories,
+                }),
+            };
+        }
+
+        case "reorderCategories": {
+            const current = state.setup.categories;
+            const next = action.categories;
+            if (next.length !== current.length) return state;
+            const currentIds = new Set(current.map(c => c.id));
+            for (const c of next) {
+                if (!currentIds.has(c.id)) return state;
+            }
+            return {
+                ...state,
+                setup: GameSetup({
+                    players: state.setup.players,
+                    categories: next,
+                }),
+            };
+        }
+
+        case "reorderCardsInCategory": {
+            const cat = state.setup.categories.find(
+                c => c.id === action.categoryId,
+            );
+            if (cat === undefined) return state;
+            // Permutation check on the card ids.
+            if (action.cards.length !== cat.cards.length) return state;
+            const currentIds = new Set(cat.cards.map(c => c.id));
+            for (const card of action.cards) {
+                if (!currentIds.has(card.id)) return state;
+            }
+            return {
+                ...state,
+                setup: GameSetup({
+                    players: state.setup.players,
+                    categories: state.setup.categories.map(c =>
+                        c.id === action.categoryId
+                            ? Category({ ...c, cards: action.cards })
+                            : c,
+                    ),
+                }),
+            };
+        }
     }
 };
 
@@ -1323,6 +1422,8 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             accusations: accusationsAsData,
             hypotheses: state.hypotheses,
             pendingSuggestion: state.pendingSuggestion,
+            selfPlayerId: state.selfPlayerId,
+            firstDealtPlayerId: state.firstDealtPlayerId,
         };
         saveToLocalStorage(session);
         queryClient.setQueryData(gameSessionQueryKey, session);
@@ -1425,6 +1526,11 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         if (state.handSizes.length > 0) return true;
         if (state.suggestions.length > 0) return true;
         if (state.accusations.length > 0) return true;
+        // M6: a user who only set their identity has expressed intent
+        // ("I'm Alice in this game") that the brand-new-user redirect
+        // shouldn't override. Same for first-dealt-player.
+        if (state.selfPlayerId !== null) return true;
+        if (state.firstDealtPlayerId !== null) return true;
         const players = state.setup.players;
         if (players.length !== DEFAULT_SETUP.players.length) return true;
         for (let i = 0; i < players.length; i++) {

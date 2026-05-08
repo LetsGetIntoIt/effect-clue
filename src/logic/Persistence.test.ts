@@ -17,7 +17,8 @@ import {
 } from "./Persistence";
 import { emptyHypotheses } from "./Hypothesis";
 
-const STORAGE_KEY = "effect-clue.session.v8";
+const STORAGE_KEY = "effect-clue.session.v9";
+const LEGACY_STORAGE_KEY_V8 = "effect-clue.session.v8";
 const LEGACY_STORAGE_KEY_V7 = "effect-clue.session.v7";
 const LEGACY_STORAGE_KEY_V6 = "effect-clue.session.v6";
 
@@ -43,6 +44,8 @@ const minimalSession: GameSession = {
     accusations: [],
     hypotheses: emptyHypotheses,
     pendingSuggestion: null,
+    selfPlayerId: null,
+    firstDealtPlayerId: null,
 };
 
 const richSession = (): GameSession => ({
@@ -96,6 +99,8 @@ const richSession = (): GameSession => ({
     ],
     hypotheses: emptyHypotheses,
     pendingSuggestion: null,
+    selfPlayerId: null,
+    firstDealtPlayerId: null,
 });
 
 describe("encode/decode — rich sessions", () => {
@@ -193,11 +198,35 @@ describe("saveToLocalStorage / loadFromLocalStorage", () => {
         expect(loaded?.handSizes).toHaveLength(3);
     });
 
-    test("save writes under the v8-scoped storage key", () => {
+    test("save writes under the v9-scoped storage key", () => {
         saveToLocalStorage(minimalSession);
         const raw = window.localStorage.getItem(STORAGE_KEY);
         expect(raw).not.toBeNull();
-        expect(JSON.parse(raw as string).version).toBe(8);
+        expect(JSON.parse(raw as string).version).toBe(9);
+    });
+
+    test("loads a v8 blob and lifts to v9 with null identity fields", () => {
+        // v8 lacked `selfPlayerId` and `firstDealtPlayerId`. The lift
+        // defaults both to null — same value the M6 wizard produces
+        // when the user skips the identity step on a fresh game.
+        const v8Payload = {
+            version: 8,
+            setup: { players: ["Anisha"], categories: [] },
+            hands: [],
+            handSizes: [],
+            suggestions: [],
+            accusations: [],
+            hypotheses: [],
+            pendingSuggestion: null,
+        };
+        window.localStorage.setItem(
+            LEGACY_STORAGE_KEY_V8,
+            JSON.stringify(v8Payload),
+        );
+        const loaded = loadFromLocalStorage();
+        expect(loaded).toBeDefined();
+        expect(loaded?.selfPlayerId).toBeNull();
+        expect(loaded?.firstDealtPlayerId).toBeNull();
     });
 
     test("loads a v7 blob (no pendingSuggestion field) and lifts to v8 with null draft", () => {

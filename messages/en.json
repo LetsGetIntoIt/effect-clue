@@ -79,7 +79,14 @@
             "removeAccusation": "removing Accusation #{number} by {player} ({cards})",
             "removeAccusationUnknown": "removing an accusation",
             "setHypothesis": "setting hypothesis: {owner} {value, select, Y {owns} other {doesn't own}} {card}",
-            "clearHypothesis": "clearing hypothesis on {owner} / {card}"
+            "clearHypothesis": "clearing hypothesis on {owner} / {card}",
+            "reorderPlayers": "reordering players",
+            "reorderCategories": "reordering categories",
+            "reorderCardsInCategory": "reordering cards in {category}",
+            "setSelfPlayer": "identifying yourself as {player}",
+            "clearSelfPlayer": "clearing your identity",
+            "setFirstDealtPlayer": "marking {player} as the first dealt",
+            "clearFirstDealtPlayer": "clearing the first-dealt player"
         }
     },
     "setup": {

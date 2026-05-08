@@ -272,6 +272,8 @@ describe("Clue — URL-based view hydration", () => {
             accusations: [],
             hypotheses: emptyHypotheses,
             pendingSuggestion: null,
+            selfPlayerId: null,
+            firstDealtPlayerId: null,
         });
         render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {
