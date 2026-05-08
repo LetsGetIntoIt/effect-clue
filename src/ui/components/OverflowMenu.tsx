@@ -12,6 +12,13 @@ interface OverflowMenuButton {
     readonly leadingIcon?: ReactNode;
     readonly trailingIcon?: ReactNode;
     readonly onClick: () => void | Promise<void>;
+    /**
+     * When `true`, the item renders greyed out and ignores clicks. The
+     * popover does NOT auto-close on a disabled click — that would
+     * feel like a successful tap on a non-functional control. Used
+     * for Undo/Redo when there's no history to act on.
+     */
+    readonly disabled?: boolean;
 }
 
 /**
@@ -23,10 +30,32 @@ interface OverflowMenuDivider {
     readonly type: "divider";
 }
 
-type OverflowMenuItem = OverflowMenuButton | OverflowMenuDivider;
+/**
+ * Two buttons rendered side-by-side at 50/50 width inside one menu
+ * row. Each half behaves like a regular menu item (close-on-click,
+ * disabled support). Labels render as `whitespace-nowrap overflow-
+ * hidden` with no ellipsis — if the label + shortcut don't fit in
+ * half the menu width, the trailing characters are simply clipped.
+ * Used for paired actions like Undo / Redo where forming a single
+ * row reads as "two halves of the same affordance" instead of two
+ * unrelated rows.
+ */
+interface OverflowMenuSplitRow {
+    readonly type: "split";
+    readonly left: OverflowMenuButton;
+    readonly right: OverflowMenuButton;
+}
+
+type OverflowMenuItem =
+    | OverflowMenuButton
+    | OverflowMenuDivider
+    | OverflowMenuSplitRow;
 
 const isDivider = (item: OverflowMenuItem): item is OverflowMenuDivider =>
     "type" in item && item.type === "divider";
+
+const isSplit = (item: OverflowMenuItem): item is OverflowMenuSplitRow =>
+    "type" in item && item.type === "split";
 
 /**
  * Shared `⋯` overflow menu. Used by the desktop header Toolbar and the
@@ -114,21 +143,43 @@ export function OverflowMenu({
                                 />
                             );
                         }
-                        const handleClick = closeThen(item.onClick);
-                        const content = (
-                            <MenuItem
-                                label={item.label}
-                                {...(item.active !== undefined
-                                    ? { active: item.active }
-                                    : {})}
-                                {...(item.leadingIcon !== undefined
-                                    ? { leadingIcon: item.leadingIcon }
-                                    : {})}
-                                {...(item.trailingIcon !== undefined
-                                    ? { trailingIcon: item.trailingIcon }
-                                    : {})}
-                                onClick={handleClick}
-                            />
+                        // Disabled items don't run their onClick and
+                        // don't auto-close the popover — leaving the
+                        // menu open keeps the disabled state visible
+                        // so the user understands why nothing happened.
+                        const renderItem = (b: OverflowMenuButton) => {
+                            const handleClick =
+                                b.disabled === true
+                                    ? () => {}
+                                    : closeThen(b.onClick);
+                            return (
+                                <MenuItem
+                                    label={b.label}
+                                    {...(b.active !== undefined
+                                        ? { active: b.active }
+                                        : {})}
+                                    {...(b.leadingIcon !== undefined
+                                        ? { leadingIcon: b.leadingIcon }
+                                        : {})}
+                                    {...(b.trailingIcon !== undefined
+                                        ? { trailingIcon: b.trailingIcon }
+                                        : {})}
+                                    disabled={b.disabled === true}
+                                    onClick={handleClick}
+                                />
+                            );
+                        };
+                        const content = isSplit(item) ? (
+                            <div className="flex w-full items-stretch gap-1">
+                                <div className="min-w-0 flex-1 basis-0">
+                                    {renderItem(item.left)}
+                                </div>
+                                <div className="min-w-0 flex-1 basis-0">
+                                    {renderItem(item.right)}
+                                </div>
+                            </div>
+                        ) : (
+                            renderItem(item)
                         );
                         return (
                             <motion.div
@@ -152,21 +203,27 @@ function MenuItem({
     active,
     leadingIcon,
     trailingIcon,
+    disabled,
     onClick,
 }: {
     readonly label: string;
     readonly active?: boolean;
     readonly leadingIcon?: ReactNode;
     readonly trailingIcon?: ReactNode;
+    readonly disabled?: boolean;
     readonly onClick: () => void;
 }) {
     return (
         <button
             type="button"
             onClick={onClick}
+            disabled={disabled}
             className={
-                "flex w-full items-center justify-between gap-2 cursor-pointer rounded-[var(--radius)] border-none bg-transparent px-3 py-2 text-left text-[13px] hover:bg-hover " +
-                (active ? "text-accent font-semibold" : "text-inherit")
+                "flex w-full items-center justify-between gap-2 rounded-[var(--radius)] border-none bg-transparent px-3 py-2 text-left text-[13px] " +
+                (disabled
+                    ? "cursor-not-allowed opacity-40 text-inherit"
+                    : "cursor-pointer hover:bg-hover " +
+                      (active ? "text-accent font-semibold" : "text-inherit"))
             }
         >
             <span className="flex min-w-0 items-center gap-2">
@@ -175,7 +232,9 @@ function MenuItem({
                         {leadingIcon}
                     </span>
                 ) : null}
-                <span className="truncate">{label}</span>
+                <span className="overflow-hidden whitespace-nowrap">
+                    {label}
+                </span>
             </span>
             {trailingIcon !== undefined ? (
                 <span className="flex shrink-0 items-center text-muted">
