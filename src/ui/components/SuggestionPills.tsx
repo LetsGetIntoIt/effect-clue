@@ -229,7 +229,7 @@ export function PillPopover({
             layout
             transition={widthTransition}
             className={
-                "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[13px] " +
+                "inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-4 py-2.5 text-[15px] " +
                 tone
             }
         >
