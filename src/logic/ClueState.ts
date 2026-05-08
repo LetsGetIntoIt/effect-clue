@@ -1,7 +1,7 @@
 import type { AccusationId } from "./Accusation";
 import type { CardSet } from "./CardSet";
 import type { Card, CardCategory, Player } from "./GameObjects";
-import type { GameSetup } from "./GameSetup";
+import type { CardEntry, Category, GameSetup } from "./GameSetup";
 import type { HypothesisMap, HypothesisValue } from "./Hypothesis";
 import type { KnownCard } from "./InitialKnowledge";
 import type { Cell } from "./Knowledge";
@@ -136,11 +136,50 @@ export type ClueAction =
     | { type: "removePlayer"; player: Player }
     | { type: "renamePlayer"; oldName: Player; newName: Player }
     | { type: "movePlayer"; player: Player; direction: "left" | "right" }
+    /**
+     * Bulk-replace the player list with `players`. Used by the M6
+     * setup wizard's drag-to-reorder UI — `movePlayer` stays around
+     * for arrow-key a11y, but a drag drops the whole new ordering at
+     * once instead of N consecutive swaps. The reducer validates the
+     * input is a permutation of the current list.
+     */
+    | { type: "reorderPlayers"; players: ReadonlyArray<Player> }
+    /**
+     * Bulk-replace the category list with `categories`. Used by the
+     * M6 wizard's customize sub-flow drag-to-reorder. Validated as a
+     * permutation against the current setup.
+     */
+    | { type: "reorderCategories"; categories: ReadonlyArray<Category> }
+    /**
+     * Bulk-replace one category's card list. Used by the M6 wizard's
+     * customize sub-flow's per-category drag-to-reorder.
+     */
+    | {
+          type: "reorderCardsInCategory";
+          categoryId: CardCategory;
+          cards: ReadonlyArray<CardEntry>;
+      }
     | { type: "setUiMode"; mode: UiMode }
     | { type: "setHypothesis"; cell: Cell; value: HypothesisValue }
     | { type: "clearHypothesis"; cell: Cell }
     | { type: "replaceSession"; session: GameSession }
-    | { type: "setPendingSuggestion"; draft: PendingSuggestionDraft | null };
+    | { type: "setPendingSuggestion"; draft: PendingSuggestionDraft | null }
+    /**
+     * Set (or clear) the player the user identifies AS. Drives the
+     * M6 wizard's "Who are you?" step + the M8 My-cards panel +
+     * refute hint. `null` means "skipped / cleared". Reference
+     * invariants: cleared automatically on `removePlayer`, follows
+     * the rename on `renamePlayer`.
+     */
+    | { type: "setSelfPlayer"; player: Player | null }
+    /**
+     * Set (or clear) the player who was dealt the first card. `null`
+     * means "default to first in turn order" — keep the math centralized
+     * via `firstDealt.ts` in the wizard rather than inlining it.
+     * Reference invariants: cleared on `removePlayer`, follows the
+     * rename on `renamePlayer`.
+     */
+    | { type: "setFirstDealtPlayer"; player: Player | null };
 
 export interface ClueState {
     readonly setup: GameSetup;
@@ -168,4 +207,31 @@ export interface ClueState {
      * edits already have a saved source-of-truth in `suggestions`.
      */
     readonly pendingSuggestion: PendingSuggestionDraft | null;
+    /**
+     * The player the user identifies AS in this game. `null` means
+     * skipped / not set — every UI feature gated on identity is
+     * hidden in that case (no "set yourself" empty states; the
+     * `<SetupSummary>` row is the discoverable path back). Driven
+     * by the M6 wizard's "Who are you?" step. Read by M8's MyHand
+     * panel + suggestion-form refute hint.
+     *
+     * Reference invariants enforced in the reducer:
+     * - cleared on `removePlayer` if the removed player matches
+     * - renamed on `renamePlayer` if the renamed player matches
+     * - reset to `null` on `newGame`
+     * - defaulted to `null` on `replaceSession` (imported games — the
+     *   share wire format does NOT carry identity; the receiver picks
+     *   their own)
+     */
+    readonly selfPlayerId: Player | null;
+    /**
+     * The player who was dealt the first card. `null` means "default
+     * to the first player in turn order" — `firstDealt.ts` (added in
+     * a later M6 sub-PR) reads through this to derive per-player
+     * default hand sizes without inlining the math. Driven by the
+     * "Adjust dealing" affordance on the wizard's hand-sizes step.
+     *
+     * Same reference invariants as `selfPlayerId`.
+     */
+    readonly firstDealtPlayerId: Player | null;
 }

@@ -122,6 +122,8 @@ const seedSetupSession = (): void => {
         accusations: [],
         hypotheses: emptyHypotheses,
         pendingSuggestion: null,
+        selfPlayerId: null,
+        firstDealtPlayerId: null,
     });
 };
 

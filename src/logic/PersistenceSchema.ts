@@ -6,12 +6,13 @@ import { SuggestionId } from "./Suggestion";
 /**
  * Effect Schema definitions for the persisted session shape.
  *
- * The current canonical version is v8 (adds `pendingSuggestion`). Reads
- * accept v8 first, then fall back to v7 (auto-lifting with
- * `pendingSuggestion: null`), then v6 (auto-lifting with `hypotheses:
- * []` and `pendingSuggestion: null`), so that users who roll
- * back-and-forward between builds don't lose suggestion / accusation
- * state. Writes always go to v8.
+ * The current canonical version is v9 (adds `selfPlayerId` and
+ * `firstDealtPlayerId`). Reads accept v9 first, then fall back to v8
+ * (auto-lifting with `selfPlayerId: null` and `firstDealtPlayerId:
+ * null`), then v7 (auto-lifting with `pendingSuggestion: null`),
+ * then v6 (auto-lifting with `hypotheses: []` and the v7+v8+v9
+ * defaults), so users who roll back-and-forward between builds
+ * don't lose suggestion / accusation state. Writes always go to v9.
  *
  * v6 added the `loggedAt: number` field to each suggestion + accusation,
  * recording the millisecond timestamp at which it was logged.
@@ -23,6 +24,11 @@ import { SuggestionId } from "./Suggestion";
  * draft, persisted so it survives mobile tab swaps (which unmount the
  * suggestion form) and full-page reloads. See
  * `src/logic/ClueState.ts`'s `PendingSuggestionDraft`.
+ *
+ * v9 adds `selfPlayerId` + `firstDealtPlayerId` — identity-related
+ * fields driven by the M6 setup wizard. The local round-trip
+ * preserves them; the share wire format does not (receivers pick
+ * their own identity post-import).
  *
  * Branded strings (Player, Card, CardCategory, SuggestionId,
  * AccusationId) are decoded straight into their nominal types via
@@ -185,9 +191,7 @@ const PersistedSessionV7Schema = Schema.Struct({
 });
 
 /**
- * Canonical v8 session shape. Adds `pendingSuggestion` — the user's
- * in-flight new-suggestion draft. Encoded as `null` when no draft
- * exists; otherwise the persisted form-state shape.
+ * v8 session shape — kept for back-compat reads. v9 supersedes it.
  */
 const PersistedSessionV8Schema = Schema.Struct({
     version: Schema.Literal(8),
@@ -198,6 +202,37 @@ const PersistedSessionV8Schema = Schema.Struct({
     accusations: Schema.Array(PersistedAccusationSchema),
     hypotheses: HypothesesArraySchema,
     pendingSuggestion: Schema.NullOr(PersistedPendingSuggestionSchema),
+});
+
+/**
+ * Canonical v9 session shape. Adds two identity-related fields
+ * driven by the M6 setup wizard:
+ *
+ *   - `selfPlayerId`: the player the user identifies AS in this
+ *     game. Drives the M8 my-cards panel + the suggestion-form
+ *     refute hint. `null` when the user skipped the identity step.
+ *
+ *   - `firstDealtPlayerId`: the player who was dealt the first
+ *     card. `null` when the user accepts "first in turn order" as
+ *     the default.
+ *
+ * Both are stored on the local-storage round-trip so reload
+ * preserves identity, but the share wire format does NOT include
+ * them — receivers pick their own identity post-import. See
+ * `useApplyShareSnapshot.ts` (defaults both to null) and
+ * `ShareCodec.ts` (the wire format stays seven fields, unchanged).
+ */
+const PersistedSessionV9Schema = Schema.Struct({
+    version: Schema.Literal(9),
+    setup: PersistedGameSetupSchema,
+    hands: Schema.Array(PersistedHandSchema),
+    handSizes: Schema.Array(PersistedHandSizeSchema),
+    suggestions: Schema.Array(PersistedSuggestionSchema),
+    accusations: Schema.Array(PersistedAccusationSchema),
+    hypotheses: HypothesesArraySchema,
+    pendingSuggestion: Schema.NullOr(PersistedPendingSuggestionSchema),
+    selfPlayerId: Schema.NullOr(PlayerSchema),
+    firstDealtPlayerId: Schema.NullOr(PlayerSchema),
 });
 
 /**
@@ -214,15 +249,19 @@ export const decodeV7Unknown = Schema.decodeUnknownResult(
 export const decodeV8Unknown = Schema.decodeUnknownResult(
     PersistedSessionV8Schema,
 );
+export const decodeV9Unknown = Schema.decodeUnknownResult(
+    PersistedSessionV9Schema,
+);
 
 /**
  * Runtime types of decoded sessions — the branded, Schema-validated
- * payload `decodeV{6,7,8}Unknown` hand back. Callers construct the
+ * payload `decodeV{6,7,8,9}Unknown` hand back. Callers construct the
  * GameSession domain value from this.
  */
 export type PersistedSessionV6 = Schema.Schema.Type<typeof PersistedSessionV6Schema>;
 export type PersistedSessionV7 = Schema.Schema.Type<typeof PersistedSessionV7Schema>;
 export type PersistedSessionV8 = Schema.Schema.Type<typeof PersistedSessionV8Schema>;
+export type PersistedSessionV9 = Schema.Schema.Type<typeof PersistedSessionV9Schema>;
 
 export type PersistedHypothesis = Schema.Schema.Type<typeof PersistedHypothesisSchema>;
 export type PersistedPendingSuggestion = Schema.Schema.Type<

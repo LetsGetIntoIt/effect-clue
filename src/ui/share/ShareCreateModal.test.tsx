@@ -373,6 +373,8 @@ describe("ShareCreateModal — wire payload by variant", () => {
             accusations: [],
             hypotheses: emptyHypotheses,
             pendingSuggestion: null,
+            selfPlayerId: null,
+            firstDealtPlayerId: null,
         });
 
         mockSession = {

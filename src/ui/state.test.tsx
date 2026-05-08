@@ -612,6 +612,112 @@ describe("player roster", () => {
         expect(result.current.state).toBe(before);
     });
 
+    test("reorderPlayers bulk-replaces the player order when the input is a permutation", () => {
+        const { result } = renderClue();
+        const [p1, p2, p3, p4] = result.current.state.setup.players;
+        act(() =>
+            result.current.dispatch({
+                type: "reorderPlayers",
+                players: [p4!, p1!, p3!, p2!],
+            }),
+        );
+        expect(result.current.state.setup.players.map(p => String(p))).toEqual([
+            "Player 4",
+            "Player 1",
+            "Player 3",
+            "Player 2",
+        ]);
+    });
+
+    test("reorderPlayers rejects an input that isn't a permutation of the current list", () => {
+        // Wizard DnD would never produce a malformed list, but the
+        // reducer guards against it so a stray dispatch can't silently
+        // drop or invent players. State pointer stays unchanged on
+        // reject so React skips the re-render.
+        const { result } = renderClue();
+        const before = result.current.state;
+        const players = result.current.state.setup.players;
+        act(() =>
+            result.current.dispatch({
+                type: "reorderPlayers",
+                players: [
+                    ...players.slice(0, -1),
+                    Player("Stranger"),
+                ],
+            }),
+        );
+        expect(result.current.state).toBe(before);
+        // Length mismatch also rejected.
+        act(() =>
+            result.current.dispatch({
+                type: "reorderPlayers",
+                players: players.slice(0, -1),
+            }),
+        );
+        expect(result.current.state).toBe(before);
+    });
+
+    test("reorderCategories bulk-replaces the category order on a permutation", () => {
+        // CLASSIC_SETUP has 3 categories; flip the first two.
+        const { result } = renderClue();
+        const cats = result.current.state.setup.categories;
+        const [a, b, c] = cats;
+        act(() =>
+            result.current.dispatch({
+                type: "reorderCategories",
+                categories: [b!, a!, c!],
+            }),
+        );
+        const after = result.current.state.setup.categories;
+        expect(after[0]?.id).toBe(b!.id);
+        expect(after[1]?.id).toBe(a!.id);
+        expect(after[2]?.id).toBe(c!.id);
+    });
+
+    test("reorderCategories rejects a length mismatch", () => {
+        const { result } = renderClue();
+        const before = result.current.state;
+        const cats = result.current.state.setup.categories;
+        act(() =>
+            result.current.dispatch({
+                type: "reorderCategories",
+                categories: cats.slice(0, -1),
+            }),
+        );
+        expect(result.current.state).toBe(before);
+    });
+
+    test("reorderCardsInCategory bulk-replaces the per-category card order", () => {
+        const { result } = renderClue();
+        const cat = result.current.state.setup.categories[0]!;
+        const [c1, c2, ...rest] = cat.cards;
+        act(() =>
+            result.current.dispatch({
+                type: "reorderCardsInCategory",
+                categoryId: cat.id,
+                cards: [c2!, c1!, ...rest],
+            }),
+        );
+        const updated = result.current.state.setup.categories.find(
+            c => c.id === cat.id,
+        )!;
+        expect(updated.cards[0]?.id).toBe(c2!.id);
+        expect(updated.cards[1]?.id).toBe(c1!.id);
+    });
+
+    test("reorderCardsInCategory rejects an unknown category id", () => {
+        const { result } = renderClue();
+        const before = result.current.state;
+        act(() =>
+            result.current.dispatch({
+                type: "reorderCardsInCategory",
+                categoryId: "non-existent-cat-id" as never,
+                cards: [],
+            }),
+        );
+        expect(result.current.state).toBe(before);
+    });
+
     test("movePlayer preserves knownCards, handSizes, and suggestions by name", () => {
         const { result } = renderClue();
         const p1 = Player("Player 1");
@@ -657,6 +763,112 @@ describe("player roster", () => {
     });
 });
 
+describe("M6: identity (selfPlayerId / firstDealtPlayerId)", () => {
+    test("setSelfPlayer / setFirstDealtPlayer write the values, null clears", () => {
+        const { result } = renderClue();
+        const p1 = Player("Player 1");
+        const p2 = Player("Player 2");
+        act(() =>
+            result.current.dispatch({ type: "setSelfPlayer", player: p1 }),
+        );
+        expect(result.current.state.selfPlayerId).toBe(p1);
+        act(() =>
+            result.current.dispatch({
+                type: "setFirstDealtPlayer",
+                player: p2,
+            }),
+        );
+        expect(result.current.state.firstDealtPlayerId).toBe(p2);
+        // null clears.
+        act(() =>
+            result.current.dispatch({ type: "setSelfPlayer", player: null }),
+        );
+        expect(result.current.state.selfPlayerId).toBeNull();
+    });
+
+    test("removePlayer clears selfPlayerId / firstDealtPlayerId when the removed player matches", () => {
+        // Without this, a UI feature gated on identity would keep
+        // showing for a non-existent player after they're removed.
+        const { result } = renderClue();
+        const p1 = Player("Player 1");
+        const p2 = Player("Player 2");
+        act(() => {
+            result.current.dispatch({ type: "setSelfPlayer", player: p1 });
+            result.current.dispatch({
+                type: "setFirstDealtPlayer",
+                player: p1,
+            });
+        });
+        act(() =>
+            result.current.dispatch({ type: "removePlayer", player: p1 }),
+        );
+        expect(result.current.state.selfPlayerId).toBeNull();
+        expect(result.current.state.firstDealtPlayerId).toBeNull();
+        // Removing a different player leaves identity untouched.
+        act(() =>
+            result.current.dispatch({ type: "setSelfPlayer", player: p2 }),
+        );
+        act(() =>
+            result.current.dispatch({
+                type: "removePlayer",
+                player: Player("Player 3"),
+            }),
+        );
+        expect(result.current.state.selfPlayerId).toBe(p2);
+    });
+
+    test("renamePlayer updates selfPlayerId / firstDealtPlayerId when they match", () => {
+        const { result } = renderClue();
+        const oldName = Player("Player 1");
+        const newName = Player("Anisha");
+        act(() => {
+            result.current.dispatch({
+                type: "setSelfPlayer",
+                player: oldName,
+            });
+            result.current.dispatch({
+                type: "setFirstDealtPlayer",
+                player: oldName,
+            });
+        });
+        act(() =>
+            result.current.dispatch({
+                type: "renamePlayer",
+                oldName,
+                newName,
+            }),
+        );
+        expect(result.current.state.selfPlayerId).toBe(newName);
+        expect(result.current.state.firstDealtPlayerId).toBe(newName);
+    });
+
+    test("newGame resets identity to null", () => {
+        const { result } = renderClue();
+        const p1 = Player("Player 1");
+        act(() =>
+            result.current.dispatch({ type: "setSelfPlayer", player: p1 }),
+        );
+        act(() => result.current.dispatch({ type: "newGame" }));
+        expect(result.current.state.selfPlayerId).toBeNull();
+        expect(result.current.state.firstDealtPlayerId).toBeNull();
+    });
+
+    test("hasGameData() returns true when only selfPlayerId is set", () => {
+        // The brand-new-user redirect uses hasGameData() as the
+        // "is this a fresh visitor" gate. A user who set just their
+        // identity has expressed intent and should not be redirected.
+        const { result } = renderClue();
+        expect(result.current.hasGameData()).toBe(false);
+        act(() =>
+            result.current.dispatch({
+                type: "setSelfPlayer",
+                player: Player("Player 1"),
+            }),
+        );
+        expect(result.current.hasGameData()).toBe(true);
+    });
+});
+
 describe("replaceSession", () => {
     test("replaces the entire session and mints fresh ids for empty-id suggestions", () => {
         const { result } = renderClue();
@@ -679,6 +891,8 @@ describe("replaceSession", () => {
             accusations: [],
             hypotheses: emptyHypotheses,
             pendingSuggestion: null,
+            selfPlayerId: null,
+            firstDealtPlayerId: null,
         };
         act(() => result.current.dispatch({ type: "replaceSession", session }));
         expect(result.current.state.setup).toBe(CLASSIC_SETUP_3P);
@@ -702,6 +916,8 @@ describe("replaceSession", () => {
                 accusations: [],
                 hypotheses: emptyHypotheses,
                 pendingSuggestion: null,
+                selfPlayerId: null,
+                firstDealtPlayerId: null,
             },
         }));
         // Even though state changed, canUndo remains false for the
@@ -832,6 +1048,8 @@ describe("derived values", () => {
                     accusations: [],
                     hypotheses: emptyHypotheses,
                     pendingSuggestion: null,
+                    selfPlayerId: null,
+                    firstDealtPlayerId: null,
                 } satisfies GameSession,
             });
         });
@@ -896,6 +1114,8 @@ describe("derived values", () => {
                     accusations: [],
                     hypotheses: emptyHypotheses,
                     pendingSuggestion: null,
+                    selfPlayerId: null,
+                    firstDealtPlayerId: null,
                 } satisfies GameSession,
             });
         });
@@ -1136,6 +1356,8 @@ describe("pendingSuggestion", () => {
                     accusations: [],
                     hypotheses: emptyHypotheses,
                     pendingSuggestion: null,
+                    selfPlayerId: null,
+                    firstDealtPlayerId: null,
                 },
             }),
         );

@@ -76,6 +76,8 @@ const baseState: ClueState = {
     uiMode: "checklist",
     hypotheses: emptyHypotheses,
     pendingSuggestion: null,
+    selfPlayerId: null,
+    firstDealtPlayerId: null,
 };
 
 const accusationA: DraftAccusation = {

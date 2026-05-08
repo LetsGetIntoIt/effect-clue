@@ -22,11 +22,13 @@ import {
     decodeV6Unknown,
     decodeV7Unknown,
     decodeV8Unknown,
+    decodeV9Unknown,
     type PersistedHypothesis,
     type PersistedPendingSuggestion,
     type PersistedSessionV6,
     type PersistedSessionV7,
     type PersistedSessionV8,
+    type PersistedSessionV9,
 } from "./PersistenceSchema";
 import type { PendingSuggestionDraft } from "./ClueState";
 import {
@@ -42,14 +44,13 @@ import {
  * the mutable inputs are serialized; derived knowledge is cheap to
  * recompute, so there's no need to persist it.
  *
- * v8 (current) adds `pendingSuggestion` — the in-flight new-suggestion
- * draft, persisted so it survives mobile tab swaps and reloads.
- * v7 / v6 reads still work via {@link decodeV7Unknown} / {@link
- * decodeV6Unknown}; they're auto-lifted with `pendingSuggestion: null`
- * (and `hypotheses: []` for v6). Writes always produce v8.
+ * v9 (current) adds `selfPlayerId` + `firstDealtPlayerId` — identity-
+ * related fields driven by the M6 setup wizard. v8 / v7 / v6 reads
+ * still work via the corresponding decoders; they're auto-lifted
+ * with the new fields defaulted to null. Writes always produce v9.
  */
-interface PersistedGameV8 {
-    readonly version: 8;
+interface PersistedGameV9 {
+    readonly version: 9;
     readonly setup: {
         readonly players: ReadonlyArray<string>;
         readonly categories: ReadonlyArray<{
@@ -90,9 +91,11 @@ interface PersistedGameV8 {
         readonly value: "Y" | "N";
     }>;
     readonly pendingSuggestion: PersistedPendingSuggestion | null;
+    readonly selfPlayerId: string | null;
+    readonly firstDealtPlayerId: string | null;
 }
 
-type PersistedGame = PersistedGameV8;
+type PersistedGame = PersistedGameV9;
 
 export interface GameSession {
     setup: GameSetup;
@@ -102,12 +105,14 @@ export interface GameSession {
     accusations: ReadonlyArray<Accusation>;
     hypotheses: HypothesisMap;
     pendingSuggestion: PendingSuggestionDraft | null;
+    selfPlayerId: Player | null;
+    firstDealtPlayerId: Player | null;
 }
 
 const encodeHypotheses = (
     hypotheses: HypothesisMap,
-): PersistedGameV8["hypotheses"] => {
-    const out: Array<PersistedGameV8["hypotheses"][number]> = [];
+): PersistedGameV9["hypotheses"] => {
+    const out: Array<PersistedGameV9["hypotheses"][number]> = [];
     for (const [cell, value] of hypotheses) {
         const player =
             cell.owner._tag === "Player"
@@ -235,7 +240,7 @@ const decodeHypotheses = (
 };
 
 export const encodeSession = (session: GameSession): PersistedGame => ({
-    version: 8,
+    version: 9,
     setup: {
         players: session.setup.players.map(p => String(p)),
         categories: session.setup.categories.map(c => ({
@@ -272,6 +277,54 @@ export const encodeSession = (session: GameSession): PersistedGame => ({
     })),
     hypotheses: encodeHypotheses(session.hypotheses),
     pendingSuggestion: encodePendingSuggestion(session.pendingSuggestion),
+    selfPlayerId:
+        session.selfPlayerId === null ? null : String(session.selfPlayerId),
+    firstDealtPlayerId:
+        session.firstDealtPlayerId === null
+            ? null
+            : String(session.firstDealtPlayerId),
+});
+
+const buildSessionFromV9 = (v9: PersistedSessionV9): GameSession => ({
+    setup: GameSetup({
+        players: v9.setup.players,
+        categories: v9.setup.categories.map(c => Category({
+            id: c.id,
+            name: c.name,
+            cards: c.cards.map(card => CardEntry({
+                id: card.id,
+                name: card.name,
+            })),
+        })),
+    }),
+    hands: v9.hands.map(h => ({ player: h.player, cards: h.cards })),
+    handSizes: v9.handSizes.map(h => ({
+        player: h.player,
+        size: h.size,
+    })),
+    suggestions: v9.suggestions.map(s => Suggestion({
+        id: s.id === undefined || s.id === SuggestionId("")
+            ? newSuggestionId()
+            : s.id,
+        suggester: s.suggester,
+        cards: s.cards,
+        nonRefuters: s.nonRefuters,
+        refuter: s.refuter === null ? undefined : s.refuter,
+        seenCard: s.seenCard === null ? undefined : s.seenCard,
+        loggedAt: s.loggedAt,
+    })),
+    accusations: v9.accusations.map(a => Accusation({
+        id: a.id === undefined || a.id === AccusationId("")
+            ? newAccusationId()
+            : a.id,
+        accuser: a.accuser,
+        cards: a.cards,
+        loggedAt: a.loggedAt,
+    })),
+    hypotheses: decodeHypotheses(v9.hypotheses),
+    pendingSuggestion: decodePendingSuggestion(v9.pendingSuggestion),
+    selfPlayerId: v9.selfPlayerId,
+    firstDealtPlayerId: v9.firstDealtPlayerId,
 });
 
 const buildSessionFromV8 = (v8: PersistedSessionV8): GameSession => ({
@@ -312,6 +365,12 @@ const buildSessionFromV8 = (v8: PersistedSessionV8): GameSession => ({
     })),
     hypotheses: decodeHypotheses(v8.hypotheses),
     pendingSuggestion: decodePendingSuggestion(v8.pendingSuggestion),
+    // v8 → v9 lift: identity fields default to null. Existing
+    // sessions don't lose state on the upgrade — the M6 wizard's
+    // identity step is skippable, so null is the same value a
+    // fresh wizard skip produces.
+    selfPlayerId: null,
+    firstDealtPlayerId: null,
 });
 
 const buildSessionFromV7 = (v7: PersistedSessionV7): GameSession => ({
@@ -352,11 +411,16 @@ const buildSessionFromV7 = (v7: PersistedSessionV7): GameSession => ({
     })),
     hypotheses: decodeHypotheses(v7.hypotheses),
     pendingSuggestion: null,
+    // v7 → v9 lift: identity fields default to null (skippable
+    // wizard step's natural value).
+    selfPlayerId: null,
+    firstDealtPlayerId: null,
 });
 
 /**
- * Lift a v6 payload to v8 by attaching an empty hypothesis set and a
- * null pending-suggestion draft. Forward-only and lossless.
+ * Lift a v6 payload to v9 by attaching an empty hypothesis set, a
+ * null pending-suggestion draft, and null identity fields. Forward-
+ * only and lossless.
  */
 const liftV6ToV7 = (v6: PersistedSessionV6): GameSession => ({
     setup: GameSetup({
@@ -396,9 +460,13 @@ const liftV6ToV7 = (v6: PersistedSessionV6): GameSession => ({
     })),
     hypotheses: emptyHypotheses,
     pendingSuggestion: null,
+    selfPlayerId: null,
+    firstDealtPlayerId: null,
 });
 
 export const decodeSession = (data: unknown): GameSession | undefined => {
+    const v9 = decodeV9Unknown(data);
+    if (Result.isSuccess(v9)) return buildSessionFromV9(v9.success);
     const v8 = decodeV8Unknown(data);
     if (Result.isSuccess(v8)) return buildSessionFromV8(v8.success);
     const v7 = decodeV7Unknown(data);
@@ -408,7 +476,8 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
     return undefined;
 };
 
-const STORAGE_KEY = "effect-clue.session.v8";
+const STORAGE_KEY = "effect-clue.session.v9";
+const LEGACY_STORAGE_KEY_V8 = "effect-clue.session.v8";
 const LEGACY_STORAGE_KEY_V7 = "effect-clue.session.v7";
 const LEGACY_STORAGE_KEY_V6 = "effect-clue.session.v6";
 
@@ -423,7 +492,9 @@ export const saveToLocalStorage = (session: GameSession): void => {
 
 export const loadFromLocalStorage = (): GameSession | undefined => {
     try {
-        const rawV8 = window.localStorage.getItem(STORAGE_KEY);
+        const rawV9 = window.localStorage.getItem(STORAGE_KEY);
+        if (rawV9) return decodeSession(JSON.parse(rawV9));
+        const rawV8 = window.localStorage.getItem(LEGACY_STORAGE_KEY_V8);
         if (rawV8) return decodeSession(JSON.parse(rawV8));
         const rawV7 = window.localStorage.getItem(LEGACY_STORAGE_KEY_V7);
         if (rawV7) return decodeSession(JSON.parse(rawV7));

@@ -508,6 +508,12 @@ export function ShareCreateModal({
             // receiver enters their own. The local `pendingSuggestion`
             // exists in `state` but doesn't ride the share.
             pendingSuggestion: null,
+            // Identity is per-user and stays local. The wire format
+            // does NOT carry these — receivers pick their own
+            // identity post-import (see `useApplyShareSnapshot.ts`,
+            // which defaults both to null on the receive side).
+            selfPlayerId: null,
+            firstDealtPlayerId: null,
         };
         if (variant === VARIANT_INVITE) {
             return buildInviteInput(

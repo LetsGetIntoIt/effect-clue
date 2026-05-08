@@ -212,6 +212,26 @@ export const describeAction = (
                     findCardEntry(setup, action.cell.card)?.name ??
                     String(action.cell.card),
             });
+        case "reorderPlayers":
+            return t("actions.reorderPlayers");
+        case "reorderCategories":
+            return t("actions.reorderCategories");
+        case "reorderCardsInCategory":
+            return t("actions.reorderCardsInCategory", {
+                category: categoryName(setup, action.categoryId),
+            });
+        case "setSelfPlayer":
+            return action.player === null
+                ? t("actions.clearSelfPlayer")
+                : t("actions.setSelfPlayer", {
+                      player: String(action.player),
+                  });
+        case "setFirstDealtPlayer":
+            return action.player === null
+                ? t("actions.clearFirstDealtPlayer")
+                : t("actions.setFirstDealtPlayer", {
+                      player: String(action.player),
+                  });
         // Non-undoable actions — should never reach the describer
         // because the history reducer bypasses them.
         case "setSetup":

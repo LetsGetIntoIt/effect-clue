@@ -287,6 +287,13 @@ export const buildSessionFromSnapshot = (
         hypotheses,
         // Drafts are local-only; the receiver enters their own.
         pendingSuggestion: null,
+        // Identity is local-only too — the share wire format
+        // intentionally does NOT carry `selfPlayerId` /
+        // `firstDealtPlayerId`. The receiver picks their own
+        // identity post-import (the M6 wizard's "Who are you?" step
+        // is skippable, so null is the right starting value).
+        selfPlayerId: null,
+        firstDealtPlayerId: null,
     };
 };
 
