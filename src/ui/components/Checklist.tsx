@@ -1406,10 +1406,7 @@ export function Checklist() {
                                             hypothesisValue !== undefined ? (
                                                 <ProseChecklistIcon
                                                     value={hypothesisValue}
-                                                    isHypothesis={
-                                                        hypothesisStatus.kind !==
-                                                        "confirmed"
-                                                    }
+                                                    isHypothesis
                                                     invertedStyle
                                                 />
                                             ) : null;

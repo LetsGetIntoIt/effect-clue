@@ -154,25 +154,22 @@ describe("CellWhyPopover - Deductions section", () => {
         expect(glyphBox?.textContent).toBe("()");
         expect(glyphBox?.querySelector("svg polyline")).not.toBeNull();
 
-        // Singular "this follows from" line carries the hypothesis
-        // label and (post-M4) renders the cell's derived value as a
-        // ProseChecklistIcon chip alongside the prose key.
-        const derivedLine = container.querySelector(
-            "[data-derived-status]",
-        ) as HTMLElement | null;
-        // No data attribute — locate via partial text on the key prefix.
+        // Singular "this follows from" line renders the cell's
+        // derived value as a ProseChecklistIcon chip plus the
+        // hypothesis label. The label itself now contains a
+        // ProseChecklistIcon for the hypothesis value (Y → green
+        // chip), no literal "= Y" text.
         const derivedSpan = Array.from(
             container.querySelectorAll("span"),
         ).find(s => (s.textContent ?? "").includes("statusDerivedSingular:"));
         expect(derivedSpan).toBeDefined();
         // The chip (ProseChecklistIcon) for value=Y has bg-yes-bg.
-        const chip = derivedSpan?.querySelector(
-            "span.bg-yes-bg",
-        ) as HTMLElement | null;
-        expect(chip).not.toBeNull();
-        expect(derivedSpan?.textContent ?? "").toContain(`= Y`);
-        // suppress unused-binding lint for derivedLine sentinel pattern.
-        void derivedLine;
+        // At least one such chip rendered (the cell's derived value
+        // chip — there's also a chip for the hypothesis description).
+        const chips = derivedSpan?.querySelectorAll("span.bg-yes-bg");
+        expect((chips?.length ?? 0)).toBeGreaterThanOrEqual(1);
+        // Owner / card text rendered alongside the chips.
+        expect(derivedSpan?.textContent ?? "").toContain("Col. Mustard");
 
         // The plural copy must NOT render in the singular case.
         const pluralSpan = Array.from(
@@ -342,9 +339,18 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
 
         // The status box now renders the (triangle) AlertIcon —
         // not an X — because X is reserved for the cell's "doesn't
-        // own" semantic. The icon pulses to flag attention. The
-        // help-row badge above is a static ProseChecklistIcon (no
-        // SVG-with-the-pulse class).
+        // own" semantic. No pulse: the global contradiction banner
+        // already grabs attention, the in-popover icon is static.
+        const alertSvgs = Array.from(
+            container.querySelectorAll("svg"),
+        ).filter(svg => {
+            const path = svg.querySelector("path");
+            return (
+                path !== null &&
+                (path.getAttribute("d") ?? "").startsWith("M10.29")
+            );
+        });
+        expect(alertSvgs.length).toBe(1);
         const pulsingSvgs = Array.from(
             container.querySelectorAll("svg"),
         ).filter(svg =>
@@ -352,7 +358,7 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
                 "motion-safe:animate-pulse",
             ),
         );
-        expect(pulsingSvgs.length).toBe(1);
+        expect(pulsingSvgs.length).toBe(0);
     });
 
     test("jointly conflicts: short selectedHelpJointlyConflicts + long statusJointlyConflicts box with bullets", () => {

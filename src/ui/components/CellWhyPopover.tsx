@@ -79,24 +79,46 @@ export function CellWhyPopover({
     // provenance for hypotheses, so we list the full active set rather
     // than narrowing to the specific subset that drove this value —
     // good-enough until we wire up leave-one-out attribution.
+    interface ActiveHypothesisEntry {
+        readonly ownerName: string;
+        readonly cardLabel: string;
+        readonly value: HypothesisValue;
+    }
     const showHypothesisList =
         status.kind === "jointlyConflicts" || status.kind === "derived";
-    const activeHypothesisLabels: ReadonlyArray<string> = (() => {
+    const activeHypothesisEntries: ReadonlyArray<ActiveHypothesisEntry> = (() => {
         if (!showHypothesisList) return [];
-        const out: Array<string> = [];
+        const out: Array<ActiveHypothesisEntry> = [];
         for (const [c, v] of hypotheses) {
-            const cardName = findCardEntry(setup, c.card)?.name ?? String(c.card);
-            out.push(`${ownerLabel(c.owner)} / ${cardName} = ${v}`);
+            const cardLabel =
+                findCardEntry(setup, c.card)?.name ?? String(c.card);
+            out.push({
+                ownerName: ownerLabel(c.owner),
+                cardLabel,
+                value: v,
+            });
         }
         return out;
     })();
+    // Inline JSX renderer for each entry — used in bullet lists and
+    // the singular `description` chunk. The chip carries the value
+    // (Y / N) so the prose drops the literal letter.
+    const renderHypothesisEntry = (entry: ActiveHypothesisEntry) => (
+        <>
+            {entry.ownerName} / {entry.cardLabel}{" "}
+            <ProseChecklistIcon value={entry.value} />
+        </>
+    );
+    // Stable key for React lists.
+    const entryKey = (entry: ActiveHypothesisEntry): string =>
+        `${entry.ownerName}/${entry.cardLabel}/${entry.value}`;
 
     // For a `derived` popover with exactly one active hypothesis,
     // collapse the heading + bulleted list into a single inline
     // sentence ("from your active hypothesis (Player 1 / Miss Scarlet
     // = Y)."). Reads better when there's only one source to cite.
     const useDerivedSingular =
-        status.kind === "derived" && activeHypothesisLabels.length === 1;
+        status.kind === "derived" && activeHypothesisEntries.length === 1;
 
     const isContradicted =
         status.kind === "directlyContradicted" ||
@@ -139,20 +161,19 @@ export function CellWhyPopover({
         // Contradiction state — alert (triangle) icon, NOT an X.
         // The cell-grid uses X for "doesn't own", so reusing X for a
         // problem signal here would conflate two unrelated meanings.
-        // The pulse animation moves into the popover whenever it's
-        // open — the matching cell badge stops animating while the
-        // popover is visible (see Checklist's `isPopoverOnThisCell`).
+        // The contradiction banner up top already grabs the user's
+        // attention; this in-popover icon is a static label, not a
+        // separate attention cue.
         <div className="flex items-start gap-2 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-2 text-[12px] text-danger">
-            <AlertIcon
-                size={14}
-                className="mt-[1px] flex-shrink-0 motion-safe:animate-pulse"
-            />
+            <AlertIcon size={14} className="mt-[1px] flex-shrink-0" />
             <div className="flex flex-col gap-1">
                 <span>{longStatusMessage}</span>
-                {isJointConflict && activeHypothesisLabels.length > 0 && (
+                {isJointConflict && activeHypothesisEntries.length > 0 && (
                     <ul className="ml-3 list-disc">
-                        {activeHypothesisLabels.map(lbl => (
-                            <li key={lbl}>{lbl}</li>
+                        {activeHypothesisEntries.map(entry => (
+                            <li key={entryKey(entry)}>
+                                {renderHypothesisEntry(entry)}
+                            </li>
                         ))}
                     </ul>
                 )}
@@ -197,22 +218,21 @@ export function CellWhyPopover({
             }
         })();
         // Two chips on this row, with different roles:
-        //   - The leading badge is the inverted "?" variant —
-        //     dark tone + white "?" — matching the deductions
-        //     section's 20×20 leading icon size. For confirmed cells
-        //     (where the hypothesis matches reality) we drop the "?"
-        //     and just show the concrete icon, since the value isn't
-        //     hypothetical at that point.
+        //   - The leading badge ALWAYS renders the inverted "?"
+        //     variant — dark tone + white "?" — matching the
+        //     deductions section's 20×20 leading icon size. The "?"
+        //     means "this cell carries a hypothesis"; whether the
+        //     hypothesis happens to be confirmed / contradicted is
+        //     conveyed by the prose, not by swapping the glyph.
         //   - The inline-prose chip is about the user's chosen value,
         //     not its hypothesis state — always shows the concrete
         //     icon for Y / N. Default (light) style so it reads as
         //     part of the sentence rather than as another badge.
-        const badgeIsHypothesis = status.kind !== "confirmed";
         return (
             <div className="flex items-center gap-2 text-[12px] leading-snug text-fg">
                 <ProseChecklistIcon
                     value={hypothesisValue}
-                    isHypothesis={badgeIsHypothesis}
+                    isHypothesis
                     invertedStyle
                     className="!h-5 !w-5 text-[20px]"
                 />
@@ -275,8 +295,10 @@ export function CellWhyPopover({
                                                                   }
                                                               />
                                                           ),
-                                                          description:
-                                                              activeHypothesisLabels[0]!,
+                                                          description: () =>
+                                                              renderHypothesisEntry(
+                                                                  activeHypothesisEntries[0]!,
+                                                              ),
                                                       },
                                                   )
                                                 : t.rich("statusDerived", {
@@ -290,13 +312,19 @@ export function CellWhyPopover({
                                                   })}
                                         </span>
                                         {!useDerivedSingular &&
-                                            activeHypothesisLabels.length >
+                                            activeHypothesisEntries.length >
                                                 0 && (
                                                 <ul className="ml-3 list-disc">
-                                                    {activeHypothesisLabels.map(
-                                                        lbl => (
-                                                            <li key={lbl}>
-                                                                {lbl}
+                                                    {activeHypothesisEntries.map(
+                                                        entry => (
+                                                            <li
+                                                                key={entryKey(
+                                                                    entry,
+                                                                )}
+                                                            >
+                                                                {renderHypothesisEntry(
+                                                                    entry,
+                                                                )}
                                                             </li>
                                                         ),
                                                     )}
@@ -327,11 +355,23 @@ export function CellWhyPopover({
                             {t("leadsLabel")}
                         </div>
                         <div className="flex items-start gap-2 text-accent">
+                            {/* Leads chip in the popover matches the
+                                Deductions and Hypothesis sections'
+                                leftmost icon at 20px tall, so all
+                                three sections share a consistent
+                                left-column "this is the cell" reference.
+                                Width is left to grow with the number
+                                list — no square-aspect ratio because a
+                                long footnote run (e.g. "1,2,3,4")
+                                wouldn't fit. The cell-grid version of
+                                this chip is rendered separately in
+                                Checklist.tsx and stays small (text-
+                                [10px]) — different context. */}
                             <span
                                 aria-hidden
-                                className="mt-[2px] inline-flex flex-shrink-0 items-center gap-[2px] rounded-[3px] border border-accent/40 px-[3px] py-px text-[10px] font-semibold leading-none text-accent tabular-nums"
+                                className="inline-flex h-5 flex-shrink-0 items-center gap-[3px] rounded border border-accent/40 px-1.5 text-[12px] font-semibold leading-none text-accent tabular-nums"
                             >
-                                <LightbulbIcon size={9} />
+                                <LightbulbIcon size={12} />
                                 {footnoteNumbers.join(",")}
                             </span>
                             <span>
