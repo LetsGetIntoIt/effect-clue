@@ -47,6 +47,14 @@
     /* --- N = ruled out (faded crimson). */
     --color-no: #8a1818;
     --color-no-bg: #f0d4c8;
+    /* Lighter, less-prominent variant used only for the X glyph in
+       checklist grid cells. The deep crimson `--color-no` reads
+       loud in a wall of cells; mixing 50% white tones it down to a
+       softer "ruled-out" reading without changing the popover /
+       prose chip colors that depend on `--color-no` for tone.
+       Color-mix keeps the value derived from the source token, so a
+       theme tweak to `--color-no` carries through. */
+    --color-no-cell: color-mix(in srgb, var(--color-no), white 50%);
 
     /* --- Unknown / blank. */
     --color-unknown-bg: #f7f0dc;

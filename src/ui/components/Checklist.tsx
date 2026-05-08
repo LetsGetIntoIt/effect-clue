@@ -11,8 +11,11 @@ import {
 import { CellLayout } from "./CellLayout";
 import { CellWhyPopover, hypothesisValueFor } from "./CellWhyPopover";
 import {
+    CELL_TONE_NEUTRAL_CLASS,
+    CELL_TONE_Y_CLASS,
     GLYPH_BLANK,
     glyphKindFor,
+    ProseChecklistIcon,
     renderGlyphNode,
 } from "./CellGlyph";
 
@@ -92,7 +95,6 @@ import { useShareContext } from "../share/ShareProvider";
 import { CardPackRow } from "./CardPackRow";
 import { ShareIcon } from "./ShareIcon";
 import { ChevronLeftIcon, ChevronRightIcon, Envelope, LightbulbIcon } from "./Icons";
-import { HypothesisBadge } from "./HypothesisBadge";
 import { InfoPopover } from "./InfoPopover";
 
 /**
@@ -1402,10 +1404,13 @@ export function Checklist() {
                                         const topRight =
                                             !inSetup &&
                                             hypothesisValue !== undefined ? (
-                                                <HypothesisBadge
+                                                <ProseChecklistIcon
                                                     value={hypothesisValue}
-                                                    status={hypothesisStatus}
-                                                    animated
+                                                    isHypothesis={
+                                                        hypothesisStatus.kind !==
+                                                        "confirmed"
+                                                    }
+                                                    invertedStyle
                                                 />
                                             ) : null;
                                         const center = setupCheckbox ? (
@@ -2868,11 +2873,10 @@ const cellClass = (
 ): string => {
     let base = interactive ? `${CELL_BASE}${CELL_INTERACTIVE}` : CELL_BASE;
     if (highlighted) base += CELL_HIGHLIGHTED;
-    // Contradiction states are conveyed by the X glyph + bounce on
-    // the corner `HypothesisBadge` (`directlyContradicted` and
-    // `jointlyConflicts` both flip the badge into rejected mode) and
-    // by the boxed status panel inside the popover, so no extra
-    // cell ring is needed here.
+    // Contradiction states are conveyed by the alert icon + pulse on
+    // the popover's status box (`directlyContradicted` and
+    // `jointlyConflicts` both surface there), so no extra cell ring
+    // is needed here.
     void status;
     // Pick the color tone from the displayed value (real wins; otherwise
     // the hypothesis or derived-from-hypothesis value).
@@ -2885,10 +2889,15 @@ const cellClass = (
                 ? display.value
                 : undefined;
     if (tone === Y) {
-        return `${base} bg-yes-bg text-yes focus:ring-offset-yes-bg`;
+        return `${base} ${CELL_TONE_Y_CLASS} focus:ring-offset-yes-bg`;
     }
     if (tone === N) {
-        return `${base} bg-no-bg text-no focus:ring-offset-no-bg`;
+        // Live-grid override: use the softened `--color-no-cell`
+        // instead of the full-strength `--color-no` so a wall of N
+        // cells reads less aggressively. The popover / prose chip
+        // version of CELL_TONE_N_CLASS still uses the strong red
+        // (intentional — chips are inline, not at a wall scale).
+        return `${base} bg-no-bg text-no-cell focus:ring-offset-no-bg`;
     }
-    return `${base} bg-white focus:ring-offset-white`;
+    return `${base} ${CELL_TONE_NEUTRAL_CLASS} focus:ring-offset-white`;
 };

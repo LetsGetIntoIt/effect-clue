@@ -1,10 +1,12 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useCallback, useId, useRef } from "react";
+import { useCallback, useId, useRef, type ReactNode } from "react";
 import type { HypothesisStatus, HypothesisValue } from "../../logic/Hypothesis";
+import { N, Y } from "../../logic/Knowledge";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { label } from "../keyMap";
+import { ProseChecklistIcon } from "./CellGlyph";
 
 interface HypothesisControlProps {
     readonly value: HypothesisValue | undefined;
@@ -127,10 +129,23 @@ export function HypothesisControl({
         [onChange, focusOption],
     );
 
-    const labelFor = (option: Option): string => {
+    // The Y / N options render the same chip-styled cell glyph that
+    // the live grid + popover prose use, so users learn the icon and
+    // its tone in one place. The "Off" option keeps a plain text label
+    // because there's no cell-tone equivalent for "no hypothesis".
+    const labelFor = (option: Option): ReactNode => {
         if (option === OPT_OFF) return t("optionOff");
-        if (option === OPT_Y) return t("optionY");
-        return t("optionN");
+        if (option === OPT_Y) return <ProseChecklistIcon value={Y} />;
+        return <ProseChecklistIcon value={N} />;
+    };
+
+    // Screen-reader text for the icon-only options — the chip itself
+    // is `aria-hidden`, so the button needs an explicit aria-label to
+    // stay legible to assistive tech.
+    const ariaLabelFor = (option: Option): string | undefined => {
+        if (option === OPT_Y) return t("optionYAriaLabel");
+        if (option === OPT_N) return t("optionNAriaLabel");
+        return undefined;
     };
 
     const isContradicted =
@@ -164,6 +179,7 @@ export function HypothesisControl({
                             : "") +
                         collapseClass +
                         stackClass;
+                    const ariaLabel = ariaLabelFor(option);
                     return (
                         <button
                             key={option}
@@ -173,6 +189,9 @@ export function HypothesisControl({
                             type="button"
                             role="radio"
                             aria-checked={isSelected}
+                            {...(ariaLabel !== undefined
+                                ? { "aria-label": ariaLabel }
+                                : {})}
                             tabIndex={isSelected ? 0 : -1}
                             disabled={disabled}
                             className={className}

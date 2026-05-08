@@ -557,8 +557,8 @@ describe("Checklist — setup mode — scope of rendered controls", () => {
         const caseFileCell = tds[tds.length - 1];
         expect(caseFileCell).toBeDefined();
         if (!caseFileCell) return;
-        // The deduced value renders…
-        expect(caseFileCell.textContent?.trim()).toBe("✓");
+        // The deduced value renders as a CheckIcon SVG (post-M4 icon swap).
+        expect(caseFileCell.querySelector("svg")).not.toBeNull();
         // …but the cell stays non-interactive (no popover affordance).
         expect(caseFileCell.getAttribute("role")).toBeNull();
         expect(caseFileCell.getAttribute("aria-haspopup")).toBeNull();

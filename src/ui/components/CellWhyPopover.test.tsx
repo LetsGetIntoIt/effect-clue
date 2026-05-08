@@ -16,10 +16,27 @@ import { CellWhyPopover } from "./CellWhyPopover";
 // Same translation mock pattern as Checklist.deduce.test.tsx:
 // `t(key, values)` returns `"key:{json}"` when given values so the
 // test can assert on both the key and the substituted values, and
-// returns the raw key otherwise.
+// returns the raw key otherwise. `t.rich` invokes each callback chunk
+// (e.g. the `chip` chunk that renders `<ProseChecklistIcon>`) so the
+// rendered tree includes the chip alongside the key.
 vi.mock("next-intl", () => {
     const t = (key: string, values?: Record<string, unknown>): string =>
         values ? `${key}:${JSON.stringify(values)}` : key;
+    (t as unknown as { rich: unknown }).rich = (
+        key: string,
+        values?: Record<string, unknown>,
+    ): unknown => {
+        if (values === undefined) return key;
+        const out: Array<unknown> = [`${key}:`];
+        for (const [chunkName, val] of Object.entries(values)) {
+            if (typeof val === "function") {
+                out.push((val as () => unknown)());
+            } else {
+                out.push(`[${chunkName}=${String(val)}]`);
+            }
+        }
+        return out;
+    };
     return {
         useTranslations: () => t,
     };
@@ -89,8 +106,8 @@ describe("CellWhyPopover - Deductions section", () => {
         expect(glyphBox?.className).toMatch(/bg-yes-bg/);
         // Border-border (cell-style box).
         expect(glyphBox?.className).toMatch(/border-border/);
-        // The Y glyph's text content is "✓".
-        expect(glyphBox?.textContent).toBe("✓");
+        // Y glyph is a CheckIcon SVG (post-M4 icon swap).
+        expect(glyphBox?.querySelector("svg")).not.toBeNull();
     });
 
     test("renders with N-tinted glyph box for a real N cell", () => {
@@ -105,7 +122,8 @@ describe("CellWhyPopover - Deductions section", () => {
         const glyphBox = container.querySelector('[data-glyph="no"]');
         expect(glyphBox).not.toBeNull();
         expect(glyphBox?.className).toMatch(/bg-no-bg/);
-        expect(glyphBox?.textContent).toBe("·");
+        // N glyph is an XIcon SVG (post-M4 icon swap).
+        expect(glyphBox?.querySelector("svg")).not.toBeNull();
     });
 
     test("derived cell: '?' glyph on Y tone, statusDerivedSingular text, no statusBox in hypothesis section", () => {
@@ -127,21 +145,43 @@ describe("CellWhyPopover - Deductions section", () => {
         );
         // Deductions heading shows.
         expect(screen.getByText("deductionsLabel")).toBeInTheDocument();
-        // Question-mark glyph on Y-tone tile.
-        const glyphBox = container.querySelector('[data-glyph="question"]');
+        // Y-tone tile renders the parens-wrapped CheckIcon (post-M4
+        // cell-glyph rework — derived cells don't show "?" anymore).
+        const glyphBox = container.querySelector('[data-glyph="derivedYes"]');
         expect(glyphBox).not.toBeNull();
         expect(glyphBox?.className).toMatch(/bg-yes-bg/);
-        expect(glyphBox?.textContent).toBe("?");
+        // Parens around the icon, no "?" text.
+        expect(glyphBox?.textContent).toBe("()");
+        expect(glyphBox?.querySelector("svg polyline")).not.toBeNull();
 
-        // Singular "this follows from" line carries both the cell's
-        // derived value (so "?" badges aren't ambiguous) and the
-        // hypothesis label.
-        const derivedLine = screen.getByText(/^statusDerivedSingular:/);
-        expect(derivedLine.textContent).toContain("= Y");
-        expect(derivedLine.textContent).toContain('"value":"Y"');
+        // Singular "this follows from" line carries the hypothesis
+        // label and (post-M4) renders the cell's derived value as a
+        // ProseChecklistIcon chip alongside the prose key.
+        const derivedLine = container.querySelector(
+            "[data-derived-status]",
+        ) as HTMLElement | null;
+        // No data attribute — locate via partial text on the key prefix.
+        const derivedSpan = Array.from(
+            container.querySelectorAll("span"),
+        ).find(s => (s.textContent ?? "").includes("statusDerivedSingular:"));
+        expect(derivedSpan).toBeDefined();
+        // The chip (ProseChecklistIcon) for value=Y has bg-yes-bg.
+        const chip = derivedSpan?.querySelector(
+            "span.bg-yes-bg",
+        ) as HTMLElement | null;
+        expect(chip).not.toBeNull();
+        expect(derivedSpan?.textContent ?? "").toContain(`= Y`);
+        // suppress unused-binding lint for derivedLine sentinel pattern.
+        void derivedLine;
 
         // The plural copy must NOT render in the singular case.
-        expect(screen.queryByText(/^statusDerived:/)).toBeNull();
+        const pluralSpan = Array.from(
+            container.querySelectorAll("span"),
+        ).find(s =>
+            (s.textContent ?? "").startsWith("statusDerived:") &&
+            !(s.textContent ?? "").startsWith("statusDerivedSingular:"),
+        );
+        expect(pluralSpan).toBeUndefined();
 
         // No long-form statusBox in the Hypothesis section for derived.
         expect(screen.queryByText("statusConfirmed")).toBeNull();
@@ -164,10 +204,20 @@ describe("CellWhyPopover - Deductions section", () => {
             />,
         );
         expect(screen.getByText("deductionsLabel")).toBeInTheDocument();
-        // Plural derived heading line, carrying the cell's derived
-        // value so the "?" badge isn't ambiguous on its own.
-        const derivedLine = screen.getByText(/^statusDerived:/);
-        expect(derivedLine.textContent).toContain('"value":"N"');
+        // Plural derived heading line — the cell's derived value renders
+        // as a ProseChecklistIcon chip alongside the prose key (post-M4).
+        const derivedSpan = Array.from(
+            container.querySelectorAll("span"),
+        ).find(s =>
+            (s.textContent ?? "").startsWith("statusDerived:") &&
+            !(s.textContent ?? "").startsWith("statusDerivedSingular:"),
+        );
+        expect(derivedSpan).toBeDefined();
+        // value=N chip has bg-no-bg.
+        const chip = derivedSpan?.querySelector(
+            "span.bg-no-bg",
+        ) as HTMLElement | null;
+        expect(chip).not.toBeNull();
         // Bulleted list with two items.
         const items = container.querySelectorAll("ul > li");
         expect(items.length).toBe(2);
@@ -224,12 +274,28 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
                 display={{ tag: "hypothesis", value: "Y" }}
             />,
         );
-        const line = screen.getByText(/^selectedHelpActive:/);
-        expect(line.textContent).toContain('"value":"Y"');
+        // Locate the help-text wrapper and verify it carries both the
+        // i18n key prefix and a ProseChecklistIcon chip for the value.
+        const helpSpan = Array.from(
+            container.querySelectorAll("span"),
+        ).find(s => (s.textContent ?? "").includes("selectedHelpActive:"));
+        expect(helpSpan).toBeDefined();
+        // value=Y inline-prose chip is the default (light) style.
+        expect(helpSpan?.querySelector("span.bg-yes-bg")).not.toBeNull();
 
-        // Badge SVG renders next to the line.
-        const badgeSvg = container.querySelector('svg[data-glyph]');
-        expect(badgeSvg).not.toBeNull();
+        // The leading badge (standalone chip beside the prose) uses
+        // the inverted style — dark Y bg, white glyph — so it visually
+        // matches the cell's top-right inset badge.
+        const helpRow = helpSpan?.parentElement as HTMLElement;
+        const invertedChips = helpRow.querySelectorAll(
+            "span.bg-yes:not(.bg-yes-bg), span.bg-no:not(.bg-no-bg)",
+        );
+        expect(invertedChips.length).toBe(1);
+        // Plus the inline-prose chip in default (light) style.
+        const lightChips = helpRow.querySelectorAll(
+            "span.bg-yes-bg, span.bg-no-bg",
+        );
+        expect(lightChips.length).toBe(1);
 
         // No long-form status panel for "active".
         expect(screen.queryByText("statusConfirmed")).toBeNull();
@@ -238,7 +304,7 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
     });
 
     test("confirmed: short selectedHelpConfirmed + long statusConfirmed box", () => {
-        render(
+        const { container } = render(
             <CellWhyPopover
                 {...baseProps}
                 hypothesisValue="Y"
@@ -246,7 +312,10 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
                 display={{ tag: "real", value: Y }}
             />,
         );
-        expect(screen.getByText(/^selectedHelpConfirmed:/)).toBeInTheDocument();
+        const helpSpan = Array.from(
+            container.querySelectorAll("span"),
+        ).find(s => (s.textContent ?? "").includes("selectedHelpConfirmed:"));
+        expect(helpSpan).toBeDefined();
         expect(screen.getByText("statusConfirmed")).toBeInTheDocument();
     });
 
@@ -263,21 +332,27 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
                 display={{ tag: "real", value: Y }}
             />,
         );
-        expect(screen.getByText(/^selectedHelpContradicted:/)).toBeInTheDocument();
+        const helpSpan = Array.from(
+            container.querySelectorAll("span"),
+        ).find(s =>
+            (s.textContent ?? "").includes("selectedHelpContradicted:"),
+        );
+        expect(helpSpan).toBeDefined();
         expect(screen.getByText("statusDirectlyContradicted")).toBeInTheDocument();
 
-        // The status box embeds an `<HypothesisBadge animated>` so the
-        // pulse moves into the popover when it opens. Two badges total
-        // in the popover (the short help row and the status box); the
-        // status-box one should carry the ping class.
-        const xBadges = container.querySelectorAll('svg[data-glyph="x"]');
-        expect(xBadges.length).toBe(2);
-        const animatedXBadges = Array.from(xBadges).filter(svg =>
+        // The status box now renders the (triangle) AlertIcon —
+        // not an X — because X is reserved for the cell's "doesn't
+        // own" semantic. The icon pulses to flag attention. The
+        // help-row badge above is a static ProseChecklistIcon (no
+        // SVG-with-the-pulse class).
+        const pulsingSvgs = Array.from(
+            container.querySelectorAll("svg"),
+        ).filter(svg =>
             (svg.getAttribute("class") ?? "").includes(
                 "motion-safe:animate-pulse",
             ),
         );
-        expect(animatedXBadges.length).toBe(1);
+        expect(pulsingSvgs.length).toBe(1);
     });
 
     test("jointly conflicts: short selectedHelpJointlyConflicts + long statusJointlyConflicts box with bullets", () => {
@@ -296,9 +371,12 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
                 display={{ tag: "hypothesis", value: "Y" }}
             />,
         );
-        expect(
-            screen.getByText(/^selectedHelpJointlyConflicts:/),
-        ).toBeInTheDocument();
+        const helpSpan = Array.from(
+            container.querySelectorAll("span"),
+        ).find(s =>
+            (s.textContent ?? "").includes("selectedHelpJointlyConflicts:"),
+        );
+        expect(helpSpan).toBeDefined();
         expect(screen.getByText("statusJointlyConflicts")).toBeInTheDocument();
         // Bulleted list inside the danger box (alongside the conflict
         // headline). At least one li for the other hypothesis.
