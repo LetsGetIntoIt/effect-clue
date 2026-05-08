@@ -150,7 +150,11 @@ function needsPaneSettle(fromMode: UiMode, toMode: UiMode): boolean {
 }
 
 export type { DraftSuggestion } from "../logic/ClueState";
-import type { ClueAction, ClueState } from "../logic/ClueState";
+import type {
+    ClueAction,
+    ClueState,
+    PendingSuggestionDraft,
+} from "../logic/ClueState";
 
 const initialState: ClueState = {
     setup: DEFAULT_SETUP,
@@ -160,6 +164,7 @@ const initialState: ClueState = {
     accusations: [],
     uiMode: "setup",
     hypotheses: emptyHypotheses,
+    pendingSuggestion: null,
 };
 
 const reducer = (state: ClueState, action: ClueAction): ClueState => {
@@ -177,7 +182,8 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
             // Swap the deck; keep the current player roster. Hand
             // sizes, known cards, suggestions, accusations, and
             // hypotheses reference card ids from the old deck and are
-            // discarded.
+            // discarded. Any in-flight pending-suggestion draft also
+            // references the old deck's cards, so drop it too.
             return {
                 ...state,
                 setup: GameSetup({
@@ -189,6 +195,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 suggestions: [],
                 accusations: [],
                 hypotheses: emptyHypotheses,
+                pendingSuggestion: null,
             };
 
         case "setSetup":
@@ -357,9 +364,13 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
         }
 
         case "addSuggestion":
+            // Submitting the draft also clears it — the form re-mounts
+            // empty for the next entry, and a stale persisted draft
+            // would otherwise re-seed the next form.
             return {
                 ...state,
                 suggestions: [...state.suggestions, action.suggestion],
+                pendingSuggestion: null,
             };
 
         case "updateSuggestion":
@@ -445,6 +456,9 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 accusations: state.accusations.filter(
                     a => a.accuser !== action.player,
                 ),
+                // The in-flight draft may reference the removed player
+                // in any of its slots; drop it rather than partial-prune.
+                pendingSuggestion: null,
             };
 
         case "movePlayer": {
@@ -470,6 +484,28 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
         case "renamePlayer": {
             if (action.oldName === action.newName) return state;
             const { oldName, newName } = action;
+            const pending = state.pendingSuggestion;
+            const renamedPending: PendingSuggestionDraft | null =
+                pending === null
+                    ? null
+                    : {
+                          ...pending,
+                          suggester:
+                              pending.suggester === oldName
+                                  ? newName
+                                  : pending.suggester,
+                          nonRefuters:
+                              pending.nonRefuters === null ||
+                              isPendingNobody(pending.nonRefuters)
+                                  ? pending.nonRefuters
+                                  : pending.nonRefuters.map(p =>
+                                        p === oldName ? newName : p,
+                                    ),
+                          refuter:
+                              pending.refuter === oldName
+                                  ? newName
+                                  : pending.refuter,
+                      };
             return {
                 ...state,
                 setup: GameSetup({
@@ -501,6 +537,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     ...a,
                     accuser: a.accuser === oldName ? newName : a.accuser,
                 })),
+                pendingSuggestion: renamedPending,
             };
         }
 
@@ -549,9 +586,23 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     cards: Array.from(a.cards),
                 })),
                 hypotheses: session.hypotheses,
+                // Imported sessions don't carry a draft. Drop any
+                // local in-flight draft so the new game starts clean.
+                pendingSuggestion: session.pendingSuggestion ?? null,
             };
         }
+
+        case "setPendingSuggestion":
+            return { ...state, pendingSuggestion: action.draft };
     }
+};
+
+const isPendingNobody = (
+    v: ReadonlyArray<Player> | { readonly kind: "nobody" } | null,
+): v is { readonly kind: "nobody" } => {
+    if (v === null) return false;
+    if (Array.isArray(v)) return false;
+    return (v as { readonly kind: "nobody" }).kind === "nobody";
 };
 
 // ---- Derived ------------------------------------------------------------
@@ -726,7 +777,14 @@ const historyReducer = (h: History, action: HistoryAction): History => {
     const newCurrent = reducer(h.current, action);
     if (newCurrent === h.current) return h;
     // Ephemeral / restore actions don't participate in history.
-    if (action.type === "replaceSession" || action.type === "setUiMode") {
+    // `setPendingSuggestion` fires per keystroke as the form-side
+    // mirror updates ClueState; making it undoable would mean every
+    // typed character pushes a frame onto the undo stack.
+    if (
+        action.type === "replaceSession"
+        || action.type === "setUiMode"
+        || action.type === "setPendingSuggestion"
+    ) {
         return { ...h, current: newCurrent };
     }
     return {
@@ -831,6 +889,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             } else if (
                 action.type !== "setUiMode"
                 && action.type !== "replaceSession"
+                && action.type !== "setPendingSuggestion"
             ) {
                 markGameTouched(DateTime.nowUnsafe());
             }
@@ -1231,6 +1290,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             suggestions: suggestionsAsData,
             accusations: accusationsAsData,
             hypotheses: state.hypotheses,
+            pendingSuggestion: state.pendingSuggestion,
         };
         saveToLocalStorage(session);
         queryClient.setQueryData(gameSessionQueryKey, session);
@@ -1469,5 +1529,10 @@ const pruneSessionToSetup = (
             .filter(a => playerSet.has(String(a.accuser)))
             .filter(a => a.cards.every(c => cardIdSet.has(String(c)))),
         hypotheses: prunedHypotheses,
+        // The in-flight draft references Player and Card ids. Rather
+        // than partial-prune slots in place, drop the whole draft when
+        // the setup changes — the user is mid-flow at the keyboard, so
+        // re-entering is cheaper than auditing per-slot validity.
+        pendingSuggestion: null,
     };
 };

@@ -8,6 +8,7 @@ import { CLASSIC_SETUP_3P, DEFAULT_SETUP } from "../logic/GameSetup";
 import { emptyHypotheses } from "../logic/Hypothesis";
 import { KnownCard } from "../logic/InitialKnowledge";
 import type { GameSession } from "../logic/Persistence";
+import type { PendingSuggestionDraft } from "../logic/ClueState";
 import { PlayerOwner } from "../logic/GameObjects";
 import { Cell, N as N_VAL, Y as Y_VAL } from "../logic/Knowledge";
 import { Result } from "effect";
@@ -677,6 +678,7 @@ describe("replaceSession", () => {
             ],
             accusations: [],
             hypotheses: emptyHypotheses,
+            pendingSuggestion: null,
         };
         act(() => result.current.dispatch({ type: "replaceSession", session }));
         expect(result.current.state.setup).toBe(CLASSIC_SETUP_3P);
@@ -699,6 +701,7 @@ describe("replaceSession", () => {
                 suggestions: [],
                 accusations: [],
                 hypotheses: emptyHypotheses,
+                pendingSuggestion: null,
             },
         }));
         // Even though state changed, canUndo remains false for the
@@ -828,6 +831,7 @@ describe("derived values", () => {
                     suggestions: [],
                     accusations: [],
                     hypotheses: emptyHypotheses,
+                    pendingSuggestion: null,
                 } satisfies GameSession,
             });
         });
@@ -891,6 +895,7 @@ describe("derived values", () => {
                     suggestions: [],
                     accusations: [],
                     hypotheses: emptyHypotheses,
+                    pendingSuggestion: null,
                 } satisfies GameSession,
             });
         });
@@ -957,5 +962,201 @@ describe("accusations end-to-end", () => {
         expect(
             Result.isSuccess(result.current.derived.deductionResult),
         ).toBe(true);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// pendingSuggestion (M2)
+//
+// A persisted in-flight new-suggestion draft survives mobile tab swaps
+// (which unmount `SuggestionLogPanel` → `SuggestionForm`) and full-page
+// reloads. The reducer owns the clear-on-submit / clear-on-newGame /
+// stale-ref-on-setup-change semantics; the form layer owns the read/write
+// mirror.
+// ---------------------------------------------------------------------------
+describe("pendingSuggestion", () => {
+    const suspect = cardByName(CLASSIC_SETUP_3P, "Col. Mustard");
+    const knife = cardByName(CLASSIC_SETUP_3P, "Knife");
+    const kitchen = cardByName(CLASSIC_SETUP_3P, "Kitchen");
+    const sampleDraft = (
+        overrides: Record<string, unknown> = {},
+    ): PendingSuggestionDraft => ({
+        id: "draft-test-1",
+        suggester: Player("Player 1"),
+        cards: [suspect, knife, kitchen],
+        nonRefuters: null,
+        refuter: null,
+        seenCard: null,
+        ...overrides,
+    });
+
+    test("setPendingSuggestion writes the field", () => {
+        const { result } = renderClue();
+        expect(result.current.state.pendingSuggestion).toBeNull();
+        const d = sampleDraft();
+        act(() =>
+            result.current.dispatch({
+                type: "setPendingSuggestion",
+                draft: d,
+            }),
+        );
+        expect(result.current.state.pendingSuggestion).toEqual(d);
+    });
+
+    test("setPendingSuggestion bypasses undo history (form keystrokes shouldn't fill the stack)", () => {
+        const { result } = renderClue();
+        const d = sampleDraft();
+        act(() =>
+            result.current.dispatch({
+                type: "setPendingSuggestion",
+                draft: d,
+            }),
+        );
+        expect(result.current.canUndo).toBe(false);
+    });
+
+    test("addSuggestion clears any pending draft", () => {
+        const { result } = renderClue();
+        act(() =>
+            result.current.dispatch({
+                type: "setPendingSuggestion",
+                draft: sampleDraft(),
+            }),
+        );
+        expect(result.current.state.pendingSuggestion).not.toBeNull();
+        act(() =>
+            result.current.dispatch({
+                type: "addSuggestion",
+                suggestion: {
+                    id: newSuggestionId(),
+                    suggester: Player("Player 1"),
+                    cards: [suspect, knife, kitchen],
+                    nonRefuters: [],
+                },
+            }),
+        );
+        expect(result.current.state.pendingSuggestion).toBeNull();
+    });
+
+    test("newGame clears any pending draft", () => {
+        const { result } = renderClue();
+        act(() =>
+            result.current.dispatch({
+                type: "setPendingSuggestion",
+                draft: sampleDraft(),
+            }),
+        );
+        act(() => result.current.dispatch({ type: "newGame" }));
+        expect(result.current.state.pendingSuggestion).toBeNull();
+    });
+
+    test("loadCardSet clears any pending draft (cards reference the old deck)", () => {
+        const { result } = renderClue();
+        act(() =>
+            result.current.dispatch({
+                type: "setPendingSuggestion",
+                draft: sampleDraft(),
+            }),
+        );
+        const altPack = CARD_SETS.find(p => p.id !== "classic");
+        if (!altPack) throw new Error("expected at least two bundled packs");
+        act(() =>
+            result.current.dispatch({
+                type: "loadCardSet",
+                cardSet: altPack.cardSet,
+                label: altPack.label,
+            }),
+        );
+        expect(result.current.state.pendingSuggestion).toBeNull();
+    });
+
+    test("removePlayer clears any pending draft (player ref might be stale)", () => {
+        const { result } = renderClue();
+        act(() =>
+            result.current.dispatch({
+                type: "setPendingSuggestion",
+                draft: sampleDraft({ suggester: Player("Player 1") }),
+            }),
+        );
+        act(() =>
+            result.current.dispatch({
+                type: "removePlayer",
+                player: Player("Player 1"),
+            }),
+        );
+        expect(result.current.state.pendingSuggestion).toBeNull();
+    });
+
+    test("renamePlayer remaps Player refs inside the draft, doesn't drop", () => {
+        const { result } = renderClue();
+        const oldName = Player("Player 1");
+        const newName = Player("Alice");
+        act(() =>
+            result.current.dispatch({
+                type: "setPendingSuggestion",
+                draft: sampleDraft({
+                    suggester: oldName,
+                    nonRefuters: [oldName, Player("Player 2")],
+                    refuter: oldName,
+                }),
+            }),
+        );
+        act(() =>
+            result.current.dispatch({
+                type: "renamePlayer",
+                oldName,
+                newName,
+            }),
+        );
+        const after = result.current.state.pendingSuggestion;
+        expect(after?.suggester).toBe(newName);
+        expect(after?.refuter).toBe(newName);
+        expect(after?.nonRefuters).toEqual([newName, Player("Player 2")]);
+    });
+
+    test("replaceSession picks up the imported pendingSuggestion (defaulting to null)", () => {
+        const { result } = renderClue();
+        // Pre-state: a local draft.
+        act(() =>
+            result.current.dispatch({
+                type: "setPendingSuggestion",
+                draft: sampleDraft(),
+            }),
+        );
+        // replaceSession with a session that has no draft — the local
+        // one is dropped.
+        act(() =>
+            result.current.dispatch({
+                type: "replaceSession",
+                session: {
+                    setup: CLASSIC_SETUP_3P,
+                    hands: [],
+                    handSizes: [],
+                    suggestions: [],
+                    accusations: [],
+                    hypotheses: emptyHypotheses,
+                    pendingSuggestion: null,
+                },
+            }),
+        );
+        expect(result.current.state.pendingSuggestion).toBeNull();
+    });
+
+    test("setSetup (deck pruning) clears the draft defensively", () => {
+        const { result } = renderClue();
+        act(() =>
+            result.current.dispatch({
+                type: "setPendingSuggestion",
+                draft: sampleDraft(),
+            }),
+        );
+        // setSetup runs through pruneSessionToSetup.
+        act(() =>
+            result.current.dispatch({
+                type: "setSetup",
+                setup: CLASSIC_SETUP_3P,
+            }),
+        );
+        expect(result.current.state.pendingSuggestion).toBeNull();
     });
 });

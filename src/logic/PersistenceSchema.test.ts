@@ -13,7 +13,7 @@ import { Player } from "./GameObjects";
  * starts a fresh session.
  */
 describe("Schema-backed persistence", () => {
-    test("encode produces version: 7 and round-trips through decode", () => {
+    test("encode produces version: 8 and round-trips through decode", () => {
         const encoded = encodeSession({
             setup: CLASSIC_SETUP_3P,
             hands: [],
@@ -21,8 +21,9 @@ describe("Schema-backed persistence", () => {
             suggestions: [],
             accusations: [],
             hypotheses: emptyHypotheses,
+            pendingSuggestion: null,
         });
-        expect(encoded.version).toBe(7);
+        expect(encoded.version).toBe(8);
 
         const decoded = decodeSession(encoded);
         expect(decoded).toBeDefined();

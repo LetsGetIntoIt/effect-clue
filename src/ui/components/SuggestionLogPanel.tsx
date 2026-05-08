@@ -254,6 +254,13 @@ function AddSuggestion() {
                             ref={suggestionFormRef}
                             setup={state.setup}
                             showHeader={false}
+                            pendingDraft={state.pendingSuggestion}
+                            onPendingDraftChange={draft =>
+                                dispatch({
+                                    type: "setPendingSuggestion",
+                                    draft,
+                                })
+                            }
                             onSubmit={draft => {
                                 dispatch({
                                     type: "addSuggestion",

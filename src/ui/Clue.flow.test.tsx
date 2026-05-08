@@ -121,6 +121,7 @@ const seedSetupSession = (): void => {
         suggestions: [],
         accusations: [],
         hypotheses: emptyHypotheses,
+        pendingSuggestion: null,
     });
 };
 

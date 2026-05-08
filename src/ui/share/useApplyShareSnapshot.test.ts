@@ -324,6 +324,7 @@ describe("applyShareSnapshotToLocalStorage — receive page handoff", () => {
             suggestions: [],
             accusations: [],
             hypotheses: emptyHypotheses,
+            pendingSuggestion: null,
         });
 
         const session = applyShareSnapshotToLocalStorage(
@@ -351,6 +352,7 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
             suggestions: [],
             accusations: [],
             hypotheses: emptyHypotheses,
+            pendingSuggestion: null,
         };
         saveToLocalStorage(currentSession);
 
@@ -603,6 +605,7 @@ describe("share receive dirty-state detection", () => {
             suggestions: [],
             accusations: [],
             hypotheses: emptyHypotheses,
+            pendingSuggestion: null,
         };
 
         expect(sessionHasGameData(clean)).toBe(false);
@@ -622,6 +625,7 @@ describe("share receive dirty-state detection", () => {
                 suggestions: [],
                 accusations: [],
                 hypotheses: emptyHypotheses,
+                pendingSuggestion: null,
             }),
         ).toBe(true);
         expect(
@@ -637,6 +641,7 @@ describe("share receive dirty-state detection", () => {
                 suggestions: [],
                 accusations: [],
                 hypotheses: emptyHypotheses,
+                pendingSuggestion: null,
             }),
         ).toBe(true);
     });
@@ -653,6 +658,7 @@ describe("share receive dirty-state detection", () => {
             suggestions: [],
             accusations: [],
             hypotheses: emptyHypotheses,
+            pendingSuggestion: null,
         });
         expect(hasPersistedGameData()).toBe(true);
     });

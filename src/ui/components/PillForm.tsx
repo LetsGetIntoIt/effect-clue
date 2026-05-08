@@ -16,6 +16,7 @@ import {
     PillPopover,
     type PillStatus,
 } from "./SuggestionPills";
+import { XIcon } from "./Icons";
 import { Tooltip } from "./Tooltip";
 
 /**
@@ -92,8 +93,12 @@ interface PillFormProps {
      * clear-inputs affordance are absent.
      */
     readonly headerTitle?: ReactNode;
-    /** Optional clear-inputs link in the right side of the header bar. */
-    readonly clearInputsLabel?: ReactNode;
+    /**
+     * Aria-label for the icon-only clear-inputs button rendered at the
+     * right edge of the header bar. The button is visible only when
+     * `hasAnyInput === true` and `onClearInputs` is provided.
+     */
+    readonly clearInputsLabel?: string;
     readonly hasAnyInput?: boolean;
     readonly onClearInputs?: () => void;
     /**
@@ -319,23 +324,18 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
         return (
             <div ref={formRootRef}>
                 {showHeaderBar && (
-                    <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="mb-3 flex items-center justify-between gap-2">
                         {headerTitle ?? <span />}
                         {onClearInputs !== undefined &&
                             hasAnyInput === true &&
                             clearInputsLabel !== undefined && (
                                 <button
                                     type="button"
+                                    aria-label={clearInputsLabel}
                                     onClick={onClearInputs}
-                                    className="inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-[12px] text-muted hover:text-accent"
+                                    className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-accent"
                                 >
-                                    <span
-                                        aria-hidden
-                                        className="text-[14px] leading-none"
-                                    >
-                                        ×
-                                    </span>
-                                    {clearInputsLabel}
+                                    <XIcon size={18} />
                                 </button>
                             )}
                     </div>

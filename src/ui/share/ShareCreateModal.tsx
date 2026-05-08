@@ -504,6 +504,10 @@ export function ShareCreateModal({
             suggestions: derived.suggestionsAsData,
             accusations: derived.accusationsAsData,
             hypotheses: state.hypotheses,
+            // Drafts aren't part of the share wire format — the
+            // receiver enters their own. The local `pendingSuggestion`
+            // exists in `state` but doesn't ride the share.
+            pendingSuggestion: null,
         };
         if (variant === VARIANT_INVITE) {
             return buildInviteInput(
