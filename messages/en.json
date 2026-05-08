@@ -243,7 +243,7 @@
         "cancelEditAria": "Cancel edit",
         "priorEmpty": "No suggestions yet. Add one above.",
         "suggestedLine": "<strong>{suggester}</strong> suggested {cards}",
-        "refutationLine": "{status, select, refutedSeenPassed {refuted by <strong>{refuter}</strong> (showed {seen}) · passed: {passers}} refutedSeen {refuted by <strong>{refuter}</strong> (showed {seen})} refutedPassed {refuted by <strong>{refuter}</strong> · passed: {passers}} refuted {refuted by <strong>{refuter}</strong>} nobodyPassed {nobody could refute · passed: {passers}} other {nobody could refute}}",
+        "refutationLine": "{status, select, refutedSeenPassed {Passed by {passers}; refuted by <strong>{refuter}</strong> (showed {seen})} refutedSeen {Nobody passed; refuted by <strong>{refuter}</strong> (showed {seen})} refutedPassed {Passed by {passers}; refuted by <strong>{refuter}</strong> (card not seen)} refuted {Nobody passed; refuted by <strong>{refuter}</strong> (card not seen)} nobodyPassed {Passed by {passers}; nobody refuted} other {Nobody passed; nobody refuted}}",
         "removeAction": "Remove suggestion",
         "removeConfirm": "Remove this suggestion?",
         "cancelAction": "Cancel",

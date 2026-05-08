@@ -632,8 +632,10 @@ function FormSlide({
  * with the seen-card and non-refuters axes via select keeps the copy
  * as a single translatable sentence per case rather than a
  * concatenation of fragments.
+ *
+ * Exported for unit-test coverage of all six branches.
  */
-const refutationStatus = (
+export const refutationStatus = (
     s: DraftSuggestion,
 ):
     | "refutedSeenPassed"
