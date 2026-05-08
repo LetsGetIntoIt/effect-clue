@@ -196,14 +196,26 @@ export function CellWhyPopover({
                     return KEY_HELP_ACTIVE;
             }
         })();
+        // The badge before the prose: same chip the prose uses
+        // inline, so the user reads "this glyph and that glyph mean
+        // the same thing." `isHypothesis` follows the cell-grid
+        // semantic — confirmed cells render with the icon, anything
+        // else (active / derived / rejected) renders with "?".
+        const badgeIsHypothesis = status.kind !== "confirmed";
         return (
             <div className="flex items-center gap-2 text-[12px] leading-snug text-fg">
-                <HypothesisBadge value={hypothesisValue} status={status} />
+                <ProseChecklistIcon
+                    value={hypothesisValue}
+                    isHypothesis={badgeIsHypothesis}
+                />
                 <span>
                     {t.rich(shortKey, {
                         value: hypothesisValue,
                         chip: () => (
-                            <ProseChecklistIcon value={hypothesisValue} />
+                            <ProseChecklistIcon
+                                value={hypothesisValue}
+                                isHypothesis={badgeIsHypothesis}
+                            />
                         ),
                     })}
                 </span>

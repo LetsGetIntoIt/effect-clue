@@ -26,10 +26,11 @@ export const CELL_TONE_NEUTRAL_CLASS = "bg-white";
 const CELL_BORDER_CLASS = "border border-border";
 
 /**
- * Pixel size for the inline cell-glyph icons. Matches `text-[12px]
- * font-semibold` cap-height closely so the chip reads as letter-sized.
+ * Pixel size for the inline cell-glyph icons rendered inside the live
+ * grid (where each cell has a fixed pixel layout). Prose chips size
+ * the icon via CSS instead so the chip scales with surrounding text.
  */
-const CELL_ICON_SIZE = 14;
+const CELL_ICON_SIZE_PX = 14;
 
 const cellToneClassForValue = (
     value: CellValue,
@@ -81,9 +82,9 @@ export const glyphKindFor = (
 export const renderGlyphNode = (kind: GlyphKind): ReactNode => {
     switch (kind) {
         case GLYPH_YES:
-            return <CheckIcon size={CELL_ICON_SIZE} />;
+            return <CheckIcon size={CELL_ICON_SIZE_PX} />;
         case GLYPH_NO:
-            return <XIcon size={CELL_ICON_SIZE} />;
+            return <XIcon size={CELL_ICON_SIZE_PX} />;
         case GLYPH_QUESTION:
             return "?";
         case GLYPH_BLANK:
@@ -92,15 +93,15 @@ export const renderGlyphNode = (kind: GlyphKind): ReactNode => {
 };
 
 /**
- * Pick the icon for a Y or N value. The cell glyph and the popover
- * toggle's chip both call through here so they always agree on which
- * icon represents which value.
+ * Pick the icon for a Y or N value, sized to fill its parent box (so
+ * the prose chip can scale with text via em units; the parent
+ * controls dimensions).
  */
-const cellGlyphIcon = (value: CellValue): ReactNode =>
+const cellGlyphIcon = (value: CellValue, iconClass: string): ReactNode =>
     value === Y ? (
-        <CheckIcon size={CELL_ICON_SIZE} />
+        <CheckIcon className={iconClass} />
     ) : (
-        <XIcon size={CELL_ICON_SIZE} />
+        <XIcon className={iconClass} />
     );
 
 // Tone class for any container that should match a cell's background
@@ -148,12 +149,22 @@ export function ProseChecklistIcon({
     readonly isHypothesis?: boolean;
     readonly className?: string;
 }) {
+    // Sized in em — the chip's box, its border-radius via the
+    // existing cell shape, and its inner glyph all scale with the
+    // parent's font-size. So the chip is approximately the size of a
+    // capital letter beside it, and a user who bumps their browser
+    // font size sees the chip grow proportionally. The icon fills
+    // ~70% of the chip via `h-[0.7em] w-[0.7em]` so its stroke
+    // weight reads at the same density as a glyph in the surrounding
+    // text.
     return (
         <span
             aria-hidden
-            className={`inline-flex h-5 w-5 flex-shrink-0 items-center justify-center ${CELL_BORDER_CLASS} text-[12px] font-semibold leading-none ${cellToneClassForValue(value)} ${className ?? ""}`}
+            className={`inline-flex h-[1.1em] w-[1.1em] flex-shrink-0 items-center justify-center ${CELL_BORDER_CLASS} font-semibold leading-none ${cellToneClassForValue(value)} ${className ?? ""}`}
         >
-            {isHypothesis ? "?" : cellGlyphIcon(value)}
+            {isHypothesis
+                ? "?"
+                : cellGlyphIcon(value, "h-[0.7em] w-[0.7em]")}
         </span>
     );
 }

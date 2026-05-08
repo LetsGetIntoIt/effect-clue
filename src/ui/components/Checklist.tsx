@@ -16,6 +16,7 @@ import {
     CELL_TONE_Y_CLASS,
     GLYPH_BLANK,
     glyphKindFor,
+    ProseChecklistIcon,
     renderGlyphNode,
 } from "./CellGlyph";
 
@@ -95,7 +96,6 @@ import { useShareContext } from "../share/ShareProvider";
 import { CardPackRow } from "./CardPackRow";
 import { ShareIcon } from "./ShareIcon";
 import { ChevronLeftIcon, ChevronRightIcon, Envelope, LightbulbIcon } from "./Icons";
-import { HypothesisBadge } from "./HypothesisBadge";
 import { InfoPopover } from "./InfoPopover";
 
 /**
@@ -1405,10 +1405,12 @@ export function Checklist() {
                                         const topRight =
                                             !inSetup &&
                                             hypothesisValue !== undefined ? (
-                                                <HypothesisBadge
+                                                <ProseChecklistIcon
                                                     value={hypothesisValue}
-                                                    status={hypothesisStatus}
-                                                    animated
+                                                    isHypothesis={
+                                                        hypothesisStatus.kind !==
+                                                        "confirmed"
+                                                    }
                                                 />
                                             ) : null;
                                         const center = setupCheckbox ? (

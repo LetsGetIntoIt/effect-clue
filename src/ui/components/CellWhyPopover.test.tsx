@@ -280,9 +280,13 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
         // value=Y chip rendered inline.
         expect(helpSpan?.querySelector("span.bg-yes-bg")).not.toBeNull();
 
-        // Badge SVG (the HypothesisBadge) renders next to the line.
-        const badgeSvg = container.querySelector('svg[data-glyph]');
-        expect(badgeSvg).not.toBeNull();
+        // The leading badge (the standalone chip beside the prose) is
+        // also a ProseChecklistIcon — no more `data-glyph` SVG. Two
+        // chips total in the help row when active: the standalone +
+        // the inline-prose one.
+        const helpRow = helpSpan?.parentElement as HTMLElement;
+        const chips = helpRow.querySelectorAll("span.bg-yes-bg, span.bg-no-bg");
+        expect(chips.length).toBe(2);
 
         // No long-form status panel for "active".
         expect(screen.queryByText("statusConfirmed")).toBeNull();
@@ -327,12 +331,12 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
         expect(helpSpan).toBeDefined();
         expect(screen.getByText("statusDirectlyContradicted")).toBeInTheDocument();
 
-        // The status box embeds an `<HypothesisBadge animated>` so the
-        // pulse moves into the popover when it opens. Two badges total
-        // in the popover (the short help row and the status box); the
-        // status-box one should carry the ping class.
+        // The status box still embeds an `<HypothesisBadge animated>`
+        // so the pulse cue stays for rejection (the help-row badge
+        // moved to ProseChecklistIcon, which is static). Exactly one
+        // X badge SVG now, and it's the animated status-box one.
         const xBadges = container.querySelectorAll('svg[data-glyph="x"]');
-        expect(xBadges.length).toBe(2);
+        expect(xBadges.length).toBe(1);
         const animatedXBadges = Array.from(xBadges).filter(svg =>
             (svg.getAttribute("class") ?? "").includes(
                 "motion-safe:animate-pulse",
