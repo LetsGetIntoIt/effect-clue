@@ -249,7 +249,7 @@ export const SuggestionForm = forwardRef<
         (value: Player | Nobody) => {
             if (isNobody(value)) return;
             commitAndAdvance(
-                { ...form, suggester: value },
+                applySuggesterMove(form, value),
                 PILL_SUGGESTER,
             );
         },
@@ -272,7 +272,7 @@ export const SuggestionForm = forwardRef<
             value: ReadonlyArray<Player> | Nobody,
             opts: { advance: boolean } = { advance: true },
         ) => {
-            const next = { ...form, nonRefuters: value };
+            const next = applyPassersMove(form, value);
             if (opts.advance) {
                 commitAndAdvance(next, PILL_PASSERS);
             } else {
@@ -283,15 +283,14 @@ export const SuggestionForm = forwardRef<
     );
     const commitRefuter = useCallback(
         (value: Player | Nobody) => {
-            // If refuter becomes NOBODY, the shown-card pill turns
-            // unreachable (disabled) — clear any old seenCard so the
-            // user can't leave a stale value stranded. When refuter
-            // switches to a different resolved player, keep seenCard
-            // as-is: if it's no longer in the suggested cards, the
-            // error-state will surface the mismatch in PILL_SEEN.
-            const nextSeenCard = isNobody(value) ? null : form.seenCard;
+            // applyRefuterMove handles clearing seenCard when refuter
+            // becomes NOBODY (otherwise the shown-card pill turns
+            // unreachable and a stale value would strand). When
+            // refuter switches to a different resolved player, seenCard
+            // is preserved — if it's no longer in the suggested cards,
+            // the error-state surfaces the mismatch in PILL_SEEN.
             commitAndAdvance(
-                { ...form, refuter: value, seenCard: nextSeenCard },
+                applyRefuterMove(form, value),
                 PILL_REFUTER,
             );
         },
@@ -484,7 +483,7 @@ export const SuggestionForm = forwardRef<
                 : {}),
             content: (
                 <SingleSelectList<Player>
-                    options={suggesterOptions(setup, form)}
+                    options={playerOptions(setup)}
                     selected={form.suggester}
                     onCommit={commitSuggester}
                     nobodyLabel={null}
@@ -533,7 +532,7 @@ export const SuggestionForm = forwardRef<
                 : {}),
             content: (
                 <MultiSelectList
-                    options={passersOptions(setup, form)}
+                    options={playerOptions(setup)}
                     selected={
                         Array.isArray(form.nonRefuters)
                             ? form.nonRefuters
@@ -563,7 +562,7 @@ export const SuggestionForm = forwardRef<
                 : {}),
             content: (
                 <SingleSelectList<Player>
-                    options={refuterOptions(setup, form)}
+                    options={playerOptions(setup)}
                     selected={
                         isNobody(form.refuter) ? null : form.refuter
                     }
@@ -829,11 +828,13 @@ type PillErrorCode =
  * a pill has multiple problems the first-listed rule wins.
  *
  * Most cross-role paradoxes are prevented at input time by the
- * option-builder filters (e.g. `suggesterOptions` excludes the
- * current refuter). This validator is the RETROACTIVE safety net
- * for values that were valid at entry but became stale after a
- * later edit — most commonly, a `seenCard` whose corresponding
- * category card was subsequently changed.
+ * role-move helpers (`applySuggesterMove` etc.) — selecting a
+ * player into a role automatically removes them from any other
+ * role they currently occupy. This validator is the RETROACTIVE
+ * safety net for values that were valid at entry but became stale
+ * after a later edit — most commonly, a `seenCard` whose
+ * corresponding category card was subsequently changed, or a
+ * loaded draft whose saved shape happens to violate Clue rules.
  */
 export const validateFormConsistency = (
     form: FormState,
@@ -920,60 +921,98 @@ const formatFieldList = (fields: ReadonlyArray<string>): string => {
 // ---- Candidate list helpers ------------------------------------------
 
 /**
- * Players available for the suggester slot. Excludes anyone already
- * playing the refuter or passer roles in this suggestion — Clue
- * grammar makes those disjoint.
+ * Every player in the setup, as a candidate option. The suggester /
+ * passers / refuter pills all show the same full list — they used
+ * to filter to "not in another role" but that created a sequencing
+ * trap (selecting Alice as refuter then trying to make her a passer
+ * required clearing refuter first). Now selection moves the player
+ * between roles automatically; see `applyRoleMove*` below.
  */
-const suggesterOptions = (
+const playerOptions = (
     setup: GameSetup,
+): ReadonlyArray<Option<Player>> =>
+    setup.players.map(p => ({ value: p, label: String(p) }));
+
+// ---- Role-move helpers ----------------------------------------------
+
+/**
+ * Apply a player to the suggester slot, removing them from any other
+ * role they currently occupy (passers list, refuter slot). Pure;
+ * exported for testing.
+ */
+export const applySuggesterMove = (
     form: FormState,
-): ReadonlyArray<Option<Player>> => {
-    const excluded = new Set<Player>();
-    if (form.refuter !== null && !isNobody(form.refuter)) {
-        excluded.add(form.refuter);
-    }
-    if (Array.isArray(form.nonRefuters)) {
-        for (const p of form.nonRefuters) excluded.add(p);
-    }
-    return setup.players
-        .filter(p => !excluded.has(p))
-        .map(p => ({ value: p, label: String(p) }));
+    player: Player,
+): FormState => {
+    const nextNonRefuters = Array.isArray(form.nonRefuters)
+        ? form.nonRefuters.filter(p => p !== player)
+        : form.nonRefuters;
+    const refuterMatches =
+        form.refuter !== null &&
+        !isNobody(form.refuter) &&
+        form.refuter === player;
+    return {
+        ...form,
+        suggester: player,
+        nonRefuters: nextNonRefuters,
+        refuter: refuterMatches ? null : form.refuter,
+        // Clearing refuter mirrors the existing commitRefuter behaviour:
+        // shown card is meaningless without a resolved refuter.
+        seenCard: refuterMatches ? null : form.seenCard,
+    };
 };
 
 /**
- * Players available for the passers list. Excludes the suggester
- * and the refuter (both disjoint from passing in Clue rules).
+ * Apply a passers value, removing each passer from any other role
+ * they currently occupy. NOBODY and null pass through unchanged
+ * (no players to move). Pure; exported for testing.
  */
-const passersOptions = (
-    setup: GameSetup,
+export const applyPassersMove = (
     form: FormState,
-): ReadonlyArray<Option<Player>> => {
-    const excluded = new Set<Player>();
-    if (form.suggester !== null) excluded.add(form.suggester);
-    if (form.refuter !== null && !isNobody(form.refuter)) {
-        excluded.add(form.refuter);
+    value: ReadonlyArray<Player> | Nobody | null,
+): FormState => {
+    if (value === null || isNobody(value)) {
+        return { ...form, nonRefuters: value };
     }
-    return setup.players
-        .filter(p => !excluded.has(p))
-        .map(p => ({ value: p, label: String(p) }));
+    const newPassers = new Set<Player>(value);
+    const suggesterMatches =
+        form.suggester !== null && newPassers.has(form.suggester);
+    const refuterMatches =
+        form.refuter !== null &&
+        !isNobody(form.refuter) &&
+        newPassers.has(form.refuter);
+    return {
+        ...form,
+        nonRefuters: value,
+        suggester: suggesterMatches ? null : form.suggester,
+        refuter: refuterMatches ? null : form.refuter,
+        seenCard: refuterMatches ? null : form.seenCard,
+    };
 };
 
 /**
- * Players available for the refuter slot. Excludes the suggester
- * and anyone already in the passers list.
+ * Apply a refuter value, removing them from any other role they
+ * currently occupy (suggester slot, passers list). NOBODY clears
+ * any stale shown card (existing behaviour). Pure; exported for
+ * testing.
  */
-const refuterOptions = (
-    setup: GameSetup,
+export const applyRefuterMove = (
     form: FormState,
-): ReadonlyArray<Option<Player>> => {
-    const excluded = new Set<Player>();
-    if (form.suggester !== null) excluded.add(form.suggester);
-    if (Array.isArray(form.nonRefuters)) {
-        for (const p of form.nonRefuters) excluded.add(p);
+    value: Player | Nobody,
+): FormState => {
+    if (isNobody(value)) {
+        return { ...form, refuter: value, seenCard: null };
     }
-    return setup.players
-        .filter(p => !excluded.has(p))
-        .map(p => ({ value: p, label: String(p) }));
+    const nextNonRefuters = Array.isArray(form.nonRefuters)
+        ? form.nonRefuters.filter(p => p !== value)
+        : form.nonRefuters;
+    const suggesterMatches = form.suggester === value;
+    return {
+        ...form,
+        refuter: value,
+        nonRefuters: nextNonRefuters,
+        suggester: suggesterMatches ? null : form.suggester,
+    };
 };
 
 /**

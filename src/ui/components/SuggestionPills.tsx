@@ -229,7 +229,7 @@ export function PillPopover({
             layout
             transition={widthTransition}
             className={
-                "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[13px] " +
+                "inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-4 py-2.5 text-[15px] " +
                 tone
             }
         >
@@ -528,7 +528,7 @@ export function SingleSelectList<T>({
                         role="option"
                         aria-selected={isSelected}
                         className={
-                            "flex cursor-pointer items-center gap-1.5 rounded px-3 py-2 text-[13px]" +
+                            "flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded px-3 py-2.5 text-[15px]" +
                             (highlighted ? " bg-accent/15" : "") +
                             (row.kind === "nobody"
                                 ? " border-b border-border/60 text-muted"
@@ -704,7 +704,7 @@ export function MultiSelectList({
                     role="option"
                     aria-selected={nobodyChosen}
                     className={
-                        "flex cursor-pointer items-center gap-1.5 rounded border-b border-border/60 px-3 py-2 text-[13px] text-muted" +
+                        "flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded border-b border-border/60 px-3 py-2.5 text-[15px] text-muted" +
                         (focusedIdx === 0 ? " bg-accent/15" : "")
                     }
                     onMouseEnter={() => setFocusedIdx(0)}
@@ -726,7 +726,7 @@ export function MultiSelectList({
                             role="option"
                             aria-selected={checked}
                             className={
-                                "flex cursor-pointer items-center gap-1.5 rounded px-3 py-2 text-[13px]" +
+                                "flex min-h-[44px] cursor-pointer items-center gap-1.5 rounded px-3 py-2.5 text-[15px]" +
                                 (highlighted ? " bg-accent/15" : "")
                             }
                             onMouseEnter={() => setFocusedIdx(rowIdx)}
