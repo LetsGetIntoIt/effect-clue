@@ -11,6 +11,9 @@ import {
 import { CellLayout } from "./CellLayout";
 import { CellWhyPopover, hypothesisValueFor } from "./CellWhyPopover";
 import {
+    CELL_TONE_N_CLASS,
+    CELL_TONE_NEUTRAL_CLASS,
+    CELL_TONE_Y_CLASS,
     GLYPH_BLANK,
     glyphKindFor,
     renderGlyphNode,
@@ -2885,10 +2888,10 @@ const cellClass = (
                 ? display.value
                 : undefined;
     if (tone === Y) {
-        return `${base} bg-yes-bg text-yes focus:ring-offset-yes-bg`;
+        return `${base} ${CELL_TONE_Y_CLASS} focus:ring-offset-yes-bg`;
     }
     if (tone === N) {
-        return `${base} bg-no-bg text-no focus:ring-offset-no-bg`;
+        return `${base} ${CELL_TONE_N_CLASS} focus:ring-offset-no-bg`;
     }
-    return `${base} bg-white focus:ring-offset-white`;
+    return `${base} ${CELL_TONE_NEUTRAL_CLASS} focus:ring-offset-white`;
 };

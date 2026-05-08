@@ -1,10 +1,12 @@
 import { describe, expect, test } from "vitest";
+import { isValidElement } from "react";
 import { N, Y } from "../../logic/Knowledge";
 import type {
     CellDisplay,
     HypothesisStatus,
 } from "../../logic/Hypothesis";
 import { glyphKindFor, renderGlyphNode } from "./CellGlyph";
+import { CheckIcon, XIcon } from "./Icons";
 
 describe("glyphKindFor", () => {
     test("real Y → 'yes'", () => {
@@ -62,12 +64,20 @@ describe("glyphKindFor", () => {
 });
 
 describe("renderGlyphNode", () => {
-    test("yes renders as ✓", () => {
-        expect(renderGlyphNode("yes")).toBe("✓");
+    test("yes renders a CheckIcon element", () => {
+        const node = renderGlyphNode("yes");
+        expect(isValidElement(node)).toBe(true);
+        expect(
+            isValidElement(node) ? node.type : null,
+        ).toBe(CheckIcon);
     });
 
-    test("no renders as ·", () => {
-        expect(renderGlyphNode("no")).toBe("·");
+    test("no renders an XIcon element", () => {
+        const node = renderGlyphNode("no");
+        expect(isValidElement(node)).toBe(true);
+        expect(
+            isValidElement(node) ? node.type : null,
+        ).toBe(XIcon);
     });
 
     test("question renders as ?", () => {

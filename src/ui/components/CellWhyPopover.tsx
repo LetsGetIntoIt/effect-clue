@@ -18,6 +18,7 @@ import { HypothesisBadge } from "./HypothesisBadge";
 import {
     cellToneBgClass,
     glyphKindFor,
+    ProseChecklistIcon,
     renderGlyphNode,
 } from "./CellGlyph";
 
@@ -198,7 +199,14 @@ export function CellWhyPopover({
         return (
             <div className="flex items-center gap-2 text-[12px] leading-snug text-fg">
                 <HypothesisBadge value={hypothesisValue} status={status} />
-                <span>{t(shortKey, { value: hypothesisValue })}</span>
+                <span>
+                    {t.rich(shortKey, {
+                        value: hypothesisValue,
+                        chip: () => (
+                            <ProseChecklistIcon value={hypothesisValue} />
+                        ),
+                    })}
+                </span>
             </div>
         );
     };
@@ -235,13 +243,28 @@ export function CellWhyPopover({
                                     <div className="flex flex-col gap-1 text-[12px] text-muted">
                                         <span>
                                             {useDerivedSingular
-                                                ? t("statusDerivedSingular", {
-                                                      value: status.value,
-                                                      description:
-                                                          activeHypothesisLabels[0]!,
-                                                  })
-                                                : t("statusDerived", {
-                                                      value: status.value,
+                                                ? t.rich(
+                                                      "statusDerivedSingular",
+                                                      {
+                                                          chip: () => (
+                                                              <ProseChecklistIcon
+                                                                  value={
+                                                                      status.value
+                                                                  }
+                                                              />
+                                                          ),
+                                                          description:
+                                                              activeHypothesisLabels[0]!,
+                                                      },
+                                                  )
+                                                : t.rich("statusDerived", {
+                                                      chip: () => (
+                                                          <ProseChecklistIcon
+                                                              value={
+                                                                  status.value
+                                                              }
+                                                          />
+                                                      ),
                                                   })}
                                         </span>
                                         {!useDerivedSingular &&

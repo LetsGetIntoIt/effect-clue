@@ -3,7 +3,38 @@ import {
     type CellDisplay,
     type HypothesisStatus,
 } from "../../logic/Hypothesis";
-import { N, Y } from "../../logic/Knowledge";
+import { N, Y, type CellValue } from "../../logic/Knowledge";
+import { CheckIcon, XIcon } from "./Icons";
+
+// ---------------------------------------------------------------------------
+// Shared cell styling.
+//
+// One source of truth for "what does a Y / N / blank cell look like" so the
+// live grid (`Checklist.tsx`'s `cellClass`), the popover's mini-cell
+// (`CellWhyPopover.tsx`), and the popover toggle (`HypothesisControl.tsx`)
+// all match without copy-pasted Tailwind strings drifting apart.
+// ---------------------------------------------------------------------------
+
+/** Background + text color for a Y-toned surface. */
+export const CELL_TONE_Y_CLASS = "bg-yes-bg text-yes";
+/** Background + text color for an N-toned surface. */
+export const CELL_TONE_N_CLASS = "bg-no-bg text-no";
+/** Background + text color for a no-value (blank / unknown) surface. */
+export const CELL_TONE_NEUTRAL_CLASS = "bg-white";
+
+/** Single-pixel border using the same neutral color as the live grid. */
+const CELL_BORDER_CLASS = "border border-border";
+
+/**
+ * Pixel size for the inline cell-glyph icons. Matches `text-[12px]
+ * font-semibold` cap-height closely so the chip reads as letter-sized.
+ */
+const CELL_ICON_SIZE = 14;
+
+const cellToneClassForValue = (
+    value: CellValue,
+): typeof CELL_TONE_Y_CLASS | typeof CELL_TONE_N_CLASS =>
+    value === Y ? CELL_TONE_Y_CLASS : CELL_TONE_N_CLASS;
 
 // Discriminator constants for the cell's primary glyph slot. Module-
 // scope so the `no-literal-string` lint rule reads them as code, not
@@ -50,15 +81,27 @@ export const glyphKindFor = (
 export const renderGlyphNode = (kind: GlyphKind): ReactNode => {
     switch (kind) {
         case GLYPH_YES:
-            return "✓";
+            return <CheckIcon size={CELL_ICON_SIZE} />;
         case GLYPH_NO:
-            return "·";
+            return <XIcon size={CELL_ICON_SIZE} />;
         case GLYPH_QUESTION:
             return "?";
         case GLYPH_BLANK:
             return null;
     }
 };
+
+/**
+ * Pick the icon for a Y or N value. The cell glyph and the popover
+ * toggle's chip both call through here so they always agree on which
+ * icon represents which value.
+ */
+const cellGlyphIcon = (value: CellValue): ReactNode =>
+    value === Y ? (
+        <CheckIcon size={CELL_ICON_SIZE} />
+    ) : (
+        <XIcon size={CELL_ICON_SIZE} />
+    );
 
 // Tone class for any container that should match a cell's background
 // (the live cell, the popover's mini-glyph box). Mirrors the tone
@@ -73,7 +116,35 @@ export const cellToneBgClass = (display: CellDisplay): string => {
               : display.tag === "derived"
                 ? display.value
                 : undefined;
-    if (tone === Y) return "bg-yes-bg";
-    if (tone === N) return "bg-no-bg";
-    return "bg-white";
+    if (tone === Y) return CELL_TONE_Y_CLASS.split(" ")[0]!;
+    if (tone === N) return CELL_TONE_N_CLASS.split(" ")[0]!;
+    return CELL_TONE_NEUTRAL_CLASS;
 };
+
+/**
+ * Inline chip that mirrors a checklist cell's appearance — same border,
+ * background, and text color — for prose contexts that mention a Y/N
+ * value (popover help text, contradiction banners, anywhere a "this is
+ * Y" / "this is N" reference would otherwise be a bare letter).
+ *
+ * The chip is decorative; assistive tech consumes the surrounding text
+ * (e.g. "Hypothesis: Y — plausible so far"), so the chip is
+ * `aria-hidden`. Callers wanting screen-reader text should keep the
+ * value name elsewhere in the sentence.
+ */
+export function ProseChecklistIcon({
+    value,
+    className,
+}: {
+    readonly value: CellValue;
+    readonly className?: string;
+}) {
+    return (
+        <span
+            aria-hidden
+            className={`inline-flex h-5 w-5 flex-shrink-0 items-center justify-center ${CELL_BORDER_CLASS} text-[12px] font-semibold leading-none ${cellToneClassForValue(value)} ${className ?? ""}`}
+        >
+            {cellGlyphIcon(value)}
+        </span>
+    );
+}
