@@ -156,8 +156,8 @@
         "statusConfirmed": "Confirmed by real facts — you can turn this hypothesis off.",
         "statusDirectlyContradicted": "Contradicts a real fact — your hypothesis can't be true.",
         "statusJointlyConflicts": "Conflicts with another hypothesis. These can't all be true together — drop one to resolve.",
-        "statusDerived": "This value <chip></chip> follows from your active hypotheses:",
-        "statusDerivedSingular": "This value <chip></chip> follows from your active hypothesis (<description></description>).",
+        "statusDerived": "Based on your active hypotheses.",
+        "statusDerivedSingular": "Based on your active hypothesis.",
         "statusActiveHypothesisCell": "This is an active hypothesis.",
         "emptyHint": "Set a hypothesis to explore what would follow."
     },

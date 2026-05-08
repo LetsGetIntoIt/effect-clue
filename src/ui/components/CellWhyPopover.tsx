@@ -73,19 +73,20 @@ export function CellWhyPopover({
     const cardLabel =
         findCardEntry(setup, cell.card)?.name ?? String(cell.card);
 
-    // For derived + joint-conflict popovers, list every active
-    // hypothesis by name so the user knows which assumption(s) are
-    // shaping this cell. The deducer doesn't currently track per-cell
-    // provenance for hypotheses, so we list the full active set rather
-    // than narrowing to the specific subset that drove this value —
-    // good-enough until we wire up leave-one-out attribution.
+    // For joint-conflict popovers, list every active hypothesis by
+    // name so the user knows which assumptions are mutually
+    // unsatisfiable. The deducer doesn't currently track per-cell
+    // provenance for hypotheses, so we list the full active set
+    // rather than narrowing to the specific subset that drives the
+    // contradiction — good-enough until we wire up leave-one-out
+    // attribution. Derived cells get their explanation via the
+    // chain text (joint provenance) instead of a hypothesis list.
     interface ActiveHypothesisEntry {
         readonly ownerName: string;
         readonly cardLabel: string;
         readonly value: HypothesisValue;
     }
-    const showHypothesisList =
-        status.kind === "jointlyConflicts" || status.kind === "derived";
+    const showHypothesisList = status.kind === "jointlyConflicts";
     const activeHypothesisEntries: ReadonlyArray<ActiveHypothesisEntry> = (() => {
         if (!showHypothesisList) return [];
         const out: Array<ActiveHypothesisEntry> = [];
@@ -100,9 +101,9 @@ export function CellWhyPopover({
         }
         return out;
     })();
-    // Inline JSX renderer for each entry — used in bullet lists and
-    // the singular `description` chunk. The chip carries the value
-    // (Y / N) so the prose drops the literal letter.
+    // Inline JSX renderer for each entry — used in the joint-conflict
+    // bullet list. The chip carries the value (Y / N) so the prose
+    // drops the literal letter.
     const renderHypothesisEntry = (entry: ActiveHypothesisEntry) => (
         <>
             {entry.ownerName} / {entry.cardLabel}{" "}
@@ -113,12 +114,14 @@ export function CellWhyPopover({
     const entryKey = (entry: ActiveHypothesisEntry): string =>
         `${entry.ownerName}/${entry.cardLabel}/${entry.value}`;
 
-    // For a `derived` popover with exactly one active hypothesis,
-    // collapse the heading + bulleted list into a single inline
-    // sentence ("from your active hypothesis (Player 1 / Miss Scarlet
-    // = Y)."). Reads better when there's only one source to cite.
-    const useDerivedSingular =
-        status.kind === "derived" && activeHypothesisEntries.length === 1;
+    // Singular vs. plural copy for the derived-cell preamble. The
+    // count comes from the hypothesis map directly — even if not
+    // every active hypothesis contributed to this cell's value
+    // (without leave-one-out attribution we can't know), the prose
+    // is just "Based on your active hypothesis(es)" so the count
+    // distinction is purely grammatical.
+    const isDerivedSingular =
+        status.kind === "derived" && HashMap.size(hypotheses) === 1;
 
     const isContradicted =
         status.kind === "directlyContradicted" ||
@@ -276,60 +279,18 @@ export function CellWhyPopover({
                                 )}
                             </span>
                             <div className="flex flex-col gap-1">
-                                {whyText !== undefined && (
-                                    <div className="whitespace-pre-line">
-                                        {whyText}
+                                {status.kind === "derived" && (
+                                    <div className="text-[12px] text-muted">
+                                        {t(
+                                            isDerivedSingular
+                                                ? "statusDerivedSingular"
+                                                : "statusDerived",
+                                        )}
                                     </div>
                                 )}
-                                {status.kind === "derived" && (
-                                    <div className="flex flex-col gap-1 text-[12px] text-muted">
-                                        <span>
-                                            {useDerivedSingular
-                                                ? t.rich(
-                                                      "statusDerivedSingular",
-                                                      {
-                                                          chip: () => (
-                                                              <ProseChecklistIcon
-                                                                  value={
-                                                                      status.value
-                                                                  }
-                                                              />
-                                                          ),
-                                                          description: () =>
-                                                              renderHypothesisEntry(
-                                                                  activeHypothesisEntries[0]!,
-                                                              ),
-                                                      },
-                                                  )
-                                                : t.rich("statusDerived", {
-                                                      chip: () => (
-                                                          <ProseChecklistIcon
-                                                              value={
-                                                                  status.value
-                                                              }
-                                                          />
-                                                      ),
-                                                  })}
-                                        </span>
-                                        {!useDerivedSingular &&
-                                            activeHypothesisEntries.length >
-                                                0 && (
-                                                <ul className="ml-3 list-disc">
-                                                    {activeHypothesisEntries.map(
-                                                        entry => (
-                                                            <li
-                                                                key={entryKey(
-                                                                    entry,
-                                                                )}
-                                                            >
-                                                                {renderHypothesisEntry(
-                                                                    entry,
-                                                                )}
-                                                            </li>
-                                                        ),
-                                                    )}
-                                                </ul>
-                                            )}
+                                {whyText !== undefined && (
+                                    <div className="whitespace-pre-line text-[12px] text-muted">
+                                        {whyText}
                                     </div>
                                 )}
                                 {display.tag === "hypothesis" &&

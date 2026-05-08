@@ -126,71 +126,68 @@ describe("CellWhyPopover - Deductions section", () => {
         expect(glyphBox?.querySelector("svg")).not.toBeNull();
     });
 
-    test("derived cell: '?' glyph on Y tone, statusDerivedSingular text, no statusBox in hypothesis section", () => {
-        // Build a hypothesis map with one entry so the singular path is
-        // taken: "This value follows from your active hypothesis (X)."
+    test("derived cell, one hypothesis: singular preamble + chain text from whyText, no bullet list", () => {
+        // Build a hypothesis map with one entry so the singular
+        // preamble fires: "Based on your active hypothesis:" followed
+        // by the chain text (computed externally from joint
+        // provenance and passed in as `whyText`).
         const otherCell = Cell(PlayerOwner(player1), cardB);
         const hypotheses = HashMap.set(
             HashMap.empty<typeof otherCell, HypothesisValue>(),
             otherCell,
             "Y",
         );
+        const fakeChain =
+            "1. Given: You marked that Anisha owns Miss Scarlet.\n2. Card ownership: Miss Scarlet is already owned by someone else, so Bob doesn't own it.";
         const { container } = render(
             <CellWhyPopover
                 {...baseProps}
                 hypotheses={hypotheses}
                 display={{ tag: "derived", value: Y }}
                 status={{ kind: "derived", value: Y }}
+                whyText={fakeChain}
             />,
         );
         // Deductions heading shows.
         expect(screen.getByText("deductionsLabel")).toBeInTheDocument();
-        // Y-tone tile renders the parens-wrapped CheckIcon (post-M4
-        // cell-glyph rework — derived cells don't show "?" anymore).
+        // Y-tone tile renders the parens-wrapped CheckIcon.
         const glyphBox = container.querySelector('[data-glyph="derivedYes"]');
         expect(glyphBox).not.toBeNull();
         expect(glyphBox?.className).toMatch(/bg-yes-bg/);
-        // Parens around the icon, no "?" text.
         expect(glyphBox?.textContent).toBe("()");
         expect(glyphBox?.querySelector("svg polyline")).not.toBeNull();
 
-        // Singular "this follows from" line renders the cell's
-        // derived value as a ProseChecklistIcon chip plus the
-        // hypothesis label. The label itself now contains a
-        // ProseChecklistIcon for the hypothesis value (Y → green
-        // chip), no literal "= Y" text.
-        const derivedSpan = Array.from(
-            container.querySelectorAll("span"),
-        ).find(s => (s.textContent ?? "").includes("statusDerivedSingular:"));
-        expect(derivedSpan).toBeDefined();
-        // The chip (ProseChecklistIcon) for value=Y has bg-yes-bg.
-        // At least one such chip rendered (the cell's derived value
-        // chip — there's also a chip for the hypothesis description).
-        const chips = derivedSpan?.querySelectorAll("span.bg-yes-bg");
-        expect((chips?.length ?? 0)).toBeGreaterThanOrEqual(1);
-        // Owner / card text rendered alongside the chips.
-        expect(derivedSpan?.textContent ?? "").toContain("Col. Mustard");
-
-        // The plural copy must NOT render in the singular case.
-        const pluralSpan = Array.from(
-            container.querySelectorAll("span"),
-        ).find(s =>
-            (s.textContent ?? "").startsWith("statusDerived:") &&
-            !(s.textContent ?? "").startsWith("statusDerivedSingular:"),
+        // Singular preamble appears (mock returns bare key for plain
+        // `t(...)` calls).
+        expect(
+            screen.getByText("statusDerivedSingular"),
+        ).toBeInTheDocument();
+        // The plural preamble does NOT render in the singular case.
+        expect(screen.queryByText("statusDerived")).toBeNull();
+        // Chain text (passed via whyText prop) renders below the
+        // preamble in a `whitespace-pre-line` block.
+        const chainEl = Array.from(
+            container.querySelectorAll(".whitespace-pre-line"),
+        ).find(el => (el.textContent ?? "").includes("Card ownership"));
+        expect(chainEl).toBeDefined();
+        expect(chainEl?.textContent ?? "").toContain(
+            "You marked that Anisha owns Miss Scarlet",
         );
-        expect(pluralSpan).toBeUndefined();
-
+        // No hypothesis bullet list inside the Deductions section.
+        expect(container.querySelector("ul > li")).toBeNull();
         // No long-form statusBox in the Hypothesis section for derived.
         expect(screen.queryByText("statusConfirmed")).toBeNull();
     });
 
-    test("derived cell with two hypotheses: plural copy + bulleted list inside Deductions", () => {
+    test("derived cell with two hypotheses: plural preamble + chain text from whyText, no bullet list", () => {
         const cellH1 = Cell(PlayerOwner(player1), cardA);
         const cellH2 = Cell(PlayerOwner(setup.players[1]!), cardB);
         const hypotheses = HashMap.fromIterable<typeof cellH1, HypothesisValue>([
             [cellH1, "Y"],
             [cellH2, "N"],
         ]);
+        const fakeChain =
+            "1. Given: You marked that Anisha owns Col. Mustard.\n2. Card ownership: Col. Mustard is already owned by someone else, so the case file doesn't have it.";
         const { container } = render(
             <CellWhyPopover
                 {...baseProps}
@@ -198,26 +195,22 @@ describe("CellWhyPopover - Deductions section", () => {
                 cell={Cell(CaseFileOwner(), cardA)}
                 display={{ tag: "derived", value: N }}
                 status={{ kind: "derived", value: N }}
+                whyText={fakeChain}
             />,
         );
         expect(screen.getByText("deductionsLabel")).toBeInTheDocument();
-        // Plural derived heading line — the cell's derived value renders
-        // as a ProseChecklistIcon chip alongside the prose key (post-M4).
-        const derivedSpan = Array.from(
-            container.querySelectorAll("span"),
-        ).find(s =>
-            (s.textContent ?? "").startsWith("statusDerived:") &&
-            !(s.textContent ?? "").startsWith("statusDerivedSingular:"),
-        );
-        expect(derivedSpan).toBeDefined();
-        // value=N chip has bg-no-bg.
-        const chip = derivedSpan?.querySelector(
-            "span.bg-no-bg",
-        ) as HTMLElement | null;
-        expect(chip).not.toBeNull();
-        // Bulleted list with two items.
-        const items = container.querySelectorAll("ul > li");
-        expect(items.length).toBe(2);
+        // Plural preamble appears, singular does NOT.
+        expect(screen.getByText("statusDerived")).toBeInTheDocument();
+        expect(screen.queryByText("statusDerivedSingular")).toBeNull();
+        // Chain text rendered.
+        const chainEl = Array.from(
+            container.querySelectorAll(".whitespace-pre-line"),
+        ).find(el => (el.textContent ?? "").includes("Card ownership"));
+        expect(chainEl).toBeDefined();
+        // No hypothesis bullet list inside Deductions — the user
+        // explicitly wanted that dropped for derived cells (it stays
+        // for jointly-conflicting cells, which has its own test).
+        expect(container.querySelector("ul > li")).toBeNull();
     });
 });
 
