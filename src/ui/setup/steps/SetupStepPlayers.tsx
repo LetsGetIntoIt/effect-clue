@@ -8,6 +8,7 @@ import {
     VALID,
     VALIDATION_BLOCKED,
     type StepValidation,
+    type WizardStepId,
 } from "../wizardSteps";
 import type { StepPanelState } from "../SetupStepPanel";
 
@@ -18,8 +19,11 @@ interface Props {
     readonly state: StepPanelState;
     readonly stepNumber: number;
     readonly totalSteps: number;
-    readonly onAdvance: () => void;
     readonly onClickToEdit: () => void;
+    readonly registerPanelEl?: (
+        stepId: WizardStepId,
+        el: HTMLElement | null,
+    ) => void;
 }
 
 /**
@@ -38,8 +42,8 @@ export function SetupStepPlayers({
     state,
     stepNumber,
     totalSteps,
-    onAdvance,
     onClickToEdit,
+    registerPanelEl,
 }: Props) {
     const t = useTranslations("setupWizard.players");
     const { state: clue } = useClue();
@@ -66,10 +70,9 @@ export function SetupStepPlayers({
             totalSteps={totalSteps}
             title={t("title")}
             summary={summary}
-            skippable={false}
             validation={validation}
-            onAdvance={onAdvance}
             onClickToEdit={onClickToEdit}
+            registerPanelEl={registerPanelEl}
         >
             <p className="m-0 text-[13px] text-muted">
                 {t("turnOrderHint")}

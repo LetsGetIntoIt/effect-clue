@@ -17,11 +17,28 @@ interface Props {
     readonly title: string;
     readonly summary: ReactNode;
     readonly children: ReactNode;
-    readonly skippable: boolean;
+    /**
+     * Validation envelope. The panel only uses it to render the
+     * inline banner inside the editing body — Next / Skip enable
+     * state lives on the wizard's sticky CTA bar (which reads
+     * `stepValidationLevel(focusedStep, state)` from `wizardSteps`).
+     */
     readonly validation: StepValidation;
-    readonly onAdvance: () => void;
-    readonly onSkip?: () => void;
     readonly onClickToEdit?: () => void;
+    /**
+     * Optional ref-callback the wizard uses to look up each panel's
+     * DOM node for the smooth-scroll-on-advance behavior. Each step
+     * forwards the wizard's registration callback through this prop;
+     * the panel calls it on mount with its `<section>` and on
+     * unmount with `null`.
+     *
+     * Typed as `| undefined` (rather than `?`) to satisfy
+     * `exactOptionalPropertyTypes` when steps pass through their
+     * own optional prop directly.
+     */
+    readonly registerPanelEl?:
+        | ((stepId: WizardStepId, el: HTMLElement | null) => void)
+        | undefined;
 }
 
 /**
@@ -44,20 +61,26 @@ interface Props {
  * outer Setup ↔ Play slide stays in `Clue.tsx`.
  */
 export function SetupStepPanel({
+    stepId,
     state,
     stepNumber,
     totalSteps,
     title,
     summary,
     children,
-    skippable,
     validation,
-    onAdvance,
-    onSkip,
     onClickToEdit,
+    registerPanelEl,
 }: Props) {
     const t = useTranslations("setupWizard");
     const transition = useReducedTransition(T_STANDARD, { fadeMs: 120 });
+
+    // Ref-callback that lets the wizard look up this panel's DOM
+    // node for smooth-scroll on advance. Cleans up on unmount via
+    // the `null` payload.
+    const sectionRef = (el: HTMLElement | null): void => {
+        registerPanelEl?.(stepId, el);
+    };
 
     const isPending = state === "pending";
     const isEditing = state === "editing";
@@ -71,6 +94,7 @@ export function SetupStepPanel({
 
     return (
         <section
+            ref={sectionRef}
             className={`rounded-[var(--radius)] border bg-panel transition-colors ${
                 isEditing
                     ? "border-accent/40 shadow-[0_2px_12px_rgba(0,0,0,0.06)]"
@@ -153,26 +177,6 @@ export function SetupStepPanel({
                                         <span>{validation.message}</span>
                                     </div>
                                 )}
-
-                                <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/20 pt-3">
-                                    {skippable && onSkip && (
-                                        <button
-                                            type="button"
-                                            className="cursor-pointer rounded border border-border bg-bg px-3 py-1.5 text-[13px] hover:bg-hover"
-                                            onClick={onSkip}
-                                        >
-                                            {t("skip")}
-                                        </button>
-                                    )}
-                                    <button
-                                        type="button"
-                                        className="cursor-pointer rounded border-none bg-accent px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-                                        onClick={onAdvance}
-                                        disabled={validation.level === "blocked"}
-                                    >
-                                        {t("next")}
-                                    </button>
-                                </div>
                             </div>
                         </div>
                     </motion.div>

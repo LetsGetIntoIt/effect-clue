@@ -116,6 +116,26 @@ const waitForWizard = async (): Promise<HTMLElement> => {
     ) as HTMLElement;
 };
 
+// The Next / Skip / Start playing buttons live in the page-fixed
+// sticky CTA bar, siblings of the wizard shell. Helpers query at
+// document scope.
+const stickyNext = (): HTMLButtonElement => {
+    const buttons = Array.from(
+        document.querySelectorAll<HTMLButtonElement>("button"),
+    );
+    const found = buttons.find(b => b.textContent === "setupWizard.next");
+    if (!found) throw new Error("Next button not found in sticky bar");
+    return found;
+};
+const stickySkip = (): HTMLButtonElement => {
+    const buttons = Array.from(
+        document.querySelectorAll<HTMLButtonElement>("button"),
+    );
+    const found = buttons.find(b => b.textContent === "setupWizard.skip");
+    if (!found) throw new Error("Skip button not found in sticky bar");
+    return found;
+};
+
 describe("SetupWizard — accordion shell", () => {
     test("renders all five default visible steps (cardPack, players, identity, handSizes, knownCards)", async () => {
         render(<Clue />, { wrapper: TestQueryClientProvider });
@@ -144,14 +164,18 @@ describe("SetupWizard — accordion shell", () => {
         render(<Clue />, { wrapper: TestQueryClientProvider });
         const wizard = await waitForWizard();
 
-        // myCards is hidden initially.
+        // myCards is hidden initially (selfPlayerId === null).
         expect(
             within(wizard).queryByText(/setupWizard\.myCards\.title/),
         ).toBeNull();
 
+        // Default flow: advance through cardPack and players to
+        // reach identity (the wizard always lands on cardPack now,
+        // not the first incomplete step).
+        await user.click(stickyNext()); // cardPack → players
+        await user.click(stickyNext()); // players → identity
+
         // Click the first player pill in identity to set selfPlayerId.
-        // The default 4-player preset uses "Player 1" through "Player 4";
-        // clicking the first one renders an aria-pressed=true pill.
         const player1 = within(wizard).getByRole("button", {
             name: /^Player 1$/,
         });
@@ -165,57 +189,50 @@ describe("SetupWizard — accordion shell", () => {
         });
     });
 
-    test("clicking a complete step's header re-enters editing for that step", async () => {
-        const user = userEvent.setup();
-        render(<Clue />, { wrapper: TestQueryClientProvider });
-        const wizard = await waitForWizard();
-
-        // The default 4-player Classic preset → players step is
-        // already complete-eligible (>= 2 players). On mount the
-        // first incomplete step (identity) is focused; players is
-        // either complete or pending. Click the Next button to mark
-        // it complete deterministically.
-        const nextButtons = within(wizard).getAllByText("setupWizard.next");
-        const firstNext = nextButtons[0];
-        if (!firstNext) throw new Error("expected at least one Next button");
-        await user.click(firstNext);
-
-        // After advance, Identity panel is focused. Its Skip button
-        // is visible.
-        await waitFor(() => {
-            expect(
-                within(wizard).getByText("setupWizard.skip"),
-            ).toBeInTheDocument();
-        });
-    });
-
-    test("Start playing CTA is enabled with the default 4-player preset", async () => {
+    test("Skip button is visible on every step (including required steps)", async () => {
         render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForWizard();
-        // CTA lives in the sticky bottom bar, sibling of the wizard
-        // shell. Locate at document scope to avoid the within(wizard)
-        // boundary.
-        const cta = document.querySelector(
-            '[data-tour-anchor="setup-start-playing"]',
-        ) as HTMLButtonElement | null;
-        expect(cta).not.toBeNull();
-        expect(cta).not.toBeDisabled();
+        // Skip is in the sticky bar; with default Classic + 4 players
+        // valid, Skip on cardPack is enabled (acts as "accept defaults").
+        const skip = stickySkip();
+        expect(skip).not.toBeDisabled();
+    });
+
+    test("Start playing CTA appears on the last step and is enabled with defaults", async () => {
+        const user = userEvent.setup();
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitForWizard();
+        // Click Next through every step to reach the last one. With
+        // selfPlayerId null on a fresh mount, visible steps are:
+        // cardPack → players → identity → handSizes → knownCards.
+        // Five Nexts gets us to knownCards (the last visible step).
+        // We hit Skip on identity to skip past it (avoids setting
+        // selfPlayerId, keeping myCards hidden).
+        await user.click(stickyNext()); // cardPack → players
+        await user.click(stickyNext()); // players → identity
+        await user.click(stickySkip()); // identity → handSizes
+        await user.click(stickyNext()); // handSizes → knownCards
+        // We're now on the last step. The Next button's label is
+        // "Start playing" or "Continue playing" and `data-setup-cta`
+        // is set.
+        await waitFor(() => {
+            const cta = document.querySelector(
+                '[data-tour-anchor="setup-start-playing"]',
+            ) as HTMLButtonElement | null;
+            expect(cta).not.toBeNull();
+            expect(cta).not.toBeDisabled();
+        });
     });
 
     test("identity skip path leaves selfPlayerId as null", async () => {
         const user = userEvent.setup();
         render(<Clue />, { wrapper: TestQueryClientProvider });
-        const wizard = await waitForWizard();
+        await waitForWizard();
 
-        // Advance Players → identity is now editing.
-        const next = within(wizard).getAllByText("setupWizard.next");
-        const firstNext = next[0];
-        if (!firstNext) throw new Error("expected at least one Next button");
-        await user.click(firstNext);
-
-        // Click skip on identity.
-        const skip = await within(wizard).findByText("setupWizard.skip");
-        await user.click(skip);
+        // Advance cardPack → players → identity, then skip.
+        await user.click(stickyNext()); // cardPack → players
+        await user.click(stickyNext()); // players → identity
+        await user.click(stickySkip()); // identity skipped
 
         // Wizard's `setup` localStorage doesn't carry selfPlayerId;
         // the persistence v9 lift defaults it to null. Verify the

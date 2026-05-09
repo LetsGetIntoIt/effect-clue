@@ -44,7 +44,8 @@
         "redoAria": "Redo",
         "redoTitle": "Redo (⌘⇧Z / Ctrl+Shift+Z)",
         "newGame": "New game{shortcut}",
-        "newGameConfirm": "Start a new game? This will clear all players, cards, known hands, and suggestions from your current game."
+        "newGameConfirm": "Start a new game? This will clear all players, cards, known hands, and suggestions from your current game.",
+        "startNewGame": "Start new game"
     },
     "history": {
         "undoTooltip": "Undo: {description}",
@@ -136,6 +137,7 @@
             "loadConfirm": "Loading a card pack will discard your current hand sizes, known cards, and suggestions. Continue?",
             "customizeExpand": "Customize cards",
             "customizeCollapse": "Done customizing",
+            "allCardPacks": "All card packs",
             "customize": {
                 "helperText": "Drag to reorder. Rename, add, or remove categories and cards. Save your custom deck for next time.",
                 "addCategory": "+ add category",

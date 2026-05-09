@@ -1,10 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useEffect } from "react";
 import { setupSelfPlayerSet } from "../../../analytics/events";
 import { useClue } from "../../state";
 import { SetupStepPanel } from "../SetupStepPanel";
-import { VALID } from "../wizardSteps";
+import { VALID, type WizardStepId } from "../wizardSteps";
 import type { StepPanelState } from "../SetupStepPanel";
 
 const STEP_ID = "identity" as const;
@@ -13,9 +14,19 @@ interface Props {
     readonly state: StepPanelState;
     readonly stepNumber: number;
     readonly totalSteps: number;
-    readonly onAdvance: () => void;
-    readonly onSkip: () => void;
     readonly onClickToEdit: () => void;
+    /**
+     * Register a beforeSkip callback the wizard fires before
+     * advancing on Skip. Identity uses this to clear `selfPlayerId`
+     * if the user has set themselves and then opts to skip — the
+     * "Skip = un-set" semantic preserved across the unified sticky
+     * CTA bar.
+     */
+    readonly registerBeforeSkip?: (fn: (() => void) | null) => void;
+    readonly registerPanelEl?: (
+        stepId: WizardStepId,
+        el: HTMLElement | null,
+    ) => void;
 }
 
 /**
@@ -33,14 +44,31 @@ export function SetupStepIdentity({
     state,
     stepNumber,
     totalSteps,
-    onAdvance,
-    onSkip,
     onClickToEdit,
+    registerBeforeSkip,
+    registerPanelEl,
 }: Props) {
     const t = useTranslations("setupWizard.identity");
     const { state: clue, dispatch } = useClue();
     const players = clue.setup.players;
     const selfPlayerId = clue.selfPlayerId;
+
+    // Skip-clears-identity: when the user advances via Skip after
+    // having selected themselves, un-set selfPlayerId. Re-registers
+    // on every render while editing so the closure captures the
+    // latest selfPlayerId value (avoids un-setting on stale ref).
+    useEffect(() => {
+        if (state !== "editing" || registerBeforeSkip === undefined) {
+            return;
+        }
+        registerBeforeSkip(() => {
+            if (clue.selfPlayerId !== null) {
+                dispatch({ type: "setSelfPlayer", player: null });
+                setupSelfPlayerSet({ cleared: true });
+            }
+        });
+        return () => registerBeforeSkip(null);
+    }, [state, registerBeforeSkip, clue.selfPlayerId, dispatch]);
 
     const summary =
         selfPlayerId === null
@@ -55,17 +83,9 @@ export function SetupStepIdentity({
             totalSteps={totalSteps}
             title={t("title")}
             summary={summary}
-            skippable={true}
             validation={VALID}
-            onAdvance={onAdvance}
-            onSkip={() => {
-                if (selfPlayerId !== null) {
-                    dispatch({ type: "setSelfPlayer", player: null });
-                    setupSelfPlayerSet({ cleared: true });
-                }
-                onSkip();
-            }}
             onClickToEdit={onClickToEdit}
+            registerPanelEl={registerPanelEl}
         >
             <p className="m-0 text-[13px] text-muted">
                 {t("helperText")}

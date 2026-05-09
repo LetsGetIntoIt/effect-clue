@@ -44,6 +44,13 @@ export function BottomNav() {
     const hasKeyboard = useHasKeyboard();
     const mode = state.uiMode;
 
+    // In setup mode, the wizard owns the page-bottom area with its
+    // own sticky CTA bar (Start over / Skip / Next / Start playing).
+    // BottomNav's tabs aren't useful there — Game-setup's already
+    // active, and the Checklist / Suggest tabs would compete with
+    // the wizard's primary navigation. Hide entirely.
+    if (mode === "setup") return null;
+
     return (
         <nav
             aria-label={t("ariaLabel")}
@@ -77,7 +84,9 @@ export function BottomNav() {
                 />
                 </LayoutGroup>
                 <BottomOverflowMenu
-                    setupActive={mode === "setup"}
+                    // In setup mode this whole nav is unmounted, so
+                    // `setupActive` is always false from here.
+                    setupActive={false}
                     onSetup={() =>
                         dispatch({ type: "setUiMode", mode: "setup" })
                     }

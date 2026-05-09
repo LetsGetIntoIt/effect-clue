@@ -1,7 +1,10 @@
 "use client";
 
+import { HashMap } from "effect";
+import { useReducedMotion } from "motion/react";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { startSetup } from "../../analytics/gameSession";
 import {
     gameSetupStarted,
@@ -10,6 +13,9 @@ import {
     setupWizardStepReentered,
     setupWizardStepSkipped,
 } from "../../analytics/events";
+import type { ClueState } from "../../logic/ClueState";
+import { cardSetEquals } from "../../logic/CardSet";
+import { CARD_SETS, newGameSetup } from "../../logic/GameSetup";
 import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 import { useSetupWizardFocus } from "./SetupWizardFocusContext";
@@ -20,11 +26,55 @@ import { SetupStepKnownCards } from "./steps/SetupStepKnownCards";
 import { SetupStepMyCards } from "./steps/SetupStepMyCards";
 import { SetupStepPlayers } from "./steps/SetupStepPlayers";
 import {
-    isStepDataComplete,
+    stepIsSkippable,
+    stepValidationLevel,
     visibleSteps,
+    type StepValidationLevel,
     type WizardStepId,
 } from "./wizardSteps";
 import type { StepPanelState } from "./SetupStepPanel";
+
+// Default Classic deck — used to detect "deck has not been touched."
+const CLASSIC_CARD_SET = CARD_SETS[0]!.cardSet;
+// Default roster from `newGameSetup` — used to detect "players
+// have not been renamed or rearranged from defaults."
+const DEFAULT_PLAYERS = newGameSetup().players.map(p => String(p));
+// Wire-format scroll behaviors — module-scope so the
+// i18next/no-literal-string lint reads them as identifiers.
+const SCROLL_BEHAVIOR_AUTO = "auto" as const;
+const SCROLL_BEHAVIOR_SMOOTH = "smooth" as const;
+
+/**
+ * Does the current state contain anything we'd lose by a `newGame`
+ * dispatch? Used by the wizard's "Start over" button to decide
+ * whether to no-op clear (just rewind the accordion) or pop a
+ * confirm modal first.
+ *
+ * Counts as destructive: any game-progress entry (suggestions,
+ * accusations, hypotheses, knownCards, handSizes, pendingSuggestion)
+ * AND any setup-edit beyond the fresh-mount defaults (selfPlayerId,
+ * firstDealtPlayerId, renamed players, swapped/edited deck).
+ *
+ * Module-internal — verified through the wizard's behavior tests
+ * (no-op rewind on fresh mount, modal on edited state).
+ */
+function hasDestructiveState(state: ClueState): boolean {
+    if (state.suggestions.length > 0) return true;
+    if (state.accusations.length > 0) return true;
+    if (HashMap.size(state.hypotheses) > 0) return true;
+    if (state.knownCards.length > 0) return true;
+    if (state.handSizes.length > 0) return true;
+    if (state.selfPlayerId !== null) return true;
+    if (state.firstDealtPlayerId !== null) return true;
+    if (state.pendingSuggestion !== null) return true;
+    const players = state.setup.players;
+    const defaultRoster =
+        players.length === DEFAULT_PLAYERS.length &&
+        players.every((p, i) => String(p) === DEFAULT_PLAYERS[i]);
+    if (!defaultRoster) return true;
+    if (!cardSetEquals(state.setup.cardSet, CLASSIC_CARD_SET)) return true;
+    return false;
+}
 
 // Module-scope discriminators so the i18next/no-literal-string lint
 // rule treats these as identifiers, not user-facing copy.
@@ -76,26 +126,23 @@ export function SetupWizard() {
     // in so adding a stub step doesn't break the wizard.
     const steps = useMemo(() => visibleSteps(state), [state]);
 
-    // Initial completed set: any step whose data is already filled
-    // in. Lets the user re-enter a populated wizard at the right
-    // place if they returned from play mode.
+    // Initial completed set: empty. Every wizard mount walks the
+    // user through every step; nothing is auto-completed. Lets a
+    // returning user revisit each decision instead of being dropped
+    // into step 4 with the earlier ones silently locked.
     const [completed, setCompleted] = useState<ReadonlySet<WizardStepId>>(
-        () =>
-            new Set(steps.filter(id => isStepDataComplete(id, state))),
+        () => new Set(),
     );
 
-    // Initial focused step: the focus-context hint (M7 jumps), else
-    // the first non-completed step, else the last step. Covers both
-    // "fresh start" (lands on step 1) and "returning user" (lands on
-    // first incomplete step).
+    // Initial focused step: the focus-context hint (programmatic
+    // jumps from a future "edit this step" affordance), else the
+    // first canonical step. Always starts on cardPack on a normal
+    // mount.
     const [focusedStep, setFocusedStep] = useState<WizardStepId | null>(
         () => {
             const hinted = focus?.consumeFocusHint() ?? null;
             if (hinted !== null && steps.includes(hinted)) return hinted;
-            const firstIncomplete = steps.find(
-                id => !isStepDataComplete(id, state),
-            );
-            return firstIncomplete ?? steps[steps.length - 1] ?? null;
+            return steps[0] ?? null;
         },
     );
 
@@ -125,28 +172,142 @@ export function SetupWizard() {
         return STEP_PENDING;
     };
 
+    /**
+     * Smooth-scroll the newly-focused step's heading toward the top
+     * of the viewport whenever `focusedStep` changes — but only when
+     * the change came from advance/skip (which set the
+     * `scrollOnNextFocusRef` flag), not from the initial mount or
+     * from re-entering a completed step via summary-click. Reduced-
+     * motion users get an instant jump.
+     *
+     * The ~64px top offset leaves room for the page header + a
+     * sliver of the previous step's bottom, confirming forward
+     * progress without being jarring.
+     *
+     * Page-level scroll in this app lives on `<body>` (see
+     * `app/globals.css` — `html { overflow: clip }`,
+     * `body { overflow: auto; height: 100dvh }`). So scrollTo
+     * goes through `document.body`, not `window`.
+     */
+    const scrollOnNextFocusRef = useRef<boolean>(false);
+    const reducedMotion = useReducedMotion();
+    useEffect(() => {
+        if (!scrollOnNextFocusRef.current) return;
+        if (focusedStep === null) return;
+        // Defer to the next frame so the panel's expand animation
+        // has begun pushing siblings down before we measure. Don't
+        // clear the flag at the top of the effect — React StrictMode
+        // in dev runs effects setup→cleanup→setup, and clearing
+        // would leave the second setup with a stale `false` while
+        // the first setup's rAF was canceled. Clearing inside the
+        // rAF callback ensures whichever setup-pass survives runs
+        // the scroll exactly once.
+        const id = window.requestAnimationFrame(() => {
+            scrollOnNextFocusRef.current = false;
+            const el = panelElsRef.current.get(focusedStep);
+            if (!el) return;
+            const body = document.body;
+            // jsdom doesn't implement `body.scrollTo`. Guard so the
+            // unit-test environment doesn't throw — the scroll is
+            // verified manually in the next-dev preview.
+            if (typeof body.scrollTo !== "function") return;
+            const top = el.getBoundingClientRect().top + body.scrollTop;
+            body.scrollTo({
+                top: Math.max(0, top - 64),
+                behavior: reducedMotion
+                    ? SCROLL_BEHAVIOR_AUTO
+                    : SCROLL_BEHAVIOR_SMOOTH,
+            });
+        });
+        return () => window.cancelAnimationFrame(id);
+    }, [focusedStep, reducedMotion]);
+
+    /**
+     * The currently-editing step can register two transition hooks
+     * the wizard fires when the user advances or skips:
+     *
+     * - `beforeAdvance` runs on Next OR Skip, before the next step
+     *   is focused. Hand-sizes uses this to commit placeholder
+     *   defaults to state.handSizes (treating "accept the default"
+     *   as an active choice).
+     * - `beforeSkip` runs ONLY on Skip, before `beforeAdvance`.
+     *   Identity uses this to clear `selfPlayerId` when the user
+     *   skips the step after having set themselves — the legacy
+     *   "Skip = un-set" behavior preserved across the unified bar.
+     *
+     * Stored in refs so registration doesn't trigger re-renders;
+     * the focused step's `useEffect` populates them on mount and
+     * clears them on unmount / focus change.
+     */
+    const beforeAdvanceRef = useRef<(() => void) | null>(null);
+    const beforeSkipRef = useRef<(() => void) | null>(null);
+    const registerBeforeAdvance = useCallback(
+        (fn: (() => void) | null) => {
+            beforeAdvanceRef.current = fn;
+        },
+        [],
+    );
+    const registerBeforeSkip = useCallback(
+        (fn: (() => void) | null) => {
+            beforeSkipRef.current = fn;
+        },
+        [],
+    );
+
+    /**
+     * DOM-node registry for the smooth-scroll-on-advance behavior.
+     * Each panel registers via `registerPanelEl(stepId, el)` on
+     * mount and `registerPanelEl(stepId, null)` on unmount.
+     */
+    const panelElsRef = useRef<Map<WizardStepId, HTMLElement>>(new Map());
+    const registerPanelEl = useCallback(
+        (id: WizardStepId, el: HTMLElement | null) => {
+            if (el === null) {
+                panelElsRef.current.delete(id);
+            } else {
+                panelElsRef.current.set(id, el);
+            }
+        },
+        [],
+    );
+
     const advance = (currentId: WizardStepId) => {
-        // Mark current step complete; pick the next non-completed
-        // step in canonical order; if all visible steps are done,
-        // collapse without focus (CTA takes over).
+        // Run any beforeAdvance the focused step registered (e.g.
+        // hand-sizes commits placeholder defaults). Clear it before
+        // the next render so the next focused step's beforeAdvance
+        // doesn't accidentally fire if it hasn't registered yet.
+        beforeAdvanceRef.current?.();
+        beforeAdvanceRef.current = null;
+        // Mark current step complete and advance to the literally-
+        // next step in canonical order (regardless of completion
+        // state). Re-entering a complete step + Next → still moves
+        // forward by one.
         const nextCompleted = new Set(completed);
         nextCompleted.add(currentId);
         setCompleted(nextCompleted);
-        const remaining = steps.find(id => !nextCompleted.has(id));
-        setFocusedStep(remaining ?? null);
+        const currentIdx = steps.indexOf(currentId);
+        const nextStep = steps[currentIdx + 1] ?? null;
+        scrollOnNextFocusRef.current = true;
+        setFocusedStep(nextStep);
         setupWizardStepAdvanced({ step: currentId });
     };
 
     const skip = (currentId: WizardStepId) => {
-        // Same flow as `advance` (one less event, different signal).
-        // The accordion treats "Skip" and "Next" identically — both
-        // mark the step complete and move on; the analytics
-        // distinction lets us see which steps users actually fill in.
+        // Skip fires beforeSkip first (e.g. identity clears
+        // `selfPlayerId`), then beforeAdvance (e.g. hand-sizes
+        // commits placeholder defaults), then the canonical
+        // advance.
+        beforeSkipRef.current?.();
+        beforeSkipRef.current = null;
+        beforeAdvanceRef.current?.();
+        beforeAdvanceRef.current = null;
         const nextCompleted = new Set(completed);
         nextCompleted.add(currentId);
         setCompleted(nextCompleted);
-        const remaining = steps.find(id => !nextCompleted.has(id));
-        setFocusedStep(remaining ?? null);
+        const currentIdx = steps.indexOf(currentId);
+        const nextStep = steps[currentIdx + 1] ?? null;
+        scrollOnNextFocusRef.current = true;
+        setFocusedStep(nextStep);
         setupWizardStepSkipped({ step: currentId });
     };
 
@@ -167,33 +328,62 @@ export function SetupWizard() {
         setupWizardStepReentered({ step: id });
     };
 
-    // Required visible steps (subset that block "Start playing"):
-    // today the required steps are `cardPack` (every game needs a
-    // deck) and `players` (every game needs at least 2 players).
-    // Identity, hand sizes, my cards, and other-player cards are
-    // skippable per their step config. Always-allow the CTA once
-    // a game is in progress (mid-game edits to setup don't re-gate
-    // the user out of play).
-    const REQUIRED: ReadonlySet<WizardStepId> = useMemo(
-        () => new Set<WizardStepId>(["cardPack", "players"]),
-        [],
-    );
-    const requiredVisible = useMemo(
-        () => steps.filter(id => REQUIRED.has(id)),
-        [steps, REQUIRED],
-    );
-    const allRequiredComplete = requiredVisible.every(id =>
-        completed.has(id),
-    );
+    // Sticky CTA bar state — derived per render from the focused
+    // step. With the new "always Next through every step" flow,
+    // "Start playing" appears only once the user reaches the last
+    // visible step (and validation isn't blocked). When already
+    // mid-game, the label flips to "Continue playing" and the
+    // semantic stays the same.
+    const isLastStep =
+        focusedStep !== null &&
+        steps.indexOf(focusedStep) === steps.length - 1;
+    const focusedValidationLevel: StepValidationLevel | null =
+        focusedStep === null ? null : stepValidationLevel(focusedStep, state);
+    const focusedSkippable: boolean =
+        focusedStep === null ? false : stepIsSkippable(focusedStep);
+    // Skip is always visible. Disabled only when a required step has
+    // BLOCKED validation (defaults don't satisfy it) — Skip then
+    // can't safely act as "accept defaults."
+    const skipEnabled =
+        focusedStep !== null &&
+        (focusedSkippable || focusedValidationLevel !== "blocked");
+    const nextEnabled =
+        focusedStep !== null && focusedValidationLevel !== "blocked";
     const hasGameProgress =
         state.suggestions.length > 0 || state.accusations.length > 0;
-    const ctaEnabled = allRequiredComplete || hasGameProgress;
-    const ctaLabel = hasGameProgress
+    const startPlayingLabel = hasGameProgress
         ? tSetup("continuePlaying", { shortcut: "" })
         : tSetup("startPlaying", { shortcut: "" });
 
-    const startPlaying = () => {
-        if (!ctaEnabled) return;
+    const onClickNext = () => {
+        if (focusedStep === null) return;
+        if (!nextEnabled) return;
+        if (isLastStep) {
+            onClickStartPlaying();
+            return;
+        }
+        advance(focusedStep);
+    };
+
+    const onClickSkip = () => {
+        if (focusedStep === null) return;
+        if (!skipEnabled) return;
+        skip(focusedStep);
+    };
+
+    const onClickStartPlaying = () => {
+        if (!nextEnabled) return;
+        // Mark the last step complete (consistent with advance)
+        // before transitioning out of setup.
+        if (focusedStep !== null) {
+            beforeSkipRef.current?.();
+            beforeSkipRef.current = null;
+            beforeAdvanceRef.current?.();
+            beforeAdvanceRef.current = null;
+            const nextCompleted = new Set(completed);
+            nextCompleted.add(focusedStep);
+            setCompleted(nextCompleted);
+        }
         if (!hasGameProgress) {
             startSetup();
             gameSetupStarted();
@@ -202,17 +392,37 @@ export function SetupWizard() {
         dispatch({ type: "setUiMode", mode: "checklist" });
     };
 
-    const newGame = async () => {
+    /**
+     * "Start over" branches on whether anything destructive would be
+     * lost. With a fresh wizard mount (default deck, default roster,
+     * no game progress) the click is a no-op clear that just rewinds
+     * the accordion to step 1. Otherwise pop a confirm — Cancel is
+     * Radix-AlertDialog's default focus, so an accidental Enter
+     * cancels and preserves state.
+     */
+    const onStartOver = async () => {
+        if (!hasDestructiveState(state)) {
+            setCompleted(new Set());
+            const first = steps[0] ?? null;
+            setFocusedStep(first);
+            return;
+        }
         const ok = await confirm({
             message: tToolbar("newGameConfirm"),
+            confirmLabel: tToolbar("startNewGame"),
+            destructive: true,
         });
-        if (ok) {
-            dispatch({ type: "newGame" });
-        }
+        if (!ok) return;
+        dispatch({ type: "newGame" });
+        // newGame remounts the wizard via state reset; the fresh
+        // mount lands on step 1 via the initial-state logic above.
     };
 
     return (
-        <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4">
+        // pb-32 / pb-20 reserves space for the page-fixed sticky CTA
+        // bar so the user can scroll past the last accordion panel
+        // without it being covered.
+        <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4 pb-32 [@media(min-width:800px)]:pb-20">
             <header className="flex flex-col gap-1">
                 <h2 className="m-0 text-[24px] font-semibold tracking-tight">
                     {t("heading")}
@@ -237,8 +447,8 @@ export function SetupWizard() {
                                 state={panelState}
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
-                                onAdvance={() => advance(id)}
                                 onClickToEdit={() => reEnter(id)}
+                                registerPanelEl={registerPanelEl}
                             />
                         );
                     }
@@ -249,8 +459,8 @@ export function SetupWizard() {
                                 state={panelState}
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
-                                onAdvance={() => advance(id)}
                                 onClickToEdit={() => reEnter(id)}
+                                registerPanelEl={registerPanelEl}
                             />
                         );
                     }
@@ -261,9 +471,9 @@ export function SetupWizard() {
                                 state={panelState}
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
-                                onAdvance={() => advance(id)}
-                                onSkip={() => skip(id)}
                                 onClickToEdit={() => reEnter(id)}
+                                registerBeforeSkip={registerBeforeSkip}
+                                registerPanelEl={registerPanelEl}
                             />
                         );
                     }
@@ -274,9 +484,11 @@ export function SetupWizard() {
                                 state={panelState}
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
-                                onAdvance={() => advance(id)}
-                                onSkip={() => skip(id)}
                                 onClickToEdit={() => reEnter(id)}
+                                registerBeforeAdvance={
+                                    registerBeforeAdvance
+                                }
+                                registerPanelEl={registerPanelEl}
                             />
                         );
                     }
@@ -292,9 +504,8 @@ export function SetupWizard() {
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
                                 selfPlayerId={state.selfPlayerId}
-                                onAdvance={() => advance(id)}
-                                onSkip={() => skip(id)}
                                 onClickToEdit={() => reEnter(id)}
+                                registerPanelEl={registerPanelEl}
                             />
                         );
                     }
@@ -305,9 +516,8 @@ export function SetupWizard() {
                                 state={panelState}
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
-                                onAdvance={() => advance(id)}
-                                onSkip={() => skip(id)}
                                 onClickToEdit={() => reEnter(id)}
+                                registerPanelEl={registerPanelEl}
                             />
                         );
                     }
@@ -315,25 +525,63 @@ export function SetupWizard() {
                 })}
             </div>
 
-            <div className="sticky bottom-0 z-10 -mx-2 flex flex-wrap items-center justify-between gap-3 border-t border-border/30 bg-bg/95 px-2 py-3 backdrop-blur supports-[backdrop-filter]:bg-bg/80">
-                <button
-                    type="button"
-                    className="cursor-pointer rounded border border-border bg-bg px-3 py-1.5 text-[13px] hover:bg-hover"
-                    onClick={newGame}
-                >
-                    {t("newGame")}
-                </button>
-                <button
-                    type="button"
-                    className="cursor-pointer rounded border-none bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={startPlaying}
-                    disabled={!ctaEnabled}
-                    data-tour-anchor="setup-start-playing"
-                    data-setup-cta=""
-                >
-                    {ctaLabel}
-                </button>
-            </div>
+            {/*
+              Sticky CTA bar — rendered via portal at document.body
+              so the `contain-paint` on Clue.tsx's slide container
+              doesn't capture our `position: fixed` and pin it to the
+              wrong containing block. Lands on the visible viewport
+              bottom regardless of page scroll, mirroring the
+              BottomNav / modal pattern in CLAUDE.md.
+            */}
+            {typeof window !== "undefined" &&
+                createPortal(
+                    <div
+                        className={
+                            "fixed inset-x-0 bottom-0 z-[var(--z-app-chrome)] " +
+                            "border-t border-border bg-panel " +
+                            "[padding-bottom:env(safe-area-inset-bottom,0px)]"
+                        }
+                    >
+                        <div className="mx-auto flex w-full max-w-[720px] items-center gap-2 px-3 py-2">
+                            <button
+                                type="button"
+                                className="shrink-0 cursor-pointer rounded border border-border bg-bg px-3 py-1.5 text-[13px] hover:bg-hover"
+                                onClick={onStartOver}
+                            >
+                                {t("newGame")}
+                            </button>
+                            <div className="ml-auto flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    className="cursor-pointer rounded border border-border bg-bg px-3 py-1.5 text-[13px] hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+                                    onClick={onClickSkip}
+                                    disabled={!skipEnabled}
+                                >
+                                    {t("skip")}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="cursor-pointer rounded border-none bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                                    onClick={onClickNext}
+                                    disabled={!nextEnabled}
+                                    data-tour-anchor={
+                                        isLastStep
+                                            ? "setup-start-playing"
+                                            : undefined
+                                    }
+                                    data-setup-cta={
+                                        isLastStep ? "" : undefined
+                                    }
+                                >
+                                    {isLastStep
+                                        ? startPlayingLabel
+                                        : t("next")}
+                                </button>
+                            </div>
+                        </div>
+                    </div>,
+                    document.body,
+                )}
         </div>
     );
 }
