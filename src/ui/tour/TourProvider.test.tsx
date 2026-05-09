@@ -97,10 +97,11 @@ describe("TourProvider — persistence on close", () => {
     test("completion: clicking Next past the last step writes lastDismissedAt", () => {
         const api = mount();
         act(() => api.current().startTour("setup"));
-        // Setup has 6 steps. Click Next 6 times: steps 0→1, 1→2,
-        // 2→3, 3→4, 4→5, then the 6th call past the last step
-        // triggers the completion path.
-        for (let i = 0; i < 6; i++) {
+        // PR-A4: setup tour has 5 steps (welcome → cardpack → players
+        // → mycards → overflow). Click Next 5 times: steps 0→1, 1→2,
+        // 2→3, 3→4, then the 5th call past the last step triggers the
+        // completion path.
+        for (let i = 0; i < 5; i++) {
             act(() => api.current().nextStep());
         }
         expect(api.current().activeScreen).toBeUndefined();
@@ -180,16 +181,16 @@ describe("TourProvider — viewport filter", () => {
         expect(api2.current().steps?.length).toBe(6);
     });
 
-    test("setup tour has the same 6 steps at both breakpoints (no viewport-locked steps)", () => {
+    test("setup tour has the same 5 steps at both breakpoints (no viewport-locked steps)", () => {
         stubMatchMedia(true);
         const api = mount();
         act(() => api.current().startTour("setup"));
-        expect(api.current().steps?.length).toBe(6);
+        expect(api.current().steps?.length).toBe(5);
 
         stubMatchMedia(false);
         const api2 = mount();
         act(() => api2.current().startTour("setup"));
-        expect(api2.current().steps?.length).toBe(6);
+        expect(api2.current().steps?.length).toBe(5);
     });
 
     test("isLastStep is true on the final step of checklistSuggest", () => {
@@ -229,7 +230,7 @@ describe("TourProvider — analytics events", () => {
             event: "tour_started",
             props: {
                 screenKey: "setup",
-                stepCount: 6,
+                stepCount: 5,
                 reengaged: false,
                 daysSinceLastDismissal: null,
             },
@@ -239,8 +240,8 @@ describe("TourProvider — analytics events", () => {
             props: {
                 screenKey: "setup",
                 stepIndex: 0,
-                stepId: "setup-card-pack",
-                totalSteps: 6,
+                stepId: "setup-wizard-shell",
+                totalSteps: 5,
                 isFirstStep: true,
                 isLastStep: false,
             },
@@ -262,7 +263,7 @@ describe("TourProvider — analytics events", () => {
             props: {
                 screenKey: "setup",
                 stepIndex: 1,
-                stepId: "setup-player-column",
+                stepId: "setup-step-cardpack-pills",
                 isFirstStep: false,
                 isLastStep: false,
             },
@@ -274,16 +275,16 @@ describe("TourProvider — analytics events", () => {
         const api = mount();
         act(() => api.current().startTour("setup"));
         captureCalls.length = 0;
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < 5; i++) {
             act(() => api.current().nextStep());
         }
-        // 5 advances + 5 step_views (steps 1..5) + 1 completion.
+        // 4 advances + 4 step_views (steps 1..4) + 1 completion.
         const last = captureCalls[captureCalls.length - 1];
         expect(last?.event).toBe("tour_completed");
         expect(last).toMatchObject({
             props: {
                 screenKey: "setup",
-                totalSteps: 6,
+                totalSteps: 5,
                 $set: { tour_setup_status: "completed" },
             },
         });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { setupSelfPlayerSet } from "../../../analytics/events";
 import { useClue } from "../../state";
 import { SetupStepPanel } from "../SetupStepPanel";
 import { VALID } from "../wizardSteps";
@@ -60,6 +61,7 @@ export function SetupStepIdentity({
             onSkip={() => {
                 if (selfPlayerId !== null) {
                     dispatch({ type: "setSelfPlayer", player: null });
+                    setupSelfPlayerSet({ cleared: true });
                 }
                 onSkip();
             }}
@@ -86,12 +88,16 @@ export function SetupStepIdentity({
                                         : "border-border bg-bg text-fg hover:bg-hover"
                                 }`}
                                 aria-pressed={active}
-                                onClick={() =>
+                                onClick={() => {
+                                    const next = active ? null : player;
                                     dispatch({
                                         type: "setSelfPlayer",
-                                        player: active ? null : player,
-                                    })
-                                }
+                                        player: next,
+                                    });
+                                    setupSelfPlayerSet({
+                                        cleared: next === null,
+                                    });
+                                }}
                             >
                                 {String(player)}
                             </button>

@@ -10,6 +10,11 @@ import type { StepPanelState } from "../SetupStepPanel";
 
 const STEP_ID = "myCards" as const;
 
+// Tour anchor shared with `tours.ts` setup step 4 ("Mark your cards").
+// Pulled to module scope so the i18next/no-literal-string lint treats
+// it as a wire identifier, not user copy.
+const FIRST_ROW_TOUR_ANCHOR = "setup-step-mycards-firstrow" as const;
+
 interface Props {
     readonly state: StepPanelState;
     readonly stepNumber: number;
@@ -67,6 +72,7 @@ export function SetupStepMyCards({
             <PlayerColumnCardList
                 player={selfPlayerId}
                 heading={t("yourHand")}
+                firstRowTourAnchor={FIRST_ROW_TOUR_ANCHOR}
             />
         </SetupStepPanel>
     );

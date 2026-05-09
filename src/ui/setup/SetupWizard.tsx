@@ -3,7 +3,13 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { startSetup } from "../../analytics/gameSession";
-import { gameSetupStarted } from "../../analytics/events";
+import {
+    gameSetupStarted,
+    setupWizardCompleted,
+    setupWizardStepAdvanced,
+    setupWizardStepReentered,
+    setupWizardStepSkipped,
+} from "../../analytics/events";
 import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 import { useSetupWizardFocus } from "./SetupWizardFocusContext";
@@ -128,6 +134,20 @@ export function SetupWizard() {
         setCompleted(nextCompleted);
         const remaining = steps.find(id => !nextCompleted.has(id));
         setFocusedStep(remaining ?? null);
+        setupWizardStepAdvanced({ step: currentId });
+    };
+
+    const skip = (currentId: WizardStepId) => {
+        // Same flow as `advance` (one less event, different signal).
+        // The accordion treats "Skip" and "Next" identically — both
+        // mark the step complete and move on; the analytics
+        // distinction lets us see which steps users actually fill in.
+        const nextCompleted = new Set(completed);
+        nextCompleted.add(currentId);
+        setCompleted(nextCompleted);
+        const remaining = steps.find(id => !nextCompleted.has(id));
+        setFocusedStep(remaining ?? null);
+        setupWizardStepSkipped({ step: currentId });
     };
 
     const reEnter = (id: WizardStepId) => {
@@ -144,6 +164,7 @@ export function SetupWizard() {
         nextCompleted.delete(id);
         setCompleted(nextCompleted);
         setFocusedStep(id);
+        setupWizardStepReentered({ step: id });
     };
 
     // Required visible steps (subset that block "Start playing"):
@@ -177,6 +198,7 @@ export function SetupWizard() {
             startSetup();
             gameSetupStarted();
         }
+        setupWizardCompleted();
         dispatch({ type: "setUiMode", mode: "checklist" });
     };
 
@@ -192,9 +214,9 @@ export function SetupWizard() {
     return (
         <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4">
             <header className="flex flex-col gap-1">
-                <h1 className="m-0 text-[24px] font-semibold tracking-tight">
+                <h2 className="m-0 text-[24px] font-semibold tracking-tight">
                     {t("heading")}
-                </h1>
+                </h2>
                 <p className="m-0 text-[14px] text-muted">
                     {t("subheading")}
                 </p>
@@ -240,7 +262,7 @@ export function SetupWizard() {
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
                                 onAdvance={() => advance(id)}
-                                onSkip={() => advance(id)}
+                                onSkip={() => skip(id)}
                                 onClickToEdit={() => reEnter(id)}
                             />
                         );
@@ -253,7 +275,7 @@ export function SetupWizard() {
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
                                 onAdvance={() => advance(id)}
-                                onSkip={() => advance(id)}
+                                onSkip={() => skip(id)}
                                 onClickToEdit={() => reEnter(id)}
                             />
                         );
@@ -271,7 +293,7 @@ export function SetupWizard() {
                                 totalSteps={totalSteps}
                                 selfPlayerId={state.selfPlayerId}
                                 onAdvance={() => advance(id)}
-                                onSkip={() => advance(id)}
+                                onSkip={() => skip(id)}
                                 onClickToEdit={() => reEnter(id)}
                             />
                         );
@@ -284,7 +306,7 @@ export function SetupWizard() {
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
                                 onAdvance={() => advance(id)}
-                                onSkip={() => advance(id)}
+                                onSkip={() => skip(id)}
                                 onClickToEdit={() => reEnter(id)}
                             />
                         );
@@ -307,6 +329,7 @@ export function SetupWizard() {
                     onClick={startPlaying}
                     disabled={!ctaEnabled}
                     data-tour-anchor="setup-start-playing"
+                    data-setup-cta=""
                 >
                     {ctaLabel}
                 </button>

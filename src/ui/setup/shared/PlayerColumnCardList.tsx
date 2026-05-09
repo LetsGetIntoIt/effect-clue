@@ -28,9 +28,20 @@ import { useClue } from "../../state";
 interface Props {
     readonly player: Player;
     readonly heading?: string;
+    /**
+     * Optional `data-tour-anchor` for the very first checkbox row.
+     * Used by the M6 setup tour's "Mark your cards" step to spotlight
+     * the first row when the column lives in step 5 (My cards). Other
+     * mounts (step 6, M8 my-hand panel) leave this undefined.
+     */
+    readonly firstRowTourAnchor?: string;
 }
 
-export function PlayerColumnCardList({ player, heading }: Props) {
+export function PlayerColumnCardList({
+    player,
+    heading,
+    firstRowTourAnchor,
+}: Props) {
     const tSetup = useTranslations("setup");
     const { state, dispatch } = useClue();
     const setup = state.setup;
@@ -64,6 +75,12 @@ export function PlayerColumnCardList({ player, heading }: Props) {
 
     const heading_ = heading ?? String(player);
 
+    // Stable identity of the very first card across all categories.
+    // Tagged with `firstRowTourAnchor` (when provided) so the setup
+    // tour's "Mark your cards" step can spotlight a single row rather
+    // than the whole column.
+    const firstCardId = setup.categories[0]?.cards[0]?.id;
+
     return (
         <div className="flex min-w-0 flex-col gap-2 rounded border border-border/40 p-3">
             <h3 className="m-0 truncate text-[14px] font-semibold">
@@ -81,10 +98,19 @@ export function PlayerColumnCardList({ player, heading }: Props) {
                         <ul className="m-0 flex list-none flex-col gap-1 p-0">
                             {category.cards.map(entry => {
                                 const owned = ownedSet.has(entry.id);
+                                const isFirst =
+                                    firstRowTourAnchor !== undefined &&
+                                    entry.id === firstCardId;
                                 return (
                                     <li
                                         key={String(entry.id)}
                                         className="flex items-center gap-2"
+                                        {...(isFirst
+                                            ? {
+                                                  "data-tour-anchor":
+                                                      firstRowTourAnchor,
+                                              }
+                                            : {})}
                                     >
                                         <label className="flex w-full cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-hover">
                                             <input

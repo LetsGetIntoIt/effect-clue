@@ -104,7 +104,7 @@ describe("TourPopover — anchor lookup", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
                 ]}
             >
                 {c => {
@@ -116,13 +116,13 @@ describe("TourPopover — anchor lookup", () => {
         );
         act(() => api.startTour("setup"));
         // Title and body keys for setup tour step 0
-        // (`setup.cardPack.title` / `setup.cardPack.body`) — the
+        // (`setup.welcome.title` / `setup.welcome.body`) — the
         // next-intl mock returns the key itself.
         expect(
-            screen.getByText("setup.cardPack.title"),
+            screen.getByText("setup.welcome.title"),
         ).toBeInTheDocument();
         expect(
-            screen.getByText("setup.cardPack.body"),
+            screen.getByText("setup.welcome.body"),
         ).toBeInTheDocument();
     });
 
@@ -196,7 +196,7 @@ describe("TourPopover — anchor lookup", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
                 ]}
             >
                 {c => {
@@ -230,7 +230,7 @@ describe("TourPopover — anchor lookup", () => {
         // to a fixed viewport position and still shows the copy.
         expect(() => act(() => api.startTour("setup"))).not.toThrow();
         expect(
-            screen.getByText("setup.cardPack.title"),
+            screen.getByText("setup.welcome.title"),
         ).toBeInTheDocument();
     });
 });
@@ -249,7 +249,7 @@ describe("TourPopover — M20 interaction rules", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
                 ]}
             >
                 {c => {
@@ -295,7 +295,7 @@ describe("TourPopover — M20 interaction rules", () => {
                         <button
                             type="button"
                             data-testid="anchor"
-                            data-tour-anchor="setup-card-pack"
+                            data-tour-anchor="setup-wizard-shell"
                             onClick={onAnchorClick}
                         >
                             click me
@@ -332,7 +332,7 @@ describe("TourPopover — M20 interaction rules", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
                 ]}
             >
                 {c => {
@@ -369,7 +369,7 @@ describe("TourPopover — veil isolation", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
                 ]}
             >
                 {c => {
@@ -402,7 +402,7 @@ describe("TourPopover — veil isolation", () => {
                     anchors={[
                         {
                             testId: "card-pack",
-                            anchorAttr: "setup-card-pack",
+                            anchorAttr: "setup-wizard-shell",
                         },
                     ]}
                 >
@@ -445,7 +445,7 @@ describe("TourPopover — veil isolation", () => {
                     anchors={[
                         {
                             testId: "card-pack",
-                            anchorAttr: "setup-card-pack",
+                            anchorAttr: "setup-wizard-shell",
                         },
                     ]}
                 >
@@ -487,7 +487,7 @@ describe("TourPopover — veil isolation", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
                 ]}
             >
                 {c => {
@@ -528,7 +528,7 @@ describe("TourPopover — veil isolation", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
                 ]}
             >
                 {c => {
@@ -574,7 +574,7 @@ describe("TourPopover — veil isolation", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
                     { testId: "sticky", stickyLeft: true },
                 ]}
             >
@@ -627,7 +627,7 @@ describe("TourPopover — veil isolation", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
                     { testId: "sticky", stickyLeft: true },
                 ]}
             >
@@ -679,7 +679,7 @@ describe("TourPopover — veil isolation", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-card-pack" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
                     { testId: "sticky", stickyLeft: true },
                 ]}
             >

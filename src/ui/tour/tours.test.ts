@@ -41,33 +41,29 @@ const findStep = (
 };
 
 describe("TOURS — setup tour", () => {
-    test("has 6 steps in declaration order", () => {
+    test("walks the M6 wizard in 5 steps", () => {
+        // PR-A4 reworked the setup tour for the wizard: welcome → card
+        // pack → players → my cards → overflow. The deeper "hand sizes"
+        // and "start playing" steps from the legacy setup-mode Checklist
+        // are gone (the wizard's accordion already exposes everything;
+        // re-touring it would be repetitive).
         expect(TOURS.setup.map(s => s.anchor)).toEqual([
-            "setup-card-pack",
-            "setup-player-column",
-            "setup-hand-size",
-            "setup-known-cell",
+            "setup-wizard-shell",
+            "setup-step-cardpack-pills",
+            "setup-step-players-list",
+            "setup-step-mycards-firstrow",
             "overflow-menu",
-            "setup-start-playing",
         ]);
     });
 
-    test("setup-known-cell uses popoverAnchor + sideByViewport", () => {
-        const step = findStep(TOURS.setup, "setup-known-cell");
-        // Spotlight covers all body cells; popover anchors to the
-        // header so it doesn't pin against an 800-px-tall column.
-        expect(step.popoverAnchor).toBe("setup-known-cell-header");
-        // Desktop: popover sits to the RIGHT (column visible).
-        // Mobile: side: bottom; column too narrow horizontally for
-        // a side popover.
-        expect(step.sideByViewport?.desktop).toEqual({
-            side: "right",
-            align: "start",
-        });
-        expect(step.sideByViewport?.mobile).toEqual({
-            side: "bottom",
-            align: "center",
-        });
+    test("mycards step auto-skips when its anchor is missing (selfPlayerId === null)", () => {
+        // The wizard hides step 5 from the accordion entirely when
+        // identity is unset; the anchor isn't mounted, so tours.ts'
+        // missing-anchor auto-skip kicks in. Pin the step exists with
+        // the anchor name we expect; the auto-skip is exercised by
+        // TourPopover's own behavior tests.
+        const step = findStep(TOURS.setup, "setup-step-mycards-firstrow");
+        expect(step.titleKey).toBe("setup.knownCard.title");
     });
 
     test("overflow-menu uses popoverAnchorPriority + sideByViewport", () => {
@@ -82,11 +78,6 @@ describe("TOURS — setup tour", () => {
         expect(step.sideByViewport?.mobile.side).toBe("top");
     });
 
-    test("setup-start-playing keeps the popover below the near-top CTA", () => {
-        const step = findStep(TOURS.setup, "setup-start-playing");
-        expect(step.side).toBe("bottom");
-        expect(step.align).toBe("end");
-    });
 });
 
 describe("TOURS — checklistSuggest tour", () => {

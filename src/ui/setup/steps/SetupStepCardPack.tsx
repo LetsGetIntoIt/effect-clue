@@ -17,6 +17,8 @@ import {
 import type { StepPanelState } from "../SetupStepPanel";
 
 const STEP_ID = "cardPack" as const;
+// Tour anchor shared with the M6 setup tour's "Card pack" step.
+const PILLS_TOUR_ANCHOR = "setup-step-cardpack-pills" as const;
 
 interface Props {
     readonly state: StepPanelState;
@@ -135,7 +137,10 @@ export function SetupStepCardPack({
         >
             <p className="m-0 text-[13px] text-muted">{t("helperText")}</p>
 
-            <div className="flex flex-wrap gap-2">
+            <div
+                className="flex flex-wrap gap-2"
+                data-tour-anchor={PILLS_TOUR_ANCHOR}
+            >
                 {pills.map(pill => (
                     <button
                         key={pill.id}
