@@ -440,12 +440,19 @@ export function SetupWizard() {
     };
 
     /**
-     * Footer JSX for the editing step — `position: sticky; bottom: 0`
-     * inside its panel so it pins to the visible viewport bottom
-     * while the panel's content is taller than the viewport, and
-     * settles at the panel's natural bottom when the panel fits in
-     * the viewport. This is what makes the CTA read as "belonging
-     * to the card" rather than a disconnected page chrome.
+     * Footer JSX for the editing step. Styled to look like a clear
+     * extension of the card body — same `bg-panel` as the section,
+     * a top divider matching the body's separator, and rounded
+     * bottom corners so it lines up with the card's outer
+     * `rounded-[var(--radius)]` regardless of whether it's pinned
+     * to the viewport (sticky) or sitting at the card's natural
+     * bottom.
+     *
+     * `position: sticky; bottom: 0` does the dual-mode behavior:
+     * pins to the visible viewport bottom while the card is taller
+     * than the viewport, and settles at the card's natural bottom
+     * when the card fits. Solid `bg-panel` (not translucent) so the
+     * pinned state doesn't visually leak through to siblings below.
      *
      * The wizard generates the footer once per render and threads
      * it through every step component as a `footer` prop. Only the
@@ -455,10 +462,10 @@ export function SetupWizard() {
     const stickyFooter = (
         <div
             className={
-                "sticky bottom-0 -mx-4 -mb-4 flex items-center gap-2 " +
-                "border-t border-border/30 bg-panel/95 px-4 py-2 " +
-                "backdrop-blur supports-[backdrop-filter]:bg-panel/85 " +
-                "[padding-bottom:calc(env(safe-area-inset-bottom,0px)+0.5rem)]"
+                "sticky bottom-0 z-[1] flex flex-wrap items-center gap-2 " +
+                "rounded-b-[var(--radius)] border-t border-border/30 " +
+                "bg-panel px-4 py-3 " +
+                "[padding-bottom:calc(env(safe-area-inset-bottom,0px)+0.75rem)]"
             }
         >
             <button
