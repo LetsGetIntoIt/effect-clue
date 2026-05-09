@@ -1,53 +1,154 @@
 "use client";
 
+import { Reorder } from "motion/react";
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import {
-    type Category,
     type CardEntry,
+    type Category,
 } from "../../../logic/CardSet";
+import type { CustomCardSet } from "../../../logic/CustomCardSets";
 import { useConfirm } from "../../hooks/useConfirm";
+import { usePrompt } from "../../hooks/usePrompt";
 import { useClue } from "../../state";
-import { TrashIcon } from "../../components/Icons";
+import { useCardPackActions } from "../../components/cardPackActions";
+import {
+    ChevronLeftIcon,
+    ChevronRightIcon,
+    TrashIcon,
+} from "../../components/Icons";
+
+// Reorder.Group axis values — pulled to module scope so the
+// i18next/no-literal-string lint reads them as wire identifiers.
+const REORDER_AXIS_Y = "y" as const;
+
+// Decorative drag-handle glyph (mirrors PlayerListReorder).
+const DRAG_HANDLE_GLYPH = "⋮⋮";
+
+interface Props {
+    /**
+     * The custom pack (if any) the user loaded via a pill before
+     * opening this customize panel. Drives the "Update {label}"
+     * footer button: only meaningful when the user explicitly
+     * started from a saved custom pack (built-ins like Classic
+     * never qualify, since they live in code rather than the
+     * mutable library).
+     */
+    readonly loadedCustomPack: CustomCardSet | null;
+    /**
+     * Notify the parent so it can flip its `loadedFromCustomPackId`
+     * to the freshly-saved pack's id — that way "Update" appears
+     * for the new pack on the next save without needing a re-load.
+     */
+    readonly onSavedAsNewPack: (packId: string) => void;
+}
 
 /**
  * Inline customize sub-flow for the M6 wizard's step 1.
  *
- * Lets the user rename, add, and remove categories and cards. The
- * sub-flow doesn't reorder via drag-and-drop yet — that's deferred
- * to a follow-up since the existing `reorderCategories` /
- * `reorderCardsInCategory` actions (PR-A1) are wired but the UI
- * component isn't.
+ * Lets the user rename, add, remove, and drag-to-reorder categories
+ * and the cards inside them. Footer offers "Save as new pack"
+ * (always) and "Update {label}" (only when the user started from a
+ * saved custom pack). Built-in decks like Classic never get an
+ * "Update" CTA because their canonical copy lives in code, not the
+ * user's library.
  *
- * Edits dispatch immediately, mirroring today's inSetup behavior.
- * The confirm dialogs gate destructive removals when the action
- * would also drop known cards / suggestions referencing them
- * (matching the legacy `<Checklist inSetup>` patterns).
- *
- * Save-as / update-pack will land in a follow-up PR alongside the
- * DnD reorder UI; for now the user can save and reuse via the
- * legacy CardPackRow pill bar (still mounted under the feature
- * flag's "off" code path) or the existing share modal.
+ * Edits dispatch immediately to the reducer (mirroring today's
+ * behavior — every edit goes through `dispatch`, no per-flow draft
+ * buffer). Drag-end commits a bulk reorder action so the operation
+ * is one undo step.
  */
-export function SetupStepCardPackCustomize() {
+export function SetupStepCardPackCustomize({
+    loadedCustomPack,
+    onSavedAsNewPack,
+}: Props) {
     const t = useTranslations("setupWizard.cardPack.customize");
     const { state, dispatch } = useClue();
     const confirm = useConfirm();
+    const prompt = usePrompt();
+    const tCommon = useTranslations("common");
+    const { savePack } = useCardPackActions();
     const setup = state.setup;
+
+    const [categoryDraft, setCategoryDraft] = useState<
+        ReadonlyArray<Category>
+    >(setup.categories);
+    useEffect(() => {
+        setCategoryDraft(setup.categories);
+    }, [setup.categories]);
+
+    const commitCategoryReorder = (next: ReadonlyArray<Category>) => {
+        const sameOrder =
+            next.length === setup.categories.length &&
+            next.every((c, i) => c.id === setup.categories[i]?.id);
+        if (sameOrder) return;
+        dispatch({ type: "reorderCategories", categories: next });
+    };
+
+    const moveCategory = (idx: number, dir: -1 | 1) => {
+        const target = idx + dir;
+        if (target < 0 || target >= categoryDraft.length) return;
+        const next = [...categoryDraft];
+        const a = next[idx];
+        const b = next[target];
+        if (!a || !b) return;
+        next[idx] = b;
+        next[target] = a;
+        dispatch({ type: "reorderCategories", categories: next });
+    };
+
+    const saveAsNewPack = async () => {
+        const name = await prompt({
+            title: t("saveAsPackPromptTitle"),
+            label: t("saveAsPackPromptLabel"),
+            initialValue: loadedCustomPack?.label ?? "",
+            confirmLabel: tCommon("save"),
+        });
+        if (name === null) return;
+        const trimmed = name.trim();
+        if (trimmed.length === 0) return;
+        const saved = await savePack({
+            label: trimmed,
+            cardSet: setup.cardSet,
+        });
+        onSavedAsNewPack(saved.id);
+    };
+
+    const updateLoadedPack = async () => {
+        if (loadedCustomPack === null) return;
+        await savePack({
+            label: loadedCustomPack.label,
+            cardSet: setup.cardSet,
+            existingId: loadedCustomPack.id,
+        });
+    };
 
     return (
         <div className="flex flex-col gap-3 rounded border border-border/30 p-3">
             <p className="m-0 text-[13px] text-muted">{t("helperText")}</p>
 
-            <ul className="m-0 flex list-none flex-col gap-3 p-0">
-                {setup.categories.map(category => (
-                    <li
+            <Reorder.Group
+                axis={REORDER_AXIS_Y}
+                values={[...categoryDraft]}
+                onReorder={(next: ReadonlyArray<Category>) => {
+                    setCategoryDraft(next);
+                }}
+                className="m-0 flex list-none flex-col gap-3 p-0"
+            >
+                {categoryDraft.map((category, idx) => (
+                    <Reorder.Item
                         key={String(category.id)}
-                        className="flex flex-col gap-2 rounded border border-border/40 p-2"
+                        value={category}
+                        onDragEnd={() => commitCategoryReorder(categoryDraft)}
+                        className="flex touch-none flex-col gap-2 rounded border border-border/40 bg-bg p-2"
                     >
                         <CategoryHeader
                             category={category}
-                            canRemove={setup.categories.length > 1}
+                            canRemove={categoryDraft.length > 1}
+                            isFirst={idx === 0}
+                            isLast={idx === categoryDraft.length - 1}
+                            onMoveUp={() => moveCategory(idx, -1)}
+                            onMoveDown={() => moveCategory(idx, 1)}
                             onRemove={async () => {
                                 const hasReferences =
                                     state.knownCards.some(kc =>
@@ -69,41 +170,7 @@ export function SetupStepCardPackCustomize() {
                                 });
                             }}
                         />
-                        <ul className="m-0 flex list-none flex-col gap-1 p-0">
-                            {category.cards.map(entry => (
-                                <li
-                                    key={String(entry.id)}
-                                    className="flex items-center gap-2"
-                                >
-                                    <CardRow
-                                        entry={entry}
-                                        canRemove={category.cards.length > 1}
-                                        onRemove={async () => {
-                                            const hasReferences =
-                                                state.knownCards.some(
-                                                    kc => kc.card === entry.id,
-                                                ) ||
-                                                state.suggestions.length > 0;
-                                            if (hasReferences) {
-                                                const ok = await confirm({
-                                                    message: t(
-                                                        "removeCardConfirm",
-                                                        {
-                                                            card: entry.name,
-                                                        },
-                                                    ),
-                                                });
-                                                if (!ok) return;
-                                            }
-                                            dispatch({
-                                                type: "removeCardById",
-                                                cardId: entry.id,
-                                            });
-                                        }}
-                                    />
-                                </li>
-                            ))}
-                        </ul>
+                        <CardList category={category} />
                         <button
                             type="button"
                             className="self-start cursor-pointer rounded border border-border bg-bg px-2 py-1 text-[12px] hover:bg-hover"
@@ -116,9 +183,10 @@ export function SetupStepCardPackCustomize() {
                         >
                             {t("addCard")}
                         </button>
-                    </li>
+                    </Reorder.Item>
                 ))}
-            </ul>
+            </Reorder.Group>
+
             <button
                 type="button"
                 className="self-start cursor-pointer rounded border border-border bg-bg px-2 py-1 text-[12px] hover:bg-hover"
@@ -126,17 +194,144 @@ export function SetupStepCardPackCustomize() {
             >
                 {t("addCategory")}
             </button>
+
+            <div className="flex flex-wrap items-center gap-2 border-t border-border/30 pt-3">
+                <button
+                    type="button"
+                    className="cursor-pointer rounded border border-border bg-bg px-3 py-1.5 text-[13px] hover:bg-hover"
+                    onClick={saveAsNewPack}
+                >
+                    {t("saveAsNewPack")}
+                </button>
+                {loadedCustomPack !== null && (
+                    <button
+                        type="button"
+                        className="cursor-pointer rounded border-none bg-accent px-3 py-1.5 text-[13px] text-white hover:bg-accent-hover"
+                        onClick={updateLoadedPack}
+                    >
+                        {t("updatePack", { label: loadedCustomPack.label })}
+                    </button>
+                )}
+            </div>
         </div>
+    );
+}
+
+/**
+ * One category's card list — its own `Reorder.Group` so cards drag
+ * within their parent category. Dispatches `reorderCardsInCategory`
+ * on drag end. Splitting this out keeps the parent Reorder.Group
+ * cleaner and isolates per-category state.
+ */
+function CardList({ category }: { readonly category: Category }) {
+    const t = useTranslations("setupWizard.cardPack.customize");
+    const { state, dispatch } = useClue();
+    const confirm = useConfirm();
+
+    const [cardDraft, setCardDraft] = useState<ReadonlyArray<CardEntry>>(
+        category.cards,
+    );
+    useEffect(() => {
+        setCardDraft(category.cards);
+    }, [category.cards]);
+
+    const commitCardReorder = (next: ReadonlyArray<CardEntry>) => {
+        const sameOrder =
+            next.length === category.cards.length &&
+            next.every((c, i) => c.id === category.cards[i]?.id);
+        if (sameOrder) return;
+        dispatch({
+            type: "reorderCardsInCategory",
+            categoryId: category.id,
+            cards: next,
+        });
+    };
+
+    const moveCard = (idx: number, dir: -1 | 1) => {
+        const target = idx + dir;
+        if (target < 0 || target >= cardDraft.length) return;
+        const next = [...cardDraft];
+        const a = next[idx];
+        const b = next[target];
+        if (!a || !b) return;
+        next[idx] = b;
+        next[target] = a;
+        dispatch({
+            type: "reorderCardsInCategory",
+            categoryId: category.id,
+            cards: next,
+        });
+    };
+
+    return (
+        <Reorder.Group
+            axis={REORDER_AXIS_Y}
+            values={[...cardDraft]}
+            onReorder={(next: ReadonlyArray<CardEntry>) => {
+                setCardDraft(next);
+            }}
+            className="m-0 flex list-none flex-col gap-1 p-0"
+        >
+            {cardDraft.map((entry, idx) => (
+                <Reorder.Item
+                    key={String(entry.id)}
+                    value={entry}
+                    onDragEnd={() => commitCardReorder(cardDraft)}
+                    className="flex touch-none items-center gap-2 rounded border border-border/40 bg-bg px-1 py-0.5"
+                >
+                    <span
+                        aria-hidden
+                        className="cursor-grab select-none text-[14px] leading-none text-muted"
+                    >
+                        {DRAG_HANDLE_GLYPH}
+                    </span>
+                    <CardRow
+                        entry={entry}
+                        canRemove={cardDraft.length > 1}
+                        isFirst={idx === 0}
+                        isLast={idx === cardDraft.length - 1}
+                        onMoveUp={() => moveCard(idx, -1)}
+                        onMoveDown={() => moveCard(idx, 1)}
+                        onRemove={async () => {
+                            const hasReferences =
+                                state.knownCards.some(
+                                    kc => kc.card === entry.id,
+                                ) || state.suggestions.length > 0;
+                            if (hasReferences) {
+                                const ok = await confirm({
+                                    message: t("removeCardConfirm", {
+                                        card: entry.name,
+                                    }),
+                                });
+                                if (!ok) return;
+                            }
+                            dispatch({
+                                type: "removeCardById",
+                                cardId: entry.id,
+                            });
+                        }}
+                    />
+                </Reorder.Item>
+            ))}
+        </Reorder.Group>
     );
 }
 
 function CategoryHeader({
     category,
     canRemove,
+    isFirst,
+    isLast,
+    onMoveUp,
+    onMoveDown,
     onRemove,
 }: {
     readonly category: Category;
     readonly canRemove: boolean;
+    readonly isFirst: boolean;
+    readonly isLast: boolean;
+    readonly onMoveUp: () => void;
+    readonly onMoveDown: () => void;
     readonly onRemove: () => void;
 }) {
     const t = useTranslations("setupWizard.cardPack.customize");
@@ -161,13 +356,17 @@ function CategoryHeader({
 
     return (
         <div className="flex items-center gap-2">
+            <span
+                aria-hidden
+                className="cursor-grab select-none text-[18px] leading-none text-muted"
+            >
+                {DRAG_HANDLE_GLYPH}
+            </span>
             <input
                 type="text"
                 className="box-border min-w-0 flex-1 rounded border border-border px-2 py-1 text-[13px] font-semibold uppercase tracking-wide"
                 value={draft}
-                aria-label={t("categoryNameAria", {
-                    name: category.name,
-                })}
+                aria-label={t("categoryNameAria", { name: category.name })}
                 onChange={e => setDraft(e.currentTarget.value)}
                 onBlur={commit}
                 onKeyDown={e => {
@@ -179,6 +378,14 @@ function CategoryHeader({
                         (e.currentTarget as HTMLInputElement).blur();
                     }
                 }}
+            />
+            <ArrowButtons
+                isFirst={isFirst}
+                isLast={isLast}
+                onMoveUp={onMoveUp}
+                onMoveDown={onMoveDown}
+                upLabel={t("moveCategoryUpAria", { name: category.name })}
+                downLabel={t("moveCategoryDownAria", { name: category.name })}
             />
             {canRemove && (
                 <button
@@ -199,10 +406,18 @@ function CategoryHeader({
 function CardRow({
     entry,
     canRemove,
+    isFirst,
+    isLast,
+    onMoveUp,
+    onMoveDown,
     onRemove,
 }: {
     readonly entry: CardEntry;
     readonly canRemove: boolean;
+    readonly isFirst: boolean;
+    readonly isLast: boolean;
+    readonly onMoveUp: () => void;
+    readonly onMoveDown: () => void;
     readonly onRemove: () => void;
 }) {
     const t = useTranslations("setupWizard.cardPack.customize");
@@ -244,6 +459,14 @@ function CardRow({
                     }
                 }}
             />
+            <ArrowButtons
+                isFirst={isFirst}
+                isLast={isLast}
+                onMoveUp={onMoveUp}
+                onMoveDown={onMoveDown}
+                upLabel={t("moveCardUpAria", { name: entry.name })}
+                downLabel={t("moveCardDownAria", { name: entry.name })}
+            />
             {canRemove && (
                 <button
                     type="button"
@@ -254,6 +477,54 @@ function CardRow({
                     <TrashIcon size={14} />
                 </button>
             )}
+        </div>
+    );
+}
+
+/**
+ * Up/down arrow buttons used by both `CategoryHeader` and `CardRow`.
+ * Drives the same dispatch-on-click semantics as the drag-end commit
+ * — that's how the keyboard a11y path stays in lock-step with drag.
+ *
+ * Visually the arrows are stacked vertically; "up" maps to a left
+ * chevron rotated -90° and "down" to a right chevron rotated -90°,
+ * matching the established pattern in `PlayerListReorder`.
+ */
+function ArrowButtons({
+    isFirst,
+    isLast,
+    onMoveUp,
+    onMoveDown,
+    upLabel,
+    downLabel,
+}: {
+    readonly isFirst: boolean;
+    readonly isLast: boolean;
+    readonly onMoveUp: () => void;
+    readonly onMoveDown: () => void;
+    readonly upLabel: string;
+    readonly downLabel: string;
+}) {
+    return (
+        <div className="flex shrink-0 flex-col">
+            <button
+                type="button"
+                className="flex h-5 w-6 cursor-pointer items-center justify-center rounded border-none bg-transparent text-fg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                disabled={isFirst}
+                aria-label={upLabel}
+                onClick={onMoveUp}
+            >
+                <ChevronLeftIcon size={12} className="-rotate-90" />
+            </button>
+            <button
+                type="button"
+                className="flex h-5 w-6 cursor-pointer items-center justify-center rounded border-none bg-transparent text-fg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                disabled={isLast}
+                aria-label={downLabel}
+                onClick={onMoveDown}
+            >
+                <ChevronRightIcon size={12} className="-rotate-90" />
+            </button>
         </div>
     );
 }
