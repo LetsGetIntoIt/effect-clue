@@ -88,7 +88,7 @@ vi.mock("motion/react", () => {
     };
 });
 
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Clue } from "../Clue";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
@@ -145,7 +145,9 @@ describe("SetupWizard — accordion shell", () => {
         // either complete or pending. Click the Next button to mark
         // it complete deterministically.
         const nextButtons = within(wizard).getAllByText("setupWizard.next");
-        await user.click(nextButtons[0]);
+        const firstNext = nextButtons[0];
+        if (!firstNext) throw new Error("expected at least one Next button");
+        await user.click(firstNext);
 
         // After advance, Identity panel is focused. Its Skip button
         // is visible.
@@ -176,7 +178,9 @@ describe("SetupWizard — accordion shell", () => {
 
         // Advance Players → identity is now editing.
         const next = within(wizard).getAllByText("setupWizard.next");
-        await user.click(next[0]);
+        const firstNext = next[0];
+        if (!firstNext) throw new Error("expected at least one Next button");
+        await user.click(firstNext);
 
         // Click skip on identity.
         const skip = await within(wizard).findByText("setupWizard.skip");
