@@ -66,7 +66,7 @@ export function ShareMissingPage({
                             <button
                                 type="button"
                                 onClick={() => router.push(target)}
-                                className="cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover"
+                                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent font-semibold text-white hover:bg-accent-hover"
                                 data-share-missing-cta
                             >
                                 {actionLabel}

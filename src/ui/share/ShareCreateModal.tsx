@@ -1029,7 +1029,7 @@ export function ShareCreateModal({
                                         <button
                                             type="button"
                                             onClick={() => void onGoogleSignIn()}
-                                            className="cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover"
+                                            className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent font-semibold text-white hover:bg-accent-hover"
                                         >
                                             {tAccount("signInWithGoogle")}
                                         </button>
@@ -1046,7 +1046,7 @@ export function ShareCreateModal({
                             <button
                                 type="button"
                                 onClick={goBackToToggles}
-                                className="mr-auto cursor-pointer rounded-[var(--radius)] border border-border bg-white px-4 py-2 text-[14px] hover:bg-hover"
+                                className="tap-target text-tap mr-auto cursor-pointer rounded-[var(--radius)] border border-border bg-white hover:bg-hover"
                             >
                                 {tCommon("back")}
                             </button>
@@ -1054,7 +1054,7 @@ export function ShareCreateModal({
                         <button
                             type="button"
                             onClick={close}
-                            className="cursor-pointer rounded-[var(--radius)] border border-border bg-white px-4 py-2 text-[14px] hover:bg-hover"
+                            className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white hover:bg-hover"
                         >
                             {tCommon("cancel")}
                         </button>
@@ -1063,7 +1063,7 @@ export function ShareCreateModal({
                                 type="button"
                                 onClick={() => void onCreate()}
                                 disabled={submitting}
-                                className="cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+                                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
                                 data-share-cta
                             >
                                 {ctaLabel}

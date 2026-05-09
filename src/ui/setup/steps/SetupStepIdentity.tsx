@@ -105,7 +105,7 @@ export function SetupStepIdentity({
                             <button
                                 key={String(player)}
                                 type="button"
-                                className={`cursor-pointer rounded-full border px-3 py-1.5 text-[13px] transition-colors ${
+                                className={`tap-target-compact text-tap-compact cursor-pointer rounded-full border transition-colors ${
                                     active
                                         ? "border-accent bg-accent text-white hover:bg-accent-hover"
                                         : "border-border bg-bg text-fg hover:bg-hover"

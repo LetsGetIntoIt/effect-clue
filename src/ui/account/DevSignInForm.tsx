@@ -84,7 +84,7 @@ export function DevSignInForm({ onSignedIn }: DevSignInFormProps) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="off"
-                    className="rounded border border-border bg-white px-2 py-1 text-[13px]"
+                    className="tap-target-compact text-tap-compact rounded border border-border bg-white"
                 />
             </label>
             {error !== null ? (
@@ -93,7 +93,7 @@ export function DevSignInForm({ onSignedIn }: DevSignInFormProps) {
             <button
                 type="submit"
                 disabled={submitting}
-                className="cursor-pointer rounded-[var(--radius)] border border-border bg-white px-3 py-1.5 text-[13px] hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40"
+                className="tap-target-compact text-tap-compact cursor-pointer rounded-[var(--radius)] border border-border bg-white hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40"
             >
                 {submitting ? "Signing in…" : "Sign in (dev only)"}
             </button>

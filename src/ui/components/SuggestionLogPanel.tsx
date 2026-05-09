@@ -798,7 +798,7 @@ function LogAccusationButton({
         <button
             type="button"
             title={tRecs("accuseNowLogTitle")}
-            className="cursor-pointer rounded border border-accent bg-transparent px-3 py-1 text-[13px] text-accent hover:bg-accent hover:text-white"
+            className="tap-target-compact text-tap-compact cursor-pointer rounded border border-accent bg-transparent text-accent hover:bg-accent hover:text-white"
             onClick={() => {
                 dispatch({
                     type: "addAccusation",
@@ -1706,7 +1706,7 @@ function PriorSuggestionItem({
                                         e.stopPropagation();
                                         enterEdit();
                                     }}
-                                    className="min-h-[44px] cursor-pointer rounded-[var(--radius)] border border-accent bg-transparent px-4 py-2 text-[13px] font-semibold text-accent"
+                                    className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-accent bg-transparent font-semibold text-accent"
                                 >
                                     {t("editAction")}
                                 </button>
@@ -1729,7 +1729,7 @@ function PriorSuggestionItem({
                         exitEdit();
                         refocusRow();
                     }}
-                    className="absolute right-1 top-1 inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-accent"
+                    className="tap-icon absolute right-1 top-1 inline-flex cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-accent"
                 >
                     <XIcon size={18} />
                 </button>
@@ -1738,7 +1738,7 @@ function PriorSuggestionItem({
                     <button
                         type="button"
                         aria-label={t("removeAction")}
-                        className="absolute right-1 top-1 inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-accent"
+                        className="tap-icon absolute right-1 top-1 inline-flex cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-accent"
                         onClick={e => {
                             e.stopPropagation();
                             void onRemove();
@@ -2036,7 +2036,7 @@ function PriorAccusationItem({
                                         e.stopPropagation();
                                         enterEdit();
                                     }}
-                                    className="min-h-[44px] cursor-pointer rounded-[var(--radius)] border border-accent bg-transparent px-4 py-2 text-[13px] font-semibold text-accent"
+                                    className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-accent bg-transparent font-semibold text-accent"
                                 >
                                     {t("editAction")}
                                 </button>
@@ -2059,7 +2059,7 @@ function PriorAccusationItem({
                         exitEdit();
                         refocusRow();
                     }}
-                    className="absolute right-1 top-1 inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-accent"
+                    className="tap-icon absolute right-1 top-1 inline-flex cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-accent"
                 >
                     <XIcon size={18} />
                 </button>
@@ -2068,7 +2068,7 @@ function PriorAccusationItem({
                     <button
                         type="button"
                         aria-label={t("removeAction")}
-                        className="absolute right-1 top-1 inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-accent"
+                        className="tap-icon absolute right-1 top-1 inline-flex cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-accent"
                         onClick={e => {
                             e.stopPropagation();
                             void onRemove();

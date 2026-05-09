@@ -316,7 +316,7 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                 clearInputsLabel !== undefined);
 
         const submitButtonClass =
-            "min-h-[44px] rounded border-none px-4 py-2.5 text-[15px] " +
+            "tap-target text-tap rounded border-none " +
             (canSubmit
                 ? "cursor-pointer bg-accent text-white"
                 : "cursor-not-allowed bg-unknown-bg text-muted/70");
@@ -333,7 +333,7 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                                     type="button"
                                     aria-label={clearInputsLabel}
                                     onClick={onClearInputs}
-                                    className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-accent"
+                                    className="tap-icon inline-flex cursor-pointer items-center justify-center rounded border-none bg-transparent text-muted hover:text-accent"
                                 >
                                     <XIcon size={18} />
                                 </button>
@@ -376,7 +376,7 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                     {onCancel !== undefined && (
                         <button
                             type="button"
-                            className="min-h-[44px] cursor-pointer rounded border border-border bg-white px-4 py-2.5 text-[15px]"
+                            className="tap-target text-tap cursor-pointer rounded border border-border bg-white"
                             onClick={onCancel}
                         >
                             {cancelLabel ?? null}

@@ -180,6 +180,80 @@
     --z-tour-popover: 90;
 }
 
+/*
+ * Responsive interactive sizing — tap-target tokens.
+ *
+ * Mobile defaults are sized for finger taps (44px primary, 36px
+ * compact). At the existing 800px mobile/desktop split (see
+ * `useIsMobile` in `src/ui/state.tsx` and the `[@media(min-width:
+ * 800px)]:` arbitrary classes throughout TSX), the same tokens
+ * shrink to pointer-friendly densities so buttons, pills, modal
+ * CTAs, and dropdown rows don't waste vertical space on desktop.
+ *
+ * Consumed via the `tap-target`, `tap-target-compact`, `tap-icon`,
+ * `text-tap`, and `text-tap-compact` utilities below — interactive
+ * components apply those classes and inherit the breakpoint-driven
+ * sizing automatically.
+ *
+ * Kept in `:root` rather than `@theme` for the same reason as the
+ * tour palette above: tokens consumed via `var()` rather than via
+ * generated utility names get tree-shaken by v4's scanner if they
+ * live in `@theme`. A plain `:root` block is always emitted.
+ */
+:root {
+    /* Standard tap target — primary buttons, form pills, modal CTAs. */
+    --tap-min: 44px;
+    --tap-pad-x: 16px;
+    --tap-pad-y: 10px;
+    --tap-text: 15px;
+
+    /* Compact target — secondary buttons, setup chips, dropdown rows. */
+    --tap-min-compact: 36px;
+    --tap-pad-x-compact: 12px;
+    --tap-pad-y-compact: 6px;
+    --tap-text-compact: 13px;
+
+    /* Icon-only square button — close X, info circles. */
+    --tap-icon: 44px;
+}
+
+@media (min-width: 800px) {
+    :root {
+        --tap-min: 32px;
+        --tap-pad-x: 12px;
+        --tap-pad-y: 6px;
+        --tap-text: 13px;
+
+        --tap-min-compact: 28px;
+        --tap-pad-x-compact: 10px;
+        --tap-pad-y-compact: 4px;
+        --tap-text-compact: 13px;
+
+        --tap-icon: 32px;
+    }
+}
+
+@utility tap-target {
+    min-height: var(--tap-min);
+    padding-inline: var(--tap-pad-x);
+    padding-block: var(--tap-pad-y);
+}
+@utility tap-target-compact {
+    min-height: var(--tap-min-compact);
+    padding-inline: var(--tap-pad-x-compact);
+    padding-block: var(--tap-pad-y-compact);
+}
+@utility tap-icon {
+    min-height: var(--tap-icon);
+    min-width: var(--tap-icon);
+}
+@utility text-tap {
+    font-size: var(--tap-text);
+}
+@utility text-tap-compact {
+    font-size: var(--tap-text-compact);
+}
+
 html,
 body {
     background: var(--color-bg);

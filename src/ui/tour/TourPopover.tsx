@@ -802,7 +802,7 @@ export function TourPopover() {
                                     type="button"
                                     onClick={() => prevStep()}
                                     disabled={stepIndex === 0}
-                                    className="cursor-pointer rounded-[var(--tour-radius)] border border-[var(--color-tour-border)] bg-white px-3 py-1.5 text-[13px] text-[var(--color-tour-accent)] hover:bg-[var(--color-tour-bg-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                                    className="tap-target-compact text-tap-compact cursor-pointer rounded-[var(--tour-radius)] border border-[var(--color-tour-border)] bg-white text-[var(--color-tour-accent)] hover:bg-[var(--color-tour-bg-hover)] disabled:cursor-not-allowed disabled:opacity-40"
                                 >
                                     {t("back")}
                                 </button>
@@ -810,7 +810,7 @@ export function TourPopover() {
                                     ref={nextButtonRef}
                                     type="button"
                                     onClick={() => nextStep()}
-                                    className="cursor-pointer rounded-[var(--tour-radius)] border-2 border-[var(--color-tour-accent)] bg-[var(--color-tour-accent)] px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--color-tour-accent-hover)]"
+                                    className="tap-target-compact text-tap-compact cursor-pointer rounded-[var(--tour-radius)] border-2 border-[var(--color-tour-accent)] bg-[var(--color-tour-accent)] font-semibold text-white hover:bg-[var(--color-tour-accent-hover)]"
                                 >
                                     {isLastStep ? t(finishKey) : t("next")}
                                 </button>

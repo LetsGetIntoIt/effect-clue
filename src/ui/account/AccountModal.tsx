@@ -219,7 +219,7 @@ export function AccountModal({
                                 <button
                                     type="button"
                                     onClick={() => void onGoogleSignIn()}
-                                    className="mt-4 cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover"
+                                    className="tap-target text-tap mt-4 cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent font-semibold text-white hover:bg-accent-hover"
                                 >
                                     {t("signInWithGoogle")}
                                 </button>

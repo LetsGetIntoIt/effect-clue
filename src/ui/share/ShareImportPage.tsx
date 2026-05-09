@@ -608,7 +608,7 @@ export function ShareImportPage({
                             <button
                                 type="button"
                                 onClick={() => close(VIA_X)}
-                                className="cursor-pointer rounded-[var(--radius)] border border-border bg-white px-4 py-2 text-[14px] hover:bg-hover"
+                                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white hover:bg-hover"
                             >
                                 {tCommon("cancel")}
                             </button>
@@ -617,7 +617,7 @@ export function ShareImportPage({
                                 onClick={() => void onImport()}
                                 disabled={submitting || isEmpty}
                                 data-share-import-cta
-                                className="cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+                                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
                             >
                                 {submitting
                                     ? t("importing")
