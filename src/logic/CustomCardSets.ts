@@ -152,8 +152,60 @@ const encodePersistedCategories = (
     }));
 
 /**
+ * Collapse `packs` to one entry per `id`, preserving input order.
+ *
+ * Why this exists: localStorage state has been observed in the wild
+ * with multiple `CustomCardSet` entries sharing one server-minted id
+ * (e.g. three rows all stamped `q7xao88qw0hobmp43aa5s0r8`, all
+ * labelled "Sync test (PENDING)"). The server-side schema rules out
+ * a matching shape on disk (`card_packs.id` is `PRIMARY KEY`,
+ * `(owner_id, client_generated_id)` is `UNIQUE` — verified against
+ * a live DB with zero collisions), so the corruption is purely
+ * local. Provenance unclear; most likely a stale state from earlier
+ * code paths that have since been cleaned up plus possibly a
+ * hand-edit on the affected user's machine.
+ *
+ * The user-facing symptom is React's "Encountered two children with
+ * the same key" warning in `<SetupStepCardPack>`'s pill row (which
+ * keys on `pack.id`) and one of the duplicates silently disappearing
+ * from the rendered list — so users couldn't reliably select or
+ * delete the affected pack.
+ *
+ * The fix is applied at three boundaries to fully close the loop:
+ *
+ *   - Read (`loadCustomCardSets`): dedupes whatever's on disk
+ *     before returning, so even the very first render against a
+ *     corrupt blob doesn't trip React. `useCustomCardPacks` seeds its
+ *     React Query with `loadCustomCardSets()` as `initialData`, so
+ *     this is the only fix that catches the bug pre-reconcile.
+ *   - Write (`writeAll`): dedupes whatever's about to be persisted,
+ *     so any path that flushes packs (`saveCustomCardSet`,
+ *     `markPackSynced`, `replaceCustomCardSets`, …) self-heals the
+ *     on-disk blob.
+ *   - Reconcile (`reconcileCardPacks` in `src/data/cardPacksSync.tsx`):
+ *     dedupes the merged output of the local-vs-server merge, so
+ *     the in-memory shape we pass to `replaceCustomCardSets` and
+ *     `setQueryData` never has dupes either.
+ */
+const dedupePacksById = (
+    packs: ReadonlyArray<CustomCardSet>,
+): ReadonlyArray<CustomCardSet> => {
+    const seen = new Set<string>();
+    const out: Array<CustomCardSet> = [];
+    for (const pack of packs) {
+        if (seen.has(pack.id)) continue;
+        seen.add(pack.id);
+        out.push(pack);
+    }
+    return out;
+};
+
+/**
  * Read all user-saved card packs from localStorage. Returns an
  * empty array if the key is missing or the payload doesn't decode.
+ *
+ * Returned packs are deduped by id (see `dedupePacksById`) so the
+ * UI never sees collisions even if the on-disk blob is corrupt.
  */
 export const loadCustomCardSets = (): ReadonlyArray<CustomCardSet> => {
     if (typeof window === "undefined") return [];
@@ -162,22 +214,24 @@ export const loadCustomCardSets = (): ReadonlyArray<CustomCardSet> => {
         if (!raw) return [];
         const decoded = decodeUnknown(JSON.parse(raw));
         if (Result.isFailure(decoded)) return [];
-        return decoded.success.presets.map(p => ({
-            id: p.id,
-            label: p.label,
-            cardSet: decodePersistedCategories(p.categories),
-            unsyncedSince: p.unsyncedSince !== undefined
-                ? DateTime.makeUnsafe(p.unsyncedSince)
-                : undefined,
-            lastSyncedSnapshot: p.lastSyncedSnapshot !== undefined
-                ? {
-                    label: p.lastSyncedSnapshot.label,
-                    cardSet: decodePersistedCategories(
-                        p.lastSyncedSnapshot.categories,
-                    ),
-                }
-                : undefined,
-        }));
+        const decodedPacks: ReadonlyArray<CustomCardSet> =
+            decoded.success.presets.map(p => ({
+                id: p.id,
+                label: p.label,
+                cardSet: decodePersistedCategories(p.categories),
+                unsyncedSince: p.unsyncedSince !== undefined
+                    ? DateTime.makeUnsafe(p.unsyncedSince)
+                    : undefined,
+                lastSyncedSnapshot: p.lastSyncedSnapshot !== undefined
+                    ? {
+                        label: p.lastSyncedSnapshot.label,
+                        cardSet: decodePersistedCategories(
+                            p.lastSyncedSnapshot.categories,
+                        ),
+                    }
+                    : undefined,
+            }));
+        return dedupePacksById(decodedPacks);
     } catch {
         return [];
     }
@@ -186,9 +240,10 @@ export const loadCustomCardSets = (): ReadonlyArray<CustomCardSet> => {
 const writeAll = (packs: ReadonlyArray<CustomCardSet>): void => {
     if (typeof window === "undefined") return;
     try {
+        const deduped = dedupePacksById(packs);
         const encoded = encode({
             version: 1,
-            presets: packs.map(p => ({
+            presets: deduped.map(p => ({
                 id: p.id,
                 label: p.label,
                 categories: encodePersistedCategories(p.cardSet),

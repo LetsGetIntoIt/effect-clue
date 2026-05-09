@@ -70,6 +70,46 @@ describe("loadCustomCardSets", () => {
         );
         expect(loadCustomCardSets()).toEqual([]);
     });
+
+    // Read-side dedupe — see `dedupePacksById` in `CustomCardSets.ts`
+    // for the full backstory. The matching read of corrupt on-disk
+    // state must not produce duplicates, since `useCustomCardPacks`
+    // seeds React Query's `initialData` with `loadCustomCardSets()`
+    // and any duplicates would reach `<SetupStepCardPack>` on first
+    // render, before reconcile / writeAll can clean up.
+    test("dedupes by id when the on-disk blob has duplicate ids", () => {
+        const baseCategory = {
+            id: "cat-w",
+            name: "Weapon",
+            cards: [{ id: "card-knife", name: "Knife" }],
+        };
+        window.localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({
+                version: 1,
+                presets: [
+                    {
+                        id: "q7xao88qw0hobmp43aa5s0r8",
+                        label: "Sync test (PENDING)",
+                        categories: [baseCategory],
+                    },
+                    {
+                        id: "q7xao88qw0hobmp43aa5s0r8",
+                        label: "Sync test (PENDING)",
+                        categories: [baseCategory],
+                    },
+                    {
+                        id: "q7xao88qw0hobmp43aa5s0r8",
+                        label: "Sync test (PENDING)",
+                        categories: [baseCategory],
+                    },
+                ],
+            }),
+        );
+        const loaded = loadCustomCardSets();
+        expect(loaded).toHaveLength(1);
+        expect(loaded[0]?.id).toBe("q7xao88qw0hobmp43aa5s0r8");
+    });
 });
 
 describe("saveCustomCardSet + loadCustomCardSets", () => {
@@ -267,6 +307,57 @@ describe("replaceCustomCardSets metadata round-trip", () => {
             ),
         );
         expect(loaded[0]?.lastSyncedSnapshot?.label).toBe("Office");
+    });
+});
+
+// Belt-and-suspenders for the same dedupe invariant
+// `reconcileCardPacks` enforces in memory: localStorage state has
+// been observed with multiple entries sharing one server-minted id
+// (e.g. three rows all stamped `q7xao88qw0hobmp43aa5s0r8`,
+// "Sync test (PENDING)"), which the server-side schema rules out
+// (`card_packs.id` PK + `(owner_id, client_generated_id)` UNIQUE,
+// verified live). Provenance unclear; symptom is React's "Encountered
+// two children with the same key" warning in `<SetupStepCardPack>`'s
+// pill row + a silently-dropped pack. Cleaning up at the localStorage
+// write boundary means any path that flushes packs (reconcile,
+// markPackSynced, replaceCustomCardSets) self-heals the on-disk blob.
+describe("writeAll dedupe — collapses ids on persist", () => {
+    beforeEach(() => window.localStorage.clear());
+
+    test(
+        "replaceCustomCardSets keeps the first occurrence when ids collide",
+        () => {
+            replaceCustomCardSets([
+                {
+                    id: "server-1",
+                    label: "Office",
+                    cardSet: makePack(),
+                },
+                {
+                    id: "server-1",
+                    label: "Office (stale)",
+                    cardSet: makePack(),
+                },
+                {
+                    id: "server-1",
+                    label: "Office (stale 2)",
+                    cardSet: makePack(),
+                },
+            ]);
+            const loaded = loadCustomCardSets();
+            expect(loaded).toHaveLength(1);
+            expect(loaded[0]?.label).toBe("Office");
+        },
+    );
+
+    test("non-colliding ids round-trip unchanged", () => {
+        replaceCustomCardSets([
+            { id: "a", label: "A", cardSet: makePack() },
+            { id: "b", label: "B", cardSet: makePack() },
+            { id: "c", label: "C", cardSet: makePack() },
+        ]);
+        const loaded = loadCustomCardSets();
+        expect(loaded.map(p => p.id)).toEqual(["a", "b", "c"]);
     });
 });
 

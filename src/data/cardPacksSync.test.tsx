@@ -206,4 +206,80 @@ describe("reconcileCardPacks", () => {
         expect(result.packs[0]?.unsyncedSince).toBeDefined();
         expect(result.packs[0]?.id).toBe("local-1");
     });
+
+    // The dedupe pass at the end of `reconcileCardPacks` exists because
+    // localStorage state was observed with multiple entries sharing one
+    // server-minted id (e.g. three packs all stamped
+    // `q7xao88qw0hobmp43aa5s0r8`, all labelled "Sync test (PENDING)").
+    // The server-side schema rules out the matching shape on disk
+    // (`card_packs.id` is `PRIMARY KEY`, `(owner_id, client_generated_id)`
+    // is `UNIQUE` — verified live), so the corruption is purely local.
+    // Phase 1 and Phase 3 both leak dupes from corrupt input; the
+    // collapse-to-first-occurrence step at the end is the chokepoint.
+    describe("dedupe — defensive against pre-corrupted local state", () => {
+        test("collapses local-only siblings sharing one id (Phase 3)", () => {
+            const result = reconcileCardPacks(
+                [
+                    localPack("dup-1", "Office", "Rope"),
+                    localPack("dup-1", "Office", "Pipe"),
+                    localPack("dup-1", "Office", "Knife"),
+                ],
+                [],
+            );
+            expect(result.packs).toHaveLength(1);
+            expect(result.packs[0]?.id).toBe("dup-1");
+            // First occurrence wins.
+            expect(
+                cardSetEquals(result.packs[0]!.cardSet, makeCardSet("Rope")),
+            ).toBe(true);
+        });
+
+        test("collapses Phase-1 siblings that all match one server pack", () => {
+            // Two locals with the same id both pair-match the server's
+            // `clientGeneratedId`. Without the dedupe, Phase 1 would
+            // emit two merged entries with `id: server-1`.
+            const result = reconcileCardPacks(
+                [
+                    localPack("client-1", "Office", "Rope"),
+                    localPack("client-1", "Office", "Pipe"),
+                ],
+                [serverPack("server-1", "client-1", "Office", "Rope")],
+            );
+            expect(result.packs).toHaveLength(1);
+            expect(result.packs[0]?.id).toBe("server-1");
+        });
+
+        test(
+            "collapses a Phase-1 server-paired entry against a stale " +
+                "Phase-3 sibling sharing the post-swap id",
+            () => {
+                // Real-world shape: localStorage has both the freshly-
+                // synced pack (id swapped to `server-1`) AND a stale
+                // sibling that still carries `server-1` from a prior
+                // sync round. Phase 1 pair-matches `client-1` and emits
+                // a server-paired entry first; Phase 3 then tries to
+                // pass through the stale sibling. Dedupe drops the
+                // sibling so the server-paired entry — the one with
+                // `lastSyncedSnapshot` populated — survives.
+                const result = reconcileCardPacks(
+                    [
+                        localPack("client-1", "Office", "Rope"),
+                        localPack("server-1", "Office (stale)", "Pipe"),
+                    ],
+                    [
+                        serverPack(
+                            "server-1",
+                            "client-1",
+                            "Office",
+                            "Rope",
+                        ),
+                    ],
+                );
+                expect(result.packs).toHaveLength(1);
+                expect(result.packs[0]?.id).toBe("server-1");
+                expect(result.packs[0]?.lastSyncedSnapshot).toBeDefined();
+                expect(result.packs[0]?.label).toBe("Office");
+            },
+        );
+    });
 });

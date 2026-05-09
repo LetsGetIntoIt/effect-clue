@@ -221,7 +221,46 @@ export const reconcileCardPacks = (
         merged.push(localPack);
     }
 
-    return { packs: merged, idMap, countPulled };
+    // Defensive dedupe — see comment block in `dedupePacksById` below.
+    return { packs: dedupePacksById(merged), idMap, countPulled };
+};
+
+/**
+ * Collapse the merged output to one entry per `id`, keeping the first
+ * occurrence. Stable: preserves input order.
+ *
+ * Why we apply dedupe at the merge output (not just inside each
+ * Phase): localStorage has been observed in the wild with multiple
+ * entries sharing one id (see the docblock on `dedupePacksById` in
+ * `src/logic/CustomCardSets.ts` for the full rationale and the
+ * read / write / reconcile triangulation). When the input is dirty:
+ *
+ *   - Phase 1's loop (client-id pair matches) doesn't `continue` when
+ *     `localPack.id` is already in `handledLocalIds`, so two local
+ *     packs sharing one id both push merged entries with the matching
+ *     server pack's id.
+ *   - Phase 3 (local-only passthrough) doesn't check whether a
+ *     `localPack.id` has already been emitted by an earlier iteration,
+ *     so corrupt sibling entries flow through untouched.
+ *
+ * Rather than chasing every Phase that could leak a dup, we collapse
+ * at the output. Phase 1's server-paired entries land in `merged`
+ * before Phase 3's stale local copies, so on collision the
+ * server-paired entry (with `lastSyncedSnapshot` populated) wins —
+ * which is the right answer for syncing back into the canonical
+ * library.
+ */
+const dedupePacksById = (
+    packs: ReadonlyArray<CustomCardSet>,
+): ReadonlyArray<CustomCardSet> => {
+    const seen = new Set<string>();
+    const out: Array<CustomCardSet> = [];
+    for (const pack of packs) {
+        if (seen.has(pack.id)) continue;
+        seen.add(pack.id);
+        out.push(pack);
+    }
+    return out;
 };
 
 // ── Server-snapshot application ─────────────────────────────────────────────
