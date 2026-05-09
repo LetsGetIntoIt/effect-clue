@@ -189,7 +189,7 @@ export function SetupStepCardPackCustomize({
 
             <button
                 type="button"
-                className="self-start cursor-pointer rounded border border-border bg-bg px-2 py-1 text-[12px] hover:bg-hover"
+                className="tap-target-compact text-tap-compact self-start cursor-pointer rounded border border-border bg-bg hover:bg-hover"
                 onClick={() => dispatch({ type: "addCategory" })}
             >
                 {t("addCategory")}
@@ -198,7 +198,7 @@ export function SetupStepCardPackCustomize({
             <div className="flex flex-wrap items-center gap-2 border-t border-border/30 pt-3">
                 <button
                     type="button"
-                    className="cursor-pointer rounded border border-border bg-bg px-3 py-1.5 text-[13px] hover:bg-hover"
+                    className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-bg hover:bg-hover"
                     onClick={saveAsNewPack}
                 >
                     {t("saveAsNewPack")}
@@ -206,7 +206,7 @@ export function SetupStepCardPackCustomize({
                 {loadedCustomPack !== null && (
                     <button
                         type="button"
-                        className="cursor-pointer rounded border-none bg-accent px-3 py-1.5 text-[13px] text-white hover:bg-accent-hover"
+                        className="tap-target-compact text-tap-compact cursor-pointer rounded border-none bg-accent text-white hover:bg-accent-hover"
                         onClick={updateLoadedPack}
                     >
                         {t("updatePack", { label: loadedCustomPack.label })}

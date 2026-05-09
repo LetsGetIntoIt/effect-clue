@@ -29,8 +29,8 @@ import { Tooltip } from "./Tooltip";
 const TRIGGER_MENU: InstallPromptTrigger = "menu";
 
 const buttonClass =
-    "rounded-[var(--radius)] border border-border bg-white px-3.5 py-1.5 " +
-    "text-[13px] cursor-pointer hover:bg-hover " +
+    "tap-target-compact text-tap-compact rounded-[var(--radius)] border border-border bg-white " +
+    "cursor-pointer hover:bg-hover " +
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent " +
     "focus-visible:ring-offset-1 focus-visible:ring-offset-bg";
 

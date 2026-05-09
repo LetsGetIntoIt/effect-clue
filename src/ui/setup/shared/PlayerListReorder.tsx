@@ -139,7 +139,7 @@ export function PlayerListReorder() {
 
             <button
                 type="button"
-                className="self-start cursor-pointer rounded border border-border bg-bg px-3 py-1.5 text-[13px] hover:bg-hover"
+                className="tap-target-compact text-tap-compact self-start cursor-pointer rounded border border-border bg-bg hover:bg-hover"
                 onClick={() => dispatch({ type: "addPlayer" })}
             >
                 {tSetup("addPlayerLabel")}

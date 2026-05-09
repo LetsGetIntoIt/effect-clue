@@ -219,7 +219,7 @@ function MenuItem({
             onClick={onClick}
             disabled={disabled}
             className={
-                "flex w-full items-center justify-between gap-2 rounded-[var(--radius)] border-none bg-transparent px-3 py-2 text-left text-[13px] " +
+                "tap-target-compact text-tap-compact flex w-full items-center justify-between gap-2 rounded-[var(--radius)] border-none bg-transparent text-left " +
                 (disabled
                     ? "cursor-not-allowed opacity-40 text-inherit"
                     : "cursor-pointer hover:bg-hover " +

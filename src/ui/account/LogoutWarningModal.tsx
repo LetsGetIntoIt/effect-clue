@@ -160,7 +160,7 @@ export function LogoutWarningModal({
                             <button
                                 type="button"
                                 onClick={onStay}
-                                className="cursor-pointer rounded-[var(--radius)] border border-border bg-transparent px-4 py-2 text-[13px] font-semibold text-[#2a1f12] hover:bg-hover"
+                                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-transparent font-semibold text-[#2a1f12] hover:bg-hover"
                             >
                                 {t("stayLoggedIn")}
                             </button>
@@ -170,7 +170,7 @@ export function LogoutWarningModal({
                                 type="button"
                                 onClick={onRetry}
                                 disabled={retrying}
-                                className="cursor-pointer rounded-[var(--radius)] border border-border bg-panel px-4 py-2 text-[13px] font-semibold text-[#2a1f12] hover:bg-hover disabled:opacity-60"
+                                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-panel font-semibold text-[#2a1f12] hover:bg-hover disabled:opacity-60"
                             >
                                 {retrying ? t("tryingAgain") : t("tryAgain")}
                             </button>
@@ -179,7 +179,7 @@ export function LogoutWarningModal({
                             <button
                                 type="button"
                                 onClick={onSignOutAnyway}
-                                className="cursor-pointer rounded-[var(--radius)] border border-accent bg-accent px-4 py-2 text-[13px] font-semibold text-white hover:bg-accent-hover"
+                                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-accent bg-accent font-semibold text-white hover:bg-accent-hover"
                             >
                                 {t("signOutAnyway")}
                             </button>

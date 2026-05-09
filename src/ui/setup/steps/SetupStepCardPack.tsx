@@ -383,7 +383,7 @@ export function SetupStepCardPack({
                                 <button
                                     type="button"
                                     className={
-                                        "cursor-pointer rounded-full border px-3 py-1.5 text-[13px] transition-colors duration-200 ease-out " +
+                                        "tap-target-compact text-tap-compact cursor-pointer rounded-full border transition-colors duration-200 ease-out " +
                                         (isActive
                                             ? "border-accent bg-accent font-semibold text-white"
                                             : "border-border bg-bg hover:bg-hover")
@@ -421,7 +421,7 @@ export function SetupStepCardPack({
                     >
                         <button
                             type="button"
-                            className="cursor-pointer rounded-full border border-border bg-bg px-3 py-1.5 text-[13px] hover:bg-hover"
+                            className="tap-target-compact text-tap-compact cursor-pointer rounded-full border border-border bg-bg hover:bg-hover"
                         >
                             {t("allCardPacks")}
                         </button>
@@ -432,7 +432,7 @@ export function SetupStepCardPack({
             <div className="flex flex-col gap-2">
                 <button
                     type="button"
-                    className="self-start cursor-pointer rounded border border-border bg-bg px-3 py-1.5 text-[13px] hover:bg-hover"
+                    className="tap-target-compact text-tap-compact self-start cursor-pointer rounded border border-border bg-bg hover:bg-hover"
                     onClick={() => setShowCustomize(prev => !prev)}
                     aria-expanded={showCustomize}
                 >

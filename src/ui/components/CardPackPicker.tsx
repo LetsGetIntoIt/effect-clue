@@ -205,7 +205,7 @@ export function CardPackPicker({
                                 }}
                                 onKeyDown={onKeyDown}
                                 className={
-                                    "w-full rounded border border-border bg-white px-2 py-1 text-[13px] " +
+                                    "tap-target-compact text-tap-compact w-full rounded border border-border bg-white " +
                                     "focus:border-accent focus:outline-none"
                                 }
                             />
@@ -238,7 +238,7 @@ export function CardPackPicker({
                                                 isActiveMatch ? "true" : undefined
                                             }
                                             className={
-                                                "flex items-stretch justify-between rounded px-2 py-1.5 text-[13px] " +
+                                                "tap-target-compact text-tap-compact flex items-stretch justify-between rounded " +
                                                 (isHighlighted ? "bg-hover " : "") +
                                                 (isActiveMatch
                                                     ? "border-l-2 border-accent text-accent font-semibold"

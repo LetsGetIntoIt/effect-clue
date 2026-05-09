@@ -123,14 +123,14 @@ export function PromptProvider({ children }: { readonly children: ReactNode }) {
                                     onChange={(e) => setValue(e.target.value)}
                                     placeholder={pending?.placeholder}
                                     maxLength={pending?.maxLength}
-                                    className="mt-1 block w-full min-h-[44px] rounded-[var(--radius)] border border-border bg-white px-3 py-2 text-[14px] text-[#2a1f12] focus:border-accent focus:outline-none"
+                                    className="tap-target text-tap mt-1 block w-full rounded-[var(--radius)] border border-border bg-white text-[#2a1f12] focus:border-accent focus:outline-none"
                                 />
                             </label>
                             <div className="mt-5 flex flex-wrap justify-end gap-2">
                                 <AlertDialog.Cancel asChild>
                                     <button
                                         type="button"
-                                        className="cursor-pointer rounded-[var(--radius)] border border-border bg-transparent px-4 py-2 text-[13px] font-semibold text-[#2a1f12] hover:bg-hover"
+                                        className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-transparent font-semibold text-[#2a1f12] hover:bg-hover"
                                     >
                                         {cancelLabel}
                                     </button>
@@ -139,7 +139,7 @@ export function PromptProvider({ children }: { readonly children: ReactNode }) {
                                     type="submit"
                                     disabled={!canSubmit}
                                     className={
-                                        "cursor-pointer rounded-[var(--radius)] border border-accent bg-accent px-4 py-2 text-[13px] font-semibold text-white hover:bg-accent-hover " +
+                                        "tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-accent bg-accent font-semibold text-white hover:bg-accent-hover " +
                                         "disabled:cursor-not-allowed disabled:border-border disabled:bg-row-alt disabled:text-muted disabled:hover:bg-row-alt"
                                     }
                                 >

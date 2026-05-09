@@ -95,7 +95,7 @@ export function ConfirmProvider({ children }: { readonly children: ReactNode }) 
                             <AlertDialog.Cancel asChild>
                                 <button
                                     type="button"
-                                    className="cursor-pointer rounded-[var(--radius)] border border-border bg-transparent px-4 py-2 text-[13px] font-semibold text-[#2a1f12] hover:bg-hover"
+                                    className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-transparent font-semibold text-[#2a1f12] hover:bg-hover"
                                 >
                                     {cancelLabel}
                                 </button>
@@ -105,7 +105,7 @@ export function ConfirmProvider({ children }: { readonly children: ReactNode }) 
                                     type="button"
                                     onClick={() => close(true)}
                                     className={
-                                        "cursor-pointer rounded-[var(--radius)] border px-4 py-2 text-[13px] font-semibold " +
+                                        "tap-target text-tap cursor-pointer rounded-[var(--radius)] border font-semibold " +
                                         (destructive
                                             ? "border-accent bg-accent text-white hover:bg-accent-hover"
                                             : "border-border bg-panel text-[#2a1f12] hover:bg-hover")
