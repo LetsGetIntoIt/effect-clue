@@ -69,20 +69,28 @@ const baseProps = {
 };
 
 describe("CellExplanationRow - section visibility", () => {
-    test("blank cell with no footnote, no hypothesis: only Hypothesis section + emptyHint", () => {
+    test("blank cell with no footnote, no hypothesis: all four section labels render with null-state copy where empty", () => {
         render(<CellExplanationRow {...baseProps} />);
 
-        // Hypothesis heading + empty hint + helpText all render.
+        // All four section labels render unconditionally so the
+        // layout doesn't shift when content fills in.
+        expect(screen.getByText("observationsLabel")).toBeInTheDocument();
+        expect(screen.getByText("deductionsLabel")).toBeInTheDocument();
+        expect(screen.getByText("leadsLabel")).toBeInTheDocument();
         expect(screen.getByText("hypothesisLabel")).toBeInTheDocument();
+
+        // Deductions + Leads show their null-state copy because no
+        // deduction/lead exists for this cell yet.
+        expect(screen.getByText("deductionsEmpty")).toBeInTheDocument();
+        expect(screen.getByText("leadsEmpty")).toBeInTheDocument();
+
+        // Hypothesis still shows the action-oriented empty hint and
+        // its standing helpText.
         expect(screen.getByText("emptyHint")).toBeInTheDocument();
         expect(screen.getByText("helpText")).toBeInTheDocument();
-
-        // Deductions and Leads headings are hidden.
-        expect(screen.queryByText("deductionsLabel")).toBeNull();
-        expect(screen.queryByText("leadsLabel")).toBeNull();
     });
 
-    test("hides Deductions and Leads when no content; toggle alone shows", () => {
+    test("no long-form status boxes when toggle alone is off", () => {
         render(<CellExplanationRow {...baseProps} hypothesisValue={undefined} />);
         // No long-form status box for either.
         expect(screen.queryByText("statusConfirmed")).toBeNull();
@@ -244,9 +252,20 @@ describe("CellExplanationRow - Leads section", () => {
         expect(footnoteLine.textContent).toContain("#2, #3");
     });
 
-    test("hides Leads section when footnoteNumbers is empty", () => {
-        render(<CellExplanationRow {...baseProps} footnoteNumbers={[]} />);
-        expect(screen.queryByText("leadsLabel")).toBeNull();
+    test("Leads label still renders with leadsEmpty null-state when footnoteNumbers is empty", () => {
+        const { container } = render(
+            <CellExplanationRow {...baseProps} footnoteNumbers={[]} />,
+        );
+        expect(screen.getByText("leadsLabel")).toBeInTheDocument();
+        expect(screen.getByText("leadsEmpty")).toBeInTheDocument();
+        // No accent chip with tabular-nums (the populated-state chip).
+        const chip = Array.from(
+            container.querySelectorAll<HTMLElement>("span"),
+        ).find(s =>
+            s.className.includes("border-accent/40") &&
+            s.className.includes("tabular-nums"),
+        );
+        expect(chip).toBeUndefined();
     });
 });
 
@@ -445,10 +464,19 @@ describe("CellExplanationRow - Observations section (M9)", () => {
         ).toBeNull();
     });
 
-    test("hides Observations section entirely for case-file owner cells", () => {
+    test("Observations label still renders for case-file owner cells, with explanatory null-state copy and no checkbox", () => {
         const caseCell = Cell(CaseFileOwner(), cardA);
-        render(<CellExplanationRow {...baseProps} cell={caseCell} />);
-        expect(screen.queryByText("observationsLabel")).toBeNull();
+        const { container } = render(
+            <CellExplanationRow {...baseProps} cell={caseCell} />,
+        );
+        expect(screen.getByText("observationsLabel")).toBeInTheDocument();
+        expect(
+            screen.getByText("observationsEmptyCaseFile"),
+        ).toBeInTheDocument();
+        // No "I have seen this card" checkbox — it doesn't apply.
+        expect(
+            container.querySelector('input[type="checkbox"]'),
+        ).toBeNull();
     });
 
     test("checkbox checked state mirrors the `observed` prop", () => {
