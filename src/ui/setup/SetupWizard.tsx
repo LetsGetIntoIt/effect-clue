@@ -7,8 +7,11 @@ import { gameSetupStarted } from "../../analytics/events";
 import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 import { useSetupWizardFocus } from "./SetupWizardFocusContext";
+import { SetupStepCardPack } from "./steps/SetupStepCardPack";
 import { SetupStepHandSizes } from "./steps/SetupStepHandSizes";
 import { SetupStepIdentity } from "./steps/SetupStepIdentity";
+import { SetupStepKnownCards } from "./steps/SetupStepKnownCards";
+import { SetupStepMyCards } from "./steps/SetupStepMyCards";
 import { SetupStepPlayers } from "./steps/SetupStepPlayers";
 import {
     isStepDataComplete,
@@ -60,19 +63,12 @@ export function SetupWizard() {
     const confirm = useConfirm();
     const focus = useSetupWizardFocus();
 
-    // Only the three steps shipping in PR-A2 are implemented; future
-    // PRs add the rest. Filter against both the plan's `visibleSteps`
-    // (data-driven; e.g. `myCards` hidden when selfPlayerId is null)
-    // AND the implemented set.
-    const IMPLEMENTED: ReadonlySet<WizardStepId> = useMemo(
-        () => new Set<WizardStepId>(["players", "identity", "handSizes"]),
-        [],
-    );
-    const steps = useMemo(
-        () =>
-            visibleSteps(state).filter(id => IMPLEMENTED.has(id)),
-        [state, IMPLEMENTED],
-    );
+    // PR-A3 ships steps 1, 5, 6 alongside the existing 2-4 — every
+    // step in `visibleSteps(state)` is now implemented, so the filter
+    // is a no-op until a future PR adds steps that need a render-time
+    // gate (e.g., shipped behind a sub-flag). Keep the filter wired
+    // in so adding a stub step doesn't break the wizard.
+    const steps = useMemo(() => visibleSteps(state), [state]);
 
     // Initial completed set: any step whose data is already filled
     // in. Lets the user re-enter a populated wizard at the right
@@ -151,13 +147,19 @@ export function SetupWizard() {
     };
 
     // Required visible steps (subset that block "Start playing"):
-    // today the only required step is `players` (identity and hand
-    // sizes are skippable per their step config). Always-allow the
-    // CTA once a game is in progress (mid-game edits to setup don't
-    // re-gate the user out of play).
+    // today the required steps are `cardPack` (every game needs a
+    // deck) and `players` (every game needs at least 2 players).
+    // Identity, hand sizes, my cards, and other-player cards are
+    // skippable per their step config. Always-allow the CTA once
+    // a game is in progress (mid-game edits to setup don't re-gate
+    // the user out of play).
+    const REQUIRED: ReadonlySet<WizardStepId> = useMemo(
+        () => new Set<WizardStepId>(["cardPack", "players"]),
+        [],
+    );
     const requiredVisible = useMemo(
-        () => steps.filter(id => id === "players"),
-        [steps],
+        () => steps.filter(id => REQUIRED.has(id)),
+        [steps, REQUIRED],
     );
     const allRequiredComplete = requiredVisible.every(id =>
         completed.has(id),
@@ -206,6 +208,18 @@ export function SetupWizard() {
                     const stepNumber = idx + 1;
                     const totalSteps = steps.length;
                     const panelState = stepStateFor(id);
+                    if (id === "cardPack") {
+                        return (
+                            <SetupStepCardPack
+                                key={id}
+                                state={panelState}
+                                stepNumber={stepNumber}
+                                totalSteps={totalSteps}
+                                onAdvance={() => advance(id)}
+                                onClickToEdit={() => reEnter(id)}
+                            />
+                        );
+                    }
                     if (id === "players") {
                         return (
                             <SetupStepPlayers
@@ -234,6 +248,37 @@ export function SetupWizard() {
                     if (id === "handSizes") {
                         return (
                             <SetupStepHandSizes
+                                key={id}
+                                state={panelState}
+                                stepNumber={stepNumber}
+                                totalSteps={totalSteps}
+                                onAdvance={() => advance(id)}
+                                onSkip={() => advance(id)}
+                                onClickToEdit={() => reEnter(id)}
+                            />
+                        );
+                    }
+                    if (id === "myCards") {
+                        // visibleSteps already gates this on
+                        // selfPlayerId !== null, but TypeScript needs
+                        // the runtime guard to narrow the prop.
+                        if (state.selfPlayerId === null) return null;
+                        return (
+                            <SetupStepMyCards
+                                key={id}
+                                state={panelState}
+                                stepNumber={stepNumber}
+                                totalSteps={totalSteps}
+                                selfPlayerId={state.selfPlayerId}
+                                onAdvance={() => advance(id)}
+                                onSkip={() => advance(id)}
+                                onClickToEdit={() => reEnter(id)}
+                            />
+                        );
+                    }
+                    if (id === "knownCards") {
+                        return (
+                            <SetupStepKnownCards
                                 key={id}
                                 state={panelState}
                                 stepNumber={stepNumber}

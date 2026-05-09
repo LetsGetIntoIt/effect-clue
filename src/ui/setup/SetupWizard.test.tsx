@@ -117,14 +117,19 @@ const waitForWizard = async (): Promise<HTMLElement> => {
 };
 
 describe("SetupWizard — accordion shell", () => {
-    test("renders only the implemented steps (players, identity, handSizes)", async () => {
+    test("renders all five default visible steps (cardPack, players, identity, handSizes, knownCards)", async () => {
         render(<Clue />, { wrapper: TestQueryClientProvider });
         const wizard = await waitForWizard();
 
-        // The mocked translation returns the key itself.
+        // Default state has selfPlayerId === null, so myCards is
+        // hidden by visibleSteps(). The other five render.
+        expect(within(wizard).getByText(/setupWizard\.cardPack\.title/)).toBeInTheDocument();
         expect(within(wizard).getByText(/setupWizard\.players\.title/)).toBeInTheDocument();
         expect(within(wizard).getByText(/setupWizard\.identity\.title/)).toBeInTheDocument();
         expect(within(wizard).getByText(/setupWizard\.handSizes\.title/)).toBeInTheDocument();
+        expect(within(wizard).getByText(/setupWizard\.knownCards\.title/)).toBeInTheDocument();
+        // myCards is hidden until selfPlayerId is set.
+        expect(within(wizard).queryByText(/setupWizard\.myCards\.title/)).toBeNull();
     });
 
     test("identity step is hidden from canonical visibleSteps for null self, but the panel renders (skippable)", async () => {
@@ -132,6 +137,32 @@ describe("SetupWizard — accordion shell", () => {
         const wizard = await waitForWizard();
         // Identity panel exists; user can pick a player or skip.
         expect(within(wizard).getByText(/setupWizard\.identity\.title/)).toBeInTheDocument();
+    });
+
+    test("clicking a player pill in identity reveals the myCards step", async () => {
+        const user = userEvent.setup();
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        const wizard = await waitForWizard();
+
+        // myCards is hidden initially.
+        expect(
+            within(wizard).queryByText(/setupWizard\.myCards\.title/),
+        ).toBeNull();
+
+        // Click the first player pill in identity to set selfPlayerId.
+        // The default 4-player preset uses "Player 1" through "Player 4";
+        // clicking the first one renders an aria-pressed=true pill.
+        const player1 = within(wizard).getByRole("button", {
+            name: /^Player 1$/,
+        });
+        await user.click(player1);
+
+        // myCards step should now appear in the accordion.
+        await waitFor(() => {
+            expect(
+                within(wizard).getByText(/setupWizard\.myCards\.title/),
+            ).toBeInTheDocument();
+        });
     });
 
     test("clicking a complete step's header re-enters editing for that step", async () => {
