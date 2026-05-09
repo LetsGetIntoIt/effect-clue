@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { setupFirstDealtPlayerSet } from "../../../analytics/events";
 import { allCardIds, caseFileSize } from "../../../logic/CardSet";
 import type { Player } from "../../../logic/GameObjects";
 import { useClue } from "../../state";
@@ -191,12 +192,13 @@ function AdjustDealing() {
                         type="radio"
                         name="first-dealt"
                         checked={firstDealt === null}
-                        onChange={() =>
+                        onChange={() => {
                             dispatch({
                                 type: "setFirstDealtPlayer",
                                 player: null,
-                            })
-                        }
+                            });
+                            setupFirstDealtPlayerSet({ auto: true });
+                        }}
                     />
                     {t("firstDealtAuto")}
                 </label>
@@ -209,12 +211,13 @@ function AdjustDealing() {
                             type="radio"
                             name="first-dealt"
                             checked={firstDealt === player}
-                            onChange={() =>
+                            onChange={() => {
                                 dispatch({
                                     type: "setFirstDealtPlayer",
                                     player,
-                                })
-                            }
+                                });
+                                setupFirstDealtPlayerSet({ auto: false });
+                            }}
                         />
                         {String(player)}
                     </label>

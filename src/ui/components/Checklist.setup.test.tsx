@@ -67,6 +67,15 @@ import { seedOnboardingDismissed } from "../../test-utils/onboardingSeed";
 beforeEach(() => {
     window.localStorage.clear();
     seedOnboardingDismissed();
+    // M6 PR-A4 flipped the setup-wizard flag default to ON, swapping
+    // the live setup surface from `<Checklist inSetup>` to
+    // `<SetupWizard>`. These tests pin the legacy Checklist setup
+    // rendering — opt them out of the wizard explicitly so we keep
+    // testing the legacy path until PR-B removes it.
+    window.localStorage.setItem(
+        "effect-clue.flag.setup-wizard.v1",
+        "0",
+    );
     window.history.replaceState(null, "", "/");
 });
 

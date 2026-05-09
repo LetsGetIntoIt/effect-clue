@@ -17,6 +17,10 @@ const REORDER_AXIS_Y = "y" as const;
 // not a translatable string.
 const DRAG_HANDLE_GLYPH = "⋮⋮";
 
+// Tour anchor shared with the M6 setup tour's "Players in turn order"
+// step.
+const PLAYERS_LIST_TOUR_ANCHOR = "setup-step-players-list" as const;
+
 /**
  * Drag-to-reorder list of players, plus inline name + remove
  * controls per row and explicit up/down arrow buttons for keyboard
@@ -63,6 +67,7 @@ export function PlayerListReorder() {
                     setDraft(next);
                 }}
                 className="m-0 flex list-none flex-col gap-2 p-0"
+                data-tour-anchor={PLAYERS_LIST_TOUR_ANCHOR}
             >
                 {draft.map((player, i) => (
                     <Reorder.Item

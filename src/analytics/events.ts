@@ -824,3 +824,43 @@ export const deducerRun = (props: {
     cardCount: number;
     result: "success" | "error";
 }): void => capture("deducer_run", props);
+
+// ── Setup wizard (M6) ─────────────────────────────────────────────────────
+// One event per user-visible state transition in the accordion. The
+// `step` payload uses the wizard's stable WizardStepId discriminators
+// ("cardPack", "players", "identity", "handSizes", "myCards",
+// "knownCards") so renaming a step is a TypeScript-checked change at
+// every call site. Used to re-point the existing onboarding funnel
+// (`gameSetupStarted → playerAdded → cardsDealt → gameStarted`) at
+// the wizard's emit boundaries — `cardsDealt` now fires on step 5's
+// first checkbox toggle (or step 6's, when identity is skipped).
+type WizardStep =
+    | "cardPack"
+    | "players"
+    | "identity"
+    | "handSizes"
+    | "myCards"
+    | "knownCards";
+
+export const setupWizardStepAdvanced = (props: {
+    step: WizardStep;
+}): void => capture("setup_wizard_step_advanced", props);
+
+export const setupWizardStepSkipped = (props: {
+    step: WizardStep;
+}): void => capture("setup_wizard_step_skipped", props);
+
+export const setupWizardStepReentered = (props: {
+    step: WizardStep;
+}): void => capture("setup_wizard_step_reentered", props);
+
+export const setupWizardCompleted = (): void =>
+    capture("setup_wizard_completed");
+
+export const setupSelfPlayerSet = (props: {
+    cleared: boolean;
+}): void => capture("setup_self_player_set", props);
+
+export const setupFirstDealtPlayerSet = (props: {
+    auto: boolean;
+}): void => capture("setup_first_dealt_player_set", props);

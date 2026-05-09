@@ -107,9 +107,9 @@ export function SetupStepPanel({
                         )}
                     </span>
                     <div className="flex min-w-0 flex-col">
-                        <h2 className="m-0 text-[15px] font-semibold leading-tight">
+                        <h3 className="m-0 text-[15px] font-semibold leading-tight">
                             {title}
-                        </h2>
+                        </h3>
                         <span className="text-[11px] uppercase tracking-wide text-muted">
                             {t("stepCounter", {
                                 step: stepNumber,

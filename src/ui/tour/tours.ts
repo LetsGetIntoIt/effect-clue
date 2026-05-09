@@ -185,71 +185,48 @@ export interface TourStep {
 export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
     setup: [
         {
-            anchor: "setup-card-pack",
+            // High-level welcome — point at the entire wizard so the
+            // user takes in the accordion shape before drilling down.
+            anchor: "setup-wizard-shell",
+            titleKey: "setup.welcome.title",
+            bodyKey: "setup.welcome.body",
+            side: "bottom",
+            align: "start",
+        },
+        {
+            // Card pack — pill row inside step 1's panel. Mounted only
+            // while step 1 is in `editing` state; auto-skips otherwise.
+            anchor: "setup-step-cardpack-pills",
             titleKey: "setup.cardPack.title",
             bodyKey: "setup.cardPack.body",
             side: "bottom",
             align: "start",
         },
         {
-            anchor: "setup-player-column",
+            // Players in turn order — Reorder.Group inside step 2.
+            anchor: "setup-step-players-list",
             titleKey: "setup.players.title",
             bodyKey: "setup.players.body",
             side: "bottom",
             align: "start",
         },
         {
-            anchor: "setup-hand-size",
-            titleKey: "setup.handSize.title",
-            bodyKey: "setup.handSize.body",
-            side: "bottom",
-            align: "center",
-        },
-        {
-            // Spotlight unions every cell in the first player column
-            // (header + body cells). Popover anchors to the column
-            // HEADER only — pinning to the full column would put the
-            // popover off-screen on narrow viewports because Radix
-            // tries to anchor against a tall rect.
-            anchor: "setup-known-cell",
-            popoverAnchor: "setup-known-cell-header",
+            // Mark your cards — first checkbox row inside step 5. Auto-
+            // skips when `selfPlayerId === null` (the step is hidden
+            // entirely from the accordion in that case, so the anchor
+            // isn't mounted; tours.ts auto-skips missing anchors).
+            anchor: "setup-step-mycards-firstrow",
             titleKey: "setup.knownCard.title",
             bodyKey: "setup.knownCard.body",
-            // Per-viewport positioning:
-            //   - desktop: sit to the RIGHT of the column header so
-            //     the entire column stays visible. The setup table
-            //     is wide enough on desktop that there's room.
-            //   - mobile: sit BELOW the header (popover hangs into
-            //     the column body, covering the top 2-3 rows). Side
-            //     "right" doesn't fit on mobile because the column
-            //     pushes near the right edge.
             side: "bottom",
-            align: "center",
-            sideByViewport: {
-                desktop: { side: "right", align: "start" },
-                mobile: { side: "bottom", align: "center" },
-            },
+            align: "start",
         },
         {
+            // Come back later — overflow menu (existing anchor +
+            // forceOpen wiring still applies).
             anchor: "overflow-menu",
             titleKey: "setup.overflow.title",
             bodyKey: "setup.overflow.body",
-            // The trigger is in DOM order before the portaled menu
-            // content; `last-visible` resolves to the OPEN dropdown
-            // when it's present (which it is during this step, via
-            // forceOpen). The popover lands beside the dropdown,
-            // leaving both the trigger AND the menu items unobscured.
-            //
-            // The popover is too wide (~360px) to fit in the gap on
-            // either SIDE of the menu on mobile (where the menu fills
-            // most of the right column), so the side flips per
-            // viewport:
-            //   - desktop: menu opens DOWN from a TOP-right trigger;
-            //     plenty of room to the LEFT → side:"left".
-            //   - mobile: menu opens UP from a BOTTOM-right trigger;
-            //     plenty of room ABOVE → side:"top", align:"end" so
-            //     the popover hugs the menu's right edge and stays
-            //     in-viewport on a 375 px viewport.
             popoverAnchorPriority: "last-visible",
             side: "left",
             align: "start",
@@ -257,18 +234,6 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
                 mobile: { side: "top", align: "end" },
                 desktop: { side: "left", align: "start" },
             },
-        },
-        {
-            anchor: "setup-start-playing",
-            titleKey: "setup.start.title",
-            bodyKey: "setup.start.body",
-            // This CTA sits near the top of Setup. Keeping the
-            // popover below the button avoids top-edge clipping when
-            // the tour scrolls back up from a deeper table step,
-            // especially on mobile where the header consumes a
-            // meaningful chunk of the viewport.
-            side: "bottom",
-            align: "end",
         },
     ],
     checklistSuggest: [

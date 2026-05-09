@@ -555,29 +555,25 @@
         "gotIt": "Got it",
         "takeTour": "Take tour",
         "setup": {
+            "welcome": {
+                "title": "Set up your game step by step",
+                "body": "We'll walk you through the deck, who's playing, and the cards you're holding. You can always come back to any step."
+            },
             "cardPack": {
                 "title": "Pick a card pack",
-                "body": "Start with the Classic deck, swap to Master Detective, or roll your own and save it as a custom pack."
+                "body": "Pick a pack — Classic, Master Detective, or one of your saved customs. Hit Customize to build your own."
             },
             "players": {
-                "title": "Add the players",
-                "body": "Type each player's name. Use + Player for as many as you need — Clue traditionally has 3-6, but the solver scales to any size."
-            },
-            "handSize": {
-                "title": "Set hand sizes",
-                "body": "How many cards each player was dealt. The solver uses this to deduce who can't be holding which card."
+                "title": "Players in turn order",
+                "body": "Enter players in turn order — the first one listed will be dealt first. Drag to reorder, or use the up/down buttons."
             },
             "knownCard": {
                 "title": "Mark the cards you were dealt",
-                "body": "Click a cell to mark the cards you were dealt, plus any other cards you happen to know. Maybe you snuck a peek. We won't judge."
+                "body": "Tick the cards you have — the solver uses your hand to rule everything else out for you."
             },
             "overflow": {
-                "title": "Everything else lives here",
-                "body": "The ⋯ menu has Game setup, Take tour, New game, About, and (after sign-in) your account."
-            },
-            "start": {
-                "title": "Ready to play",
-                "body": "Click Start playing to flip into Play mode. The deducer keeps running in the background as you log suggestions and disproofs."
+                "title": "Come back later",
+                "body": "Use the ⋯ menu anytime to come back here, restart this tour, or start a new game."
             }
         },
         "checklist": {
