@@ -5,7 +5,7 @@ import type { Player } from "../../../logic/GameObjects";
 import { useClue } from "../../state";
 import { PlayerColumnCardList } from "../shared/PlayerColumnCardList";
 import { SetupStepPanel } from "../SetupStepPanel";
-import { VALID } from "../wizardSteps";
+import { VALID, type WizardStepId } from "../wizardSteps";
 import type { StepPanelState } from "../SetupStepPanel";
 
 const STEP_ID = "myCards" as const;
@@ -20,9 +20,12 @@ interface Props {
     readonly stepNumber: number;
     readonly totalSteps: number;
     readonly selfPlayerId: Player;
-    readonly onAdvance: () => void;
-    readonly onSkip: () => void;
     readonly onClickToEdit: () => void;
+    readonly registerPanelEl?: (
+        stepId: WizardStepId,
+        el: HTMLElement | null,
+    ) => void;
+    readonly footer?: React.ReactNode | undefined;
 }
 
 /**
@@ -40,9 +43,9 @@ export function SetupStepMyCards({
     stepNumber,
     totalSteps,
     selfPlayerId,
-    onAdvance,
-    onSkip,
     onClickToEdit,
+    registerPanelEl,
+    footer,
 }: Props) {
     const t = useTranslations("setupWizard.myCards");
     const { state: clue } = useClue();
@@ -62,11 +65,10 @@ export function SetupStepMyCards({
             totalSteps={totalSteps}
             title={t("title")}
             summary={summary}
-            skippable={true}
             validation={VALID}
-            onAdvance={onAdvance}
-            onSkip={onSkip}
             onClickToEdit={onClickToEdit}
+            registerPanelEl={registerPanelEl}
+            footer={footer}
         >
             <p className="m-0 text-[13px] text-muted">{t("helperText")}</p>
             <PlayerColumnCardList

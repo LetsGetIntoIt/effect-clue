@@ -76,12 +76,6 @@ export function PlayerListReorder() {
                         onDragEnd={() => commitReorder(draft)}
                         className="flex touch-none items-center gap-2 rounded border border-border/50 bg-bg px-2 py-1.5"
                     >
-                        <span
-                            aria-hidden
-                            className="cursor-grab select-none text-[18px] leading-none text-muted"
-                        >
-                            {DRAG_HANDLE_GLYPH}
-                        </span>
                         <PlayerNameInput
                             player={player}
                             allPlayers={players}
@@ -128,6 +122,17 @@ export function PlayerListReorder() {
                                 />
                             </button>
                         </div>
+                        {/* Drag handle on the right, separated from the
+                            trash (inside PlayerNameInput) by the arrow
+                            buttons + an extra ml-3 so a thumb reaching
+                            for the handle can't accidentally hit the
+                            trash. */}
+                        <span
+                            aria-hidden
+                            className="ml-3 shrink-0 cursor-grab select-none text-[18px] leading-none text-muted"
+                        >
+                            {DRAG_HANDLE_GLYPH}
+                        </span>
                     </Reorder.Item>
                 ))}
             </Reorder.Group>

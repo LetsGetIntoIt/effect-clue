@@ -7,7 +7,7 @@ import { useClue } from "../../state";
 import { ChevronLeftIcon, ChevronRightIcon } from "../../components/Icons";
 import { PlayerColumnCardList } from "../shared/PlayerColumnCardList";
 import { SetupStepPanel } from "../SetupStepPanel";
-import { VALID } from "../wizardSteps";
+import { VALID, type WizardStepId } from "../wizardSteps";
 import type { StepPanelState } from "../SetupStepPanel";
 
 const STEP_ID = "knownCards" as const;
@@ -16,9 +16,12 @@ interface Props {
     readonly state: StepPanelState;
     readonly stepNumber: number;
     readonly totalSteps: number;
-    readonly onAdvance: () => void;
-    readonly onSkip: () => void;
     readonly onClickToEdit: () => void;
+    readonly registerPanelEl?: (
+        stepId: WizardStepId,
+        el: HTMLElement | null,
+    ) => void;
+    readonly footer?: React.ReactNode | undefined;
 }
 
 /**
@@ -40,9 +43,9 @@ export function SetupStepKnownCards({
     state,
     stepNumber,
     totalSteps,
-    onAdvance,
-    onSkip,
     onClickToEdit,
+    registerPanelEl,
+    footer,
 }: Props) {
     const t = useTranslations("setupWizard.knownCards");
     const { state: clue } = useClue();
@@ -77,11 +80,10 @@ export function SetupStepKnownCards({
                 totalSteps={totalSteps}
                 title={t("title")}
                 summary={t("summaryEmpty")}
-                skippable={true}
                 validation={VALID}
-                onAdvance={onAdvance}
-                onSkip={onSkip}
                 onClickToEdit={onClickToEdit}
+                registerPanelEl={registerPanelEl}
+                footer={footer}
             >
                 <p className="m-0 text-[13px] text-muted">
                     {t("noOtherPlayers")}
@@ -100,11 +102,10 @@ export function SetupStepKnownCards({
             totalSteps={totalSteps}
             title={t("title")}
             summary={summary}
-            skippable={true}
             validation={VALID}
-            onAdvance={onAdvance}
-            onSkip={onSkip}
             onClickToEdit={onClickToEdit}
+            registerPanelEl={registerPanelEl}
+            footer={footer}
         >
             <p className="m-0 text-[13px] text-muted">{t("helperText")}</p>
 

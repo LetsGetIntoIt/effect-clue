@@ -279,12 +279,6 @@ function CardList({ category }: { readonly category: Category }) {
                     onDragEnd={() => commitCardReorder(cardDraft)}
                     className="flex touch-none items-center gap-2 rounded border border-border/40 bg-bg px-1 py-0.5"
                 >
-                    <span
-                        aria-hidden
-                        className="cursor-grab select-none text-[14px] leading-none text-muted"
-                    >
-                        {DRAG_HANDLE_GLYPH}
-                    </span>
                     <CardRow
                         entry={entry}
                         canRemove={cardDraft.length > 1}
@@ -356,12 +350,6 @@ function CategoryHeader({
 
     return (
         <div className="flex items-center gap-2">
-            <span
-                aria-hidden
-                className="cursor-grab select-none text-[18px] leading-none text-muted"
-            >
-                {DRAG_HANDLE_GLYPH}
-            </span>
             <input
                 type="text"
                 className="box-border min-w-0 flex-1 rounded border border-border px-2 py-1 text-[13px] font-semibold uppercase tracking-wide"
@@ -399,6 +387,15 @@ function CategoryHeader({
                     <TrashIcon size={14} />
                 </button>
             )}
+            {/* Drag handle on the right with extra ml-3 gap from
+                the trash so a thumb reaching for the handle can't
+                accidentally hit delete. */}
+            <span
+                aria-hidden
+                className="ml-3 shrink-0 cursor-grab select-none text-[18px] leading-none text-muted"
+            >
+                {DRAG_HANDLE_GLYPH}
+            </span>
         </div>
     );
 }
@@ -477,6 +474,14 @@ function CardRow({
                     <TrashIcon size={14} />
                 </button>
             )}
+            {/* Drag handle on the right with extra ml-3 gap from
+                trash. Mirrors the CategoryHeader pattern. */}
+            <span
+                aria-hidden
+                className="ml-3 shrink-0 cursor-grab select-none text-[14px] leading-none text-muted"
+            >
+                {DRAG_HANDLE_GLYPH}
+            </span>
         </div>
     );
 }

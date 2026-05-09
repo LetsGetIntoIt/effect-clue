@@ -81,11 +81,38 @@ vi.mock("motion/react", () => {
             },
         },
     );
+    // Reorder.Group → ul; Reorder.Item → li. The flow test goes
+    // through the wizard which mounts PlayerListReorder + the
+    // customize sub-flow — both use Reorder. The test layer doesn't
+    // need real drag behavior, only that children render.
+    const ReorderGroup = forwardRef(
+        (props: Record<string, unknown>, ref: React.Ref<HTMLElement>) => {
+            const {
+                axis: _axis,
+                values: _values,
+                onReorder: _onReorder,
+                ...rest
+            } = props;
+            return createElement("ul", { ...rest, ref });
+        },
+    ) as React.ComponentType<unknown>;
+    const ReorderItem = forwardRef(
+        (props: Record<string, unknown>, ref: React.Ref<HTMLElement>) => {
+            const {
+                value: _value,
+                onDragEnd: _onDragEnd,
+                drag: _drag,
+                ...rest
+            } = props;
+            return createElement("li", { ...rest, ref });
+        },
+    ) as React.ComponentType<unknown>;
     return {
         motion,
         AnimatePresence: ({ children }: { children: ReactNode }) => children,
         useReducedMotion: () => false,
         LayoutGroup: ({ children }: { children: ReactNode }) => children,
+        Reorder: { Group: ReorderGroup, Item: ReorderItem },
     };
 });
 
@@ -149,7 +176,24 @@ describe("Clue — full user-journey umbrella", () => {
         const user = userEvent.setup();
         render(<Clue />, { wrapper: TestQueryClientProvider });
 
-        // 1. Setup mode lands with the Start Playing CTA visible.
+        // 1. Setup mode lands on cardPack. Walk Next through every
+        //    step (skipping identity to keep myCards hidden) until
+        //    the sticky CTA flips to "Start playing" with
+        //    `data-setup-cta` set. The next-intl mock above strips
+        //    namespaces, so the button text is just "next" / "skip".
+        const stickyByText = (text: string): HTMLButtonElement => {
+            const btns = Array.from(
+                document.querySelectorAll<HTMLButtonElement>("button"),
+            );
+            const found = btns.find(b => b.textContent === text);
+            if (!found) throw new Error(`button "${text}" not found`);
+            return found;
+        };
+        await waitFor(() => stickyByText("next"));
+        await user.click(stickyByText("next")); // cardPack → players
+        await user.click(stickyByText("next")); // players → identity
+        await user.click(stickyByText("skip")); // identity skipped
+        await user.click(stickyByText("next")); // handSizes → knownCards
         await waitFor(() => {
             expect(
                 document.querySelector("[data-setup-cta]"),

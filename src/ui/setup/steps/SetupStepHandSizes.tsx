@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { setupFirstDealtPlayerSet } from "../../../analytics/events";
 import { allCardIds, caseFileSize } from "../../../logic/CardSet";
 import type { Player } from "../../../logic/GameObjects";
@@ -12,6 +12,7 @@ import {
     VALID,
     VALIDATION_WARNING,
     type StepValidation,
+    type WizardStepId,
 } from "../wizardSteps";
 import type { StepPanelState } from "../SetupStepPanel";
 
@@ -21,9 +22,23 @@ interface Props {
     readonly state: StepPanelState;
     readonly stepNumber: number;
     readonly totalSteps: number;
-    readonly onAdvance: () => void;
-    readonly onSkip: () => void;
     readonly onClickToEdit: () => void;
+    /**
+     * Register a callback the wizard fires before transitioning
+     * away from this step. Used to commit placeholder defaults to
+     * `state.handSizes` when the user advances without typing
+     * anything — treat the displayed default as an active choice.
+     *
+     * The wizard owns a single `beforeAdvance` slot (the focused
+     * step writes to it; the wizard reads + clears on advance/skip).
+     * Steps that don't need it can ignore the prop.
+     */
+    readonly registerBeforeAdvance?: (fn: (() => void) | null) => void;
+    readonly registerPanelEl?: (
+        stepId: WizardStepId,
+        el: HTMLElement | null,
+    ) => void;
+    readonly footer?: React.ReactNode | undefined;
 }
 
 /**
@@ -46,14 +61,52 @@ export function SetupStepHandSizes({
     state,
     stepNumber,
     totalSteps,
-    onAdvance,
-    onSkip,
     onClickToEdit,
+    registerBeforeAdvance,
+    registerPanelEl,
+    footer,
 }: Props) {
     const t = useTranslations("setupWizard.handSizes");
     const { state: clue, dispatch } = useClue();
     const setup = clue.setup;
     const players = setup.players;
+
+    /**
+     * On advance/skip from this step, commit the currently-displayed
+     * placeholder default for any player without a typed value.
+     * Treats accepting the default as an active choice rather than
+     * leaving the field unset.
+     *
+     * Re-registers on every render while editing so the closure
+     * captures the latest `clue.handSizes` / `firstDealtPlayerId` /
+     * `setup.players` — re-running with stale values would commit
+     * the wrong defaults.
+     */
+    useEffect(() => {
+        if (state !== "editing" || registerBeforeAdvance === undefined) {
+            return;
+        }
+        registerBeforeAdvance(() => {
+            const liveMap = new Map(clue.handSizes);
+            const liveDefaults = new Map(
+                firstDealtHandSizes(setup, clue.firstDealtPlayerId),
+            );
+            for (const player of setup.players) {
+                if (liveMap.has(player)) continue;
+                const def = liveDefaults.get(player);
+                if (def === undefined) continue;
+                dispatch({ type: "setHandSize", player, size: def });
+            }
+        });
+        return () => registerBeforeAdvance(null);
+    }, [
+        state,
+        registerBeforeAdvance,
+        clue.handSizes,
+        clue.firstDealtPlayerId,
+        setup,
+        dispatch,
+    ]);
 
     const handSizeMap = new Map(clue.handSizes);
     const defaults = new Map(
@@ -104,11 +157,10 @@ export function SetupStepHandSizes({
             totalSteps={totalSteps}
             title={t("title")}
             summary={summary}
-            skippable={true}
             validation={validation}
-            onAdvance={onAdvance}
-            onSkip={onSkip}
             onClickToEdit={onClickToEdit}
+            registerPanelEl={registerPanelEl}
+            footer={footer}
         >
             {players.length === 0 ? (
                 <p className="m-0 text-[13px] text-muted">

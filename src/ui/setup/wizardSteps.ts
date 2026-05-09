@@ -1,3 +1,4 @@
+import { allCardIds, caseFileSize } from "../../logic/CardSet";
 import type { ClueState } from "../../logic/ClueState";
 
 /**
@@ -104,7 +105,7 @@ export function isStepDataComplete(
  * warns without blocking).
  * `blocked` — Next disabled, banner shown.
  */
-type StepValidationLevel = "valid" | "warning" | "blocked";
+export type StepValidationLevel = "valid" | "warning" | "blocked";
 
 export interface StepValidation {
     readonly level: StepValidationLevel;
@@ -123,3 +124,80 @@ export const VALID: StepValidation = {
     level: VALIDATION_VALID,
     message: null,
 };
+
+/**
+ * Whether the user can skip this step. Required steps (cardPack,
+ * players) are not skippable in the UX sense — Skip there acts as
+ * "accept defaults" only when the defaults already validate.
+ *
+ * The wizard's sticky CTA bar checks this PLUS
+ * `stepValidationLevel(stepId, state)` to decide whether the Skip
+ * button is enabled:
+ *   - skippable + any level         → enabled
+ *   - non-skippable + valid/warning → enabled (acts as "accept defaults")
+ *   - non-skippable + blocked       → disabled
+ */
+export function stepIsSkippable(stepId: WizardStepId): boolean {
+    switch (stepId) {
+        case "cardPack":
+        case "players":
+            return false;
+        case "identity":
+        case "handSizes":
+        case "myCards":
+        case "knownCards":
+            return true;
+    }
+}
+
+/**
+ * Validation level (no message) for the focused step. The wizard's
+ * sticky CTA bar reads this to gate the Next button: blocked → Next
+ * disabled. The per-step components still compute their own
+ * `StepValidation` (with translated messages) for the inline banner;
+ * this helper is the level-only view the bar needs without depending
+ * on i18n.
+ *
+ * Steps that haven't been touched (e.g. cardPack with default
+ * Classic loaded; players with the default 4-player roster) report
+ * `valid` — that's what makes Skip act as "accept defaults" and
+ * what makes Next on every step enabled by default.
+ */
+export function stepValidationLevel(
+    stepId: WizardStepId,
+    state: ClueState,
+): StepValidationLevel {
+    switch (stepId) {
+        case "cardPack":
+            return state.setup.categories.length < 1
+                ? VALIDATION_BLOCKED
+                : VALIDATION_VALID;
+        case "players":
+            return state.setup.players.length < 2
+                ? VALIDATION_BLOCKED
+                : VALIDATION_VALID;
+        case "identity":
+            return VALIDATION_VALID;
+        case "handSizes": {
+            const players = state.setup.players;
+            if (players.length === 0) return VALIDATION_VALID;
+            const handSizeMap = new Map(state.handSizes);
+            const setSizes = players
+                .map(p => handSizeMap.get(p))
+                .filter((n): n is number => typeof n === "number");
+            const allSet = setSizes.length === players.length;
+            if (!allSet) return VALIDATION_VALID;
+            const totalDealt =
+                allCardIds(state.setup).length - caseFileSize(state.setup);
+            const totalEntered = setSizes.reduce((a, b) => a + b, 0);
+            return totalEntered === totalDealt
+                ? VALIDATION_VALID
+                : VALIDATION_WARNING;
+        }
+        case "myCards":
+            return VALIDATION_VALID;
+        case "knownCards":
+            return VALIDATION_VALID;
+    }
+}
+
