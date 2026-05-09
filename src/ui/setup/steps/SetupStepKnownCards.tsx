@@ -21,6 +21,7 @@ interface Props {
         stepId: WizardStepId,
         el: HTMLElement | null,
     ) => void;
+    readonly footer?: React.ReactNode | undefined;
 }
 
 /**
@@ -44,6 +45,7 @@ export function SetupStepKnownCards({
     totalSteps,
     onClickToEdit,
     registerPanelEl,
+    footer,
 }: Props) {
     const t = useTranslations("setupWizard.knownCards");
     const { state: clue } = useClue();
@@ -81,6 +83,7 @@ export function SetupStepKnownCards({
                 validation={VALID}
                 onClickToEdit={onClickToEdit}
                 registerPanelEl={registerPanelEl}
+                footer={footer}
             >
                 <p className="m-0 text-[13px] text-muted">
                     {t("noOtherPlayers")}
@@ -102,6 +105,7 @@ export function SetupStepKnownCards({
             validation={VALID}
             onClickToEdit={onClickToEdit}
             registerPanelEl={registerPanelEl}
+            footer={footer}
         >
             <p className="m-0 text-[13px] text-muted">{t("helperText")}</p>
 

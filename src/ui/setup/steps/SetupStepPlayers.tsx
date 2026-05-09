@@ -24,6 +24,7 @@ interface Props {
         stepId: WizardStepId,
         el: HTMLElement | null,
     ) => void;
+    readonly footer?: React.ReactNode | undefined;
 }
 
 /**
@@ -44,6 +45,7 @@ export function SetupStepPlayers({
     totalSteps,
     onClickToEdit,
     registerPanelEl,
+    footer,
 }: Props) {
     const t = useTranslations("setupWizard.players");
     const { state: clue } = useClue();
@@ -73,6 +75,7 @@ export function SetupStepPlayers({
             validation={validation}
             onClickToEdit={onClickToEdit}
             registerPanelEl={registerPanelEl}
+            footer={footer}
         >
             <p className="m-0 text-[13px] text-muted">
                 {t("turnOrderHint")}

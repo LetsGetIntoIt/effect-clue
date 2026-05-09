@@ -38,6 +38,7 @@ interface Props {
         stepId: WizardStepId,
         el: HTMLElement | null,
     ) => void;
+    readonly footer?: React.ReactNode | undefined;
 }
 
 /**
@@ -63,6 +64,7 @@ export function SetupStepHandSizes({
     onClickToEdit,
     registerBeforeAdvance,
     registerPanelEl,
+    footer,
 }: Props) {
     const t = useTranslations("setupWizard.handSizes");
     const { state: clue, dispatch } = useClue();
@@ -158,6 +160,7 @@ export function SetupStepHandSizes({
             validation={validation}
             onClickToEdit={onClickToEdit}
             registerPanelEl={registerPanelEl}
+            footer={footer}
         >
             {players.length === 0 ? (
                 <p className="m-0 text-[13px] text-muted">

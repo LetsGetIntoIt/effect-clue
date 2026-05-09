@@ -1,6 +1,7 @@
 "use client";
 
 import { DateTime } from "effect";
+import { LayoutGroup, motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import {
@@ -21,6 +22,7 @@ import { cardSetEquals, type CardSet } from "../../../logic/CardSet";
 import type { CustomCardSet } from "../../../logic/CustomCardSets";
 import { CARD_SETS } from "../../../logic/GameSetup";
 import { useConfirm } from "../../hooks/useConfirm";
+import { T_STANDARD, useReducedTransition } from "../../motion";
 import { useClue } from "../../state";
 import { useCardPackActions } from "../../components/cardPackActions";
 import {
@@ -95,6 +97,7 @@ interface Props {
         stepId: WizardStepId,
         el: HTMLElement | null,
     ) => void;
+    readonly footer?: React.ReactNode | undefined;
 }
 
 /**
@@ -127,6 +130,7 @@ export function SetupStepCardPack({
     totalSteps,
     onClickToEdit,
     registerPanelEl,
+    footer,
 }: Props) {
     const t = useTranslations("setupWizard.cardPack");
     const tSetup = useTranslations("setup");
@@ -143,6 +147,13 @@ export function SetupStepCardPack({
 
     const [showCustomize, setShowCustomize] = useState(false);
     const [pickerOpen, setPickerOpen] = useState(false);
+
+    // Single transition routed through useReducedTransition so the
+    // pill reposition (Framer Motion FLIP) collapses to instant when
+    // the user has prefers-reduced-motion. Mirrors the legacy
+    // `CardPackRow` behavior where surface pills smoothly slide
+    // when MRU ordering shifts after a load.
+    const pillLayoutTransition = useReducedTransition(T_STANDARD);
 
     const classic = CARD_SETS[0]!;
     const classicDisplay = useMemo<DisplayPack>(
@@ -351,6 +362,7 @@ export function SetupStepCardPack({
             validation={validation}
             onClickToEdit={onClickToEdit}
             registerPanelEl={registerPanelEl}
+            footer={footer}
         >
             <p className="m-0 text-[13px] text-muted">{t("helperText")}</p>
 
@@ -358,35 +370,44 @@ export function SetupStepCardPack({
                 className="flex flex-wrap items-center gap-2"
                 data-tour-anchor={PILLS_TOUR_ANCHOR}
             >
-                {surfacePacks.map(pack => {
-                    const isActive = pack.id === activeMatch?.id;
-                    return (
-                        <button
-                            key={pack.id}
-                            type="button"
-                            className={
-                                "cursor-pointer rounded-full border px-3 py-1.5 text-[13px] transition-colors duration-200 ease-out " +
-                                (isActive
-                                    ? "border-accent bg-accent font-semibold text-white"
-                                    : "border-border bg-bg hover:bg-hover")
-                            }
-                            aria-pressed={isActive}
-                            data-card-pack-active={
-                                isActive ? TRUE_LITERAL : undefined
-                            }
-                            onClick={() => onSelectFromSurface(pack)}
-                            title={
-                                pack.isCustom
-                                    ? tSetup("loadCustomCardSetTitle", {
-                                          label: pack.label,
-                                      })
-                                    : pack.label
-                            }
-                        >
-                            {pack.label}
-                        </button>
-                    );
-                })}
+                <LayoutGroup id="card-pack-surface">
+                    {surfacePacks.map(pack => {
+                        const isActive = pack.id === activeMatch?.id;
+                        return (
+                            <motion.span
+                                key={pack.id}
+                                layout
+                                transition={pillLayoutTransition}
+                                className="inline-flex"
+                            >
+                                <button
+                                    type="button"
+                                    className={
+                                        "cursor-pointer rounded-full border px-3 py-1.5 text-[13px] transition-colors duration-200 ease-out " +
+                                        (isActive
+                                            ? "border-accent bg-accent font-semibold text-white"
+                                            : "border-border bg-bg hover:bg-hover")
+                                    }
+                                    aria-pressed={isActive}
+                                    data-card-pack-active={
+                                        isActive ? TRUE_LITERAL : undefined
+                                    }
+                                    onClick={() => onSelectFromSurface(pack)}
+                                    title={
+                                        pack.isCustom
+                                            ? tSetup(
+                                                  "loadCustomCardSetTitle",
+                                                  { label: pack.label },
+                                              )
+                                            : pack.label
+                                    }
+                                >
+                                    {pack.label}
+                                </button>
+                            </motion.span>
+                        );
+                    })}
+                </LayoutGroup>
                 {showAllCardPacksPill && (
                     <CardPackPicker
                         open={pickerOpen}

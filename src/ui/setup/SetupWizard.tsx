@@ -1,10 +1,10 @@
 "use client";
 
-import { HashMap } from "effect";
+import { Duration, HashMap } from "effect";
 import { useReducedMotion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { PANE_SETTLE } from "../motion";
 import { startSetup } from "../../analytics/gameSession";
 import {
     gameSetupStarted,
@@ -202,7 +202,16 @@ export function SetupWizard() {
         // the first setup's rAF was canceled. Clearing inside the
         // rAF callback ensures whichever setup-pass survives runs
         // the scroll exactly once.
-        const id = window.requestAnimationFrame(() => {
+        // Wait for the accordion's height transition to complete
+        // before measuring the new focused panel's position. If we
+        // scrolled on the next animation frame, the cardPack body
+        // would still be expanded and the players section would
+        // measure ~200px too low, scrolling past where it ends up
+        // settling. `PANE_SETTLE` already encodes the
+        // `T_STANDARD.duration + 1 frame` rule used elsewhere for
+        // "after a panel transition completes" timing.
+        const settleMs = Duration.toMillis(PANE_SETTLE);
+        const id = window.setTimeout(() => {
             scrollOnNextFocusRef.current = false;
             const el = panelElsRef.current.get(focusedStep);
             if (!el) return;
@@ -211,15 +220,27 @@ export function SetupWizard() {
             // unit-test environment doesn't throw — the scroll is
             // verified manually in the next-dev preview.
             if (typeof body.scrollTo !== "function") return;
+            // The page header is `position: sticky` and its measured
+            // height is published as `--header-offset` on `:root` by
+            // a ResizeObserver in `Clue.tsx`. Reading it ensures the
+            // scrolled-to heading isn't hidden behind the sticky
+            // header on either breakpoint. Add a small extra gap
+            // (16px) so a sliver of the previous step's bottom is
+            // still visible — confirms forward progress.
+            const rootStyle = window.getComputedStyle(
+                document.documentElement,
+            );
+            const headerOffset =
+                parseFloat(rootStyle.getPropertyValue("--header-offset")) || 0;
             const top = el.getBoundingClientRect().top + body.scrollTop;
             body.scrollTo({
-                top: Math.max(0, top - 64),
+                top: Math.max(0, top - headerOffset - 16),
                 behavior: reducedMotion
                     ? SCROLL_BEHAVIOR_AUTO
                     : SCROLL_BEHAVIOR_SMOOTH,
             });
-        });
-        return () => window.cancelAnimationFrame(id);
+        }, settleMs);
+        return () => window.clearTimeout(id);
     }, [focusedStep, reducedMotion]);
 
     /**
@@ -418,11 +439,62 @@ export function SetupWizard() {
         // mount lands on step 1 via the initial-state logic above.
     };
 
+    /**
+     * Footer JSX for the editing step — `position: sticky; bottom: 0`
+     * inside its panel so it pins to the visible viewport bottom
+     * while the panel's content is taller than the viewport, and
+     * settles at the panel's natural bottom when the panel fits in
+     * the viewport. This is what makes the CTA read as "belonging
+     * to the card" rather than a disconnected page chrome.
+     *
+     * The wizard generates the footer once per render and threads
+     * it through every step component as a `footer` prop. Only the
+     * step in `editing` state actually renders it (the panel hides
+     * the footer in pending / complete state).
+     */
+    const stickyFooter = (
+        <div
+            className={
+                "sticky bottom-0 -mx-4 -mb-4 flex items-center gap-2 " +
+                "border-t border-border/30 bg-panel/95 px-4 py-2 " +
+                "backdrop-blur supports-[backdrop-filter]:bg-panel/85 " +
+                "[padding-bottom:calc(env(safe-area-inset-bottom,0px)+0.5rem)]"
+            }
+        >
+            <button
+                type="button"
+                className="shrink-0 cursor-pointer rounded border border-border bg-bg px-3 py-1.5 text-[13px] hover:bg-hover"
+                onClick={onStartOver}
+            >
+                {t("newGame")}
+            </button>
+            <div className="ml-auto flex items-center gap-2">
+                <button
+                    type="button"
+                    className="cursor-pointer rounded border border-border bg-bg px-3 py-1.5 text-[13px] hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={onClickSkip}
+                    disabled={!skipEnabled}
+                >
+                    {t("skip")}
+                </button>
+                <button
+                    type="button"
+                    className="cursor-pointer rounded border-none bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={onClickNext}
+                    disabled={!nextEnabled}
+                    data-tour-anchor={
+                        isLastStep ? "setup-start-playing" : undefined
+                    }
+                    data-setup-cta={isLastStep ? "" : undefined}
+                >
+                    {isLastStep ? startPlayingLabel : t("next")}
+                </button>
+            </div>
+        </div>
+    );
+
     return (
-        // pb-32 / pb-20 reserves space for the page-fixed sticky CTA
-        // bar so the user can scroll past the last accordion panel
-        // without it being covered.
-        <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4 pb-32 [@media(min-width:800px)]:pb-20">
+        <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4">
             <header className="flex flex-col gap-1">
                 <h2 className="m-0 text-[24px] font-semibold tracking-tight">
                     {t("heading")}
@@ -449,6 +521,7 @@ export function SetupWizard() {
                                 totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
                                 registerPanelEl={registerPanelEl}
+                                footer={stickyFooter}
                             />
                         );
                     }
@@ -461,6 +534,7 @@ export function SetupWizard() {
                                 totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
                                 registerPanelEl={registerPanelEl}
+                                footer={stickyFooter}
                             />
                         );
                     }
@@ -474,6 +548,7 @@ export function SetupWizard() {
                                 onClickToEdit={() => reEnter(id)}
                                 registerBeforeSkip={registerBeforeSkip}
                                 registerPanelEl={registerPanelEl}
+                                footer={stickyFooter}
                             />
                         );
                     }
@@ -489,6 +564,7 @@ export function SetupWizard() {
                                     registerBeforeAdvance
                                 }
                                 registerPanelEl={registerPanelEl}
+                                footer={stickyFooter}
                             />
                         );
                     }
@@ -506,6 +582,7 @@ export function SetupWizard() {
                                 selfPlayerId={state.selfPlayerId}
                                 onClickToEdit={() => reEnter(id)}
                                 registerPanelEl={registerPanelEl}
+                                footer={stickyFooter}
                             />
                         );
                     }
@@ -518,6 +595,7 @@ export function SetupWizard() {
                                 totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
                                 registerPanelEl={registerPanelEl}
+                                footer={stickyFooter}
                             />
                         );
                     }
@@ -525,63 +603,6 @@ export function SetupWizard() {
                 })}
             </div>
 
-            {/*
-              Sticky CTA bar — rendered via portal at document.body
-              so the `contain-paint` on Clue.tsx's slide container
-              doesn't capture our `position: fixed` and pin it to the
-              wrong containing block. Lands on the visible viewport
-              bottom regardless of page scroll, mirroring the
-              BottomNav / modal pattern in CLAUDE.md.
-            */}
-            {typeof window !== "undefined" &&
-                createPortal(
-                    <div
-                        className={
-                            "fixed inset-x-0 bottom-0 z-[var(--z-app-chrome)] " +
-                            "border-t border-border bg-panel " +
-                            "[padding-bottom:env(safe-area-inset-bottom,0px)]"
-                        }
-                    >
-                        <div className="mx-auto flex w-full max-w-[720px] items-center gap-2 px-3 py-2">
-                            <button
-                                type="button"
-                                className="shrink-0 cursor-pointer rounded border border-border bg-bg px-3 py-1.5 text-[13px] hover:bg-hover"
-                                onClick={onStartOver}
-                            >
-                                {t("newGame")}
-                            </button>
-                            <div className="ml-auto flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    className="cursor-pointer rounded border border-border bg-bg px-3 py-1.5 text-[13px] hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
-                                    onClick={onClickSkip}
-                                    disabled={!skipEnabled}
-                                >
-                                    {t("skip")}
-                                </button>
-                                <button
-                                    type="button"
-                                    className="cursor-pointer rounded border-none bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-                                    onClick={onClickNext}
-                                    disabled={!nextEnabled}
-                                    data-tour-anchor={
-                                        isLastStep
-                                            ? "setup-start-playing"
-                                            : undefined
-                                    }
-                                    data-setup-cta={
-                                        isLastStep ? "" : undefined
-                                    }
-                                >
-                                    {isLastStep
-                                        ? startPlayingLabel
-                                        : t("next")}
-                                </button>
-                            </div>
-                        </div>
-                    </div>,
-                    document.body,
-                )}
         </div>
     );
 }

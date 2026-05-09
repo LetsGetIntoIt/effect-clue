@@ -39,6 +39,16 @@ interface Props {
     readonly registerPanelEl?:
         | ((stepId: WizardStepId, el: HTMLElement | null) => void)
         | undefined;
+    /**
+     * The wizard's CTA footer (Start over / Skip / Next /
+     * Start playing). Passed through every step but rendered only
+     * when the panel is in editing state. Inside the panel body,
+     * positioned `sticky bottom-0` so it pins to the visible
+     * viewport bottom while the panel content is taller than the
+     * viewport, and settles at the panel's natural bottom when
+     * the content fits.
+     */
+    readonly footer?: ReactNode | undefined;
 }
 
 /**
@@ -71,6 +81,7 @@ export function SetupStepPanel({
     validation,
     onClickToEdit,
     registerPanelEl,
+    footer,
 }: Props) {
     const t = useTranslations("setupWizard");
     const transition = useReducedTransition(T_STANDARD, { fadeMs: 120 });
@@ -182,6 +193,19 @@ export function SetupStepPanel({
                     </motion.div>
                 )}
             </AnimatePresence>
+            {/*
+              CTA footer rendered OUTSIDE the AnimatePresence motion
+              wrapper so its `position: sticky` isn't trapped by the
+              wrapper's `overflow-hidden` (needed for the height
+              transition). Sticky-bottom inside the section means the
+              bar pins to the visible viewport bottom while the card
+              content is taller than the viewport, and settles at
+              the card's natural bottom when the content fits.
+              `[bottom: 0]` is relative to the body's scroll
+              container (page-level scroll lives on body per
+              app/globals.css).
+            */}
+            {isEditing && footer ? footer : null}
 
             {isPending && (
                 <div className="border-t border-border/20 px-4 py-2 text-[12px] text-muted">

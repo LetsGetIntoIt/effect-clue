@@ -27,6 +27,7 @@ interface Props {
         stepId: WizardStepId,
         el: HTMLElement | null,
     ) => void;
+    readonly footer?: React.ReactNode | undefined;
 }
 
 /**
@@ -47,6 +48,7 @@ export function SetupStepIdentity({
     onClickToEdit,
     registerBeforeSkip,
     registerPanelEl,
+    footer,
 }: Props) {
     const t = useTranslations("setupWizard.identity");
     const { state: clue, dispatch } = useClue();
@@ -86,6 +88,7 @@ export function SetupStepIdentity({
             validation={VALID}
             onClickToEdit={onClickToEdit}
             registerPanelEl={registerPanelEl}
+            footer={footer}
         >
             <p className="m-0 text-[13px] text-muted">
                 {t("helperText")}
