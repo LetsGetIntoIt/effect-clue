@@ -192,6 +192,63 @@
             "paginator": "{current} of {total} · {player}"
         }
     },
+    "setupSummary": {
+        "heading": "Game setup",
+        "toggleExpand": "Show setup",
+        "toggleCollapse": "Hide setup",
+        "cardPack": {
+            "label": "Card pack",
+            "summary": "{categories} {categories, plural, one {category} other {categories}} · {cards} cards",
+            "summaryEmpty": "No deck yet",
+            "edit": "Change deck"
+        },
+        "players": {
+            "label": "Players",
+            "summary": "{count} {count, plural, one {player} other {players}}",
+            "summaryEmpty": "No players yet",
+            "renameTitle": "Rename {player}",
+            "renameAria": "Rename {player}",
+            "renameInputLabel": "Player name",
+            "renameSave": "Save",
+            "renameCancel": "Cancel",
+            "addOrRemove": "Add or remove players"
+        },
+        "identity": {
+            "label": "You",
+            "summary": "Playing as {player}",
+            "summaryUnset": "Identity not set",
+            "setSelf": "Set yourself",
+            "popoverTitle": "Who are you?",
+            "popoverHint": "Pick yourself to enable My Cards and refute hints. You can clear this anytime.",
+            "clearOption": "(not set)",
+            "noPlayersHint": "Add some players first."
+        },
+        "handSizes": {
+            "label": "Hand sizes",
+            "summary": "{total} cards dealt across all players",
+            "summaryPartial": "Hand sizes incomplete",
+            "summaryNoPlayers": "No players yet",
+            "editTitle": "Edit hand size for {player}",
+            "editAria": "Edit hand size for {player}",
+            "popoverTitle": "Hand size",
+            "popoverInputLabel": "{player}'s hand",
+            "save": "Save",
+            "cancel": "Cancel",
+            "mismatch": "Total dealt: {total} · expected {expected}"
+        },
+        "myCards": {
+            "label": "My cards",
+            "summary": "{count} {count, plural, one {card} other {cards}} marked",
+            "summaryEmpty": "No cards marked yet",
+            "edit": "Edit my cards"
+        },
+        "knownCards": {
+            "label": "Known other cards",
+            "summary": "{count} {count, plural, one {card} other {cards}} marked across other players",
+            "summaryEmpty": "No other-player cards marked",
+            "edit": "Edit known cards"
+        }
+    },
     "deduce": {
         "title": "Deduction grid",
         "caseFileProgress": "Case file · {percent}% solved",

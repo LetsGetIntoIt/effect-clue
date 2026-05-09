@@ -864,3 +864,20 @@ export const setupSelfPlayerSet = (props: {
 export const setupFirstDealtPlayerSet = (props: {
     auto: boolean;
 }): void => capture("setup_first_dealt_player_set", props);
+
+// ── Setup summary (M7) ────────────────────────────────────────────────────
+// Read-at-a-glance summary panel that lives above the play-mode grid.
+// Inline popover edits cover small fields; "jump to wizard step" sends
+// the user back into the wizard with a focus hint.
+type SetupSummaryField =
+    | "playerName"
+    | "handSize"
+    | "selfPlayer";
+
+export const setupSummaryInlineEdit = (props: {
+    field: SetupSummaryField;
+}): void => capture("setup_summary_inline_edit", props);
+
+export const setupSummaryJumpedToWizard = (props: {
+    step: WizardStep;
+}): void => capture("setup_summary_jumped_to_wizard", props);
