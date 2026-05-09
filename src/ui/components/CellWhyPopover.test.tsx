@@ -62,6 +62,9 @@ const baseProps = {
     hypothesisValue: undefined as HypothesisValue | undefined,
     display: { tag: "blank" } as CellDisplay,
     status: { kind: "off" } as HypothesisStatus,
+    observed: false,
+    onObservationChange: vi.fn(),
+    selfPlayerId: null,
 };
 
 describe("CellWhyPopover - section visibility", () => {
@@ -415,6 +418,63 @@ describe("CellWhyPopover - cell-heading line", () => {
         const heading = screen.getByText(/^cellHeading:/);
         // Player(...) is a Brand.nominal helper — passes strings through.
         expect(heading.textContent).toContain(`"owner":"${String(player1)}"`);
+    });
+});
+
+describe("CellWhyPopover - Observations section (M9)", () => {
+    test("renders Observations section above Deductions for a player-owned cell", () => {
+        render(<CellWhyPopover {...baseProps} />);
+        expect(screen.getByText("observationsLabel")).toBeInTheDocument();
+        // Default help text fires when selfPlayerId !== owner.
+        expect(
+            screen.getByText("observationsHelpDefault"),
+        ).toBeInTheDocument();
+    });
+
+    test("uses the friendlier 'Mark cards you have here' help when popover is on the user's own row", () => {
+        render(
+            <CellWhyPopover
+                {...baseProps}
+                selfPlayerId={player1}
+            />,
+        );
+        expect(screen.getByText("observationsHelpSelf")).toBeInTheDocument();
+        expect(
+            screen.queryByText("observationsHelpDefault"),
+        ).toBeNull();
+    });
+
+    test("hides Observations section entirely for case-file owner cells", () => {
+        const caseCell = Cell(CaseFileOwner(), cardA);
+        render(<CellWhyPopover {...baseProps} cell={caseCell} />);
+        expect(screen.queryByText("observationsLabel")).toBeNull();
+    });
+
+    test("checkbox checked state mirrors the `observed` prop", () => {
+        const { container } = render(
+            <CellWhyPopover {...baseProps} observed={true} />,
+        );
+        const checkbox = container.querySelector(
+            'input[type="checkbox"]',
+        ) as HTMLInputElement;
+        expect(checkbox).not.toBeNull();
+        expect(checkbox.checked).toBe(true);
+    });
+
+    test("toggling the checkbox calls onObservationChange with the inverted value", () => {
+        const handler = vi.fn();
+        const { container } = render(
+            <CellWhyPopover
+                {...baseProps}
+                observed={false}
+                onObservationChange={handler}
+            />,
+        );
+        const checkbox = container.querySelector(
+            'input[type="checkbox"]',
+        ) as HTMLInputElement;
+        checkbox.click();
+        expect(handler).toHaveBeenCalledWith(true);
     });
 });
 

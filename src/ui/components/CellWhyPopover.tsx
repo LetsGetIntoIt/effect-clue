@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ownerLabel } from "../../logic/GameObjects";
+import { ownerLabel, type Player } from "../../logic/GameObjects";
 import type { GameSetup } from "../../logic/GameSetup";
 import type { Cell } from "../../logic/Knowledge";
 import { findCardEntry } from "../../logic/GameSetup";
@@ -29,6 +29,11 @@ const KEY_HELP_ACTIVE = "selectedHelpActive" as const;
 const KEY_HELP_CONFIRMED = "selectedHelpConfirmed" as const;
 const KEY_HELP_CONTRADICTED = "selectedHelpContradicted" as const;
 const KEY_HELP_JOINTLY_CONFLICTS = "selectedHelpJointlyConflicts" as const;
+// Observations help-text keys — same hoisting reason. Default copy
+// covers any cell; the self-flavoured copy fires when the popover is
+// opened on the user's own row.
+const KEY_OBS_HELP_DEFAULT = "observationsHelpDefault" as const;
+const KEY_OBS_HELP_SELF = "observationsHelpSelf" as const;
 
 interface CellWhyPopoverProps {
     readonly cell: Cell;
@@ -46,6 +51,28 @@ interface CellWhyPopoverProps {
      * a Leads section with the same chip + the translated explanation.
      */
     readonly footnoteNumbers: ReadonlyArray<number>;
+    /**
+     * Observations section state (M9). The cell shows whether the
+     * user has manually marked this `(player, card)` pair as a fact
+     * — pre-populated from Game Setup, kept separate from suggestion-
+     * derived knowledge.
+     *
+     * `observed` mirrors `state.knownCards.some(kc => kc.player === ...
+     * && kc.card === ...)`. `onObservationChange(true)` dispatches
+     * `addKnownCard`; `onObservationChange(false)` dispatches
+     * `removeKnownCard` with the matching index. Both wired by the
+     * Checklist parent.
+     *
+     * Hidden entirely for case-file owner cells — only the deducer
+     * concludes about the case file; observations don't apply.
+     *
+     * `selfPlayerId` lets the help-text swap to the friendlier
+     * "Mark cards you have here" wording when the popover is on the
+     * user's own row.
+     */
+    readonly observed: boolean;
+    readonly onObservationChange: (next: boolean) => void;
+    readonly selfPlayerId: Player | null;
 }
 
 /**
@@ -66,6 +93,9 @@ export function CellWhyPopover({
     onHypothesisChange,
     whyText,
     footnoteNumbers,
+    observed,
+    onObservationChange,
+    selfPlayerId,
 }: CellWhyPopoverProps) {
     const t = useTranslations("hypothesis");
     const tDeduce = useTranslations("deduce");
@@ -253,6 +283,17 @@ export function CellWhyPopover({
         );
     };
 
+    // Observations section (M9). Above Deductions; below the heading.
+    // Only meaningful for player-owned cells — the case-file owner
+    // can't be "observed" in real life (only deduced).
+    const showObservations = cell.owner._tag === "Player";
+    const observationOwner =
+        cell.owner._tag === "Player" ? cell.owner.player : null;
+    const observationsHelpKey =
+        observationOwner !== null && observationOwner === selfPlayerId
+            ? KEY_OBS_HELP_SELF
+            : KEY_OBS_HELP_DEFAULT;
+
     return (
         <div className="contents">
             <div className="flex flex-col gap-3">
@@ -262,6 +303,35 @@ export function CellWhyPopover({
                         card: cardLabel,
                     })}
                 </div>
+                {showObservations && (
+                    <div className="flex flex-col gap-2">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-fg">
+                            {t("observationsLabel")}
+                        </div>
+                        <p className="m-0 text-[12px] leading-snug text-muted">
+                            {t(observationsHelpKey)}
+                        </p>
+                        <label className="flex cursor-pointer items-center gap-2 text-[13px]">
+                            <input
+                                type="checkbox"
+                                checked={observed}
+                                onChange={e =>
+                                    onObservationChange(e.currentTarget.checked)
+                                }
+                                aria-label={t("observationsCheckboxLabel", {
+                                    owner: ownerLabel(cell.owner),
+                                    card: cardLabel,
+                                })}
+                            />
+                            <span>
+                                {t("observationsCheckboxLabel", {
+                                    owner: ownerLabel(cell.owner),
+                                    card: cardLabel,
+                                })}
+                            </span>
+                        </label>
+                    </div>
+                )}
                 {showDeductions && (
                     <div className="flex flex-col gap-2">
                         <div className="text-[11px] font-semibold uppercase tracking-wide text-fg">
