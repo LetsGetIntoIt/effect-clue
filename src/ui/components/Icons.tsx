@@ -258,29 +258,6 @@ export function RedoIcon({ className, size = 20 }: IconProps) {
     );
 }
 
-/** Magnifying glass — paired with search / filter controls. */
-export function SearchIcon({ className, size = 14 }: IconProps) {
-    return (
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width={size}
-            height={size}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            focusable="false"
-            className={className}
-        >
-            <circle cx="11" cy="11" r="7" />
-            <line x1="20" y1="20" x2="16" y2="16" />
-        </svg>
-    );
-}
-
 /** User silhouette — paired with account / sign-in affordances. */
 export function UserIcon({ className, size = 18 }: IconProps) {
     return (

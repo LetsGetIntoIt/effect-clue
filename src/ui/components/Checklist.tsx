@@ -26,7 +26,6 @@ import { useTranslations } from "next-intl";
 import {
     hypothesisCleared,
     hypothesisSet,
-    playerAdded,
     whyTooltipOpened,
     type CellHypothesisStatus,
 } from "../../analytics/events";
@@ -40,13 +39,10 @@ import {
 } from "react";
 import { Card, Owner, Player, ownerLabel } from "../../logic/GameObjects";
 import {
-    allCardIds,
     allOwners,
     cardName,
-    caseFileSize,
     categoryName,
     categoryOfCard,
-    defaultHandSizes,
 } from "../../logic/GameSetup";
 import {
     Cell,
@@ -58,7 +54,6 @@ import {
     Y,
 } from "../../logic/Knowledge";
 import { footnotesForCell } from "../../logic/Footnotes";
-import { KnownCard } from "../../logic/InitialKnowledge";
 import {
     chainFor,
     describeReason,
@@ -72,7 +67,6 @@ import {
 } from "../../logic/Recommender";
 import { Accusation } from "../../logic/Accusation";
 import { Suggestion } from "../../logic/Suggestion";
-import { useConfirm } from "../hooks/useConfirm";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useSelection } from "../SelectionContext";
 import { useClue } from "../state";
@@ -81,7 +75,7 @@ import {
     registerChecklistFocusHandler,
     rememberChecklistCell,
 } from "../checklistFocus";
-import { label, matches, shortcutSuffix } from "../keyMap";
+import { label, matches } from "../keyMap";
 import { AnimatePresence, motion, type Transition } from "motion/react";
 import {
     T_CELEBRATE,
@@ -91,10 +85,7 @@ import {
     useReducedTransition,
 } from "../motion";
 import { useConfetti } from "../hooks/useConfetti";
-import { useShareContext } from "../share/ShareProvider";
-import { CardPackRow } from "./CardPackRow";
-import { ShareIcon } from "./ShareIcon";
-import { ChevronLeftIcon, ChevronRightIcon, Envelope, LightbulbIcon } from "./Icons";
+import { Envelope, LightbulbIcon } from "./Icons";
 import { InfoPopover } from "./InfoPopover";
 
 /**
@@ -227,23 +218,16 @@ function navigateGrid(
 }
 
 /**
- * Unified tabbed checklist: the single surface for both editing the
- * deck / roster (Setup mode) and tracking deductions (Play mode).
- * State-slice ownership is one tab-gate deep: `inSetup` controls
- * whether player name inputs, hand-size row, add / remove affordances,
- * and the trailing "+" column render. The cell grid (Y / N / blank,
- * tooltips, cross-highlighting, footnotes) is identical in both.
- *
- * The GameSetupPanel + ChecklistGrid pair this replaces is still
- * mounted during commits 17–18 as a safety net and gets deleted in
- * commit 19.
+ * Play-mode deduction grid: the read-only checklist where the user
+ * tracks who-has-what across the game. Setup mode is owned by the
+ * M6 `<SetupWizard>` accordion (see `src/ui/setup/`); this component
+ * focuses on the post-setup play surface — Y / N / blank cells,
+ * cross-highlighting, footnotes, the per-cell "why" popover, and
+ * the case-file column.
  */
 export function Checklist() {
     const t = useTranslations("deduce");
-    const tSetup = useTranslations("setup");
-    const tShare = useTranslations("share");
     const tReasons = useTranslations("reasons");
-    const { openInvitePlayer } = useShareContext();
     const hasKeyboard = useHasKeyboard();
     const { state, dispatch, derived } = useClue();
     const {
@@ -258,10 +242,7 @@ export function Checklist() {
         onGridLeave,
         cancelExitTimer,
     } = useWhyHoverIntent();
-    const confirm = useConfirm();
-    const inSetup = state.uiMode === "setup";
     const setup = state.setup;
-    const knownCards = state.knownCards;
     const result = derived.deductionResult;
     const footnotes = derived.footnotes;
     const provenance = derived.provenance;
@@ -484,12 +465,10 @@ export function Checklist() {
     }, [setup.categories]);
     const totalRows = rowIdxByCard.size;
     const totalCols = owners.length;
-    // Setup mode extends the nav ring up (player-name row -2,
-    // hand-size row -1) and left (card-name col -1).
     const bounds: GridBounds = {
-        minRow: inSetup ? -2 : 0,
+        minRow: 0,
         maxRow: totalRows - 1,
-        minCol: inSetup ? -1 : 0,
+        minCol: 0,
         maxCol: totalCols - 1,
     };
 
@@ -681,84 +660,6 @@ export function Checklist() {
         return unregister;
     }, []);
 
-    // In Setup mode the add-player column sits between the players and
-    // the case file — clicking + spawns the new player where its column
-    // would naturally appear. Each of the three owner-axis rows below
-    // injects the matching header/cell right before the case-file
-    // column; Play mode skips the cell entirely (unchanged column
-    // count).
-    const addPlayerHeaderCell = (
-        <motion.th
-            key={ADD_PLAYER_COLUMN_KEY}
-            className={`${COLUMN_HEADER_STACK} w-px overflow-hidden whitespace-nowrap border-r border-b border-border bg-row-header p-0 text-center`}
-            initial={TABLE_COLUMN_HIDDEN}
-            animate={TABLE_COLUMN_VISIBLE}
-            exit={columnCellExit}
-            transition={tableEntryTransition}
-            // The setup tour's "Add players" step highlights the
-            // entire header row of player cells, including the
-            // "+ Player" affordance, so the user can see all the
-            // ways they manage the player set in one spotlight.
-            data-tour-anchor="setup-player-column"
-        >
-            {renderColumnReveal(
-                <div className="px-1.5 py-1">
-                    <button
-                        type="button"
-                        className="cursor-pointer whitespace-nowrap rounded border-none bg-accent px-2 py-1 text-[12px] font-semibold leading-none text-white hover:bg-accent-hover"
-                        title={tSetup("addPlayerTitle")}
-                        onClick={() => {
-                            const position = state.setup.players.length;
-                            dispatch({ type: "addPlayer" });
-                            playerAdded({
-                                playerCount: position + 1,
-                                position,
-                            });
-                        }}
-                    >
-                        {tSetup("addPlayerLabel")}
-                    </button>
-                </div>,
-            )}
-        </motion.th>
-    );
-    const addPlayerEmptyCell = (
-        <motion.td
-            key={ADD_PLAYER_COLUMN_KEY}
-            className={`${COLUMN_HEADER_STACK} overflow-hidden border-r border-b border-border`}
-            initial={TABLE_COLUMN_HIDDEN}
-            animate={TABLE_COLUMN_VISIBLE}
-            exit={columnCellExit}
-            transition={tableEntryTransition}
-        >
-            {renderColumnReveal(<div className="h-7 w-0" />)}
-        </motion.td>
-    );
-
-    const handSizeMap = new Map(state.handSizes);
-    const defaults = new Map(defaultHandSizes(setup));
-    const totalDealt = allCardIds(setup).length - caseFileSize(setup);
-    const setHandSizesArr = setup.players
-        .map(p => handSizeMap.get(p))
-        .filter((n): n is number => typeof n === "number");
-    const allHandSizesSet =
-        setHandSizesArr.length === setup.players.length &&
-        setup.players.length > 0;
-    const handSizesTotal = setHandSizesArr.reduce((a, b) => a + b, 0);
-    const handSizeMismatch =
-        allHandSizesSet && handSizesTotal !== totalDealt;
-
-    const onHandSizeChange = (player: Player, raw: string) => {
-        if (raw === "") {
-            dispatch({ type: "setHandSize", player, size: undefined });
-            return;
-        }
-        const n = Number(raw);
-        if (Number.isFinite(n) && n >= 0) {
-            dispatch({ type: "setHandSize", player, size: n });
-        }
-    };
-
     /**
      * Cross-highlight: when the user hovers a row in the prior
      * suggestion or accusation log, highlight every cell whose
@@ -812,33 +713,12 @@ export function Checklist() {
         return false;
     };
 
-    /**
-     * Toggle a known-card entry for (player, card) when the user clicks
-     * a cell. Only player columns are interactive — the case-file
-     * column is computed by the deducer.
-     */
-    const toggleKnownCard = (owner: Owner, card: Card) => {
-        if (owner._tag !== "Player") return;
-        const player = owner.player;
-        const index = knownCards.findIndex(
-            kc => kc.player === player && kc.card === card,
-        );
-        if (index >= 0) {
-            dispatch({ type: "removeKnownCard", index });
-        } else {
-            dispatch({
-                type: "addKnownCard",
-                card: KnownCard({ player, card }),
-            });
-        }
-    };
-
     const knowledge: Knowledge =
         Result.getOrUndefined(result) ?? emptyKnowledge;
 
     // Column count for <th colSpan> on category / card-name / add-* rows.
     // In Setup mode the trailing "+ add player" column adds one more.
-    const cardSpan = 1 + owners.length + (inSetup ? 1 : 0);
+    const cardSpan = 1 + owners.length;
 
     return (
         <section
@@ -877,60 +757,9 @@ export function Checklist() {
                 onGridLeave();
             }}
         >
-            {inSetup && (
-                <div className="mb-4 shrink-0 rounded-[var(--radius)] border border-accent/40 bg-accent/5 px-4 py-3 [@media(min-width:800px)]:sticky [@media(min-width:800px)]:left-9 [@media(min-width:800px)]:max-w-[calc(100vw-4.5rem)]">
-                    <h2 className="m-0 font-display text-[20px] text-accent">
-                        {tSetup("title")}
-                    </h2>
-                    <p className="m-0 mt-1.5 text-[14px] leading-relaxed">
-                        {tSetup("description")}
-                    </p>
-                    <div className="mt-3 flex flex-wrap items-center justify-start gap-3 [@media(min-width:800px)]:justify-end">
-                        <button
-                            type="button"
-                            data-setup-cta
-                            data-tour-anchor="setup-start-playing"
-                            className="cursor-pointer rounded-[var(--radius)] border-none bg-accent px-4 py-2 text-[14px] font-semibold text-white hover:bg-accent-hover"
-                            onClick={() =>
-                                dispatch({
-                                    type: "setUiMode",
-                                    mode: "checklist",
-                                })
-                            }
-                        >
-                            {suggestions.length > 0
-                                ? tSetup("continuePlaying", {
-                                      shortcut: shortcutSuffix("global.gotoPlay", hasKeyboard),
-                                  })
-                                : tSetup("startPlaying", {
-                                      shortcut: shortcutSuffix("global.gotoPlay", hasKeyboard),
-                                  })}
-                        </button>
-                        <button
-                            type="button"
-                            className="inline-flex cursor-pointer items-center gap-1 rounded-[var(--radius)] border-none bg-transparent px-1 py-1 text-[13px] text-muted hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                            onClick={() => openInvitePlayer()}
-                            data-share-invite-from-setup
-                            data-tour-anchor="setup-invite-player"
-                        >
-                            <ShareIcon size={14} />
-                            {tShare("entryInvitePlayer")}
-                        </button>
-                    </div>
-                </div>
-            )}
             <div className="shrink-0 [@media(min-width:800px)]:sticky [@media(min-width:800px)]:left-9 [@media(min-width:800px)]:max-w-[calc(100vw-4.5rem)]">
-                {inSetup ? <CardPackRow /> : <CaseFileHeader knowledge={knowledge} />}
+                <CaseFileHeader knowledge={knowledge} />
             </div>
-            {inSetup && handSizeMismatch && (
-                <div className="mb-3 shrink-0 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-3 py-2 text-[13px] text-warning [@media(min-width:800px)]:sticky [@media(min-width:800px)]:left-9 [@media(min-width:800px)]:max-w-[calc(100vw-4.5rem)]">
-                    {tSetup("handSizeMismatch", {
-                        total: handSizesTotal,
-                        expected: totalDealt,
-                        caseFileCount: caseFileSize(setup),
-                    })}
-                </div>
-            )}
             <div className="-mx-4 px-4">
             <table className="w-full border-separate border-spacing-0 border-t border-l border-border text-[13px]">
                 <thead className="sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))] z-[var(--z-checklist-sticky-header)] bg-row-header">
@@ -939,32 +768,10 @@ export function Checklist() {
                             className={`${STICKY_FIRST_COL_HEADER} border-r border-b border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted`}
                             data-tour-sticky-left=""
                         >
-                            {inSetup || !hasKeyboard ? null : label("global.gotoChecklist")}
+                            {!hasKeyboard ? null : label("global.gotoChecklist")}
                         </th>
                         <AnimatePresence initial={false} mode={MOTION_SYNC}>
-                        {owners.flatMap((owner, ownerIdx) => {
-                            // Setup-tour anchors for player header cells:
-                            //   - `setup-player-column` (every player
-                            //     header) so the "Add players" step
-                            //     spotlights the row of player names.
-                            //   - `setup-known-cell-header` (FIRST
-                            //     player only) so the "Mark cards"
-                            //     step's popover anchors to the top
-                            //     of the column rather than the full
-                            //     column union (which is too tall to
-                            //     position against on narrow viewports).
-                            // The Case File header skips both since
-                            // it's not a player.
-                            const isFirstPlayer =
-                                owner._tag === "Player" && ownerIdx === 0;
-                            const playerHeaderAnchor =
-                                inSetup && owner._tag === "Player"
-                                    ? {
-                                          "data-tour-anchor": isFirstPlayer
-                                              ? "setup-player-column setup-known-cell-header"
-                                              : "setup-player-column",
-                                      }
-                                    : {};
+                        {owners.flatMap(owner => {
                             const cell = (
                                 <motion.th
                                     key={ownerKey(owner, playerColumnKeys)}
@@ -974,142 +781,22 @@ export function Checklist() {
                                     animate={TABLE_COLUMN_VISIBLE}
                                     exit={columnCellExit}
                                     transition={tableEntryTransition}
-                                    {...playerHeaderAnchor}
                                 >
                                     {renderColumnReveal(
                                         <div className="px-2 py-1">
-                                            {inSetup && owner._tag === "Player" ? (
-                                                <PlayerNameInput
-                                                    player={owner.player}
-                                                    allPlayers={setup.players}
-                                                    colIdx={ownerIdx}
-                                                    bounds={bounds}
-                                                    index={setup.players.indexOf(
-                                                        owner.player,
-                                                    )}
-                                                    playerCount={setup.players.length}
-                                                />
-                                            ) : (
-                                                ownerLabel(owner)
-                                            )}
+                                            {ownerLabel(owner)}
                                         </div>,
                                     )}
                                 </motion.th>
                             );
-                            return inSetup && owner._tag === "CaseFile"
-                                ? [addPlayerHeaderCell, cell]
-                                : [cell];
+                            return [cell];
                         })}
                         </AnimatePresence>
                     </tr>
-                    {inSetup && (
-                        <tr>
-                            <th
-                                className={`${STICKY_FIRST_COL_HEADER} whitespace-nowrap border-r border-b border-border bg-row-header px-1.5 py-1 text-left font-semibold`}
-                                data-tour-sticky-left=""
-                                // The setup tour's "Set hand sizes"
-                                // step highlights the row label cell
-                                // alongside every player's input so
-                                // the spotlight covers the whole row.
-                                data-tour-anchor="setup-hand-size"
-                            >
-                                {tSetup("handSize")}
-                            </th>
-                            <AnimatePresence initial={false} mode={MOTION_SYNC}>
-                            {owners.flatMap((owner, ownerIdx) => {
-                                let cell: ReactNode;
-                                if (owner._tag !== "Player") {
-                                    cell = (
-                                        <motion.td
-                                            key={ownerKey(owner, playerColumnKeys)}
-                                            className={`${COLUMN_HEADER_STACK_HANDSIZE} overflow-hidden border-r border-b border-border`}
-                                            layout={LAYOUT_POSITION}
-                                            initial={TABLE_COLUMN_HIDDEN}
-                                            animate={TABLE_COLUMN_VISIBLE}
-                                            exit={columnCellExit}
-                                            transition={tableEntryTransition}
-                                        >
-                                            {renderColumnReveal(<div className="h-7 w-0" />)}
-                                        </motion.td>
-                                    );
-                                } else {
-                                    const current = handSizeMap.get(owner.player);
-                                    const def = defaults.get(owner.player);
-                                    // Anchor the setup tour's hand-size step
-                                    // to EVERY player's hand-size cell so the
-                                    // spotlight highlights the whole row, not
-                                    // just one cell. The TourPopover unions
-                                    // the matched rects.
-                                    cell = (
-                                        <motion.td
-                                            key={ownerKey(owner, playerColumnKeys)}
-                                            className={`${COLUMN_HEADER_STACK_HANDSIZE} overflow-hidden border-r border-b border-border p-0 text-center`}
-                                            layout={LAYOUT_POSITION}
-                                            initial={TABLE_COLUMN_HIDDEN}
-                                            animate={TABLE_COLUMN_VISIBLE}
-                                            exit={columnCellExit}
-                                            transition={tableEntryTransition}
-                                            data-tour-anchor="setup-hand-size"
-                                        >
-                                            {renderColumnReveal(
-                                                <div className="px-1.5 py-1">
-                                                    <input
-                                                        type="number"
-                                                        min={0}
-                                                        max={allCardIds(setup).length}
-                                                        className="w-14 rounded border border-border p-0.5 text-center text-[12px]"
-                                                        value={
-                                                            current === undefined
-                                                                ? ""
-                                                                : String(current)
-                                                        }
-                                                        placeholder={
-                                                            def === undefined
-                                                                ? ""
-                                                                : String(def)
-                                                        }
-                                                        data-cell-row={-1}
-                                                        data-cell-col={ownerIdx}
-                                                        onFocus={() =>
-                                                            rememberChecklistCell(
-                                                                -1,
-                                                                ownerIdx,
-                                                            )
-                                                        }
-                                                        onKeyDown={e =>
-                                                            navigateGrid(
-                                                                e,
-                                                                -1,
-                                                                ownerIdx,
-                                                                bounds,
-                                                                { isTextInput: true },
-                                                            )
-                                                        }
-                                                        onChange={e =>
-                                                            onHandSizeChange(
-                                                                owner.player,
-                                                                e.currentTarget.value,
-                                                            )
-                                                        }
-                                                    />
-                                                </div>,
-                                            )}
-                                        </motion.td>
-                                    );
-                                }
-                                return inSetup && owner._tag === "CaseFile"
-                                    ? [addPlayerEmptyCell, cell]
-                                    : [cell];
-                            })}
-                            </AnimatePresence>
-                        </tr>
-                    )}
                 </thead>
                 <tbody>
                     <AnimatePresence initial={false} mode={MOTION_SYNC}>
                     {setup.categories.flatMap(category => {
-                        const canRemoveCategory = setup.categories.length > 1;
-                        const canRemoveCard = category.cards.length > 1;
                         return [
                             <motion.tr
                                 key={`h-${String(category.id)}`}
@@ -1121,75 +808,9 @@ export function Checklist() {
                                     exit={cellExitTone}
                                 >
                                     {renderRowReveal(
-                                        inSetup ? (
-                                            <div className="flex items-center justify-between gap-2 px-2 py-1.5">
-                                            <InlineTextEdit
-                                                value={category.name}
-                                                className="min-w-0 flex-1 rounded border border-white/30 bg-transparent px-1 py-0.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-white focus:bg-white/10 focus:outline-none"
-                                                title={tSetup("renameCategoryTitle")}
-                                                onCommit={next =>
-                                                    dispatch({
-                                                        type: "renameCategory",
-                                                        categoryId: category.id,
-                                                        name: next,
-                                                    })
-                                                }
-                                            />
-                                            <button
-                                                type="button"
-                                                aria-label={
-                                                    canRemoveCategory
-                                                        ? tSetup("removeCategoryTitle", {
-                                                              name: category.name,
-                                                          })
-                                                        : tSetup("removeCategoryMin")
-                                                }
-                                                disabled={!canRemoveCategory}
-                                                className="cursor-pointer border-none bg-transparent p-0 text-[14px] leading-none text-white/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                                                onClick={async () => {
-                                                    const categoryCardIds = new Set(
-                                                        category.cards.map(c => c.id),
-                                                    );
-                                                    const hasKnownCards = knownCards.some(
-                                                        kc => categoryCardIds.has(kc.card),
-                                                    );
-                                                    const hasSuggestions = state.suggestions.some(
-                                                        s =>
-                                                            s.cards.some(c =>
-                                                                categoryCardIds.has(c),
-                                                            ) ||
-                                                            (s.seenCard !== undefined &&
-                                                                categoryCardIds.has(
-                                                                    s.seenCard,
-                                                                )),
-                                                    );
-                                                    if (
-                                                        (hasKnownCards || hasSuggestions) &&
-                                                        !(await confirm({
-                                                            message: tSetup(
-                                                                "removeCategoryConfirm",
-                                                                {
-                                                                    name: category.name,
-                                                                },
-                                                            ),
-                                                        }))
-                                                    ) {
-                                                        return;
-                                                    }
-                                                    dispatch({
-                                                        type: "removeCategoryById",
-                                                        categoryId: category.id,
-                                                    });
-                                                }}
-                                            >
-                                                &times;
-                                            </button>
-                                            </div>
-                                        ) : (
-                                            <div className="px-2 py-1.5">
-                                                {category.name}
-                                            </div>
-                                        ),
+                                        <div className="px-2 py-1.5">
+                                            {category.name}
+                                        </div>,
                                     )}
                                 </motion.th>
                                 <td
@@ -1198,8 +819,6 @@ export function Checklist() {
                                 />
                             </motion.tr>,
                             ...category.cards.map(entry => {
-                                const cardRowIdx =
-                                    rowIdxByCard.get(entry.id) ?? -1;
                                 return (
                                 <motion.tr
                                     key={String(entry.id)}
@@ -1211,74 +830,9 @@ export function Checklist() {
                                         exit={cellExitTone}
                                     >
                                         {renderRowReveal(
-                                            inSetup ? (
-                                                <div className="flex items-center justify-between gap-2 px-2 py-1">
-                                                <InlineTextEdit
-                                                    value={entry.name}
-                                                    className="min-w-0 flex-1 rounded border border-border/60 bg-transparent px-1 py-0.5 text-[12px] focus:border-accent focus:outline-none"
-                                                    title={tSetup("renameCardTitle")}
-                                                    onCommit={next =>
-                                                        dispatch({
-                                                            type: "renameCard",
-                                                            cardId: entry.id,
-                                                            name: next,
-                                                        })
-                                                    }
-                                                    navCell={{
-                                                        rowIdx: cardRowIdx,
-                                                        colIdx: -1,
-                                                        bounds,
-                                                    }}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    aria-label={
-                                                        canRemoveCard
-                                                            ? tSetup("removeCardTitle", {
-                                                                  name: entry.name,
-                                                              })
-                                                            : tSetup("removeCardMin")
-                                                    }
-                                                    disabled={!canRemoveCard}
-                                                    className="cursor-pointer border-none bg-transparent p-0 text-[14px] leading-none text-muted hover:text-danger disabled:cursor-not-allowed disabled:opacity-40"
-                                                    onClick={async () => {
-                                                        const hasKnownCards = knownCards.some(
-                                                            kc => kc.card === entry.id,
-                                                        );
-                                                        const hasSuggestions = state.suggestions.some(
-                                                            s =>
-                                                                s.cards.some(
-                                                                    c => c === entry.id,
-                                                                ) ||
-                                                                s.seenCard === entry.id,
-                                                        );
-                                                        if (
-                                                            (hasKnownCards || hasSuggestions) &&
-                                                            !(await confirm({
-                                                                message: tSetup(
-                                                                    "removeCardConfirm",
-                                                                    {
-                                                                        card: entry.name,
-                                                                    },
-                                                                ),
-                                                            }))
-                                                        ) {
-                                                            return;
-                                                        }
-                                                        dispatch({
-                                                            type: "removeCardById",
-                                                            cardId: entry.id,
-                                                        });
-                                                    }}
-                                                >
-                                                    &times;
-                                                </button>
-                                                </div>
-                                            ) : (
-                                                <div className="px-2 py-1">
-                                                    {entry.name}
-                                                </div>
-                                            ),
+                                            <div className="px-2 py-1">
+                                                {entry.name}
+                                            </div>,
                                         )}
                                     </motion.th>
                                     <AnimatePresence
@@ -1306,22 +860,9 @@ export function Checklist() {
                                             hypotheses,
                                             jointFailed,
                                         );
-                                        // Setup mode is for entering known
-                                        // facts — hypotheses shouldn't tint
-                                        // cells, drive corner badges, or show
-                                        // lightbulb leads. Forcing the
-                                        // status to "off" makes `displayFor`
-                                        // return the real value (or blank),
-                                        // and the topLeft / topRight slots
-                                        // below skip the chip + badge in
-                                        // setup outright.
-                                        const effectiveStatus: HypothesisStatus =
-                                            inSetup
-                                                ? { kind: "off" }
-                                                : hypothesisStatus;
                                         const display = displayFor(
                                             value,
-                                            effectiveStatus,
+                                            hypothesisStatus,
                                         );
                                         const footnoteNumbers = footnotesForCell(
                                             footnotes,
@@ -1332,37 +873,12 @@ export function Checklist() {
                                             owner,
                                             entry.id,
                                         );
-                                        // In Setup mode, player cells show a native
-                                        // checkbox bound to the *manual* knownCards
-                                        // slice — not the deduced value. The cell
-                                        // background still reflects the deduced Y/N,
-                                        // so a green-background cell with an
-                                        // unchecked box means "solver derived this,
-                                        // you didn't enter it."
-                                        const isKnownY =
-                                            isPlayerCell &&
-                                            knownCards.some(
-                                                kc =>
-                                                    kc.player ===
-                                                        (owner._tag === "Player"
-                                                            ? owner.player
-                                                            : undefined) &&
-                                                    kc.card === entry.id,
-                                            );
-                                        const setupCheckbox =
-                                            inSetup && isPlayerCell;
-                                        // Setup mode: the whole cell is the
-                                        // toggle target (easier to hit on
-                                        // touch than a bare checkbox).
-                                        const setupInteractive =
-                                            inSetup && isPlayerCell;
-                                        // Play mode: the cell is read-only
-                                        // w.r.t. known-card toggling, but it
-                                        // pins the cell selection (for
-                                        // cross-panel highlighting) and
-                                        // opens the deduction-chain popover.
-                                        const playInteractive =
-                                            !inSetup && isPlayerCell;
+                                        // Player cells host the deduction
+                                        // popover on click — they don't
+                                        // toggle known-cards directly anymore
+                                        // (the wizard's PlayerColumnCardList
+                                        // owns that flow).
+                                        const playInteractive = isPlayerCell;
                                         // Derived cells (value follows
                                         // from a hypothesis, not from real
                                         // facts alone) chain through joint
@@ -1386,8 +902,7 @@ export function Checklist() {
                                             tReasons,
                                         });
                                         const showChip =
-                                            !inSetup
-                                            && footnoteNumbers.length > 0
+                                            footnoteNumbers.length > 0
                                             && value === undefined;
                                         const topLeft = showChip ? (
                                             <span
@@ -1415,7 +930,6 @@ export function Checklist() {
                                         // the user is looking at one or the
                                         // other.
                                         const topRight =
-                                            !inSetup &&
                                             hypothesisValue !== undefined ? (
                                                 <ProseChecklistIcon
                                                     value={hypothesisValue}
@@ -1423,16 +937,7 @@ export function Checklist() {
                                                     invertedStyle
                                                 />
                                             ) : null;
-                                        const center = setupCheckbox ? (
-                                            <input
-                                                type="checkbox"
-                                                aria-hidden
-                                                tabIndex={-1}
-                                                className="pointer-events-none h-4 w-4 accent-accent"
-                                                checked={isKnownY}
-                                                readOnly
-                                            />
-                                        ) : (
+                                        const center = (
                                             <AnimatedCellGlyph
                                                 display={display}
                                                 status={hypothesisStatus}
@@ -1445,31 +950,15 @@ export function Checklist() {
                                                 center={center}
                                             />
                                         );
-                                        // A cell needs the interactive
-                                        // ring style when the user can
-                                        // focus or hover it: Setup-mode
-                                        // toggleable cells, Play-mode
-                                        // player cells with a deduction,
-                                        // and Play-mode case-file cells
-                                        // with a deduction. Setup mode
-                                        // intentionally gives case-file
-                                        // cells NO popover affordance —
-                                        // setup is for entering inputs,
-                                        // not exploring the deduction
-                                        // chain.
-                                        // Drop the deduction-content gate so the
-                                        // popover opens on every play-mode player
-                                        // cell (and play-mode case-file cell). Even
-                                        // a blank cell now hosts the hypothesis
-                                        // control via `<CellWhyPopover>`, so the
-                                        // popover always has something to show.
+                                        // Every cell hosts the deduction-
+                                        // chain popover via `<CellWhyPopover>`
+                                        // — even blank ones, because the
+                                        // hypothesis control still lives there.
                                         const popoverInteractive =
-                                            !inSetup
-                                            && (playInteractive || !isPlayerCell);
+                                            playInteractive || !isPlayerCell;
                                         const tdClassName = cellClass(
                                             display,
-                                            setupInteractive
-                                                || playInteractive
+                                            playInteractive
                                                 || popoverInteractive,
                                             isHighlighted,
                                             hypothesisStatus,
@@ -1563,61 +1052,7 @@ export function Checklist() {
                                                 : undefined;
                                         const ownerCellKey = `${ownerKey(owner, playerColumnKeys)}-${String(entry.id)}`;
                                         let cell: ReactNode;
-                                        if (setupInteractive) {
-                                            const ariaLabel = tSetup(
-                                                "knownCardCheckboxAria",
-                                                {
-                                                    player: String(
-                                                        owner._tag === "Player"
-                                                            ? owner.player
-                                                            : "",
-                                                    ),
-                                                    card: entry.name,
-                                                },
-                                            );
-                                            cell = (
-                                                <motion.td
-                                                    key={ownerCellKey}
-                                                    className={tdClassName}
-                                                    layout={LAYOUT_POSITION}
-                                                    exit={columnCellExit}
-                                                    style={STYLE_COLUMN_CELL_VISIBLE}
-                                                    role="button"
-                                                    tabIndex={0}
-                                                    aria-pressed={isKnownY}
-                                                    aria-label={ariaLabel}
-                                                    data-cell-row={rowIdx}
-                                                    data-cell-col={colIdx}
-                                                    {...firstCellAnchorAttr}
-                                                    onFocus={onCellFocus}
-                                                    onClick={() =>
-                                                        toggleKnownCard(
-                                                            owner,
-                                                            entry.id,
-                                                        )
-                                                    }
-                                                    onKeyDown={e => {
-                                                        if (
-                                                            matches(
-                                                                "action.toggle",
-                                                                e.nativeEvent,
-                                                            )
-                                                        ) {
-                                                            e.preventDefault();
-                                                            toggleKnownCard(
-                                                                owner,
-                                                                entry.id,
-                                                            );
-                                                            return;
-                                                        }
-                                                        onGridArrowKey(e);
-                                                    }}
-                                                    {...hoverHandlers}
-                                                >
-                                                    {renderTableCellContent(cellContent)}
-                                                </motion.td>
-                                            );
-                                        } else if (popoverInteractive) {
+                                        if (popoverInteractive) {
                                             // Either:
                                             //   - Play-mode player cell with
                                             //     a deduction (the original
@@ -1875,88 +1310,14 @@ export function Checklist() {
                                                 </motion.td>
                                             );
                                         }
-                                        const emptyCell = (
-                                            <motion.td
-                                                key={`${ADD_PLAYER_COLUMN_KEY}-${String(entry.id)}`}
-                                                className="overflow-hidden border-r border-b border-border"
-                                                exit={columnCellExit}
-                                                style={STYLE_COLUMN_CELL_VISIBLE}
-                                            >
-                                                {renderTableCellContent(null)}
-                                            </motion.td>
-                                        );
-                                        return inSetup && owner._tag === "CaseFile"
-                                            ? [emptyCell, cell]
-                                            : [cell];
+                                        return [cell];
                                     })}
                                     </AnimatePresence>
                                 </motion.tr>
                                 );
                             }),
-                            ...(inSetup
-                                ? [
-                                      <motion.tr
-                                          key={`add-card-${String(category.id)}`}
-                                          {...tableRowMotionProps}
-                                      >
-                                          <motion.th
-                                              className={`${STICKY_FIRST_COL} overflow-hidden border-r border-b border-border bg-row-alt p-0 text-left`}
-                                              data-tour-sticky-left=""
-                                              exit={cellExitTone}
-                                          >
-                                              {renderRowReveal(
-                                                  <div className="px-1.5 py-1">
-                                                      <button
-                                                          type="button"
-                                                          className="cursor-pointer border-none bg-transparent p-0 text-[12px] text-accent underline"
-                                                          onClick={() =>
-                                                              dispatch({
-                                                                  type: "addCardToCategoryById",
-                                                                  categoryId: category.id,
-                                                              })
-                                                          }
-                                                      >
-                                                          {tSetup("addCard")}
-                                                      </button>
-                                                  </div>,
-                                              )}
-                                          </motion.th>
-                                          <td
-                                              colSpan={cardSpan - 1}
-                                              className="border-r border-b border-border bg-row-alt"
-                                          />
-                                      </motion.tr>,
-                                  ]
-                                : []),
                         ];
                     })}
-                    {inSetup && (
-                        <motion.tr key="add-category" {...tableRowMotionProps}>
-                            <motion.th
-                                className={`${STICKY_FIRST_COL} overflow-hidden border-r border-b border-border bg-row-alt p-0 text-left`}
-                                data-tour-sticky-left=""
-                                exit={cellExitTone}
-                            >
-                                {renderRowReveal(
-                                    <div className="px-1.5 py-2">
-                                        <button
-                                            type="button"
-                                            className="cursor-pointer rounded border border-border bg-white px-3 py-1 text-[13px] hover:bg-hover"
-                                            onClick={() =>
-                                                dispatch({ type: "addCategory" })
-                                            }
-                                        >
-                                            {tSetup("addCategory")}
-                                        </button>
-                                    </div>,
-                                )}
-                            </motion.th>
-                            <td
-                                colSpan={cardSpan - 1}
-                                className="border-r border-b border-border bg-row-alt"
-                            />
-                        </motion.tr>
-                    )}
                     </AnimatePresence>
                 </tbody>
             </table>
@@ -1965,263 +1326,6 @@ export function Checklist() {
     );
 }
 
-/**
- * Editable text cell. Commits the new value on blur or Enter; resets
- * to the external value on Escape or if the input is cleared.
- *
- * If `navCell` is provided the input joins the Checklist grid nav
- * ring at that (row, col): arrow keys walk to neighbour cells
- * (Left/Right only at the text boundary), Cmd/Ctrl+Arrow jumps to
- * the edge.
- */
-function InlineTextEdit({
-    value,
-    onCommit,
-    className,
-    title,
-    navCell,
-}: {
-    value: string;
-    onCommit: (next: string) => void;
-    className?: string;
-    title?: string;
-    navCell?: {
-        readonly rowIdx: number;
-        readonly colIdx: number;
-        readonly bounds: GridBounds;
-    };
-}) {
-    const [local, setLocal] = useState(value);
-    useEffect(() => {
-        setLocal(value);
-    }, [value]);
-
-    const commit = () => {
-        const trimmed = local.trim();
-        if (trimmed.length === 0) {
-            setLocal(value);
-            return;
-        }
-        if (trimmed !== value) onCommit(trimmed);
-    };
-
-    return (
-        <input
-            type="text"
-            value={local}
-            className={className}
-            title={title}
-            {...(navCell
-                ? {
-                      "data-cell-row": navCell.rowIdx,
-                      "data-cell-col": navCell.colIdx,
-                  }
-                : {})}
-            onFocus={
-                navCell
-                    ? () =>
-                          rememberChecklistCell(
-                              navCell.rowIdx,
-                              navCell.colIdx,
-                          )
-                    : undefined
-            }
-            onChange={e => setLocal(e.currentTarget.value)}
-            onBlur={commit}
-            onKeyDown={e => {
-                if (navCell) {
-                    navigateGrid(
-                        e,
-                        navCell.rowIdx,
-                        navCell.colIdx,
-                        navCell.bounds,
-                        { isTextInput: true },
-                    );
-                    if (e.defaultPrevented) return;
-                }
-                if (e.key === "Enter") {
-                    (e.currentTarget as HTMLInputElement).blur();
-                } else if (e.key === "Escape") {
-                    setLocal(value);
-                    (e.currentTarget as HTMLInputElement).blur();
-                }
-            }}
-        />
-    );
-}
-
-/**
- * Editable player-name header with remove-× button. Handles the
- * duplicate-name check locally so the reducer doesn't have to.
- *
- * The input joins the Checklist grid nav ring at row -2 so arrow
- * keys sweep between player-name inputs and down into the hand-size
- * and card cells; Cmd/Ctrl+Arrow jumps to the grid edge.
- */
-function PlayerNameInput({
-    player,
-    allPlayers,
-    colIdx,
-    bounds,
-    index,
-    playerCount,
-}: {
-    player: Player;
-    allPlayers: ReadonlyArray<Player>;
-    colIdx: number;
-    bounds: GridBounds;
-    index: number;
-    playerCount: number;
-}) {
-    const t = useTranslations("setup");
-    const { state, dispatch } = useClue();
-    const confirm = useConfirm();
-    const [editing, setEditing] = useState(String(player));
-    const [error, setError] = useState("");
-
-    useEffect(() => {
-        setEditing(String(player));
-        setError("");
-    }, [player]);
-
-    const commit = () => {
-        const trimmed = editing.trim();
-        if (!trimmed) {
-            setEditing(String(player));
-            setError("");
-            return;
-        }
-        if (trimmed === String(player)) {
-            setError("");
-            return;
-        }
-        if (allPlayers.some(p => String(p) === trimmed)) {
-            setError(t("duplicateName"));
-            return;
-        }
-        dispatch({
-            type: "renamePlayer",
-            oldName: player,
-            newName: Player(trimmed),
-        });
-        setError("");
-    };
-
-    // Removing a player also drops their known cards and any suggestions
-    // that reference them (see the reducer's `removePlayer` branch).
-    // Prompt first when that's destructive — we skip the confirm otherwise
-    // so a freshly-added empty slot doesn't feel chatty.
-    const onRemove = async () => {
-        const hasKnownCards = state.knownCards.some(
-            kc => kc.player === player,
-        );
-        const hasSuggestions = state.suggestions.some(
-            s =>
-                s.suggester === player ||
-                s.refuter === player ||
-                s.nonRefuters.some(p => p === player),
-        );
-        if (hasKnownCards || hasSuggestions) {
-            const ok = await confirm({
-                message: t("removePlayerConfirm", {
-                    player: String(player),
-                }),
-            });
-            if (!ok) return;
-        }
-        dispatch({ type: "removePlayer", player });
-    };
-
-    const canMoveLeft = index > 0;
-    const canMoveRight = index < playerCount - 1;
-    const arrowClass =
-        "flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded border-none bg-transparent text-fg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent";
-    return (
-        <div className="flex flex-col items-stretch gap-0.5">
-            <div
-                className={`flex items-center gap-9 ${
-                    playerCount > 1 ? "justify-between" : "justify-center"
-                }`}
-            >
-                {playerCount > 1 && (
-                    <button
-                        type="button"
-                        className={arrowClass}
-                        disabled={!canMoveLeft}
-                        aria-label={t("movePlayerLeftTitle", {
-                            player: String(player),
-                        })}
-                        onClick={() =>
-                            dispatch({
-                                type: "movePlayer",
-                                player,
-                                direction: "left",
-                            })
-                        }
-                    >
-                        <ChevronLeftIcon size={16} />
-                    </button>
-                )}
-                <div className="flex min-w-0 items-center gap-1">
-                    <input
-                        type="text"
-                        className="box-border w-28 min-w-0 max-w-full rounded border border-border px-1.5 py-1 text-[12px]"
-                        value={editing}
-                        data-cell-row={-2}
-                        data-cell-col={colIdx}
-                        onFocus={() => rememberChecklistCell(-2, colIdx)}
-                        onChange={e => {
-                            setEditing(e.currentTarget.value);
-                            setError("");
-                        }}
-                        onBlur={commit}
-                        onKeyDown={e => {
-                            navigateGrid(e, -2, colIdx, bounds, {
-                                isTextInput: true,
-                            });
-                            if (e.defaultPrevented) return;
-                            if (e.key === "Enter") commit();
-                        }}
-                    />
-                    <button
-                        type="button"
-                        className="shrink-0 cursor-pointer rounded border-none bg-accent px-2 py-1 text-[12px] font-semibold leading-none text-white hover:bg-accent-hover"
-                        aria-label={t("removePlayerTitle", {
-                            player: String(player),
-                        })}
-                        onClick={onRemove}
-                    >
-                        &times;
-                    </button>
-                </div>
-                {playerCount > 1 && (
-                    <button
-                        type="button"
-                        className={arrowClass}
-                        disabled={!canMoveRight}
-                        aria-label={t("movePlayerRightTitle", {
-                            player: String(player),
-                        })}
-                        onClick={() =>
-                            dispatch({
-                                type: "movePlayer",
-                                player,
-                                direction: "right",
-                            })
-                        }
-                    >
-                        <ChevronRightIcon size={16} />
-                    </button>
-                )}
-            </div>
-            {error && (
-                <span className="whitespace-nowrap text-[11px] text-danger">
-                    {error}
-                </span>
-            )}
-        </div>
-    );
-}
 
 /**
  * Resolve a single `ReasonDescription` (from `describeReason`) into
@@ -2785,7 +1889,6 @@ function AnimatedCellGlyph({
     );
 }
 
-const ADD_PLAYER_COLUMN_KEY = "add-player-col";
 // `align-top` (vertical-align: top) anchors the row/column reveal
 // motion.div — and thus CellLayout's grid — to the cell's top edge.
 // Table-cell percentage-height inheritance is unreliable (CSS spec
@@ -2814,9 +1917,6 @@ const STICKY_FIRST_COL_HEADER =
 // player names cover both.
 const COLUMN_HEADER_STACK =
     "relative z-[var(--z-checklist-sticky-header)]";
-
-const COLUMN_HEADER_STACK_HANDSIZE =
-    "relative z-[var(--z-checklist-sticky-handsize-input)]";
 
 // Z-index ladder for the checklist (bottom → top):
 //   - body cell hover ring       : --z-checklist-cell-hover

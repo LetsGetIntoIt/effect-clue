@@ -140,7 +140,7 @@ interface PackLike {
  * so callers (notably the dropdown order in CardPackRow) can sort
  * pack lists by the same rule the recency tie-breaker uses.
  */
-export const compareCardPackLabels = (a: string, b: string): number =>
+const compareCardPackLabels = (a: string, b: string): number =>
     a.localeCompare(b, undefined, { sensitivity: "base" });
 
 /**

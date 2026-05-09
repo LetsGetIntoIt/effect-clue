@@ -233,26 +233,3 @@ describe("SetupWizard — accordion shell", () => {
     });
 });
 
-describe("SetupWizard — feature flag", () => {
-    test("when the flag is off, the legacy Checklist renders instead", async () => {
-        // Override the seeded flag to OFF.
-        window.localStorage.setItem(
-            "effect-clue.flag.setup-wizard.v1",
-            "0",
-        );
-        render(<Clue />, { wrapper: TestQueryClientProvider });
-
-        // Wait long enough for the wizard mount path to stabilize;
-        // it should NOT show.
-        await waitFor(() => {
-            // Setup CTA from the legacy Checklist is the unique
-            // signal of the legacy path.
-            expect(
-                document.querySelector("[data-setup-cta]"),
-            ).toBeInTheDocument();
-        });
-        expect(
-            document.querySelector('[data-tour-anchor="setup-wizard-shell"]'),
-        ).toBeNull();
-    });
-});

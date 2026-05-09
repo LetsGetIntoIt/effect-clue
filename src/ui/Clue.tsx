@@ -8,7 +8,6 @@ import { startSetup } from "../analytics/gameSession";
 import { AccountProvider } from "./account/AccountProvider";
 import { ShareProvider } from "./share/ShareProvider";
 import { BottomNav } from "./components/BottomNav";
-import { Checklist } from "./components/Checklist";
 import { GlobalContradictionBanner } from "./components/GlobalContradictionBanner";
 import { InstallPromptProvider } from "./components/InstallPromptProvider";
 import { PlayLayout } from "./components/PlayLayout";
@@ -25,7 +24,6 @@ import { StartupCoordinatorProvider, useStartupCoordinator } from "./onboarding/
 import { SplashModal } from "./components/SplashModal";
 import { StaleGameModal } from "./components/StaleGameModal";
 import { useStaleGameGate } from "./hooks/useStaleGameGate";
-import { useSetupWizardEnabled } from "./setup/featureFlag";
 import { SetupWizard } from "./setup/SetupWizard";
 import { SetupWizardFocusProvider } from "./setup/SetupWizardFocusContext";
 import { ClueProvider, useClue } from "./state";
@@ -484,7 +482,6 @@ function TabContent() {
     const { state, hydrated } = useClue();
     const mode = state.uiMode;
     const transition = useReducedTransition(T_STANDARD, { fadeMs: 120 });
-    const wizardEnabled = useSetupWizardEnabled();
 
     // Track the previous mode to compute slide direction. Updates
     // via useEffect so render sees the PREVIOUS value alongside the
@@ -538,7 +535,7 @@ function TabContent() {
                         transition={transition}
                         className="[grid-area:stack] min-w-0"
                     >
-                        {wizardEnabled ? <SetupWizard /> : <Checklist />}
+                        <SetupWizard />
                     </motion.div>
                 ) : (
                     <motion.div

@@ -24,7 +24,6 @@ export {
     allCardIds,
     allCardEntries,
     categoryOfCard,
-    caseFileSize,
 } from "./CardSet";
 
 /**
