@@ -31,6 +31,7 @@ interface Props {
 interface Pill {
     readonly id: string;
     readonly label: string;
+    readonly isCustom: boolean;
     readonly load: () => void;
 }
 
@@ -64,6 +65,20 @@ export function SetupStepCardPack({
     const setup = clue.setup;
 
     const [showCustomize, setShowCustomize] = useState(false);
+    // The custom pack the user most recently loaded via a pill, if
+    // any. Drives the "Update {label}" footer button in the customize
+    // sub-flow — only meaningful when the user explicitly started
+    // from a saved pack. Cleared if they load a built-in afterwards
+    // or save-as a new one. Component-local; resets when the wizard
+    // remounts (cold start, fresh game), which is fine — re-clicking
+    // a pill is a one-tap recovery.
+    const [loadedFromCustomPackId, setLoadedFromCustomPackId] = useState<
+        string | null
+    >(null);
+    const loadedCustomPack =
+        loadedFromCustomPackId === null
+            ? null
+            : customPacks.find(p => p.id === loadedFromCustomPackId) ?? null;
 
     const hasDestructiveData =
         clue.knownCards.length > 0 ||
@@ -73,6 +88,7 @@ export function SetupStepCardPack({
     const load = async (input: {
         readonly cardSet: CardSet;
         readonly label: string;
+        readonly fromCustomPackId: string | null;
     }) => {
         if (
             hasDestructiveData &&
@@ -85,21 +101,32 @@ export function SetupStepCardPack({
             cardSet: input.cardSet,
             label: input.label,
         });
+        setLoadedFromCustomPackId(input.fromCustomPackId);
     };
 
     const pills = useMemo<ReadonlyArray<Pill>>(() => {
         const builtIn: ReadonlyArray<Pill> = CARD_SETS.map(p => ({
             id: p.id,
             label: p.label,
+            isCustom: false,
             load: () => {
-                void load({ cardSet: p.cardSet, label: p.label });
+                void load({
+                    cardSet: p.cardSet,
+                    label: p.label,
+                    fromCustomPackId: null,
+                });
             },
         }));
         const custom: ReadonlyArray<Pill> = customPacks.map(p => ({
             id: p.id,
             label: p.label,
+            isCustom: true,
             load: () => {
-                void load({ cardSet: p.cardSet, label: p.label });
+                void load({
+                    cardSet: p.cardSet,
+                    label: p.label,
+                    fromCustomPackId: p.id,
+                });
             },
         }));
         return [...builtIn, ...custom];
@@ -164,7 +191,14 @@ export function SetupStepCardPack({
                         ? t("customizeCollapse")
                         : t("customizeExpand")}
                 </button>
-                {showCustomize && <SetupStepCardPackCustomize />}
+                {showCustomize && (
+                    <SetupStepCardPackCustomize
+                        loadedCustomPack={loadedCustomPack}
+                        onSavedAsNewPack={packId =>
+                            setLoadedFromCustomPackId(packId)
+                        }
+                    />
+                )}
             </div>
         </SetupStepPanel>
     );

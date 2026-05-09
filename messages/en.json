@@ -137,7 +137,7 @@
             "customizeExpand": "Customize cards",
             "customizeCollapse": "Done customizing",
             "customize": {
-                "helperText": "Rename, add, or remove categories and cards. Drag-to-reorder + save-as-pack are coming soon.",
+                "helperText": "Drag to reorder. Rename, add, or remove categories and cards. Save your custom deck for next time.",
                 "addCategory": "+ add category",
                 "addCard": "+ add card",
                 "categoryNameAria": "Rename category {name}",
@@ -145,7 +145,15 @@
                 "removeCategoryTitle": "Remove category {name}",
                 "removeCategoryConfirm": "Remove {name}? Known-card marks and suggestions referencing its cards will be cleared.",
                 "removeCardTitle": "Remove card {name}",
-                "removeCardConfirm": "Remove {card}? Known-card marks and suggestions referencing this card will be cleared."
+                "removeCardConfirm": "Remove {card}? Known-card marks and suggestions referencing this card will be cleared.",
+                "moveCategoryUpAria": "Move {name} up",
+                "moveCategoryDownAria": "Move {name} down",
+                "moveCardUpAria": "Move {name} up",
+                "moveCardDownAria": "Move {name} down",
+                "saveAsNewPack": "Save as new pack",
+                "saveAsPackPromptTitle": "Save your deck",
+                "saveAsPackPromptLabel": "Pack name",
+                "updatePack": "Update \"{label}\""
             }
         },
         "players": {
