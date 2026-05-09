@@ -66,6 +66,7 @@ import {
     caseFileProgress,
 } from "../../logic/Recommender";
 import { Accusation } from "../../logic/Accusation";
+import { KnownCard } from "../../logic/InitialKnowledge";
 import { Suggestion } from "../../logic/Suggestion";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useSelection } from "../SelectionContext";
@@ -1083,6 +1084,21 @@ export function Checklist() {
                                                 popoverCell,
                                                 thisCell,
                                             );
+                                            // Observation lookup for this
+                                            // cell. Y-only fact: did the
+                                            // user mark this player as
+                                            // owning this card via setup
+                                            // or the popover?
+                                            const observedForCell =
+                                                thisCell.owner._tag === "Player" &&
+                                                state.knownCards.some(
+                                                    kc =>
+                                                        kc.player ===
+                                                            (thisCell.owner._tag === "Player"
+                                                                ? thisCell.owner.player
+                                                                : null) &&
+                                                        kc.card === thisCell.card,
+                                                );
                                             const popoverBody = (
                                                 <CellWhyPopover
                                                     cell={thisCell}
@@ -1125,6 +1141,45 @@ export function Checklist() {
                                                     whyText={cellWhy.chainText}
                                                     footnoteNumbers={footnoteNumbers}
                                                     display={display}
+                                                    observed={observedForCell}
+                                                    onObservationChange={(
+                                                        next: boolean,
+                                                    ) => {
+                                                        if (
+                                                            thisCell.owner._tag !==
+                                                            "Player"
+                                                        )
+                                                            return;
+                                                        const ownerPlayer =
+                                                            thisCell.owner.player;
+                                                        if (next) {
+                                                            dispatch({
+                                                                type: "addKnownCard",
+                                                                card: KnownCard({
+                                                                    player: ownerPlayer,
+                                                                    card: thisCell.card,
+                                                                }),
+                                                            });
+                                                        } else {
+                                                            const idx =
+                                                                state.knownCards.findIndex(
+                                                                    kc =>
+                                                                        kc.player ===
+                                                                            ownerPlayer &&
+                                                                        kc.card ===
+                                                                            thisCell.card,
+                                                                );
+                                                            if (idx >= 0) {
+                                                                dispatch({
+                                                                    type: "removeKnownCard",
+                                                                    index: idx,
+                                                                });
+                                                            }
+                                                        }
+                                                    }}
+                                                    selfPlayerId={
+                                                        state.selfPlayerId
+                                                    }
                                                 />
                                             );
                                             cell = (
