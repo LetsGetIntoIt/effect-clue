@@ -77,8 +77,13 @@ interface CellExplanationRowProps {
  * can take up real estate spanning the whole table without hiding
  * any other rows. Sections (Heading, Observations, Deductions, Leads,
  * Hypothesis) map 1:1 to the same three visual badges on the cell so
- * users learn to read the badges without opening the row. Sections
- * without content hide themselves entirely.
+ * users learn to read the badges without opening the row. All four
+ * body sections render unconditionally — sections without content
+ * show null-state copy so the layout doesn't shift when content
+ * appears (e.g., switching on a hypothesis turns the Deductions
+ * section's null state into a populated derivation in place, instead
+ * of pushing the Hypothesis section down by adding a new section
+ * above it).
  */
 export function CellExplanationRow({
     cell,
@@ -233,101 +238,121 @@ export function CellExplanationRow({
         );
     };
 
-    const observationsSection = showObservations ? (
+    const observationsSection = (
         <section className="flex flex-col gap-2">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-fg">
                 {t("observationsLabel")}
             </div>
-            <p className="m-0 text-[12px] leading-snug text-muted">
-                {t(observationsHelpKey)}
-            </p>
-            <label className="flex cursor-pointer items-center gap-2 text-[13px]">
-                <input
-                    type="checkbox"
-                    checked={observed}
-                    onChange={e =>
-                        onObservationChange(e.currentTarget.checked)
-                    }
-                    aria-label={t("observationsCheckboxLabel", {
-                        owner: ownerLabel(cell.owner),
-                        card: cardLabel,
-                    })}
-                />
-                <span>
-                    {t("observationsCheckboxLabel", {
-                        owner: ownerLabel(cell.owner),
-                        card: cardLabel,
-                    })}
-                </span>
-            </label>
+            {showObservations ? (
+                <>
+                    <p className="m-0 text-[12px] leading-snug text-muted">
+                        {t(observationsHelpKey)}
+                    </p>
+                    <label className="flex cursor-pointer items-center gap-2 text-[13px]">
+                        <input
+                            type="checkbox"
+                            checked={observed}
+                            onChange={e =>
+                                onObservationChange(e.currentTarget.checked)
+                            }
+                            aria-label={t("observationsCheckboxLabel", {
+                                owner: ownerLabel(cell.owner),
+                                card: cardLabel,
+                            })}
+                        />
+                        <span>
+                            {t("observationsCheckboxLabel", {
+                                owner: ownerLabel(cell.owner),
+                                card: cardLabel,
+                            })}
+                        </span>
+                    </label>
+                </>
+            ) : (
+                <p className="m-0 text-[12px] leading-snug text-muted">
+                    {t("observationsEmptyCaseFile")}
+                </p>
+            )}
         </section>
-    ) : null;
+    );
 
-    const deductionsSection = showDeductions ? (
+    const deductionsSection = (
         <section className="flex flex-col gap-2">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-fg">
                 {t("deductionsLabel")}
             </div>
-            <div className="flex items-start gap-2">
-                <span
-                    aria-hidden
-                    className={`inline-flex h-5 w-5 flex-shrink-0 items-center justify-center border border-border text-[12px] font-semibold leading-none ${cellToneClass(display)}`}
-                    data-glyph={glyphKindFor(display, status)}
-                >
-                    {renderGlyphNode(
-                        glyphKindFor(display, status),
-                        { compact: true },
-                    )}
-                </span>
-                <div className="flex flex-col gap-1">
-                    {status.kind === "derived" && (
-                        <div className="text-[12px] text-muted">
-                            {t(
-                                isDerivedSingular
-                                    ? "statusDerivedSingular"
-                                    : "statusDerived",
-                            )}
-                        </div>
-                    )}
-                    {whyText !== undefined && (
-                        <div className="whitespace-pre-line text-[12px] text-muted">
-                            {whyText}
-                        </div>
-                    )}
-                    {display.tag === "hypothesis" &&
-                        status.kind !== "derived" && (
+            {showDeductions ? (
+                <div className="flex items-start gap-2">
+                    <span
+                        aria-hidden
+                        className={`inline-flex h-5 w-5 flex-shrink-0 items-center justify-center border border-border text-[12px] font-semibold leading-none ${cellToneClass(display)}`}
+                        data-glyph={glyphKindFor(display, status)}
+                    >
+                        {renderGlyphNode(
+                            glyphKindFor(display, status),
+                            { compact: true },
+                        )}
+                    </span>
+                    <div className="flex flex-col gap-1">
+                        {status.kind === "derived" && (
                             <div className="text-[12px] text-muted">
-                                {t("statusActiveHypothesisCell")}
+                                {t(
+                                    isDerivedSingular
+                                        ? "statusDerivedSingular"
+                                        : "statusDerived",
+                                )}
                             </div>
                         )}
+                        {whyText !== undefined && (
+                            <div className="whitespace-pre-line text-[12px] text-muted">
+                                {whyText}
+                            </div>
+                        )}
+                        {display.tag === "hypothesis" &&
+                            status.kind !== "derived" && (
+                                <div className="text-[12px] text-muted">
+                                    {t("statusActiveHypothesisCell")}
+                                </div>
+                            )}
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <p className="m-0 text-[12px] leading-snug text-muted">
+                    {t("deductionsEmpty")}
+                </p>
+            )}
         </section>
-    ) : null;
+    );
 
-    const leadsSection = showLeads ? (
+    const leadsSection = (
         <section className="flex flex-col gap-2">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-fg">
                 {t("leadsLabel")}
             </div>
-            <div className="flex items-start gap-2 text-accent">
-                <span
-                    aria-hidden
-                    className="inline-flex h-5 flex-shrink-0 items-center gap-[3px] rounded border border-accent/40 px-1.5 text-[12px] font-semibold leading-none text-accent tabular-nums"
-                >
-                    <LightbulbIcon size={12} />
-                    {footnoteNumbers.join(",")}
-                </span>
-                <span>
-                    {tDeduce("footnoteLine", {
-                        labels: footnoteNumbers
-                            .map(n => `#${n}`)
-                            .join(", "),
-                    })}
-                </span>
-            </div>
+            {showLeads ? (
+                <div className="flex items-start gap-2 text-accent">
+                    <span
+                        aria-hidden
+                        className="inline-flex h-5 flex-shrink-0 items-center gap-[3px] rounded border border-accent/40 px-1.5 text-[12px] font-semibold leading-none text-accent tabular-nums"
+                    >
+                        <LightbulbIcon size={12} />
+                        {footnoteNumbers.join(",")}
+                    </span>
+                    <span>
+                        {tDeduce("footnoteLine", {
+                            labels: footnoteNumbers
+                                .map(n => `#${n}`)
+                                .join(", "),
+                        })}
+                    </span>
+                </div>
+            ) : (
+                <p className="m-0 text-[12px] leading-snug text-muted">
+                    {t("leadsEmpty")}
+                </p>
+            )}
         </section>
-    ) : null;
+    );
 
     const hypothesisSection = (
         <section className="flex flex-col gap-2">
@@ -352,36 +377,22 @@ export function CellExplanationRow({
     );
 
     // Layout: centered title strip on top with the close button
-    // anchored to the right edge, then the four sections (filtered
-    // down to the ones that actually have content) laid out side-by-
-    // side with vertical separator lines between them. The flex row
-    // wraps on narrow viewports so each section keeps a usable
-    // minimum width; `border-l border-border` gates the separator on
-    // every section after the first.
+    // anchored to the right edge, then all four sections laid out
+    // side-by-side with vertical separator lines between them. Every
+    // section renders unconditionally — empty ones show null-state
+    // copy — so the layout doesn't shift when content fills in. The
+    // flex row wraps on narrow viewports so each section keeps a
+    // usable minimum width.
     interface BodySection {
         readonly key: string;
         readonly node: ReactNode;
     }
-    const bodySections: ReadonlyArray<BodySection> = (
-        [
-            observationsSection !== null
-                ? {
-                      key: SECTION_KEY_OBSERVATIONS,
-                      node: observationsSection,
-                  }
-                : null,
-            deductionsSection !== null
-                ? {
-                      key: SECTION_KEY_DEDUCTIONS,
-                      node: deductionsSection,
-                  }
-                : null,
-            leadsSection !== null
-                ? { key: SECTION_KEY_LEADS, node: leadsSection }
-                : null,
-            { key: SECTION_KEY_HYPOTHESIS, node: hypothesisSection },
-        ] as ReadonlyArray<BodySection | null>
-    ).filter((s): s is BodySection => s !== null);
+    const bodySections: ReadonlyArray<BodySection> = [
+        { key: SECTION_KEY_OBSERVATIONS, node: observationsSection },
+        { key: SECTION_KEY_DEDUCTIONS, node: deductionsSection },
+        { key: SECTION_KEY_LEADS, node: leadsSection },
+        { key: SECTION_KEY_HYPOTHESIS, node: hypothesisSection },
+    ];
 
     return (
         <div className="flex flex-col">
