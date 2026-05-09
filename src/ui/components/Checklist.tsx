@@ -9,7 +9,7 @@ import {
     type HypothesisValue,
 } from "../../logic/Hypothesis";
 import { CellLayout } from "./CellLayout";
-import { CellWhyPopover, hypothesisValueFor } from "./CellWhyPopover";
+import { CellExplanationRow, hypothesisValueFor } from "./CellExplanationRow";
 import {
     CELL_TONE_NEUTRAL_CLASS,
     CELL_TONE_Y_CLASS,
@@ -71,7 +71,6 @@ import { Suggestion } from "../../logic/Suggestion";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useSelection } from "../SelectionContext";
 import { useClue } from "../state";
-import { useWhyHoverIntent } from "../checklistPopoverIntent";
 import {
     registerChecklistFocusHandler,
     rememberChecklistCell,
@@ -87,7 +86,6 @@ import {
 } from "../motion";
 import { useConfetti } from "../hooks/useConfetti";
 import { Envelope, LightbulbIcon } from "./Icons";
-import { InfoPopover } from "./InfoPopover";
 
 /**
  * Box around the grid nav ring. Setup mode extends the ring to
@@ -237,12 +235,11 @@ export function Checklist() {
         popoverCell,
         setPopoverCell,
     } = useSelection();
-    const {
-        onCellPointerEnter,
-        onCellPointerLeave,
-        onGridLeave,
-        cancelExitTimer,
-    } = useWhyHoverIntent();
+    // Local alias — the SelectionContext field is named for the old
+    // popover, but its meaning ("which cell's explanation is currently
+    // exposed") still fits the inline-row model.
+    const expandedCell = popoverCell;
+    const setExpandedCell = setPopoverCell;
     const setup = state.setup;
     const result = derived.deductionResult;
     const footnotes = derived.footnotes;
@@ -290,22 +287,24 @@ export function Checklist() {
     //   - no why popover is open (`popoverCell === null`).
     const popoverCellRef = useRef<Cell | null>(popoverCell);
     popoverCellRef.current = popoverCell;
-    // Touch-only "first tap dismisses, second tap opens" gate. On
-    // touch, tapping a cell while a popover is already open on a
-    // different cell should dismiss the open popover and NOT swap
-    // it onto the freshly tapped cell — the user has to tap the new
-    // cell a second time to see its popover. Mouse and keyboard
-    // continue to swap on hover / open on click as before; on those
-    // input types, peeking at adjacent cells is cheap and useful.
+    // Touch two-tap protocol. On touch devices, the first tap on a
+    // cell only focuses it; a second tap on the already-focused cell
+    // is what opens its explanation row. Mouse and keyboard remain
+    // single-action: clicking or pressing Enter/Space immediately
+    // toggles the row.
     //
-    // The pointerdown handler on each popover-interactive cell sets
-    // this flag when the conditions match. Radix's
-    // `onPointerDownOutside` then closes the previously-open popover,
-    // and the click that follows would normally fire `onOpenChange(true)`
-    // on the freshly tapped cell — we consume the flag there to
-    // suppress that open. The flag self-resets at the start of every
-    // pointerdown so a stale value can never carry over.
-    const dismissNextTouchOpenRef = useRef(false);
+    // `pointerdown` fires before the browser moves focus to the tapped
+    // element, so checking `document.activeElement === currentTarget`
+    // at that moment tells us whether THIS cell was already focused
+    // before this tap (i.e. the second tap of a two-tap sequence). The
+    // value is consumed by the cell's onClick handler. We set `null`
+    // for non-touch pointers so onClick can detect "mouse / keyboard"
+    // and skip the two-tap gating.
+    const wasTouchSecondTapRef = useRef<boolean | null>(null);
+    // DOM ref for the currently-open explanation row. Used by the
+    // outside-click effect below to decide whether a click should
+    // close the row.
+    const explainRowNodeRef = useRef<HTMLElement | null>(null);
     // Map from `ownerCellKey` to the popover-interactive cell's DOM
     // node. Each such cell registers itself via a callback ref. The
     // popover-cell-changed effect below uses this map to move focus
@@ -449,6 +448,93 @@ export function Checklist() {
         }
     }, [popoverCell, playerColumnKeys]);
 
+    // Open-cell metrics for the cell-to-details visual seam. The
+    // explanation row's accent border-t paints across the entire row,
+    // including the slice directly below the open cell — that 2px
+    // line breaks the "one continuous outline" feel. We measure the
+    // open cell's left/width relative to the explanation row's
+    // content td (`explainRowNodeRef`) and render a `bg-panel` cover
+    // strip at exactly that horizontal range, masking the border at
+    // the cell's column. ResizeObservers on both nodes keep the
+    // metrics current through table resizes / layout shifts.
+    interface CellMetrics {
+        readonly left: number;
+        readonly width: number;
+    }
+    const [openCellMetrics, setOpenCellMetrics] =
+        useState<CellMetrics | null>(null);
+    useLayoutEffect(() => {
+        if (popoverCell === null) {
+            setOpenCellMetrics(null);
+            return;
+        }
+        const key = `${ownerKey(popoverCell.owner, playerColumnKeys)}-${String(popoverCell.card)}`;
+        const cellNode = cellNodesByKeyRef.current.get(key);
+        const rowNode = explainRowNodeRef.current;
+        if (!cellNode || !rowNode) {
+            setOpenCellMetrics(null);
+            return;
+        }
+        const measure = () => {
+            const cellRect = cellNode.getBoundingClientRect();
+            const rowRect = rowNode.getBoundingClientRect();
+            setOpenCellMetrics({
+                left: cellRect.left - rowRect.left,
+                width: cellRect.width,
+            });
+        };
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(cellNode);
+        observer.observe(rowNode);
+        return () => observer.disconnect();
+    }, [popoverCell, playerColumnKeys]);
+
+    // Close on Escape, regardless of where focus is currently parked
+    // (the open cell, a control inside the explanation row, or any
+    // other element). Only active while a row is open so we don't
+    // shadow Esc handling elsewhere.
+    useEffect(() => {
+        if (expandedCell === null) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                e.preventDefault();
+                setExpandedCell(null);
+            }
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [expandedCell, setExpandedCell]);
+
+    // Close on pointerdown outside the open cell + explanation row.
+    // The cell node lookup is by the same key the focus-restore effect
+    // uses; the row node is captured by the explanation row's callback
+    // ref. A click landing inside either node is "still engaged" and
+    // does not close.
+    useEffect(() => {
+        if (expandedCell === null) return;
+        const onPointerDownOutside = (e: PointerEvent) => {
+            const target = e.target as Node | null;
+            if (target === null) return;
+            const key = `${ownerKey(expandedCell.owner, playerColumnKeys)}-${String(expandedCell.card)}`;
+            const cellNode = cellNodesByKeyRef.current.get(key);
+            const rowNode = explainRowNodeRef.current;
+            if (cellNode && cellNode.contains(target)) return;
+            if (rowNode && rowNode.contains(target)) return;
+            setExpandedCell(null);
+        };
+        // Use capture phase so we run before any click handlers inside
+        // the table (e.g. tapping a different cell) — the cell's own
+        // click handler will then re-establish the right open state.
+        window.addEventListener("pointerdown", onPointerDownOutside, true);
+        return () =>
+            window.removeEventListener(
+                "pointerdown",
+                onPointerDownOutside,
+                true,
+            );
+    }, [expandedCell, playerColumnKeys, setExpandedCell]);
+
     const owners: ReadonlyArray<Owner> = allOwners(setup);
 
     // Flat (card → row) index used for arrow-key grid navigation.
@@ -477,6 +563,7 @@ export function Checklist() {
     const tableRowEntryTransition = useReducedTransition(
         TABLE_ROW_ENTRY_TRANSITION,
     );
+    const explainRowTransition = useReducedTransition(EXPLAIN_ROW_TRANSITION);
     const tableCollapseTransition = useReducedTransition(
         TABLE_COLLAPSE_TRANSITION,
     );
@@ -721,6 +808,146 @@ export function Checklist() {
     // In Setup mode the trailing "+ add player" column adds one more.
     const cardSpan = 1 + owners.length;
 
+    // Build the contents of the inline explanation row. Computed once
+    // for the currently-expanded cell (if any) instead of per-cell so
+    // the heavy `buildCellWhy` chain only runs once. The wrapping row
+    // is rendered inside the per-card-row loop below; this `useMemo`
+    // produces only the body element.
+    const explainContent = useMemo(() => {
+        if (popoverCell === null) return null;
+        const value = getCellByOwnerCard(
+            knowledge,
+            popoverCell.owner,
+            popoverCell.card,
+        );
+        const explainHypothesisValue = hypothesisValueFor(
+            hypotheses,
+            popoverCell,
+        );
+        const explainStatus = statusFor(
+            popoverCell,
+            realKnowledge,
+            jointKnowledge,
+            hypotheses,
+            jointFailed,
+        );
+        const explainDisplay = displayFor(value, explainStatus);
+        const explainFootnotes = footnotesForCell(footnotes, popoverCell);
+        const explainCellWhy = buildCellWhy({
+            provenance:
+                explainStatus.kind === "derived"
+                    ? jointProvenance
+                    : provenance,
+            suggestions,
+            accusations,
+            setup,
+            owner: popoverCell.owner,
+            card: popoverCell.card,
+            tDeduce: t,
+            tReasons,
+        });
+        const observedForCell =
+            popoverCell.owner._tag === "Player" &&
+            state.knownCards.some(
+                kc =>
+                    popoverCell.owner._tag === "Player" &&
+                    kc.player === popoverCell.owner.player &&
+                    kc.card === popoverCell.card,
+            );
+        return (
+            <CellExplanationRow
+                cell={popoverCell}
+                setup={setup}
+                status={explainStatus}
+                hypotheses={hypotheses}
+                hypothesisValue={explainHypothesisValue}
+                onHypothesisChange={(
+                    next: HypothesisValue | undefined,
+                ) => {
+                    const prevValue = explainHypothesisValue;
+                    const cellStatusKind =
+                        explainStatus.kind as CellHypothesisStatus;
+                    if (next === undefined) {
+                        dispatch({
+                            type: "clearHypothesis",
+                            cell: popoverCell,
+                        });
+                        if (prevValue !== undefined) {
+                            hypothesisCleared({
+                                previousValue: prevValue,
+                                cellStatus: cellStatusKind,
+                                source: "click",
+                            });
+                        }
+                    } else {
+                        dispatch({
+                            type: "setHypothesis",
+                            cell: popoverCell,
+                            value: next,
+                        });
+                        hypothesisSet({
+                            value: next,
+                            previousValue:
+                                prevValue ?? ANALYTICS_PREV_OFF,
+                            cellStatus: cellStatusKind,
+                            source: "click",
+                        });
+                    }
+                }}
+                whyText={explainCellWhy.chainText}
+                footnoteNumbers={explainFootnotes}
+                display={explainDisplay}
+                observed={observedForCell}
+                onObservationChange={(next: boolean) => {
+                    if (popoverCell.owner._tag !== "Player") return;
+                    const ownerPlayer = popoverCell.owner.player;
+                    if (next) {
+                        dispatch({
+                            type: "addKnownCard",
+                            card: KnownCard({
+                                player: ownerPlayer,
+                                card: popoverCell.card,
+                            }),
+                        });
+                    } else {
+                        const idx = state.knownCards.findIndex(
+                            kc =>
+                                kc.player === ownerPlayer &&
+                                kc.card === popoverCell.card,
+                        );
+                        if (idx >= 0) {
+                            dispatch({
+                                type: "removeKnownCard",
+                                index: idx,
+                            });
+                        }
+                    }
+                }}
+                selfPlayerId={state.selfPlayerId}
+                onClose={() => setExpandedCell(null)}
+            />
+        );
+    }, [
+        popoverCell,
+        knowledge,
+        hypotheses,
+        realKnowledge,
+        jointKnowledge,
+        jointFailed,
+        footnotes,
+        provenance,
+        jointProvenance,
+        suggestions,
+        accusations,
+        setup,
+        state.knownCards,
+        state.selfPlayerId,
+        dispatch,
+        setExpandedCell,
+        t,
+        tReasons,
+    ]);
+
     return (
         <section
             ref={rootRef}
@@ -734,29 +961,6 @@ export function Checklist() {
             // breakpoint is active.
             data-tour-anchor="desktop-checklist-area"
             className="min-w-max rounded-[var(--radius)] border border-border bg-panel p-4"
-            onMouseLeave={onCellPointerLeave}
-            onBlur={e => {
-                // Focus left the checklist root entirely (relatedTarget
-                // is outside the section). Exit popovers mode so the
-                // tab key moving focus away from the grid doesn't
-                // leave a stranded popover + suggestion highlight.
-                //
-                // Special-case: focus moving INTO the portaled popover
-                // content counts as still-engaged. The popover lives in
-                // `document.body`, so `currentTarget.contains` returns
-                // false even when the user is interacting with it; we
-                // identify it via the `data-popover-zone="checklist"`
-                // marker that the InfoPopover stamps on its Content.
-                const next = e.relatedTarget as Node | null;
-                if (next && e.currentTarget.contains(next)) return;
-                if (
-                    next instanceof Element
-                    && next.closest('[data-popover-zone="checklist"]')
-                ) {
-                    return;
-                }
-                onGridLeave();
-            }}
         >
             <div className="shrink-0 [@media(min-width:800px)]:sticky [@media(min-width:800px)]:left-9 [@media(min-width:800px)]:max-w-[calc(100vw-4.5rem)]">
                 <CaseFileHeader knowledge={knowledge} />
@@ -819,8 +1023,105 @@ export function Checklist() {
                                     className="border-r border-b border-border bg-category-header"
                                 />
                             </motion.tr>,
-                            ...category.cards.map(entry => {
-                                return (
+                            ...category.cards.flatMap(entry => {
+                                const showExplain =
+                                    popoverCell !== null &&
+                                    popoverCell.card === entry.id;
+                                // Inline expansion row, inserted directly
+                                // BELOW the open cell's row. Two td's:
+                                //   - First td continues the sticky-left
+                                //     card-name column visually (blank,
+                                //     bg-panel, no right border).
+                                //   - Second td spans the rest of the
+                                //     row and holds the height-animated
+                                //     details box. The accent border on
+                                //     the box is open on the LEFT so it
+                                //     reads as connected to the empty
+                                //     leftmost area, with text starting
+                                //     aligned with the second column.
+                                const explainTr = showExplain ? (
+                                    <motion.tr
+                                        key={`explain-${String(entry.id)}`}
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={explainRowTransition}
+                                        className="relative z-[var(--z-checklist-explain-row)]"
+                                    >
+                                        <td
+                                            className={`${STICKY_FIRST_COL} bg-panel border-b border-border p-0`}
+                                            data-tour-sticky-left=""
+                                        />
+                                        <td
+                                            colSpan={cardSpan - 1}
+                                            className="relative p-0"
+                                            ref={(
+                                                el: HTMLTableCellElement | null,
+                                            ) => {
+                                                explainRowNodeRef.current = el;
+                                            }}
+                                        >
+                                            <AnimatePresence propagate>
+                                                <motion.div
+                                                    key="content"
+                                                    initial={{
+                                                        height: 0,
+                                                        opacity: 0,
+                                                    }}
+                                                    animate={{
+                                                        // eslint-disable-next-line i18next/no-literal-string -- CSS auto value
+                                                        height: "auto",
+                                                        opacity: 1,
+                                                    }}
+                                                    exit={{
+                                                        height: 0,
+                                                        opacity: 0,
+                                                    }}
+                                                    transition={
+                                                        explainRowTransition
+                                                    }
+                                                    style={
+                                                        STYLE_OVERFLOW_HIDDEN
+                                                    }
+                                                    // `contain-inline-size`
+                                                    // stops the inner
+                                                    // sections' min-widths
+                                                    // from propagating up
+                                                    // into <main>'s
+                                                    // min-w-max calculation
+                                                    // and pushing the
+                                                    // checklist past the
+                                                    // SuggestionLogPanel.
+                                                    className="border-t-2 border-r-2 border-b-2 border-accent bg-panel contain-inline-size"
+                                                >
+                                                    {explainContent}
+                                                </motion.div>
+                                            </AnimatePresence>
+                                            {/* Mask the 2px accent border
+                                                directly under the open cell
+                                                so the cell flows seamlessly
+                                                into the details box. Lives
+                                                outside the height-animated
+                                                motion.div (which has
+                                                `overflow: hidden` and would
+                                                otherwise clip the cover) so
+                                                it can paint over the
+                                                motion.div's `border-t`. */}
+                                            {openCellMetrics !== null && (
+                                                <div
+                                                    aria-hidden
+                                                    className="pointer-events-none absolute h-[2px] bg-panel"
+                                                    style={{
+                                                        top: 0,
+                                                        left: `${openCellMetrics.left}px`,
+                                                        width: `${openCellMetrics.width}px`,
+                                                    }}
+                                                />
+                                            )}
+                                        </td>
+                                    </motion.tr>
+                                ) : null;
+                                const cardRow = (
                                 <motion.tr
                                     key={String(entry.id)}
                                     {...tableRowMotionProps}
@@ -880,28 +1181,6 @@ export function Checklist() {
                                         // (the wizard's PlayerColumnCardList
                                         // owns that flow).
                                         const playInteractive = isPlayerCell;
-                                        // Derived cells (value follows
-                                        // from a hypothesis, not from real
-                                        // facts alone) chain through joint
-                                        // provenance so the chain text
-                                        // includes the hypothesis as a
-                                        // "Given" step. All other cells
-                                        // chain through real-only
-                                        // provenance.
-                                        const cellWhy = buildCellWhy({
-                                            provenance:
-                                                hypothesisStatus.kind ===
-                                                "derived"
-                                                    ? jointProvenance
-                                                    : provenance,
-                                            suggestions,
-                                            accusations,
-                                            setup,
-                                            owner,
-                                            card: entry.id,
-                                            tDeduce: t,
-                                            tReasons,
-                                        });
                                         const showChip =
                                             footnoteNumbers.length > 0
                                             && value === undefined;
@@ -964,39 +1243,6 @@ export function Checklist() {
                                             isHighlighted,
                                             hypothesisStatus,
                                         );
-                                        const thisCellForHover = Cell(
-                                            owner,
-                                            entry.id,
-                                        );
-                                        // Hover handlers are provided for
-                                        // every cell so the grid-leave /
-                                        // decay accounting stays consistent
-                                        // whether or not this particular
-                                        // cell has a deduction to show.
-                                        // Non-deducible cells never satisfy
-                                        // the "open a popover" path, but
-                                        // moving onto them still resets the
-                                        // decay timer so sweeping across a
-                                        // mix of deducible and empty cells
-                                        // behaves intuitively.
-                                        const hoverHandlers = {
-                                            onPointerEnter: (
-                                                e: React.PointerEvent<HTMLTableCellElement>,
-                                            ) => {
-                                                if (e.pointerType !== "mouse")
-                                                    return;
-                                                onCellPointerEnter(
-                                                    thisCellForHover,
-                                                );
-                                            },
-                                            onPointerLeave: (
-                                                e: React.PointerEvent<HTMLTableCellElement>,
-                                            ) => {
-                                                if (e.pointerType !== "mouse")
-                                                    return;
-                                                onCellPointerLeave();
-                                            },
-                                        };
                                         // Arrow-key grid navigation: walk to
                                         // the nearest neighbour cell with a
                                         // data-cell-row/col pair. Shared by
@@ -1054,28 +1300,14 @@ export function Checklist() {
                                         const ownerCellKey = `${ownerKey(owner, playerColumnKeys)}-${String(entry.id)}`;
                                         let cell: ReactNode;
                                         if (popoverInteractive) {
-                                            // Either:
-                                            //   - Play-mode player cell with
-                                            //     a deduction (the original
-                                            //     case), OR
-                                            //   - Play-mode case-file cell
-                                            //     with a deduction (the
-                                            //     case file is read-only
-                                            //     and the value is always
-                                            //     derived).
-                                            //
-                                            // Setup mode intentionally
-                                            // skips this branch: the
-                                            // checklist there is for
-                                            // entering inputs, not
-                                            // exploring deductions.
-                                            //
-                                            // Both render the same
-                                            // InfoPopover wrapper so the
-                                            // deduction chain is reachable
-                                            // by hover, click, tap, and
-                                            // keyboard (Enter / Space) with
-                                            // arrow-key grid navigation.
+                                            // Play-mode cell (player or
+                                            // case file). Click / tap /
+                                            // Enter / Space toggles the
+                                            // inline explanation row above
+                                            // this cell's table row. Setup
+                                            // mode skips this branch — the
+                                            // checklist there is for input,
+                                            // not exploration.
                                             const thisCell = Cell(
                                                 owner,
                                                 entry.id,
@@ -1084,247 +1316,161 @@ export function Checklist() {
                                                 popoverCell,
                                                 thisCell,
                                             );
-                                            // Observation lookup for this
-                                            // cell. Y-only fact: did the
-                                            // user mark this player as
-                                            // owning this card via setup
-                                            // or the popover?
-                                            const observedForCell =
-                                                thisCell.owner._tag === "Player" &&
-                                                state.knownCards.some(
-                                                    kc =>
-                                                        kc.player ===
-                                                            (thisCell.owner._tag === "Player"
-                                                                ? thisCell.owner.player
-                                                                : null) &&
-                                                        kc.card === thisCell.card,
-                                                );
-                                            const popoverBody = (
-                                                <CellWhyPopover
-                                                    cell={thisCell}
-                                                    setup={setup}
-                                                    status={hypothesisStatus}
-                                                    hypotheses={hypotheses}
-                                                    hypothesisValue={hypothesisValue}
-                                                    onHypothesisChange={(
-                                                        next: HypothesisValue | undefined,
-                                                    ) => {
-                                                        const prevValue = hypothesisValue;
-                                                        const cellStatusKind = hypothesisStatus.kind as CellHypothesisStatus;
-                                                        if (next === undefined) {
-                                                            dispatch({
-                                                                type: "clearHypothesis",
-                                                                cell: thisCell,
-                                                            });
-                                                            if (prevValue !== undefined) {
-                                                                hypothesisCleared({
-                                                                    previousValue: prevValue,
-                                                                    cellStatus: cellStatusKind,
-                                                                    source: "click",
-                                                                });
-                                                            }
+                                            const interactiveTdClassName =
+                                                isOpen
+                                                    ? `${tdClassName}${CELL_EXPANDED}${cellExpandedToneClass(display)}`
+                                                    : tdClassName;
+                                            cell = (
+                                                <motion.td
+                                                    key={ownerCellKey}
+                                                    ref={(el: HTMLElement | null) => {
+                                                        if (el) {
+                                                            cellNodesByKeyRef.current.set(
+                                                                ownerCellKey,
+                                                                el,
+                                                            );
                                                         } else {
-                                                            dispatch({
-                                                                type: "setHypothesis",
-                                                                cell: thisCell,
-                                                                value: next,
-                                                            });
-                                                            hypothesisSet({
-                                                                value: next,
-                                                                previousValue:
-                                                                    prevValue ?? ANALYTICS_PREV_OFF,
-                                                                cellStatus: cellStatusKind,
-                                                                source: "click",
-                                                            });
+                                                            cellNodesByKeyRef.current.delete(
+                                                                ownerCellKey,
+                                                            );
                                                         }
                                                     }}
-                                                    whyText={cellWhy.chainText}
-                                                    footnoteNumbers={footnoteNumbers}
-                                                    display={display}
-                                                    observed={observedForCell}
-                                                    onObservationChange={(
-                                                        next: boolean,
+                                                    className={interactiveTdClassName}
+                                                    layout={LAYOUT_POSITION}
+                                                    exit={columnCellExit}
+                                                    style={STYLE_COLUMN_CELL_VISIBLE}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    aria-expanded={isOpen}
+                                                    data-cell-row={rowIdx}
+                                                    data-cell-col={colIdx}
+                                                    {...firstCellAnchorAttr}
+                                                    onFocus={onCellFocus}
+                                                    onPointerDown={(
+                                                        e: React.PointerEvent<HTMLTableCellElement>,
                                                     ) => {
                                                         if (
-                                                            thisCell.owner._tag !==
-                                                            "Player"
-                                                        )
+                                                            e.pointerType !==
+                                                            "touch"
+                                                        ) {
+                                                            wasTouchSecondTapRef.current =
+                                                                null;
                                                             return;
-                                                        const ownerPlayer =
-                                                            thisCell.owner.player;
-                                                        if (next) {
-                                                            dispatch({
-                                                                type: "addKnownCard",
-                                                                card: KnownCard({
-                                                                    player: ownerPlayer,
-                                                                    card: thisCell.card,
-                                                                }),
-                                                            });
-                                                        } else {
-                                                            const idx =
-                                                                state.knownCards.findIndex(
-                                                                    kc =>
-                                                                        kc.player ===
-                                                                            ownerPlayer &&
-                                                                        kc.card ===
-                                                                            thisCell.card,
-                                                                );
-                                                            if (idx >= 0) {
-                                                                dispatch({
-                                                                    type: "removeKnownCard",
-                                                                    index: idx,
-                                                                });
-                                                            }
                                                         }
+                                                        // pointerdown fires
+                                                        // before the browser
+                                                        // moves focus on
+                                                        // touch, so the
+                                                        // pre-tap focus is
+                                                        // still in effect.
+                                                        // If THIS cell was
+                                                        // already focused,
+                                                        // this tap is the
+                                                        // second of a
+                                                        // two-tap sequence
+                                                        // on it.
+                                                        wasTouchSecondTapRef.current =
+                                                            document.activeElement ===
+                                                            e.currentTarget;
                                                     }}
-                                                    selfPlayerId={
-                                                        state.selfPlayerId
-                                                    }
-                                                />
-                                            );
-                                            cell = (
-                                                <InfoPopover
-                                                    key={ownerCellKey}
-                                                    content={popoverBody}
-                                                    variant="default"
-                                                    open={isOpen}
-                                                    onOpenChange={open => {
-                                                        if (open) {
-                                                            if (
-                                                                dismissNextTouchOpenRef.current
-                                                            ) {
-                                                                // Touch tap
-                                                                // on a different
-                                                                // cell while a
-                                                                // popover was
-                                                                // open: the
-                                                                // open popover
-                                                                // already closed
-                                                                // via Radix's
-                                                                // pointerdown-outside
-                                                                // path; suppress
-                                                                // this open so
-                                                                // the user has
-                                                                // to tap again
-                                                                // to see the
-                                                                // new cell's
-                                                                // popover.
-                                                                dismissNextTouchOpenRef.current = false;
-                                                                return;
-                                                            }
-                                                            // Explicit
-                                                            // activation
-                                                            // (click /
-                                                            // tap /
-                                                            // keyboard) —
-                                                            // overrides
-                                                            // any
-                                                            // in-flight
-                                                            // exit
-                                                            // timer.
-                                                            cancelExitTimer();
-                                                            setPopoverCell(
-                                                                thisCell,
+                                                    onClick={() => {
+                                                        const wasTouchSecondTap =
+                                                            wasTouchSecondTapRef.current;
+                                                        wasTouchSecondTapRef.current =
+                                                            null;
+                                                        const wasOpen = Equal.equals(
+                                                            popoverCellRef.current,
+                                                            thisCell,
+                                                        );
+                                                        if (
+                                                            wasTouchSecondTap ===
+                                                            null
+                                                        ) {
+                                                            // Mouse, pen,
+                                                            // or keyboard-
+                                                            // synthesized
+                                                            // click — single
+                                                            // action toggle.
+                                                            setExpandedCell(
+                                                                wasOpen
+                                                                    ? null
+                                                                    : thisCell,
                                                             );
-                                                        } else {
-                                                            setPopoverCell(
+                                                            return;
+                                                        }
+                                                        // Touch protocol.
+                                                        if (wasOpen) {
+                                                            // Tap open cell
+                                                            // again → close.
+                                                            setExpandedCell(
                                                                 null,
                                                             );
+                                                            return;
                                                         }
-                                                    }}
-                                                    onContentPointerEnter={
-                                                        cancelExitTimer
-                                                    }
-                                                    onContentPointerLeave={
-                                                        onCellPointerLeave
-                                                    }
-                                                    popoverZone="checklist"
-                                                >
-                                                    <motion.td
-                                                        ref={(el: HTMLElement | null) => {
-                                                            if (el) {
-                                                                cellNodesByKeyRef.current.set(
-                                                                    ownerCellKey,
-                                                                    el,
-                                                                );
-                                                            } else {
-                                                                cellNodesByKeyRef.current.delete(
-                                                                    ownerCellKey,
-                                                                );
-                                                            }
-                                                        }}
-                                                        className={tdClassName}
-                                                        layout={LAYOUT_POSITION}
-                                                        exit={columnCellExit}
-                                                        style={STYLE_COLUMN_CELL_VISIBLE}
-                                                        role="button"
-                                                        tabIndex={0}
-                                                        aria-haspopup={ARIA_HASPOPUP_DIALOG}
-                                                        data-cell-row={rowIdx}
-                                                        data-cell-col={colIdx}
-                                                        {...firstCellAnchorAttr}
-                                                        onFocus={onCellFocus}
-                                                        onPointerDown={e => {
-                                                            // Reset any stale
-                                                            // flag from a prior
-                                                            // gesture that
-                                                            // didn't complete a
-                                                            // click.
-                                                            dismissNextTouchOpenRef.current =
-                                                                false;
-                                                            if (
-                                                                e.pointerType
-                                                                    !== "touch"
-                                                            )
-                                                                return;
-                                                            // Touch tap on a
+                                                        if (
+                                                            popoverCellRef.current !==
+                                                            null
+                                                        ) {
+                                                            // Tap on a
                                                             // different cell
-                                                            // while a popover
-                                                            // is open: arm the
-                                                            // dismiss-not-open
-                                                            // gate. The flag
-                                                            // is consumed by
-                                                            // this cell's
-                                                            // onOpenChange a
-                                                            // few events later
-                                                            // when the click
-                                                            // would otherwise
-                                                            // open the new
-                                                            // popover.
-                                                            if (
-                                                                popoverCellRef.current
-                                                                    !== null
-                                                                && !Equal.equals(
-                                                                    popoverCellRef.current,
-                                                                    thisCell,
-                                                                )
-                                                            ) {
-                                                                dismissNextTouchOpenRef.current =
-                                                                    true;
-                                                            }
-                                                        }}
-                                                        onKeyDown={e => {
-                                                            // Enter/Space should open the
-                                                            // info popover. Radix binds
-                                                            // click-to-toggle via asChild,
-                                                            // so we synthesize a click.
-                                                            if (
-                                                                matches(
-                                                                    "action.toggle",
-                                                                    e.nativeEvent,
-                                                                )
-                                                            ) {
-                                                                e.preventDefault();
-                                                                e.currentTarget.click();
-                                                                return;
-                                                            }
-                                                            onGridArrowKey(e);
-                                                        }}
-                                                        {...hoverHandlers}
-                                                    >
-                                                        {renderTableCellContent(cellContent)}
-                                                    </motion.td>
-                                                </InfoPopover>
+                                                            // while a row
+                                                            // is open →
+                                                            // close. Browser
+                                                            // focus moves to
+                                                            // thisCell during
+                                                            // the click; the
+                                                            // next tap is the
+                                                            // second tap that
+                                                            // opens it.
+                                                            setExpandedCell(
+                                                                null,
+                                                            );
+                                                            return;
+                                                        }
+                                                        if (
+                                                            wasTouchSecondTap
+                                                        ) {
+                                                            // Second tap on
+                                                            // already-focused
+                                                            // cell with no
+                                                            // open row →
+                                                            // open this cell.
+                                                            setExpandedCell(
+                                                                thisCell,
+                                                            );
+                                                            return;
+                                                        }
+                                                        // First tap on an
+                                                        // unfocused cell with
+                                                        // no open row → just
+                                                        // focus (default
+                                                        // browser behavior),
+                                                        // don't open.
+                                                    }}
+                                                    onKeyDown={(
+                                                        e: React.KeyboardEvent<HTMLTableCellElement>,
+                                                    ) => {
+                                                        // Enter / Space
+                                                        // synthesizes a
+                                                        // click → goes
+                                                        // through the
+                                                        // single-action
+                                                        // toggle path above.
+                                                        if (
+                                                            matches(
+                                                                "action.toggle",
+                                                                e.nativeEvent,
+                                                            )
+                                                        ) {
+                                                            e.preventDefault();
+                                                            e.currentTarget.click();
+                                                            return;
+                                                        }
+                                                        onGridArrowKey(e);
+                                                    }}
+                                                >
+                                                    {renderTableCellContent(cellContent)}
+                                                </motion.td>
                                             );
                                         } else if (isPlayerCell) {
                                             // Play-mode player cell with no
@@ -1345,7 +1491,6 @@ export function Checklist() {
                                                     {...firstCellAnchorAttr}
                                                     onFocus={onCellFocus}
                                                     onKeyDown={onGridArrowKey}
-                                                    {...hoverHandlers}
                                                 >
                                                     {renderTableCellContent(cellContent)}
                                                 </motion.td>
@@ -1359,7 +1504,6 @@ export function Checklist() {
                                                     exit={columnCellExit}
                                                     style={STYLE_COLUMN_CELL_VISIBLE}
                                                     {...firstCellAnchorAttr}
-                                                    {...hoverHandlers}
                                                 >
                                                     {renderTableCellContent(cellContent)}
                                                 </motion.td>
@@ -1370,6 +1514,9 @@ export function Checklist() {
                                     </AnimatePresence>
                                 </motion.tr>
                                 );
+                                return explainTr !== null
+                                    ? [cardRow, explainTr]
+                                    : [cardRow];
                             }),
                         ];
                     })}
@@ -1601,7 +1748,6 @@ const CSS_BORDER = "var(--color-border)";
 const CSS_WHITE = "#ffffff";
 const CSS_INK = "#2a1f12";
 const CSS_DANGER = "var(--color-danger)";
-const ARIA_HASPOPUP_DIALOG = "dialog";
 const MOTION_SYNC: "sync" = "sync";
 const MOTION_WAIT: "wait" = "wait";
 const MOTION_POP_LAYOUT: "popLayout" = "popLayout";
@@ -1643,6 +1789,57 @@ const TABLE_COLUMN_HIDDEN = { maxWidth: 0, opacity: 0 } as const;
 const TABLE_COLUMN_VISIBLE = { maxWidth: CELL_EXPAND_CAP_PX, opacity: 1 } as const;
 const STYLE_OVERFLOW_HIDDEN = { overflow: "hidden" } as const;
 const STYLE_COLUMN_CELL_VISIBLE = { maxWidth: CELL_EXPAND_CAP_PX } as const;
+
+/**
+ * Inline explanation row animation. The row is inserted above the
+ * tapped cell's table row and animates its content from height 0 to
+ * auto on enter (and back on exit). Duration matches `TABLE_ENTRY_DURATION`
+ * so the row reads as part of the same family of table animations.
+ */
+const EXPLAIN_ROW_DURATION = Duration.millis(220);
+const EXPLAIN_ROW_TRANSITION: Transition = {
+    duration: Duration.toSeconds(EXPLAIN_ROW_DURATION),
+    ease: TABLE_EASE,
+};
+
+/**
+ * Class added to the open cell's `<motion.td>`. Replaces the 1px tone
+ * borders with a 2px accent border on the three sides that aren't
+ * shared with the details row; the bottom border is dropped entirely
+ * so the cell flows seamlessly into the details box's `border-t-2`.
+ *
+ * Background is set per-cell via `cellExpandedToneClass(display)` so
+ * Y / N cells keep their green / red tone but fade to the panel color
+ * at the very bottom, while blank cells get the flat panel color
+ * directly.
+ *
+ * The `cell-expanded-focus` utility (defined in `globals.css`) replaces
+ * the standard 4-sided focus ring with a 3-sided box-shadow on
+ * `:focus`, so even with the cell focused there's no horizontal line
+ * across its bottom edge. The bottom corners are kept sharp (no
+ * `rounded-b`) so the ring's left and right ends drop cleanly down to
+ * the explanation row.
+ */
+const CELL_EXPANDED =
+    " !border-2 !border-accent !border-b-0 !rounded-none cell-expanded-focus focus:!ring-0 focus:!ring-offset-0 z-[var(--z-checklist-cell-focus)]";
+
+const CELL_EXPANDED_TONE_BLANK = " !bg-panel" as const;
+const CELL_EXPANDED_TONE_Y = " cell-expanded-tone-yes" as const;
+const CELL_EXPANDED_TONE_N = " cell-expanded-tone-no" as const;
+
+const cellExpandedToneClass = (display: CellDisplay): string => {
+    const tone: CellValue | undefined =
+        display.tag === "real"
+            ? display.value
+            : display.tag === "hypothesis"
+              ? display.value
+              : display.tag === "derived"
+                ? display.value
+                : undefined;
+    if (tone === Y) return CELL_EXPANDED_TONE_Y;
+    if (tone === N) return CELL_EXPANDED_TONE_N;
+    return CELL_EXPANDED_TONE_BLANK;
+};
 
 function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
     const t = useTranslations("deduce");
