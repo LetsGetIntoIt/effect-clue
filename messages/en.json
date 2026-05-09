@@ -200,6 +200,18 @@
             "paginator": "{current} of {total} · {player}"
         }
     },
+    "myHand": {
+        "title": "Your cards",
+        "empty": "Mark your cards in setup to see them here.",
+        "categoryLabel": "{category}:",
+        "toggleHide": "Hide my cards",
+        "toggleShow": "Show my cards"
+    },
+    "refuteHint": {
+        "canRefute": "You can refute with: {cards}",
+        "cannotRefute": "You can't refute this — none of your cards match.",
+        "join": ", "
+    },
     "deduce": {
         "title": "Deduction grid",
         "caseFileProgress": "Case file · {percent}% solved",
