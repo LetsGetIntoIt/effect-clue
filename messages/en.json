@@ -145,6 +145,27 @@
         "next": "Next",
         "skip": "Skip",
         "newGame": "Start over",
+        "cardPack": {
+            "title": "Pick a card pack",
+            "helperText": "The deck decides what cards exist. You can save your own custom packs after editing.",
+            "summary": "{categories} {categories, plural, one {category} other {categories}}, {cards} {cards, plural, one {card} other {cards}}",
+            "summaryEmpty": "No cards yet",
+            "validationEmpty": "Add at least one category to continue.",
+            "loadConfirm": "Loading a card pack will discard your current hand sizes, known cards, and suggestions. Continue?",
+            "customizeExpand": "Customize cards",
+            "customizeCollapse": "Done customizing",
+            "customize": {
+                "helperText": "Rename, add, or remove categories and cards. Drag-to-reorder + save-as-pack are coming soon.",
+                "addCategory": "+ add category",
+                "addCard": "+ add card",
+                "categoryNameAria": "Rename category {name}",
+                "cardNameAria": "Rename card {name}",
+                "removeCategoryTitle": "Remove category {name}",
+                "removeCategoryConfirm": "Remove {name}? Known-card marks and suggestions referencing its cards will be cleared.",
+                "removeCardTitle": "Remove card {name}",
+                "removeCardConfirm": "Remove {card}? Known-card marks and suggestions referencing this card will be cleared."
+            }
+        },
         "players": {
             "title": "Who's playing?",
             "turnOrderHint": "Enter players in turn order — the first player you list will be dealt first.",
@@ -170,6 +191,23 @@
             "adjustDealingTitle": "Adjust dealing",
             "firstDealtLegend": "Who was dealt the first card?",
             "firstDealtAuto": "Automatic — first player in turn order"
+        },
+        "myCards": {
+            "title": "Which cards do you have?",
+            "helperText": "Tick the cards you were dealt — the solver knows you don't have anything else.",
+            "yourHand": "Your hand",
+            "summary": "{count} {count, plural, one {card} other {cards}} marked",
+            "summaryEmpty": "No cards marked"
+        },
+        "knownCards": {
+            "title": "Do you know any other player's cards?",
+            "helperText": "If you've seen another player's card — refuted, snuck a peek, etc. — mark it here.",
+            "noOtherPlayers": "Add more players to mark other-player cards.",
+            "summary": "{count} {count, plural, one {card} other {cards}} marked across other players",
+            "summaryEmpty": "No other-player cards marked",
+            "prevPlayer": "Previous player",
+            "nextPlayer": "Next player",
+            "paginator": "{current} of {total} · {player}"
         }
     },
     "deduce": {

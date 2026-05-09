@@ -1,0 +1,118 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+import { useMemo } from "react";
+import { KnownCard } from "../../../logic/InitialKnowledge";
+import type { Card, Player } from "../../../logic/GameObjects";
+import { useClue } from "../../state";
+
+/**
+ * One column of "does this player own this card?" toggles.
+ *
+ * Used by the M6 wizard's step 5 (My cards) and step 6 (Other
+ * players' cards). The legacy `<Checklist inSetup>` cell-based grid
+ * solves the same problem but carries deductions, popovers, leads,
+ * and status glyphs that are overkill for "tick the cards you have."
+ *
+ * Toggle dispatches `addKnownCard` / `removeKnownCard` against the
+ * existing `knownCards` slice. Layout:
+ *
+ * - One header row with the player name (or a custom heading from
+ *   the parent for "My cards" — pass `heading` to override).
+ * - One row per category, with the category name as a sub-heading
+ *   followed by checkbox rows for each card in that category.
+ *
+ * The component doesn't paginate; the parent controls layout
+ * (single column on mobile, grid on desktop) by stacking instances.
+ */
+interface Props {
+    readonly player: Player;
+    readonly heading?: string;
+}
+
+export function PlayerColumnCardList({ player, heading }: Props) {
+    const tSetup = useTranslations("setup");
+    const { state, dispatch } = useClue();
+    const setup = state.setup;
+    const knownCards = state.knownCards;
+
+    // Cache "owns this card?" lookups per render so the per-row
+    // toggle doesn't scan `knownCards` linearly.
+    const ownedSet = useMemo(() => {
+        const set = new Set<Card>();
+        for (const kc of knownCards) {
+            if (kc.player === player) set.add(kc.card);
+        }
+        return set;
+    }, [knownCards, player]);
+
+    const toggle = (card: Card) => {
+        if (ownedSet.has(card)) {
+            const idx = knownCards.findIndex(
+                kc => kc.player === player && kc.card === card,
+            );
+            if (idx >= 0) {
+                dispatch({ type: "removeKnownCard", index: idx });
+            }
+        } else {
+            dispatch({
+                type: "addKnownCard",
+                card: KnownCard({ player, card }),
+            });
+        }
+    };
+
+    const heading_ = heading ?? String(player);
+
+    return (
+        <div className="flex min-w-0 flex-col gap-2 rounded border border-border/40 p-3">
+            <h3 className="m-0 truncate text-[14px] font-semibold">
+                {heading_}
+            </h3>
+            <div className="flex flex-col gap-3">
+                {setup.categories.map(category => (
+                    <div
+                        key={String(category.id)}
+                        className="flex flex-col gap-1"
+                    >
+                        <span className="text-[11px] uppercase tracking-wide text-muted">
+                            {category.name}
+                        </span>
+                        <ul className="m-0 flex list-none flex-col gap-1 p-0">
+                            {category.cards.map(entry => {
+                                const owned = ownedSet.has(entry.id);
+                                return (
+                                    <li
+                                        key={String(entry.id)}
+                                        className="flex items-center gap-2"
+                                    >
+                                        <label className="flex w-full cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-hover">
+                                            <input
+                                                type="checkbox"
+                                                checked={owned}
+                                                onChange={() =>
+                                                    toggle(entry.id)
+                                                }
+                                                aria-label={tSetup(
+                                                    "knownCardCheckboxAria",
+                                                    {
+                                                        player: String(player),
+                                                        card: entry.name,
+                                                    },
+                                                )}
+                                            />
+                                            <span className="text-[13px]">
+                                                {entry.name}
+                                            </span>
+                                        </label>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
