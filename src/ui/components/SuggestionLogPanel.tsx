@@ -45,6 +45,7 @@ import { useSelection } from "../SelectionContext";
 import { TrashIcon, XIcon } from "./Icons";
 import { InfoPopover } from "./InfoPopover";
 import { AccusationForm, type AccusationFormHandle } from "./AccusationForm";
+import { RefuteHint } from "./MyHandPanel";
 import {
     SuggestionForm,
     type SuggestionFormHandle,
@@ -304,6 +305,7 @@ function AddSuggestion() {
                                 });
                             }}
                         />
+                        <RefuteHint />
                     </FormSlide>
                 ) : (
                     <FormSlide key="accusation" direction={1}>

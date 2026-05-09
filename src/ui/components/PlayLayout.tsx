@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { T_STANDARD, useReducedTransition } from "../motion";
 import { Checklist } from "./Checklist";
+import { MyHandPanel } from "./MyHandPanel";
 import { SuggestionLogPanel } from "./SuggestionLogPanel";
 
 // Non user-facing literals.
@@ -53,7 +54,16 @@ const slideVariants: Variants = {
  */
 export function PlayLayout({ mode }: { readonly mode: PlayMode }) {
     const isDesktop = useIsDesktop();
-    return isDesktop ? <DesktopPlayLayout /> : <MobilePlayLayout mode={mode} />;
+    return (
+        <div className="flex min-w-0 flex-col gap-3">
+            <MyHandPanel />
+            {isDesktop ? (
+                <DesktopPlayLayout />
+            ) : (
+                <MobilePlayLayout mode={mode} />
+            )}
+        </div>
+    );
 }
 
 function DesktopPlayLayout() {
