@@ -68,7 +68,7 @@ export function PlayLayout({ mode }: { readonly mode: PlayMode }) {
 
 function DesktopPlayLayout() {
     return (
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(320px,420px)] items-start gap-5">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,420px)] items-start gap-5">
             <Checklist />
             {/* The M10 swap-discoverability tour anchors here to
                 spotlight the entire suggest column on desktop, mirror
@@ -79,7 +79,7 @@ function DesktopPlayLayout() {
                 even after vertical scroll. */}
             <div
                 data-tour-anchor="desktop-suggest-area"
-                className="sticky right-5 top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px)+1.5rem)] max-h-[calc(100dvh-var(--contradiction-banner-offset,0px)-var(--header-offset,0px)-3rem)] min-w-0 overflow-y-auto"
+                className="sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px)+1.5rem)] max-h-[calc(100dvh-var(--contradiction-banner-offset,0px)-var(--header-offset,0px)-3rem)] min-w-0 overflow-y-auto"
             >
                 <SuggestionLogPanel />
             </div>

@@ -159,6 +159,12 @@
      */
     --z-local-raised: 10;
     --z-checklist-cell-hover: 20;
+    /* The inline explanation row sits just above the regular body
+       cells so its accent border paints over any cell hover/highlight
+       outline that might bleed into the row above. Still below the
+       focused cell so the open cell's own accent border layers over
+       the explanation row's top edge. */
+    --z-checklist-explain-row: 22;
     --z-checklist-cell-focus: 25;
     --z-checklist-sticky-column: 30;
     --z-checklist-sticky-handsize-input: 33;
@@ -270,4 +276,57 @@ h3 {
         outline-offset: 2px;
         border-radius: 3px;
     }
+}
+
+/* Open-cell focus indicator. The cell's accent border on top/left/
+   right (from `CELL_EXPANDED` in Checklist.tsx) already serves as
+   the visual anchor, but on focus we still want a stronger ring
+   that's distinct from the steady-state border. Box-shadow lets us
+   paint the ring on three sides only — no bottom — so the cell
+   keeps flowing visually into the explanation row below. The bottom
+   border-radius is also disabled in JSX so the ring's leftmost and
+   rightmost ends drop straight down at the cell's bottom corners
+   without curving. */
+/* The doubled class selector ensures we win specificity against
+   Tailwind's `focus:!ring-0` utility (which also uses !important and
+   therefore needs to be beaten on specificity, not just !important). */
+.cell-expanded-focus.cell-expanded-focus:focus,
+.cell-expanded-focus.cell-expanded-focus:focus-visible {
+    outline: none !important;
+    box-shadow:
+        0 -3px 0 var(--color-accent),
+        -3px 0 0 var(--color-accent),
+        3px 0 0 var(--color-accent) !important;
+}
+
+/* When the explanation row's section grid has an odd number of items,
+   make the last one span both columns so we don't leave an empty grid
+   cell with the parent's `bg-border` peeking through. Combined with
+   the 2-col container query in CellExplanationRow.tsx, this keeps
+   3-section configurations rendering as 2 + 1 (full-width) cleanly,
+   and 1-section configs as a single full-width row. */
+.cell-section-grid > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+}
+
+/* Open-cell tone gradients. When the open cell has a Y/N value the
+   user still wants to see the green/red tone at a glance, but the
+   very bottom should fade to the explanation row's panel color so the
+   cell feels visually continuous with the details flowing out below
+   it. Empty cells use a flat panel color (no gradient needed). */
+.cell-expanded-tone-yes {
+    background: linear-gradient(
+        to bottom,
+        var(--color-yes-bg) 0%,
+        var(--color-yes-bg) 65%,
+        var(--color-panel) 100%
+    ) !important;
+}
+.cell-expanded-tone-no {
+    background: linear-gradient(
+        to bottom,
+        var(--color-no-bg) 0%,
+        var(--color-no-bg) 65%,
+        var(--color-panel) 100%
+    ) !important;
 }

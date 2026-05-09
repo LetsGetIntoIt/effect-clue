@@ -113,7 +113,7 @@ describe("Checklist — deduce mode — top-level structure", () => {
 });
 
 describe("Checklist — deduce mode — cell affordances", () => {
-    test("body cells are popover triggers (no native checkboxes in the Checklist)", async () => {
+    test("body cells are explanation-row triggers (no native checkboxes in the Checklist)", async () => {
         render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForDeduceChecklist();
         // Checklist has no native-checkbox cells in deduce mode. (The
@@ -173,15 +173,15 @@ describe("Checklist — deduce mode — body layout", () => {
 });
 
 // -----------------------------------------------------------------------
-// Case-file body cells expose the same popover affordance as
+// Case-file body cells expose the same explanation-row affordance as
 // play-mode player cells when there's a deduction to explain — the
 // case file's value is always derived (the column is read-only), so
-// tooltipContent is the only thing the user sees, and they need a
-// hover/click/keyboard path to it.
+// the deduction-chain row is the only thing the user sees, and they
+// need a click/tap/keyboard path to it.
 // -----------------------------------------------------------------------
 
-describe("Checklist — case-file deduction popover", () => {
-    test("a deduced case-file cell exposes role=button + aria-haspopup + data-cell-col, with no toggle handler", async () => {
+describe("Checklist — case-file deduction explanation row", () => {
+    test("a deduced case-file cell exposes role=button + aria-expanded + data-cell-col, with no toggle handler", async () => {
         // Seed a session where the card-ownership slice can pin the
         // case file: every non-Plum suspect is dealt to Player 1, so
         // case_Plum gets deduced=Y and the popover should attach.
@@ -282,14 +282,20 @@ describe("Checklist — case-file deduction popover", () => {
         expect(caseFileCell).toBeDefined();
         if (!caseFileCell) return;
         expect(caseFileCell.getAttribute("role")).toBe("button");
-        expect(caseFileCell.getAttribute("aria-haspopup")).toBe("dialog");
+        // The cell uses `aria-expanded` (not `aria-haspopup`) since
+        // the explanation now opens inline as a disclosure row above
+        // the cell, not as a floating popup. Initial state is false
+        // because no cell's row is open by default.
+        expect(caseFileCell.getAttribute("aria-expanded")).toBe("false");
         expect(caseFileCell.getAttribute("tabindex")).toBe("0");
         // Crucially: clicking a case-file cell must NOT toggle a
         // known-card entry — the column is read-only. The click /
-        // toggle wiring lives on player cells only; for case-file we
-        // mount InfoPopover but no onClick that mutates state.
-        // Asserting the absence of `aria-pressed` (which is set on
-        // setup-mode toggleable cells) is a stable proxy.
+        // toggle wiring opens the explanation row but doesn't mutate
+        // app state for case-file cells (the column has no observation
+        // section and no hypothesis dispatcher writes that affect
+        // case-file values). Asserting the absence of `aria-pressed`
+        // (which is set on setup-mode toggleable cells) is a stable
+        // proxy.
         expect(caseFileCell.getAttribute("aria-pressed")).toBeNull();
 
         // The focus indicator uses `ring-*` (box-shadow) instead of
@@ -315,11 +321,11 @@ describe("Checklist — case-file deduction popover", () => {
         expect(caseFileCell.className).not.toMatch(/focus-visible:ring-/);
     });
 
-    test("an undeduced case-file cell stays non-interactive (no popover affordance)", async () => {
+    test("an undeduced case-file cell stays non-interactive (no explanation-row affordance)", async () => {
         // Same session as above, but deuce-mode renders just the
         // empty checklist by default — no deductions firing. Look at
         // a row whose case-file cell has no value: it should NOT
-        // expose role=button or aria-haspopup.
+        // expose role=button or aria-expanded.
         // Reuse the empty fresh state by doing nothing extra.
         render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForDeduceChecklist();

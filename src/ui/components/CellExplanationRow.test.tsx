@@ -11,7 +11,7 @@ import type {
     HypothesisStatus,
     HypothesisValue,
 } from "../../logic/Hypothesis";
-import { CellWhyPopover } from "./CellWhyPopover";
+import { CellExplanationRow } from "./CellExplanationRow";
 
 // Same translation mock pattern as Checklist.deduce.test.tsx:
 // `t(key, values)` returns `"key:{json}"` when given values so the
@@ -65,11 +65,12 @@ const baseProps = {
     observed: false,
     onObservationChange: vi.fn(),
     selfPlayerId: null,
+    onClose: vi.fn(),
 };
 
-describe("CellWhyPopover - section visibility", () => {
+describe("CellExplanationRow - section visibility", () => {
     test("blank cell with no footnote, no hypothesis: only Hypothesis section + emptyHint", () => {
-        render(<CellWhyPopover {...baseProps} />);
+        render(<CellExplanationRow {...baseProps} />);
 
         // Hypothesis heading + empty hint + helpText all render.
         expect(screen.getByText("hypothesisLabel")).toBeInTheDocument();
@@ -82,7 +83,7 @@ describe("CellWhyPopover - section visibility", () => {
     });
 
     test("hides Deductions and Leads when no content; toggle alone shows", () => {
-        render(<CellWhyPopover {...baseProps} hypothesisValue={undefined} />);
+        render(<CellExplanationRow {...baseProps} hypothesisValue={undefined} />);
         // No long-form status box for either.
         expect(screen.queryByText("statusConfirmed")).toBeNull();
         expect(screen.queryByText("statusDirectlyContradicted")).toBeNull();
@@ -90,10 +91,10 @@ describe("CellWhyPopover - section visibility", () => {
     });
 });
 
-describe("CellWhyPopover - Deductions section", () => {
+describe("CellExplanationRow - Deductions section", () => {
     test("renders with whyText and a Y-tinted glyph box for a real Y cell", () => {
         const { container } = render(
-            <CellWhyPopover
+            <CellExplanationRow
                 {...baseProps}
                 whyText="why-line-1\nwhy-line-2"
                 display={{ tag: "real", value: Y }}
@@ -115,7 +116,7 @@ describe("CellWhyPopover - Deductions section", () => {
 
     test("renders with N-tinted glyph box for a real N cell", () => {
         const { container } = render(
-            <CellWhyPopover
+            <CellExplanationRow
                 {...baseProps}
                 whyText="reason-line"
                 display={{ tag: "real", value: N }}
@@ -143,7 +144,7 @@ describe("CellWhyPopover - Deductions section", () => {
         const fakeChain =
             "1. Given: You marked that Anisha owns Miss Scarlet.\n2. Card ownership: Miss Scarlet is already owned by someone else, so Bob doesn't own it.";
         const { container } = render(
-            <CellWhyPopover
+            <CellExplanationRow
                 {...baseProps}
                 hypotheses={hypotheses}
                 display={{ tag: "derived", value: Y }}
@@ -192,7 +193,7 @@ describe("CellWhyPopover - Deductions section", () => {
         const fakeChain =
             "1. Given: You marked that Anisha owns Col. Mustard.\n2. Card ownership: Col. Mustard is already owned by someone else, so the case file doesn't have it.";
         const { container } = render(
-            <CellWhyPopover
+            <CellExplanationRow
                 {...baseProps}
                 hypotheses={hypotheses}
                 cell={Cell(CaseFileOwner(), cardA)}
@@ -217,10 +218,10 @@ describe("CellWhyPopover - Deductions section", () => {
     });
 });
 
-describe("CellWhyPopover - Leads section", () => {
+describe("CellExplanationRow - Leads section", () => {
     test("renders chip + footnote text for non-empty footnoteNumbers", () => {
         const { container } = render(
-            <CellWhyPopover {...baseProps} footnoteNumbers={[2, 3]} />,
+            <CellExplanationRow {...baseProps} footnoteNumbers={[2, 3]} />,
         );
         expect(screen.getByText("leadsLabel")).toBeInTheDocument();
 
@@ -244,14 +245,14 @@ describe("CellWhyPopover - Leads section", () => {
     });
 
     test("hides Leads section when footnoteNumbers is empty", () => {
-        render(<CellWhyPopover {...baseProps} footnoteNumbers={[]} />);
+        render(<CellExplanationRow {...baseProps} footnoteNumbers={[]} />);
         expect(screen.queryByText("leadsLabel")).toBeNull();
     });
 });
 
-describe("CellWhyPopover - Hypothesis section help text", () => {
+describe("CellExplanationRow - Hypothesis section help text", () => {
     test("hypothesisValue undefined: shows the unchanged helpText", () => {
-        render(<CellWhyPopover {...baseProps} />);
+        render(<CellExplanationRow {...baseProps} />);
         expect(screen.getByText("helpText")).toBeInTheDocument();
         // No badge SVG inside the Hypothesis section's help row.
         const helpEl = screen.getByText("helpText");
@@ -260,7 +261,7 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
 
     test("active Y hypothesis: short selectedHelpActive line + hypothesis badge, no statusBox", () => {
         const { container } = render(
-            <CellWhyPopover
+            <CellExplanationRow
                 {...baseProps}
                 hypothesisValue="Y"
                 status={{ kind: "active", value: "Y" }}
@@ -298,7 +299,7 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
 
     test("confirmed: short selectedHelpConfirmed + long statusConfirmed box", () => {
         const { container } = render(
-            <CellWhyPopover
+            <CellExplanationRow
                 {...baseProps}
                 hypothesisValue="Y"
                 status={{ kind: "confirmed", value: "Y" }}
@@ -314,7 +315,7 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
 
     test("directly contradicted: short selectedHelpContradicted + long statusDirectlyContradicted box with animated X badge", () => {
         const { container } = render(
-            <CellWhyPopover
+            <CellExplanationRow
                 {...baseProps}
                 hypothesisValue="N"
                 status={{
@@ -365,7 +366,7 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
             "Y",
         );
         const { container } = render(
-            <CellWhyPopover
+            <CellExplanationRow
                 {...baseProps}
                 hypothesisValue="Y"
                 hypotheses={hypotheses}
@@ -388,7 +389,7 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
 
     test("regression: hypothesisValue cleared with no chain/footnote collapses to emptyHint", () => {
         const { rerender } = render(
-            <CellWhyPopover
+            <CellExplanationRow
                 {...baseProps}
                 hypothesisValue="Y"
                 status={{ kind: "active", value: "Y" }}
@@ -399,7 +400,7 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
         expect(screen.queryByText("emptyHint")).toBeNull();
 
         rerender(
-            <CellWhyPopover
+            <CellExplanationRow
                 {...baseProps}
                 hypothesisValue={undefined}
                 status={{ kind: "off" }}
@@ -412,18 +413,18 @@ describe("CellWhyPopover - Hypothesis section help text", () => {
     });
 });
 
-describe("CellWhyPopover - cell-heading line", () => {
+describe("CellExplanationRow - cell-heading line", () => {
     test("renders the owner / card heading line", () => {
-        render(<CellWhyPopover {...baseProps} />);
+        render(<CellExplanationRow {...baseProps} />);
         const heading = screen.getByText(/^cellHeading:/);
         // Player(...) is a Brand.nominal helper — passes strings through.
         expect(heading.textContent).toContain(`"owner":"${String(player1)}"`);
     });
 });
 
-describe("CellWhyPopover - Observations section (M9)", () => {
+describe("CellExplanationRow - Observations section (M9)", () => {
     test("renders Observations section above Deductions for a player-owned cell", () => {
-        render(<CellWhyPopover {...baseProps} />);
+        render(<CellExplanationRow {...baseProps} />);
         expect(screen.getByText("observationsLabel")).toBeInTheDocument();
         // Default help text fires when selfPlayerId !== owner.
         expect(
@@ -433,7 +434,7 @@ describe("CellWhyPopover - Observations section (M9)", () => {
 
     test("uses the friendlier 'Mark cards you have here' help when popover is on the user's own row", () => {
         render(
-            <CellWhyPopover
+            <CellExplanationRow
                 {...baseProps}
                 selfPlayerId={player1}
             />,
@@ -446,13 +447,13 @@ describe("CellWhyPopover - Observations section (M9)", () => {
 
     test("hides Observations section entirely for case-file owner cells", () => {
         const caseCell = Cell(CaseFileOwner(), cardA);
-        render(<CellWhyPopover {...baseProps} cell={caseCell} />);
+        render(<CellExplanationRow {...baseProps} cell={caseCell} />);
         expect(screen.queryByText("observationsLabel")).toBeNull();
     });
 
     test("checkbox checked state mirrors the `observed` prop", () => {
         const { container } = render(
-            <CellWhyPopover {...baseProps} observed={true} />,
+            <CellExplanationRow {...baseProps} observed={true} />,
         );
         const checkbox = container.querySelector(
             'input[type="checkbox"]',
@@ -464,7 +465,7 @@ describe("CellWhyPopover - Observations section (M9)", () => {
     test("toggling the checkbox calls onObservationChange with the inverted value", () => {
         const handler = vi.fn();
         const { container } = render(
-            <CellWhyPopover
+            <CellExplanationRow
                 {...baseProps}
                 observed={false}
                 onObservationChange={handler}

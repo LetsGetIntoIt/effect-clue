@@ -581,7 +581,7 @@ function ViewSkeleton() {
     return (
         <div
             aria-hidden
-            className="relative min-h-[60vh] motion-safe:animate-pulse [@media(min-width:800px)]:grid [@media(min-width:800px)]:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] [@media(min-width:800px)]:gap-5"
+            className="relative min-h-[60vh] motion-safe:animate-pulse [@media(min-width:800px)]:grid [@media(min-width:800px)]:grid-cols-[minmax(0,1fr)_minmax(0,420px)] [@media(min-width:800px)]:gap-5"
         >
             {pane}
             <div className="hidden [@media(min-width:800px)]:block">
