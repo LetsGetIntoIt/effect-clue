@@ -1056,7 +1056,8 @@ export function Checklist() {
                                         className="relative z-[var(--z-checklist-explain-row)]"
                                     >
                                         <td
-                                            className={`${STICKY_FIRST_COL} bg-panel border-b border-border p-0`}
+                                            // z-0 (not `--z-checklist-sticky-column`) so the sibling td's popup paints on top during horizontal scroll — this cell is intentionally empty.
+                                            className="sticky left-0 z-0 bg-panel border-b border-border p-0"
                                             data-tour-sticky-left=""
                                         />
                                         <td
