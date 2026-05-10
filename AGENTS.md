@@ -210,7 +210,7 @@ Resize the preview between viewports as you go — many of these regress on one 
 
 - Tap-to-dismiss on the parchment outside the open cell + explanation row works.
 - Touch-scrolling anywhere on the page does NOT dismiss the row. The dismissal effect listens for `click` (not `pointerdown`); a `click` only fires after a tap that didn't move significantly, so a drag/scroll never produces one. If you change the listener back to `pointerdown` to "fix" some other problem, scrolling the page with the row open will dismiss it again — that's the regression to avoid.
-- Tapping a different cell while one is open closes the old row and opens the new one (capture-phase outer + bubble-phase cell `onClick`, batched together so React lands on the new cell). On touch, the existing two-tap protocol still applies: tapping a different cell closes the open row but doesn't open the new one until the second tap.
+- Tapping a different cell while one is open closes the old row and opens the new one (capture-phase outer + bubble-phase cell `onClick`, batched together so React lands on the new cell). On touch, the two-tap protocol applies for CROSS-ROW navigation only: tapping a cell on a different row (different `card`) closes the open row but doesn't open the new one until the second tap. Tapping a cell in the SAME ROW as the open one (same `card`, different owner column) opens the new cell directly with a single tap — the row is already in context, so the second-tap dismiss gate would be pure friction.
 
 **Open-cell outline + related-cell highlight (`Checklist.tsx` + `globals.css`):**
 
