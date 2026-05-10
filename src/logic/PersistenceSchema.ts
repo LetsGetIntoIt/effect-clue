@@ -6,13 +6,14 @@ import { SuggestionId } from "./Suggestion";
 /**
  * Effect Schema definitions for the persisted session shape.
  *
- * The current canonical version is v9 (adds `selfPlayerId` and
- * `firstDealtPlayerId`). Reads accept v9 first, then fall back to v8
- * (auto-lifting with `selfPlayerId: null` and `firstDealtPlayerId:
- * null`), then v7 (auto-lifting with `pendingSuggestion: null`),
- * then v6 (auto-lifting with `hypotheses: []` and the v7+v8+v9
- * defaults), so users who roll back-and-forward between builds
- * don't lose suggestion / accusation state. Writes always go to v9.
+ * The current canonical version is v10 (adds `dismissedInsights`).
+ * Reads accept v10 first, then fall back to v9 (auto-lifting with
+ * `dismissedInsights: []`), then v8 (auto-lifting with `selfPlayerId:
+ * null` and `firstDealtPlayerId: null`), then v7 (auto-lifting with
+ * `pendingSuggestion: null`), then v6 (auto-lifting with `hypotheses:
+ * []` and the v7+v8+v9+v10 defaults), so users who roll back-and-forward
+ * between builds don't lose suggestion / accusation state. Writes always
+ * go to v10.
  *
  * v6 added the `loggedAt: number` field to each suggestion + accusation,
  * recording the millisecond timestamp at which it was logged.
@@ -29,6 +30,12 @@ import { SuggestionId } from "./Suggestion";
  * fields driven by the M6 setup wizard. The local round-trip
  * preserves them; the share wire format does not (receivers pick
  * their own identity post-import).
+ *
+ * v10 adds `dismissedInsights: Array<{ key, atConfidence }>` — the
+ * per-game dismissal records that drive the "suppress until evidence
+ * grows" filter for behavioral insights. Local round-trip only; the
+ * share wire format does not include them (personal scratchwork, same
+ * policy as hypotheses).
  *
  * Branded strings (Player, Card, CardCategory, SuggestionId,
  * AccusationId) are decoded straight into their nominal types via
@@ -205,22 +212,25 @@ const PersistedSessionV8Schema = Schema.Struct({
 });
 
 /**
- * Canonical v9 session shape. Adds two identity-related fields
- * driven by the M6 setup wizard:
- *
- *   - `selfPlayerId`: the player the user identifies AS in this
- *     game. Drives the M8 my-cards panel + the suggestion-form
- *     refute hint. `null` when the user skipped the identity step.
- *
- *   - `firstDealtPlayerId`: the player who was dealt the first
- *     card. `null` when the user accepts "first in turn order" as
- *     the default.
- *
- * Both are stored on the local-storage round-trip so reload
- * preserves identity, but the share wire format does NOT include
- * them — receivers pick their own identity post-import. See
- * `useApplyShareSnapshot.ts` (defaults both to null) and
- * `ShareCodec.ts` (the wire format stays seven fields, unchanged).
+ * Persisted shape of a single dismissed-insight record. Keyed by the
+ * stable `Insight.dismissedKey` and the confidence the insight had at
+ * dismissal time. Flat encoding — same rationale as the hypothesis
+ * schema (avoids `Schema.Union` and keeps the decoder's services
+ * channel typed).
+ */
+const PersistedDismissedInsightSchema = Schema.Struct({
+    key: Schema.String,
+    atConfidence: Schema.Literals(["low", "med", "high"]),
+});
+
+const DismissedInsightsArraySchema = Schema.Array(
+    PersistedDismissedInsightSchema,
+);
+
+/**
+ * v9 session shape — kept for back-compat reads. v10 supersedes it.
+ * Selfsame as v8 plus `selfPlayerId` + `firstDealtPlayerId` — the
+ * identity-related fields driven by the M6 setup wizard.
  */
 const PersistedSessionV9Schema = Schema.Struct({
     version: Schema.Literal(9),
@@ -233,6 +243,31 @@ const PersistedSessionV9Schema = Schema.Struct({
     pendingSuggestion: Schema.NullOr(PersistedPendingSuggestionSchema),
     selfPlayerId: Schema.NullOr(PlayerSchema),
     firstDealtPlayerId: Schema.NullOr(PlayerSchema),
+});
+
+/**
+ * Canonical v10 session shape. Adds `dismissedInsights` — per-game
+ * dismissal records for behavioral insights (see
+ * `src/logic/BehavioralInsights.ts`). Local round-trip only; the share
+ * wire format intentionally omits them (personal scratchwork, same
+ * policy as hypotheses). The share codec stays unchanged.
+ *
+ * Identity fields (`selfPlayerId`, `firstDealtPlayerId`) carry over
+ * from v9 verbatim — local-storage preserves them, share wire format
+ * does not.
+ */
+const PersistedSessionV10Schema = Schema.Struct({
+    version: Schema.Literal(10),
+    setup: PersistedGameSetupSchema,
+    hands: Schema.Array(PersistedHandSchema),
+    handSizes: Schema.Array(PersistedHandSizeSchema),
+    suggestions: Schema.Array(PersistedSuggestionSchema),
+    accusations: Schema.Array(PersistedAccusationSchema),
+    hypotheses: HypothesesArraySchema,
+    pendingSuggestion: Schema.NullOr(PersistedPendingSuggestionSchema),
+    selfPlayerId: Schema.NullOr(PlayerSchema),
+    firstDealtPlayerId: Schema.NullOr(PlayerSchema),
+    dismissedInsights: DismissedInsightsArraySchema,
 });
 
 /**
@@ -252,16 +287,23 @@ export const decodeV8Unknown = Schema.decodeUnknownResult(
 export const decodeV9Unknown = Schema.decodeUnknownResult(
     PersistedSessionV9Schema,
 );
+export const decodeV10Unknown = Schema.decodeUnknownResult(
+    PersistedSessionV10Schema,
+);
 
 /**
  * Runtime types of decoded sessions — the branded, Schema-validated
- * payload `decodeV{6,7,8,9}Unknown` hand back. Callers construct the
- * GameSession domain value from this.
+ * payload `decodeV{6,7,8,9,10}Unknown` hand back. Callers construct
+ * the GameSession domain value from this.
  */
 export type PersistedSessionV6 = Schema.Schema.Type<typeof PersistedSessionV6Schema>;
 export type PersistedSessionV7 = Schema.Schema.Type<typeof PersistedSessionV7Schema>;
 export type PersistedSessionV8 = Schema.Schema.Type<typeof PersistedSessionV8Schema>;
 export type PersistedSessionV9 = Schema.Schema.Type<typeof PersistedSessionV9Schema>;
+export type PersistedSessionV10 = Schema.Schema.Type<typeof PersistedSessionV10Schema>;
+export type PersistedDismissedInsight = Schema.Schema.Type<
+    typeof PersistedDismissedInsightSchema
+>;
 
 export type PersistedHypothesis = Schema.Schema.Type<typeof PersistedHypothesisSchema>;
 export type PersistedPendingSuggestion = Schema.Schema.Type<

@@ -236,13 +236,13 @@ describe("SetupWizard — accordion shell", () => {
         await user.click(stickySkip()); // identity skipped
 
         // Wizard's `setup` localStorage doesn't carry selfPlayerId;
-        // the persistence v9 lift defaults it to null. Verify the
+        // the persistence v9→v10 lift defaults it to null. Verify the
         // session-backed identity stayed null by inspecting state
         // through the reducer's persistence: localStorage's session
         // payload should NOT mention any player as selfPlayerId.
         await waitFor(() => {
             const raw = window.localStorage.getItem(
-                "effect-clue.session.v9",
+                "effect-clue.session.v10",
             );
             expect(raw).not.toBeNull();
             const parsed = JSON.parse(raw!) as { selfPlayerId: unknown };

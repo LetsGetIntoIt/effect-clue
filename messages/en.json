@@ -379,7 +379,21 @@
         "submit": "Add{shortcut}",
         "clearInputs": "Clear inputs",
         "pillValueNobody": "nobody",
-        "pillValueUnknown": "unknown"
+        "pillValueUnknown": "unknown",
+        "insightsTitle": "Hypotheses",
+        "insightsTitleWithCount": "Hypotheses ({count})",
+        "insightsHelp": "When we notice patterns in other players' suggestions, we'll suggest hypotheses here. You can choose which ones to adopt.",
+        "insightFrequentSuggester": "<strong>{suggester}</strong> has named <strong>{card}</strong> {count} times — they may own it.",
+        "insightCategoricalHole": "<strong>{suggester}</strong> has named every <strong>{category}</strong> except <strong>{card}</strong> — they may own it.",
+        "insightDualSignal": "<strong>{suggester}</strong> has named <strong>{card}</strong> {count} times and avoided it across every other <strong>{category}</strong> they've named — strong signal they may own it.",
+        "insightSharedSuggestionFocus": "{distinctSuggesters} different players have named <strong>{card}</strong> — only one of them can own it, so it may be in the case file.",
+        "insightConfidenceLow": "low",
+        "insightConfidenceMed": "medium",
+        "insightConfidenceHigh": "high",
+        "insightAcceptAria": "Accept — pin {suggester} owns {card} as a hypothesis",
+        "insightAcceptAriaCaseFile": "Accept — pin {card} is in the case file as a hypothesis",
+        "insightDismissAria": "Dismiss — suppress this insight unless evidence grows",
+        "insightDismissAriaCaseFile": "Dismiss — suppress this case-file insight unless evidence grows"
     },
     "accusations": {
         "addTitle": "Log a failed accusation",

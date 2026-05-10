@@ -1,4 +1,5 @@
 import type { AccusationId } from "./Accusation";
+import type { InsightConfidence } from "./BehavioralInsights";
 import type { CardSet } from "./CardSet";
 import type { Card, CardCategory, Player } from "./GameObjects";
 import type { CardEntry, Category, GameSetup } from "./GameSetup";
@@ -173,6 +174,15 @@ export type ClueAction =
      */
     | { type: "setSelfPlayer"; player: Player | null }
     /**
+     * Persist that the user dismissed a specific behavioral insight at
+     * its current confidence level. The insight resurfaces only if its
+     * confidence later grows strictly past `atConfidence` — see
+     * `src/logic/BehavioralInsights.ts` for the dismissal model.
+     */
+    | { type: "dismissInsight"; key: string; atConfidence: InsightConfidence }
+    /** Forget every insight dismissal — the user wants the suggestions back. */
+    | { type: "clearDismissedInsights" }
+    /**
      * Set (or clear) the player who was dealt the first card. `null`
      * means "default to first in turn order" — keep the math centralized
      * via `firstDealt.ts` in the wizard rather than inlining it.
@@ -234,4 +244,17 @@ export interface ClueState {
      * Same reference invariants as `selfPlayerId`.
      */
     readonly firstDealtPlayerId: Player | null;
+    /**
+     * Per-game dismissal map for behavioral insights. Keyed by the
+     * insight's `dismissedKey`; the value is the confidence the
+     * insight had when the user dismissed it. The render-time filter
+     * suppresses an insight while its current confidence is `≤` the
+     * stored level — once evidence pushes confidence strictly higher,
+     * the insight resurfaces. See `src/logic/BehavioralInsights.ts`.
+     *
+     * Reset to `new Map()` on `newGame`, `loadCardSet`, and
+     * `replaceSession` (the share wire format does NOT carry these —
+     * dismissals are personal scratchwork, like hypotheses).
+     */
+    readonly dismissedInsights: ReadonlyMap<string, InsightConfidence>;
 }

@@ -119,6 +119,7 @@ const seedOneSuggestionAndMount = async (
         pendingSuggestion: null,
         selfPlayerId: null,
         firstDealtPlayerId: null,
+        dismissedInsights: new Map(),
     });
     if (view === "suggest") {
         // The mobile play layout only mounts the active pane, so

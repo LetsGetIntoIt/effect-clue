@@ -44,6 +44,12 @@ import {
     type HypothesisConflict,
     type HypothesisMap,
 } from "../logic/Hypothesis";
+import {
+    generateInsights,
+    isConfidenceGreater,
+    type Insight,
+    type InsightConfidence,
+} from "../logic/BehavioralInsights";
 
 // Re-export for ContradictionBanner (which historically imports from
 // "../state"). The type itself moved to ./logic/Hypothesis.
@@ -167,6 +173,7 @@ const initialState: ClueState = {
     pendingSuggestion: null,
     selfPlayerId: null,
     firstDealtPlayerId: null,
+    dismissedInsights: new Map<string, InsightConfidence>(),
 };
 
 const reducer = (state: ClueState, action: ClueAction): ClueState => {
@@ -186,6 +193,8 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
             // hypotheses reference card ids from the old deck and are
             // discarded. Any in-flight pending-suggestion draft also
             // references the old deck's cards, so drop it too.
+            // Behavioral-insight dismissals key on `(player, card)` —
+            // discard them too since the card ids no longer exist.
             return {
                 ...state,
                 setup: GameSetup({
@@ -198,6 +207,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 accusations: [],
                 hypotheses: emptyHypotheses,
                 pendingSuggestion: null,
+                dismissedInsights: new Map<string, InsightConfidence>(),
             };
 
         case "setSetup":
@@ -581,6 +591,18 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 hypotheses: HashMap.remove(state.hypotheses, action.cell),
             };
 
+        case "dismissInsight": {
+            const next = new Map(state.dismissedInsights);
+            next.set(action.key, action.atConfidence);
+            return { ...state, dismissedInsights: next };
+        }
+
+        case "clearDismissedInsights":
+            return {
+                ...state,
+                dismissedInsights: new Map<string, InsightConfidence>(),
+            };
+
         case "replaceSession": {
             const { session } = action;
             return {
@@ -620,6 +642,13 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 // works for both paths.
                 selfPlayerId: session.selfPlayerId ?? null,
                 firstDealtPlayerId: session.firstDealtPlayerId ?? null,
+                // Localstorage round-trip preserves dismissals; share
+                // wire format omits them (the receiver picks their
+                // own scratchwork). Persistence's lift paths default
+                // missing fields to an empty Map so both work.
+                dismissedInsights:
+                    session.dismissedInsights
+                        ?? new Map<string, InsightConfidence>(),
             };
         }
 
@@ -761,6 +790,15 @@ interface ClueDerived {
      * `deductionResult` itself is a failure, this is `undefined`.
      */
     readonly hypothesisConflict: HypothesisConflict | undefined;
+    /**
+     * Soft "behavioral hypotheses" surfaced from suggestion-log
+     * patterns — see {@link generateInsights}. Each entry is one row
+     * the user can accept (→ pin a `setHypothesis` on its `targetCell`)
+     * or dismiss (→ suppressed until evidence grows past the dismissed
+     * confidence). Already filtered against `knowledge`, active
+     * hypotheses, and the dismissal map.
+     */
+    readonly behavioralInsights: ReadonlyArray<Insight>;
 }
 
 const deriveState = (
@@ -891,6 +929,8 @@ const historyReducer = (h: History, action: HistoryAction): History => {
         action.type === "replaceSession"
         || action.type === "setUiMode"
         || action.type === "setPendingSuggestion"
+        || action.type === "dismissInsight"
+        || action.type === "clearDismissedInsights"
     ) {
         return { ...h, current: newCurrent };
     }
@@ -997,6 +1037,8 @@ export function ClueProvider({ children }: { children: ReactNode }) {
                 action.type !== "setUiMode"
                 && action.type !== "replaceSession"
                 && action.type !== "setPendingSuggestion"
+                && action.type !== "dismissInsight"
+                && action.type !== "clearDismissedInsights"
             ) {
                 markGameTouched(DateTime.nowUnsafe());
             }
@@ -1288,6 +1330,43 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         [deductionResult, jointDeductionResult, state.hypotheses],
     );
 
+    /**
+     * Behavioral insights — generated from the suggestion log + filtered
+     * against the dismissal map's "evidence must grow past dismissed
+     * level" rule. Re-runs whenever any of its inputs change, so a
+     * newly-deduced cell or a freshly-pinned hypothesis transparently
+     * removes a stale insight.
+     */
+    const behavioralInsights = useMemo<ReadonlyArray<Insight>>(() => {
+        // Use the deducer's success branch when available; on
+        // contradiction fall back to the initial knowledge so insight
+        // generation degrades gracefully (the user is editing inputs
+        // in that state anyway).
+        const knowledge = Result.isSuccess(deductionResult)
+            ? deductionResult.success
+            : initialKnowledge;
+        const raw = generateInsights(
+            state.setup,
+            suggestionsAsData,
+            knowledge,
+            state.hypotheses,
+            state.selfPlayerId,
+        );
+        return raw.filter(ins => {
+            const dismissedAt = state.dismissedInsights.get(ins.dismissedKey);
+            if (dismissedAt === undefined) return true;
+            return isConfidenceGreater(ins.confidence, dismissedAt);
+        });
+    }, [
+        state.setup,
+        suggestionsAsData,
+        deductionResult,
+        initialKnowledge,
+        state.hypotheses,
+        state.selfPlayerId,
+        state.dismissedInsights,
+    ]);
+
     const derived: ClueDerived = useMemo(
         () => ({
             suggestionsAsData,
@@ -1300,6 +1379,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             hypotheses: state.hypotheses,
             jointDeductionResult,
             hypothesisConflict,
+            behavioralInsights,
         }),
         [
             suggestionsAsData,
@@ -1312,6 +1392,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             state.hypotheses,
             jointDeductionResult,
             hypothesisConflict,
+            behavioralInsights,
         ],
     );
 
@@ -1424,6 +1505,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             pendingSuggestion: state.pendingSuggestion,
             selfPlayerId: state.selfPlayerId,
             firstDealtPlayerId: state.firstDealtPlayerId,
+            dismissedInsights: state.dismissedInsights,
         };
         saveToLocalStorage(session);
         queryClient.setQueryData(gameSessionQueryKey, session);
