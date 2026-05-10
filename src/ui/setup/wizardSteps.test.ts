@@ -23,6 +23,7 @@ const baseState: ClueState = {
     pendingSuggestion: null,
     selfPlayerId: null,
     firstDealtPlayerId: null,
+    dismissedInsights: new Map(),
 };
 
 describe("visibleSteps", () => {

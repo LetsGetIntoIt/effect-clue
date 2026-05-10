@@ -274,6 +274,7 @@ describe("Clue — URL-based view hydration", () => {
             pendingSuggestion: null,
             selfPlayerId: null,
             firstDealtPlayerId: null,
+            dismissedInsights: new Map(),
         });
         render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {

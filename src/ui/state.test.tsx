@@ -893,6 +893,7 @@ describe("replaceSession", () => {
             pendingSuggestion: null,
             selfPlayerId: null,
             firstDealtPlayerId: null,
+            dismissedInsights: new Map(),
         };
         act(() => result.current.dispatch({ type: "replaceSession", session }));
         expect(result.current.state.setup).toBe(CLASSIC_SETUP_3P);
@@ -918,6 +919,7 @@ describe("replaceSession", () => {
                 pendingSuggestion: null,
                 selfPlayerId: null,
                 firstDealtPlayerId: null,
+                dismissedInsights: new Map(),
             },
         }));
         // Even though state changed, canUndo remains false for the
@@ -1050,6 +1052,7 @@ describe("derived values", () => {
                     pendingSuggestion: null,
                     selfPlayerId: null,
                     firstDealtPlayerId: null,
+                    dismissedInsights: new Map(),
                 } satisfies GameSession,
             });
         });
@@ -1116,6 +1119,7 @@ describe("derived values", () => {
                     pendingSuggestion: null,
                     selfPlayerId: null,
                     firstDealtPlayerId: null,
+                    dismissedInsights: new Map(),
                 } satisfies GameSession,
             });
         });
@@ -1358,6 +1362,7 @@ describe("pendingSuggestion", () => {
                     pendingSuggestion: null,
                     selfPlayerId: null,
                     firstDealtPlayerId: null,
+                    dismissedInsights: new Map(),
                 },
             }),
         );

@@ -238,6 +238,8 @@ export const describeAction = (
         case "setUiMode":
         case "replaceSession":
         case "setPendingSuggestion":
+        case "dismissInsight":
+        case "clearDismissedInsights":
             return t("unknownAction");
     }
 };

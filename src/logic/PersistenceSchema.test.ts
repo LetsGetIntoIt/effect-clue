@@ -13,7 +13,7 @@ import { Player } from "./GameObjects";
  * starts a fresh session.
  */
 describe("Schema-backed persistence", () => {
-    test("encode produces version: 9 and round-trips through decode", () => {
+    test("encode produces version: 10 and round-trips through decode", () => {
         const encoded = encodeSession({
             setup: CLASSIC_SETUP_3P,
             hands: [],
@@ -24,8 +24,9 @@ describe("Schema-backed persistence", () => {
             pendingSuggestion: null,
             selfPlayerId: null,
             firstDealtPlayerId: null,
+            dismissedInsights: new Map(),
         });
-        expect(encoded.version).toBe(9);
+        expect(encoded.version).toBe(10);
 
         const decoded = decodeSession(encoded);
         expect(decoded).toBeDefined();
@@ -96,6 +97,34 @@ describe("Schema-backed persistence", () => {
         };
         const result = decodeV6Unknown(missingLoggedAt);
         expect(Result.isFailure(result)).toBe(true);
+    });
+
+    test("v10 round-trips a populated dismissedInsights map", () => {
+        const dismissed = new Map([
+            ["FrequentSuggester:Bob:knife", "low" as const],
+            ["CategoricalHole:Cho:wrench", "med" as const],
+        ]);
+        const encoded = encodeSession({
+            setup: CLASSIC_SETUP_3P,
+            hands: [],
+            handSizes: [],
+            suggestions: [],
+            accusations: [],
+            hypotheses: emptyHypotheses,
+            pendingSuggestion: null,
+            selfPlayerId: null,
+            firstDealtPlayerId: null,
+            dismissedInsights: dismissed,
+        });
+        const decoded = decodeSession(encoded);
+        expect(decoded).toBeDefined();
+        expect(decoded?.dismissedInsights.size).toBe(2);
+        expect(
+            decoded?.dismissedInsights.get("FrequentSuggester:Bob:knife"),
+        ).toBe("low");
+        expect(
+            decoded?.dismissedInsights.get("CategoricalHole:Cho:wrench"),
+        ).toBe("med");
     });
 
     test("non-v6 payloads return undefined", () => {

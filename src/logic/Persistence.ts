@@ -5,6 +5,7 @@ import {
     accusationCards,
     newAccusationId,
 } from "./Accusation";
+import type { InsightConfidence } from "./BehavioralInsights";
 import {
     CaseFileOwner,
     Card,
@@ -23,12 +24,15 @@ import {
     decodeV7Unknown,
     decodeV8Unknown,
     decodeV9Unknown,
+    decodeV10Unknown,
+    type PersistedDismissedInsight,
     type PersistedHypothesis,
     type PersistedPendingSuggestion,
     type PersistedSessionV6,
     type PersistedSessionV7,
     type PersistedSessionV8,
     type PersistedSessionV9,
+    type PersistedSessionV10,
 } from "./PersistenceSchema";
 import type { PendingSuggestionDraft } from "./ClueState";
 import {
@@ -44,13 +48,13 @@ import {
  * the mutable inputs are serialized; derived knowledge is cheap to
  * recompute, so there's no need to persist it.
  *
- * v9 (current) adds `selfPlayerId` + `firstDealtPlayerId` — identity-
- * related fields driven by the M6 setup wizard. v8 / v7 / v6 reads
- * still work via the corresponding decoders; they're auto-lifted
- * with the new fields defaulted to null. Writes always produce v9.
+ * v10 (current) adds `dismissedInsights` — per-game dismissal records
+ * for behavioral insights. v9 / v8 / v7 / v6 reads still work via the
+ * corresponding decoders; they're auto-lifted with the new field
+ * defaulted to []. Writes always produce v10.
  */
-interface PersistedGameV9 {
-    readonly version: 9;
+interface PersistedGameV10 {
+    readonly version: 10;
     readonly setup: {
         readonly players: ReadonlyArray<string>;
         readonly categories: ReadonlyArray<{
@@ -93,9 +97,13 @@ interface PersistedGameV9 {
     readonly pendingSuggestion: PersistedPendingSuggestion | null;
     readonly selfPlayerId: string | null;
     readonly firstDealtPlayerId: string | null;
+    readonly dismissedInsights: ReadonlyArray<{
+        readonly key: string;
+        readonly atConfidence: InsightConfidence;
+    }>;
 }
 
-type PersistedGame = PersistedGameV9;
+type PersistedGame = PersistedGameV10;
 
 export interface GameSession {
     setup: GameSetup;
@@ -107,12 +115,13 @@ export interface GameSession {
     pendingSuggestion: PendingSuggestionDraft | null;
     selfPlayerId: Player | null;
     firstDealtPlayerId: Player | null;
+    dismissedInsights: ReadonlyMap<string, InsightConfidence>;
 }
 
 const encodeHypotheses = (
     hypotheses: HypothesisMap,
-): PersistedGameV9["hypotheses"] => {
-    const out: Array<PersistedGameV9["hypotheses"][number]> = [];
+): PersistedGameV10["hypotheses"] => {
+    const out: Array<PersistedGameV10["hypotheses"][number]> = [];
     for (const [cell, value] of hypotheses) {
         const player =
             cell.owner._tag === "Player"
@@ -239,8 +248,32 @@ const decodeHypotheses = (
     return m;
 };
 
+const encodeDismissedInsights = (
+    map: ReadonlyMap<string, InsightConfidence>,
+): PersistedGameV10["dismissedInsights"] => {
+    const out: Array<{ key: string; atConfidence: InsightConfidence }> = [];
+    for (const [key, atConfidence] of map) {
+        out.push({ key, atConfidence });
+    }
+    // Sort for deterministic round-trip — the map's iteration order is
+    // insertion-driven, but a stable on-disk ordering simplifies tests
+    // and diff-friendly localStorage payloads.
+    out.sort((a, b) => a.key.localeCompare(b.key));
+    return out;
+};
+
+const decodeDismissedInsights = (
+    raw: ReadonlyArray<PersistedDismissedInsight>,
+): Map<string, InsightConfidence> => {
+    const m = new Map<string, InsightConfidence>();
+    for (const { key, atConfidence } of raw) {
+        m.set(key, atConfidence);
+    }
+    return m;
+};
+
 export const encodeSession = (session: GameSession): PersistedGame => ({
-    version: 9,
+    version: 10,
     setup: {
         players: session.setup.players.map(p => String(p)),
         categories: session.setup.categories.map(c => ({
@@ -283,6 +316,50 @@ export const encodeSession = (session: GameSession): PersistedGame => ({
         session.firstDealtPlayerId === null
             ? null
             : String(session.firstDealtPlayerId),
+    dismissedInsights: encodeDismissedInsights(session.dismissedInsights),
+});
+
+const buildSessionFromV10 = (v10: PersistedSessionV10): GameSession => ({
+    setup: GameSetup({
+        players: v10.setup.players,
+        categories: v10.setup.categories.map(c => Category({
+            id: c.id,
+            name: c.name,
+            cards: c.cards.map(card => CardEntry({
+                id: card.id,
+                name: card.name,
+            })),
+        })),
+    }),
+    hands: v10.hands.map(h => ({ player: h.player, cards: h.cards })),
+    handSizes: v10.handSizes.map(h => ({
+        player: h.player,
+        size: h.size,
+    })),
+    suggestions: v10.suggestions.map(s => Suggestion({
+        id: s.id === undefined || s.id === SuggestionId("")
+            ? newSuggestionId()
+            : s.id,
+        suggester: s.suggester,
+        cards: s.cards,
+        nonRefuters: s.nonRefuters,
+        refuter: s.refuter === null ? undefined : s.refuter,
+        seenCard: s.seenCard === null ? undefined : s.seenCard,
+        loggedAt: s.loggedAt,
+    })),
+    accusations: v10.accusations.map(a => Accusation({
+        id: a.id === undefined || a.id === AccusationId("")
+            ? newAccusationId()
+            : a.id,
+        accuser: a.accuser,
+        cards: a.cards,
+        loggedAt: a.loggedAt,
+    })),
+    hypotheses: decodeHypotheses(v10.hypotheses),
+    pendingSuggestion: decodePendingSuggestion(v10.pendingSuggestion),
+    selfPlayerId: v10.selfPlayerId,
+    firstDealtPlayerId: v10.firstDealtPlayerId,
+    dismissedInsights: decodeDismissedInsights(v10.dismissedInsights),
 });
 
 const buildSessionFromV9 = (v9: PersistedSessionV9): GameSession => ({
@@ -325,6 +402,8 @@ const buildSessionFromV9 = (v9: PersistedSessionV9): GameSession => ({
     pendingSuggestion: decodePendingSuggestion(v9.pendingSuggestion),
     selfPlayerId: v9.selfPlayerId,
     firstDealtPlayerId: v9.firstDealtPlayerId,
+    // v9 → v10 lift: no recorded dismissals on prior builds.
+    dismissedInsights: new Map<string, InsightConfidence>(),
 });
 
 const buildSessionFromV8 = (v8: PersistedSessionV8): GameSession => ({
@@ -371,6 +450,8 @@ const buildSessionFromV8 = (v8: PersistedSessionV8): GameSession => ({
     // fresh wizard skip produces.
     selfPlayerId: null,
     firstDealtPlayerId: null,
+    // v8 → v10 lift: no dismissals on the prior build.
+    dismissedInsights: new Map<string, InsightConfidence>(),
 });
 
 const buildSessionFromV7 = (v7: PersistedSessionV7): GameSession => ({
@@ -411,10 +492,11 @@ const buildSessionFromV7 = (v7: PersistedSessionV7): GameSession => ({
     })),
     hypotheses: decodeHypotheses(v7.hypotheses),
     pendingSuggestion: null,
-    // v7 → v9 lift: identity fields default to null (skippable
-    // wizard step's natural value).
+    // v7 → v10 lift: identity fields default to null (skippable
+    // wizard step's natural value); no recorded dismissals.
     selfPlayerId: null,
     firstDealtPlayerId: null,
+    dismissedInsights: new Map<string, InsightConfidence>(),
 });
 
 /**
@@ -462,9 +544,12 @@ const liftV6ToV7 = (v6: PersistedSessionV6): GameSession => ({
     pendingSuggestion: null,
     selfPlayerId: null,
     firstDealtPlayerId: null,
+    dismissedInsights: new Map<string, InsightConfidence>(),
 });
 
 export const decodeSession = (data: unknown): GameSession | undefined => {
+    const v10 = decodeV10Unknown(data);
+    if (Result.isSuccess(v10)) return buildSessionFromV10(v10.success);
     const v9 = decodeV9Unknown(data);
     if (Result.isSuccess(v9)) return buildSessionFromV9(v9.success);
     const v8 = decodeV8Unknown(data);
@@ -476,7 +561,8 @@ export const decodeSession = (data: unknown): GameSession | undefined => {
     return undefined;
 };
 
-const STORAGE_KEY = "effect-clue.session.v9";
+const STORAGE_KEY = "effect-clue.session.v10";
+const LEGACY_STORAGE_KEY_V9 = "effect-clue.session.v9";
 const LEGACY_STORAGE_KEY_V8 = "effect-clue.session.v8";
 const LEGACY_STORAGE_KEY_V7 = "effect-clue.session.v7";
 const LEGACY_STORAGE_KEY_V6 = "effect-clue.session.v6";
@@ -492,7 +578,9 @@ export const saveToLocalStorage = (session: GameSession): void => {
 
 export const loadFromLocalStorage = (): GameSession | undefined => {
     try {
-        const rawV9 = window.localStorage.getItem(STORAGE_KEY);
+        const rawV10 = window.localStorage.getItem(STORAGE_KEY);
+        if (rawV10) return decodeSession(JSON.parse(rawV10));
+        const rawV9 = window.localStorage.getItem(LEGACY_STORAGE_KEY_V9);
         if (rawV9) return decodeSession(JSON.parse(rawV9));
         const rawV8 = window.localStorage.getItem(LEGACY_STORAGE_KEY_V8);
         if (rawV8) return decodeSession(JSON.parse(rawV8));

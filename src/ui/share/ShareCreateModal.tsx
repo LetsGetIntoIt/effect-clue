@@ -503,6 +503,9 @@ export function ShareCreateModal({
             // which defaults both to null on the receive side).
             selfPlayerId: null,
             firstDealtPlayerId: null,
+            // Dismissals stay local — the share codec doesn't pick
+            // this field, but the GameSession type requires it.
+            dismissedInsights: new Map(),
         };
         if (variant === VARIANT_INVITE) {
             return buildInviteInput(

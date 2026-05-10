@@ -42,6 +42,7 @@ import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { useListFormatter } from "../hooks/useListFormatter";
 import { useSelection } from "../SelectionContext";
+import { BehavioralInsights } from "./BehavioralInsights";
 import { TrashIcon, XIcon } from "./Icons";
 import { InfoPopover } from "./InfoPopover";
 import { AccusationForm, type AccusationFormHandle } from "./AccusationForm";
@@ -93,6 +94,7 @@ export function SuggestionLogPanel() {
             </div>
             <AddSuggestion />
             <PriorLog />
+            <BehavioralInsights />
         </section>
     );
 }

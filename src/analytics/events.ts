@@ -298,6 +298,41 @@ export const checklistRowClicked = (props: {
     cardType: "suspect" | "weapon" | "room";
 }): void => capture("checklist_row_clicked", props);
 
+// ── Behavioral insights ──────────────────────────────────────────────────
+//
+// Soft "behavioral hypothesis" rows surfaced from suggestion-log
+// patterns. Three lifecycle events let dashboards measure per-detector
+// surfacing rate and acceptance rate.
+
+export type InsightKindTag =
+    | "FrequentSuggester"
+    | "CategoricalHole"
+    | "DualSignal";
+
+export type InsightConfidenceTag = "low" | "med" | "high";
+
+/** Fires once per unique `dismissedKey` per session — the first time
+ *  the user sees a given insight. The component dedupes via a session
+ *  ref; rerenders that surface the same insight don't re-emit. */
+export const insightSurfaced = (props: {
+    kind: InsightKindTag;
+    confidence: InsightConfidenceTag;
+}): void => capture("insight_surfaced", props);
+
+/** User clicked Accept on an insight row — a `setHypothesis` is
+ *  about to dispatch on the insight's target cell. */
+export const insightAccepted = (props: {
+    kind: InsightKindTag;
+    confidence: InsightConfidenceTag;
+}): void => capture("insight_accepted", props);
+
+/** User clicked Dismiss on an insight row — `dismissInsight` records
+ *  the suppression at this confidence level. */
+export const insightDismissed = (props: {
+    kind: InsightKindTag;
+    confidence: InsightConfidenceTag;
+}): void => capture("insight_dismissed", props);
+
 export const undoUsed = (props: { turnNumber: number }): void =>
     capture("undo_used", props);
 

@@ -424,6 +424,7 @@ describe("ShareCreateModal — wire payload by variant", () => {
             pendingSuggestion: null,
             selfPlayerId: null,
             firstDealtPlayerId: null,
+            dismissedInsights: new Map(),
         });
 
         mockSession = {

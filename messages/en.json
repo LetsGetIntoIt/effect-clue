@@ -379,7 +379,18 @@
         "submit": "Add{shortcut}",
         "clearInputs": "Clear inputs",
         "pillValueNobody": "nobody",
-        "pillValueUnknown": "unknown"
+        "pillValueUnknown": "unknown",
+        "insightsTitle": "Insights",
+        "insightsTitleWithCount": "Insights ({count})",
+        "insightsEmpty": "No patterns yet — keep logging suggestions and we'll surface hunches here.",
+        "insightFrequentSuggester": "<strong>{suggester}</strong> has named <strong>{card}</strong> {count} times — they may own it.",
+        "insightCategoricalHole": "<strong>{suggester}</strong> has named every <strong>{category}</strong> except <strong>{card}</strong> — they may own it.",
+        "insightDualSignal": "<strong>{suggester}</strong> has named <strong>{card}</strong> {count} times and avoided it across every other <strong>{category}</strong> they've named — strong signal they may own it.",
+        "insightConfidenceLow": "low",
+        "insightConfidenceMed": "medium",
+        "insightConfidenceHigh": "high",
+        "insightAcceptAria": "Accept — pin {suggester} owns {card} as a hypothesis",
+        "insightDismissAria": "Dismiss — suppress this insight unless evidence grows"
     },
     "accusations": {
         "addTitle": "Log a failed accusation",

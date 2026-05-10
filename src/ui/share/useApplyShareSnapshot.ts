@@ -294,6 +294,10 @@ export const buildSessionFromSnapshot = (
         // is skippable, so null is the right starting value).
         selfPlayerId: null,
         firstDealtPlayerId: null,
+        // Dismissals are personal scratchwork — the share wire format
+        // doesn't carry them (same policy as hypotheses for non-transfer
+        // share kinds). Receivers start with a clean dismissal map.
+        dismissedInsights: new Map(),
     };
 };
 

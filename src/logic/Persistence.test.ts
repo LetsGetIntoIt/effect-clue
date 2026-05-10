@@ -17,7 +17,8 @@ import {
 } from "./Persistence";
 import { emptyHypotheses } from "./Hypothesis";
 
-const STORAGE_KEY = "effect-clue.session.v9";
+const STORAGE_KEY = "effect-clue.session.v10";
+const LEGACY_STORAGE_KEY_V9 = "effect-clue.session.v9";
 const LEGACY_STORAGE_KEY_V8 = "effect-clue.session.v8";
 const LEGACY_STORAGE_KEY_V7 = "effect-clue.session.v7";
 const LEGACY_STORAGE_KEY_V6 = "effect-clue.session.v6";
@@ -46,6 +47,7 @@ const minimalSession: GameSession = {
     pendingSuggestion: null,
     selfPlayerId: null,
     firstDealtPlayerId: null,
+    dismissedInsights: new Map(),
 };
 
 const richSession = (): GameSession => ({
@@ -101,6 +103,7 @@ const richSession = (): GameSession => ({
     pendingSuggestion: null,
     selfPlayerId: null,
     firstDealtPlayerId: null,
+    dismissedInsights: new Map(),
 });
 
 describe("encode/decode — rich sessions", () => {
@@ -198,14 +201,38 @@ describe("saveToLocalStorage / loadFromLocalStorage", () => {
         expect(loaded?.handSizes).toHaveLength(3);
     });
 
-    test("save writes under the v9-scoped storage key", () => {
+    test("save writes under the v10-scoped storage key", () => {
         saveToLocalStorage(minimalSession);
         const raw = window.localStorage.getItem(STORAGE_KEY);
         expect(raw).not.toBeNull();
-        expect(JSON.parse(raw as string).version).toBe(9);
+        expect(JSON.parse(raw as string).version).toBe(10);
     });
 
-    test("loads a v8 blob and lifts to v9 with null identity fields", () => {
+    test("loads a v9 blob and lifts to v10 with empty dismissedInsights", () => {
+        // v9 lacked `dismissedInsights`. The lift defaults to an empty
+        // map — the same value a fresh game produces.
+        const v9Payload = {
+            version: 9,
+            setup: { players: ["Anisha"], categories: [] },
+            hands: [],
+            handSizes: [],
+            suggestions: [],
+            accusations: [],
+            hypotheses: [],
+            pendingSuggestion: null,
+            selfPlayerId: null,
+            firstDealtPlayerId: null,
+        };
+        window.localStorage.setItem(
+            LEGACY_STORAGE_KEY_V9,
+            JSON.stringify(v9Payload),
+        );
+        const loaded = loadFromLocalStorage();
+        expect(loaded).toBeDefined();
+        expect(loaded?.dismissedInsights.size).toBe(0);
+    });
+
+    test("loads a v8 blob and lifts to v10 with empty dismissedInsights and null identity", () => {
         // v8 lacked `selfPlayerId` and `firstDealtPlayerId`. The lift
         // defaults both to null — same value the M6 wizard produces
         // when the user skips the identity step on a fresh game.
