@@ -13,6 +13,7 @@ import { InstallPromptProvider } from "./components/InstallPromptProvider";
 import { PlayLayout } from "./components/PlayLayout";
 import { Toolbar } from "./components/Toolbar";
 import { TooltipProvider } from "./components/Tooltip";
+import { ModalStackProvider, ModalStackShell } from "./components/ModalStack";
 import { ConfirmProvider, useConfirm } from "./hooks/useConfirm";
 import { PromptProvider } from "./hooks/usePrompt";
 import { useSplashGate } from "./hooks/useSplashGate";
@@ -21,7 +22,7 @@ import { useGlobalShortcut } from "./keyMap";
 import { T_STANDARD, useReducedTransition } from "./motion";
 import type { UiMode } from "../logic/ClueState";
 import { StartupCoordinatorProvider, useStartupCoordinator } from "./onboarding/StartupCoordinator";
-import { SplashModal } from "./components/SplashModal";
+import { useSplashModalGate } from "./components/SplashModal";
 import { StaleGameModal } from "./components/StaleGameModal";
 import { useStaleGameGate } from "./hooks/useStaleGameGate";
 import { SetupWizard } from "./setup/SetupWizard";
@@ -148,6 +149,7 @@ export function Clue() {
     return (
         <TooltipProvider delayDuration={150} skipDelayDuration={50}>
           <ClueProvider>
+           <ModalStackProvider>
            <ConfirmProvider>
            <PromptProvider>
            <SelectionProvider>
@@ -157,6 +159,7 @@ export function Clue() {
            </SelectionProvider>
            </PromptProvider>
            </ConfirmProvider>
+           </ModalStackProvider>
           </ClueProvider>
         </TooltipProvider>
     );
@@ -224,6 +227,7 @@ function ClueShell({
     const t = useTranslations("app");
     const { showSplash, dismiss: dismissSplash } = useSplashGate();
     const staleGame = useStaleGameGate();
+    useSplashModalGate({ open: showSplash, onDismiss: dismissSplash });
     return (
         <InstallPromptProvider>
         <AccountProvider>
@@ -277,7 +281,6 @@ function ClueShell({
                 <TourPopover />
             </main>
             <BottomNav />
-            <SplashModal open={showSplash} onDismiss={dismissSplash} />
             <StaleGameModal
                 open={staleGame.open}
                 variant={staleGame.variant}
@@ -286,6 +289,11 @@ function ClueShell({
                 onSetupNewGame={staleGame.setupNewGame}
                 onKeepWorking={staleGame.keepWorking}
             />
+            {/* Shell renders the active modal-stack entry. Mounted
+                here — inside every provider whose context a pushed
+                modal might consume — so AccountModal can use
+                useConfirm, ShareCreateModal can use useClue, etc. */}
+            <ModalStackShell />
         </ShareProvider>
         </AccountProvider>
         </InstallPromptProvider>

@@ -840,7 +840,8 @@ type WizardStep =
     | "identity"
     | "handSizes"
     | "myCards"
-    | "knownCards";
+    | "knownCards"
+    | "inviteOtherPlayers";
 
 export const setupWizardStepAdvanced = (props: {
     step: WizardStep;

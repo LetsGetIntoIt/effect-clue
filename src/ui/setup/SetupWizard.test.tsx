@@ -204,14 +204,15 @@ describe("SetupWizard — accordion shell", () => {
         await waitForWizard();
         // Click Next through every step to reach the last one. With
         // selfPlayerId null on a fresh mount, visible steps are:
-        // cardPack → players → identity → handSizes → knownCards.
-        // Five Nexts gets us to knownCards (the last visible step).
+        // cardPack → players → identity → handSizes → knownCards →
+        // inviteOtherPlayers.
         // We hit Skip on identity to skip past it (avoids setting
         // selfPlayerId, keeping myCards hidden).
         await user.click(stickyNext()); // cardPack → players
         await user.click(stickyNext()); // players → identity
         await user.click(stickySkip()); // identity → handSizes
         await user.click(stickyNext()); // handSizes → knownCards
+        await user.click(stickyNext()); // knownCards → inviteOtherPlayers
         // We're now on the last step. The Next button's label is
         // "Start playing" or "Continue playing" and `data-setup-cta`
         // is set.

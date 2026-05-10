@@ -38,10 +38,22 @@ afterEach(() => {
     window.localStorage.clear();
 });
 
+import {
+    ModalStackProvider,
+    ModalStackShell,
+} from "./ModalStack";
+
 const importModal = async () => {
     const mod = await import("./InstallPromptModal");
     return mod.InstallPromptModal;
 };
+
+const wrapped = (node: React.ReactNode) => (
+    <ModalStackProvider>
+        {node}
+        <ModalStackShell />
+    </ModalStackProvider>
+);
 
 const seedState = (state: {
     visits: number;
@@ -66,15 +78,13 @@ const seedState = (state: {
 describe("InstallPromptModal — render", () => {
     test("renders title, value-prop bullets, and both buttons when open", async () => {
         const InstallPromptModal = await importModal();
-        render(
-            <InstallPromptModal
+        render(wrapped(<InstallPromptModal
                 open
                 trigger="auto"
                 onInstall={async () => true}
                 onSnooze={() => {}}
                 onClose={() => {}}
-            />,
-        );
+            />));
         expect(
             screen.getByText("installPrompt.title"),
         ).toBeInTheDocument();
@@ -91,15 +101,13 @@ describe("InstallPromptModal — render", () => {
 
     test("renders nothing when closed", async () => {
         const InstallPromptModal = await importModal();
-        render(
-            <InstallPromptModal
+        render(wrapped(<InstallPromptModal
                 open={false}
                 trigger="auto"
                 onInstall={async () => true}
                 onSnooze={() => {}}
                 onClose={() => {}}
-            />,
-        );
+            />));
         expect(
             screen.queryByText("installPrompt.title"),
         ).not.toBeInTheDocument();
@@ -107,15 +115,13 @@ describe("InstallPromptModal — render", () => {
 
     test("auto-focuses Not now, not the X or Install", async () => {
         const InstallPromptModal = await importModal();
-        render(
-            <InstallPromptModal
+        render(wrapped(<InstallPromptModal
                 open
                 trigger="auto"
                 onInstall={async () => true}
                 onSnooze={() => {}}
                 onClose={() => {}}
-            />,
-        );
+            />));
         const notNow = screen.getByRole("button", {
             name: "installPrompt.notNow",
         });
@@ -130,15 +136,13 @@ describe("InstallPromptModal — analytics", () => {
         seedState({ visits: 3 });
         const InstallPromptModal = await importModal();
         const onInstall = vi.fn().mockResolvedValue(true);
-        render(
-            <InstallPromptModal
+        render(wrapped(<InstallPromptModal
                 open
                 trigger="auto"
                 onInstall={onInstall}
                 onSnooze={() => {}}
                 onClose={() => {}}
-            />,
-        );
+            />));
         fireEvent.click(
             screen.getByRole("button", { name: "installPrompt.install" }),
         );
@@ -162,15 +166,13 @@ describe("InstallPromptModal — analytics", () => {
         const dismissedAt = DateTime.makeUnsafe("2026-01-01T00:00:00Z");
         seedState({ visits: 5, lastDismissedAt: dismissedAt });
         const InstallPromptModal = await importModal();
-        render(
-            <InstallPromptModal
+        render(wrapped(<InstallPromptModal
                 open
                 trigger="menu"
                 onInstall={vi.fn().mockResolvedValue(false)}
                 onSnooze={() => {}}
                 onClose={() => {}}
-            />,
-        );
+            />));
         fireEvent.click(
             screen.getByRole("button", { name: "installPrompt.install" }),
         );
@@ -197,15 +199,13 @@ describe("InstallPromptModal — analytics", () => {
         seedState({ visits: 2 });
         const InstallPromptModal = await importModal();
         const onSnooze = vi.fn();
-        render(
-            <InstallPromptModal
+        render(wrapped(<InstallPromptModal
                 open
                 trigger="auto"
                 onInstall={vi.fn().mockResolvedValue(false)}
                 onSnooze={onSnooze}
                 onClose={() => {}}
-            />,
-        );
+            />));
         fireEvent.click(
             screen.getByRole("button", { name: "installPrompt.notNow" }),
         );
@@ -227,15 +227,13 @@ describe("InstallPromptModal — analytics", () => {
     test("Native decline (user accepts our modal but declines OS dialog) reports dismissed_native_decline", async () => {
         seedState({ visits: 2 });
         const InstallPromptModal = await importModal();
-        render(
-            <InstallPromptModal
+        render(wrapped(<InstallPromptModal
                 open
                 trigger="auto"
                 onInstall={vi.fn().mockResolvedValue(false)}
                 onSnooze={() => {}}
                 onClose={() => {}}
-            />,
-        );
+            />));
         fireEvent.click(
             screen.getByRole("button", { name: "installPrompt.install" }),
         );
@@ -258,15 +256,13 @@ describe("InstallPromptModal — analytics", () => {
     test("Successful install fires install_accepted with the accepted status", async () => {
         seedState({ visits: 2 });
         const InstallPromptModal = await importModal();
-        render(
-            <InstallPromptModal
+        render(wrapped(<InstallPromptModal
                 open
                 trigger="menu"
                 onInstall={vi.fn().mockResolvedValue(true)}
                 onSnooze={() => {}}
                 onClose={() => {}}
-            />,
-        );
+            />));
         fireEvent.click(
             screen.getByRole("button", { name: "installPrompt.install" }),
         );

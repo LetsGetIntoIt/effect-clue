@@ -40,6 +40,8 @@ vi.mock("./authClient", () => ({
 // LogoutWarningModal that AccountProvider opens via `requestSignOut`.
 vi.mock("./AccountModal", () => ({
     AccountModal: () => null,
+    ACCOUNT_MODAL_ID: "account",
+    ACCOUNT_MODAL_MAX_WIDTH: "min(92vw,440px)",
 }));
 
 const flushPendingChangesMock = vi.fn();
@@ -69,6 +71,7 @@ import {
     useAccountContext,
 } from "./AccountProvider";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
+import { ModalStackProvider, ModalStackShell } from "../components/ModalStack";
 
 const SignOutButton = () => {
     const { requestSignOut } = useAccountContext();
@@ -83,12 +86,21 @@ const SignOutButton = () => {
     );
 };
 
+const Wrappers = ({ children }: { readonly children: React.ReactNode }) => (
+    <TestQueryClientProvider>
+        <ModalStackProvider>
+            {children}
+            <ModalStackShell />
+        </ModalStackProvider>
+    </TestQueryClientProvider>
+);
+
 const renderProvider = () =>
     render(
         <AccountProvider>
             <SignOutButton />
         </AccountProvider>,
-        { wrapper: TestQueryClientProvider },
+        { wrapper: Wrappers },
     );
 
 beforeEach(() => {
@@ -321,7 +333,7 @@ describe("AccountProvider — requestSignOut orchestration", () => {
             <AccountProvider>
                 <Caller />
             </AccountProvider>,
-            { wrapper: TestQueryClientProvider },
+            { wrapper: Wrappers },
         );
         fireEvent.click(screen.getByTestId("sign-out"));
         await screen.findByText("account.logoutWarning.title");

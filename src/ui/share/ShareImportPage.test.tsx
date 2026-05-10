@@ -127,6 +127,7 @@ import {
 import { newSuggestionId } from "../../logic/Suggestion";
 import { newAccusationId } from "../../logic/Accusation";
 import { ShareImportPage } from "./ShareImportPage";
+import { ModalStackProvider, ModalStackShell } from "../components/ModalStack";
 import { ConfirmProvider } from "../hooks/useConfirm";
 
 const CUSTOM_PACK_PAYLOAD = Schema.encodeSync(cardPackCodec)({
@@ -264,9 +265,12 @@ beforeEach(() => {
 
 const renderImportPage = (snapshot: ReturnType<typeof buildSnapshot>) =>
     render(
-        <ConfirmProvider>
-            <ShareImportPage snapshot={snapshot} />
-        </ConfirmProvider>,
+        <ModalStackProvider>
+            <ConfirmProvider>
+                <ShareImportPage snapshot={snapshot} />
+                <ModalStackShell />
+            </ConfirmProvider>
+        </ModalStackProvider>,
     );
 
 describe("ShareImportPage — sender display", () => {

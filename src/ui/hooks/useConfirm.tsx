@@ -1,14 +1,25 @@
+/**
+ * Promise-based confirm dialog. Replaces `window.confirm` with a
+ * styled, keyboard-accessible modal pushed onto the global modal stack
+ * so it composes cleanly with whatever else is open.
+ *
+ * Callers do `const ok = await confirm({ message: "..." })`. The
+ * promise resolves true on Confirm, false on Cancel. Outside-click and
+ * Escape are disabled (must go through a button) — matches the strict
+ * dismissal of the prior `AlertDialog`-based implementation.
+ */
 "use client";
 
-import * as AlertDialog from "@radix-ui/react-alert-dialog";
+import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
 import {
     createContext,
     type ReactNode,
     useCallback,
     useContext,
-    useState,
+    useRef,
 } from "react";
+import { useModalStack } from "../components/ModalStack";
 
 interface ConfirmOptions {
     readonly title?: string;
@@ -22,103 +33,116 @@ type ConfirmFn = (opts: ConfirmOptions) => Promise<boolean>;
 
 const ConfirmContext = createContext<ConfirmFn | null>(null);
 
-interface PendingConfirm extends ConfirmOptions {
-    readonly resolve: (v: boolean) => void;
-}
+const CONFIRM_ID_PREFIX = "confirm" as const;
 
-/**
- * Replaces `window.confirm`. Renders a single Radix AlertDialog at the app
- * root; callers invoke `const ok = await confirm({ message: "..." })` and
- * get `true` / `false`. Styled, keyboard-accessible, usable on mobile
- * Safari (which renders `window.confirm` as an ugly native sheet that
- * steals focus and blocks event handlers).
- */
 export function ConfirmProvider({ children }: { readonly children: ReactNode }) {
     const tCommon = useTranslations("common");
-    const [pending, setPending] = useState<PendingConfirm | null>(null);
+    const { push, pop } = useModalStack();
+    // Monotonic counter so each confirm() call gets a unique stack id.
+    // Lets the same provider serve multiple back-to-back confirms
+    // without id collisions.
+    const nextIdRef = useRef(0);
 
-    const confirm = useCallback<ConfirmFn>((opts) => {
-        return new Promise<boolean>((resolve) => {
-            setPending({ ...opts, resolve });
-        });
-    }, []);
-
-    const close = useCallback(
-        (value: boolean) => {
-            setPending((prev) => {
-                if (prev) prev.resolve(value);
-                return null;
+    const confirm = useCallback<ConfirmFn>(
+        (opts) => {
+            return new Promise<boolean>((resolve) => {
+                nextIdRef.current += 1;
+                const id = `${CONFIRM_ID_PREFIX}-${nextIdRef.current}`;
+                const settle = (value: boolean) => {
+                    // Resolve FIRST. See usePrompt's `settle` for the
+                    // same reasoning — `pop()` synchronously fires the
+                    // safety-net `onClose` that resolves `false`, and
+                    // promises only resolve once.
+                    resolve(value);
+                    pop();
+                };
+                push({
+                    id,
+                    title: opts.title ?? tCommon("confirmTitle"),
+                    dismissOnOutsideClick: false,
+                    dismissOnEscape: false,
+                    maxWidth: "min(90vw,420px)",
+                    // Defensive resolve(false) — if the entry is removed
+                    // by closeAll/popTo from outside, the awaited
+                    // promise still settles. The user-driven settle()
+                    // path resolves first; this onClose's resolve(false)
+                    // is then a no-op (Promise resolves once).
+                    onClose: () => resolve(false),
+                    content: (
+                        <ConfirmModalContent
+                            options={opts}
+                            onResolve={settle}
+                            confirmTitle={tCommon("confirmTitle")}
+                            defaultConfirmLabel={tCommon("confirm")}
+                            defaultCancelLabel={tCommon("cancel")}
+                        />
+                    ),
+                });
             });
         },
-        [],
+        [push, pop, tCommon],
     );
-
-    const open = pending !== null;
-    const confirmLabel =
-        pending?.confirmLabel ?? tCommon("confirm");
-    const cancelLabel = pending?.cancelLabel ?? tCommon("cancel");
-    const destructive = pending?.destructive ?? true;
 
     return (
         <ConfirmContext.Provider value={confirm}>
             {children}
-            <AlertDialog.Root
-                open={open}
-                onOpenChange={(next) => {
-                    if (!next) close(false);
-                }}
-            >
-                <AlertDialog.Portal>
-                    <AlertDialog.Overlay
-                        className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/30"
-                    />
-                    <AlertDialog.Content
-                        className={
-                            "fixed left-1/2 top-1/2 z-[var(--z-dialog-content)] w-[min(90vw,420px)] -translate-x-1/2 -translate-y-1/2 " +
-                            "rounded-[var(--radius)] border border-border bg-panel p-5 shadow-[0_10px_28px_rgba(0,0,0,0.28)] " +
-                            "focus:outline-none"
-                        }
-                    >
-                        {pending?.title ? (
-                            <AlertDialog.Title className="m-0 mb-2 font-display text-[18px] text-accent">
-                                {pending.title}
-                            </AlertDialog.Title>
-                        ) : (
-                            <AlertDialog.Title className="sr-only">
-                                {tCommon("confirmTitle")}
-                            </AlertDialog.Title>
-                        )}
-                        <AlertDialog.Description className="m-0 text-[14px] leading-snug text-[#2a1f12]">
-                            {pending?.message ?? ""}
-                        </AlertDialog.Description>
-                        <div className="mt-5 flex flex-wrap justify-end gap-2">
-                            <AlertDialog.Cancel asChild>
-                                <button
-                                    type="button"
-                                    className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-transparent font-semibold text-[#2a1f12] hover:bg-hover"
-                                >
-                                    {cancelLabel}
-                                </button>
-                            </AlertDialog.Cancel>
-                            <AlertDialog.Action asChild>
-                                <button
-                                    type="button"
-                                    onClick={() => close(true)}
-                                    className={
-                                        "tap-target text-tap cursor-pointer rounded-[var(--radius)] border font-semibold " +
-                                        (destructive
-                                            ? "border-accent bg-accent text-white hover:bg-accent-hover"
-                                            : "border-border bg-panel text-[#2a1f12] hover:bg-hover")
-                                    }
-                                >
-                                    {confirmLabel}
-                                </button>
-                            </AlertDialog.Action>
-                        </div>
-                    </AlertDialog.Content>
-                </AlertDialog.Portal>
-            </AlertDialog.Root>
         </ConfirmContext.Provider>
+    );
+}
+
+function ConfirmModalContent({
+    options,
+    onResolve,
+    confirmTitle,
+    defaultConfirmLabel,
+    defaultCancelLabel,
+}: {
+    readonly options: ConfirmOptions;
+    readonly onResolve: (value: boolean) => void;
+    readonly confirmTitle: string;
+    readonly defaultConfirmLabel: string;
+    readonly defaultCancelLabel: string;
+}) {
+    const confirmLabel = options.confirmLabel ?? defaultConfirmLabel;
+    const cancelLabel = options.cancelLabel ?? defaultCancelLabel;
+    const destructive = options.destructive ?? true;
+    const visibleTitle = options.title ?? null;
+    return (
+        <div className="p-5">
+            {visibleTitle ? (
+                <Dialog.Title className="m-0 mb-2 font-display text-[18px] text-accent">
+                    {visibleTitle}
+                </Dialog.Title>
+            ) : (
+                <Dialog.Title className="sr-only">
+                    {confirmTitle}
+                </Dialog.Title>
+            )}
+            <p className="m-0 text-[14px] leading-snug text-[#2a1f12]">
+                {options.message}
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <button
+                    type="button"
+                    onClick={() => onResolve(false)}
+                    className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-transparent font-semibold text-[#2a1f12] hover:bg-hover"
+                >
+                    {cancelLabel}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => onResolve(true)}
+                    className={
+                        "tap-target text-tap cursor-pointer rounded-[var(--radius)] border font-semibold " +
+                        (destructive
+                            ? "border-accent bg-accent text-white hover:bg-accent-hover"
+                            : "border-border bg-panel text-[#2a1f12] hover:bg-hover")
+                    }
+                >
+                    {confirmLabel}
+                </button>
+            </div>
+        </div>
     );
 }
 

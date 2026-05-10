@@ -410,6 +410,33 @@ export function ChevronRightIcon({ className, size = 16 }: IconProps) {
     );
 }
 
+/** Three corner squares of a QR code — used on the share modal's
+ *  "Show QR code" affordance to signal scannable output for a
+ *  co-located player. Paired with the share-link UI. */
+export function QrCodeIcon({ className, size = 14 }: IconProps) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+            className={className}
+        >
+            <rect x="3" y="3" width="6" height="6" rx="1" />
+            <rect x="15" y="3" width="6" height="6" rx="1" />
+            <rect x="3" y="15" width="6" height="6" rx="1" />
+            <path d="M14 14h2v2h-2zM18 14h3M14 18v3M18 18h3v3h-3z" />
+        </svg>
+    );
+}
+
 /** Arrow leaving a frame — paired with links that open in a new tab. */
 export function ExternalLinkIcon({ className, size = 14 }: IconProps) {
     return (

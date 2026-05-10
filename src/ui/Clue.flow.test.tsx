@@ -194,6 +194,7 @@ describe("Clue — full user-journey umbrella", () => {
         await user.click(stickyByText("next")); // players → identity
         await user.click(stickyByText("skip")); // identity skipped
         await user.click(stickyByText("next")); // handSizes → knownCards
+        await user.click(stickyByText("next")); // knownCards → inviteOtherPlayers
         await waitFor(() => {
             expect(
                 document.querySelector("[data-setup-cta]"),

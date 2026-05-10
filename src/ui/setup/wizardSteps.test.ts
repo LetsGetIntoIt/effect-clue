@@ -5,7 +5,12 @@ import { Player } from "../../logic/GameObjects";
 import { CLASSIC_SETUP_3P, GameSetup } from "../../logic/GameSetup";
 import { emptyHypotheses } from "../../logic/Hypothesis";
 import { PlayerSet } from "../../logic/PlayerSet";
-import { isStepDataComplete, visibleSteps } from "./wizardSteps";
+import {
+    isStepDataComplete,
+    stepIsSkippable,
+    stepValidationLevel,
+    visibleSteps,
+} from "./wizardSteps";
 
 const baseState: ClueState = {
     setup: CLASSIC_SETUP_3P,
@@ -48,7 +53,34 @@ describe("visibleSteps", () => {
             "handSizes",
             "myCards",
             "knownCards",
+            "inviteOtherPlayers",
         ]);
+    });
+
+    test("inviteOtherPlayers is the last step in both visible-step orderings", () => {
+        const withSelf = visibleSteps({
+            ...baseState,
+            selfPlayerId: Player("Anisha"),
+        });
+        expect(withSelf[withSelf.length - 1]).toBe("inviteOtherPlayers");
+        const withoutSelf = visibleSteps(baseState);
+        expect(withoutSelf[withoutSelf.length - 1]).toBe("inviteOtherPlayers");
+    });
+});
+
+describe("inviteOtherPlayers step", () => {
+    test("is skippable", () => {
+        expect(stepIsSkippable("inviteOtherPlayers")).toBe(true);
+    });
+
+    test("validation is always valid (no data to gate on)", () => {
+        expect(stepValidationLevel("inviteOtherPlayers", baseState)).toBe(
+            "valid",
+        );
+    });
+
+    test("isStepDataComplete is always true (no required data)", () => {
+        expect(isStepDataComplete("inviteOtherPlayers", baseState)).toBe(true);
     });
 });
 

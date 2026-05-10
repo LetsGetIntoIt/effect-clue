@@ -15,10 +15,19 @@ vi.mock("next-intl", () => ({
     },
 }));
 
+import { ModalStackProvider, ModalStackShell } from "./ModalStack";
+
 const importModal = async () => {
     const mod = await import("./StaleGameModal");
     return mod.StaleGameModal;
 };
+
+const wrapped = (node: React.ReactNode) => (
+    <ModalStackProvider>
+        {node}
+        <ModalStackShell />
+    </ModalStackProvider>
+);
 
 const baseProps = {
     referenceTimestamp: DateTime.makeUnsafe("2026-04-22T12:00:00Z"),
@@ -28,15 +37,13 @@ const baseProps = {
 describe("StaleGameModal", () => {
     test("renders title, description (started variant), and both buttons", async () => {
         const StaleGameModal = await importModal();
-        render(
-            <StaleGameModal
+        render(wrapped(<StaleGameModal
                 {...baseProps}
                 open
                 variant="started"
                 onSetupNewGame={() => {}}
                 onKeepWorking={() => {}}
-            />,
-        );
+            />));
         expect(screen.getByText("staleGame.title")).toBeInTheDocument();
         expect(
             screen.getByText(/staleGame\.descriptionStarted/),
@@ -51,15 +58,13 @@ describe("StaleGameModal", () => {
 
     test("renders the unstarted-variant description", async () => {
         const StaleGameModal = await importModal();
-        render(
-            <StaleGameModal
+        render(wrapped(<StaleGameModal
                 {...baseProps}
                 open
                 variant="unstarted"
                 onSetupNewGame={() => {}}
                 onKeepWorking={() => {}}
-            />,
-        );
+            />));
         expect(
             screen.getByText(/staleGame\.descriptionUnstarted/),
         ).toBeInTheDocument();
@@ -67,15 +72,13 @@ describe("StaleGameModal", () => {
 
     test("renders nothing when closed", async () => {
         const StaleGameModal = await importModal();
-        render(
-            <StaleGameModal
+        render(wrapped(<StaleGameModal
                 {...baseProps}
                 open={false}
                 variant="started"
                 onSetupNewGame={() => {}}
                 onKeepWorking={() => {}}
-            />,
-        );
+            />));
         expect(
             screen.queryByText("staleGame.title"),
         ).not.toBeInTheDocument();
@@ -83,15 +86,13 @@ describe("StaleGameModal", () => {
 
     test("auto-focuses 'Keep working', not 'Set up new game' or X", async () => {
         const StaleGameModal = await importModal();
-        render(
-            <StaleGameModal
+        render(wrapped(<StaleGameModal
                 {...baseProps}
                 open
                 variant="started"
                 onSetupNewGame={() => {}}
                 onKeepWorking={() => {}}
-            />,
-        );
+            />));
         const keepWorking = screen.getByRole("button", {
             name: "staleGame.keepWorking",
         });
@@ -104,15 +105,13 @@ describe("StaleGameModal", () => {
         const onSetupNewGame = vi.fn();
         const onKeepWorking = vi.fn();
         const StaleGameModal = await importModal();
-        render(
-            <StaleGameModal
+        render(wrapped(<StaleGameModal
                 {...baseProps}
                 open
                 variant="started"
                 onSetupNewGame={onSetupNewGame}
                 onKeepWorking={onKeepWorking}
-            />,
-        );
+            />));
         fireEvent.click(
             screen.getByRole("button", { name: /staleGame\.setupNew/ }),
         );
@@ -124,15 +123,13 @@ describe("StaleGameModal", () => {
         const onSetupNewGame = vi.fn();
         const onKeepWorking = vi.fn();
         const StaleGameModal = await importModal();
-        render(
-            <StaleGameModal
+        render(wrapped(<StaleGameModal
                 {...baseProps}
                 open
                 variant="started"
                 onSetupNewGame={onSetupNewGame}
                 onKeepWorking={onKeepWorking}
-            />,
-        );
+            />));
         fireEvent.click(
             screen.getByRole("button", { name: "staleGame.keepWorking" }),
         );
@@ -144,15 +141,13 @@ describe("StaleGameModal", () => {
         const onSetupNewGame = vi.fn();
         const onKeepWorking = vi.fn();
         const StaleGameModal = await importModal();
-        render(
-            <StaleGameModal
+        render(wrapped(<StaleGameModal
                 {...baseProps}
                 open
                 variant="started"
                 onSetupNewGame={onSetupNewGame}
                 onKeepWorking={onKeepWorking}
-            />,
-        );
+            />));
         fireEvent.click(screen.getByRole("button", { name: "common.close" }));
         expect(onKeepWorking).toHaveBeenCalledTimes(1);
         expect(onSetupNewGame).not.toHaveBeenCalled();

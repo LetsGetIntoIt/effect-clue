@@ -200,6 +200,12 @@
             "prevPlayer": "Previous player",
             "nextPlayer": "Next player",
             "paginator": "{current} of {total} · {player}"
+        },
+        "inviteOtherPlayers": {
+            "title": "Invite other players",
+            "description": "Want to play together? Send your friends a link so they can follow the game on their own device. You can always invite players later from the menu.",
+            "cta": "Invite a player",
+            "summarySkipped": "You can always invite players later from the menu"
         }
     },
     "myHand": {
