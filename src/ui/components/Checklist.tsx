@@ -479,19 +479,27 @@ export function Checklist() {
         const measure = () => {
             const cellRect = cellNode.getBoundingClientRect();
             const rowRect = rowNode.getBoundingClientRect();
-            // The mask covers the panel's `border-t-2` directly under
-            // the open cell. With the new 3-sided open-cell outline
-            // (3px accent + 2px offset = 5px total) we widen the mask
-            // by 5px on each side so the panel's top border doesn't
-            // peek out into the cell's outline area. Clamp at the
-            // panel's left edge (0) and at the panel's right border
-            // (rowRect.width − panel.border-r-2 = 2px) so a rightmost
-            // open cell doesn't punch a hole into the panel's
-            // `border-r-2` near the corner.
-            const RING_SIZE = 5;
-            const PANEL_BORDER = 2;
-            const rawLeft = cellRect.left - rowRect.left - RING_SIZE;
-            const rawWidth = cellRect.width + RING_SIZE * 2;
+            // The mask covers the panel's `border-t-[3px]` directly
+            // under the open cell. Crucially, the mask is sized to the
+            // cell's INNER box (cell.left to cell.right) — NOT extended
+            // out by the cell's outline width. The cell's 3px accent
+            // ring (vertical, on left/right sides) ends at y =
+            // cell.bottom, and the panel's `border-t-[3px]`
+            // (horizontal) lives at y = panel.top to panel.top + 3. At
+            // the bottom corners, the 3px outline column sits directly
+            // above where the panel's 3px border row runs — by NOT
+            // masking under the outline column, the panel's accent
+            // border is visible there and fills the L-junction with no
+            // gap. Both arms of the L are 3px-wide/tall so the
+            // junction reads as a clean right-angle corner.
+            //
+            // Clamp at the panel's edges so a leftmost open cell
+            // doesn't expose accent past the panel's left edge, and a
+            // rightmost cell doesn't punch a hole into the panel's
+            // `border-r-[3px]`.
+            const PANEL_BORDER = 3;
+            const rawLeft = cellRect.left - rowRect.left;
+            const rawWidth = cellRect.width;
             const clampedLeft = Math.max(0, rawLeft);
             const maxRight = rowRect.width - PANEL_BORDER;
             const clampedWidth = Math.max(
@@ -1127,9 +1135,9 @@ export function Checklist() {
                                                     animate={{
                                                         // eslint-disable-next-line i18next/no-literal-string -- CSS auto value
                                                         height: "auto",
-                                                        borderTopWidth: 2,
-                                                        borderRightWidth: 2,
-                                                        borderBottomWidth: 2,
+                                                        borderTopWidth: 3,
+                                                        borderRightWidth: 3,
+                                                        borderBottomWidth: 3,
                                                     }}
                                                     exit={{
                                                         height: 0,
@@ -1148,15 +1156,24 @@ export function Checklist() {
                                                     // alongside `height` so
                                                     // the borders collapse
                                                     // in lockstep with the
-                                                    // box (no residual 4px
+                                                    // box (no residual 6px
                                                     // sliver after height
                                                     // hits 0). Tailwind
                                                     // classes stay as the
                                                     // rest-state source of
-                                                    // truth (color + 2px
+                                                    // truth (color + 3px
                                                     // widths); motion's
                                                     // inline values agree at
                                                     // the open steady state.
+                                                    // 3px matches the open
+                                                    // cell's accent ring
+                                                    // width so the cell's
+                                                    // vertical outline and
+                                                    // the panel's horizontal
+                                                    // border meet at clean
+                                                    // L-junctions with no
+                                                    // tab sticking out at
+                                                    // either bottom corner.
                                                     // `contain-inline-size`
                                                     // stops the inner
                                                     // sections' min-widths
@@ -1166,7 +1183,7 @@ export function Checklist() {
                                                     // and pushing the
                                                     // checklist past the
                                                     // SuggestionLogPanel.
-                                                    className="border-t-2 border-r-2 border-b-2 border-accent bg-panel contain-inline-size"
+                                                    className="border-t-[3px] border-r-[3px] border-b-[3px] border-accent bg-panel contain-inline-size"
                                                 >
                                                     {explainContent}
                                                 </motion.div>
@@ -1184,7 +1201,7 @@ export function Checklist() {
                                             {openCellMetrics !== null && (
                                                 <div
                                                     aria-hidden
-                                                    className="pointer-events-none absolute h-[2px] bg-panel"
+                                                    className="pointer-events-none absolute h-[3px] bg-panel"
                                                     style={{
                                                         top: 0,
                                                         left: `${openCellMetrics.left}px`,
@@ -1867,18 +1884,18 @@ const STYLE_COLUMN_CELL_VISIBLE = { maxWidth: CELL_EXPAND_CAP_PX } as const;
 
 /**
  * Class added to the open cell's `<motion.td>`. The `cell-expanded-focus`
- * utility (defined in `globals.css`) paints a 4-sided 3px accent
- * box-shadow ring with a 2px offset gap, then clip-paths the bottom
- * edge so the ring is 3-sided — visually identical to the standard
- * `:focus-visible` look elsewhere on the page. Always-on (not gated
- * on `:focus`) so the open cell is identifiable even after focus
- * moves into the explanation panel.
+ * utility (defined in `globals.css`) paints a 3-sided 3px accent
+ * box-shadow ring (top / left / right only, no bottom) that hugs the
+ * cell with no offset gap. Always-on (not gated on `:focus`) so the
+ * open cell is identifiable even after focus moves into the
+ * explanation panel.
  *
  * `!border-b-0` drops the cell's 1px gray bottom border so it flows
  * directly into the panel's `border-t-2` (which is itself masked
- * underneath the cell, see `openCellMetrics`). `!rounded-none` keeps
- * the bottom corners sharp so the ring's left/right ends drop
- * cleanly down to the panel.
+ * underneath the cell, see `openCellMetrics`). `!rounded-t-[3px]
+ * !rounded-b-none` rounds only the top corners with a small radius
+ * matching the focus/hover ring — the bottom stays sharp so the
+ * ring's left/right ends drop cleanly down into the panel.
  *
  * `!outline-none` overrides the global `*:focus-visible` outline AND
  * the `CELL_HIGHLIGHTED` dashed outline — when the open cell is also
@@ -1895,7 +1912,7 @@ const STYLE_COLUMN_CELL_VISIBLE = { maxWidth: CELL_EXPAND_CAP_PX } as const;
  * directly.
  */
 const CELL_EXPANDED =
-    " !outline-none !border-b-0 !rounded-none cell-expanded-focus focus:!ring-0 focus:!ring-offset-0 z-[var(--z-checklist-cell-focus)]";
+    " !outline-none !border-b-0 !rounded-t-[3px] !rounded-b-none cell-expanded-focus focus:!ring-0 focus:!ring-offset-0 z-[var(--z-checklist-cell-focus)]";
 
 const CELL_EXPANDED_TONE_BLANK = " !bg-panel" as const;
 const CELL_EXPANDED_TONE_Y = " cell-expanded-tone-yes" as const;
@@ -2282,12 +2299,6 @@ const COLUMN_HEADER_STACK =
 // mouse click on a cell; that's acceptable here because the popover
 // it pairs with is the primary feedback anyway.
 //
-// The ring-offset color is set per-cell to match the cell's own
-// background (`ring-offset-yes-bg`, `ring-offset-no-bg`, or
-// `ring-offset-white`) so the 2px offset blends into the cell —
-// visually equivalent to the transparent offset CSS outlines have.
-// Without that match the offset would render as a solid panel band
-// and the focus indicator would look like a thick double-ring.
 // `hover:` modifiers are gated by `not-focus:` so the soft hover
 // ring (2px, accent/30) yields to the focus ring (3px, accent)
 // whenever the cell is focused. Without that gate, both rules
@@ -2295,22 +2306,25 @@ const COLUMN_HEADER_STACK =
 // pointer is still over the focused cell — so opening the popover
 // via hover would show a faint hint until the cursor moved away,
 // at which point the strong focus ring would finally appear.
+//
+// Both rings hug the cell (no `ring-offset-*`) with a small
+// `rounded-[2px]` so the indicator reads as part of the cell rather
+// than a floating frame around it.
 const CELL_INTERACTIVE =
-    " cursor-pointer hover:not-focus:z-[var(--z-checklist-cell-hover)] hover:not-focus:rounded-[2px] hover:not-focus:ring-2 hover:not-focus:ring-accent/30 focus:z-[var(--z-checklist-cell-focus)] focus:ring-[3px] focus:ring-accent focus:ring-offset-2 focus:rounded-[2px] focus:outline-none";
+    " cursor-pointer hover:not-focus:z-[var(--z-checklist-cell-hover)] hover:not-focus:rounded-[2px] hover:not-focus:ring-2 hover:not-focus:ring-accent/30 focus:z-[var(--z-checklist-cell-focus)] focus:ring-[3px] focus:ring-accent focus:rounded-[2px] focus:outline-none";
 
 // Highlight applied to cells whose deduction provenance contributes to
-// the open popover's value. A 3px dashed accent outline at 2px offset
-// matches the open cell's outline geometry (3px box-shadow ring + 2px
-// offset) so the highlights line up visually around the open cell, but
-// the dashed style keeps the related-cell visual distinct from the
-// solid open-cell ring. `outline` is used rather than `ring` because
-// box-shadow has no dashed style; outline doesn't change the cell's
-// box dimensions, so there's no layout shift when a cell becomes
-// highlighted. `--z-checklist-cell-hover` (20) sits below
+// the open popover's value. A 3px dashed accent outline hugging the
+// cell (no offset) with a small `rounded-[2px]` matches the focus ring
+// geometry but uses a dashed style so it stays visually distinct from
+// the open cell's solid ring. `outline` is used rather than `ring`
+// because box-shadow has no dashed style; outline doesn't change the
+// cell's box dimensions, so there's no layout shift when a cell
+// becomes highlighted. `--z-checklist-cell-hover` (20) sits below
 // `--z-checklist-cell-focus` (25) so the open cell's solid box-shadow
 // always paints over the dashed outline at any overlap.
 const CELL_HIGHLIGHTED =
-    " z-[var(--z-checklist-cell-hover)] !outline !outline-[3px] !outline-dashed !outline-accent !outline-offset-2";
+    " z-[var(--z-checklist-cell-hover)] !outline !outline-[3px] !outline-dashed !outline-accent !rounded-[2px]";
 
 const cellClass = (
     display: CellDisplay,
@@ -2335,8 +2349,12 @@ const cellClass = (
               : display.tag === "derived"
                 ? display.value
                 : undefined;
+    // The per-tone classes no longer carry a `focus:ring-offset-*` —
+    // the focus ring now hugs the cell (no offset), so the per-tone
+    // ring-offset color that previously made the 2px offset blend into
+    // the cell's bg is irrelevant.
     if (tone === Y) {
-        return `${base} ${CELL_TONE_Y_CLASS} focus:ring-offset-yes-bg`;
+        return `${base} ${CELL_TONE_Y_CLASS}`;
     }
     if (tone === N) {
         // Live-grid override: use the softened `--color-no-cell`
@@ -2344,7 +2362,7 @@ const cellClass = (
         // cells reads less aggressively. The popover / prose chip
         // version of CELL_TONE_N_CLASS still uses the strong red
         // (intentional — chips are inline, not at a wall scale).
-        return `${base} bg-no-bg text-no-cell focus:ring-offset-no-bg`;
+        return `${base} bg-no-bg text-no-cell`;
     }
-    return `${base} ${CELL_TONE_NEUTRAL_CLASS} focus:ring-offset-white`;
+    return `${base} ${CELL_TONE_NEUTRAL_CLASS}`;
 };

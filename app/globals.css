@@ -352,24 +352,21 @@ h3 {
     }
 }
 
-/* Open-cell outline. Matches the standard `:focus-visible` look — a
-   3px accent ring with a 2px gap of cell-bg-color — but with the
-   bottom edge clipped so the cell flows visually into the explanation
-   row below. Always on when the cell is expanded (not gated on
-   `:focus`) so the user can identify the open cell even after focus
-   moves into the explanation panel.
+/* Open-cell outline. A 3-sided 3px accent ring (top / left / right
+   only — no bottom) that hugs the cell with no offset gap. Always on
+   when the cell is expanded (not gated on `:focus`) so the user can
+   identify the open cell even after focus moves into the explanation
+   panel.
 
-   Implementation: a 4-sided box-shadow ring (2px cell-bg offset, then
-   3px accent), then a `clip-path` that extends the visible region 10px
-   outward on top/left/right (capturing the full 5px ring) but stops at
-   `y = 100%` on the bottom — clipping the bottom 5px of the ring so
-   nothing paints under the cell. The inset shadow covers the cell's
-   own 1px `border-r` (from `CELL_BASE`) so the visual right edge of
-   the cell matches the offset gap on the other sides.
+   Implementation: a 4-sided `box-shadow` ring (3px accent spread),
+   then a `clip-path` that extends the visible region 5px outward on
+   top/left/right (capturing the full 3px ring) but stops at `y =
+   100%` on the bottom — clipping the bottom 3px of the ring so
+   nothing paints under the cell.
 
-   `--cell-edge-color` is set per-tone (yes-bg / no-bg / panel) on the
-   `cell-expanded-tone-*` classes below; defaults to panel for blank
-   cells. */
+   `CELL_EXPANDED` adds `!rounded-t-[3px] !rounded-b-none` so the
+   box-shadow naturally curves around the top two corners while the
+   bottom drops straight into the panel below. */
 /* Wrapped in `@layer utilities` so this rule sits in the same cascade
    layer as Tailwind's `focus:!ring-0` / `focus:ring-[3px]`. Per CSS
    spec, `!important` declarations are sorted by layer with the
@@ -385,14 +382,12 @@ h3 {
 @layer utilities {
     .cell-expanded-focus.cell-expanded-focus {
         box-shadow:
-            inset -1px 0 0 0 var(--cell-edge-color, var(--color-panel)),
-            0 0 0 2px var(--cell-edge-color, var(--color-panel)),
-            0 0 0 5px var(--color-accent) !important;
+            0 0 0 3px var(--color-accent) !important;
         clip-path: polygon(
-            -10px -10px,
-            calc(100% + 10px) -10px,
-            calc(100% + 10px) 100%,
-            -10px 100%
+            -5px -5px,
+            calc(100% + 5px) -5px,
+            calc(100% + 5px) 100%,
+            -5px 100%
         );
     }
 }
@@ -410,15 +405,8 @@ h3 {
    user still wants to see the green/red tone at a glance, but the
    very bottom should fade to the explanation row's panel color so the
    cell feels visually continuous with the details flowing out below
-   it. Empty cells use a flat panel color (no gradient needed).
-
-   `--cell-edge-color` matches each tone's top-edge fill so the
-   2px offset gap inside `.cell-expanded-focus` reads as part of the
-   cell rather than a foreign band. The bottom 35% of the cell fades
-   to panel via the gradient — but since the ring is clipped at the
-   cell's bottom edge, no offset gap renders there to mismatch. */
+   it. Empty cells use a flat panel color (no gradient needed). */
 .cell-expanded-tone-yes {
-    --cell-edge-color: var(--color-yes-bg);
     background: linear-gradient(
         to bottom,
         var(--color-yes-bg) 0%,
@@ -427,7 +415,6 @@ h3 {
     ) !important;
 }
 .cell-expanded-tone-no {
-    --cell-edge-color: var(--color-no-bg);
     background: linear-gradient(
         to bottom,
         var(--color-no-bg) 0%,
