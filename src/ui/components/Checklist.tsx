@@ -79,6 +79,7 @@ import { label, matches } from "../keyMap";
 import { AnimatePresence, motion, type Transition } from "motion/react";
 import {
     T_CELEBRATE,
+    T_EXPLAIN_ROW,
     T_FAST,
     T_STANDARD,
     T_WIGGLE,
@@ -570,7 +571,7 @@ export function Checklist() {
     const tableRowEntryTransition = useReducedTransition(
         TABLE_ROW_ENTRY_TRANSITION,
     );
-    const explainRowTransition = useReducedTransition(EXPLAIN_ROW_TRANSITION);
+    const explainRowTransition = useReducedTransition(T_EXPLAIN_ROW);
     const tableCollapseTransition = useReducedTransition(
         TABLE_COLLAPSE_TRANSITION,
     );
@@ -1049,9 +1050,15 @@ export function Checklist() {
                                 const explainTr = showExplain ? (
                                     <motion.tr
                                         key={`explain-${String(entry.id)}`}
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
+                                        // `exit` (even empty) is what
+                                        // AnimatePresence keys off to keep
+                                        // the row mounted while the inner
+                                        // `AnimatePresence propagate`
+                                        // collapses height + borders. Without
+                                        // it, the parent tr unmounts
+                                        // immediately and the inner exit
+                                        // animation never runs to completion.
+                                        exit={{}}
                                         transition={explainRowTransition}
                                         className="relative z-[var(--z-checklist-explain-row)]"
                                     >
@@ -1074,16 +1081,22 @@ export function Checklist() {
                                                     key="content"
                                                     initial={{
                                                         height: 0,
-                                                        opacity: 0,
+                                                        borderTopWidth: 0,
+                                                        borderRightWidth: 0,
+                                                        borderBottomWidth: 0,
                                                     }}
                                                     animate={{
                                                         // eslint-disable-next-line i18next/no-literal-string -- CSS auto value
                                                         height: "auto",
-                                                        opacity: 1,
+                                                        borderTopWidth: 2,
+                                                        borderRightWidth: 2,
+                                                        borderBottomWidth: 2,
                                                     }}
                                                     exit={{
                                                         height: 0,
-                                                        opacity: 0,
+                                                        borderTopWidth: 0,
+                                                        borderRightWidth: 0,
+                                                        borderBottomWidth: 0,
                                                     }}
                                                     transition={
                                                         explainRowTransition
@@ -1091,6 +1104,20 @@ export function Checklist() {
                                                     style={
                                                         STYLE_OVERFLOW_HIDDEN
                                                     }
+                                                    // Per-side `border*Width`
+                                                    // numerics interpolate
+                                                    // alongside `height` so
+                                                    // the borders collapse
+                                                    // in lockstep with the
+                                                    // box (no residual 4px
+                                                    // sliver after height
+                                                    // hits 0). Tailwind
+                                                    // classes stay as the
+                                                    // rest-state source of
+                                                    // truth (color + 2px
+                                                    // widths); motion's
+                                                    // inline values agree at
+                                                    // the open steady state.
                                                     // `contain-inline-size`
                                                     // stops the inner
                                                     // sections' min-widths
@@ -1797,18 +1824,6 @@ const TABLE_COLUMN_HIDDEN = { maxWidth: 0, opacity: 0 } as const;
 const TABLE_COLUMN_VISIBLE = { maxWidth: CELL_EXPAND_CAP_PX, opacity: 1 } as const;
 const STYLE_OVERFLOW_HIDDEN = { overflow: "hidden" } as const;
 const STYLE_COLUMN_CELL_VISIBLE = { maxWidth: CELL_EXPAND_CAP_PX } as const;
-
-/**
- * Inline explanation row animation. The row is inserted above the
- * tapped cell's table row and animates its content from height 0 to
- * auto on enter (and back on exit). Duration matches `TABLE_ENTRY_DURATION`
- * so the row reads as part of the same family of table animations.
- */
-const EXPLAIN_ROW_DURATION = Duration.millis(220);
-const EXPLAIN_ROW_TRANSITION: Transition = {
-    duration: Duration.toSeconds(EXPLAIN_ROW_DURATION),
-    ease: TABLE_EASE,
-};
 
 /**
  * Class added to the open cell's `<motion.td>`. Replaces the 1px tone
