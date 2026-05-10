@@ -14,6 +14,7 @@ import {
     type InsightConfidence,
     type InsightKind,
 } from "../../logic/BehavioralInsights";
+import type { Player } from "../../logic/GameObjects";
 import { cardName, categoryName } from "../../logic/GameSetup";
 import { useClue } from "../state";
 import { CheckIcon, XIcon } from "./Icons";
@@ -115,7 +116,16 @@ function InsightRow({
     const t = useTranslations("suggestions");
     const rationale = renderRationale(insight.kind, setup, t);
     const cardLabel = cardLabelOf(insight.kind, setup);
-    const playerLabel = playerLabelOf(insight.kind);
+    const isCaseFile = insight.kind._tag === "SharedSuggestionFocus";
+    const acceptAria = isCaseFile
+        ? t("insightAcceptAriaCaseFile", { card: cardLabel })
+        : t("insightAcceptAria", {
+              suggester: String(playerSuggesterOf(insight.kind)),
+              card: cardLabel,
+          });
+    const dismissAria = isCaseFile
+        ? t("insightDismissAriaCaseFile")
+        : t("insightDismissAria");
 
     return (
         <li
@@ -129,10 +139,7 @@ function InsightRow({
                 <button
                     type="button"
                     onClick={onAccept}
-                    aria-label={t("insightAcceptAria", {
-                        suggester: playerLabel,
-                        card: cardLabel,
-                    })}
+                    aria-label={acceptAria}
                     className="rounded p-1 text-yes hover:bg-yes-bg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     data-action="accept"
                 >
@@ -141,10 +148,7 @@ function InsightRow({
                 <button
                     type="button"
                     onClick={onDismiss}
-                    aria-label={t("insightDismissAria", {
-                        suggester: playerLabel,
-                        card: cardLabel,
-                    })}
+                    aria-label={dismissAria}
                     className="rounded p-1 text-muted hover:bg-bg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     data-action="dismiss"
                 >
@@ -213,6 +217,12 @@ const renderRationale = (
                 category: categoryName(setup, kind.category),
                 strong,
             });
+        case "SharedSuggestionFocus":
+            return t.rich("insightSharedSuggestionFocus", {
+                card: cardName(setup, kind.card),
+                distinctSuggesters: kind.distinctSuggesters,
+                strong,
+            });
     }
 };
 
@@ -223,10 +233,28 @@ const cardLabelOf = (
     switch (kind._tag) {
         case "FrequentSuggester":
         case "DualSignal":
+        case "SharedSuggestionFocus":
             return cardName(setup, kind.card);
         case "CategoricalHole":
             return cardName(setup, kind.missingCard);
     }
 };
 
-const playerLabelOf = (kind: InsightKind): string => String(kind.suggester);
+/**
+ * The single suggester a player-targeted insight focuses on. Only
+ * defined for kinds whose target cell is `(player, card)`; case-file
+ * insights (`SharedSuggestionFocus`) have multiple suggesters and use
+ * a separate aria template that doesn't mention any specific player.
+ */
+const playerSuggesterOf = (
+    kind: InsightKind,
+): Player | undefined => {
+    switch (kind._tag) {
+        case "FrequentSuggester":
+        case "CategoricalHole":
+        case "DualSignal":
+            return kind.suggester;
+        case "SharedSuggestionFocus":
+            return undefined;
+    }
+};

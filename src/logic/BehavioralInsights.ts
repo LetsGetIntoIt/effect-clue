@@ -2,6 +2,7 @@ import { Data, HashMap, HashSet } from "effect";
 import {
     Card,
     CardCategory,
+    CaseFileOwner,
     Player,
     PlayerOwner,
 } from "./GameObjects";
@@ -24,17 +25,22 @@ import type { Suggestion } from "./Suggestion";
  * action takes over and the joint-deduction machinery tracks
  * plausibility / contradictions.
  *
- * M1 ships two pure-pattern detectors that don't need a per-player
+ * Three pure-pattern detectors that don't need a per-player
  * perspective engine:
  *
  *   - `FrequentSuggester`: a player has named the same card 3+ times
  *     across all suggestions. Likely they own it (own-cards tactic).
+ *     Maps to `(player, card) = Y`.
  *   - `CategoricalHole`: a player has named every card in a category
- *     except one. Likely they own the missing one.
+ *     except one. Likely they own the missing one. Maps to
+ *     `(player, missing card) = Y`.
+ *   - `SharedSuggestionFocus`: 3+ distinct players have each named
+ *     the same card. Only one of them can own it — the common
+ *     curiosity is more naturally explained by "it's in the case
+ *     file." Maps to `(case file, card) = Y`.
  *
- * Both detectors emit only `Y` hypotheses on `(player, card)` cells.
- * Theory-of-mind detectors (e.g. "could they know it's in the case
- * file?") need a perspective engine and are deferred to a later
+ * Theory-of-mind detectors (e.g. "could a specific player have
+ * deduced X?") need a perspective engine and are deferred to a later
  * milestone — see the M3 sketch in
  * `/Users/kapil/.claude/plans/it-would-be-great-structured-kay.md`.
  *
@@ -97,7 +103,25 @@ class DualSignalImpl extends Data.TaggedClass("DualSignal")<{
 }> {}
 type DualSignal = DualSignalImpl;
 
-export type InsightKind = FrequentSuggester | CategoricalHole | DualSignal;
+/**
+ * Many distinct players have each named the same card across the
+ * suggestion log. Each of them might be probing — but the joint
+ * behavior is more naturally explained by "this card is in the case
+ * file" than by "all of these players think they own it" (only one
+ * can own it). Maps to a `(case file, card) = Y` hypothesis.
+ */
+class SharedSuggestionFocusImpl extends Data.TaggedClass("SharedSuggestionFocus")<{
+    readonly card: Card;
+    readonly distinctSuggesters: number;
+    readonly totalCount: number;
+}> {}
+type SharedSuggestionFocus = SharedSuggestionFocusImpl;
+
+export type InsightKind =
+    | FrequentSuggester
+    | CategoricalHole
+    | DualSignal
+    | SharedSuggestionFocus;
 
 export interface Insight {
     /**
@@ -119,6 +143,11 @@ const dismissedKeyFor = (
     card: Card,
 ): string => `${tag}:${String(player)}:${String(card)}`;
 
+const dismissedKeyForCaseFile = (
+    tag: InsightKind["_tag"],
+    card: Card,
+): string => `${tag}:case-file:${String(card)}`;
+
 const frequentSuggesterConfidence = (count: number): InsightConfidence => {
     if (count >= 6) return "high";
     if (count >= 4) return "med";
@@ -130,6 +159,14 @@ const categoricalHoleConfidence = (
 ): InsightConfidence => {
     if (categorySize >= 7) return "high";
     if (categorySize >= 5) return "med";
+    return "low";
+};
+
+const sharedSuggestionConfidence = (
+    distinctSuggesters: number,
+): InsightConfidence => {
+    if (distinctSuggesters >= 5) return "high";
+    if (distinctSuggesters >= 4) return "med";
     return "low";
 };
 
@@ -274,6 +311,94 @@ const detectCategoricalHole = (
 };
 
 /**
+ * Many-distinct-suggesters → case-file detector.
+ *
+ * Counts unique suggesters per card (and the total times that card has
+ * appeared across the log). When 3+ distinct players have each named
+ * the same card, it's unlikely they all own it — only one can — so
+ * the joint behavior is better explained by "the card is in the case
+ * file." Maps to a `(case file, card) = Y` hypothesis.
+ *
+ * The self-player counts toward `distinctSuggesters` if they've
+ * suggested the card; their inclusion isn't disqualifying because
+ * the case-file interpretation is consistent with anyone (including
+ * the user) probing for it. The detector skips emitting if the user
+ * is already known to own the card — at that point the case-file
+ * proposal is contradicted by real facts and the call-site filter
+ * would drop it anyway, but we short-circuit here for clarity.
+ */
+const detectSharedSuggestionFocus = (
+    suggestions: ReadonlyArray<Suggestion>,
+    knowledge: Knowledge,
+    hypotheses: HypothesisMap,
+    selfPlayer: Player | null,
+): ReadonlyArray<Insight> => {
+    // card → { suggesters: HashSet<Player>, totalCount }
+    let perCard = HashMap.empty<
+        Card,
+        {
+            readonly suggesters: HashSet.HashSet<Player>;
+            readonly totalCount: number;
+        }
+    >();
+    for (const s of suggestions) {
+        for (const card of s.cards) {
+            const existing = HashMap.get(perCard, card);
+            if (existing._tag === "Some") {
+                perCard = HashMap.set(perCard, card, {
+                    suggesters: HashSet.add(
+                        existing.value.suggesters,
+                        s.suggester,
+                    ),
+                    totalCount: existing.value.totalCount + 1,
+                });
+            } else {
+                perCard = HashMap.set(perCard, card, {
+                    suggesters: HashSet.fromIterable([s.suggester]),
+                    totalCount: 1,
+                });
+            }
+        }
+    }
+    const out: Insight[] = [];
+    for (const [card, { suggesters, totalCount }] of perCard) {
+        const distinctSuggesters = HashSet.size(suggesters);
+        if (distinctSuggesters < 3) continue;
+        const targetCell = Cell(CaseFileOwner(), card);
+        if (isCellKnown(knowledge, targetCell)) continue;
+        if (isCellHypothesized(hypotheses, targetCell)) continue;
+        // If the user definitely owns this card, the case-file
+        // interpretation is impossible regardless of how many people
+        // suggested it.
+        if (
+            selfPlayer !== null
+            && getCellByOwnerCard(
+                knowledge,
+                PlayerOwner(selfPlayer),
+                card,
+            ) === "Y"
+        ) {
+            continue;
+        }
+        out.push({
+            dismissedKey: dismissedKeyForCaseFile(
+                "SharedSuggestionFocus",
+                card,
+            ),
+            kind: new SharedSuggestionFocusImpl({
+                card,
+                distinctSuggesters,
+                totalCount,
+            }),
+            targetCell,
+            proposedValue: "Y",
+            confidence: sharedSuggestionConfidence(distinctSuggesters),
+        });
+    }
+    return out;
+};
+
+/**
  * Final pass: when both detectors produced an insight on the same
  * (player, card) pair, replace them with a single `DualSignal`
  * insight that carries data from both halves.
@@ -384,6 +509,16 @@ export const generateInsights = (
         hypotheses,
         selfPlayer,
     );
+    const shared = detectSharedSuggestionFocus(
+        suggestions,
+        knowledge,
+        hypotheses,
+        selfPlayer,
+    );
+    // The freq + hole pair both target `(player, card) = Y`, so they
+    // can collapse into a `DualSignal`. `shared` targets
+    // `(case file, card) = Y` — a different cell — so it's never a
+    // merge candidate; we just append it through.
     const merged = mergeOverlapping([...freq, ...hole]);
-    return sortInsights(merged);
+    return sortInsights([...merged, ...shared]);
 };

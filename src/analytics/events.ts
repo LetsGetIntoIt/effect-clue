@@ -307,7 +307,8 @@ export const checklistRowClicked = (props: {
 export type InsightKindTag =
     | "FrequentSuggester"
     | "CategoricalHole"
-    | "DualSignal";
+    | "DualSignal"
+    | "SharedSuggestionFocus";
 
 export type InsightConfidenceTag = "low" | "med" | "high";
 

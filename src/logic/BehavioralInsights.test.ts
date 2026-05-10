@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
     Card,
     CardCategory,
+    CaseFileOwner,
     Player,
     PlayerOwner,
 } from "./GameObjects";
@@ -426,6 +427,150 @@ describe("CategoricalHole detector", () => {
             null,
         );
         expect(out).toHaveLength(0);
+    });
+});
+
+describe("SharedSuggestionFocus detector", () => {
+    test("emits low confidence when 3 distinct players have named the same card", () => {
+        // Each of A, B, C names KNIFE once across their suggestions.
+        const suggestions = [
+            sug(A, [SCARLET, KNIFE, KITCHEN]),
+            sug(B, [PLUM, KNIFE, BALLROOM]),
+            sug(C, [MUSTARD, KNIFE, STUDY]),
+        ];
+        const out = generateInsights(
+            setup,
+            suggestions,
+            emptyKnowledge,
+            emptyHypotheses,
+            null,
+        );
+        const shared = out.find(
+            i =>
+                i.kind._tag === "SharedSuggestionFocus"
+                && i.kind.card === KNIFE,
+        );
+        expect(shared).toBeDefined();
+        expect(shared?.confidence).toBe<InsightConfidence>("low");
+        expect(shared?.proposedValue).toBe("Y");
+        expect(shared?.targetCell.owner._tag).toBe("CaseFile");
+        if (shared?.kind._tag === "SharedSuggestionFocus") {
+            expect(shared.kind.distinctSuggesters).toBe(3);
+        }
+    });
+
+    test("does NOT emit when only 2 distinct players have named the card", () => {
+        const suggestions = [
+            sug(A, [SCARLET, KNIFE, KITCHEN]),
+            sug(A, [PLUM, KNIFE, BALLROOM]),
+            sug(B, [MUSTARD, KNIFE, STUDY]),
+        ];
+        const out = generateInsights(
+            setup,
+            suggestions,
+            emptyKnowledge,
+            emptyHypotheses,
+            null,
+        );
+        const shared = out.find(
+            i =>
+                i.kind._tag === "SharedSuggestionFocus"
+                && i.kind.card === KNIFE,
+        );
+        expect(shared).toBeUndefined();
+    });
+
+    test("does NOT emit when the case-file cell for the card is already known", () => {
+        const suggestions = [
+            sug(A, [SCARLET, KNIFE, KITCHEN]),
+            sug(B, [PLUM, KNIFE, BALLROOM]),
+            sug(C, [MUSTARD, KNIFE, STUDY]),
+        ];
+        // Deducer has already proven KNIFE is NOT in the case file
+        // (e.g. someone refuted with it).
+        const knowledge = setCell(
+            emptyKnowledge,
+            Cell(CaseFileOwner(), KNIFE),
+            "N",
+        );
+        const out = generateInsights(
+            setup,
+            suggestions,
+            knowledge,
+            emptyHypotheses,
+            null,
+        );
+        const shared = out.find(
+            i =>
+                i.kind._tag === "SharedSuggestionFocus"
+                && i.kind.card === KNIFE,
+        );
+        expect(shared).toBeUndefined();
+    });
+
+    test("does NOT emit when the user is known to own the card", () => {
+        const suggestions = [
+            sug(A, [SCARLET, KNIFE, KITCHEN]),
+            sug(B, [PLUM, KNIFE, BALLROOM]),
+            sug(C, [MUSTARD, KNIFE, STUDY]),
+        ];
+        const knowledge = setCell(
+            emptyKnowledge,
+            Cell(PlayerOwner(A), KNIFE),
+            Y,
+        );
+        const out = generateInsights(
+            setup,
+            suggestions,
+            knowledge,
+            emptyHypotheses,
+            A,
+        );
+        const shared = out.find(
+            i => i.kind._tag === "SharedSuggestionFocus",
+        );
+        expect(shared).toBeUndefined();
+    });
+
+    test("targets the case-file cell, not a player cell", () => {
+        const suggestions = [
+            sug(A, [SCARLET, KNIFE, KITCHEN]),
+            sug(B, [PLUM, KNIFE, BALLROOM]),
+            sug(C, [MUSTARD, KNIFE, STUDY]),
+        ];
+        const out = generateInsights(
+            setup,
+            suggestions,
+            emptyKnowledge,
+            emptyHypotheses,
+            null,
+        );
+        const shared = out.find(
+            i => i.kind._tag === "SharedSuggestionFocus",
+        );
+        expect(shared?.targetCell.owner._tag).toBe("CaseFile");
+        expect(shared?.targetCell.card).toBe(KNIFE);
+    });
+
+    test("dismissedKey distinguishes case-file insights from player insights", () => {
+        const suggestions = [
+            sug(A, [SCARLET, KNIFE, KITCHEN]),
+            sug(B, [PLUM, KNIFE, BALLROOM]),
+            sug(C, [MUSTARD, KNIFE, STUDY]),
+        ];
+        const out = generateInsights(
+            setup,
+            suggestions,
+            emptyKnowledge,
+            emptyHypotheses,
+            null,
+        );
+        const shared = out.find(
+            i => i.kind._tag === "SharedSuggestionFocus",
+        );
+        expect(shared?.dismissedKey).toContain("SharedSuggestionFocus");
+        expect(shared?.dismissedKey).toContain("case-file");
+        expect(shared?.dismissedKey).toContain(String(KNIFE));
     });
 });
 
