@@ -25,6 +25,17 @@ export const T_STANDARD: Transition = {
 };
 
 /**
+ * Tuned for the checklist cell-explanation row's expand/collapse.
+ * Shorter duration + Material-standard easeInOut (no slow tail) so
+ * the height + border-width animation lands cleanly at zero — no
+ * faint border sliver lingering after the panel collapses.
+ */
+export const T_EXPLAIN_ROW: Transition = {
+    duration: Duration.toSeconds(Duration.millis(150)),
+    ease: [0.4, 0, 0.2, 1],
+};
+
+/**
  * How long to wait after starting a view/pane transition before
  * running post-transition side effects (opening a popover anchored to
  * a newly-visible pill, scrolling to a freshly-revealed row, focusing
