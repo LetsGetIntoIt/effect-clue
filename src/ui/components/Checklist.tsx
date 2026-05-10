@@ -1504,17 +1504,46 @@ export function Checklist() {
                                                         ) {
                                                             // Tap on a
                                                             // different cell
-                                                            // while a row
-                                                            // is open →
-                                                            // close. Browser
-                                                            // focus moves to
-                                                            // thisCell during
-                                                            // the click; the
-                                                            // next tap is the
-                                                            // second tap that
+                                                            // while a row is
+                                                            // open.
+                                                            //
+                                                            // SAME-ROW shortcut:
+                                                            // if the new cell
+                                                            // shares the open
+                                                            // cell's card
+                                                            // (same row in the
+                                                            // grid), treat the
+                                                            // tap as a direct
+                                                            // cell-swap. The
+                                                            // explanation row
+                                                            // is already open
+                                                            // on this row;
+                                                            // dismissing only
+                                                            // to require a
+                                                            // second tap on
+                                                            // the next column
+                                                            // is friction
+                                                            // without payoff.
+                                                            //
+                                                            // DIFFERENT-ROW:
+                                                            // close the open
+                                                            // row and let
+                                                            // browser focus
+                                                            // move to thisCell
+                                                            // during the
+                                                            // click; the next
+                                                            // tap is the
+                                                            // second tap of
+                                                            // the two-tap
+                                                            // protocol that
                                                             // opens it.
+                                                            const sameRow =
+                                                                popoverCellRef.current.card ===
+                                                                thisCell.card;
                                                             setExpandedCell(
-                                                                null,
+                                                                sameRow
+                                                                    ? thisCell
+                                                                    : null,
                                                             );
                                                             return;
                                                         }
