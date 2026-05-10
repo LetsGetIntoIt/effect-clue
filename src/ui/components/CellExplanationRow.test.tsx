@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { HashMap } from "effect";
 import { describe, expect, test, vi } from "vitest";
 
@@ -69,12 +69,14 @@ const baseProps = {
 };
 
 describe("CellExplanationRow - section visibility", () => {
-    test("blank cell with no footnote, no hypothesis: all four section labels render with null-state copy where empty", () => {
+    test("blank cell with no footnote, no hypothesis: all three section labels render with null-state copy where empty", () => {
         render(<CellExplanationRow {...baseProps} />);
 
-        // All four section labels render unconditionally so the
-        // layout doesn't shift when content fills in.
-        expect(screen.getByText("observationsLabel")).toBeInTheDocument();
+        // All three section labels render unconditionally so the
+        // layout doesn't shift when content fills in. Observations is
+        // not its own section anymore — its checkbox lives inside a
+        // disclosure within the Deductions section.
+        expect(screen.queryByText("observationsLabel")).toBeNull();
         expect(screen.getByText("deductionsLabel")).toBeInTheDocument();
         expect(screen.getByText("leadsLabel")).toBeInTheDocument();
         expect(screen.getByText("hypothesisLabel")).toBeInTheDocument();
@@ -441,48 +443,96 @@ describe("CellExplanationRow - cell-heading line", () => {
     });
 });
 
-describe("CellExplanationRow - Observations section (M9)", () => {
-    test("renders Observations section above Deductions for a player-owned cell", () => {
+describe("CellExplanationRow - observation disclosure inside Deductions", () => {
+    test("disclosure button renders for a player-owned cell with the expand label", () => {
         render(<CellExplanationRow {...baseProps} />);
-        expect(screen.getByText("observationsLabel")).toBeInTheDocument();
-        // Default help text fires when selfPlayerId !== owner.
-        expect(
-            screen.getByText("observationsHelpDefault"),
-        ).toBeInTheDocument();
+        // The disclosure button replaces the standalone Observations
+        // section. It lives inside Deductions and toggles a checkbox.
+        const button = screen.getByRole("button", {
+            name: /observationsExpandLabel/,
+        });
+        expect(button).toBeInTheDocument();
+        expect(button.getAttribute("aria-expanded")).toBe("false");
     });
 
-    test("uses the friendlier 'Mark cards you have here' help when popover is on the user's own row", () => {
+    test("checkbox uses 'I have this card in my hand' label when popover is on the user's own row", () => {
+        // observed=true seeds the disclosure open at mount, so the
+        // checkbox is in the DOM without needing to click the button.
         render(
             <CellExplanationRow
                 {...baseProps}
                 selfPlayerId={player1}
+                observed={true}
             />,
         );
-        expect(screen.getByText("observationsHelpSelf")).toBeInTheDocument();
+        // Self-flavoured copy uses the 'Own' key. The mock returns the
+        // bare key when no values are passed, so we look for it
+        // directly.
         expect(
-            screen.queryByText("observationsHelpDefault"),
-        ).toBeNull();
-    });
-
-    test("Observations label still renders for case-file owner cells, with explanatory null-state copy and no checkbox", () => {
-        const caseCell = Cell(CaseFileOwner(), cardA);
-        const { container } = render(
-            <CellExplanationRow {...baseProps} cell={caseCell} />,
-        );
-        expect(screen.getByText("observationsLabel")).toBeInTheDocument();
-        expect(
-            screen.getByText("observationsEmptyCaseFile"),
+            screen.getByText("observationsCheckboxLabelOwn"),
         ).toBeInTheDocument();
-        // No "I have seen this card" checkbox — it doesn't apply.
+        // The 'Other' key (with substitutions) does not render.
         expect(
-            container.querySelector('input[type="checkbox"]'),
+            screen.queryByText(/^observationsCheckboxLabelOther:/),
         ).toBeNull();
     });
 
-    test("checkbox checked state mirrors the `observed` prop", () => {
+    test("checkbox uses 'I have seen that {player} owns {card}' label for another player's row", () => {
+        render(
+            <CellExplanationRow
+                {...baseProps}
+                selfPlayerId={null}
+                observed={true}
+            />,
+        );
+        // 'Other' copy includes player + card substitutions. The mock
+        // serializes values into the rendered text as JSON.
+        const labelEl = screen.getByText(/^observationsCheckboxLabelOther:/);
+        expect(labelEl).toBeInTheDocument();
+        expect(labelEl.textContent).toContain(`"player":"${String(player1)}"`);
+        expect(labelEl.textContent).toContain(`"card":`);
+    });
+
+    test("falls through to 'Other' copy when selfPlayerId is null even on the owner's row", () => {
+        // Defensive: regardless of selfPlayerId === null, we should
+        // not use the 'Own' copy when we cannot identify ownership.
+        render(
+            <CellExplanationRow
+                {...baseProps}
+                selfPlayerId={null}
+                observed={true}
+            />,
+        );
+        expect(
+            screen.queryByText("observationsCheckboxLabelOwn"),
+        ).toBeNull();
+        expect(
+            screen.getByText(/^observationsCheckboxLabelOther:/),
+        ).toBeInTheDocument();
+    });
+
+    test("case-file cells render no disclosure button", () => {
+        const caseCell = Cell(CaseFileOwner(), cardA);
+        render(<CellExplanationRow {...baseProps} cell={caseCell} />);
+        // The disclosure is gated on player-owned cells. Case-file
+        // cells get the 3 standard sections with no observation toggle.
+        expect(
+            screen.queryByRole("button", {
+                name: /observationsExpandLabel/,
+            }),
+        ).toBeNull();
+        // The 3 section labels still render for case-file cells.
+        expect(screen.getByText("deductionsLabel")).toBeInTheDocument();
+        expect(screen.getByText("leadsLabel")).toBeInTheDocument();
+        expect(screen.getByText("hypothesisLabel")).toBeInTheDocument();
+    });
+
+    test("checkbox checked state mirrors the `observed` prop (disclosure auto-opens when observed)", () => {
         const { container } = render(
             <CellExplanationRow {...baseProps} observed={true} />,
         );
+        // observed=true seeds the disclosure open, so the checkbox
+        // is rendered immediately with checked=true.
         const checkbox = container.querySelector(
             'input[type="checkbox"]',
         ) as HTMLInputElement;
@@ -495,7 +545,7 @@ describe("CellExplanationRow - Observations section (M9)", () => {
         const { container } = render(
             <CellExplanationRow
                 {...baseProps}
-                observed={false}
+                observed={true}
                 onObservationChange={handler}
             />,
         );
@@ -503,7 +553,22 @@ describe("CellExplanationRow - Observations section (M9)", () => {
             'input[type="checkbox"]',
         ) as HTMLInputElement;
         checkbox.click();
-        expect(handler).toHaveBeenCalledWith(true);
+        expect(handler).toHaveBeenCalledWith(false);
+    });
+
+    test("clicking the disclosure button toggles aria-expanded", () => {
+        render(<CellExplanationRow {...baseProps} observed={false} />);
+        const button = screen.getByRole("button", {
+            name: /observationsExpandLabel/,
+        });
+        // Starts collapsed because observed=false seeds open=false.
+        expect(button.getAttribute("aria-expanded")).toBe("false");
+        // `fireEvent.click` wraps the dispatch in `act()` so React's
+        // state update + re-render happens synchronously before we
+        // re-read the attribute. Native `.click()` skips that wrap and
+        // leaves the DOM stale.
+        fireEvent.click(button);
+        expect(button.getAttribute("aria-expanded")).toBe("true");
     });
 });
 

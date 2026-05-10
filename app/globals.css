@@ -352,35 +352,53 @@ h3 {
     }
 }
 
-/* Open-cell focus indicator. The cell's accent border on top/left/
-   right (from `CELL_EXPANDED` in Checklist.tsx) already serves as
-   the visual anchor, but on focus we still want a stronger ring
-   that's distinct from the steady-state border. Box-shadow lets us
-   paint the ring on three sides only — no bottom — so the cell
-   keeps flowing visually into the explanation row below. The bottom
-   border-radius is also disabled in JSX so the ring's leftmost and
-   rightmost ends drop straight down at the cell's bottom corners
-   without curving. */
-/* The doubled class selector ensures we win specificity against
-   Tailwind's `focus:!ring-0` utility (which also uses !important and
-   therefore needs to be beaten on specificity, not just !important). */
+/* Open-cell outline. A 3-sided 3px accent ring (top / left / right
+   only — no bottom) that hugs the cell with no offset gap. Always on
+   when the cell is expanded (not gated on `:focus`) so the user can
+   identify the open cell even after focus moves into the explanation
+   panel.
+
+   Implementation: a 4-sided `box-shadow` ring (3px accent spread),
+   then a `clip-path` that extends the visible region 5px outward on
+   top/left/right (capturing the full 3px ring) but stops at `y =
+   100%` on the bottom — clipping the bottom 3px of the ring so
+   nothing paints under the cell.
+
+   `CELL_EXPANDED` adds `!rounded-t-[3px] !rounded-b-none` so the
+   box-shadow naturally curves around the top two corners while the
+   bottom drops straight into the panel below. */
+/* Wrapped in `@layer utilities` so this rule sits in the same cascade
+   layer as Tailwind's `focus:!ring-0` / `focus:ring-[3px]`. Per CSS
+   spec, `!important` declarations are sorted by layer with the
+   *most-recently-defined* layer winning, and unlayered rules are
+   evaluated LAST among `!important` author declarations. Without
+   `@layer utilities`, Tailwind's layered `!important focus:` rule
+   beats our unlayered `!important` rule whenever the cell has focus
+   (e.g., right after a click), even though the unlayered rule wins
+   at rest. Putting our rule in the same layer means specificity +
+   source order decide the winner — and our doubled-class selector
+   `(0,2,0)` ties Tailwind's `focus:!ring-0:focus` `(0,2,0)`, with
+   our rule appearing later in the source so it takes precedence. */
+@layer utilities {
+    .cell-expanded-focus.cell-expanded-focus {
+        box-shadow:
+            0 0 0 3px var(--color-accent) !important;
+        clip-path: polygon(
+            -5px -5px,
+            calc(100% + 5px) -5px,
+            calc(100% + 5px) 100%,
+            -5px 100%
+        );
+    }
+}
+
+/* Suppress the global `:focus-visible` outline on the open cell — the
+   always-on box-shadow above already serves as the keyboard indicator.
+   The doubled class selector wins specificity against Tailwind's
+   `focus:!ring-0` utility (also `!important`). */
 .cell-expanded-focus.cell-expanded-focus:focus,
 .cell-expanded-focus.cell-expanded-focus:focus-visible {
     outline: none !important;
-    box-shadow:
-        0 -3px 0 var(--color-accent),
-        -3px 0 0 var(--color-accent),
-        3px 0 0 var(--color-accent) !important;
-}
-
-/* When the explanation row's section grid has an odd number of items,
-   make the last one span both columns so we don't leave an empty grid
-   cell with the parent's `bg-border` peeking through. Combined with
-   the 2-col container query in CellExplanationRow.tsx, this keeps
-   3-section configurations rendering as 2 + 1 (full-width) cleanly,
-   and 1-section configs as a single full-width row. */
-.cell-section-grid > :last-child:nth-child(odd) {
-    grid-column: 1 / -1;
 }
 
 /* Open-cell tone gradients. When the open cell has a Y/N value the
