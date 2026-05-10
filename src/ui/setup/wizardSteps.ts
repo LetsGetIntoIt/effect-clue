@@ -18,11 +18,16 @@ export type WizardStepId =
     | "identity"
     | "handSizes"
     | "myCards"
-    | "knownCards";
+    | "knownCards"
+    | "inviteOtherPlayers";
 
 /**
  * Canonical ordering of the steps. The accordion renders panels in
- * this order; `visibleSteps` filters this array based on state.
+ * this order; `visibleSteps` filters this array based on state. The
+ * `inviteOtherPlayers` step is intentionally last — that's what makes
+ * the wizard's `isLastStep` flip the sticky CTA to "Start playing"
+ * on the invite panel, so the user lands on a one-click outbound
+ * affordance right before they enter Play mode.
  */
 const ALL_STEP_IDS: ReadonlyArray<WizardStepId> = [
     "cardPack",
@@ -31,6 +36,7 @@ const ALL_STEP_IDS: ReadonlyArray<WizardStepId> = [
     "handSizes",
     "myCards",
     "knownCards",
+    "inviteOtherPlayers",
 ];
 
 /**
@@ -91,6 +97,10 @@ export function isStepDataComplete(
             );
         case "knownCards":
             return state.knownCards.length > 0;
+        case "inviteOtherPlayers":
+            // Always considered complete — the step is purely an
+            // optional outbound action with no stored data to gate on.
+            return true;
     }
 }
 
@@ -146,6 +156,7 @@ export function stepIsSkippable(stepId: WizardStepId): boolean {
         case "handSizes":
         case "myCards":
         case "knownCards":
+        case "inviteOtherPlayers":
             return true;
     }
 }
@@ -197,6 +208,8 @@ export function stepValidationLevel(
         case "myCards":
             return VALIDATION_VALID;
         case "knownCards":
+            return VALIDATION_VALID;
+        case "inviteOtherPlayers":
             return VALIDATION_VALID;
     }
 }

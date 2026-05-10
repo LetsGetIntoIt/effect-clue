@@ -22,6 +22,7 @@ import { useSetupWizardFocus } from "./SetupWizardFocusContext";
 import { SetupStepCardPack } from "./steps/SetupStepCardPack";
 import { SetupStepHandSizes } from "./steps/SetupStepHandSizes";
 import { SetupStepIdentity } from "./steps/SetupStepIdentity";
+import { SetupStepInviteOtherPlayers } from "./steps/SetupStepInviteOtherPlayers";
 import { SetupStepKnownCards } from "./steps/SetupStepKnownCards";
 import { SetupStepMyCards } from "./steps/SetupStepMyCards";
 import { SetupStepPlayers } from "./steps/SetupStepPlayers";
@@ -596,6 +597,19 @@ export function SetupWizard() {
                     if (id === "knownCards") {
                         return (
                             <SetupStepKnownCards
+                                key={id}
+                                state={panelState}
+                                stepNumber={stepNumber}
+                                totalSteps={totalSteps}
+                                onClickToEdit={() => reEnter(id)}
+                                registerPanelEl={registerPanelEl}
+                                footer={stickyFooter}
+                            />
+                        );
+                    }
+                    if (id === "inviteOtherPlayers") {
+                        return (
+                            <SetupStepInviteOtherPlayers
                                 key={id}
                                 state={panelState}
                                 stepNumber={stepNumber}
