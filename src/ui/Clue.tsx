@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, type Variants } from "motion/react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { gameSetupStarted } from "../analytics/events";
 import { startSetup } from "../analytics/gameSession";
@@ -228,16 +228,41 @@ function ClueShell({
         <InstallPromptProvider>
         <AccountProvider>
         <ShareProvider>
-            <main className="mx-auto flex max-w-[1400px] flex-col gap-5 px-5 pb-24 [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+1.5rem)]">
+            <main className="mx-auto flex max-w-[1400px] flex-col gap-5 px-5 pb-24 [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))]">
+                {/*
+                  Header is `position: fixed` so its `bg-bg` always
+                  spans the full visible viewport, even when the body
+                  is scrolled horizontally on a wide Checklist on
+                  mobile. (`position: sticky` doesn't work for this:
+                  on mobile `<main>` is itself only viewport-wide, so
+                  sticky-left has no room to shift within its parent
+                  and the header bg would only cover ~viewport-40 px
+                  — letting the table's category-header rows peek
+                  through above the title on horizontal scroll.)
+
+                  The fixed header sits below the also-fixed
+                  `<GlobalContradictionBanner />` via the banner-
+                  published `--contradiction-banner-offset`. The
+                  inner wrapper mirrors `<main>`'s `mx-auto
+                  max-w-[1400px] px-5` so on wide desktop viewports
+                  the title and toolbar land at the same x-positions
+                  as main's content (the bg extends edge-to-edge
+                  but the content stays main-aligned). `<main>`'s
+                  padding-top adds `--header-offset` (published by
+                  the ResizeObserver further down) so the in-flow
+                  TabContent below doesn't slide under the header.
+                */}
                 <header
                     ref={headerRef}
-                    className="sticky top-[var(--contradiction-banner-offset,0px)] z-[var(--z-app-chrome)] flex flex-wrap items-center justify-between gap-4 bg-bg py-2 [@media(min-width:800px)]:left-5 [@media(min-width:800px)]:max-w-[calc(100vw-2.5rem)]"
+                    className="fixed inset-x-0 top-[var(--contradiction-banner-offset,0px)] z-[var(--z-app-chrome)] bg-bg"
                 >
-                    <h1 className="m-0 text-[36px] uppercase tracking-[0.08em] text-accent drop-shadow-sm">
-                        {t("title")}
-                    </h1>
-                    <div className="hidden [@media(min-width:800px)]:block">
-                        <Toolbar />
+                    <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-4 px-5 py-2">
+                        <h1 className="m-0 text-[26px] leading-[1.4] uppercase tracking-[0.08em] text-accent drop-shadow-sm">
+                            {t("title")}
+                        </h1>
+                        <div className="hidden [@media(min-width:800px)]:block">
+                            <Toolbar />
+                        </div>
                     </div>
                 </header>
 
@@ -511,6 +536,42 @@ function TabContent() {
         window.scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" });
     }, [topLevelKey]);
 
+    // Apply paint containment ONLY during the Setup ↔ Play slide.
+    // `contain: paint` clips painting at the container's box AND
+    // keeps the off-screen pane's `translateX(±100%)` overflow from
+    // propagating into `body.scrollWidth` — both effects are wanted
+    // mid-animation but unwanted at rest. With containment always on,
+    // a wide Play-mode `<Checklist>` (`min-w-max`) would have its
+    // overflow clipped at this box and `body` would never become
+    // horizontally scrollable on mobile, breaking the load-bearing
+    // "page owns horizontal scroll" invariant.
+    //
+    // Tracking is gated on `hydrated`. The pre-hydration `topLevelKey`
+    // is always `"setup"` (the default uiMode); when hydration resolves
+    // the URL to e.g. `?view=checklist`, `topLevelKey` flips to `"play"`.
+    // That flip happens at the same render where `AnimatePresence`
+    // mounts for the first time — so it has nothing to exit, no exit
+    // animation runs, and `onExitComplete` never fires. Without the
+    // gate we'd flip `isAnimating` to true on that hydration change and
+    // never get a callback to clear it, leaving `contain-paint`
+    // permanently applied and silently killing mobile horizontal
+    // scroll. We capture the post-hydration `topLevelKey` as a
+    // baseline; only subsequent changes from that baseline (real
+    // user-driven slides) flip `isAnimating` true.
+    const [isAnimating, setIsAnimating] = useState(false);
+    const baselineTopLevelKeyForAnim = useRef<"setup" | "play" | null>(null);
+    useEffect(() => {
+        if (!hydrated) return;
+        if (baselineTopLevelKeyForAnim.current === null) {
+            baselineTopLevelKeyForAnim.current = topLevelKey;
+            return;
+        }
+        if (baselineTopLevelKeyForAnim.current === topLevelKey) return;
+        baselineTopLevelKeyForAnim.current = topLevelKey;
+        setIsAnimating(true);
+    }, [hydrated, topLevelKey]);
+    const animationContainClass = isAnimating ? " contain-paint" : "";
+
     // Until URL/localStorage hydration resolves the real view, render
     // a view-agnostic skeleton so the default `"setup"` pane doesn't
     // flash between initial mount and the hydrated dispatch. Gating
@@ -519,11 +580,17 @@ function TabContent() {
     // `hydrated` is true, so `initial={false}` correctly skips the
     // entry animation on whichever hydrated view wins.
     return (
-        <div className="relative grid grid-cols-[minmax(0,1fr)] [grid-template-areas:'stack'] contain-paint">
+        <div
+            className={`relative grid grid-cols-[minmax(0,1fr)] [grid-template-areas:'stack']${animationContainClass}`}
+        >
             {!hydrated ? (
                 <ViewSkeleton />
             ) : (
-            <AnimatePresence custom={direction} initial={false}>
+            <AnimatePresence
+                custom={direction}
+                initial={false}
+                onExitComplete={() => setIsAnimating(false)}
+            >
                 {topLevelKey === UI_SETUP ? (
                     <motion.div
                         key={UI_SETUP}

@@ -506,14 +506,22 @@ export function Checklist() {
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [expandedCell, setExpandedCell]);
 
-    // Close on pointerdown outside the open cell + explanation row.
-    // The cell node lookup is by the same key the focus-restore effect
-    // uses; the row node is captured by the explanation row's callback
-    // ref. A click landing inside either node is "still engaged" and
-    // does not close.
+    // Close on click outside the open cell + explanation row.
+    //
+    // We listen for `click` (not `pointerdown`) so that touch
+    // scrolls — which fire `pointerdown` at the start of every drag —
+    // do NOT dismiss the panel. The page (and the table inside it)
+    // must stay scrollable while details are open: a `click` only
+    // fires on a tap that didn't move significantly, which is the
+    // gesture we actually want to count as "outside dismiss".
+    //
+    // The cell node lookup is by the same key the focus-restore
+    // effect uses; the row node is captured by the explanation row's
+    // callback ref. A click landing inside either node is "still
+    // engaged" and does not close.
     useEffect(() => {
         if (expandedCell === null) return;
-        const onPointerDownOutside = (e: PointerEvent) => {
+        const onClickOutside = (e: MouseEvent) => {
             const target = e.target as Node | null;
             if (target === null) return;
             const key = `${ownerKey(expandedCell.owner, playerColumnKeys)}-${String(expandedCell.card)}`;
@@ -523,16 +531,15 @@ export function Checklist() {
             if (rowNode && rowNode.contains(target)) return;
             setExpandedCell(null);
         };
-        // Use capture phase so we run before any click handlers inside
-        // the table (e.g. tapping a different cell) — the cell's own
-        // click handler will then re-establish the right open state.
-        window.addEventListener("pointerdown", onPointerDownOutside, true);
+        // Capture phase so we run before any React onClick inside the
+        // table (e.g. tapping a different cell) — the closure's stale
+        // `expandedCell` would otherwise dismiss after the cell's own
+        // handler reopened on the new target. Capture-then-bubble
+        // means React's batched setExpandedCell(null)→setExpandedCell(
+        // newCell) collapses to `newCell`.
+        window.addEventListener("click", onClickOutside, true);
         return () =>
-            window.removeEventListener(
-                "pointerdown",
-                onPointerDownOutside,
-                true,
-            );
+            window.removeEventListener("click", onClickOutside, true);
     }, [expandedCell, playerColumnKeys, setExpandedCell]);
 
     const owners: ReadonlyArray<Owner> = allOwners(setup);
