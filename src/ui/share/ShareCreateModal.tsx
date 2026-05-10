@@ -77,7 +77,8 @@ import { useSession } from "../hooks/useSession";
 import { authClient } from "../account/authClient";
 import { DevSignInForm } from "../account/DevSignInForm";
 import { T_STANDARD, useReducedTransition } from "../motion";
-import { CheckIcon, ClipboardIcon, XIcon } from "../components/Icons";
+import { CheckIcon, ClipboardIcon, QrCodeIcon, XIcon } from "../components/Icons";
+import { useModalStack } from "../components/ModalStack";
 import { QrCodeSvg } from "./QrCodeSvg";
 import { useCardPackUsage } from "../../data/cardPackUsage";
 import { useCustomCardPacks } from "../../data/customCardPacks";
@@ -348,8 +349,6 @@ const buildTransferInput = (
 });
 
 interface ShareCreateModalProps {
-    readonly open: boolean;
-    readonly onClose: () => void;
     readonly variant: ShareVariant;
     /**
      * Override pack used by `pack` variant when opened from the picker
@@ -369,9 +368,10 @@ interface ShareCreateModalProps {
     readonly onResumeConsumed?: () => void;
 }
 
+export const SHARE_CREATE_MODAL_ID = "share-create" as const;
+export const SHARE_CREATE_MODAL_MAX_WIDTH = "min(92vw,480px)" as const;
+
 export function ShareCreateModal({
-    open,
-    onClose,
     variant,
     forcedCardPack,
     forcedCardPackLabel,
@@ -390,25 +390,14 @@ export function ShareCreateModal({
     const customPacks = customPacksQuery.data ?? [];
     const usage = usageQuery.data ?? new Map<string, DateTime.Utc>();
     const transition = useReducedTransition(T_STANDARD);
+    const { pop } = useModalStack();
     const [step, setStep] = useState<Step>(STEP_TOGGLES);
     const [direction, setDirection] = useState<1 | -1>(1);
     const pendingRetryRef = useRef(false);
-    // Optional "include progress" checkbox in the invite variant.
-    // Re-seeded on each open so the prior session's choice doesn't
-    // bleed into a fresh modal mount.
+    // Optional "include progress" checkbox in the invite variant. Lives
+    // in component state — the modal mounts fresh on each push so the
+    // initial value is always `false`, no per-open reset effect needed.
     const [includeProgress, setIncludeProgress] = useState(false);
-    const prevOpenRef = useRef(open);
-    useEffect(() => {
-        if (open && !prevOpenRef.current) {
-            setIncludeProgress(false);
-            setHasCopied(false);
-            setInlineCheckUntil(null);
-            setShareUrl(null);
-            setQrSvg(null);
-            setQrShown(false);
-        }
-        prevOpenRef.current = open;
-    }, [open]);
     const [submitting, setSubmitting] = useState(false);
     // Sticky-once-true within the modal session: drives the bottom-CTA
     // transition from "Copy link" → "Done". Set by either the bottom
@@ -634,13 +623,15 @@ export function ShareCreateModal({
      * Bottom-CTA dispatcher — drives the four-state machine
      * (Generate → Copy → Done) plus the anonymous "Sign in" branch.
      *
-     *   1. hasCopied  → close the modal (CTA reads "Done")
-     *   2. shareUrl   → copy the existing URL (CTA reads "Copy link")
+     *   1. done state  → close the modal (CTA reads "Done"). User is
+     *      "done" once they've copied OR revealed the QR — both are
+     *      ways of actually sharing the link.
+     *   2. shareUrl    → copy the existing URL (CTA reads "Copy link")
      *   3. needsSignIn → slide to sign-in step
-     *   4. else       → generate the share via createShare
+     *   4. else        → generate the share via createShare
      */
     const onCreate = async (): Promise<void> => {
-        if (hasCopied) {
+        if (hasCopied || qrShown) {
             close();
             return;
         }
@@ -738,7 +729,7 @@ export function ShareCreateModal({
 
     const resumedRef = useRef<PendingShareIntent | null>(null);
     useEffect(() => {
-        if (!open || resumeIntent === undefined) return;
+        if (resumeIntent === undefined) return;
         if (resumedRef.current === resumeIntent) return;
         resumedRef.current = resumeIntent;
         void createFromPayload(resumeIntent.payload, {
@@ -746,7 +737,7 @@ export function ShareCreateModal({
             packIsCustom: resumeIntent.packIsCustom,
             includesProgress: resumeIntent.includesProgress,
         }).then(() => onResumeConsumed?.());
-    }, [createFromPayload, onResumeConsumed, open, resumeIntent]);
+    }, [createFromPayload, onResumeConsumed, resumeIntent]);
 
     const goBackToToggles = (): void => {
         pendingRetryRef.current = false;
@@ -754,64 +745,50 @@ export function ShareCreateModal({
         setStep(STEP_TOGGLES);
     };
 
+    // Closing pops this modal off the stack. The component unmounts,
+    // so any local state (`step`, `shareUrl`, `qrShown`, etc.) is
+    // discarded — the next push of `share-create` mounts a fresh
+    // component with default state.
     const close = (): void => {
-        setHasCopied(false);
-        setInlineCheckUntil(null);
-        setShareUrl(null);
-        setQrSvg(null);
-        setQrShown(false);
-        setError(null);
-        setStep(STEP_TOGGLES);
-        setDirection(1);
         pendingRetryRef.current = false;
-        onClose();
+        pop();
     };
 
     const titleKey = TITLE_KEY_FOR[variant];
     const descriptionKey = DESCRIPTION_KEY_FOR[variant];
 
+    // Once the URL is in hand AND the user has either copied it or
+    // revealed the QR (the two ways someone "uses" the link), flip the
+    // bottom CTA to "Done" — clicking it closes the modal. Without the
+    // QR branch the user who scans-but-doesn't-copy is still nudged to
+    // "Copy link," which feels off after they've already shared.
+    const isDoneState = hasCopied || qrShown;
     const ctaLabel = submitting
         ? t(CREATING_KEY)
         : needsSignIn && shareUrl === null
             ? t(SIGN_IN_TO_SHARE_KEY)
             : shareUrl === null
                 ? t(GENERATE_LINK_KEY)
-                : !hasCopied
-                    ? t(COPY_LINK_KEY)
-                    : t(DONE_KEY);
+                : isDoneState
+                    ? t(DONE_KEY)
+                    : t(COPY_LINK_KEY);
 
     return (
-        <Dialog.Root open={open} onOpenChange={(next) => !next && close()}>
-            <Dialog.Portal>
-                <Dialog.Overlay className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/40" />
-                <Dialog.Content
-                    className={
-                        // `max-h` + `overflow-y-auto` is a safety net so
-                        // the modal never extends past the visible
-                        // viewport. The QR canvas inside `QrCodeSvg`
-                        // already self-caps its size against
-                        // `100dvh - 24rem`, so on any reasonable screen
-                        // the QR sits naturally and the scroll never
-                        // triggers; the cap here just covers edge
-                        // cases (very short landscape phones, an
-                        // unusually long pack-includes list, etc.).
-                        "fixed left-1/2 top-1/2 z-[var(--z-dialog-content)] flex max-h-[calc(100dvh-2rem)] w-[min(92vw,480px)] flex-col " +
-                        "-translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-[var(--radius)] border border-border " +
-                        "bg-panel shadow-[0_10px_28px_rgba(0,0,0,0.28)] focus:outline-none"
-                    }
-                >
+                <div className="flex flex-col">
                     <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
                         <Dialog.Title className="m-0 font-display text-[20px] text-accent">
                             {step === STEP_TOGGLES
                                 ? t(titleKey)
                                 : t(SIGN_IN_TITLE_KEY)}
                         </Dialog.Title>
-                        <Dialog.Close
+                        <button
+                            type="button"
                             aria-label={tCommon("close")}
+                            onClick={close}
                             className="-mt-1 -mr-1 cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-[#2a1f12] hover:bg-hover"
                         >
                             <XIcon size={18} />
-                        </Dialog.Close>
+                        </button>
                     </div>
                     <div className="relative grid grid-cols-[minmax(0,1fr)] [grid-template-areas:'stack'] overflow-hidden">
                         <AnimatePresence custom={direction} initial={false} mode={PRESENCE_WAIT_MODE}>
@@ -993,10 +970,11 @@ export function ShareCreateModal({
                                                             kind: variant,
                                                         });
                                                     }}
-                                                    className="cursor-pointer self-start border-none bg-transparent p-0 text-[12px] font-semibold text-accent underline hover:text-accent-hover"
+                                                    className="tap-target text-tap inline-flex cursor-pointer items-center justify-center gap-2 rounded-[var(--radius)] border border-border bg-white font-semibold text-accent hover:bg-hover"
                                                     data-share-show-qr
                                                 >
-                                                    {t(SHOW_QR_CODE_KEY)}
+                                                    <QrCodeIcon size={16} />
+                                                    <span>{t(SHOW_QR_CODE_KEY)}</span>
                                                 </button>
                                             ) : null}
                                             {qrShown && qrSvg !== null ? (
@@ -1070,8 +1048,6 @@ export function ShareCreateModal({
                             </button>
                         ) : null}
                     </div>
-                </Dialog.Content>
-            </Dialog.Portal>
-        </Dialog.Root>
+                </div>
     );
 }

@@ -13,13 +13,17 @@
  *   - "Set up new game" → primary CTA, calls `onSetupNewGame()`.
  *     The caller is responsible for dispatching `newGame` and
  *     redirecting to the setup pane.
- *   - "Keep working" / X / Esc / overlay click → calls `onKeepWorking()`.
+ *   - "Keep working" / X / Esc / outside-click → calls `onKeepWorking()`.
  *     The caller persists a snooze so we don't re-prompt every page
  *     load.
  *
  * Auto-focus lands on "Keep working" — wiping the game is the
  * destructive action, so an Enter on muscle memory should NOT be the
  * thing that wipes it. Mirrors the install-prompt focus bias.
+ *
+ * Rendered via the global modal stack — the content component itself
+ * has no `Dialog.Root`. `useStaleGameModalGate` watches the consumer
+ * gate and pushes / pops the entry as the gate flips.
  */
 "use client";
 
@@ -28,6 +32,7 @@ import { DateTime, Duration } from "effect";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef } from "react";
 import { ArrowRightIcon, XIcon } from "./Icons";
+import { useModalStack } from "./ModalStack";
 
 export type StaleGameVariant = "started" | "unstarted";
 
@@ -35,6 +40,9 @@ export type StaleGameVariant = "started" | "unstarted";
 // the i18next/no-literal-string rule treats them as identifiers.
 export const STALE_GAME_VARIANT_STARTED: StaleGameVariant = "started";
 export const STALE_GAME_VARIANT_UNSTARTED: StaleGameVariant = "unstarted";
+
+const STALE_GAME_MODAL_ID = "stale-game" as const;
+const STALE_GAME_MAX_WIDTH = "min(92vw,480px)" as const;
 
 // next-intl key names for the per-variant body copy. Same rationale.
 const STALE_GAME_DESCRIPTION_KEY_STARTED = "descriptionStarted" as const;
@@ -48,12 +56,6 @@ type TranslateFn = (
     values?: Record<string, string | number>,
 ) => string;
 
-/**
- * Render a coarse "N day(s)" / "N hour(s)" string for the modal body.
- * We deliberately keep it imprecise — the user only needs to know
- * whether this game is "the one I worked on yesterday" or "the one
- * from last month".
- */
 const humanizeIdleDuration = (
     duration: Duration.Duration,
     t: TranslateFn,
@@ -72,29 +74,21 @@ const humanizeIdleDuration = (
     });
 };
 
-export function StaleGameModal({
-    open,
+interface StaleGameModalContentProps {
+    readonly variant: StaleGameVariant;
+    readonly referenceTimestamp: DateTime.Utc;
+    readonly now: DateTime.Utc;
+    readonly onSetupNewGame: () => void;
+    readonly onKeepWorking: () => void;
+}
+
+function StaleGameModalContent({
     variant,
     referenceTimestamp,
     now,
     onSetupNewGame,
     onKeepWorking,
-}: {
-    readonly open: boolean;
-    readonly variant: StaleGameVariant;
-    /**
-     * For "started": the most recent `lastModifiedAt`.
-     * For "unstarted": the `createdAt`.
-     * Used for the human-readable "you haven't touched this in
-     * {duration}" copy. Caller is responsible for picking the right
-     * one — the modal only stringifies it.
-     */
-    readonly referenceTimestamp: DateTime.Utc;
-    /** Snapshot of "now" at modal open. Pure render function input. */
-    readonly now: DateTime.Utc;
-    readonly onSetupNewGame: () => void;
-    readonly onKeepWorking: () => void;
-}) {
+}: StaleGameModalContentProps) {
     const t = useTranslations("staleGame");
     const tCommon = useTranslations("common");
     const keepWorkingRef = useRef<HTMLButtonElement | null>(null);
@@ -105,22 +99,15 @@ export function StaleGameModal({
     );
     const humanDuration = humanizeIdleDuration(idleDuration, t);
 
-    // Fallback focus pull when the modal goes from closed to open.
-    // `onOpenAutoFocus` covers the "mount with open=true" case; this
-    // handles "mount with open=false → re-render with open=true",
-    // which is the boot path coming out of the StartupCoordinator.
-    // The setTimeout (vs rAF) is a deliberate choice — Radix Dialog's
-    // FocusScope sets focus from a useEffect that runs after the
-    // first paint, so an rAF-deferred focus can lose the race. A
-    // small macrotask delay lets FocusScope settle before we
-    // override with the cancel-biased target.
+    // Focus the safe option on mount (single rAF — see SplashModal for
+    // the same pattern). Wiping the game is the destructive action;
+    // muscle-memory Enter should NOT be what triggers it.
     useEffect(() => {
-        if (!open) return;
-        const id = window.setTimeout(() => {
+        const id = window.requestAnimationFrame(() => {
             keepWorkingRef.current?.focus();
-        }, 50);
-        return () => window.clearTimeout(id);
-    }, [open]);
+        });
+        return () => window.cancelAnimationFrame(id);
+    }, []);
 
     const descriptionKey =
         variant === STALE_GAME_VARIANT_STARTED
@@ -128,67 +115,114 @@ export function StaleGameModal({
             : STALE_GAME_DESCRIPTION_KEY_UNSTARTED;
 
     return (
-        <Dialog.Root
-            open={open}
-            onOpenChange={(next) => {
-                if (!next) onKeepWorking();
-            }}
-        >
-            <Dialog.Portal>
-                <Dialog.Overlay className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/40" />
-                <Dialog.Content
-                    className={
-                        "fixed left-1/2 top-1/2 z-[var(--z-dialog-content)] flex w-[min(92vw,480px)] flex-col "
-                        + "-translate-x-1/2 -translate-y-1/2 rounded-[var(--radius)] border border-border "
-                        + "bg-panel shadow-[0_10px_28px_rgba(0,0,0,0.28)] focus:outline-none"
-                    }
-                    onOpenAutoFocus={(e) => {
-                        e.preventDefault();
-                        // `setTimeout` rather than rAF so we settle
-                        // after Radix's FocusScope, which can win
-                        // races with a single rAF-deferred focus call.
-                        window.setTimeout(() => {
-                            keepWorkingRef.current?.focus();
-                        }, 50);
-                    }}
+        <div className="flex flex-col">
+            <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
+                <Dialog.Title className="m-0 font-display text-[20px] text-accent">
+                    {t("title")}
+                </Dialog.Title>
+                <button
+                    type="button"
+                    aria-label={tCommon("close")}
+                    onClick={onKeepWorking}
+                    className="-mt-1 -mr-1 cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-[#2a1f12] hover:bg-hover"
                 >
-                    <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
-                        <Dialog.Title className="m-0 font-display text-[20px] text-accent">
-                            {t("title")}
-                        </Dialog.Title>
-                        <Dialog.Close
-                            aria-label={tCommon("close")}
-                            className="-mt-1 -mr-1 cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-[#2a1f12] hover:bg-hover"
-                        >
-                            <XIcon size={18} />
-                        </Dialog.Close>
-                    </div>
-                    <Dialog.Description className="px-5 pt-3 pb-1 text-[14px] leading-relaxed">
-                        {t(descriptionKey, { humanDuration })}
-                    </Dialog.Description>
-                    <div className="mt-4 flex items-center justify-end gap-2 border-t border-border bg-panel px-5 pt-4 pb-5">
-                        <button
-                            ref={keepWorkingRef}
-                            type="button"
-                            onClick={onKeepWorking}
-                            className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white hover:bg-hover"
-                        >
-                            {t("keepWorking")}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={onSetupNewGame}
-                            className={
-                                "tap-target text-tap inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius)] border-2 border-accent bg-accent "
-                                + "font-semibold text-white hover:bg-accent-hover"
-                            }
-                        >
-                            <span>{t("setupNew")}</span>
-                            <ArrowRightIcon size={16} />
-                        </button>
-                    </div>
-                </Dialog.Content>
-            </Dialog.Portal>
-        </Dialog.Root>
+                    <XIcon size={18} />
+                </button>
+            </div>
+            <p className="px-5 pt-3 pb-1 text-[14px] leading-relaxed">
+                {t(descriptionKey, { humanDuration })}
+            </p>
+            <div className="mt-4 flex items-center justify-end gap-2 border-t border-border bg-panel px-5 pt-4 pb-5">
+                <button
+                    ref={keepWorkingRef}
+                    type="button"
+                    onClick={onKeepWorking}
+                    className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white hover:bg-hover"
+                >
+                    {t("keepWorking")}
+                </button>
+                <button
+                    type="button"
+                    onClick={onSetupNewGame}
+                    className={
+                        "tap-target text-tap inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius)] border-2 border-accent bg-accent "
+                        + "font-semibold text-white hover:bg-accent-hover"
+                    }
+                >
+                    <span>{t("setupNew")}</span>
+                    <ArrowRightIcon size={16} />
+                </button>
+            </div>
+        </div>
     );
+}
+
+interface StaleGameModalGateProps {
+    readonly open: boolean;
+    readonly variant: StaleGameVariant;
+    /**
+     * For "started": the most recent `lastModifiedAt`.
+     * For "unstarted": the `createdAt`.
+     */
+    readonly referenceTimestamp: DateTime.Utc;
+    /** Snapshot of "now" at modal open. Pure render function input. */
+    readonly now: DateTime.Utc;
+    readonly onSetupNewGame: () => void;
+    readonly onKeepWorking: () => void;
+}
+
+/** Push / pop the stale-game modal as the consumer's gate flips. */
+function useStaleGameModalGate({
+    open,
+    variant,
+    referenceTimestamp,
+    now,
+    onSetupNewGame,
+    onKeepWorking,
+}: StaleGameModalGateProps): void {
+    const t = useTranslations("staleGame");
+    const { push, popTo } = useModalStack();
+    // Hold callbacks + translated title in refs (see SplashModal for
+    // why — `useTranslations` returns an unstable reference under some
+    // test mocks, and the consumer recreates handlers every render).
+    const handlersRef = useRef({ onSetupNewGame, onKeepWorking });
+    handlersRef.current = { onSetupNewGame, onKeepWorking };
+    const titleRef = useRef("");
+    titleRef.current = t("title");
+    useEffect(() => {
+        if (!open) return;
+        push({
+            id: STALE_GAME_MODAL_ID,
+            title: titleRef.current,
+            maxWidth: STALE_GAME_MAX_WIDTH,
+            content: (
+                <StaleGameModalContent
+                    variant={variant}
+                    referenceTimestamp={referenceTimestamp}
+                    now={now}
+                    onSetupNewGame={() => {
+                        popTo(STALE_GAME_MODAL_ID);
+                        handlersRef.current.onSetupNewGame();
+                    }}
+                    onKeepWorking={() => {
+                        popTo(STALE_GAME_MODAL_ID);
+                        handlersRef.current.onKeepWorking();
+                    }}
+                />
+            ),
+        });
+        return () => {
+            popTo(STALE_GAME_MODAL_ID);
+        };
+    }, [open, variant, referenceTimestamp, now, push, popTo]);
+}
+
+/**
+ * Backwards-compatible component wrapper around `useStaleGameModalGate`.
+ * Tests can keep mounting `<StaleGameModal open ... />` directly without
+ * hand-pushing onto the stack.
+ */
+export function StaleGameModal(props: StaleGameModalGateProps) {
+    useStaleGameModalGate(props);
+    return null;
 }

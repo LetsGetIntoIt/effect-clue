@@ -7,6 +7,7 @@ vi.mock("next-intl", () => {
     return { useTranslations: () => t };
 });
 
+import { ModalStackProvider, ModalStackShell } from "../components/ModalStack";
 import { PromptProvider, usePrompt } from "./usePrompt";
 
 function Trigger({
@@ -36,9 +37,12 @@ function Trigger({
 const renderHarness = () => {
     const captured: { current: string | null | "unset" } = { current: "unset" };
     const utils = render(
-        <PromptProvider>
-            <Trigger captured={captured} />
-        </PromptProvider>,
+        <ModalStackProvider>
+            <PromptProvider>
+                <Trigger captured={captured} />
+                <ModalStackShell />
+            </PromptProvider>
+        </ModalStackProvider>,
     );
     return { ...utils, captured };
 };
@@ -48,7 +52,10 @@ describe("usePrompt", () => {
         const user = userEvent.setup();
         renderHarness();
         await user.click(screen.getByTestId("open"));
-        expect(screen.getByText("Rename pack")).toBeInTheDocument();
+        // Title appears twice — sr-only (shell's Dialog.Title for
+        // accessibility) and visible (PromptModalContent's h2). Both
+        // are intentional.
+        expect(screen.getAllByText("Rename pack").length).toBeGreaterThan(0);
         const input = screen.getByDisplayValue("Old name") as HTMLInputElement;
         expect(input).toHaveFocus();
         // Auto-select-all on open.

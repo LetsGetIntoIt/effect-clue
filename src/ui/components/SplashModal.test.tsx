@@ -29,15 +29,27 @@ afterEach(() => {
     captureCalls.length = 0;
 });
 
+import {
+    ModalStackProvider,
+    ModalStackShell,
+} from "./ModalStack";
+
 const importModal = async () => {
     const mod = await import("./SplashModal");
     return mod.SplashModal;
 };
 
+const wrapped = (node: React.ReactNode) => (
+    <ModalStackProvider>
+        {node}
+        <ModalStackShell />
+    </ModalStackProvider>
+);
+
 describe("SplashModal", () => {
     test("renders title, content, and primary button when open", async () => {
         const SplashModal = await importModal();
-        render(<SplashModal open onDismiss={() => {}} />);
+        render(wrapped(<SplashModal open onDismiss={() => {}} />));
         expect(screen.getByText("splash.title")).toBeInTheDocument();
         expect(screen.getByTestId("yt-mock")).toBeInTheDocument();
         expect(
@@ -47,13 +59,13 @@ describe("SplashModal", () => {
 
     test("renders nothing when closed", async () => {
         const SplashModal = await importModal();
-        render(<SplashModal open={false} onDismiss={() => {}} />);
+        render(wrapped(<SplashModal open={false} onDismiss={() => {}} />));
         expect(screen.queryByText("splash.title")).not.toBeInTheDocument();
     });
 
     test("auto-focuses the CTA, not the X", async () => {
         const SplashModal = await importModal();
-        render(<SplashModal open onDismiss={() => {}} />);
+        render(wrapped(<SplashModal open onDismiss={() => {}} />));
         const cta = screen.getByRole("button", {
             name: "splash.startPlaying",
         });
@@ -65,7 +77,7 @@ describe("SplashModal", () => {
     test("'Start playing' fires dismiss with method=start_playing and the checkbox state", async () => {
         const onDismiss = vi.fn();
         const SplashModal = await importModal();
-        render(<SplashModal open onDismiss={onDismiss} />);
+        render(wrapped(<SplashModal open onDismiss={onDismiss} />));
         fireEvent.click(screen.getByRole("button", { name: "splash.startPlaying" }));
         expect(onDismiss).toHaveBeenCalledWith(false);
         expect(captureCalls).toHaveLength(1);
@@ -92,7 +104,7 @@ describe("SplashModal", () => {
     test("X close fires dismiss with method=x_button", async () => {
         const onDismiss = vi.fn();
         const SplashModal = await importModal();
-        render(<SplashModal open onDismiss={onDismiss} />);
+        render(wrapped(<SplashModal open onDismiss={onDismiss} />));
         fireEvent.click(screen.getByRole("button", { name: "splash.close" }));
         expect(onDismiss).toHaveBeenCalledWith(false);
         expect(captureCalls).toHaveLength(1);
@@ -114,7 +126,7 @@ describe("SplashModal", () => {
         const user = userEvent.setup();
         const onDismiss = vi.fn();
         const SplashModal = await importModal();
-        render(<SplashModal open onDismiss={onDismiss} />);
+        render(wrapped(<SplashModal open onDismiss={onDismiss} />));
         await user.click(screen.getByRole("checkbox"));
         await user.click(screen.getByRole("button", { name: "splash.startPlaying" }));
         expect(onDismiss).toHaveBeenCalledWith(true);

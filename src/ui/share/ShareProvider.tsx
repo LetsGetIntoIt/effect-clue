@@ -1,6 +1,5 @@
 /**
- * Owns the open/closed state of the share-create modal and the
- * variant + per-call options the entry point selects.
+ * Owns the three sender entry points for the share modal.
  *
  * Three named openers, one per flow:
  *   - `openShareCardPack({ forcedCardPack?, packLabel? })` —
@@ -12,11 +11,11 @@
  *   - `openContinueOnAnotherDevice()` — full transfer share with
  *     all private game state. Overflow menu only.
  *
- * The previous `openModal` / `openModalWith({ initialToggles, ... })`
- * API was removed in M22 — the toggle-based contract leaked the
- * server's column structure into the UI. The variant API is the
- * stable surface; new sender entry points should reuse one of the
- * three openers rather than passing toggles directly.
+ * Each opener pushes a `ShareCreateModal` content entry onto the
+ * global modal stack with the appropriate variant + per-call options.
+ * No own `Dialog.Root` — the stack shell renders the modal and slides
+ * it in over whatever else was already open (e.g. AccountModal during
+ * the My Card Packs share path).
  */
 "use client";
 
@@ -26,16 +25,23 @@ import {
     useContext,
     useEffect,
     useMemo,
-    useState,
+    useRef,
     type ReactNode,
 } from "react";
+import { useTranslations } from "next-intl";
 import type { CardSet } from "../../logic/CardSet";
+import { useModalStack } from "../components/ModalStack";
 import { useSession } from "../hooks/useSession";
 import {
     consumePendingShareIntent,
     type PendingShareIntent,
 } from "./pendingShare";
-import { ShareCreateModal, type ShareVariant } from "./ShareCreateModal";
+import {
+    SHARE_CREATE_MODAL_ID,
+    SHARE_CREATE_MODAL_MAX_WIDTH,
+    ShareCreateModal,
+    type ShareVariant,
+} from "./ShareCreateModal";
 
 interface OpenSharePackOptions {
     /** When opened from the picker, ships the picked pack instead of
@@ -48,7 +54,6 @@ interface OpenSharePackOptions {
 }
 
 interface ShareContextValue {
-    readonly open: boolean;
     readonly openShareCardPack: (opts?: OpenSharePackOptions) => void;
     readonly openInvitePlayer: () => void;
     readonly openContinueOnAnotherDevice: () => void;
@@ -60,7 +65,6 @@ interface ShareContextValue {
  * (CardPackRow alone, etc.) render without crashing.
  */
 const SHARE_CONTEXT_DEFAULT: ShareContextValue = {
-    open: false,
     openShareCardPack: () => {},
     openInvitePlayer: () => {},
     openContinueOnAnotherDevice: () => {},
@@ -75,78 +79,105 @@ const VARIANT_PACK: ShareVariant = "pack";
 const VARIANT_INVITE: ShareVariant = "invite";
 const VARIANT_TRANSFER: ShareVariant = "transfer";
 
+const TITLE_KEY_FOR: Record<ShareVariant, string> = {
+    [VARIANT_PACK]: "packTitle",
+    [VARIANT_INVITE]: "inviteTitle",
+    [VARIANT_TRANSFER]: "transferTitle",
+};
+
 export function ShareProvider({
     children,
 }: {
     readonly children: ReactNode;
 }) {
-    const [open, setOpen] = useState(false);
-    const [variant, setVariant] = useState<ShareVariant>(VARIANT_PACK);
-    const [forcedCardPack, setForcedCardPack] = useState<
-        CardSet | undefined
-    >(undefined);
-    const [forcedCardPackLabel, setForcedCardPackLabel] = useState<
-        string | undefined
-    >(undefined);
-    const [resumeIntent, setResumeIntent] =
-        useState<PendingShareIntent | null>(null);
+    const t = useTranslations("share");
+    const { push } = useModalStack();
     const session = useSession();
+    /**
+     * Set when an OAuth round-trip completes with a stashed share
+     * intent — consumed by the resume effect below, which pushes the
+     * share modal pre-loaded with the recovered payload. Cleared via
+     * `onResumeConsumed` (passed into the modal) so a re-open of the
+     * modal doesn't re-consume.
+     */
+    const resumeIntentRef = useRef<PendingShareIntent | null>(null);
+
+    const pushShareModal = useCallback(
+        (
+            variant: ShareVariant,
+            opts: {
+                readonly forcedCardPack?: CardSet;
+                readonly forcedCardPackLabel?: string;
+                readonly resumeIntent?: PendingShareIntent;
+            } = {},
+        ) => {
+            push({
+                id: SHARE_CREATE_MODAL_ID,
+                title: t(TITLE_KEY_FOR[variant]),
+                maxWidth: SHARE_CREATE_MODAL_MAX_WIDTH,
+                content: (
+                    <ShareCreateModal
+                        variant={variant}
+                        {...(opts.forcedCardPack !== undefined
+                            ? { forcedCardPack: opts.forcedCardPack }
+                            : {})}
+                        {...(opts.forcedCardPackLabel !== undefined
+                            ? { forcedCardPackLabel: opts.forcedCardPackLabel }
+                            : {})}
+                        {...(opts.resumeIntent !== undefined
+                            ? { resumeIntent: opts.resumeIntent }
+                            : {})}
+                        onResumeConsumed={() => {
+                            resumeIntentRef.current = null;
+                        }}
+                    />
+                ),
+            });
+        },
+        [push, t],
+    );
 
     const openShareCardPack = useCallback(
         (opts?: OpenSharePackOptions) => {
-            setVariant(VARIANT_PACK);
-            setForcedCardPack(opts?.forcedCardPack);
-            setForcedCardPackLabel(opts?.packLabel);
-            setOpen(true);
+            pushShareModal(VARIANT_PACK, {
+                ...(opts?.forcedCardPack !== undefined
+                    ? { forcedCardPack: opts.forcedCardPack }
+                    : {}),
+                ...(opts?.packLabel !== undefined
+                    ? { forcedCardPackLabel: opts.packLabel }
+                    : {}),
+            });
         },
-        [],
+        [pushShareModal],
     );
     const openInvitePlayer = useCallback(() => {
-        setVariant(VARIANT_INVITE);
-        setForcedCardPack(undefined);
-        setForcedCardPackLabel(undefined);
-        setOpen(true);
-    }, []);
+        pushShareModal(VARIANT_INVITE);
+    }, [pushShareModal]);
     const openContinueOnAnotherDevice = useCallback(() => {
-        setVariant(VARIANT_TRANSFER);
-        setForcedCardPack(undefined);
-        setForcedCardPackLabel(undefined);
-        setOpen(true);
-    }, []);
-    const closeModal = useCallback(() => {
-        setOpen(false);
-        setResumeIntent(null);
-        // Keep variant + forced state in place — the modal is unmounting,
-        // and clearing now would re-render with default state for a
-        // frame before it goes away.
-    }, []);
+        pushShareModal(VARIANT_TRANSFER);
+    }, [pushShareModal]);
 
+    // Resume a stashed share intent once the user signs in. Drains
+    // localStorage exactly once per signed-in mount; the
+    // `resumeIntentRef` keeps a fresh re-fire from re-pushing the
+    // same intent.
     useEffect(() => {
         const user = session.data?.user;
         if (!user || user.isAnonymous) return;
-        if (open || resumeIntent !== null) return;
+        if (resumeIntentRef.current !== null) return;
         const pending = consumePendingShareIntent();
         if (pending === null) return;
-        setVariant(pending.variant);
-        setForcedCardPack(undefined);
-        setForcedCardPackLabel(undefined);
-        setResumeIntent(pending);
-        setOpen(true);
-    }, [open, resumeIntent, session.data]);
-
-    const onResumeConsumed = useCallback(() => {
-        setResumeIntent(null);
-    }, []);
+        resumeIntentRef.current = pending;
+        pushShareModal(pending.variant, { resumeIntent: pending });
+    }, [pushShareModal, session.data]);
 
     const value = useMemo<ShareContextValue>(
         () => ({
-            open,
             openShareCardPack,
             openInvitePlayer,
             openContinueOnAnotherDevice,
         }),
         [
-            open,
             openShareCardPack,
             openInvitePlayer,
             openContinueOnAnotherDevice,
@@ -154,19 +185,6 @@ export function ShareProvider({
     );
 
     return (
-        <ShareContext.Provider value={value}>
-            {children}
-            <ShareCreateModal
-                open={open}
-                onClose={closeModal}
-                variant={variant}
-                {...(forcedCardPack !== undefined ? { forcedCardPack } : {})}
-                {...(forcedCardPackLabel !== undefined
-                    ? { forcedCardPackLabel }
-                    : {})}
-                {...(resumeIntent !== null ? { resumeIntent } : {})}
-                onResumeConsumed={onResumeConsumed}
-            />
-        </ShareContext.Provider>
+        <ShareContext.Provider value={value}>{children}</ShareContext.Provider>
     );
 }

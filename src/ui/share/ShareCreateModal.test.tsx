@@ -19,7 +19,7 @@
  *     payload silently coming back).
  */
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { forwardRef, createElement, act } from "react";
+import { forwardRef, createElement, act, useRef } from "react";
 import type { ReactNode } from "react";
 
 vi.mock("next-intl", () => {
@@ -102,21 +102,70 @@ vi.mock("../hooks/useSession", () => ({
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ClueProvider } from "../state";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
-import { ShareCreateModal, pickProgressLabelKey } from "./ShareCreateModal";
+import {
+    ModalStackProvider,
+    ModalStackShell,
+    useModalStack,
+} from "../components/ModalStack";
+import {
+    SHARE_CREATE_MODAL_ID,
+    ShareCreateModal,
+    pickProgressLabelKey,
+} from "./ShareCreateModal";
+
+/**
+ * Test seeder — pushes a ShareCreateModal entry onto the modal stack
+ * on mount so the shell renders it. Lets tests assert on the modal's
+ * DOM via `screen` exactly as the legacy `<ShareCreateModal open ...>`
+ * mount did, but routes through the stack so the migrated content
+ * component finds Dialog.Root context.
+ */
+const ShareModalSeeder = ({
+    variant,
+    resumeIntent,
+}: {
+    readonly variant: "pack" | "invite" | "transfer";
+    readonly resumeIntent?: import("./pendingShare").PendingShareIntent;
+}) => {
+    const { push } = useModalStack();
+    const pushedRef = useRef(false);
+    if (!pushedRef.current) {
+        pushedRef.current = true;
+        push({
+            id: SHARE_CREATE_MODAL_ID,
+            title: "Share",
+            content: (
+                <ShareCreateModal
+                    variant={variant}
+                    {...(resumeIntent !== undefined ? { resumeIntent } : {})}
+                />
+            ),
+        });
+    }
+    return null;
+};
+
+const ShareTestWrapper = ({
+    children,
+}: {
+    readonly children: React.ReactNode;
+}) => (
+    <TestQueryClientProvider>
+        <ClueProvider>
+            <ModalStackProvider>
+                {children}
+                <ModalStackShell />
+            </ModalStackProvider>
+        </ClueProvider>
+    </TestQueryClientProvider>
+);
 
 const mountModal = (
     variant: "pack" | "invite" | "transfer",
 ) =>
-    render(
-        <ClueProvider>
-            <ShareCreateModal
-                open={true}
-                onClose={() => {}}
-                variant={variant}
-            />
-        </ClueProvider>,
-        { wrapper: TestQueryClientProvider },
-    );
+    render(<ShareModalSeeder variant={variant} />, {
+        wrapper: ShareTestWrapper,
+    });
 
 const findCta = (): HTMLButtonElement => {
     const el = document.querySelector(
@@ -431,17 +480,7 @@ describe("ShareCreateModal — Generate → Copy → Done CTA", () => {
         mockSession = {
             data: { user: { id: "u1", isAnonymous: false } },
         };
-        const onClose = vi.fn();
-        render(
-            <ClueProvider>
-                <ShareCreateModal
-                    open={true}
-                    onClose={onClose}
-                    variant="pack"
-                />
-            </ClueProvider>,
-            { wrapper: TestQueryClientProvider },
-        );
+        mountModal("pack");
 
         // Generate.
         expect(findCta().textContent).toContain("generateLink");
@@ -461,12 +500,17 @@ describe("ShareCreateModal — Generate → Copy → Done CTA", () => {
             expect(writeText).toHaveBeenCalledTimes(1);
         });
 
-        // Done (third click closes the modal).
+        // Done (third click closes the modal — pops it off the stack
+        // and the shell unmounts the entry).
         expect(findCta().textContent).toContain("done");
         await act(async () => {
             fireEvent.click(findCta());
         });
-        expect(onClose).toHaveBeenCalled();
+        await waitFor(() => {
+            expect(
+                document.querySelector("[data-share-cta]"),
+            ).toBeNull();
+        });
         // Generation only happened once across the whole cycle.
         expect(createShareMock).toHaveBeenCalledTimes(1);
     });
@@ -645,6 +689,53 @@ describe("ShareCreateModal — QR code", () => {
             document.querySelector("[data-share-show-qr]"),
         ).toBeNull();
     });
+
+    test("Clicking 'Show QR code' flips the bottom CTA to 'Done' and clicking Done pops the modal", async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, "clipboard", {
+            configurable: true,
+            value: { writeText },
+        });
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: false } },
+        };
+        mountModal("invite");
+
+        // Generate the link.
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await waitFor(() => {
+            expect(createShareMock).toHaveBeenCalledTimes(1);
+        });
+        // Pre-QR-reveal CTA reads "Copy link".
+        expect(findCta().textContent).toContain("copyLink");
+
+        // Reveal the QR.
+        const showQr = document.querySelector(
+            "[data-share-show-qr]",
+        ) as HTMLButtonElement | null;
+        await act(async () => {
+            fireEvent.click(showQr!);
+        });
+
+        // CTA flips to "Done" without the user copying anything.
+        expect(findCta().textContent).toContain("done");
+
+        // Clicking Done pops the modal.
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await waitFor(() => {
+            expect(
+                document.querySelector("[data-share-cta]"),
+            ).toBeNull();
+        });
+        // No extra createShare on the QR-reveal-then-done path.
+        expect(createShareMock).toHaveBeenCalledTimes(1);
+        // Clipboard was never invoked — user shared via QR, not copy.
+        expect(writeText).not.toHaveBeenCalled();
+    });
 });
 
 describe("ShareCreateModal — sign-in slide", () => {
@@ -710,20 +801,16 @@ describe("ShareCreateModal — sign-in slide", () => {
             }),
         };
         render(
-            <ClueProvider>
-                <ShareCreateModal
-                    open={true}
-                    onClose={() => {}}
-                    variant="pack"
-                    resumeIntent={{
-                        variant: "pack",
-                        payload,
-                        packIsCustom: false,
-                        includesProgress: false,
-                    }}
-                />
-            </ClueProvider>,
-            { wrapper: TestQueryClientProvider },
+            <ShareModalSeeder
+                variant="pack"
+                resumeIntent={{
+                    variant: "pack",
+                    payload,
+                    packIsCustom: false,
+                    includesProgress: false,
+                }}
+            />,
+            { wrapper: ShareTestWrapper },
         );
 
         await waitFor(() => {

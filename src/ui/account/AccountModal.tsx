@@ -46,11 +46,15 @@ import {
     TrashIcon,
     XIcon,
 } from "../components/Icons";
+import { useModalStack } from "../components/ModalStack";
 import { ShareIcon } from "../components/ShareIcon";
 import { useCardPackActions } from "../components/cardPackActions";
 import { AccountAvatar } from "./AccountAvatar";
 import { authClient } from "./authClient";
 import { DevSignInForm } from "./DevSignInForm";
+
+export const ACCOUNT_MODAL_ID = "account" as const;
+export const ACCOUNT_MODAL_MAX_WIDTH = "min(92vw,440px)" as const;
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -124,25 +128,20 @@ export const mergeCardPacks = (
     return [...decodedServer, ...localOnly];
 };
 
-export function AccountModal({
-    open,
-    onClose,
-}: {
-    readonly open: boolean;
-    readonly onClose: () => void;
-}) {
+export function AccountModal() {
     const t = useTranslations("account");
     const tCommon = useTranslations("common");
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const session = useSession();
+    const { pop } = useModalStack();
     const user = session.data?.user;
     const isAnon = !user || user.isAnonymous;
     const localCardPacks = useCustomCardPacks();
     const myCardPacks = useQuery({
         queryKey: myCardPacksQueryKey(user?.id),
         queryFn: getMyCardPacks,
-        enabled: open && !isAnon,
+        enabled: !isAnon,
     });
     const packs = mergeCardPacks(
         localCardPacks.data ?? [],
@@ -181,30 +180,23 @@ export function AccountModal({
 
     const onDevSignedIn = async (): Promise<void> => {
         await session.refetch();
-        onClose();
+        pop();
     };
 
     return (
-        <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
-            <Dialog.Portal>
-                <Dialog.Overlay className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/40" />
-                <Dialog.Content
-                    className={
-                        "fixed left-1/2 top-1/2 z-[var(--z-dialog-content)] flex w-[min(92vw,440px)] flex-col " +
-                        "-translate-x-1/2 -translate-y-1/2 rounded-[var(--radius)] border border-border " +
-                        "bg-panel shadow-[0_10px_28px_rgba(0,0,0,0.28)] focus:outline-none"
-                    }
-                >
+                <div className="flex flex-col">
                     <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
                         <Dialog.Title className="m-0 font-display text-[20px] text-accent">
                             {isAnon ? t("titleSignedOut") : t("titleSignedIn")}
                         </Dialog.Title>
-                        <Dialog.Close
+                        <button
+                            type="button"
                             aria-label={tCommon("close")}
+                            onClick={pop}
                             className="-mt-1 -mr-1 cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-[#2a1f12] hover:bg-hover"
                         >
                             <XIcon size={18} />
-                        </Dialog.Close>
+                        </button>
                     </div>
                     <Dialog.Description className="px-5 pt-3 text-[14px] leading-relaxed">
                         {isAnon ? t("descriptionSignedOut") : t("descriptionSignedIn")}
@@ -368,8 +360,6 @@ export function AccountModal({
                             </div>
                         )}
                     </div>
-                </Dialog.Content>
-            </Dialog.Portal>
-        </Dialog.Root>
+                </div>
     );
 }

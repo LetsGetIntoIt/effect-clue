@@ -63,21 +63,50 @@ vi.mock("../share/ShareProvider", () => ({
 import * as React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DateTime } from "effect";
-import { AccountModal, mergeCardPacks } from "./AccountModal";
+import { AccountModal, ACCOUNT_MODAL_ID, mergeCardPacks } from "./AccountModal";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
+import {
+    ModalStackProvider,
+    ModalStackShell,
+    useModalStack,
+} from "../components/ModalStack";
 import { ConfirmProvider } from "../hooks/useConfirm";
 import { PromptProvider } from "../hooks/usePrompt";
 
 const Wrappers = ({ children }: { readonly children: React.ReactNode }) => (
     <TestQueryClientProvider>
-        <ConfirmProvider>
-            <PromptProvider>{children}</PromptProvider>
-        </ConfirmProvider>
+        <ModalStackProvider>
+            <ConfirmProvider>
+                <PromptProvider>
+                    {children}
+                    {/* Shell mounted inside the providers so pushed
+                        content can read confirm / prompt context. */}
+                    <ModalStackShell />
+                </PromptProvider>
+            </ConfirmProvider>
+        </ModalStackProvider>
     </TestQueryClientProvider>
 );
 
+/**
+ * Push the AccountModal onto the stack on mount. The shell mounted by
+ * `ModalStackProvider` then renders it. Tests query the rendered DOM
+ * via `screen` exactly as before.
+ */
+const AccountModalSeeder = () => {
+    const { push } = useModalStack();
+    React.useEffect(() => {
+        push({
+            id: ACCOUNT_MODAL_ID,
+            title: "Account",
+            content: <AccountModal />,
+        });
+    }, [push]);
+    return null;
+};
+
 const renderModal = () =>
-    render(<AccountModal open={true} onClose={() => {}} />, {
+    render(<AccountModalSeeder />, {
         wrapper: Wrappers,
     });
 
