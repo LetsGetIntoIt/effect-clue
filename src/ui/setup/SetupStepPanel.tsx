@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { T_STANDARD, useReducedTransition } from "../motion";
 import { AlertIcon, CheckIcon } from "../components/Icons";
 import type { StepValidation, WizardStepId } from "./wizardSteps";
@@ -42,11 +43,10 @@ interface Props {
     /**
      * The wizard's CTA footer (Start over / Skip / Next /
      * Start playing). Passed through every step but rendered only
-     * when the panel is in editing state. Inside the panel body,
-     * positioned `sticky bottom-0` so it pins to the visible
-     * viewport bottom while the panel content is taller than the
-     * viewport, and settles at the panel's natural bottom when
-     * the content fits.
+     * when the panel is in editing state. Portaled to `document.body`
+     * so it escapes the framer-motion slide container's transform-
+     * induced containing block; positioned `fixed bottom-0` from there
+     * so it pins to the visible viewport bottom on every device.
      */
     readonly footer?: ReactNode | undefined;
 }
@@ -194,18 +194,21 @@ export function SetupStepPanel({
                 )}
             </AnimatePresence>
             {/*
-              CTA footer rendered OUTSIDE the AnimatePresence motion
-              wrapper so its `position: sticky` isn't trapped by the
-              wrapper's `overflow-hidden` (needed for the height
-              transition). Sticky-bottom inside the section means the
-              bar pins to the visible viewport bottom while the card
-              content is taller than the viewport, and settles at
-              the card's natural bottom when the content fits.
-              `[bottom: 0]` is relative to the body's scroll
-              container (page-level scroll lives on body per
-              app/globals.css).
+              CTA footer is portaled to `document.body` so it escapes
+              the framer-motion `<motion.div>` slide container in
+              `Clue.tsx` (which always carries an inline
+              `transform: translateX(0%)` when at rest). That transform
+              creates a containing block that breaks `position: sticky`
+              and `position: fixed` for descendants on some mobile
+              browsers — most notably Safari. The portal escapes that
+              containing block so the footer's `position: fixed` pins
+              to the visible viewport on every device.
+
+              Don't move the footer back into the wizard's flow without
+              verifying mobile pinning behavior — jsdom can't catch this
+              regression; only a real (or emulated) mobile viewport can.
             */}
-            {isEditing && footer ? footer : null}
+            {isEditing && footer ? <FooterPortal>{footer}</FooterPortal> : null}
 
             {isPending && (
                 <div className="border-t border-border/20 px-4 py-2 text-[12px] text-muted">
@@ -214,4 +217,16 @@ export function SetupStepPanel({
             )}
         </section>
     );
+}
+
+/**
+ * SSR-safe portal wrapper that renders its children into `document.body`.
+ * Used to escape the framer-motion slide container's transform-induced
+ * containing block so the wizard's CTA footer (Start over / Skip / Next)
+ * can pin to the viewport bottom via `position: fixed`. See the
+ * accompanying note at the call site for the full rationale.
+ */
+function FooterPortal({ children }: { children: ReactNode }) {
+    if (typeof document === "undefined") return null;
+    return createPortal(children, document.body);
 }

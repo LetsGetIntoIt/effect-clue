@@ -441,68 +441,84 @@ export function SetupWizard() {
     };
 
     /**
-     * Footer JSX for the editing step. Styled to look like a clear
-     * extension of the card body — same `bg-panel` as the section,
-     * a top divider matching the body's separator, and rounded
-     * bottom corners so it lines up with the card's outer
-     * `rounded-[var(--radius)]` regardless of whether it's pinned
-     * to the viewport (sticky) or sitting at the card's natural
-     * bottom.
+     * Footer JSX for the editing step. A viewport-wide bar pinned to
+     * the page's bottom edge via `position: fixed; bottom: 0`, with
+     * the inner content (Start over / Skip / Next) constrained to the
+     * wizard's `max-w-[720px]` so the buttons stay aligned with the
+     * accordion column above.
      *
-     * `position: sticky; bottom: 0` does the dual-mode behavior:
-     * pins to the visible viewport bottom while the card is taller
-     * than the viewport, and settles at the card's natural bottom
-     * when the card fits. Solid `bg-panel` (not translucent) so the
-     * pinned state doesn't visually leak through to siblings below.
+     * `position: fixed` (not `sticky`) because the wizard renders
+     * inside the framer-motion `<motion.div>` slide container in
+     * `Clue.tsx`, which always carries an inline
+     * `transform: translateX(0%)` at rest. That transform creates a
+     * containing block that breaks `position: sticky` for descendants
+     * on some mobile browsers — most notably Safari. The footer is
+     * portaled to `document.body` (see `FooterPortal` in
+     * `SetupStepPanel.tsx`) so it escapes the motion.div's containing
+     * block; from there `position: fixed` reliably pins to the
+     * visible viewport on every device.
      *
-     * The wizard generates the footer once per render and threads
-     * it through every step component as a `footer` prop. Only the
-     * step in `editing` state actually renders it (the panel hides
-     * the footer in pending / complete state).
+     * `--z-app-chrome` matches `BottomNav`'s z-index. `BottomNav`
+     * doesn't render in setup mode (per `BottomNav.tsx`), so they
+     * never compete for the same area.
+     *
+     * The wizard generates the footer once per render and threads it
+     * through every step component as a `footer` prop. Only the step
+     * in `editing` state actually renders it (the panel hides the
+     * footer in pending / complete state). The wizard's outer
+     * container adds bottom padding to keep the last step's content
+     * from sliding under this fixed bar.
      */
     const stickyFooter = (
         <div
             className={
-                "sticky bottom-0 z-[1] flex flex-wrap items-center gap-2 " +
-                "rounded-b-[var(--radius)] border-t border-border/30 " +
+                "fixed inset-x-0 bottom-0 z-[var(--z-app-chrome)] border-t border-border/30 " +
                 "bg-panel px-4 py-3 " +
                 "[padding-bottom:calc(env(safe-area-inset-bottom,0px)+0.75rem)]"
             }
         >
-            <button
-                type="button"
-                className="tap-target-compact text-tap-compact shrink-0 cursor-pointer rounded border border-border bg-bg hover:bg-hover"
-                onClick={onStartOver}
-            >
-                {t("newGame")}
-            </button>
-            <div className="ml-auto flex items-center gap-2">
+            <div className="mx-auto flex w-full max-w-[720px] flex-wrap items-center gap-2">
                 <button
                     type="button"
-                    className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-bg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={onClickSkip}
-                    disabled={!skipEnabled}
+                    className="tap-target-compact text-tap-compact shrink-0 cursor-pointer rounded border border-border bg-bg hover:bg-hover"
+                    onClick={onStartOver}
                 >
-                    {t("skip")}
+                    {t("newGame")}
                 </button>
-                <button
-                    type="button"
-                    className="tap-target text-tap cursor-pointer rounded border-none bg-accent font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={onClickNext}
-                    disabled={!nextEnabled}
-                    data-tour-anchor={
-                        isLastStep ? "setup-start-playing" : undefined
-                    }
-                    data-setup-cta={isLastStep ? "" : undefined}
-                >
-                    {isLastStep ? startPlayingLabel : t("next")}
-                </button>
+                <div className="ml-auto flex items-center gap-2">
+                    <button
+                        type="button"
+                        className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-bg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={onClickSkip}
+                        disabled={!skipEnabled}
+                    >
+                        {t("skip")}
+                    </button>
+                    <button
+                        type="button"
+                        className="tap-target text-tap cursor-pointer rounded border-none bg-accent font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={onClickNext}
+                        disabled={!nextEnabled}
+                        data-tour-anchor={
+                            isLastStep ? "setup-start-playing" : undefined
+                        }
+                        data-setup-cta={isLastStep ? "" : undefined}
+                    >
+                        {isLastStep ? startPlayingLabel : t("next")}
+                    </button>
+                </div>
             </div>
         </div>
     );
 
     return (
-        <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4">
+        // Bottom padding clears the fixed-position CTA footer (~64px
+        // button row + py-3 padding + safe-area-inset-bottom) so the
+        // last step's content doesn't slide under it. Matches the
+        // padding model `<main>` uses for `BottomNav` clearance on
+        // mobile (`pb-24`), but scoped to setup mode here because
+        // BottomNav doesn't render while the wizard is active.
+        <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4 pb-[calc(64px+env(safe-area-inset-bottom,0px)+1rem)]">
             <header className="flex flex-col gap-1">
                 <h2 className="m-0 text-[24px] font-semibold tracking-tight">
                     {t("heading")}

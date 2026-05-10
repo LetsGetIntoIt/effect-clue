@@ -1,7 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { AnimatePresence, motion } from "motion/react";
 import { ownerLabel, type Player } from "../../logic/GameObjects";
 import type { GameSetup } from "../../logic/GameSetup";
 import type { Cell } from "../../logic/Knowledge";
@@ -13,7 +14,13 @@ import {
     type HypothesisValue,
 } from "../../logic/Hypothesis";
 import { HashMap } from "effect";
-import { AlertIcon, CheckIcon, LightbulbIcon, XIcon } from "./Icons";
+import {
+    AlertIcon,
+    CheckIcon,
+    ChevronRightIcon,
+    LightbulbIcon,
+    XIcon,
+} from "./Icons";
 import { HypothesisControl } from "./HypothesisControl";
 import {
     cellToneClass,
@@ -30,18 +37,12 @@ const KEY_HELP_ACTIVE = "selectedHelpActive" as const;
 const KEY_HELP_CONFIRMED = "selectedHelpConfirmed" as const;
 const KEY_HELP_CONTRADICTED = "selectedHelpContradicted" as const;
 const KEY_HELP_JOINTLY_CONFLICTS = "selectedHelpJointlyConflicts" as const;
-// Observations help-text keys — same hoisting reason. Default copy
-// covers any cell; the self-flavoured copy fires when the row is
-// opened on the user's own player row.
-const KEY_OBS_HELP_DEFAULT = "observationsHelpDefault" as const;
-const KEY_OBS_HELP_SELF = "observationsHelpSelf" as const;
 
-// React keys for the body sections array. Hoisted to module scope so
-// the `no-literal-string` lint rule reads them as code identifiers.
-const SECTION_KEY_OBSERVATIONS = "observations" as const;
-const SECTION_KEY_DEDUCTIONS = "deductions" as const;
-const SECTION_KEY_LEADS = "leads" as const;
-const SECTION_KEY_HYPOTHESIS = "hypothesis" as const;
+// Inline style for the observation-disclosure motion.div. Hoisted so
+// the object identity is stable across renders, and so the literal
+// `"hidden"` value isn't picked up by the `no-literal-string` lint
+// rule inside JSX.
+const STYLE_OBSERVATION_OVERFLOW = { overflow: "hidden" } as const;
 
 interface CellExplanationRowProps {
     readonly cell: Cell;
@@ -75,15 +76,29 @@ interface CellExplanationRowProps {
  * Full-width inline-row content for the checklist's "explain a cell"
  * disclosure. Replaced the per-cell Radix popover so the explanation
  * can take up real estate spanning the whole table without hiding
- * any other rows. Sections (Heading, Observations, Deductions, Leads,
- * Hypothesis) map 1:1 to the same three visual badges on the cell so
- * users learn to read the badges without opening the row. All four
- * body sections render unconditionally — sections without content
+ * any other rows.
+ *
+ * Renders three sections in a stable arrangement that never reflows:
+ *
+ *   - **Deductions** — full-width on row 1 (desktop) or top of stack
+ *     (mobile). Hosts the derivation chain / why-text plus a small
+ *     "Did you observe this card directly?" disclosure (player-owned
+ *     cells only) that wraps the knownCards checkbox. The disclosure
+ *     is the only place the user can mark a cell as directly observed;
+ *     it lives inside Deductions because direct observation and
+ *     deduction together describe everything the solver knows about
+ *     the cell.
+ *   - **Leads** — row 2 left (desktop) or middle of stack (mobile).
+ *   - **Hypothesis** — row 2 right (desktop) or bottom of stack
+ *     (mobile). Hosts the Off / Y / N picker + status box.
+ *
+ * Every section renders unconditionally — sections without content
  * show null-state copy so the layout doesn't shift when content
  * appears (e.g., switching on a hypothesis turns the Deductions
  * section's null state into a populated derivation in place, instead
  * of pushing the Hypothesis section down by adding a new section
- * above it).
+ * above it). The same three sections render for player-owned cells
+ * and case-file cells alike — only the inner content differs.
  */
 export function CellExplanationRow({
     cell,
@@ -105,6 +120,13 @@ export function CellExplanationRow({
 
     const cardLabel =
         findCardEntry(setup, cell.card)?.name ?? String(cell.card);
+
+    // Disclosure state for the "Did you observe this card directly?"
+    // toggle inside Deductions. Seeded from `observed` so a
+    // previously-marked cell shows the checked checkbox without
+    // requiring a tap; the user's first interaction with a fresh
+    // cell starts collapsed.
+    const [observationOpen, setObservationOpen] = useState<boolean>(observed);
 
     interface ActiveHypothesisEntry {
         readonly ownerName: string;
@@ -151,10 +173,16 @@ export function CellExplanationRow({
     const showObservations = cell.owner._tag === "Player";
     const observationOwner =
         cell.owner._tag === "Player" ? cell.owner.player : null;
-    const observationsHelpKey =
-        observationOwner !== null && observationOwner === selfPlayerId
-            ? KEY_OBS_HELP_SELF
-            : KEY_OBS_HELP_DEFAULT;
+    const isOwnPlayer =
+        observationOwner !== null
+        && selfPlayerId !== null
+        && observationOwner === selfPlayerId;
+    const observationCheckboxLabel = isOwnPlayer
+        ? t("observationsCheckboxLabelOwn")
+        : t("observationsCheckboxLabelOther", {
+              player: ownerLabel(cell.owner),
+              card: cardLabel,
+          });
 
     const longStatusMessage = (() => {
         switch (status.kind) {
@@ -238,42 +266,49 @@ export function CellExplanationRow({
         );
     };
 
-    const observationsSection = (
-        <section className="flex flex-col gap-2">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-fg">
-                {t("observationsLabel")}
-            </div>
-            {showObservations ? (
-                <>
-                    <p className="m-0 text-[12px] leading-snug text-muted">
-                        {t(observationsHelpKey)}
-                    </p>
-                    <label className="flex cursor-pointer items-center gap-2 text-[13px]">
-                        <input
-                            type="checkbox"
-                            checked={observed}
-                            onChange={e =>
-                                onObservationChange(e.currentTarget.checked)
-                            }
-                            aria-label={t("observationsCheckboxLabel", {
-                                owner: ownerLabel(cell.owner),
-                                card: cardLabel,
-                            })}
-                        />
-                        <span>
-                            {t("observationsCheckboxLabel", {
-                                owner: ownerLabel(cell.owner),
-                                card: cardLabel,
-                            })}
-                        </span>
-                    </label>
-                </>
-            ) : (
-                <p className="m-0 text-[12px] leading-snug text-muted">
-                    {t("observationsEmptyCaseFile")}
-                </p>
-            )}
-        </section>
+    const observationDisclosure = !showObservations ? null : (
+        <div className="mt-1">
+            <button
+                type="button"
+                onClick={() => setObservationOpen(o => !o)}
+                aria-expanded={observationOpen}
+                aria-controls="cell-observation-disclosure"
+                className="-ml-1 flex cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-[12px] text-muted hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+                <ChevronRightIcon
+                    size={12}
+                    className={`transition-transform ${observationOpen ? "rotate-90" : ""}`}
+                />
+                <span>{t("observationsExpandLabel")}</span>
+            </button>
+            <AnimatePresence initial={false}>
+                {observationOpen && (
+                    <motion.div
+                        key="content"
+                        id="cell-observation-disclosure"
+                        initial={{ height: 0, opacity: 0 }}
+                        // eslint-disable-next-line i18next/no-literal-string -- CSS auto value
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        style={STYLE_OBSERVATION_OVERFLOW}
+                    >
+                        <label className="flex cursor-pointer items-center gap-2 pt-2 text-[13px]">
+                            <input
+                                type="checkbox"
+                                checked={observed}
+                                onChange={e =>
+                                    onObservationChange(
+                                        e.currentTarget.checked,
+                                    )
+                                }
+                                aria-label={observationCheckboxLabel}
+                            />
+                            <span>{observationCheckboxLabel}</span>
+                        </label>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
     );
 
     const deductionsSection = (
@@ -321,6 +356,7 @@ export function CellExplanationRow({
                     {t("deductionsEmpty")}
                 </p>
             )}
+            {observationDisclosure}
         </section>
     );
 
@@ -377,23 +413,12 @@ export function CellExplanationRow({
     );
 
     // Layout: centered title strip on top with the close button
-    // anchored to the right edge, then all four sections laid out
-    // side-by-side with vertical separator lines between them. Every
-    // section renders unconditionally — empty ones show null-state
-    // copy — so the layout doesn't shift when content fills in. The
-    // flex row wraps on narrow viewports so each section keeps a
-    // usable minimum width.
-    interface BodySection {
-        readonly key: string;
-        readonly node: ReactNode;
-    }
-    const bodySections: ReadonlyArray<BodySection> = [
-        { key: SECTION_KEY_OBSERVATIONS, node: observationsSection },
-        { key: SECTION_KEY_DEDUCTIONS, node: deductionsSection },
-        { key: SECTION_KEY_LEADS, node: leadsSection },
-        { key: SECTION_KEY_HYPOTHESIS, node: hypothesisSection },
-    ];
-
+    // anchored to the right edge, then a fixed 3-section grid.
+    // Mobile (1-col, container query <400px): Deductions → Leads →
+    // Hypothesis stacked. Desktop (2-col, ≥400px): Deductions
+    // full-width on row 1, Leads + Hypothesis side-by-side on row 2.
+    // Every section renders unconditionally with null-state copy when
+    // empty so the grid never reflows when content fills in.
     return (
         <div className="flex flex-col">
             <div className="relative px-4 py-2">
@@ -421,22 +446,24 @@ export function CellExplanationRow({
                 motion.div's accent border (the gap fills only between
                 items, never around them).
 
-                Two-column max with the `:last-child:nth-child(odd)`
-                rule (in `globals.css`) spanning the full row when the
-                last item is alone — keeps the layout filling cleanly
-                without leaving an empty grid cell. Container query
-                drops to a single column under 400px wide.
+                Deductions explicitly spans both columns at the desktop
+                breakpoint via `@[400px]/sections:col-span-2`. With a
+                fixed 3-section count and Deductions always full-width,
+                Leads + Hypothesis always sit side-by-side on row 2 at
+                desktop and stacked at mobile — the layout never
+                reflows in response to content changes.
             */}
             <div className="@container/sections">
-                <div className="cell-section-grid grid grid-cols-1 gap-px bg-border @[400px]/sections:grid-cols-2">
-                    {bodySections.map(section => (
-                        <div
-                            key={section.key}
-                            className="flex flex-col gap-2 bg-panel px-4 py-3"
-                        >
-                            {section.node}
-                        </div>
-                    ))}
+                <div className="grid grid-cols-1 gap-px bg-border @[400px]/sections:grid-cols-2">
+                    <div className="flex flex-col gap-2 bg-panel px-4 py-3 @[400px]/sections:col-span-2">
+                        {deductionsSection}
+                    </div>
+                    <div className="flex flex-col gap-2 bg-panel px-4 py-3">
+                        {leadsSection}
+                    </div>
+                    <div className="flex flex-col gap-2 bg-panel px-4 py-3">
+                        {hypothesisSection}
+                    </div>
                 </div>
             </div>
         </div>

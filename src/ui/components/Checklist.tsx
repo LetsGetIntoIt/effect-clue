@@ -479,9 +479,28 @@ export function Checklist() {
         const measure = () => {
             const cellRect = cellNode.getBoundingClientRect();
             const rowRect = rowNode.getBoundingClientRect();
+            // The mask covers the panel's `border-t-2` directly under
+            // the open cell. With the new 3-sided open-cell outline
+            // (3px accent + 2px offset = 5px total) we widen the mask
+            // by 5px on each side so the panel's top border doesn't
+            // peek out into the cell's outline area. Clamp at the
+            // panel's left edge (0) and at the panel's right border
+            // (rowRect.width − panel.border-r-2 = 2px) so a rightmost
+            // open cell doesn't punch a hole into the panel's
+            // `border-r-2` near the corner.
+            const RING_SIZE = 5;
+            const PANEL_BORDER = 2;
+            const rawLeft = cellRect.left - rowRect.left - RING_SIZE;
+            const rawWidth = cellRect.width + RING_SIZE * 2;
+            const clampedLeft = Math.max(0, rawLeft);
+            const maxRight = rowRect.width - PANEL_BORDER;
+            const clampedWidth = Math.max(
+                0,
+                Math.min(rawWidth + (rawLeft - clampedLeft), maxRight - clampedLeft),
+            );
             setOpenCellMetrics({
-                left: cellRect.left - rowRect.left,
-                width: cellRect.width,
+                left: clampedLeft,
+                width: clampedWidth,
             });
         };
         measure();
@@ -957,6 +976,26 @@ export function Checklist() {
     ]);
 
     return (
+        // Wrapper carries the `min-w-max` and a mobile-only `pe-5`
+        // right-side spacer. Padding (unlike margin) propagates to the
+        // parent's scrollable overflow, so when the table is wide
+        // enough to overflow the viewport, `body.scrollWidth` extends
+        // 20px past the section's right border — giving the rounded
+        // box a 20px gap to the right edge of the page that mirrors
+        // the 20px gap on the left from `<main>`'s `px-5`.
+        //
+        // The `pe-5` is zeroed out at the desktop breakpoint
+        // (≥800px) because `DesktopPlayLayout`'s grid already provides
+        // `gap-5` (20px) between the Checklist and the
+        // SuggestionLogPanel — adding another 20px via `pe-5` would
+        // double the visible gap. Setup mode's wizard is
+        // `max-w-[720px]` and never overflows, so the mobile-only
+        // spacer is invisible there.
+        //
+        // The wrapper also takes over `min-w-max` from the section
+        // because the section's own `min-w-max` plus our `pe-5` would
+        // compete for the same intrinsic-width calculation.
+        <div className="min-w-max pe-5 [@media(min-width:800px)]:pe-0">
         <section
             ref={rootRef}
             id="checklist"
@@ -968,7 +1007,7 @@ export function Checklist() {
             // the resolver simply queries for whichever side of the
             // breakpoint is active.
             data-tour-anchor="desktop-checklist-area"
-            className="min-w-max rounded-[var(--radius)] border border-border bg-panel p-4"
+            className="rounded-[var(--radius)] border border-border bg-panel p-4"
         >
             <div className="shrink-0 [@media(min-width:800px)]:sticky [@media(min-width:800px)]:left-9 [@media(min-width:800px)]:max-w-[calc(100vw-4.5rem)]">
                 <CaseFileHeader knowledge={knowledge} />
@@ -1560,6 +1599,7 @@ export function Checklist() {
             </table>
             </div>
         </section>
+        </div>
     );
 }
 
@@ -1826,25 +1866,36 @@ const STYLE_OVERFLOW_HIDDEN = { overflow: "hidden" } as const;
 const STYLE_COLUMN_CELL_VISIBLE = { maxWidth: CELL_EXPAND_CAP_PX } as const;
 
 /**
- * Class added to the open cell's `<motion.td>`. Replaces the 1px tone
- * borders with a 2px accent border on the three sides that aren't
- * shared with the details row; the bottom border is dropped entirely
- * so the cell flows seamlessly into the details box's `border-t-2`.
+ * Class added to the open cell's `<motion.td>`. The `cell-expanded-focus`
+ * utility (defined in `globals.css`) paints a 4-sided 3px accent
+ * box-shadow ring with a 2px offset gap, then clip-paths the bottom
+ * edge so the ring is 3-sided — visually identical to the standard
+ * `:focus-visible` look elsewhere on the page. Always-on (not gated
+ * on `:focus`) so the open cell is identifiable even after focus
+ * moves into the explanation panel.
+ *
+ * `!border-b-0` drops the cell's 1px gray bottom border so it flows
+ * directly into the panel's `border-t-2` (which is itself masked
+ * underneath the cell, see `openCellMetrics`). `!rounded-none` keeps
+ * the bottom corners sharp so the ring's left/right ends drop
+ * cleanly down to the panel.
+ *
+ * `!outline-none` overrides the global `*:focus-visible` outline AND
+ * the `CELL_HIGHLIGHTED` dashed outline — when the open cell is also
+ * a deduction-chain participant, only the box-shadow ring shows,
+ * never both rings competing.
+ *
+ * `focus:!ring-0 focus:!ring-offset-0` suppresses the standard 4-sided
+ * focus ring (from `CELL_INTERACTIVE`) so the cell-expanded box-shadow
+ * is the only outline.
  *
  * Background is set per-cell via `cellExpandedToneClass(display)` so
  * Y / N cells keep their green / red tone but fade to the panel color
  * at the very bottom, while blank cells get the flat panel color
  * directly.
- *
- * The `cell-expanded-focus` utility (defined in `globals.css`) replaces
- * the standard 4-sided focus ring with a 3-sided box-shadow on
- * `:focus`, so even with the cell focused there's no horizontal line
- * across its bottom edge. The bottom corners are kept sharp (no
- * `rounded-b`) so the ring's left and right ends drop cleanly down to
- * the explanation row.
  */
 const CELL_EXPANDED =
-    " !border-2 !border-accent !border-b-0 !rounded-none cell-expanded-focus focus:!ring-0 focus:!ring-offset-0 z-[var(--z-checklist-cell-focus)]";
+    " !outline-none !border-b-0 !rounded-none cell-expanded-focus focus:!ring-0 focus:!ring-offset-0 z-[var(--z-checklist-cell-focus)]";
 
 const CELL_EXPANDED_TONE_BLANK = " !bg-panel" as const;
 const CELL_EXPANDED_TONE_Y = " cell-expanded-tone-yes" as const;
@@ -2247,8 +2298,19 @@ const COLUMN_HEADER_STACK =
 const CELL_INTERACTIVE =
     " cursor-pointer hover:not-focus:z-[var(--z-checklist-cell-hover)] hover:not-focus:rounded-[2px] hover:not-focus:ring-2 hover:not-focus:ring-accent/30 focus:z-[var(--z-checklist-cell-focus)] focus:ring-[3px] focus:ring-accent focus:ring-offset-2 focus:rounded-[2px] focus:outline-none";
 
+// Highlight applied to cells whose deduction provenance contributes to
+// the open popover's value. A 3px dashed accent outline at 2px offset
+// matches the open cell's outline geometry (3px box-shadow ring + 2px
+// offset) so the highlights line up visually around the open cell, but
+// the dashed style keeps the related-cell visual distinct from the
+// solid open-cell ring. `outline` is used rather than `ring` because
+// box-shadow has no dashed style; outline doesn't change the cell's
+// box dimensions, so there's no layout shift when a cell becomes
+// highlighted. `--z-checklist-cell-hover` (20) sits below
+// `--z-checklist-cell-focus` (25) so the open cell's solid box-shadow
+// always paints over the dashed outline at any overlap.
 const CELL_HIGHLIGHTED =
-    " z-[var(--z-checklist-cell-hover)] ring-2 ring-accent ring-offset-1 ring-offset-panel";
+    " z-[var(--z-checklist-cell-hover)] !outline !outline-[3px] !outline-dashed !outline-accent !outline-offset-2";
 
 const cellClass = (
     display: CellDisplay,
