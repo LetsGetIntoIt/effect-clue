@@ -151,9 +151,13 @@ const addSuggestion = (
 };
 
 describe("BehavioralInsights — empty state", () => {
-    test("renders the empty-state copy when no patterns are detected", () => {
+    test("renders the help-text caption when no patterns are detected", () => {
         renderUnderProvider();
-        expect(document.body.textContent).toContain("insightsEmpty");
+        // Help text always renders — it explains the section regardless
+        // of whether there are insights to show. With no insights, the
+        // list itself is omitted.
+        expect(document.body.textContent).toContain("insightsHelp");
+        expect(document.querySelectorAll('[data-insight-kind]').length).toBe(0);
     });
 });
 

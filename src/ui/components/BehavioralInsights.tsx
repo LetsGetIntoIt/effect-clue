@@ -52,16 +52,15 @@ export function BehavioralInsights() {
             className="mt-4 border-t border-border pt-4"
             data-tour-anchor="suggest-insights"
         >
-            <h3 className="m-0 mb-2 text-[14px] font-semibold">
+            <h3 className="m-0 mb-1 text-[14px] font-semibold">
                 {insights.length === 0
                     ? t("insightsTitle")
                     : t("insightsTitleWithCount", { count: insights.length })}
             </h3>
-            {insights.length === 0 ? (
-                <div className="text-[13px] text-muted">
-                    {t("insightsEmpty")}
-                </div>
-            ) : (
+            <p className="m-0 mb-2 text-[12px] leading-snug text-muted">
+                {t("insightsHelp")}
+            </p>
+            {insights.length === 0 ? null : (
                 <ul className="m-0 flex list-none flex-col gap-2 p-0">
                     {insights.map(ins => (
                         <InsightRow
