@@ -221,6 +221,15 @@ export function SetupWizard() {
             // unit-test environment doesn't throw — the scroll is
             // verified manually in the next-dev preview.
             if (typeof body.scrollTo !== "function") return;
+            // Only scroll if the newly-focused step's top edge sits
+            // in the bottom 20% of the viewport (or below it). When
+            // the step is already comfortably in view, scrolling
+            // every advance reads as jumpy — everything shifts while
+            // the user is still mid-interaction. Leaving scroll alone
+            // keeps the user's reading position stable.
+            const viewportTop = el.getBoundingClientRect().top;
+            const viewportHeight = window.innerHeight;
+            if (viewportTop <= viewportHeight * 0.8) return;
             // The page header is `position: sticky` and its measured
             // height is published as `--header-offset` on `:root` by
             // a ResizeObserver in `Clue.tsx`. Reading it ensures the
@@ -233,7 +242,7 @@ export function SetupWizard() {
             );
             const headerOffset =
                 parseFloat(rootStyle.getPropertyValue("--header-offset")) || 0;
-            const top = el.getBoundingClientRect().top + body.scrollTop;
+            const top = viewportTop + body.scrollTop;
             body.scrollTo({
                 top: Math.max(0, top - headerOffset - 16),
                 behavior: reducedMotion

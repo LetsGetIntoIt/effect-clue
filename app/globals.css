@@ -390,6 +390,35 @@ h3 {
             -5px 100%
         );
     }
+    /* Rightmost open cell (the Case file column) sits flush against
+       the explanation panel's `border-r-[3px]`. Two changes from the
+       base rule:
+       (a) Clip-path stops at `100%` on the right so the outset
+           shadow's right side isn't drawn past the cell — that's
+           what would otherwise show as a thin vertical accent line
+           outside the panel's rounded box.
+       (b) An additional `inset -3px 0 0` shadow paints a 3px accent
+           strip INSIDE the cell at its right edge. That strip sits
+           at exactly the same x-range as the explanation panel's
+           `border-r-[3px]` (which paints from `panel.right − 3` to
+           `panel.right`), so the cell's right side and the panel's
+           right border line up into one continuous vertical accent
+           line. Without (b), the cell appears to have only top +
+           left edges, and the panel's right border visually starts
+           mid-air below the cell.
+       Doubled-class selector ties the base rule's specificity
+       (0,2,0); declaring later in source order wins. */
+    .cell-expanded-focus-last-col.cell-expanded-focus-last-col {
+        box-shadow:
+            0 0 0 3px var(--color-accent),
+            inset -3px 0 0 var(--color-accent) !important;
+        clip-path: polygon(
+            -5px -5px,
+            100% -5px,
+            100% 100%,
+            -5px 100%
+        );
+    }
 }
 
 /* Suppress the global `:focus-visible` outline on the open cell — the
