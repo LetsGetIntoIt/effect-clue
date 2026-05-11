@@ -451,6 +451,54 @@ describe("BehavioralInsights — active hypotheses", () => {
         );
         expect(document.body.textContent).not.toContain("insightsHelpEmpty");
     });
+
+    test("each active hypothesis row renders the same ProseChecklistIcon badge the contradiction banner uses", () => {
+        const h = renderUnderProvider();
+        seedClassicSetup(h);
+        const knifeCell = Cell(PlayerOwner(B), KNIFE);
+        const ropeCell = Cell(PlayerOwner(A), ROPE);
+        act(() => {
+            h.result.current.dispatch({
+                type: "setHypothesis",
+                cell: knifeCell,
+                value: "Y",
+            });
+        });
+        act(() => {
+            h.result.current.dispatch({
+                type: "setHypothesis",
+                cell: ropeCell,
+                value: "N",
+            });
+        });
+        const rows = Array.from(
+            document.querySelectorAll<HTMLElement>(
+                "[data-active-hypothesis-key]",
+            ),
+        );
+        expect(rows).toHaveLength(2);
+        for (const row of rows) {
+            const value = row.dataset["activeHypothesisValue"];
+            // Badge sits inside the label span (matches the
+            // contradiction banner's `Owner / Card <chip>` shape) —
+            // not as a sibling icon next to the chevron.
+            const labelSpan = row.querySelector<HTMLElement>(
+                "span.min-w-0",
+            );
+            expect(labelSpan).not.toBeNull();
+            const badge = labelSpan?.querySelector<HTMLElement>(
+                '[aria-hidden="true"]',
+            );
+            expect(badge).not.toBeNull();
+            if (value === "Y") {
+                expect(badge?.className).toContain("bg-yes-bg");
+                expect(badge?.className).toContain("text-yes");
+            } else {
+                expect(badge?.className).toContain("bg-no-bg");
+                expect(badge?.className).toContain("text-no");
+            }
+        }
+    });
 });
 
 describe("BehavioralInsights — clear-dismissed link", () => {
