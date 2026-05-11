@@ -518,6 +518,37 @@ export function Checklist() {
         return () => observer.disconnect();
     }, [popoverCell, playerColumnKeys]);
 
+    // Right-side gutter detection. The wrapper around the rounded
+    // checklist section ships a `pe-5` only when the section's
+    // intrinsic content width exceeds the viewport's available width
+    // (= `window.innerWidth - 40` after `<main>`'s 20px-each-side
+    // `px-5`). When the table actually overflows horizontally, the
+    // `pe-5` pushes `body.scrollWidth` 20px past the section's right
+    // border so the gutter-on-the-right matches the gutter-on-the-left
+    // once the user scrolls to the end. When the table fits, no
+    // `pe-5` is applied so the right gutter equals the left gutter at
+    // rest. Section width is invariant to whether `pe-5` is applied
+    // (the section sits inside the wrapper's content area), so this
+    // measurement does not feed back on itself.
+    const [needsRightGutter, setNeedsRightGutter] = useState(false);
+    useEffect(() => {
+        const section = rootRef.current;
+        if (!section) return;
+        const update = () => {
+            setNeedsRightGutter(
+                section.offsetWidth > window.innerWidth - 40,
+            );
+        };
+        update();
+        const observer = new ResizeObserver(update);
+        observer.observe(section);
+        window.addEventListener("resize", update);
+        return () => {
+            observer.disconnect();
+            window.removeEventListener("resize", update);
+        };
+    }, []);
+
     // Close on Escape, regardless of where focus is currently parked
     // (the open cell, a control inside the explanation row, or any
     // other element). Only active while a row is open so we don't
@@ -984,26 +1015,38 @@ export function Checklist() {
     ]);
 
     return (
-        // Wrapper carries the `min-w-max` and a mobile-only `pe-5`
-        // right-side spacer. Padding (unlike margin) propagates to the
-        // parent's scrollable overflow, so when the table is wide
-        // enough to overflow the viewport, `body.scrollWidth` extends
-        // 20px past the section's right border — giving the rounded
-        // box a 20px gap to the right edge of the page that mirrors
-        // the 20px gap on the left from `<main>`'s `px-5`.
+        // Wrapper carries the `min-w-max` and a CONDITIONAL `pe-5`
+        // right-side spacer. The `pe-5` is applied only when the
+        // section's intrinsic width exceeds the viewport's available
+        // width (`window.innerWidth - 40`, accounting for `<main>`'s
+        // `px-5`) — see the `needsRightGutter` ResizeObserver above.
+        // Padding (unlike margin) propagates to the parent's
+        // scrollable overflow, so when the table is wide enough to
+        // overflow horizontally, `body.scrollWidth` extends 20px past
+        // the section's right border — giving the rounded box a 20px
+        // gap to the right edge of the page that mirrors the 20px
+        // gap on the left from `<main>`'s `px-5`. When the table
+        // fits, no `pe-5` is applied so the right gutter equals the
+        // left gutter at rest (no double-padding asymmetry).
         //
         // The `pe-5` is zeroed out at the desktop breakpoint
-        // (≥800px) because `DesktopPlayLayout`'s grid already provides
-        // `gap-5` (20px) between the Checklist and the
-        // SuggestionLogPanel — adding another 20px via `pe-5` would
-        // double the visible gap. Setup mode's wizard is
-        // `max-w-[720px]` and never overflows, so the mobile-only
-        // spacer is invisible there.
+        // (≥800px) regardless of overflow because `DesktopPlayLayout`'s
+        // grid already provides `gap-5` (20px) between the Checklist
+        // and the SuggestionLogPanel — adding another 20px via `pe-5`
+        // would double the visible gap. Setup mode's wizard is
+        // `max-w-[720px]` and never overflows, so the spacer is
+        // invisible there.
         //
         // The wrapper also takes over `min-w-max` from the section
         // because the section's own `min-w-max` plus our `pe-5` would
         // compete for the same intrinsic-width calculation.
-        <div className="min-w-max pe-5 [@media(min-width:800px)]:pe-0">
+        <div
+            className={
+                needsRightGutter
+                    ? "min-w-max pe-5 [@media(min-width:800px)]:pe-0"
+                    : "min-w-max"
+            }
+        >
         <section
             ref={rootRef}
             id="checklist"
@@ -1129,20 +1172,17 @@ export function Checklist() {
                                                     initial={{
                                                         height: 0,
                                                         borderTopWidth: 0,
-                                                        borderRightWidth: 0,
                                                         borderBottomWidth: 0,
                                                     }}
                                                     animate={{
                                                         // eslint-disable-next-line i18next/no-literal-string -- CSS auto value
                                                         height: "auto",
                                                         borderTopWidth: 3,
-                                                        borderRightWidth: 3,
                                                         borderBottomWidth: 3,
                                                     }}
                                                     exit={{
                                                         height: 0,
                                                         borderTopWidth: 0,
-                                                        borderRightWidth: 0,
                                                         borderBottomWidth: 0,
                                                     }}
                                                     transition={
@@ -1151,15 +1191,32 @@ export function Checklist() {
                                                     style={
                                                         STYLE_OVERFLOW_HIDDEN
                                                     }
-                                                    // Per-side `border*Width`
-                                                    // numerics interpolate
+                                                    // Only the top and bottom
+                                                    // border widths animate
                                                     // alongside `height` so
-                                                    // the borders collapse
-                                                    // in lockstep with the
-                                                    // box (no residual 6px
-                                                    // sliver after height
-                                                    // hits 0). Tailwind
-                                                    // classes stay as the
+                                                    // the horizontal borders
+                                                    // collapse in lockstep
+                                                    // with the box (no
+                                                    // residual sliver after
+                                                    // height hits 0). The
+                                                    // right border stays at
+                                                    // its static
+                                                    // `border-r-[3px]`
+                                                    // Tailwind value — the
+                                                    // panel only grows
+                                                    // vertically, so the
+                                                    // right edge has nothing
+                                                    // to interpolate, and
+                                                    // animating
+                                                    // `borderRightWidth`
+                                                    // from 0→3 shifts the
+                                                    // panel's content left
+                                                    // by 3px mid-flight. At
+                                                    // `height: 0` the right
+                                                    // border has no vertical
+                                                    // extent so it stays
+                                                    // invisible. Tailwind
+                                                    // classes are the
                                                     // rest-state source of
                                                     // truth (color + 3px
                                                     // widths); motion's
@@ -1407,9 +1464,21 @@ export function Checklist() {
                                                 popoverCell,
                                                 thisCell,
                                             );
+                                            // The rightmost owner column (Case
+                                            // file) sits flush against the
+                                            // panel's right border. Without
+                                            // this modifier, the open cell's
+                                            // 3px box-shadow ring paints past
+                                            // the panel and shows as a thin
+                                            // vertical accent line outside the
+                                            // rounded box. See
+                                            // `.cell-expanded-focus-last-col`
+                                            // in `app/globals.css`.
+                                            const isLastOwnerCol =
+                                                colIdx === totalCols - 1;
                                             const interactiveTdClassName =
                                                 isOpen
-                                                    ? `${tdClassName}${CELL_EXPANDED}${cellExpandedToneClass(display)}`
+                                                    ? `${tdClassName}${CELL_EXPANDED}${cellExpandedToneClass(display)}${isLastOwnerCol ? " cell-expanded-focus-last-col" : ""}`
                                                     : tdClassName;
                                             cell = (
                                                 <motion.td

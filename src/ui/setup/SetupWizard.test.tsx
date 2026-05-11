@@ -251,3 +251,108 @@ describe("SetupWizard — accordion shell", () => {
     });
 });
 
+describe("SetupWizard — scroll-on-advance gate", () => {
+    // The wizard scrolls the newly-focused step into view only when
+    // that step's top edge sits in the bottom 20% of the viewport
+    // (or below it). When the step is already in the top 80% of the
+    // viewport, the scroll is suppressed so the page doesn't jump
+    // while the user is mid-interaction. jsdom can't actually
+    // measure layout, so these tests stub `getBoundingClientRect` +
+    // `window.innerHeight` + `document.body.scrollTo` to drive both
+    // branches of the gate explicitly.
+
+    const STUBBED_VIEWPORT_HEIGHT = 1000;
+
+    const installLayoutStubs = (topPx: number): {
+        scrollSpy: ReturnType<typeof vi.fn>;
+        restore: () => void;
+    } => {
+        const scrollSpy = vi.fn();
+        const originalScrollTo = (
+            document.body as unknown as { scrollTo?: unknown }
+        ).scrollTo;
+        Object.defineProperty(document.body, "scrollTo", {
+            configurable: true,
+            value: scrollSpy,
+            writable: true,
+        });
+        const originalInnerHeight = window.innerHeight;
+        Object.defineProperty(window, "innerHeight", {
+            configurable: true,
+            value: STUBBED_VIEWPORT_HEIGHT,
+            writable: true,
+        });
+        const gbcrSpy = vi
+            .spyOn(Element.prototype, "getBoundingClientRect")
+            .mockReturnValue({
+                top: topPx,
+                bottom: topPx + 100,
+                left: 0,
+                right: 0,
+                width: 0,
+                height: 100,
+                x: 0,
+                y: topPx,
+                toJSON: () => ({}),
+            });
+        return {
+            scrollSpy,
+            restore: () => {
+                gbcrSpy.mockRestore();
+                Object.defineProperty(document.body, "scrollTo", {
+                    configurable: true,
+                    value: originalScrollTo,
+                    writable: true,
+                });
+                Object.defineProperty(window, "innerHeight", {
+                    configurable: true,
+                    value: originalInnerHeight,
+                    writable: true,
+                });
+            },
+        };
+    };
+
+    test("scrolls when the newly-focused step's top is in the bottom 20% of the viewport", async () => {
+        // top = 900 of a 1000-px viewport → strictly greater than
+        // 0.8 * 1000 = 800, so the gate falls through and scrollTo
+        // fires.
+        const { scrollSpy, restore } = installLayoutStubs(900);
+        try {
+            const user = userEvent.setup();
+            render(<Clue />, { wrapper: TestQueryClientProvider });
+            await waitForWizard();
+            await user.click(stickyNext()); // cardPack → players
+            await waitFor(
+                () => {
+                    expect(scrollSpy).toHaveBeenCalled();
+                },
+                { timeout: 1500 },
+            );
+        } finally {
+            restore();
+        }
+    });
+
+    test("does not scroll when the newly-focused step's top is in the top 80% of the viewport", async () => {
+        // top = 100 of a 1000-px viewport → less than the 0.8 * 1000
+        // = 800 threshold, so the gate short-circuits and scrollTo
+        // is never invoked, even well past `PANE_SETTLE`.
+        const { scrollSpy, restore } = installLayoutStubs(100);
+        try {
+            const user = userEvent.setup();
+            render(<Clue />, { wrapper: TestQueryClientProvider });
+            await waitForWizard();
+            await user.click(stickyNext()); // cardPack → players
+            // Wait well past PANE_SETTLE (210ms) so the deferred
+            // measurement has definitely run.
+            await new Promise((resolve) => {
+                window.setTimeout(resolve, 600);
+            });
+            expect(scrollSpy).not.toHaveBeenCalled();
+        } finally {
+            restore();
+        }
+    });
+});
+
