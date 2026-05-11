@@ -745,9 +745,10 @@ function Recommendations() {
     const bodyTransition = useReducedTransition(T_STANDARD);
     // Smaller / lighter than `SECTION_TITLE` so the recommendations
     // heading reads as a secondary affordance — the primary heading
-    // is "Add a suggestion" right below.
+    // is "Add a suggestion" right below. `font-sans!` overrides the
+    // global slab `h3` rule (see SECTION_TITLE for the same workaround).
     const header = (
-        <h3 className="mt-0 mb-1 text-[1rem] font-normal text-muted">
+        <h3 className="mt-0 mb-1 font-sans! text-[1rem] font-normal text-muted">
             <button
                 type="button"
                 aria-expanded={expanded}
