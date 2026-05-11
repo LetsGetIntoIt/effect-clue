@@ -302,6 +302,19 @@ export function Checklist() {
     // for non-touch pointers so onClick can detect "mouse / keyboard"
     // and skip the two-tap gating.
     const wasTouchSecondTapRef = useRef<boolean | null>(null);
+    // Touch long-press protocol. The timer is armed on touch
+    // `pointerdown` and fires LONG_PRESS_DELAY later if the user is
+    // still pressing (no `pointerup` / `pointercancel`) and hasn't
+    // moved more than LONG_PRESS_MOVE_TOLERANCE_PX. When it fires we
+    // open the long-pressed cell directly (or close it, if the
+    // long-press lands on the already-open cell). `wasLongPressRef`
+    // gates the trailing synthesized `click` so it doesn't re-engage
+    // the two-tap state machine.
+    const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    );
+    const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
+    const wasLongPressRef = useRef<boolean>(false);
     // DOM ref for the currently-open explanation row. Used by the
     // outside-click effect below to decide whether a click should
     // close the row.
@@ -583,23 +596,38 @@ export function Checklist() {
         const onClickOutside = (e: MouseEvent) => {
             const target = e.target as Node | null;
             if (target === null) return;
-            const key = `${ownerKey(expandedCell.owner, playerColumnKeys)}-${String(expandedCell.card)}`;
-            const cellNode = cellNodesByKeyRef.current.get(key);
+            // Any registered popover-interactive cell "owns" its tap —
+            // its onClick decides (close-self / same-row swap /
+            // cross-row close / two-tap open). We deliberately do NOT
+            // dismiss here when the click lands on a different cell;
+            // the prior design did, and relied on React batching this
+            // setExpandedCell(null) with the cell's bubble-phase
+            // setExpandedCell(newCell). Mobile browsers were not
+            // reliably batching them, producing a close-then-no-reopen
+            // sequence on same-row tap-swap.
+            for (const node of cellNodesByKeyRef.current.values()) {
+                if (node.contains(target)) return;
+            }
             const rowNode = explainRowNodeRef.current;
-            if (cellNode && cellNode.contains(target)) return;
             if (rowNode && rowNode.contains(target)) return;
             setExpandedCell(null);
         };
-        // Capture phase so we run before any React onClick inside the
-        // table (e.g. tapping a different cell) — the closure's stale
-        // `expandedCell` would otherwise dismiss after the cell's own
-        // handler reopened on the new target. Capture-then-bubble
-        // means React's batched setExpandedCell(null)→setExpandedCell(
-        // newCell) collapses to `newCell`.
         window.addEventListener("click", onClickOutside, true);
         return () =>
             window.removeEventListener("click", onClickOutside, true);
-    }, [expandedCell, playerColumnKeys, setExpandedCell]);
+    }, [expandedCell, setExpandedCell]);
+
+    // Clear any pending long-press timer on unmount so the callback
+    // can't fire setExpandedCell after the component is gone.
+    useEffect(
+        () => () => {
+            if (longPressTimerRef.current !== null) {
+                clearTimeout(longPressTimerRef.current);
+                longPressTimerRef.current = null;
+            }
+        },
+        [],
+    );
 
     const owners: ReadonlyArray<Owner> = allOwners(setup);
 
@@ -1556,8 +1584,141 @@ export function Checklist() {
                                                         wasTouchSecondTapRef.current =
                                                             document.activeElement ===
                                                             e.currentTarget;
+                                                        // Arm long-press.
+                                                        longPressStartRef.current =
+                                                            {
+                                                                x: e.clientX,
+                                                                y: e.clientY,
+                                                            };
+                                                        wasLongPressRef.current = false;
+                                                        if (
+                                                            longPressTimerRef.current
+                                                            !== null
+                                                        ) {
+                                                            clearTimeout(
+                                                                longPressTimerRef.current,
+                                                            );
+                                                        }
+                                                        longPressTimerRef.current =
+                                                            setTimeout(() => {
+                                                                longPressTimerRef.current =
+                                                                    null;
+                                                                wasLongPressRef.current =
+                                                                    true;
+                                                                const wasOpenOnThisCell =
+                                                                    Equal.equals(
+                                                                        popoverCellRef.current,
+                                                                        thisCell,
+                                                                    );
+                                                                // Long-press
+                                                                // on the
+                                                                // already-open
+                                                                // cell toggles
+                                                                // it closed.
+                                                                // Otherwise it
+                                                                // opens this
+                                                                // cell — the
+                                                                // cross-row
+                                                                // case is a
+                                                                // close-on-old
+                                                                // + expand-on-
+                                                                // new commit
+                                                                // driven by
+                                                                // setExpanded-
+                                                                // Cell(thisCell).
+                                                                setExpandedCell(
+                                                                    wasOpenOnThisCell
+                                                                        ? null
+                                                                        : thisCell,
+                                                                );
+                                                            }, Duration.toMillis(LONG_PRESS_DELAY));
+                                                    }}
+                                                    onPointerMove={(
+                                                        e: React.PointerEvent<HTMLTableCellElement>,
+                                                    ) => {
+                                                        if (
+                                                            longPressTimerRef.current
+                                                            === null
+                                                        ) {
+                                                            return;
+                                                        }
+                                                        const start =
+                                                            longPressStartRef.current;
+                                                        if (start === null) {
+                                                            return;
+                                                        }
+                                                        const dx =
+                                                            e.clientX - start.x;
+                                                        const dy =
+                                                            e.clientY - start.y;
+                                                        if (
+                                                            dx * dx + dy * dy
+                                                            > LONG_PRESS_MOVE_TOLERANCE_PX
+                                                                * LONG_PRESS_MOVE_TOLERANCE_PX
+                                                        ) {
+                                                            clearTimeout(
+                                                                longPressTimerRef.current,
+                                                            );
+                                                            longPressTimerRef.current =
+                                                                null;
+                                                        }
+                                                    }}
+                                                    onPointerUp={() => {
+                                                        if (
+                                                            longPressTimerRef.current
+                                                            !== null
+                                                        ) {
+                                                            clearTimeout(
+                                                                longPressTimerRef.current,
+                                                            );
+                                                            longPressTimerRef.current =
+                                                                null;
+                                                        }
+                                                    }}
+                                                    onPointerCancel={() => {
+                                                        if (
+                                                            longPressTimerRef.current
+                                                            !== null
+                                                        ) {
+                                                            clearTimeout(
+                                                                longPressTimerRef.current,
+                                                            );
+                                                            longPressTimerRef.current =
+                                                                null;
+                                                        }
+                                                        // Scroll takeover etc.
+                                                        // pointercancel means
+                                                        // "not a tap" — drop
+                                                        // any held long-press
+                                                        // flag too so a
+                                                        // synthesized click
+                                                        // can't follow.
+                                                        wasLongPressRef.current = false;
                                                     }}
                                                     onClick={() => {
+                                                        if (
+                                                            wasLongPressRef.current
+                                                        ) {
+                                                            // The long-press
+                                                            // already fired
+                                                            // and opened (or
+                                                            // closed) this
+                                                            // cell. Suppress
+                                                            // the trailing
+                                                            // synthesized
+                                                            // click so it
+                                                            // doesn't
+                                                            // re-engage the
+                                                            // two-tap state
+                                                            // machine or
+                                                            // toggle the
+                                                            // panel back.
+                                                            wasLongPressRef.current =
+                                                                false;
+                                                            wasTouchSecondTapRef.current =
+                                                                null;
+                                                            return;
+                                                        }
                                                         const wasTouchSecondTap =
                                                             wasTouchSecondTapRef.current;
                                                         wasTouchSecondTapRef.current =
@@ -1978,6 +2139,14 @@ const TABLE_COLLAPSE_DURATION = Duration.millis(180);
 const TABLE_REDUCED_DANGER_FADE_MS = Duration.toMillis(
     Duration.millis(80),
 );
+// Touch long-press: a press held for LONG_PRESS_DELAY without
+// significant movement (< LONG_PRESS_MOVE_TOLERANCE_PX) opens the
+// long-pressed cell's explanation row directly, bypassing the
+// two-tap gate. Same-row swap is a re-anchor, cross-row is a
+// close-and-open driven by the single setExpandedCell commit.
+// Long-press on the already-open cell toggles it closed.
+const LONG_PRESS_DELAY = Duration.millis(500);
+const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 const TABLE_DANGER_FADE_SECONDS = Duration.toSeconds(TABLE_DANGER_FADE_DURATION);
 const TABLE_DANGER_HOLD_SECONDS = Duration.toSeconds(TABLE_DANGER_HOLD_DURATION);
 const TABLE_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
