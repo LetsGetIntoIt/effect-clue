@@ -313,7 +313,7 @@ export function CellExplanationRow({
 
     const deductionsSection = (
         <section className="flex flex-col gap-2">
-            <div className="text-[1.125rem] font-semibold uppercase tracking-wide text-fg">
+            <div className="text-[1.125rem] font-bold uppercase tracking-wide text-accent">
                 {t("deductionsLabel")}
             </div>
             {showDeductions ? (
@@ -362,7 +362,7 @@ export function CellExplanationRow({
 
     const leadsSection = (
         <section className="flex flex-col gap-2">
-            <div className="text-[1.125rem] font-semibold uppercase tracking-wide text-fg">
+            <div className="text-[1.125rem] font-bold uppercase tracking-wide text-accent">
                 {t("leadsLabel")}
             </div>
             {showLeads ? (
@@ -392,7 +392,7 @@ export function CellExplanationRow({
 
     const hypothesisSection = (
         <section className="flex flex-col gap-2">
-            <div className="text-[1.125rem] font-semibold uppercase tracking-wide text-fg">
+            <div className="text-[1.125rem] font-bold uppercase tracking-wide text-accent">
                 {t("hypothesisLabel")}
             </div>
             {renderHypothesisHelp()}
@@ -422,7 +422,7 @@ export function CellExplanationRow({
     return (
         <div className="flex flex-col">
             <div className="relative px-4 py-2">
-                <h3 className="m-0 text-center text-[1.125rem] font-semibold uppercase tracking-wide text-fg">
+                <h3 className="m-0 text-center text-[1.25rem] uppercase tracking-[0.05em] text-accent">
                     {t("cellHeading", {
                         owner: ownerLabel(cell.owner),
                         card: cardLabel,
