@@ -20,8 +20,12 @@
     --color-panel: #f7f0dc;
     /* Aged-paper edge, warm taupe-brown. */
     --color-border: #cbb68c;
-    /* Faded ink for secondary text. */
-    --color-muted: #6d5a3f;
+    /* Faded ink for secondary text. Darkened from #6d5a3f for WCAG
+     * AA contrast on every parchment / panel / warm surface used in
+     * the app — lifts text-muted on bg-panel from ~5.2:1 to ~7.9:1
+     * (AAA) and clears ~4.7:1 borderlines on row-header / row-alt /
+     * hover up to comfortable AA. */
+    --color-muted: #5a4831;
     /* Warm beige for table row headers / neutral bars. */
     --color-row-header: #e5d9b8;
     /* Dossier manila for the case-file header strip. */
@@ -49,12 +53,15 @@
     --color-no-bg: #f0d4c8;
     /* Lighter, less-prominent variant used only for the X glyph in
        checklist grid cells. The deep crimson `--color-no` reads
-       loud in a wall of cells; mixing 50% white tones it down to a
+       loud in a wall of cells; mixing white tones it down to a
        softer "ruled-out" reading without changing the popover /
        prose chip colors that depend on `--color-no` for tone.
        Color-mix keeps the value derived from the source token, so a
-       theme tweak to `--color-no` carries through. */
-    --color-no-cell: color-mix(in srgb, var(--color-no), white 50%);
+       theme tweak to `--color-no` carries through. Blend reduced
+       from 50% white to 30% white to clear WCAG SC 1.4.11 (3:1
+       graphical-UI minimum) against parchment / row-alt — the
+       previous mix sat at ~2.1:1, the tighter mix lands at ~4:1. */
+    --color-no-cell: color-mix(in srgb, var(--color-no), white 30%);
 
     /* --- Unknown / blank. */
     --color-unknown-bg: #f7f0dc;

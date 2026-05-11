@@ -319,7 +319,11 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
             "tap-target text-tap rounded border-none @max-[500px]/log:w-full " +
             (canSubmit
                 ? "cursor-pointer bg-accent text-white"
-                : "cursor-not-allowed bg-unknown-bg text-muted/70");
+                // Disabled tone: bg-unknown-bg + cursor-not-allowed
+                // carry the "inactive" signal so text-muted (full) keeps
+                // the label legible. Opacity-modified muted dipped
+                // below WCAG AA on parchment.
+                : "cursor-not-allowed bg-unknown-bg text-muted");
 
         return (
             <div ref={formRootRef}>

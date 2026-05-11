@@ -226,7 +226,11 @@ export function PillPopover({
           : status === STATUS_PENDING_REQ
             ? "bg-transparent text-muted border-border"
             : disabled
-              ? "bg-transparent text-muted/60 border-dashed border-border/50"
+              // Disabled-optional tone: the dashed border at 50%
+              // opacity + bg-transparent already signal "inactive".
+              // Keep text-muted (full) for legibility — the previous
+              // /60 variant dipped to ~2.5:1 on parchment.
+              ? "bg-transparent text-muted border-dashed border-border/50"
               : "bg-transparent text-muted border-dashed border-border";
     const iconNode: ReactNode = hasError
         ? <AlertIcon className="h-[1.1em] w-[1.1em]" />
