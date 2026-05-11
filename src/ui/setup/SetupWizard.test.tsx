@@ -242,7 +242,7 @@ describe("SetupWizard — accordion shell", () => {
         // payload should NOT mention any player as selfPlayerId.
         await waitFor(() => {
             const raw = window.localStorage.getItem(
-                "effect-clue.session.v10",
+                "effect-clue.session.v11",
             );
             expect(raw).not.toBeNull();
             const parsed = JSON.parse(raw!) as { selfPlayerId: unknown };

@@ -6,11 +6,23 @@
  * wherever they last were in the grid, or to the first interactive
  * cell if they've never been there.
  *
+ * The Hypotheses panel also feeds this bus via the `{ cell }` Target
+ * variant: clicking an active-hypothesis row asks Checklist to focus
+ * the corresponding cell, scroll it into view, and open its
+ * explanation popover (the popover open is owned by `SelectionContext`
+ * and dispatched alongside the focus call from the panel side).
+ *
  * Parallels `suggestionFormFocus.ts`.
  */
 
-type Target = { row: number; col: number } | "last" | "first";
-type Handler = (target: Target) => void;
+import type { Cell } from "../logic/Knowledge";
+
+type ChecklistFocusTarget =
+    | { row: number; col: number }
+    | { cell: Cell }
+    | "last"
+    | "first";
+type Handler = (target: ChecklistFocusTarget) => void;
 
 let current: Handler | null = null;
 let lastFocused: { row: number; col: number } | null = null;
@@ -26,8 +38,12 @@ export function registerChecklistFocusHandler(h: Handler): () => void {
     };
 }
 
-export function requestFocusChecklistCell(): void {
+export function requestFocusChecklistCell(target?: ChecklistFocusTarget): void {
     if (!current) return;
+    if (target !== undefined) {
+        current(target);
+        return;
+    }
     // eslint-disable-next-line i18next/no-literal-string -- sentinel, not user copy
     current(lastFocused ?? "first");
 }

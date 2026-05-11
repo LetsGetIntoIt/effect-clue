@@ -148,6 +148,7 @@ const seedSetupSession = (): void => {
         suggestions: [],
         accusations: [],
         hypotheses: emptyHypotheses,
+            hypothesisOrder: [],
         pendingSuggestion: null,
         selfPlayerId: null,
         firstDealtPlayerId: null,

@@ -271,6 +271,7 @@ describe("Clue — URL-based view hydration", () => {
             ],
             accusations: [],
             hypotheses: emptyHypotheses,
+            hypothesisOrder: [],
             pendingSuggestion: null,
             selfPlayerId: null,
             firstDealtPlayerId: null,

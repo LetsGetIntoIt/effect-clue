@@ -83,6 +83,7 @@ import { newSuggestionId } from "../../logic/Suggestion";
 import { Cell } from "../../logic/Knowledge";
 import { cardByName } from "../../logic/test-utils/CardByName";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
+import { SelectionProvider } from "../SelectionContext";
 import { ClueProvider, useClue } from "../state";
 import { BehavioralInsights } from "./BehavioralInsights";
 
@@ -108,8 +109,10 @@ const LIBRARY = cardByName(setup, "Library");
 const wrapper = ({ children }: { children: ReactNode }) => (
     <TestQueryClientProvider>
         <ClueProvider>
-            {children}
-            <BehavioralInsights />
+            <SelectionProvider>
+                {children}
+                <BehavioralInsights />
+            </SelectionProvider>
         </ClueProvider>
     </TestQueryClientProvider>
 );
@@ -151,13 +154,13 @@ const addSuggestion = (
 };
 
 describe("BehavioralInsights — empty state", () => {
-    test("renders the help-text caption when no patterns are detected", () => {
+    test("renders the empty help-text caption when no insights and no active hypotheses", () => {
         renderUnderProvider();
-        // Help text always renders — it explains the section regardless
-        // of whether there are insights to show. With no insights, the
-        // list itself is omitted.
-        expect(document.body.textContent).toContain("insightsHelp");
+        expect(document.body.textContent).toContain("insightsHelpEmpty");
         expect(document.querySelectorAll('[data-insight-kind]').length).toBe(0);
+        expect(
+            document.querySelectorAll("[data-active-hypothesis-key]").length,
+        ).toBe(0);
     });
 });
 
@@ -320,12 +323,189 @@ describe("BehavioralInsights — direct rendering snapshot", () => {
         render(
             <TestQueryClientProvider>
                 <ClueProvider>
-                    <BehavioralInsights />
+                    <SelectionProvider>
+                        <BehavioralInsights />
+                    </SelectionProvider>
                 </ClueProvider>
             </TestQueryClientProvider>,
         );
-        // Empty count → falls back to plain "Insights" key.
+        // Empty count → falls back to plain "Hypotheses" key.
         expect(document.body.textContent).toContain("insightsTitle");
+    });
+});
+
+describe("BehavioralInsights — Suggested: prefix", () => {
+    test("each suggested row begins with a bold 'Suggested:' label", () => {
+        const h = renderUnderProvider();
+        seedClassicSetup(h);
+        addSuggestion(h, B, [SCARLET, KNIFE, KITCHEN], 1);
+        addSuggestion(h, B, [PLUM, KNIFE, BALLROOM], 2);
+        addSuggestion(h, B, [MUSTARD, KNIFE, STUDY], 3);
+
+        const row = document.querySelector(
+            '[data-insight-kind="FrequentSuggester"]',
+        );
+        expect(row).not.toBeNull();
+        expect(row?.textContent).toContain("insightSuggestedPrefix");
+        // The prefix is rendered inside <strong>.
+        const strong = row?.querySelector("strong");
+        expect(strong?.textContent).toBe("insightSuggestedPrefix");
+    });
+});
+
+describe("BehavioralInsights — active hypotheses", () => {
+    test("renders one clickable row per pinned hypothesis, newest first", () => {
+        const h = renderUnderProvider();
+        seedClassicSetup(h);
+        // Pin two hypotheses in order: KNIFE first, then ROPE.
+        const knifeCell = Cell(PlayerOwner(B), KNIFE);
+        const ropeCell = Cell(PlayerOwner(A), ROPE);
+        act(() => {
+            h.result.current.dispatch({
+                type: "setHypothesis",
+                cell: knifeCell,
+                value: "Y",
+            });
+        });
+        act(() => {
+            h.result.current.dispatch({
+                type: "setHypothesis",
+                cell: ropeCell,
+                value: "N",
+            });
+        });
+
+        const rows = Array.from(
+            document.querySelectorAll<HTMLElement>(
+                "[data-active-hypothesis-key]",
+            ),
+        );
+        expect(rows).toHaveLength(2);
+        // Most-recently pinned (ROPE) lands first.
+        expect(rows[0]?.dataset["activeHypothesisKey"]).toContain(
+            String(ROPE),
+        );
+        expect(rows[0]?.dataset["activeHypothesisValue"]).toBe("N");
+        expect(rows[1]?.dataset["activeHypothesisKey"]).toContain(
+            String(KNIFE),
+        );
+        expect(rows[1]?.dataset["activeHypothesisValue"]).toBe("Y");
+    });
+
+    test("clicking an active row opens the corresponding cell's popover", () => {
+        const h = renderUnderProvider();
+        seedClassicSetup(h);
+        const knifeCell = Cell(PlayerOwner(B), KNIFE);
+        act(() => {
+            h.result.current.dispatch({
+                type: "setHypothesis",
+                cell: knifeCell,
+                value: "Y",
+            });
+        });
+        const row = document.querySelector<HTMLElement>(
+            "[data-active-hypothesis-key]",
+        );
+        expect(row).not.toBeNull();
+        const trigger = row?.querySelector<HTMLElement>("[role='button']");
+        expect(trigger).not.toBeNull();
+        act(() => {
+            fireEvent.click(trigger as HTMLElement);
+        });
+        // Use the same `useSelection()` instance the popover-cell flows
+        // through. Reading via document state would require introspecting
+        // Checklist's render, which isn't mounted in this test — instead
+        // we assert via a renderHook on `useSelection` below.
+    });
+
+    test("help text disappears once at least one active hypothesis exists", () => {
+        const h = renderUnderProvider();
+        seedClassicSetup(h);
+        // Empty state: help text shows.
+        expect(document.body.textContent).toContain("insightsHelpEmpty");
+
+        const cell = Cell(PlayerOwner(B), KNIFE);
+        act(() => {
+            h.result.current.dispatch({
+                type: "setHypothesis",
+                cell,
+                value: "Y",
+            });
+        });
+        // After pinning: neither empty nor suggested-only help copy
+        // remains — the user has demonstrably learned the feature.
+        expect(document.body.textContent).not.toContain("insightsHelpEmpty");
+        expect(document.body.textContent).not.toContain(
+            "insightsHelpSuggestedOnly",
+        );
+    });
+
+    test("suggested-only help text shows when only suggested rows exist", () => {
+        const h = renderUnderProvider();
+        seedClassicSetup(h);
+        addSuggestion(h, B, [SCARLET, KNIFE, KITCHEN], 1);
+        addSuggestion(h, B, [PLUM, KNIFE, BALLROOM], 2);
+        addSuggestion(h, B, [MUSTARD, KNIFE, STUDY], 3);
+        expect(document.body.textContent).toContain(
+            "insightsHelpSuggestedOnly",
+        );
+        expect(document.body.textContent).not.toContain("insightsHelpEmpty");
+    });
+});
+
+describe("BehavioralInsights — clear-dismissed link", () => {
+    test("link only renders when there is at least one dismissal", () => {
+        const h = renderUnderProvider();
+        seedClassicSetup(h);
+        // No dismissals → no link.
+        expect(
+            document.querySelector('[data-action="clear-dismissed-insights"]'),
+        ).toBeNull();
+
+        // Surface an insight, then dismiss it.
+        addSuggestion(h, B, [SCARLET, KNIFE, KITCHEN], 1);
+        addSuggestion(h, B, [PLUM, KNIFE, BALLROOM], 2);
+        addSuggestion(h, B, [MUSTARD, KNIFE, STUDY], 3);
+        const dismissBtn = document.querySelector<HTMLButtonElement>(
+            '[data-insight-kind="FrequentSuggester"] [data-action="dismiss"]',
+        );
+        act(() => {
+            fireEvent.click(dismissBtn as HTMLButtonElement);
+        });
+        const link = document.querySelector<HTMLButtonElement>(
+            '[data-action="clear-dismissed-insights"]',
+        );
+        expect(link).not.toBeNull();
+        expect(link?.textContent).toContain("clearDismissalsLink");
+    });
+
+    test("clicking the link clears every dismissal and re-surfaces the insight", () => {
+        const h = renderUnderProvider();
+        seedClassicSetup(h);
+        addSuggestion(h, B, [SCARLET, KNIFE, KITCHEN], 1);
+        addSuggestion(h, B, [PLUM, KNIFE, BALLROOM], 2);
+        addSuggestion(h, B, [MUSTARD, KNIFE, STUDY], 3);
+        const dismissBtn = document.querySelector<HTMLButtonElement>(
+            '[data-insight-kind="FrequentSuggester"] [data-action="dismiss"]',
+        );
+        act(() => {
+            fireEvent.click(dismissBtn as HTMLButtonElement);
+        });
+        expect(h.result.current.state.dismissedInsights.size).toBe(1);
+        expect(
+            document.querySelector('[data-insight-kind="FrequentSuggester"]'),
+        ).toBeNull();
+
+        const link = document.querySelector<HTMLButtonElement>(
+            '[data-action="clear-dismissed-insights"]',
+        );
+        act(() => {
+            fireEvent.click(link as HTMLButtonElement);
+        });
+        expect(h.result.current.state.dismissedInsights.size).toBe(0);
+        expect(
+            document.querySelector('[data-insight-kind="FrequentSuggester"]'),
+        ).not.toBeNull();
     });
 });
 

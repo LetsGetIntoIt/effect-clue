@@ -493,6 +493,11 @@ export function ShareCreateModal({
             suggestions: derived.suggestionsAsData,
             accusations: derived.accusationsAsData,
             hypotheses: state.hypotheses,
+            // Hypothesis ordering is local-only UI state; the wire
+            // format omits it (receivers start with whatever order the
+            // share codec hands back, which today is empty for all
+            // non-transfer kinds).
+            hypothesisOrder: state.hypothesisOrder,
             // Drafts aren't part of the share wire format — the
             // receiver enters their own. The local `pendingSuggestion`
             // exists in `state` but doesn't ride the share.

@@ -254,29 +254,31 @@ export const buildSessionFromSnapshot = (
               )
             : [];
 
-    const hypotheses: HypothesisMap =
-        snapshot.hypothesesData !== null
-            ? (() => {
-                  const decoded = decodeField(
-                      F_HYPOTHESES_DATA,
-                      snapshot.hypothesesData,
-                      hypothesesCodec,
-                  );
-                  let m: HypothesisMap = emptyHypotheses;
-                  for (const h of decoded) {
-                      const owner =
-                          h.player !== null
-                              ? PlayerOwner(h.player)
-                              : CaseFileOwner();
-                      m = HashMap.set(
-                          m,
-                          Cell(owner, h.card),
-                          h.value as HypothesisValue,
-                      );
-                  }
-                  return m;
-              })()
-            : emptyHypotheses;
+    const { hypotheses, hypothesisOrder } = (() => {
+        if (snapshot.hypothesesData === null) {
+            return {
+                hypotheses: emptyHypotheses,
+                hypothesisOrder: [] as ReadonlyArray<Cell>,
+            };
+        }
+        const decoded = decodeField(
+            F_HYPOTHESES_DATA,
+            snapshot.hypothesesData,
+            hypothesesCodec,
+        );
+        let m: HypothesisMap = emptyHypotheses;
+        const order: Array<Cell> = [];
+        for (const h of decoded) {
+            const owner =
+                h.player !== null
+                    ? PlayerOwner(h.player)
+                    : CaseFileOwner();
+            const cell = Cell(owner, h.card);
+            m = HashMap.set(m, cell, h.value as HypothesisValue);
+            order.push(cell);
+        }
+        return { hypotheses: m, hypothesisOrder: order };
+    })();
 
     return {
         setup,
@@ -285,6 +287,7 @@ export const buildSessionFromSnapshot = (
         suggestions,
         accusations,
         hypotheses,
+        hypothesisOrder,
         // Drafts are local-only; the receiver enters their own.
         pendingSuggestion: null,
         // Identity is local-only too — the share wire format
