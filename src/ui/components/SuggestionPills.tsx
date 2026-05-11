@@ -231,6 +231,7 @@ export function PillPopover({
             transition={widthTransition}
             className={
                 "tap-target text-tap inline-flex items-center gap-1.5 rounded-full border " +
+                "@max-[500px]/log:flex @max-[500px]/log:w-full @max-[500px]/log:justify-start " +
                 tone
             }
         >
@@ -297,6 +298,7 @@ export function PillPopover({
                     (disabled ? "cursor-not-allowed " : "cursor-pointer ") +
                     "rounded-full border-none bg-transparent p-0 " +
                     "hover:opacity-80 " +
+                    "@max-[500px]/log:block @max-[500px]/log:w-full " +
                     // While the dropdown is open, real focus is inside
                     // the list — pin the ring on the trigger anyway so
                     // the user can see which pill they're editing.

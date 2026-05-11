@@ -85,7 +85,7 @@ const LABEL_ROW = "flex items-center gap-1.5 text-[13px]";
 export function SuggestionLogPanel() {
     const t = useTranslations("suggestions");
     return (
-        <section className="min-w-0 contain-inline-size rounded-[var(--radius)] border border-border bg-panel p-4">
+        <section className="@container/log min-w-0 contain-inline-size rounded-[var(--radius)] border border-border bg-panel p-4">
             <h2 className="m-0 mb-3 text-[16px] uppercase tracking-[0.05em] text-accent">
                 {t("title")}
             </h2>
