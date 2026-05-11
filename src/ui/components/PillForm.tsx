@@ -316,7 +316,7 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                 clearInputsLabel !== undefined);
 
         const submitButtonClass =
-            "tap-target text-tap rounded border-none @max-[500px]/log:w-full " +
+            "tap-target text-tap rounded border-none @max-[410px]/log:w-full " +
             (canSubmit
                 ? "cursor-pointer bg-accent text-white"
                 // Disabled tone: bg-unknown-bg + cursor-not-allowed
@@ -344,7 +344,7 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                             )}
                     </div>
                 )}
-                <div className="flex flex-wrap items-center gap-1.5 @max-[500px]/log:flex-col @max-[500px]/log:items-stretch">
+                <div className="flex flex-wrap items-center gap-1.5 @max-[410px]/log:flex-col @max-[410px]/log:items-stretch">
                     {slots.map(slot => (
                         <PillPopover
                             key={slot.id}
@@ -380,7 +380,7 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                     {onCancel !== undefined && (
                         <button
                             type="button"
-                            className="tap-target text-tap cursor-pointer rounded border border-border bg-white @max-[500px]/log:w-full"
+                            className="tap-target text-tap cursor-pointer rounded border border-border bg-white @max-[410px]/log:w-full"
                             onClick={onCancel}
                         >
                             {cancelLabel ?? null}
