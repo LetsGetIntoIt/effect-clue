@@ -513,7 +513,7 @@ export function SetupWizard() {
     return (
         <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4">
             <header className="flex flex-col gap-1">
-                <h2 className="m-0 text-[1.5rem] font-semibold tracking-tight">
+                <h2 className="m-0 text-[1.5rem] uppercase tracking-[0.05em] text-accent">
                     {t("heading")}
                 </h2>
                 <p className="m-0 text-[1rem] text-muted">

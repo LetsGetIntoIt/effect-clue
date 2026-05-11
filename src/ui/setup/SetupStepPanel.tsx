@@ -142,7 +142,7 @@ export function SetupStepPanel({
                         )}
                     </span>
                     <div className="flex min-w-0 flex-col">
-                        <h3 className="m-0 text-[1.125rem] font-semibold leading-tight">
+                        <h3 className="m-0 font-sans! text-[1.125rem] font-bold uppercase tracking-wide text-accent leading-tight">
                             {title}
                         </h3>
                         <span className="text-[1rem] uppercase tracking-wide text-muted">
