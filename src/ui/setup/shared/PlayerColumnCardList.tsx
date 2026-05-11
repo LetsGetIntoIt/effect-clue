@@ -83,7 +83,7 @@ export function PlayerColumnCardList({
 
     return (
         <div className="flex min-w-0 flex-col gap-2 rounded border border-border/40 p-3">
-            <h3 className="m-0 truncate text-[14px] font-semibold">
+            <h3 className="m-0 truncate text-[1.125rem] font-semibold">
                 {heading_}
             </h3>
             <div className="flex flex-col gap-3">
@@ -92,7 +92,7 @@ export function PlayerColumnCardList({
                         key={String(category.id)}
                         className="flex flex-col gap-1"
                     >
-                        <span className="text-[11px] uppercase tracking-wide text-muted">
+                        <span className="text-[1rem] uppercase tracking-wide text-muted">
                             {category.name}
                         </span>
                         <ul className="m-0 flex list-none flex-col gap-1 p-0">
@@ -127,7 +127,7 @@ export function PlayerColumnCardList({
                                                     },
                                                 )}
                                             />
-                                            <span className="text-[13px]">
+                                            <span className="text-[1rem]">
                                                 {entry.name}
                                             </span>
                                         </label>

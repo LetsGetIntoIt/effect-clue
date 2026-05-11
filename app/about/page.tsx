@@ -7,7 +7,7 @@ export default function AboutPage() {
     const t = useTranslations("about");
     return (
         <main className="mx-auto flex max-w-2xl flex-col gap-5 px-5 py-8">
-            <h1 className="m-0 font-display text-[28px] text-accent">
+            <h1 className="m-0 font-display text-[1.75rem] text-accent">
                 {t("pageHeading")}
             </h1>
             <AboutContent context="page" />

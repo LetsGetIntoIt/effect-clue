@@ -1116,11 +1116,11 @@ export function Checklist() {
                 <CaseFileHeader knowledge={knowledge} />
             </div>
             <div className="-mx-4 px-4">
-            <table className="w-full border-separate border-spacing-0 border-t border-l border-border text-[13px]">
+            <table className="w-full border-separate border-spacing-0 border-t border-l border-border text-[1rem]">
                 <thead className="sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))] z-[var(--z-checklist-sticky-header)] bg-row-header">
                     <tr>
                         <th
-                            className={`${STICKY_FIRST_COL_HEADER} border-r border-b border-border bg-row-header px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.05em] text-muted`}
+                            className={`${STICKY_FIRST_COL_HEADER} border-r border-b border-border bg-row-header px-2 py-1 text-center text-[1rem] font-semibold uppercase tracking-[0.05em] text-muted`}
                             data-tour-sticky-left=""
                         >
                             {!hasKeyboard ? null : label("global.gotoChecklist")}
@@ -1158,7 +1158,7 @@ export function Checklist() {
                                 {...tableRowMotionProps}
                             >
                                 <motion.th
-                                    className={`${STICKY_FIRST_COL} overflow-hidden border-r border-b border-border bg-category-header p-0 text-left text-[11px] uppercase tracking-[0.05em] text-white`}
+                                    className={`${STICKY_FIRST_COL} overflow-hidden border-r border-b border-border bg-category-header p-0 text-left text-[1rem] uppercase tracking-[0.05em] text-white`}
                                     data-tour-sticky-left=""
                                     exit={cellExitTone}
                                 >
@@ -1387,7 +1387,7 @@ export function Checklist() {
                                         const topLeft = showChip ? (
                                             <span
                                                 aria-hidden
-                                                className="inline-flex items-center gap-[2px] rounded-[3px] border border-accent/40 px-[3px] py-px text-[10px] font-semibold leading-none text-accent tabular-nums"
+                                                className="inline-flex items-center gap-[2px] rounded-[3px] border border-accent/40 px-[3px] py-px text-[1rem] font-semibold leading-none text-accent tabular-nums"
                                             >
                                                 <LightbulbIcon size={9} />
                                                 {footnoteNumbers.join(",")}
@@ -2310,7 +2310,7 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
             animate={headerAnimate}
             transition={isCelebrating ? wiggleTransition : celebrateTransition}
         >
-            <div className="mb-2.5 flex items-center gap-3 text-[13px]">
+            <div className="mb-2.5 flex items-center gap-3 text-[1rem]">
                 <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-semibold text-accent">
                     <motion.span
                         animate={
@@ -2379,7 +2379,7 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
                         >
                             <div
                                 className={
-                                    "mb-1 text-[11px] uppercase tracking-[0.05em] " +
+                                    "mb-1 text-[1rem] uppercase tracking-[0.05em] " +
                                     (solved ? "text-white/80" : "text-muted")
                                 }
                             >
@@ -2393,7 +2393,7 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
                                         animate={{ opacity: 1, y: 0 }}
                                         exit={{ opacity: 0, y: -4 }}
                                         transition={crossfadeTransition}
-                                        className="text-[14px] font-semibold"
+                                        className="text-[1rem] font-semibold"
                                     >
                                         {cardName(setup, solved)}
                                     </motion.div>
@@ -2404,7 +2404,7 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
                                         animate={{ opacity: 1, y: 0 }}
                                         exit={{ opacity: 0, y: 4 }}
                                         transition={crossfadeTransition}
-                                        className="text-[13px] text-muted"
+                                        className="text-[1rem] text-muted"
                                     >
                                         {t("candidatesCount", {
                                             count: candidates.length,

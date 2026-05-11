@@ -129,7 +129,7 @@ export function PlayerListReorder() {
                             trash. */}
                         <span
                             aria-hidden
-                            className="ml-3 shrink-0 cursor-grab select-none text-[18px] leading-none text-muted"
+                            className="ml-3 shrink-0 cursor-grab select-none text-[1.125rem] leading-none text-muted"
                         >
                             {DRAG_HANDLE_GLYPH}
                         </span>

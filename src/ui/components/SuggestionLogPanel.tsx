@@ -66,7 +66,7 @@ import {
 } from "../motion";
 import { label, matches, shortcutSuffix } from "../keyMap";
 
-const SECTION_TITLE = "mt-0 mb-2 text-[14px] font-semibold";
+const SECTION_TITLE = "mt-0 mb-2 text-[1.125rem] font-semibold";
 // Non user-facing glyph rendered as the rotating caret on
 // the Recommendations expand/collapse header.
 const CARET_GLYPH = "\u25B8";
@@ -74,8 +74,8 @@ const HEIGHT_AUTO = "auto";
 // Kept for the recommendations chooser below — the suggestion form
 // no longer uses these classes (it renders pills, not <select>s).
 const SELECT_CLASS =
-    "flex-1 rounded border border-border p-1.5 text-[13px]";
-const LABEL_ROW = "flex items-center gap-1.5 text-[13px]";
+    "flex-1 rounded border border-border p-1.5 text-[1rem]";
+const LABEL_ROW = "flex items-center gap-1.5 text-[1rem]";
 
 /**
  * Consolidated card for everything the solver's primary loop touches:
@@ -86,7 +86,7 @@ export function SuggestionLogPanel() {
     const t = useTranslations("suggestions");
     return (
         <section className="@container/log min-w-0 contain-inline-size rounded-[var(--radius)] border border-border bg-panel p-4">
-            <h2 className="m-0 mb-3 text-[16px] uppercase tracking-[0.05em] text-accent">
+            <h2 className="m-0 mb-3 text-[1.25rem] uppercase tracking-[0.05em] text-accent">
                 {t("title")}
             </h2>
             <div className="mb-5">
@@ -311,7 +311,7 @@ function AddSuggestion() {
                     </FormSlide>
                 ) : (
                     <FormSlide key="accusation" direction={1}>
-                        <p className="mt-0 mb-2 text-[12px] leading-snug text-muted">
+                        <p className="mt-0 mb-2 text-[1rem] leading-snug text-muted">
                             {tAcc("addHelpText")}
                         </p>
                         <AccusationForm
@@ -585,7 +585,7 @@ function TabButton({
             className={
                 "relative mx-px inline-flex cursor-pointer items-baseline " +
                 "rounded-[6px] border-none bg-accent/10 px-1.5 py-1 " +
-                "align-baseline text-[14px] font-semibold text-text " +
+                "align-baseline text-[1rem] font-semibold text-text " +
                 "transition-colors hover:bg-accent/20 " +
                 "focus-visible:outline-2 focus-visible:outline-accent " +
                 "focus-visible:outline-offset-1"
@@ -733,7 +733,7 @@ function Recommendations() {
     // heading reads as a secondary affordance — the primary heading
     // is "Add a suggestion" right below.
     const header = (
-        <h3 className="mt-0 mb-1 text-[12px] font-normal text-muted">
+        <h3 className="mt-0 mb-1 text-[1rem] font-normal text-muted">
             <button
                 type="button"
                 aria-expanded={expanded}
@@ -745,7 +745,7 @@ function Recommendations() {
                     aria-hidden
                     animate={{ rotate: expanded ? 90 : 0 }}
                     transition={caretTransition}
-                    className="inline-block text-[12px] leading-none"
+                    className="inline-block text-[1rem] leading-none"
                 >
                     {CARET_GLYPH}
                 </motion.span>
@@ -1004,7 +1004,7 @@ function RecommendationsBody({
 
     if (knowledge === undefined || !asPlayer || recommendLayer === null) {
         return (
-            <div className="mt-2 text-[13px] text-muted">
+            <div className="mt-2 text-[1rem] text-muted">
                 {knowledge === undefined
                     ? t("resolveContradictionFirst")
                     : t("addPlayersFirst")}
@@ -1030,7 +1030,7 @@ function RecommendationsBody({
                     </select>
                 </label>
                 <div
-                    className="mt-2 flex items-center gap-2 text-[13px] text-muted"
+                    className="mt-2 flex items-center gap-2 text-[1rem] text-muted"
                     role="status"
                     aria-live="polite"
                 >
@@ -1046,7 +1046,7 @@ function RecommendationsBody({
     const accuseBanner =
         action._tag === "Accuse" ? (
             <div
-                className="mt-2 rounded border border-accent bg-panel p-3 text-[13px]"
+                className="mt-2 rounded border border-accent bg-panel p-3 text-[1rem]"
                 role="status"
             >
                 <div className="font-semibold text-accent">
@@ -1077,7 +1077,7 @@ function RecommendationsBody({
     const nearlySolvedBanner =
         action._tag === "NearlySolved" ? (
             <div
-                className="mt-2 rounded border border-border bg-panel p-3 text-[13px]"
+                className="mt-2 rounded border border-border bg-panel p-3 text-[1rem]"
                 role="status"
             >
                 <div className="font-semibold">
@@ -1113,11 +1113,11 @@ function RecommendationsBody({
                 </select>
             </label>
             {items.length === 0 ? (
-                <div className="mt-2 text-[13px] text-muted">
+                <div className="mt-2 text-[1rem] text-muted">
                     {action._tag === "Accuse" ? null : t("nothingUseful")}
                 </div>
             ) : (
-                <ol className="mt-2 list-decimal pl-6 text-[13px]">
+                <ol className="mt-2 list-decimal pl-6 text-[1rem]">
                     {items.map((r, i) => {
                         const explanation = tRecs(
                             r.description.kind,
@@ -1188,7 +1188,7 @@ function RecommendationsBody({
                                                 })}
                                             </span>
                                         </div>
-                                        <div className="text-[12px] text-muted">
+                                        <div className="text-[1rem] text-muted">
                                             {explanation}
                                         </div>
                                     </div>
@@ -1285,13 +1285,13 @@ function PriorLog() {
                 })}
             </h3>
             {entries.length === 0 ? (
-                <div className="text-[13px] text-muted">
+                <div className="text-[1.125rem] text-muted">
                     {t("priorEmpty")}
                 </div>
             ) : (
                 <>
                     {hasKeyboard && (
-                        <div className="mb-1 text-[11px] text-muted">
+                        <div className="mb-1 text-[1.125rem] text-muted">
                             {t("priorKeyboardHint")}
                         </div>
                     )}
@@ -1544,7 +1544,7 @@ function PriorSuggestionItem({
                 // itself is covered by the app-wide `:focus-visible`
                 // outline (see app/globals.css), so we don't add one
                 // here.
-                "relative flex items-start gap-2 rounded-[var(--radius)] border border-border px-3 py-2 text-[13px] transition-colors cursor-pointer overflow-hidden " +
+                "relative flex items-start gap-2 rounded-[var(--radius)] border border-border px-3 py-2 text-[1rem] transition-colors cursor-pointer overflow-hidden " +
                 (isEditing || isHighlightedByCell
                     ? "ring-2 ring-accent ring-offset-1 ring-offset-panel "
                     : "hover:ring-2 hover:ring-accent hover:ring-offset-1 hover:ring-offset-panel ")
@@ -1680,7 +1680,7 @@ function PriorSuggestionItem({
                                 ),
                             })}
                         </div>
-                        <div className="text-[13px] text-muted">
+                        <div className="text-[1rem] text-muted">
                             {t.rich("refutationLine", {
                                 status: refutationStatus(s),
                                 refuter: s.refuter ? String(s.refuter) : "",
@@ -1696,7 +1696,7 @@ function PriorSuggestionItem({
                             })}
                         </div>
                         {!hasKeyboard && !showMobileEditButton && (
-                            <div className="mt-0.5 text-[11px] text-muted">
+                            <div className="mt-0.5 text-[1rem] text-muted">
                                 {t("priorRowHintMobile")}
                             </div>
                         )}
@@ -1717,7 +1717,7 @@ function PriorSuggestionItem({
                     </>
                 )}
                 {hasKeyboard && isRowFocused && !isEditing && (
-                    <div className="mt-0.5 text-[11px] text-muted">
+                    <div className="mt-0.5 text-[1rem] text-muted">
                         {t("priorRowHintDesktop")}
                     </div>
                 )}
@@ -1911,7 +1911,7 @@ function PriorAccusationItem({
             role="button"
             data-accusation-row={idx}
             className={
-                "relative flex items-start gap-2 rounded-[var(--radius)] border border-border px-3 py-2 text-[13px] transition-colors cursor-pointer overflow-hidden " +
+                "relative flex items-start gap-2 rounded-[var(--radius)] border border-border px-3 py-2 text-[1rem] transition-colors cursor-pointer overflow-hidden " +
                 (isEditing || isHighlightedByCell
                     ? "ring-2 ring-accent ring-offset-1 ring-offset-panel "
                     : "hover:ring-2 hover:ring-accent hover:ring-offset-1 hover:ring-offset-panel ")
@@ -2026,7 +2026,7 @@ function PriorAccusationItem({
                             })}
                         </div>
                         {!hasKeyboard && !showMobileEditButton && (
-                            <div className="mt-0.5 text-[11px] text-muted">
+                            <div className="mt-0.5 text-[1rem] text-muted">
                                 {tSug("priorRowHintMobile")}
                             </div>
                         )}
@@ -2047,7 +2047,7 @@ function PriorAccusationItem({
                     </>
                 )}
                 {hasKeyboard && isRowFocused && !isEditing && (
-                    <div className="mt-0.5 text-[11px] text-muted">
+                    <div className="mt-0.5 text-[1rem] text-muted">
                         {tSug("priorRowHintDesktop")}
                     </div>
                 )}

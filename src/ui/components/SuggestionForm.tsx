@@ -710,7 +710,7 @@ export const SuggestionForm = forwardRef<
 
     // --- Render --------------------------------------------------------
     const headerTitle = showHeader ? (
-        <h3 className="mt-0 mb-0 text-[14px] font-semibold">
+        <h3 className="mt-0 mb-0 text-[1.125rem] font-semibold">
             {suggestion !== undefined
                 ? t("editTitle")
                 : t.rich("addTitle", {

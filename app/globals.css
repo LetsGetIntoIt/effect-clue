@@ -201,17 +201,22 @@
  * live in `@theme`. A plain `:root` block is always emitted.
  */
 :root {
-    /* Standard tap target — primary buttons, form pills, modal CTAs. */
+    /* Standard tap target — primary buttons, form pills, modal CTAs.
+     * Tap-target geometry stays in px (finger size is a physical
+     * reality); only the text-size token is rem so pill / button
+     * copy scales with user font-size preference. The 1rem floor
+     * applies here too, so pill / button text never dips below
+     * body-readable size. */
     --tap-min: 44px;
     --tap-pad-x: 16px;
     --tap-pad-y: 10px;
-    --tap-text: 15px;
+    --tap-text: 1rem;
 
     /* Compact target — secondary buttons, setup chips, dropdown rows. */
     --tap-min-compact: 36px;
     --tap-pad-x-compact: 12px;
     --tap-pad-y-compact: 6px;
-    --tap-text-compact: 13px;
+    --tap-text-compact: 1rem;
 
     /* Icon-only square button — close X, info circles. */
     --tap-icon: 44px;
@@ -219,15 +224,15 @@
 
 @media (min-width: 800px) {
     :root {
-        --tap-min: 32px;
+        --tap-min: 36px;
         --tap-pad-x: 12px;
         --tap-pad-y: 6px;
-        --tap-text: 13px;
+        --tap-text: 1rem;
 
-        --tap-min-compact: 28px;
+        --tap-min-compact: 32px;
         --tap-pad-x-compact: 10px;
         --tap-pad-y-compact: 4px;
-        --tap-text-compact: 13px;
+        --tap-text-compact: 1rem;
 
         --tap-icon: 32px;
     }

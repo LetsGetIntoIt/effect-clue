@@ -112,7 +112,7 @@ export function InfoPopover({
             {asButton ? (
                 <RadixPopover.Trigger
                     aria-label={tCommon("info")}
-                    className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-border bg-panel text-[12px] text-muted hover:text-accent"
+                    className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-border bg-panel text-[1rem] text-muted hover:text-accent"
                 >
                     {children}
                 </RadixPopover.Trigger>
@@ -146,7 +146,7 @@ export function InfoPopover({
                     // mid-transit when the user is heading from cell to
                     // popover).
                     className={
-                        "z-[var(--z-popover)] rounded-[var(--radius)] border px-3 py-2 text-[12px] leading-snug shadow-[0_6px_16px_rgba(0,0,0,0.18)] " +
+                        "z-[var(--z-popover)] rounded-[var(--radius)] border px-3 py-2 text-[1rem] leading-snug shadow-[0_6px_16px_rgba(0,0,0,0.18)] " +
                         "focus:outline-none " +
                         "before:absolute before:content-[''] " +
                         "data-[side=top]:before:left-0 data-[side=top]:before:right-0 data-[side=top]:before:bottom-[-10px] data-[side=top]:before:h-[10px] " +

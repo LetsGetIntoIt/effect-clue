@@ -492,7 +492,7 @@ export function ShareImportPage({
 
     return (
         <main className="mx-auto flex max-w-[640px] flex-col gap-5 px-5 py-8">
-            <h1 className="m-0 font-display text-[28px] text-accent">
+            <h1 className="m-0 font-display text-[1.75rem] text-accent">
                 {t("importTitle")}
             </h1>
             <Dialog.Root
@@ -509,7 +509,7 @@ export function ShareImportPage({
                         }
                     >
                         <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
-                            <Dialog.Title className="m-0 font-display text-[20px] text-accent">
+                            <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
                                 {t(TITLE_KEY_FOR[receiveFlow])}
                             </Dialog.Title>
                             <button
@@ -523,7 +523,7 @@ export function ShareImportPage({
                         </div>
                         {snapshot.ownerName !== null ? (
                             <Dialog.Description
-                                className="px-5 pt-3 text-[14px] leading-relaxed"
+                                className="px-5 pt-3 text-[1rem] leading-relaxed"
                                 data-share-import-sender
                             >
                                 {t("importSharedBy", {
@@ -532,16 +532,16 @@ export function ShareImportPage({
                             </Dialog.Description>
                         ) : null}
                         {isEmpty ? (
-                            <div className="px-5 pt-3 text-[14px] leading-relaxed text-muted">
+                            <div className="px-5 pt-3 text-[1rem] leading-relaxed text-muted">
                                 {t("importEmpty")}
                             </div>
                         ) : (
                             <>
-                                <div className="px-5 pt-4 text-[14px] font-semibold">
+                                <div className="px-5 pt-4 text-[1rem] font-semibold">
                                     {includesHeader}
                                 </div>
                                 <ul
-                                    className="m-0 list-disc px-5 pl-9 pt-1 text-[14px]"
+                                    className="m-0 list-disc px-5 pl-9 pt-1 text-[1rem]"
                                     data-share-import-bullets
                                 >
                                     {showPackBullet && packBullet !== null ? (

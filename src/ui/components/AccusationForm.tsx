@@ -267,7 +267,7 @@ export const AccusationForm = forwardRef<
     }, [form, playerOptions, setup, t, commitAndAdvance]);
 
     const headerTitle = showHeader ? (
-        <h3 className="mt-0 mb-0 text-[14px] font-semibold">
+        <h3 className="mt-0 mb-0 text-[1.125rem] font-semibold">
             {effectiveSubmitLabel === "update"
                 ? t("editTitle")
                 : t("addTitle")}

@@ -186,7 +186,7 @@ export function AccountModal() {
     return (
                 <div className="flex flex-col">
                     <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
-                        <Dialog.Title className="m-0 font-display text-[20px] text-accent">
+                        <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
                             {isAnon ? t("titleSignedOut") : t("titleSignedIn")}
                         </Dialog.Title>
                         <button
@@ -198,13 +198,13 @@ export function AccountModal() {
                             <XIcon size={18} />
                         </button>
                     </div>
-                    <Dialog.Description className="px-5 pt-3 text-[14px] leading-relaxed">
+                    <Dialog.Description className="px-5 pt-3 text-[1rem] leading-relaxed">
                         {isAnon ? t("descriptionSignedOut") : t("descriptionSignedIn")}
                     </Dialog.Description>
                     <div className="px-5 pb-5">
                         {isAnon ? (
                             <div className="mt-4 flex flex-col gap-2">
-                                <ul className="m-0 list-disc pl-5 text-[14px]">
+                                <ul className="m-0 list-disc pl-5 text-[1rem]">
                                     <li>{t("benefitSyncPacks")}</li>
                                     <li>{t("benefitSharedGames")}</li>
                                 </ul>
@@ -227,24 +227,24 @@ export function AccountModal() {
                                         sizeClassName="h-12 w-12"
                                     />
                                     <div className="flex flex-col">
-                                        <div className="text-[15px] font-semibold">
+                                        <div className="text-[1rem] font-semibold">
                                             {user?.name ?? user?.email}
                                         </div>
-                                        <div className="text-[12px] text-muted">
+                                        <div className="text-[1rem] text-muted">
                                             {user?.email}
                                         </div>
                                     </div>
                                 </div>
                                 <section className="rounded-[var(--radius)] border border-border bg-white px-3 py-2">
                                     <div className="flex items-center justify-between gap-2">
-                                        <h3 className="m-0 text-[13px] font-semibold text-accent">
+                                        <h3 className="m-0 text-[1.125rem] font-semibold text-accent">
                                             {t("myCardPacksTitle")}
                                         </h3>
                                         <button
                                             type="button"
                                             onClick={() => void handleSyncNow()}
                                             disabled={isSyncing}
-                                            className="inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--radius)] border border-border bg-white px-2 py-1 text-[12px] text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent disabled:cursor-not-allowed"
+                                            className="inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--radius)] border border-border bg-white px-2 py-1 text-[1rem] text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent disabled:cursor-not-allowed"
                                         >
                                             <RefreshIcon
                                                 size={12}
@@ -264,19 +264,19 @@ export function AccountModal() {
                                         </button>
                                     </div>
                                     {myCardPacks.isPending && packs.length === 0 ? (
-                                        <div className="mt-2 text-[12px] text-muted">
+                                        <div className="mt-2 text-[1rem] text-muted">
                                             {t("myCardPacksLoading")}
                                         </div>
                                     ) : myCardPacks.isError && packs.length === 0 ? (
-                                        <div className="mt-2 text-[12px] text-danger">
+                                        <div className="mt-2 text-[1rem] text-danger">
                                             {t("myCardPacksError")}
                                         </div>
                                     ) : packs.length === 0 ? (
-                                        <div className="mt-2 text-[12px] text-muted">
+                                        <div className="mt-2 text-[1rem] text-muted">
                                             {t("myCardPacksEmpty")}
                                         </div>
                                     ) : (
-                                        <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0 text-[13px]">
+                                        <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0 text-[1rem]">
                                             {packs.map((pack) => {
                                                 const hasPending =
                                                     pack.unsyncedSince !==

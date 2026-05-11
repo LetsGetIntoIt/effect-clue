@@ -36,7 +36,7 @@ export function AccountAvatar({
         return (
             <span
                 aria-hidden="true"
-                className={`${sizeClassName} inline-flex items-center justify-center rounded-full bg-accent text-[12px] font-semibold text-white`}
+                className={`${sizeClassName} inline-flex items-center justify-center rounded-full bg-accent text-[1rem] font-semibold text-white`}
             >
                 {initialsFor(user)}
             </span>

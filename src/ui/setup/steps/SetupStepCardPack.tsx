@@ -364,7 +364,7 @@ export function SetupStepCardPack({
             registerPanelEl={registerPanelEl}
             footer={footer}
         >
-            <p className="m-0 text-[13px] text-muted">{t("helperText")}</p>
+            <p className="m-0 text-[1rem] text-muted">{t("helperText")}</p>
 
             <div
                 className="flex flex-wrap items-center gap-2"

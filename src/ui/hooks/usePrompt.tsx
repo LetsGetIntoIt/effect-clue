@@ -135,12 +135,12 @@ function PromptModalContent({
 
     return (
         <div className="p-5">
-            <Dialog.Title className="m-0 mb-2 font-display text-[18px] text-accent">
+            <Dialog.Title className="m-0 mb-2 font-display text-[1.125rem] text-accent">
                 {options.title}
             </Dialog.Title>
             <p className="sr-only">{options.label}</p>
             <form onSubmit={handleSubmit}>
-                <label className="m-0 block text-[13px] font-semibold text-[#2a1f12]">
+                <label className="m-0 block text-[1rem] font-semibold text-[#2a1f12]">
                     {options.label}
                     <input
                         ref={inputRef}

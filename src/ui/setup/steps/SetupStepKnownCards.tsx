@@ -85,7 +85,7 @@ export function SetupStepKnownCards({
                 registerPanelEl={registerPanelEl}
                 footer={footer}
             >
-                <p className="m-0 text-[13px] text-muted">
+                <p className="m-0 text-[1rem] text-muted">
                     {t("noOtherPlayers")}
                 </p>
             </SetupStepPanel>
@@ -107,7 +107,7 @@ export function SetupStepKnownCards({
             registerPanelEl={registerPanelEl}
             footer={footer}
         >
-            <p className="m-0 text-[13px] text-muted">{t("helperText")}</p>
+            <p className="m-0 text-[1rem] text-muted">{t("helperText")}</p>
 
             {/* Desktop: side-by-side grid. */}
             <div className="hidden gap-3 [@media(min-width:800px)]:grid [@media(min-width:800px)]:grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
@@ -133,7 +133,7 @@ export function SetupStepKnownCards({
                     >
                         <ChevronLeftIcon size={16} />
                     </button>
-                    <span className="text-[12px] text-muted">
+                    <span className="text-[1rem] text-muted">
                         {t("paginator", {
                             current: activeIndex + 1,
                             total: targets.length,

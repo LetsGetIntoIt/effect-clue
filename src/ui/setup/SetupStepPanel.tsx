@@ -126,7 +126,7 @@ export function SetupStepPanel({
             >
                 <div className={`flex min-w-0 items-center gap-3 ${headerTextClass}`}>
                     <span
-                        className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[12px] font-semibold ${
+                        className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[1rem] font-semibold ${
                             isComplete
                                 ? "border-accent bg-accent text-white"
                                 : isEditing
@@ -142,10 +142,10 @@ export function SetupStepPanel({
                         )}
                     </span>
                     <div className="flex min-w-0 flex-col">
-                        <h3 className="m-0 text-[15px] font-semibold leading-tight">
+                        <h3 className="m-0 text-[1.125rem] font-semibold leading-tight">
                             {title}
                         </h3>
-                        <span className="text-[11px] uppercase tracking-wide text-muted">
+                        <span className="text-[1rem] uppercase tracking-wide text-muted">
                             {t("stepCounter", {
                                 step: stepNumber,
                                 total: totalSteps,
@@ -154,7 +154,7 @@ export function SetupStepPanel({
                     </div>
                 </div>
                 {isComplete && (
-                    <span className="shrink-0 text-[12px] text-muted">
+                    <span className="shrink-0 text-[1rem] text-muted">
                         {summary}
                     </span>
                 )}
@@ -178,7 +178,7 @@ export function SetupStepPanel({
                                 {validation.message && validation.level !== "valid" && (
                                     <div
                                         role="alert"
-                                        className={`flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2 text-[13px] ${
+                                        className={`flex items-start gap-2 rounded-[var(--radius)] border px-3 py-2 text-[1rem] ${
                                             validation.level === "blocked"
                                                 ? "border-danger/40 bg-danger/5 text-danger"
                                                 : "border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-400"
@@ -208,7 +208,7 @@ export function SetupStepPanel({
             {isEditing && footer ? footer : null}
 
             {isPending && (
-                <div className="border-t border-border/20 px-4 py-2 text-[12px] text-muted">
+                <div className="border-t border-border/20 px-4 py-2 text-[1rem] text-muted">
                     {summary}
                 </div>
             )}

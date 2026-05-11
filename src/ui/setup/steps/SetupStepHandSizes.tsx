@@ -163,7 +163,7 @@ export function SetupStepHandSizes({
             footer={footer}
         >
             {players.length === 0 ? (
-                <p className="m-0 text-[13px] text-muted">
+                <p className="m-0 text-[1rem] text-muted">
                     {t("noPlayersHint")}
                 </p>
             ) : (
@@ -176,14 +176,14 @@ export function SetupStepHandSizes({
                                 key={String(player)}
                                 className="flex items-center justify-between gap-3 rounded border border-border/40 px-3 py-2"
                             >
-                                <span className="min-w-0 truncate text-[14px]">
+                                <span className="min-w-0 truncate text-[1rem]">
                                     {String(player)}
                                 </span>
                                 <input
                                     type="number"
                                     min={0}
                                     max={allCardIds(setup).length}
-                                    className="w-16 rounded border border-border px-2 py-1 text-center text-[14px]"
+                                    className="w-16 rounded border border-border px-2 py-1 text-center text-[1rem]"
                                     value={
                                         current === undefined
                                             ? ""
@@ -232,14 +232,14 @@ function AdjustDealing() {
             open={open}
             onToggle={e => setOpen((e.target as HTMLDetailsElement).open)}
         >
-            <summary className="cursor-pointer text-[13px] text-muted">
+            <summary className="cursor-pointer text-[1rem] text-muted">
                 {t("adjustDealingTitle")}
             </summary>
             <fieldset className="m-0 mt-3 flex flex-col gap-2 border-none p-0">
-                <legend className="m-0 mb-1 p-0 text-[12px] text-muted">
+                <legend className="m-0 mb-1 p-0 text-[1rem] text-muted">
                     {t("firstDealtLegend")}
                 </legend>
-                <label className="flex cursor-pointer items-center gap-2 text-[13px]">
+                <label className="flex cursor-pointer items-center gap-2 text-[1rem]">
                     <input
                         type="radio"
                         name="first-dealt"
@@ -257,7 +257,7 @@ function AdjustDealing() {
                 {players.map(player => (
                     <label
                         key={String(player)}
-                        className="flex cursor-pointer items-center gap-2 text-[13px]"
+                        className="flex cursor-pointer items-center gap-2 text-[1rem]"
                     >
                         <input
                             type="radio"

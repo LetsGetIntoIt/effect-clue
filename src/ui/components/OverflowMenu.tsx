@@ -128,7 +128,7 @@ export function OverflowMenu({
                     // unions every match.
                     data-tour-anchor="overflow-menu"
                     className={
-                        "z-[var(--z-popover)] min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[13px] shadow-[0_6px_16px_rgba(0,0,0,0.18)]" +
+                        "z-[var(--z-popover)] min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[1rem] shadow-[0_6px_16px_rgba(0,0,0,0.18)]" +
                         (contentClassName ? ` ${contentClassName}` : "")
                     }
                 >

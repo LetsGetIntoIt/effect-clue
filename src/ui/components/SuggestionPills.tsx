@@ -386,13 +386,13 @@ export function PillPopover({
                             e.preventDefault();
                         }
                     }}
-                    className="z-[var(--z-popover)] min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[13px] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
+                    className="z-[var(--z-popover)] min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[1rem] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
                 >
                     {disabled ? (
                         <div
                             id={messageId}
                             role="note"
-                            className="max-w-[240px] px-3 py-2 text-[12px] text-muted"
+                            className="max-w-[240px] px-3 py-2 text-[1rem] text-muted"
                         >
                             {disabledHint}
                         </div>
@@ -402,7 +402,7 @@ export function PillPopover({
                                 <div
                                     id={messageId}
                                     role="alert"
-                                    className="mx-1 mt-1 mb-1 rounded-[var(--radius)] border border-danger-border bg-danger-bg px-2 py-1 text-[12px] text-danger"
+                                    className="mx-1 mt-1 mb-1 rounded-[var(--radius)] border border-danger-border bg-danger-bg px-2 py-1 text-[1rem] text-danger"
                                 >
                                     {errorReason}
                                 </div>
@@ -765,7 +765,7 @@ export function MultiSelectList({
                             <span
                                 aria-hidden
                                 className={
-                                    "inline-block h-3.5 w-3.5 rounded-sm border text-center text-[10px] leading-3 " +
+                                    "inline-block h-3.5 w-3.5 rounded-sm border text-center text-[1rem] leading-3 " +
                                     (checked
                                         ? "border-accent bg-accent text-white"
                                         : "border-border bg-transparent text-transparent")
@@ -778,11 +778,11 @@ export function MultiSelectList({
                     );
                 })}
             </ul>
-            <div className="mt-1 flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-muted">
+            <div className="mt-1 flex items-center justify-between gap-2 px-2 py-1 text-[1rem] text-muted">
                 {hasKeyboard ? <span>{commitHint}</span> : <span />}
                 <button
                     type="button"
-                    className="cursor-pointer rounded border border-border bg-white px-2 py-0.5 text-[11px]"
+                    className="cursor-pointer rounded border border-border bg-white px-2 py-0.5 text-[1rem]"
                     onMouseDown={e => {
                         e.preventDefault();
                         commitAdvance(toggled);

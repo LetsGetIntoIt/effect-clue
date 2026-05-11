@@ -213,7 +213,7 @@ export function CardPackPicker({
                         {filtered.length === 0 ? (
                             <div
                                 role="status"
-                                className="px-3 py-3 text-[12px] text-muted"
+                                className="px-3 py-3 text-[1rem] text-muted"
                             >
                                 {t("cardPackSearchEmpty", { query: query.trim() })}
                             </div>

@@ -199,7 +199,7 @@ export function CellExplanationRow({
 
     const statusBox = longStatusMessage === undefined ? null : isContradicted &&
       hypothesisValue !== undefined ? (
-        <div className="flex items-start gap-2 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-2 text-[12px] text-danger">
+        <div className="flex items-start gap-2 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-2 text-[1.125rem] text-danger">
             <AlertIcon size={14} className="mt-[1px] flex-shrink-0" />
             <div className="flex flex-col gap-1">
                 <span>{longStatusMessage}</span>
@@ -215,7 +215,7 @@ export function CellExplanationRow({
             </div>
         </div>
     ) : isContradicted ? null : (
-        <div className="flex items-start gap-2 rounded-[var(--radius)] border border-yes/40 bg-yes-bg p-2 text-[12px] text-yes">
+        <div className="flex items-start gap-2 rounded-[var(--radius)] border border-yes/40 bg-yes-bg p-2 text-[1.125rem] text-yes">
             <CheckIcon size={14} className="mt-[1px] flex-shrink-0" />
             <span>{longStatusMessage}</span>
         </div>
@@ -224,7 +224,7 @@ export function CellExplanationRow({
     const renderHypothesisHelp = () => {
         if (hypothesisValue === undefined) {
             return (
-                <p className="text-[12px] leading-snug text-muted">
+                <p className="text-[1.125rem] leading-snug text-muted">
                     {t("helpText")}
                 </p>
             );
@@ -245,12 +245,12 @@ export function CellExplanationRow({
             }
         })();
         return (
-            <div className="flex items-center gap-2 text-[12px] leading-snug text-fg">
+            <div className="flex items-center gap-2 text-[1.125rem] leading-snug text-fg">
                 <ProseChecklistIcon
                     value={hypothesisValue}
                     isHypothesis
                     invertedStyle
-                    className="!h-5 !w-5 text-[20px]"
+                    className="!h-5 !w-5 text-[1.25rem]"
                 />
                 <span>
                     {t.rich(shortKey, {
@@ -273,7 +273,7 @@ export function CellExplanationRow({
                 onClick={() => setObservationOpen(o => !o)}
                 aria-expanded={observationOpen}
                 aria-controls="cell-observation-disclosure"
-                className="-ml-1 flex cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-[12px] text-muted hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="-ml-1 flex cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-[1.125rem] text-muted hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
                 <ChevronRightIcon
                     size={12}
@@ -292,7 +292,7 @@ export function CellExplanationRow({
                         exit={{ height: 0, opacity: 0 }}
                         style={STYLE_OBSERVATION_OVERFLOW}
                     >
-                        <label className="flex cursor-pointer items-center gap-2 pt-2 text-[13px]">
+                        <label className="flex cursor-pointer items-center gap-2 pt-2 text-[1.125rem]">
                             <input
                                 type="checkbox"
                                 checked={observed}
@@ -313,14 +313,14 @@ export function CellExplanationRow({
 
     const deductionsSection = (
         <section className="flex flex-col gap-2">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-fg">
+            <div className="text-[1.125rem] font-semibold uppercase tracking-wide text-fg">
                 {t("deductionsLabel")}
             </div>
             {showDeductions ? (
                 <div className="flex items-start gap-2">
                     <span
                         aria-hidden
-                        className={`inline-flex h-5 w-5 flex-shrink-0 items-center justify-center border border-border text-[12px] font-semibold leading-none ${cellToneClass(display)}`}
+                        className={`inline-flex h-5 w-5 flex-shrink-0 items-center justify-center border border-border text-[1.125rem] font-semibold leading-none ${cellToneClass(display)}`}
                         data-glyph={glyphKindFor(display, status)}
                     >
                         {renderGlyphNode(
@@ -330,7 +330,7 @@ export function CellExplanationRow({
                     </span>
                     <div className="flex flex-col gap-1">
                         {status.kind === "derived" && (
-                            <div className="text-[12px] text-muted">
+                            <div className="text-[1.125rem] text-muted">
                                 {t(
                                     isDerivedSingular
                                         ? "statusDerivedSingular"
@@ -339,20 +339,20 @@ export function CellExplanationRow({
                             </div>
                         )}
                         {whyText !== undefined && (
-                            <div className="whitespace-pre-line text-[12px] text-muted">
+                            <div className="whitespace-pre-line text-[1.125rem] text-muted">
                                 {whyText}
                             </div>
                         )}
                         {display.tag === "hypothesis" &&
                             status.kind !== "derived" && (
-                                <div className="text-[12px] text-muted">
+                                <div className="text-[1.125rem] text-muted">
                                     {t("statusActiveHypothesisCell")}
                                 </div>
                             )}
                     </div>
                 </div>
             ) : (
-                <p className="m-0 text-[12px] leading-snug text-muted">
+                <p className="m-0 text-[1.125rem] leading-snug text-muted">
                     {t("deductionsEmpty")}
                 </p>
             )}
@@ -362,14 +362,14 @@ export function CellExplanationRow({
 
     const leadsSection = (
         <section className="flex flex-col gap-2">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-fg">
+            <div className="text-[1.125rem] font-semibold uppercase tracking-wide text-fg">
                 {t("leadsLabel")}
             </div>
             {showLeads ? (
                 <div className="flex items-start gap-2 text-accent">
                     <span
                         aria-hidden
-                        className="inline-flex h-5 flex-shrink-0 items-center gap-[3px] rounded border border-accent/40 px-1.5 text-[12px] font-semibold leading-none text-accent tabular-nums"
+                        className="inline-flex h-5 flex-shrink-0 items-center gap-[3px] rounded border border-accent/40 px-1.5 text-[1.125rem] font-semibold leading-none text-accent tabular-nums"
                     >
                         <LightbulbIcon size={12} />
                         {footnoteNumbers.join(",")}
@@ -383,7 +383,7 @@ export function CellExplanationRow({
                     </span>
                 </div>
             ) : (
-                <p className="m-0 text-[12px] leading-snug text-muted">
+                <p className="m-0 text-[1.125rem] leading-snug text-muted">
                     {t("leadsEmpty")}
                 </p>
             )}
@@ -392,7 +392,7 @@ export function CellExplanationRow({
 
     const hypothesisSection = (
         <section className="flex flex-col gap-2">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-fg">
+            <div className="text-[1.125rem] font-semibold uppercase tracking-wide text-fg">
                 {t("hypothesisLabel")}
             </div>
             {renderHypothesisHelp()}
@@ -405,7 +405,7 @@ export function CellExplanationRow({
             {!showDeductions &&
                 !showLeads &&
                 hypothesisValue === undefined && (
-                    <div className="text-[12px] text-muted">
+                    <div className="text-[1.125rem] text-muted">
                         {t("emptyHint")}
                     </div>
                 )}
@@ -422,7 +422,7 @@ export function CellExplanationRow({
     return (
         <div className="flex flex-col">
             <div className="relative px-4 py-2">
-                <h3 className="m-0 text-center text-[14px] font-semibold uppercase tracking-wide text-fg">
+                <h3 className="m-0 text-center text-[1.125rem] font-semibold uppercase tracking-wide text-fg">
                     {t("cellHeading", {
                         owner: ownerLabel(cell.owner),
                         card: cardLabel,

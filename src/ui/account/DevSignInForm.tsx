@@ -58,7 +58,7 @@ export function DevSignInForm({ onSignedIn }: DevSignInFormProps) {
     return (
         <form
             onSubmit={onSubmit}
-            className="mt-3 flex flex-col gap-2 rounded-[var(--radius)] border border-dashed border-border bg-row-alt/40 p-3 text-[12px]"
+            className="mt-3 flex flex-col gap-2 rounded-[var(--radius)] border border-dashed border-border bg-row-alt/40 p-3 text-[1rem]"
         >
             <div className="font-semibold uppercase tracking-[0.05em] text-muted">
                 Dev sign-in
@@ -74,7 +74,7 @@ export function DevSignInForm({ onSignedIn }: DevSignInFormProps) {
                     onChange={(e) => setEmail(e.target.value)}
                     autoComplete="off"
                     spellCheck={false}
-                    className="rounded border border-border bg-white px-2 py-1 text-[13px]"
+                    className="rounded border border-border bg-white px-2 py-1 text-[1rem]"
                 />
             </label>
             <label className="flex flex-col gap-0.5">

@@ -54,7 +54,7 @@ export function SetupStepInviteOtherPlayers({
             registerPanelEl={registerPanelEl}
             footer={footer}
         >
-            <p className="m-0 text-[14px] leading-relaxed text-[#2a1f12]">
+            <p className="m-0 text-[1rem] leading-relaxed text-[#2a1f12]">
                 {t("description")}
             </p>
             <button

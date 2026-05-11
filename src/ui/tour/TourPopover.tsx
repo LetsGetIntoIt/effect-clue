@@ -755,7 +755,7 @@ export function TourPopover() {
                         >
                             <div
                                 id="tour-step-title"
-                                className="font-semibold text-[15px] leading-snug text-[var(--color-tour-text)]"
+                                className="font-semibold text-[1rem] leading-snug text-[var(--color-tour-text)]"
                             >
                                 {/* `currentStep.titleKey` is a full
                                     next-intl key under the
@@ -775,7 +775,7 @@ export function TourPopover() {
                         {bodyText !== "" && (
                             <div
                                 id="tour-step-body"
-                                className="px-4 pb-3 text-[13px] leading-snug text-[var(--color-tour-text)]"
+                                className="px-4 pb-3 text-[1rem] leading-snug text-[var(--color-tour-text)]"
                             >
                                 {bodyText}
                             </div>
@@ -783,7 +783,7 @@ export function TourPopover() {
                         <div
                             className="flex items-center justify-between gap-3 border-t border-[var(--color-tour-border)] px-4 py-2.5"
                         >
-                            <span className="text-[12px] text-[var(--color-tour-accent)]">
+                            <span className="text-[1rem] text-[var(--color-tour-accent)]">
                                 {t("stepCounter", {
                                     step: stepNumber,
                                     total: totalSteps,
@@ -792,7 +792,7 @@ export function TourPopover() {
                                 <button
                                     type="button"
                                     onClick={() => dismissTour("skip")}
-                                    className="cursor-pointer border-none bg-transparent p-0 text-[12px] text-[var(--color-tour-accent)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-tour-accent-hover)]"
+                                    className="cursor-pointer border-none bg-transparent p-0 text-[1rem] text-[var(--color-tour-accent)] underline decoration-dotted underline-offset-2 hover:text-[var(--color-tour-accent-hover)]"
                                 >
                                     {t("skipParens")}
                                 </button>
