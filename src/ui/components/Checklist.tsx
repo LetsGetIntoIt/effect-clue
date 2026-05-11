@@ -1387,9 +1387,9 @@ export function Checklist() {
                                         const topLeft = showChip ? (
                                             <span
                                                 aria-hidden
-                                                className="inline-flex items-center gap-[2px] rounded-[3px] border border-accent/40 px-[3px] py-px text-[1rem] font-semibold leading-none text-accent tabular-nums"
+                                                className="inline-flex h-[18px] items-center gap-[2px] rounded-[3px] border border-accent/40 px-[3px] text-[11px] font-semibold leading-none text-accent tabular-nums"
                                             >
-                                                <LightbulbIcon size={9} />
+                                                <LightbulbIcon size={10} />
                                                 {footnoteNumbers.join(",")}
                                             </span>
                                         ) : null;
@@ -1415,6 +1415,7 @@ export function Checklist() {
                                                     value={hypothesisValue}
                                                     isHypothesis
                                                     invertedStyle
+                                                    className="!h-[18px] !w-[18px] text-[12px]"
                                                 />
                                             ) : null;
                                         const center = (

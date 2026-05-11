@@ -250,7 +250,7 @@ export function CellExplanationRow({
                     value={hypothesisValue}
                     isHypothesis
                     invertedStyle
-                    className="!h-5 !w-5 text-[1.25rem]"
+                    className="!h-[24px] !w-[24px] text-[14px]"
                 />
                 <span>
                     {t.rich(shortKey, {
@@ -320,7 +320,7 @@ export function CellExplanationRow({
                 <div className="flex items-start gap-2">
                     <span
                         aria-hidden
-                        className={`inline-flex h-5 w-5 flex-shrink-0 items-center justify-center border border-border text-[1.125rem] font-semibold leading-none ${cellToneClass(display)}`}
+                        className={`inline-flex h-[24px] w-[24px] flex-shrink-0 items-center justify-center border border-border text-[14px] font-semibold leading-none ${cellToneClass(display)}`}
                         data-glyph={glyphKindFor(display, status)}
                     >
                         {renderGlyphNode(
@@ -369,9 +369,9 @@ export function CellExplanationRow({
                 <div className="flex items-start gap-2 text-accent">
                     <span
                         aria-hidden
-                        className="inline-flex h-5 flex-shrink-0 items-center gap-[3px] rounded border border-accent/40 px-1.5 text-[1.125rem] font-semibold leading-none text-accent tabular-nums"
+                        className="inline-flex h-[24px] flex-shrink-0 items-center gap-[3px] rounded border border-accent/40 px-1.5 text-[12px] font-semibold leading-none text-accent tabular-nums"
                     >
-                        <LightbulbIcon size={12} />
+                        <LightbulbIcon size={14} />
                         {footnoteNumbers.join(",")}
                     </span>
                     <span>
