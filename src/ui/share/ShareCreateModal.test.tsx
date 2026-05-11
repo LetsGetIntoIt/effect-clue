@@ -421,6 +421,7 @@ describe("ShareCreateModal — wire payload by variant", () => {
             suggestions: [],
             accusations: [],
             hypotheses: emptyHypotheses,
+            hypothesisOrder: [],
             pendingSuggestion: null,
             selfPlayerId: null,
             firstDealtPlayerId: null,

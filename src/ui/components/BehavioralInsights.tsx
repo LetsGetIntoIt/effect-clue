@@ -1,5 +1,11 @@
 "use client";
 
+import { Duration, HashMap } from "effect";
+import {
+    AnimatePresence,
+    LayoutGroup,
+    motion,
+} from "motion/react";
 import { useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import {
@@ -16,21 +22,60 @@ import {
 } from "../../logic/BehavioralInsights";
 import type { Player } from "../../logic/GameObjects";
 import { cardName, categoryName } from "../../logic/GameSetup";
+import type { HypothesisValue } from "../../logic/Hypothesis";
+import type { Cell } from "../../logic/Knowledge";
+import { requestFocusChecklistCell } from "../checklistFocus";
+import { useIsDesktop } from "../hooks/useIsDesktop";
+import { PANE_SETTLE, T_FAST, T_STANDARD, useReducedTransition } from "../motion";
+import { useSelection } from "../SelectionContext";
 import { useClue } from "../state";
-import { CheckIcon, XIcon } from "./Icons";
+import { CheckIcon, ChevronRightIcon, XIcon } from "./Icons";
 
 /**
- * Bottom section of the suggestion log: "Insights" — soft, behavior-
- * driven hypothesis suggestions surfaced from the suggestion log
- * (see {@link Insight}). Each row maps to a one-click `setHypothesis`
- * dispatch on its target cell, or a `dismissInsight` that suppresses
- * this row until the underlying signal grows strictly past its
- * current confidence tier.
+ * Hypotheses panel: section title, optional context-aware help copy,
+ * and two grouped lists.
+ *
+ * - **Suggested** (top): soft, behavior-driven hypothesis suggestions
+ *   surfaced from the suggestion log (see {@link Insight}). Each row
+ *   has a one-click `setHypothesis` accept and a `dismissInsight`
+ *   suppress, plus a bold `Suggested:` prefix to distinguish it from
+ *   adopted hypotheses.
+ * - **Active** (below): every hypothesis the user has adopted, sorted
+ *   newest-first (most-recently pinned at the top — `state.hypothesisOrder`
+ *   maintains this). Each row is a clickable text item that opens the
+ *   corresponding cell's explanation popover and scrolls the cell into
+ *   view, where the existing `HypothesisControl` lets the user edit /
+ *   clear it.
+ *
+ * Animations:
+ * - `<AnimatePresence mode="popLayout">` per group so removed items
+ *   fade out and remaining siblings slide up.
+ * - Each item carries `layout` so reorders animate.
+ * - Each item also carries a shared `layoutId` keyed by its target
+ *   cell — when the user accepts a suggested item, framer-motion
+ *   morphs the same `<li>` from the Suggested group's position into
+ *   the top of the Active group, picking up the active styling along
+ *   the way.
  */
 export function BehavioralInsights() {
     const t = useTranslations("suggestions");
     const { derived, dispatch, state } = useClue();
     const insights = derived.behavioralInsights;
+    const isDesktop = useIsDesktop();
+    const { setPopoverCell } = useSelection();
+
+    // Active hypotheses, in render order (most-recent first).
+    // `hypothesisOrder` is the source of truth for ordering; we also
+    // resolve the value from `state.hypotheses` and skip any cell
+    // whose value is missing (drift between the two should not
+    // happen, but we render defensively rather than crash).
+    const activeRows: ReadonlyArray<{
+        readonly cell: Cell;
+        readonly value: HypothesisValue;
+    }> = state.hypothesisOrder.flatMap(cell => {
+        const v = HashMap.get(state.hypotheses, cell);
+        return v._tag === "Some" ? [{ cell, value: v.value }] : [];
+    });
 
     // Per-session dedupe so `insight_surfaced` only fires once per
     // unique insight (regardless of how many renders surface the same
@@ -48,72 +93,138 @@ export function BehavioralInsights() {
         }
     }, [insights]);
 
+    const totalCount = insights.length + activeRows.length;
+    const helpText = totalCount === 0
+        ? t("insightsHelpEmpty")
+        : activeRows.length === 0
+            ? t("insightsHelpSuggestedOnly")
+            : null;
+
+    const onActiveClick = (cell: Cell) => {
+        setPopoverCell(cell);
+        if (state.uiMode !== "checklist" && !isDesktop) {
+            dispatch({ type: "setUiMode", mode: "checklist" });
+            // Wait for the mobile pane slide to settle before asking
+            // Checklist to scroll/focus the cell — the Checklist
+            // subtree only mounts on the new pane after the slide
+            // completes, so cellNodesByKeyRef is empty until then.
+            window.setTimeout(() => {
+                requestFocusChecklistCell({ cell });
+            }, Duration.toMillis(PANE_SETTLE));
+        } else {
+            requestFocusChecklistCell({ cell });
+        }
+    };
+
     return (
         <div
             className="mt-4 border-t border-border pt-4"
             data-tour-anchor="suggest-insights"
         >
             <h3 className="m-0 mb-1 text-[14px] font-semibold">
-                {insights.length === 0
+                {totalCount === 0
                     ? t("insightsTitle")
-                    : t("insightsTitleWithCount", { count: insights.length })}
+                    : t("insightsTitleWithCount", { count: totalCount })}
             </h3>
-            <p className="m-0 mb-2 text-[12px] leading-snug text-muted">
-                {t("insightsHelp")}
-            </p>
-            {insights.length === 0 ? null : (
-                <ul className="m-0 flex list-none flex-col gap-2 p-0">
-                    {insights.map(ins => (
-                        <InsightRow
-                            key={ins.dismissedKey}
-                            insight={ins}
-                            onAccept={() => {
-                                insightAccepted({
-                                    kind: ins.kind._tag as InsightKindTag,
-                                    confidence:
-                                        ins.confidence as InsightConfidenceTag,
-                                });
-                                dispatch({
-                                    type: "setHypothesis",
-                                    cell: ins.targetCell,
-                                    value: ins.proposedValue,
-                                });
-                            }}
-                            onDismiss={() => {
-                                insightDismissed({
-                                    kind: ins.kind._tag as InsightKindTag,
-                                    confidence:
-                                        ins.confidence as InsightConfidenceTag,
-                                });
-                                dispatch({
-                                    type: "dismissInsight",
-                                    key: ins.dismissedKey,
-                                    atConfidence: ins.confidence,
-                                });
-                            }}
-                            setup={state.setup}
-                        />
-                    ))}
-                </ul>
+            {helpText !== null ? (
+                <p className="m-0 mb-2 text-[12px] leading-snug text-muted">
+                    {helpText}
+                </p>
+            ) : null}
+            <LayoutGroup id="hypotheses-panel">
+                {insights.length === 0 ? null : (
+                    <ul className="m-0 mb-2 flex list-none flex-col gap-2 p-0">
+                        <AnimatePresence
+                            // eslint-disable-next-line i18next/no-literal-string -- AnimatePresence mode prop
+                            mode="popLayout"
+                            initial={false}
+                        >
+                            {insights.map(ins => (
+                                <SuggestedRow
+                                    key={cellLayoutId(ins.targetCell)}
+                                    insight={ins}
+                                    setup={state.setup}
+                                    onAccept={() => {
+                                        insightAccepted({
+                                            kind: ins.kind._tag as InsightKindTag,
+                                            confidence:
+                                                ins.confidence as InsightConfidenceTag,
+                                        });
+                                        dispatch({
+                                            type: "setHypothesis",
+                                            cell: ins.targetCell,
+                                            value: ins.proposedValue,
+                                        });
+                                    }}
+                                    onDismiss={() => {
+                                        insightDismissed({
+                                            kind: ins.kind._tag as InsightKindTag,
+                                            confidence:
+                                                ins.confidence as InsightConfidenceTag,
+                                        });
+                                        dispatch({
+                                            type: "dismissInsight",
+                                            key: ins.dismissedKey,
+                                            atConfidence: ins.confidence,
+                                        });
+                                    }}
+                                />
+                            ))}
+                        </AnimatePresence>
+                    </ul>
+                )}
+                {activeRows.length === 0 ? null : (
+                    <ul className="m-0 flex list-none flex-col gap-1 p-0">
+                        <AnimatePresence
+                            // eslint-disable-next-line i18next/no-literal-string -- AnimatePresence mode prop
+                            mode="popLayout"
+                            initial={false}
+                        >
+                            {activeRows.map(({ cell, value }) => (
+                                <ActiveRow
+                                    key={cellLayoutId(cell)}
+                                    cell={cell}
+                                    value={value}
+                                    setup={state.setup}
+                                    onClick={() => onActiveClick(cell)}
+                                />
+                            ))}
+                        </AnimatePresence>
+                    </ul>
+                )}
+            </LayoutGroup>
+            {state.dismissedInsights.size === 0 ? null : (
+                <button
+                    type="button"
+                    onClick={() => dispatch({ type: "clearDismissedInsights" })}
+                    className="mt-2 cursor-pointer border-none bg-transparent p-0 text-[12px] text-muted underline decoration-dotted underline-offset-2 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    data-action="clear-dismissed-insights"
+                >
+                    {t("clearDismissalsLink", {
+                        count: state.dismissedInsights.size,
+                    })}
+                </button>
             )}
         </div>
     );
 }
 
-interface InsightRowProps {
+interface SuggestedRowProps {
     readonly insight: Insight;
     readonly onAccept: () => void;
     readonly onDismiss: () => void;
     readonly setup: ReturnType<typeof useClue>["state"]["setup"];
 }
 
-function InsightRow({
+function SuggestedRow({
     insight,
     onAccept,
     onDismiss,
     setup,
-}: InsightRowProps) {
+}: SuggestedRowProps) {
     const t = useTranslations("suggestions");
+    const layoutTransition = useReducedTransition(T_STANDARD);
+    const exitTransition = useReducedTransition(T_FAST);
     const rationale = renderRationale(insight.kind, setup, t);
     const cardLabel = cardLabelOf(insight.kind, setup);
     const isCaseFile = insight.kind._tag === "SharedSuggestionFocus";
@@ -128,12 +239,21 @@ function InsightRow({
         : t("insightDismissAria");
 
     return (
-        <li
+        <motion.li
+            layout
+            layoutId={cellLayoutId(insight.targetCell)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: exitTransition }}
+            transition={layoutTransition}
             className="flex flex-wrap items-center gap-2 rounded border border-border bg-row-header px-2 py-1.5"
             data-insight-key={insight.dismissedKey}
             data-insight-kind={insight.kind._tag}
         >
-            <div className="min-w-0 flex-1 text-[13px]">{rationale}</div>
+            <div className="min-w-0 flex-1 text-[13px]">
+                <strong className="me-1">{t("insightSuggestedPrefix")}</strong>
+                {rationale}
+            </div>
             <ConfidencePill confidence={insight.confidence} />
             <div className="flex gap-1">
                 <button
@@ -155,9 +275,96 @@ function InsightRow({
                     <XIcon size={16} />
                 </button>
             </div>
-        </li>
+        </motion.li>
     );
 }
+
+interface ActiveRowProps {
+    readonly cell: Cell;
+    readonly value: HypothesisValue;
+    readonly setup: ReturnType<typeof useClue>["state"]["setup"];
+    readonly onClick: () => void;
+}
+
+function ActiveRow({ cell, value, setup, onClick }: ActiveRowProps) {
+    const t = useTranslations("suggestions");
+    const layoutTransition = useReducedTransition(T_STANDARD);
+    const exitTransition = useReducedTransition(T_FAST);
+    const strong = (chunks: React.ReactNode) => <strong>{chunks}</strong>;
+    const cardLabel = cardName(setup, cell.card);
+    const isPlayer = cell.owner._tag === "Player";
+    const ownerLabel = isPlayer
+        ? String(cell.owner.player)
+        : t("activeHypothesisCaseFileLabel");
+    const label = isPlayer
+        ? t.rich("activeHypothesisPlayer", {
+              player: String(cell.owner.player),
+              card: cardLabel,
+              strong,
+          })
+        : t.rich("activeHypothesisCaseFile", {
+              caseFile: ownerLabel,
+              card: cardLabel,
+              strong,
+          });
+    const aria = isPlayer
+        ? t("activeHypothesisOpenAriaPlayer", {
+              player: String(cell.owner.player),
+              card: cardLabel,
+              value,
+          })
+        : t("activeHypothesisOpenAriaCaseFile", {
+              card: cardLabel,
+              value,
+          });
+    const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onClick();
+        }
+    };
+    return (
+        <motion.li
+            layout
+            layoutId={cellLayoutId(cell)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: exitTransition }}
+            transition={layoutTransition}
+            data-active-hypothesis-key={cellLayoutId(cell)}
+            data-active-hypothesis-value={value}
+        >
+            <div
+                role="button"
+                tabIndex={0}
+                onClick={onClick}
+                onKeyDown={onKeyDown}
+                aria-label={aria}
+                className="flex cursor-pointer items-center gap-2 rounded border border-border px-2 py-1 text-[13px] hover:bg-row-header focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+                {value === "Y" ? (
+                    <CheckIcon size={14} className="shrink-0 text-yes" />
+                ) : (
+                    <XIcon size={14} className="shrink-0 text-no" />
+                )}
+                <span className="min-w-0 flex-1">{label}</span>
+                <ChevronRightIcon
+                    size={14}
+                    className="shrink-0 text-muted"
+                />
+            </div>
+        </motion.li>
+    );
+}
+
+const CASE_FILE_OWNER_KEY = "case-file";
+
+const cellLayoutId = (cell: Cell): string => {
+    const ownerKey = cell.owner._tag === "Player"
+        ? `p-${String(cell.owner.player)}`
+        : CASE_FILE_OWNER_KEY;
+    return `hyp-${ownerKey}-${String(cell.card)}`;
+};
 
 const CONFIDENCE_PILL_CLASSES: Readonly<Record<InsightConfidence, string>> = {
     high: "bg-yes-bg text-yes",

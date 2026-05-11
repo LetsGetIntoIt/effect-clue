@@ -36,7 +36,7 @@ import {
     recordCardPackUse,
 } from "../logic/CardPackUsage";
 import { cardPackUsageQueryKey } from "../data/cardPackUsage";
-import { HashMap } from "effect";
+import { Equal, HashMap } from "effect";
 import {
     computeHypothesisConflict,
     emptyHypotheses,
@@ -170,6 +170,7 @@ const initialState: ClueState = {
     accusations: [],
     uiMode: "setup",
     hypotheses: emptyHypotheses,
+    hypothesisOrder: [],
     pendingSuggestion: null,
     selfPlayerId: null,
     firstDealtPlayerId: null,
@@ -206,6 +207,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 suggestions: [],
                 accusations: [],
                 hypotheses: emptyHypotheses,
+                hypothesisOrder: [],
                 pendingSuggestion: null,
                 dismissedInsights: new Map<string, InsightConfidence>(),
             };
@@ -583,12 +585,21 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     action.cell,
                     action.value,
                 ),
+                hypothesisOrder: [
+                    action.cell,
+                    ...state.hypothesisOrder.filter(
+                        c => !Equal.equals(c, action.cell),
+                    ),
+                ],
             };
 
         case "clearHypothesis":
             return {
                 ...state,
                 hypotheses: HashMap.remove(state.hypotheses, action.cell),
+                hypothesisOrder: state.hypothesisOrder.filter(
+                    c => !Equal.equals(c, action.cell),
+                ),
             };
 
         case "dismissInsight": {
@@ -632,6 +643,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     cards: Array.from(a.cards),
                 })),
                 hypotheses: session.hypotheses,
+                hypothesisOrder: session.hypothesisOrder,
                 // Imported sessions don't carry a draft. Drop any
                 // local in-flight draft so the new game starts clean.
                 pendingSuggestion: session.pendingSuggestion ?? null,
@@ -1502,6 +1514,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             suggestions: suggestionsAsData,
             accusations: accusationsAsData,
             hypotheses: state.hypotheses,
+            hypothesisOrder: state.hypothesisOrder,
             pendingSuggestion: state.pendingSuggestion,
             selfPlayerId: state.selfPlayerId,
             firstDealtPlayerId: state.firstDealtPlayerId,
@@ -1715,6 +1728,13 @@ const pruneSessionToSetup = (
             prunedHypotheses = HashMap.remove(prunedHypotheses, cell);
         }
     }
+    const prunedHypothesisOrder = state.hypothesisOrder.filter(cell => {
+        const cardOk = cardIdSet.has(String(cell.card));
+        const ownerOk =
+            cell.owner._tag === "CaseFile" ||
+            playerSet.has(String(cell.owner.player));
+        return cardOk && ownerOk;
+    });
     return {
         ...state,
         setup,
@@ -1749,6 +1769,7 @@ const pruneSessionToSetup = (
             .filter(a => playerSet.has(String(a.accuser)))
             .filter(a => a.cards.every(c => cardIdSet.has(String(c)))),
         hypotheses: prunedHypotheses,
+        hypothesisOrder: prunedHypothesisOrder,
         // The in-flight draft references Player and Card ids. Rather
         // than partial-prune slots in place, drop the whole draft when
         // the setup changes — the user is mid-flow at the keyboard, so

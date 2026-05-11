@@ -70,6 +70,21 @@ const sug = (
     });
 };
 
+const sugAt = (
+    loggedAt: number,
+    suggester: Player,
+    cards: ReadonlyArray<Card>,
+    extras: { refuter?: Player; nonRefuters?: ReadonlyArray<Player> } = {},
+) =>
+    Suggestion({
+        id: newSuggestionId(),
+        suggester,
+        cards,
+        nonRefuters: extras.nonRefuters ?? [],
+        refuter: extras.refuter,
+        loggedAt,
+    });
+
 describe("confidence helpers", () => {
     test("maxConfidence returns the higher of two", () => {
         expect(maxConfidence("low", "med")).toBe("med");
@@ -674,9 +689,14 @@ describe("dedup / DualSignal pass", () => {
 });
 
 describe("output sort + stability", () => {
-    test("sorted by confidence high → low", () => {
-        // Mix one high-confidence FrequentSuggester (count=6) with
-        // a low-confidence one (count=3). High should land first.
+    test("sorted by recency of contributing suggestion (newest first), with confidence as tiebreaker", () => {
+        // B's six suggestions all name KNIFE (high-confidence
+        // FrequentSuggester); C's later three all name ROPE
+        // (low-confidence FrequentSuggester). Because the `sug`
+        // helper bumps `loggedAt` per call, the most recent
+        // contributing suggestion sits with C/ROPE — so it surfaces
+        // FIRST despite its lower confidence. The Hypotheses panel
+        // reads like a historical log; freshly-grown patterns rise.
         const suggestions = [
             sug(B, [SCARLET, KNIFE, KITCHEN]),
             sug(B, [PLUM, KNIFE, BALLROOM]),
@@ -687,6 +707,35 @@ describe("output sort + stability", () => {
             sug(C, [SCARLET, ROPE, KITCHEN]),
             sug(C, [PLUM, ROPE, BALLROOM]),
             sug(C, [MUSTARD, ROPE, STUDY]),
+        ];
+        const out = generateInsights(
+            setup,
+            suggestions,
+            emptyKnowledge,
+            emptyHypotheses,
+            null,
+        );
+        const freq = out.filter(i => i.kind._tag === "FrequentSuggester");
+        expect(freq).toHaveLength(2);
+        expect(freq[0]?.confidence).toBe<InsightConfidence>("low");
+        expect(freq[1]?.confidence).toBe<InsightConfidence>("high");
+    });
+
+    test("confidence breaks ties when recency matches", () => {
+        // All four suggestions share `loggedAt: 0` (the default
+        // when `sug` doesn't bump). With identical recency,
+        // confidence rules: high-confidence FrequentSuggester
+        // (count=6) lands ahead of low (count=3).
+        const suggestions = [
+            sugAt(0, B, [SCARLET, KNIFE, KITCHEN]),
+            sugAt(0, B, [PLUM, KNIFE, BALLROOM]),
+            sugAt(0, B, [MUSTARD, KNIFE, STUDY]),
+            sugAt(0, B, [GREEN, KNIFE, LIBRARY]),
+            sugAt(0, B, [PEACOCK, KNIFE, KITCHEN]),
+            sugAt(0, B, [WHITE, KNIFE, BALLROOM]),
+            sugAt(0, C, [SCARLET, ROPE, KITCHEN]),
+            sugAt(0, C, [PLUM, ROPE, BALLROOM]),
+            sugAt(0, C, [MUSTARD, ROPE, STUDY]),
         ];
         const out = generateInsights(
             setup,

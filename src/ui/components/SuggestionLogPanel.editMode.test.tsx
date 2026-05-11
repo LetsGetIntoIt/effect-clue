@@ -116,6 +116,7 @@ const seedOneSuggestionAndMount = async (
         ],
         accusations: [],
         hypotheses: emptyHypotheses,
+            hypothesisOrder: [],
         pendingSuggestion: null,
         selfPlayerId: null,
         firstDealtPlayerId: null,

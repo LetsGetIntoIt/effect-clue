@@ -13,7 +13,7 @@ import { Player } from "./GameObjects";
  * starts a fresh session.
  */
 describe("Schema-backed persistence", () => {
-    test("encode produces version: 10 and round-trips through decode", () => {
+    test("encode produces version: 11 and round-trips through decode", () => {
         const encoded = encodeSession({
             setup: CLASSIC_SETUP_3P,
             hands: [],
@@ -21,12 +21,13 @@ describe("Schema-backed persistence", () => {
             suggestions: [],
             accusations: [],
             hypotheses: emptyHypotheses,
+            hypothesisOrder: [],
             pendingSuggestion: null,
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
         });
-        expect(encoded.version).toBe(10);
+        expect(encoded.version).toBe(11);
 
         const decoded = decodeSession(encoded);
         expect(decoded).toBeDefined();
@@ -99,7 +100,7 @@ describe("Schema-backed persistence", () => {
         expect(Result.isFailure(result)).toBe(true);
     });
 
-    test("v10 round-trips a populated dismissedInsights map", () => {
+    test("v11 round-trips a populated dismissedInsights map", () => {
         const dismissed = new Map([
             ["FrequentSuggester:Bob:knife", "low" as const],
             ["CategoricalHole:Cho:wrench", "med" as const],
@@ -111,6 +112,7 @@ describe("Schema-backed persistence", () => {
             suggestions: [],
             accusations: [],
             hypotheses: emptyHypotheses,
+            hypothesisOrder: [],
             pendingSuggestion: null,
             selfPlayerId: null,
             firstDealtPlayerId: null,

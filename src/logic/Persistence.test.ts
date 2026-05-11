@@ -17,7 +17,8 @@ import {
 } from "./Persistence";
 import { emptyHypotheses } from "./Hypothesis";
 
-const STORAGE_KEY = "effect-clue.session.v10";
+const STORAGE_KEY = "effect-clue.session.v11";
+const LEGACY_STORAGE_KEY_V10 = "effect-clue.session.v10";
 const LEGACY_STORAGE_KEY_V9 = "effect-clue.session.v9";
 const LEGACY_STORAGE_KEY_V8 = "effect-clue.session.v8";
 const LEGACY_STORAGE_KEY_V7 = "effect-clue.session.v7";
@@ -44,6 +45,7 @@ const minimalSession: GameSession = {
     suggestions: [],
     accusations: [],
     hypotheses: emptyHypotheses,
+    hypothesisOrder: [],
     pendingSuggestion: null,
     selfPlayerId: null,
     firstDealtPlayerId: null,
@@ -100,6 +102,7 @@ const richSession = (): GameSession => ({
         }),
     ],
     hypotheses: emptyHypotheses,
+    hypothesisOrder: [],
     pendingSuggestion: null,
     selfPlayerId: null,
     firstDealtPlayerId: null,
@@ -201,11 +204,37 @@ describe("saveToLocalStorage / loadFromLocalStorage", () => {
         expect(loaded?.handSizes).toHaveLength(3);
     });
 
-    test("save writes under the v10-scoped storage key", () => {
+    test("save writes under the v11-scoped storage key", () => {
         saveToLocalStorage(minimalSession);
         const raw = window.localStorage.getItem(STORAGE_KEY);
         expect(raw).not.toBeNull();
-        expect(JSON.parse(raw as string).version).toBe(10);
+        expect(JSON.parse(raw as string).version).toBe(11);
+    });
+
+    test("loads a v10 blob and lifts to v11 with hypothesisOrder derived from the v10 hypotheses array", () => {
+        // v10 lacked `hypothesisOrder`; the lift derives it from the
+        // v10 `hypotheses` array's iteration order — that's the order
+        // the user last saw rendered, so it's the natural seed value.
+        const v10Payload = {
+            version: 10,
+            setup: { players: ["Anisha"], categories: [] },
+            hands: [],
+            handSizes: [],
+            suggestions: [],
+            accusations: [],
+            hypotheses: [],
+            pendingSuggestion: null,
+            selfPlayerId: null,
+            firstDealtPlayerId: null,
+            dismissedInsights: [],
+        };
+        window.localStorage.setItem(
+            LEGACY_STORAGE_KEY_V10,
+            JSON.stringify(v10Payload),
+        );
+        const loaded = loadFromLocalStorage();
+        expect(loaded).toBeDefined();
+        expect(loaded?.hypothesisOrder).toEqual([]);
     });
 
     test("loads a v9 blob and lifts to v10 with empty dismissedInsights", () => {

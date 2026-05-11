@@ -380,7 +380,9 @@
         "pillValueUnknown": "unknown",
         "insightsTitle": "Hypotheses",
         "insightsTitleWithCount": "Hypotheses ({count})",
-        "insightsHelp": "When we notice patterns in other players' suggestions, we'll suggest hypotheses here. You can choose which ones to adopt.",
+        "insightsHelpEmpty": "Have a hunch? Test a hypothesis by tapping a cell. If we notice patterns in other players' behavior, we'll suggest hypotheses here too.",
+        "insightsHelpSuggestedOnly": "We noticed patterns in other players' behavior. Adopt one as a hypothesis — a soft deduction you can lean on.",
+        "insightSuggestedPrefix": "Suggested:",
         "insightFrequentSuggester": "<strong>{suggester}</strong> has named <strong>{card}</strong> {count} times — they may own it.",
         "insightCategoricalHole": "<strong>{suggester}</strong> has named every <strong>{category}</strong> except <strong>{card}</strong> — they may own it.",
         "insightDualSignal": "<strong>{suggester}</strong> has named <strong>{card}</strong> {count} times and avoided it across every other <strong>{category}</strong> they've named — strong signal they may own it.",
@@ -391,7 +393,13 @@
         "insightAcceptAria": "Accept — pin {suggester} owns {card} as a hypothesis",
         "insightAcceptAriaCaseFile": "Accept — pin {card} is in the case file as a hypothesis",
         "insightDismissAria": "Dismiss — suppress this insight unless evidence grows",
-        "insightDismissAriaCaseFile": "Dismiss — suppress this case-file insight unless evidence grows"
+        "insightDismissAriaCaseFile": "Dismiss — suppress this case-file insight unless evidence grows",
+        "activeHypothesisPlayer": "<strong>{player}</strong> / <strong>{card}</strong>",
+        "activeHypothesisCaseFile": "<strong>{caseFile}</strong> / <strong>{card}</strong>",
+        "activeHypothesisOpenAriaPlayer": "Open hypothesis: {player} {value, select, Y {owns} other {does not own}} {card}",
+        "activeHypothesisOpenAriaCaseFile": "Open hypothesis: {card} {value, select, Y {is in} other {is not in}} the case file",
+        "activeHypothesisCaseFileLabel": "Case file",
+        "clearDismissalsLink": "Bring back {count, plural, one {# dismissed recommendation} other {# dismissed recommendations}}"
     },
     "accusations": {
         "addTitle": "Log a failed accusation",

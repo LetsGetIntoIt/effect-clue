@@ -777,11 +777,17 @@ export function Checklist() {
     const rootRef = useRef<HTMLElement>(null);
     const boundsRef = useRef(bounds);
     boundsRef.current = bounds;
+    const playerColumnKeysRef = useRef(playerColumnKeys);
+    playerColumnKeysRef.current = playerColumnKeys;
     useLayoutEffect(() => {
         const findInRoot = (r: number, c: number): HTMLElement | null =>
             rootRef.current?.querySelector<HTMLElement>(
                 `[data-cell-row="${r}"][data-cell-col="${c}"]`,
             ) ?? null;
+        const findByCell = (cell: Cell): HTMLElement | null => {
+            const key = `${ownerKey(cell.owner, playerColumnKeysRef.current)}-${String(cell.card)}`;
+            return cellNodesByKeyRef.current.get(key) ?? null;
+        };
         const unregister = registerChecklistFocusHandler(target => {
             const b = boundsRef.current;
             const findFirst = (): HTMLElement | null => {
@@ -795,18 +801,36 @@ export function Checklist() {
             };
             queueMicrotask(() => {
                 let el: HTMLElement | null = null;
+                let scrollMode: ScrollIntoViewOptions = {
+                    // eslint-disable-next-line i18next/no-literal-string -- DOM enum values
+                    block: "nearest",
+                    // eslint-disable-next-line i18next/no-literal-string -- DOM enum values
+                    inline: "nearest",
+                };
                 if (target === "first") {
                     el = findFirst();
                 } else if (target === "last") {
                     el = findFirst();
+                } else if ("cell" in target) {
+                    // Hypotheses panel jump: caller picked an explicit
+                    // cell to focus, so center it in the viewport even
+                    // when it's already partially visible — that's what
+                    // makes the "click → land on cell" interaction read
+                    // as a real navigation.
+                    el = findByCell(target.cell) ?? findFirst();
+                    scrollMode = {
+                        // eslint-disable-next-line i18next/no-literal-string -- DOM enum values
+                        block: "center",
+                        // eslint-disable-next-line i18next/no-literal-string -- DOM enum values
+                        inline: "center",
+                        // eslint-disable-next-line i18next/no-literal-string -- DOM enum values
+                        behavior: "smooth",
+                    };
                 } else {
                     el = findInRoot(target.row, target.col) ?? findFirst();
                 }
                 if (el) {
-                    el.scrollIntoView(
-                        // eslint-disable-next-line i18next/no-literal-string -- DOM enum values
-                        { block: "nearest", inline: "nearest" },
-                    );
+                    el.scrollIntoView(scrollMode);
                     el.focus({ preventScroll: false });
                 }
             });

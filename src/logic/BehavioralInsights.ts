@@ -469,9 +469,68 @@ const mergeOverlapping = (
     return out;
 };
 
-const sortInsights = (insights: ReadonlyArray<Insight>): ReadonlyArray<Insight> => {
+/**
+ * Latest `loggedAt` among suggestions that contributed to the pattern
+ * underlying this insight. Used to sort newest-first so the Hypotheses
+ * panel reads like a historical log.
+ *
+ * - `FrequentSuggester` / `DualSignal`: latest suggestion by the same
+ *   suggester that named the same card. Both fields together pin the
+ *   evidence chain that produced the insight.
+ * - `CategoricalHole`: latest suggestion by the same suggester (any
+ *   card). The "named everything except one" pattern grows whenever
+ *   the suggester logs anything in the category, so the most recent
+ *   suggestion by that suggester is the most precise "this pattern
+ *   was just touched" signal we have without re-doing the per-category
+ *   filter at sort time.
+ * - `SharedSuggestionFocus`: latest suggestion that named the card.
+ *
+ * Returns `0` when no contributing suggestion is found (which would
+ * only happen for a synthetic/test insight). The caller treats that
+ * as "oldest" so it sinks to the bottom of the list.
+ */
+const insightRecency = (
+    kind: InsightKind,
+    suggestions: ReadonlyArray<Suggestion>,
+): number => {
+    let max = 0;
+    for (const s of suggestions) {
+        let contributes = false;
+        switch (kind._tag) {
+            case "FrequentSuggester":
+            case "DualSignal":
+                contributes =
+                    s.suggester === kind.suggester
+                    && HashSet.has(s.cards, kind.card);
+                break;
+            case "CategoricalHole":
+                contributes = s.suggester === kind.suggester;
+                break;
+            case "SharedSuggestionFocus":
+                contributes = HashSet.has(s.cards, kind.card);
+                break;
+        }
+        if (contributes && s.loggedAt > max) max = s.loggedAt;
+    }
+    return max;
+};
+
+const sortInsights = (
+    insights: ReadonlyArray<Insight>,
+    suggestions: ReadonlyArray<Suggestion>,
+): ReadonlyArray<Insight> => {
+    const recencyByKey = new Map<string, number>();
+    for (const ins of insights) {
+        recencyByKey.set(ins.dismissedKey, insightRecency(ins.kind, suggestions));
+    }
     const arr = [...insights];
     arr.sort((a, b) => {
+        // Newest contributing suggestion first — the panel reads like
+        // a historical log, so a freshly-detected pattern surfaces at
+        // the top.
+        const recA = recencyByKey.get(a.dismissedKey) ?? 0;
+        const recB = recencyByKey.get(b.dismissedKey) ?? 0;
+        if (recA !== recB) return recB - recA;
         const dRank = CONFIDENCE_RANK[b.confidence] - CONFIDENCE_RANK[a.confidence];
         if (dRank !== 0) return dRank;
         const dTag = a.kind._tag.localeCompare(b.kind._tag);
@@ -520,5 +579,5 @@ export const generateInsights = (
     // `(case file, card) = Y` — a different cell — so it's never a
     // merge candidate; we just append it through.
     const merged = mergeOverlapping([...freq, ...hole]);
-    return sortInsights([...merged, ...shared]);
+    return sortInsights([...merged, ...shared], suggestions);
 };

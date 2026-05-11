@@ -207,6 +207,16 @@ export interface ClueState {
      */
     readonly hypotheses: HypothesisMap;
     /**
+     * UI-only ordering of active hypothesis cells, most-recent first.
+     * Mirrors the keys of `hypotheses` 1:1; `hypotheses` is the value
+     * source of truth (used by the deducer), and this list is what the
+     * Hypotheses panel renders top-to-bottom so the panel reads like a
+     * historical log. `setHypothesis` moves the cell to the front
+     * (re-pinning bumps it); `clearHypothesis` removes it. Persisted
+     * since v11.
+     */
+    readonly hypothesisOrder: ReadonlyArray<Cell>;
+    /**
      * In-progress new-suggestion form state. Persisted so the form
      * survives mobile tab swaps (which unmount `SuggestionLogPanel`)
      * and full-page reloads. `null` means "no draft in flight" — the
