@@ -8,11 +8,13 @@ import {
     useMemo,
     useRef,
     useState,
+    type ReactNode,
 } from "react";
 import type { Card, Player } from "../../logic/GameObjects";
 import type { GameSetup } from "../../logic/GameSetup";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { T_FAST, T_SPRING_SOFT, useReducedTransition } from "../motion";
+import { AlertIcon } from "./Icons";
 
 const MOTION_POP_LAYOUT: "popLayout" = "popLayout";
 import { matches } from "../keyMap";
@@ -52,6 +54,16 @@ export type PillStatus =
 const STATUS_DONE: PillStatus = "done";
 const STATUS_PENDING_REQ: PillStatus = "pendingRequired";
 const STATUS_PENDING_OPT: PillStatus = "pendingOptional";
+
+// AnimatePresence key for the leading-glyph motion span. Internal
+// discriminator only — never shown to the user. Same string each
+// re-render keeps the same element mounted; a flip triggers the
+// pop-out + pop-in transition between glyph states.
+type PillIconKey = "error" | "done" | "disabled" | "pending";
+const ICON_KEY_ERROR: PillIconKey = "error";
+const ICON_KEY_DONE: PillIconKey = "done";
+const ICON_KEY_DISABLED: PillIconKey = "disabled";
+const ICON_KEY_PENDING: PillIconKey = "pending";
 
 export const pillStatusForPlayer = (
     value: Player | Nobody | null,
@@ -195,13 +207,14 @@ export function PillPopover({
     // `+` glyph to invite the user to fill them in. A disabled
     // optional pill (e.g. Shown card without a refuter) fades and
     // swaps to `–` to signal it's currently unavailable. An error
-    // pill (internal inconsistency) shows a `!` in a danger tone —
-    // the user can still open the popover to correct the value.
+    // pill (internal inconsistency) shows the standard `AlertIcon`
+    // warning triangle in a danger tone — the user can still open
+    // the popover to correct the value.
     //
     // Matrix:
     //   state              | outline       | icon
     //   -------------------+---------------+-----
-    //   error              | danger        | !
+    //   error              | danger        | AlertIcon
     //   done               | solid accent  | ✓
     //   pendingRequired    | solid border  | +
     //   pendingOptional    | dashed border | +      (disabled → "–")
@@ -213,15 +226,29 @@ export function PillPopover({
           : status === STATUS_PENDING_REQ
             ? "bg-transparent text-muted border-border"
             : disabled
-              ? "bg-transparent text-muted/60 border-dashed border-border/50"
+              // Disabled-optional tone: the dashed border at 50%
+              // opacity + bg-transparent already signal "inactive".
+              // Keep text-muted (full) for legibility — the previous
+              // /60 variant dipped to ~2.5:1 on parchment.
+              ? "bg-transparent text-muted border-dashed border-border/50"
               : "bg-transparent text-muted border-dashed border-border";
-    const iconGlyph = hasError
-        ? "!"
+    const iconNode: ReactNode = hasError
+        ? <AlertIcon className="h-[1.1em] w-[1.1em]" />
         : status === STATUS_DONE
             ? "✓"
             : status === STATUS_PENDING_OPT && disabled
               ? "–"
               : "+";
+    // AnimatePresence keys on a stable string so the pop animation
+    // fires when transitioning into / out of the error state. Strings
+    // are internal discriminators, never shown to the user.
+    const iconKey: PillIconKey = hasError
+        ? ICON_KEY_ERROR
+        : status === STATUS_DONE
+            ? ICON_KEY_DONE
+            : status === STATUS_PENDING_OPT && disabled
+              ? ICON_KEY_DISABLED
+              : ICON_KEY_PENDING;
     const showClear = onClear !== undefined && status === STATUS_DONE;
     const iconTransition = useReducedTransition(T_FAST);
     const widthTransition = useReducedTransition(T_SPRING_SOFT);
@@ -230,24 +257,25 @@ export function PillPopover({
             layout
             transition={widthTransition}
             className={
-                "tap-target text-tap inline-flex items-center gap-1.5 rounded-full border " +
+                "tap-target text-tap pl-3 min-[800px]:pl-2.5 inline-flex items-center gap-1.5 rounded-full border " +
+                "@max-[410px]/log:flex @max-[410px]/log:w-full @max-[410px]/log:justify-start " +
                 tone
             }
         >
             <span
                 aria-hidden
-                className="relative inline-block w-3 overflow-hidden text-center text-[10px] leading-3"
+                className="relative inline-flex h-[1.4em] w-[1.4em] items-center justify-center overflow-hidden text-[1.25em] leading-none"
             >
                 <AnimatePresence mode={MOTION_POP_LAYOUT} initial={false}>
                     <motion.span
-                        key={iconGlyph}
+                        key={iconKey}
                         initial={{ y: -8, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: 8, opacity: 0 }}
                         transition={iconTransition}
-                        className="inline-block"
+                        className="inline-flex items-center justify-center"
                     >
-                        {iconGlyph}
+                        {iconNode}
                     </motion.span>
                 </AnimatePresence>
             </span>
@@ -260,7 +288,7 @@ export function PillPopover({
                     role="button"
                     aria-label={`Clear ${label}`}
                     tabIndex={-1}
-                    className="ml-0.5 inline-block w-3 cursor-pointer text-center text-[12px] leading-3 opacity-70 hover:opacity-100"
+                    className="ml-0.5 inline-flex h-[1.4em] w-[1.4em] items-center justify-center cursor-pointer text-[1.1em] leading-none opacity-70 hover:opacity-100"
                     onClick={e => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -297,6 +325,7 @@ export function PillPopover({
                     (disabled ? "cursor-not-allowed " : "cursor-pointer ") +
                     "rounded-full border-none bg-transparent p-0 " +
                     "hover:opacity-80 " +
+                    "@max-[410px]/log:block @max-[410px]/log:w-full " +
                     // While the dropdown is open, real focus is inside
                     // the list — pin the ring on the trigger anyway so
                     // the user can see which pill they're editing.
@@ -361,13 +390,13 @@ export function PillPopover({
                             e.preventDefault();
                         }
                     }}
-                    className="z-[var(--z-popover)] min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[13px] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
+                    className="z-[var(--z-popover)] min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[1rem] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
                 >
                     {disabled ? (
                         <div
                             id={messageId}
                             role="note"
-                            className="max-w-[240px] px-3 py-2 text-[12px] text-muted"
+                            className="max-w-[240px] px-3 py-2 text-[1rem] text-muted"
                         >
                             {disabledHint}
                         </div>
@@ -377,7 +406,7 @@ export function PillPopover({
                                 <div
                                     id={messageId}
                                     role="alert"
-                                    className="mx-1 mt-1 mb-1 rounded-[var(--radius)] border border-danger-border bg-danger-bg px-2 py-1 text-[12px] text-danger"
+                                    className="mx-1 mt-1 mb-1 rounded-[var(--radius)] border border-danger-border bg-danger-bg px-2 py-1 text-[1rem] text-danger"
                                 >
                                     {errorReason}
                                 </div>
@@ -740,7 +769,7 @@ export function MultiSelectList({
                             <span
                                 aria-hidden
                                 className={
-                                    "inline-block h-3.5 w-3.5 rounded-sm border text-center text-[10px] leading-3 " +
+                                    "inline-block h-3.5 w-3.5 rounded-sm border text-center text-[1rem] leading-3 " +
                                     (checked
                                         ? "border-accent bg-accent text-white"
                                         : "border-border bg-transparent text-transparent")
@@ -753,11 +782,11 @@ export function MultiSelectList({
                     );
                 })}
             </ul>
-            <div className="mt-1 flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-muted">
+            <div className="mt-1 flex items-center justify-between gap-2 px-2 py-1 text-[1rem] text-muted">
                 {hasKeyboard ? <span>{commitHint}</span> : <span />}
                 <button
                     type="button"
-                    className="cursor-pointer rounded border border-border bg-white px-2 py-0.5 text-[11px]"
+                    className="cursor-pointer rounded border border-border bg-white px-2 py-0.5 text-[1rem]"
                     onMouseDown={e => {
                         e.preventDefault();
                         commitAdvance(toggled);

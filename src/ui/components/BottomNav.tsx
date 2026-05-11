@@ -129,7 +129,7 @@ function NavTabItem({
                     ? { "data-tour-anchor": tourAnchor }
                     : {})}
                 className={
-                    "relative flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--radius)] border-0 bg-transparent px-2 text-[13px] font-semibold"
+                    "relative flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--radius)] border-0 bg-transparent px-2 text-[1rem] font-semibold"
                 }
             >
                 <motion.span
@@ -209,7 +209,7 @@ function BottomOverflowMenu({
     return (
         <li>
             <OverflowMenu
-                triggerClassName="flex h-12 w-12 cursor-pointer items-center justify-center rounded-[var(--radius)] border-none bg-transparent text-[20px] text-muted hover:text-accent"
+                triggerClassName="flex h-12 w-12 cursor-pointer items-center justify-center rounded-[var(--radius)] border-none bg-transparent text-[1.25rem] text-muted hover:text-accent"
                 triggerLabel={t("more")}
                 side="top"
                 align="end"

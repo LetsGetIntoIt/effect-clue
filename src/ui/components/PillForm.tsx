@@ -316,10 +316,14 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                 clearInputsLabel !== undefined);
 
         const submitButtonClass =
-            "tap-target text-tap rounded border-none " +
+            "tap-target text-tap rounded border-none @max-[410px]/log:w-full " +
             (canSubmit
                 ? "cursor-pointer bg-accent text-white"
-                : "cursor-not-allowed bg-unknown-bg text-muted/70");
+                // Disabled tone: bg-unknown-bg + cursor-not-allowed
+                // carry the "inactive" signal so text-muted (full) keeps
+                // the label legible. Opacity-modified muted dipped
+                // below WCAG AA on parchment.
+                : "cursor-not-allowed bg-unknown-bg text-muted");
 
         return (
             <div ref={formRootRef}>
@@ -340,7 +344,7 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                             )}
                     </div>
                 )}
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5 @max-[410px]/log:flex-col @max-[410px]/log:items-stretch">
                     {slots.map(slot => (
                         <PillPopover
                             key={slot.id}
@@ -376,7 +380,7 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                     {onCancel !== undefined && (
                         <button
                             type="button"
-                            className="tap-target text-tap cursor-pointer rounded border border-border bg-white"
+                            className="tap-target text-tap cursor-pointer rounded border border-border bg-white @max-[410px]/log:w-full"
                             onClick={onCancel}
                         >
                             {cancelLabel ?? null}

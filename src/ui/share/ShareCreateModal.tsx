@@ -784,7 +784,7 @@ export function ShareCreateModal({
     return (
                 <div className="flex flex-col">
                     <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
-                        <Dialog.Title className="m-0 font-display text-[20px] text-accent">
+                        <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
                             {step === STEP_TOGGLES
                                 ? t(titleKey)
                                 : t(SIGN_IN_TITLE_KEY)}
@@ -810,18 +810,18 @@ export function ShareCreateModal({
                                     transition={transition}
                                     className="[grid-area:stack] min-w-0"
                                 >
-                                    <Dialog.Description className="px-5 pt-3 text-[14px] leading-relaxed">
+                                    <Dialog.Description className="px-5 pt-3 text-[1rem] leading-relaxed">
                                         {t(descriptionKey)}
                                     </Dialog.Description>
                                     {variant === VARIANT_PACK ? (
                                         <div
-                                            className="mx-5 mt-3 rounded-[var(--radius)] border border-border bg-white px-3 py-2 text-[13px] leading-snug"
+                                            className="mx-5 mt-3 rounded-[var(--radius)] border border-border bg-white px-3 py-2 text-[1rem] leading-snug"
                                             data-share-pack-details
                                         >
                                             <div className="font-semibold text-accent">
                                                 {activeCardSetLabel}
                                             </div>
-                                            <div className="mt-1 text-[12px] text-muted">
+                                            <div className="mt-1 text-[1rem] text-muted">
                                                 {t(PACK_INCLUDES_HEADER_KEY)}
                                             </div>
                                             <ul className="m-0 mt-1 list-disc pl-5">
@@ -846,14 +846,14 @@ export function ShareCreateModal({
                                     ) : null}
                                     {variant === VARIANT_TRANSFER ? (
                                         <div
-                                            className="mx-5 mt-3 rounded-[var(--radius)] border border-danger bg-danger/10 px-3 py-2 text-[13px] leading-snug text-danger"
+                                            className="mx-5 mt-3 rounded-[var(--radius)] border border-danger bg-danger/10 px-3 py-2 text-[1rem] leading-snug text-danger"
                                             data-share-transfer-warning
                                         >
                                             {t(TRANSFER_WARNING_KEY)}
                                         </div>
                                     ) : null}
                                     {showProgressToggle && progressLabel ? (
-                                        <div className="px-5 pt-4 text-[14px]">
+                                        <div className="px-5 pt-4 text-[1rem]">
                                             <label className="flex cursor-pointer items-center gap-2">
                                                 <input
                                                     type="checkbox"
@@ -875,11 +875,11 @@ export function ShareCreateModal({
                                         </div>
                                     ) : null}
                                     {error !== null ? (
-                                        <div className="px-5 pt-3 text-[13px] text-danger">
+                                        <div className="px-5 pt-3 text-[1rem] text-danger">
                                             {error}
                                         </div>
                                     ) : null}
-                                    <div className="px-5 pt-3 text-[12px] text-muted">
+                                    <div className="px-5 pt-3 text-[1rem] text-muted">
                                         {t(LINK_EXPIRES_IN_KEY, {
                                             duration: t(TTL_KEY),
                                         })}
@@ -894,7 +894,7 @@ export function ShareCreateModal({
                                                     readOnly
                                                     value={shareUrl}
                                                     aria-label={t(SHARE_URL_ARIA_KEY)}
-                                                    className="min-w-0 flex-1 rounded border border-border bg-panel px-2 py-1 text-[12px] text-muted"
+                                                    className="min-w-0 flex-1 rounded border border-border bg-panel px-2 py-1 text-[1rem] text-muted"
                                                     onFocus={(e) =>
                                                         e.currentTarget.select()
                                                     }
@@ -906,7 +906,7 @@ export function ShareCreateModal({
                                                             shareUrl,
                                                         )
                                                     }
-                                                    className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-[var(--radius)] border border-border bg-white px-2 py-1 text-[12px] font-semibold text-accent hover:bg-hover"
+                                                    className="inline-flex min-h-8 cursor-pointer items-center gap-1 rounded-[var(--radius)] border border-border bg-white px-2 py-1 text-[1rem] font-semibold text-accent hover:bg-hover"
                                                     data-share-copy-existing
                                                 >
                                                     <AnimatePresence
@@ -1008,7 +1008,7 @@ export function ShareCreateModal({
                                     transition={transition}
                                     className="[grid-area:stack] min-w-0"
                                 >
-                                    <Dialog.Description className="px-5 pt-3 text-[14px] leading-relaxed">
+                                    <Dialog.Description className="px-5 pt-3 text-[1rem] leading-relaxed">
                                         {t(SIGN_IN_DESCRIPTION_KEY)}
                                     </Dialog.Description>
                                     <div className="flex flex-col gap-2 px-5 pt-4 pb-2">

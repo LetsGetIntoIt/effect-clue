@@ -70,7 +70,7 @@ export function SetupStepMyCards({
             registerPanelEl={registerPanelEl}
             footer={footer}
         >
-            <p className="m-0 text-[13px] text-muted">{t("helperText")}</p>
+            <p className="m-0 text-[1rem] text-muted">{t("helperText")}</p>
             <PlayerColumnCardList
                 player={selfPlayerId}
                 heading={t("yourHand")}

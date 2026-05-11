@@ -125,7 +125,7 @@ export function SetupStepCardPackCustomize({
 
     return (
         <div className="flex flex-col gap-3 rounded border border-border/30 p-3">
-            <p className="m-0 text-[13px] text-muted">{t("helperText")}</p>
+            <p className="m-0 text-[1rem] text-muted">{t("helperText")}</p>
 
             <Reorder.Group
                 axis={REORDER_AXIS_Y}
@@ -173,7 +173,7 @@ export function SetupStepCardPackCustomize({
                         <CardList category={category} />
                         <button
                             type="button"
-                            className="self-start cursor-pointer rounded border border-border bg-bg px-2 py-1 text-[12px] hover:bg-hover"
+                            className="self-start cursor-pointer rounded border border-border bg-bg px-2 py-1 text-[1rem] hover:bg-hover"
                             onClick={() =>
                                 dispatch({
                                     type: "addCardToCategoryById",
@@ -352,7 +352,7 @@ function CategoryHeader({
         <div className="flex items-center gap-2">
             <input
                 type="text"
-                className="box-border min-w-0 flex-1 rounded border border-border px-2 py-1 text-[13px] font-semibold uppercase tracking-wide"
+                className="box-border min-w-0 flex-1 rounded border border-border px-2 py-1 text-[1rem] font-semibold uppercase tracking-wide"
                 value={draft}
                 aria-label={t("categoryNameAria", { name: category.name })}
                 onChange={e => setDraft(e.currentTarget.value)}
@@ -392,7 +392,7 @@ function CategoryHeader({
                 accidentally hit delete. */}
             <span
                 aria-hidden
-                className="ml-3 shrink-0 cursor-grab select-none text-[18px] leading-none text-muted"
+                className="ml-3 shrink-0 cursor-grab select-none text-[1.125rem] leading-none text-muted"
             >
                 {DRAG_HANDLE_GLYPH}
             </span>
@@ -441,7 +441,7 @@ function CardRow({
         <div className="flex w-full items-center gap-2">
             <input
                 type="text"
-                className="box-border min-w-0 flex-1 rounded border border-border px-2 py-1 text-[13px]"
+                className="box-border min-w-0 flex-1 rounded border border-border px-2 py-1 text-[1rem]"
                 value={draft}
                 aria-label={t("cardNameAria", { name: entry.name })}
                 onChange={e => setDraft(e.currentTarget.value)}
@@ -478,7 +478,7 @@ function CardRow({
                 trash. Mirrors the CategoryHeader pattern. */}
             <span
                 aria-hidden
-                className="ml-3 shrink-0 cursor-grab select-none text-[14px] leading-none text-muted"
+                className="ml-3 shrink-0 cursor-grab select-none text-[1rem] leading-none text-muted"
             >
                 {DRAG_HANDLE_GLYPH}
             </span>

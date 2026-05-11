@@ -117,7 +117,7 @@ function StaleGameModalContent({
     return (
         <div className="flex flex-col">
             <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
-                <Dialog.Title className="m-0 font-display text-[20px] text-accent">
+                <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
                     {t("title")}
                 </Dialog.Title>
                 <button
@@ -129,7 +129,7 @@ function StaleGameModalContent({
                     <XIcon size={18} />
                 </button>
             </div>
-            <p className="px-5 pt-3 pb-1 text-[14px] leading-relaxed">
+            <p className="px-5 pt-3 pb-1 text-[1rem] leading-relaxed">
                 {t(descriptionKey, { humanDuration })}
             </p>
             <div className="mt-4 flex items-center justify-end gap-2 border-t border-border bg-panel px-5 pt-4 pb-5">

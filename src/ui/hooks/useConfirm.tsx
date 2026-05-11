@@ -110,7 +110,7 @@ function ConfirmModalContent({
     return (
         <div className="p-5">
             {visibleTitle ? (
-                <Dialog.Title className="m-0 mb-2 font-display text-[18px] text-accent">
+                <Dialog.Title className="m-0 mb-2 font-display text-[1.125rem] text-accent">
                     {visibleTitle}
                 </Dialog.Title>
             ) : (
@@ -118,7 +118,7 @@ function ConfirmModalContent({
                     {confirmTitle}
                 </Dialog.Title>
             )}
-            <p className="m-0 text-[14px] leading-snug text-[#2a1f12]">
+            <p className="m-0 text-[1rem] leading-snug text-[#2a1f12]">
                 {options.message}
             </p>
             <div className="mt-5 flex flex-wrap justify-end gap-2">

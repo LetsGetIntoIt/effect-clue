@@ -261,7 +261,7 @@ function ClueShell({
                     className="fixed inset-x-0 top-[var(--contradiction-banner-offset,0px)] z-[var(--z-app-chrome)] bg-bg"
                 >
                     <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-4 px-5 py-2">
-                        <h1 className="m-0 text-[26px] leading-[1.4] uppercase tracking-[0.08em] text-accent drop-shadow-sm">
+                        <h1 className="m-0 text-[1.625rem] leading-[1.4] uppercase tracking-[0.08em] text-accent drop-shadow-sm">
                             {t("title")}
                         </h1>
                         <div className="hidden [@media(min-width:800px)]:block">

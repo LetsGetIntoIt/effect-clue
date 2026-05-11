@@ -86,12 +86,12 @@ export function MyHandPanel() {
             className="contain-inline-size rounded border border-border/40 bg-panel/60 px-3 py-2"
         >
             <header className="flex items-center justify-between gap-2">
-                <h2 className="m-0 text-[12px] font-semibold uppercase tracking-wide text-muted">
+                <h2 className="m-0 text-[1.25rem] font-semibold uppercase tracking-wide text-muted">
                     {t("title")}
                 </h2>
                 <button
                     type="button"
-                    className="cursor-pointer rounded border border-border bg-bg px-2 py-0.5 text-[12px] hover:bg-hover"
+                    className="cursor-pointer rounded border border-border bg-bg px-2 py-0.5 text-[1rem] hover:bg-hover"
                     aria-expanded={!collapsed}
                     onClick={toggle}
                 >
@@ -103,7 +103,7 @@ export function MyHandPanel() {
                     {grouped.map(group => (
                         <li
                             key={String(group.id)}
-                            className="flex items-baseline gap-1.5 text-[13px]"
+                            className="flex items-baseline gap-1.5 text-[1rem]"
                         >
                             <span className="font-semibold text-muted">
                                 {t("categoryLabel", { category: group.label })}
@@ -172,7 +172,7 @@ export function RefuteHint() {
     if (intersect.length === 0) {
         return (
             <p
-                className="m-0 px-1 py-1 text-[12px] text-muted"
+                className="m-0 px-1 py-1 text-[1rem] text-muted"
                 data-refute-hint=""
             >
                 {t("cannotRefute")}
@@ -185,7 +185,7 @@ export function RefuteHint() {
     );
     return (
         <p
-            className="m-0 px-1 py-1 text-[12px] text-fg"
+            className="m-0 px-1 py-1 text-[1rem] text-fg"
             data-refute-hint=""
         >
             {t("canRefute", {

@@ -114,7 +114,7 @@ export const renderGlyphNode = (
             return <XIcon size={CELL_ICON_SIZE_PX} />;
         case GLYPH_DERIVED_YES:
             return compact ? (
-                <span className="inline-flex items-center text-[10px] leading-none">
+                <span className="inline-flex items-center text-[1rem] leading-none">
                     (<CheckIcon size={10} />)
                 </span>
             ) : (
@@ -124,7 +124,7 @@ export const renderGlyphNode = (
             );
         case GLYPH_DERIVED_NO:
             return compact ? (
-                <span className="inline-flex items-center text-[10px] leading-none">
+                <span className="inline-flex items-center text-[1rem] leading-none">
                     (<XIcon size={10} />)
                 </span>
             ) : (

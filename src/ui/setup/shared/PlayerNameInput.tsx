@@ -93,7 +93,7 @@ export function PlayerNameInput({
             <div className="flex min-w-0 items-center gap-2">
                 <input
                     type="text"
-                    className="box-border min-w-0 flex-1 rounded border border-border px-2 py-1.5 text-[14px]"
+                    className="box-border min-w-0 flex-1 rounded border border-border px-2 py-1.5 text-[1rem]"
                     value={editing}
                     onChange={e => {
                         setEditing(e.currentTarget.value);
@@ -123,7 +123,7 @@ export function PlayerNameInput({
                 </button>
             </div>
             {error && (
-                <span className="text-[11px] text-danger">
+                <span className="text-[1rem] text-danger">
                     {error}
                 </span>
             )}

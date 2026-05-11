@@ -123,10 +123,10 @@ export function ContradictionBanner({
         trace.offendingAccusationIndices.length > 0;
 
     return (
-        <div className="mb-3 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-3 text-[13px] text-danger">
+        <div className="mb-3 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-3 text-[1rem] text-danger">
             <div className="mb-2">
                 <div className="font-semibold">{t("bannerTitle")}</div>
-                <div className="text-[12px] opacity-80">{t("bannerHelp")}</div>
+                <div className="text-[1rem] opacity-80">{t("bannerHelp")}</div>
             </div>
             {!hasOffendingSuggestions && !hasOffendingAccusations && (
                 <div className="mb-2">
@@ -208,7 +208,7 @@ export function ContradictionBanner({
                                     </span>
                                     <button
                                         type="button"
-                                        className="cursor-pointer rounded border border-danger-border bg-white px-2 py-0.5 text-[12px] text-danger hover:bg-danger-bg"
+                                        className="cursor-pointer rounded border border-danger-border bg-white px-2 py-0.5 text-[1rem] text-danger hover:bg-danger-bg"
                                         onClick={() =>
                                             dispatch({
                                                 type: "removeKnownCard",
@@ -237,7 +237,7 @@ export function ContradictionBanner({
                                 </span>
                                 <button
                                     type="button"
-                                    className="cursor-pointer rounded border border-danger-border bg-white px-2 py-0.5 text-[12px] text-danger hover:bg-danger-bg"
+                                    className="cursor-pointer rounded border border-danger-border bg-white px-2 py-0.5 text-[1rem] text-danger hover:bg-danger-bg"
                                     onClick={() =>
                                         dispatch({
                                             type: "setHandSize",
@@ -296,7 +296,7 @@ function OffendingSuggestionRow({
             <div className="mt-1 flex justify-end gap-2">
                 <button
                     type="button"
-                    className="cursor-pointer rounded border border-danger-border bg-white px-2 py-0.5 text-[12px] text-danger hover:bg-danger-bg"
+                    className="cursor-pointer rounded border border-danger-border bg-white px-2 py-0.5 text-[1rem] text-danger hover:bg-danger-bg"
                     onClick={onEdit}
                 >
                     {t("editSuggestion")}
@@ -304,7 +304,7 @@ function OffendingSuggestionRow({
                 {onRemove && (
                     <button
                         type="button"
-                        className="cursor-pointer rounded border border-danger-border bg-white px-2 py-0.5 text-[12px] text-danger hover:bg-danger-bg"
+                        className="cursor-pointer rounded border border-danger-border bg-white px-2 py-0.5 text-[1rem] text-danger hover:bg-danger-bg"
                         onClick={onRemove}
                     >
                         {t("removeSuggestion")}
@@ -558,7 +558,7 @@ function OffendingAccusationRow({
                 {onRemove && (
                     <button
                         type="button"
-                        className="cursor-pointer rounded border border-danger-border bg-white px-2 py-0.5 text-[12px] text-danger hover:bg-danger-bg"
+                        className="cursor-pointer rounded border border-danger-border bg-white px-2 py-0.5 text-[1rem] text-danger hover:bg-danger-bg"
                         onClick={onRemove}
                     >
                         {t("removeAccusation")}
@@ -623,12 +623,12 @@ export function JointHypothesisContradictionBanner({
     const helpKey = isDirect ? KEY_DIRECT_HELP : KEY_JOINT_HELP;
 
     return (
-        <div className="mb-3 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-3 text-[13px] text-danger">
+        <div className="mb-3 rounded-[var(--radius)] border border-danger-border bg-danger-bg p-3 text-[1rem] text-danger">
             <div className="mb-2">
                 <div className="font-semibold">
                     {t(titleKey, { count: rows.length })}
                 </div>
-                <div className="text-[12px] opacity-80">
+                <div className="text-[1rem] opacity-80">
                     {t(helpKey, { count: rows.length })}
                 </div>
             </div>
@@ -657,7 +657,7 @@ export function JointHypothesisContradictionBanner({
                                 </span>
                                 <button
                                     type="button"
-                                    className="cursor-pointer rounded border border-danger-border bg-white px-2 py-0.5 text-[12px] text-danger hover:bg-danger-bg"
+                                    className="cursor-pointer rounded border border-danger-border bg-white px-2 py-0.5 text-[1rem] text-danger hover:bg-danger-bg"
                                     onClick={() =>
                                         dispatch({
                                             type: "clearHypothesis",

@@ -77,7 +77,7 @@ export function SetupStepPlayers({
             registerPanelEl={registerPanelEl}
             footer={footer}
         >
-            <p className="m-0 text-[13px] text-muted">
+            <p className="m-0 text-[1rem] text-muted">
                 {t("turnOrderHint")}
             </p>
             <PlayerListReorder />

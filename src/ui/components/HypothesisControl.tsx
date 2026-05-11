@@ -38,7 +38,7 @@ const valueFromOption = (option: Option): HypothesisValue | undefined =>
     option === OPT_OFF ? undefined : option;
 
 const baseButtonClass =
-    "flex-1 px-3 py-1 text-[12px] font-semibold cursor-pointer " +
+    "flex-1 px-3 py-1 text-[1rem] font-semibold cursor-pointer " +
     "border-2 border-border bg-panel text-muted " +
     "transition-colors " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:z-10 " +
@@ -204,7 +204,7 @@ export function HypothesisControl({
                 })}
             </div>
             {hasKeyboard && (
-                <p className="text-[11px] text-muted">
+                <p className="text-[1rem] text-muted">
                     {t("shortcutHint", {
                         off: label(SHORTCUT_OFF),
                         y: label(SHORTCUT_Y),

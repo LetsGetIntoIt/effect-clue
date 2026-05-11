@@ -710,7 +710,7 @@ export const SuggestionForm = forwardRef<
 
     // --- Render --------------------------------------------------------
     const headerTitle = showHeader ? (
-        <h3 className="mt-0 mb-0 text-[14px] font-semibold">
+        <h3 className="mt-0 mb-0 text-[1.125rem] font-semibold">
             {suggestion !== undefined
                 ? t("editTitle")
                 : t.rich("addTitle", {
@@ -880,7 +880,7 @@ export type PillId =
 // the user. `OpenTarget` and `TARGET_SUBMIT` come from `PillForm`.
 
 export const PILL_SUGGESTER: PillId = "suggester";
-const PILL_PASSERS: PillId = "passers";
+export const PILL_PASSERS: PillId = "passers";
 export const PILL_REFUTER: PillId = "refuter";
 export const PILL_SEEN: PillId = "seenCard";
 
@@ -923,17 +923,18 @@ type PillErrorCode =
 
 /**
  * Check a form snapshot for internal paradoxes. Returns a map from
- * the first-offending pill to an error code. One error per pill; if
- * a pill has multiple problems the first-listed rule wins.
+ * pill to an error code. Cross-role conflicts mark BOTH offending
+ * pills so the user sees the warning triangle on each side of the
+ * conflict, matching the Shown-Card error treatment.
  *
- * Most cross-role paradoxes are prevented at input time by the
- * role-move helpers (`applySuggesterMove` etc.) — selecting a
- * player into a role automatically removes them from any other
- * role they currently occupy. This validator is the RETROACTIVE
- * safety net for values that were valid at entry but became stale
- * after a later edit — most commonly, a `seenCard` whose
- * corresponding category card was subsequently changed, or a
- * loaded draft whose saved shape happens to violate Clue rules.
+ * Role-move helpers (`applySuggesterMove` etc.) intentionally do
+ * NOT auto-clear other-role conflicts. Selecting Alice as both
+ * Suggester and Refuter doesn't silently drop one role — both
+ * pills surface as error pills until the user resolves the
+ * paradox. This validator is the single source of truth for that
+ * detection AND for the seenCard staleness check (a `seenCard`
+ * whose corresponding category card was subsequently changed, or
+ * a loaded draft whose saved shape happens to violate Clue rules).
  */
 export const validateFormConsistency = (
     form: FormState,
@@ -957,13 +958,18 @@ export const validateFormConsistency = (
         }
     }
 
-    // Defensive cross-role checks — the option-builders normally
-    // prevent these, but validate anyway so mistakes from any
-    // future change surface clearly.
+    // Cross-role conflicts — mark BOTH sides of every conflict so the
+    // user sees the warning on each pill, matching how Shown Card
+    // flags its own problems.
     const passers: ReadonlyArray<Player> = Array.isArray(form.nonRefuters)
         ? form.nonRefuters
         : [];
 
+    // First-rule-wins per pill: if a pill is already flagged by an
+    // earlier check, leave its code alone so the three-way-collision
+    // case stays interpretable (suggester == refuter == passer-of-self
+    // reports "suggesterIsRefuter" on both endpoints and a passer-side
+    // code on PASSERS).
     if (
         form.suggester !== null &&
         form.refuter !== null &&
@@ -971,14 +977,22 @@ export const validateFormConsistency = (
         form.suggester === form.refuter
     ) {
         // eslint-disable-next-line i18next/no-literal-string -- internal error code
+        errors.set(PILL_SUGGESTER, "suggesterIsRefuter");
+        // eslint-disable-next-line i18next/no-literal-string -- internal error code
         errors.set(PILL_REFUTER, "suggesterIsRefuter");
     }
     if (
         form.suggester !== null &&
         passers.some(p => p === form.suggester)
     ) {
-        // eslint-disable-next-line i18next/no-literal-string -- internal error code
-        errors.set(PILL_SUGGESTER, "suggesterInPassers");
+        if (!errors.has(PILL_SUGGESTER)) {
+            // eslint-disable-next-line i18next/no-literal-string -- internal error code
+            errors.set(PILL_SUGGESTER, "suggesterInPassers");
+        }
+        if (!errors.has(PILL_PASSERS)) {
+            // eslint-disable-next-line i18next/no-literal-string -- internal error code
+            errors.set(PILL_PASSERS, "suggesterInPassers");
+        }
     }
     if (
         form.refuter !== null &&
@@ -988,6 +1002,10 @@ export const validateFormConsistency = (
         if (!errors.has(PILL_REFUTER)) {
             // eslint-disable-next-line i18next/no-literal-string -- internal error code
             errors.set(PILL_REFUTER, "refuterInPassers");
+        }
+        if (!errors.has(PILL_PASSERS)) {
+            // eslint-disable-next-line i18next/no-literal-string -- internal error code
+            errors.set(PILL_PASSERS, "refuterInPassers");
         }
     }
 
@@ -1035,65 +1053,33 @@ const playerOptions = (
 // ---- Role-move helpers ----------------------------------------------
 
 /**
- * Apply a player to the suggester slot, removing them from any other
- * role they currently occupy (passers list, refuter slot). Pure;
- * exported for testing.
+ * Apply a player to the suggester slot. Other-role conflicts (player
+ * already in passers / refuter) are NOT silently resolved here —
+ * `validateFormConsistency` surfaces the conflict as a dual-pill
+ * error so the user can decide which role to keep. Pure; exported
+ * for testing.
  */
 export const applySuggesterMove = (
     form: FormState,
     player: Player,
-): FormState => {
-    const nextNonRefuters = Array.isArray(form.nonRefuters)
-        ? form.nonRefuters.filter(p => p !== player)
-        : form.nonRefuters;
-    const refuterMatches =
-        form.refuter !== null &&
-        !isNobody(form.refuter) &&
-        form.refuter === player;
-    return {
-        ...form,
-        suggester: player,
-        nonRefuters: nextNonRefuters,
-        refuter: refuterMatches ? null : form.refuter,
-        // Clearing refuter mirrors the existing commitRefuter behaviour:
-        // shown card is meaningless without a resolved refuter.
-        seenCard: refuterMatches ? null : form.seenCard,
-    };
-};
+): FormState => ({ ...form, suggester: player });
 
 /**
- * Apply a passers value, removing each passer from any other role
- * they currently occupy. NOBODY and null pass through unchanged
- * (no players to move). Pure; exported for testing.
+ * Apply a passers value. NOBODY and null pass through unchanged (no
+ * players to compare). Other-role conflicts are flagged by
+ * `validateFormConsistency` rather than auto-cleared. Pure;
+ * exported for testing.
  */
 export const applyPassersMove = (
     form: FormState,
     value: ReadonlyArray<Player> | Nobody | null,
-): FormState => {
-    if (value === null || isNobody(value)) {
-        return { ...form, nonRefuters: value };
-    }
-    const newPassers = new Set<Player>(value);
-    const suggesterMatches =
-        form.suggester !== null && newPassers.has(form.suggester);
-    const refuterMatches =
-        form.refuter !== null &&
-        !isNobody(form.refuter) &&
-        newPassers.has(form.refuter);
-    return {
-        ...form,
-        nonRefuters: value,
-        suggester: suggesterMatches ? null : form.suggester,
-        refuter: refuterMatches ? null : form.refuter,
-        seenCard: refuterMatches ? null : form.seenCard,
-    };
-};
+): FormState => ({ ...form, nonRefuters: value });
 
 /**
- * Apply a refuter value, removing them from any other role they
- * currently occupy (suggester slot, passers list). NOBODY clears
- * any stale shown card (existing behaviour). Pure; exported for
- * testing.
+ * Apply a refuter value. NOBODY clears any stale shown card — that's
+ * a structural invariant ("no refuter means no shown card"), not
+ * conflict resolution. Other-role conflicts are flagged by
+ * `validateFormConsistency`. Pure; exported for testing.
  */
 export const applyRefuterMove = (
     form: FormState,
@@ -1102,16 +1088,7 @@ export const applyRefuterMove = (
     if (isNobody(value)) {
         return { ...form, refuter: value, seenCard: null };
     }
-    const nextNonRefuters = Array.isArray(form.nonRefuters)
-        ? form.nonRefuters.filter(p => p !== value)
-        : form.nonRefuters;
-    const suggesterMatches = form.suggester === value;
-    return {
-        ...form,
-        refuter: value,
-        nonRefuters: nextNonRefuters,
-        suggester: suggesterMatches ? null : form.suggester,
-    };
+    return { ...form, refuter: value };
 };
 
 /**

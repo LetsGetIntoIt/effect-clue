@@ -122,13 +122,13 @@ export function BehavioralInsights() {
             className="mt-4 border-t border-border pt-4"
             data-tour-anchor="suggest-insights"
         >
-            <h3 className="m-0 mb-1 text-[14px] font-semibold">
+            <h3 className="m-0 mb-1 font-sans! text-[1.125rem] font-bold uppercase tracking-wide text-accent">
                 {totalCount === 0
                     ? t("insightsTitle")
                     : t("insightsTitleWithCount", { count: totalCount })}
             </h3>
             {helpText !== null ? (
-                <p className="m-0 mb-2 text-[12px] leading-snug text-muted">
+                <p className="m-0 mb-2 text-[1.125rem] leading-snug text-muted">
                     {helpText}
                 </p>
             ) : null}
@@ -198,7 +198,7 @@ export function BehavioralInsights() {
                 <button
                     type="button"
                     onClick={() => dispatch({ type: "clearDismissedInsights" })}
-                    className="mt-2 cursor-pointer border-none bg-transparent p-0 text-[12px] text-muted underline decoration-dotted underline-offset-2 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="mt-2 cursor-pointer border-none bg-transparent p-0 text-[1rem] text-muted underline decoration-dotted underline-offset-2 hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     data-action="clear-dismissed-insights"
                 >
                     {t("clearDismissalsLink", {
@@ -251,7 +251,7 @@ function SuggestedRow({
             data-insight-key={insight.dismissedKey}
             data-insight-kind={insight.kind._tag}
         >
-            <div className="min-w-0 flex-1 text-[13px]">
+            <div className="min-w-0 flex-1 text-[1rem]">
                 <strong className="me-1">{t("insightSuggestedPrefix")}</strong>
                 {rationale}
             </div>
@@ -344,7 +344,7 @@ function ActiveRow({ cell, value, setup, onClick }: ActiveRowProps) {
                 onClick={onClick}
                 onKeyDown={onKeyDown}
                 aria-label={aria}
-                className="flex cursor-pointer items-center gap-2 rounded border border-border px-2 py-1 text-[13px] hover:bg-row-header focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="flex cursor-pointer items-center gap-2 rounded border border-border px-2 py-1 text-[1rem] hover:bg-row-header focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
                 <span className="min-w-0 flex-1">{label}</span>
                 <ChevronRightIcon
@@ -385,7 +385,7 @@ function ConfidencePill({ confidence }: { confidence: InsightConfidence }) {
     return (
         <span
             data-confidence={confidence}
-            className={`rounded px-1.5 py-0.5 text-[11px] uppercase tracking-[0.04em] ${CONFIDENCE_PILL_CLASSES[confidence]}`}
+            className={`rounded px-1.5 py-0.5 text-[1rem] uppercase tracking-[0.04em] ${CONFIDENCE_PILL_CLASSES[confidence]}`}
         >
             {t(CONFIDENCE_LABEL_KEY[confidence])}
         </span>

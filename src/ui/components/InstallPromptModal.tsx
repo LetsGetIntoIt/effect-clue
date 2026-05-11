@@ -102,7 +102,7 @@ function InstallPromptModalContent({
     return (
         <div className="flex flex-col">
             <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
-                <Dialog.Title className="m-0 font-display text-[20px] text-accent">
+                <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
                     {t("title")}
                 </Dialog.Title>
                 <button
@@ -114,10 +114,10 @@ function InstallPromptModalContent({
                     <XIcon size={18} />
                 </button>
             </div>
-            <p className="px-5 pt-3 text-[14px] leading-relaxed">
+            <p className="px-5 pt-3 text-[1rem] leading-relaxed">
                 {t("description")}
             </p>
-            <ul className="m-0 list-disc px-5 pl-9 pt-3 text-[14px] leading-relaxed">
+            <ul className="m-0 list-disc px-5 pl-9 pt-3 text-[1rem] leading-relaxed">
                 <li>{t("benefitOffline")}</li>
                 <li>{t("benefitHomeScreen")}</li>
                 <li>{t("benefitFastLaunch")}</li>

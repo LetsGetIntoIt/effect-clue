@@ -41,7 +41,7 @@ export function ShareMissingPage({
 
     return (
         <main className="mx-auto flex max-w-[640px] flex-col gap-5 px-5 py-8">
-            <h1 className="m-0 font-display text-[28px] text-accent">
+            <h1 className="m-0 font-display text-[1.75rem] text-accent">
                 {t("importTitle")}
             </h1>
             <Dialog.Root open>
@@ -55,10 +55,10 @@ export function ShareMissingPage({
                         }
                     >
                         <div className="px-5 pt-5">
-                            <Dialog.Title className="m-0 font-display text-[20px] text-accent">
+                            <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
                                 {t("missingTitle")}
                             </Dialog.Title>
-                            <Dialog.Description className="pt-3 text-[14px] leading-relaxed text-muted">
+                            <Dialog.Description className="pt-3 text-[1rem] leading-relaxed text-muted">
                                 {t("missingBody")}
                             </Dialog.Description>
                         </div>

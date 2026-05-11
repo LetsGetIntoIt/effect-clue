@@ -45,17 +45,17 @@ interface SectionProps {
 
 const Section = ({ heading, children }: SectionProps) => (
     <section className="mt-4">
-        <h3 className="m-0 text-[13px] font-semibold text-accent">
+        <h3 className="m-0 text-[1.125rem] font-semibold text-accent">
             {heading}
         </h3>
-        <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0 text-[13px]">
+        <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0 text-[1rem]">
             {children}
         </ul>
     </section>
 );
 
 const Tag = ({ children }: { readonly children: ReactNode }) => (
-    <span className="ml-2 inline-block rounded-[var(--radius-pill,999px)] border border-border px-2 py-px text-[11px] font-semibold text-muted">
+    <span className="ml-2 inline-block rounded-[var(--radius-pill,999px)] border border-border px-2 py-px text-[1rem] font-semibold text-muted">
         {children}
     </span>
 );
@@ -79,10 +79,10 @@ export function LogoutWarningModalContent({
     return (
         <div className="flex max-h-[85vh] flex-col">
             <div className="px-5 pt-5">
-                <Dialog.Title className="m-0 mb-2 font-display text-[18px] text-accent">
+                <Dialog.Title className="m-0 mb-2 font-display text-[1.125rem] text-accent">
                     {t("title")}
                 </Dialog.Title>
-                <p className="m-0 text-[14px] leading-snug text-[#2a1f12]">
+                <p className="m-0 text-[1rem] leading-snug text-[#2a1f12]">
                     {reason === "offline"
                         ? t("ledeOffline")
                         : t("ledeServerError")}

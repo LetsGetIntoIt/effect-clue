@@ -28,13 +28,13 @@ export function AboutContent({
                 context={context}
                 title={t("videoTitle")}
             />
-            <h2 className="m-0 font-display text-[22px] leading-tight">
+            <h2 className="m-0 font-display text-[1.375rem] leading-tight">
                 {t("title")}
             </h2>
-            <p className="m-0 text-[15px] leading-relaxed">
+            <p className="m-0 text-[1rem] leading-relaxed">
                 {t("motivation")}
             </p>
-            <p className="m-0 text-[15px] leading-relaxed">
+            <p className="m-0 text-[1rem] leading-relaxed">
                 {t("videoCallout")}
             </p>
         </div>

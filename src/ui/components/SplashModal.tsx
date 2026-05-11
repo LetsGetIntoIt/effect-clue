@@ -65,7 +65,7 @@ function SplashModalContent({
     return (
         <div className="flex max-h-[90vh] flex-col">
             <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
-                <Dialog.Title className="m-0 font-display text-[20px] text-accent">
+                <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
                     {t("title")}
                 </Dialog.Title>
                 <button
@@ -89,7 +89,7 @@ function SplashModalContent({
                     className={
                         "flex w-full cursor-pointer items-center justify-center gap-2 " +
                         "rounded-[var(--radius)] border-2 border-accent bg-accent " +
-                        "px-6 py-3.5 text-[18px] font-bold text-white " +
+                        "px-6 py-3.5 text-[1.125rem] font-bold text-white " +
                         "shadow-[0_4px_14px_rgba(122,28,28,0.35)] " +
                         "hover:bg-accent-hover hover:shadow-[0_6px_18px_rgba(122,28,28,0.45)] " +
                         "active:translate-y-[1px] active:shadow-[0_2px_8px_rgba(122,28,28,0.35)] " +
@@ -99,7 +99,7 @@ function SplashModalContent({
                     <span>{t("startPlaying")}</span>
                     <ArrowRightIcon size={20} />
                 </button>
-                <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 text-[13px] text-muted">
+                <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 text-[1rem] text-muted">
                     <input
                         type="checkbox"
                         checked={dontShowAgain}
