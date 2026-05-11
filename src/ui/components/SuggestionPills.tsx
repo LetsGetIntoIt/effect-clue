@@ -8,11 +8,13 @@ import {
     useMemo,
     useRef,
     useState,
+    type ReactNode,
 } from "react";
 import type { Card, Player } from "../../logic/GameObjects";
 import type { GameSetup } from "../../logic/GameSetup";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { T_FAST, T_SPRING_SOFT, useReducedTransition } from "../motion";
+import { AlertIcon } from "./Icons";
 
 const MOTION_POP_LAYOUT: "popLayout" = "popLayout";
 import { matches } from "../keyMap";
@@ -52,6 +54,16 @@ export type PillStatus =
 const STATUS_DONE: PillStatus = "done";
 const STATUS_PENDING_REQ: PillStatus = "pendingRequired";
 const STATUS_PENDING_OPT: PillStatus = "pendingOptional";
+
+// AnimatePresence key for the leading-glyph motion span. Internal
+// discriminator only — never shown to the user. Same string each
+// re-render keeps the same element mounted; a flip triggers the
+// pop-out + pop-in transition between glyph states.
+type PillIconKey = "error" | "done" | "disabled" | "pending";
+const ICON_KEY_ERROR: PillIconKey = "error";
+const ICON_KEY_DONE: PillIconKey = "done";
+const ICON_KEY_DISABLED: PillIconKey = "disabled";
+const ICON_KEY_PENDING: PillIconKey = "pending";
 
 export const pillStatusForPlayer = (
     value: Player | Nobody | null,
@@ -195,13 +207,14 @@ export function PillPopover({
     // `+` glyph to invite the user to fill them in. A disabled
     // optional pill (e.g. Shown card without a refuter) fades and
     // swaps to `–` to signal it's currently unavailable. An error
-    // pill (internal inconsistency) shows a `!` in a danger tone —
-    // the user can still open the popover to correct the value.
+    // pill (internal inconsistency) shows the standard `AlertIcon`
+    // warning triangle in a danger tone — the user can still open
+    // the popover to correct the value.
     //
     // Matrix:
     //   state              | outline       | icon
     //   -------------------+---------------+-----
-    //   error              | danger        | !
+    //   error              | danger        | AlertIcon
     //   done               | solid accent  | ✓
     //   pendingRequired    | solid border  | +
     //   pendingOptional    | dashed border | +      (disabled → "–")
@@ -215,13 +228,23 @@ export function PillPopover({
             : disabled
               ? "bg-transparent text-muted/60 border-dashed border-border/50"
               : "bg-transparent text-muted border-dashed border-border";
-    const iconGlyph = hasError
-        ? "!"
+    const iconNode: ReactNode = hasError
+        ? <AlertIcon className="h-[1.1em] w-[1.1em]" />
         : status === STATUS_DONE
             ? "✓"
             : status === STATUS_PENDING_OPT && disabled
               ? "–"
               : "+";
+    // AnimatePresence keys on a stable string so the pop animation
+    // fires when transitioning into / out of the error state. Strings
+    // are internal discriminators, never shown to the user.
+    const iconKey: PillIconKey = hasError
+        ? ICON_KEY_ERROR
+        : status === STATUS_DONE
+            ? ICON_KEY_DONE
+            : status === STATUS_PENDING_OPT && disabled
+              ? ICON_KEY_DISABLED
+              : ICON_KEY_PENDING;
     const showClear = onClear !== undefined && status === STATUS_DONE;
     const iconTransition = useReducedTransition(T_FAST);
     const widthTransition = useReducedTransition(T_SPRING_SOFT);
@@ -241,14 +264,14 @@ export function PillPopover({
             >
                 <AnimatePresence mode={MOTION_POP_LAYOUT} initial={false}>
                     <motion.span
-                        key={iconGlyph}
+                        key={iconKey}
                         initial={{ y: -8, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: 8, opacity: 0 }}
                         transition={iconTransition}
-                        className="inline-block"
+                        className="inline-flex items-center justify-center"
                     >
-                        {iconGlyph}
+                        {iconNode}
                     </motion.span>
                 </AnimatePresence>
             </span>

@@ -439,6 +439,138 @@ describe("SuggestionForm — stale Shown card error state", () => {
 });
 
 // -----------------------------------------------------------------------
+// Cross-role conflicts surface as dual-pill errors. The role-move helpers
+// intentionally do NOT auto-clear conflicting roles, so the validator
+// marks both offending pills and the user picks which one to fix.
+// -----------------------------------------------------------------------
+
+describe("SuggestionForm — dual-pill cross-role errors", () => {
+    test("same player as Suggester and Refuter flags BOTH pills", async () => {
+        const A = Player("Anisha");
+        const MUSTARD = cardByName(setup, "Col. Mustard");
+        const KNIFE = cardByName(setup, "Knife");
+        const KITCHEN = cardByName(setup, "Kitchen");
+        const user = userEvent.setup();
+        renderForm(
+            <SuggestionForm
+                setup={setup}
+                suggestion={{
+                    id: SuggestionId("suggester-is-refuter"),
+                    suggester: A,
+                    cards: [MUSTARD, KNIFE, KITCHEN],
+                    nonRefuters: [],
+                    refuter: A,
+                    seenCard: undefined,
+                }}
+                onSubmit={vi.fn()}
+            />,
+        );
+
+        const suggester = document.querySelector(
+            "[data-pill-id='suggester']",
+        );
+        const refuter = document.querySelector(
+            "[data-pill-id='refuter']",
+        );
+        expect(suggester).toHaveAttribute("aria-invalid", "true");
+        expect(refuter).toHaveAttribute("aria-invalid", "true");
+
+        // Opening EITHER popover surfaces the same warning.
+        await user.click(suggester as HTMLElement);
+        const sugPop = getCurrentPopover();
+        expect(
+            within(sugPop).getByRole("alert"),
+        ).toHaveTextContent(/pillErrorSuggesterIsRefuter/);
+        await user.keyboard("{Escape}");
+
+        await user.click(refuter as HTMLElement);
+        const refPop = getCurrentPopover();
+        expect(
+            within(refPop).getByRole("alert"),
+        ).toHaveTextContent(/pillErrorSuggesterIsRefuter/);
+    });
+
+    test("same player as Suggester and a Passer flags BOTH pills", () => {
+        const A = Player("Anisha");
+        const MUSTARD = cardByName(setup, "Col. Mustard");
+        const KNIFE = cardByName(setup, "Knife");
+        const KITCHEN = cardByName(setup, "Kitchen");
+        renderForm(
+            <SuggestionForm
+                setup={setup}
+                suggestion={{
+                    id: SuggestionId("suggester-in-passers"),
+                    suggester: A,
+                    cards: [MUSTARD, KNIFE, KITCHEN],
+                    nonRefuters: [A],
+                    refuter: undefined,
+                    seenCard: undefined,
+                }}
+                onSubmit={vi.fn()}
+            />,
+        );
+        expect(
+            document.querySelector("[data-pill-id='suggester']"),
+        ).toHaveAttribute("aria-invalid", "true");
+        expect(
+            document.querySelector("[data-pill-id='passers']"),
+        ).toHaveAttribute("aria-invalid", "true");
+    });
+
+    test("same player as Refuter and a Passer flags BOTH pills", () => {
+        const A = Player("Anisha");
+        const B = Player("Bob");
+        const MUSTARD = cardByName(setup, "Col. Mustard");
+        const KNIFE = cardByName(setup, "Knife");
+        const KITCHEN = cardByName(setup, "Kitchen");
+        renderForm(
+            <SuggestionForm
+                setup={setup}
+                suggestion={{
+                    id: SuggestionId("refuter-in-passers"),
+                    suggester: A,
+                    cards: [MUSTARD, KNIFE, KITCHEN],
+                    nonRefuters: [B],
+                    refuter: B,
+                    seenCard: undefined,
+                }}
+                onSubmit={vi.fn()}
+            />,
+        );
+        expect(
+            document.querySelector("[data-pill-id='refuter']"),
+        ).toHaveAttribute("aria-invalid", "true");
+        expect(
+            document.querySelector("[data-pill-id='passers']"),
+        ).toHaveAttribute("aria-invalid", "true");
+    });
+
+    test("submit is blocked while a cross-role conflict is active", () => {
+        const A = Player("Anisha");
+        const MUSTARD = cardByName(setup, "Col. Mustard");
+        const KNIFE = cardByName(setup, "Knife");
+        const KITCHEN = cardByName(setup, "Kitchen");
+        renderForm(
+            <SuggestionForm
+                setup={setup}
+                suggestion={{
+                    id: SuggestionId("submit-blocked"),
+                    suggester: A,
+                    cards: [MUSTARD, KNIFE, KITCHEN],
+                    nonRefuters: [],
+                    refuter: A,
+                    seenCard: undefined,
+                }}
+                onSubmit={vi.fn()}
+            />,
+        );
+        // Edit mode renders an "updateAction" button (not "submit").
+        const submit = screen.getByRole("button", { name: /updateAction/ });
+        expect(submit).toHaveAttribute("aria-disabled", "true");
+    });
+});
+
+// -----------------------------------------------------------------------
 // Disabled-pill popover: focusable + shows the disabled reason.
 // -----------------------------------------------------------------------
 
