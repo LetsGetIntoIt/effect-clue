@@ -230,14 +230,14 @@ export function PillPopover({
             layout
             transition={widthTransition}
             className={
-                "tap-target text-tap inline-flex items-center gap-1.5 rounded-full border " +
+                "tap-target text-tap pl-3 min-[800px]:pl-2.5 inline-flex items-center gap-1.5 rounded-full border " +
                 "@max-[500px]/log:flex @max-[500px]/log:w-full @max-[500px]/log:justify-start " +
                 tone
             }
         >
             <span
                 aria-hidden
-                className="relative inline-block w-3 overflow-hidden text-center text-[10px] leading-3"
+                className="relative inline-flex h-[1.4em] w-[1.4em] items-center justify-center overflow-hidden text-[1.25em] leading-none"
             >
                 <AnimatePresence mode={MOTION_POP_LAYOUT} initial={false}>
                     <motion.span
@@ -261,7 +261,7 @@ export function PillPopover({
                     role="button"
                     aria-label={`Clear ${label}`}
                     tabIndex={-1}
-                    className="ml-0.5 inline-block w-3 cursor-pointer text-center text-[12px] leading-3 opacity-70 hover:opacity-100"
+                    className="ml-0.5 inline-flex h-[1.4em] w-[1.4em] items-center justify-center cursor-pointer text-[1.1em] leading-none opacity-70 hover:opacity-100"
                     onClick={e => {
                         e.preventDefault();
                         e.stopPropagation();
