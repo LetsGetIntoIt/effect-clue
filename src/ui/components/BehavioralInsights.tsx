@@ -122,7 +122,7 @@ export function BehavioralInsights() {
             className="mt-4 border-t border-border pt-4"
             data-tour-anchor="suggest-insights"
         >
-            <h3 className="m-0 mb-1 font-sans! text-[1.125rem] font-semibold">
+            <h3 className="m-0 mb-1 font-sans! text-[1.125rem] font-bold uppercase tracking-wide text-accent">
                 {totalCount === 0
                     ? t("insightsTitle")
                     : t("insightsTitleWithCount", { count: totalCount })}

@@ -66,15 +66,21 @@ import {
 } from "../motion";
 import { label, matches, shortcutSuffix } from "../keyMap";
 
-// Section titles use the body sans (Crimson) at semibold so they
-// read as section dividers without the heavy slab look the global
-// `h3 { font-family: var(--font-display) }` rule would otherwise
-// give them. The slab font on a frequently-repeated section heading
-// reads heavier than intended; semibold body keeps hierarchy intact.
+// Section titles use the body sans (Crimson) so they don't carry
+// the heavy slab look the global `h3 { font-family:
+// var(--font-display) }` rule would otherwise give them — but with
+// `font-bold uppercase tracking-wide text-accent` so they still
+// read clearly as section dividers (matching the cell-explanation
+// panel's DEDUCTIONS / LEADS / HYPOTHESIS treatment). The slab
+// font on a frequently-repeated section heading reads heavier than
+// intended; the bold-uppercase-accent combo gives the heading
+// scannability without the slab weight.
+//
 // `font-sans!` (Tailwind v4 !important) is required because the
 // global h3 rule in globals.css appears AFTER the utility in source
 // order, so a plain `font-sans` loses the cascade tie.
-const SECTION_TITLE = "mt-0 mb-2 font-sans! text-[1.125rem] font-semibold";
+const SECTION_TITLE =
+    "mt-0 mb-2 font-sans! text-[1.125rem] font-bold uppercase tracking-wide text-accent";
 // Non user-facing glyph rendered as the rotating caret on
 // the Recommendations expand/collapse header.
 const CARET_GLYPH = "\u25B8";
