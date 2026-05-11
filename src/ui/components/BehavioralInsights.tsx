@@ -29,6 +29,7 @@ import { useIsDesktop } from "../hooks/useIsDesktop";
 import { PANE_SETTLE, T_FAST, T_STANDARD, useReducedTransition } from "../motion";
 import { useSelection } from "../SelectionContext";
 import { useClue } from "../state";
+import { ProseChecklistIcon } from "./CellGlyph";
 import { CheckIcon, ChevronRightIcon, XIcon } from "./Icons";
 
 /**
@@ -291,6 +292,7 @@ function ActiveRow({ cell, value, setup, onClick }: ActiveRowProps) {
     const layoutTransition = useReducedTransition(T_STANDARD);
     const exitTransition = useReducedTransition(T_FAST);
     const strong = (chunks: React.ReactNode) => <strong>{chunks}</strong>;
+    const chip = () => <ProseChecklistIcon value={value} />;
     const cardLabel = cardName(setup, cell.card);
     const isPlayer = cell.owner._tag === "Player";
     const ownerLabel = isPlayer
@@ -301,11 +303,13 @@ function ActiveRow({ cell, value, setup, onClick }: ActiveRowProps) {
               player: String(cell.owner.player),
               card: cardLabel,
               strong,
+              chip,
           })
         : t.rich("activeHypothesisCaseFile", {
               caseFile: ownerLabel,
               card: cardLabel,
               strong,
+              chip,
           });
     const aria = isPlayer
         ? t("activeHypothesisOpenAriaPlayer", {
@@ -342,11 +346,6 @@ function ActiveRow({ cell, value, setup, onClick }: ActiveRowProps) {
                 aria-label={aria}
                 className="flex cursor-pointer items-center gap-2 rounded border border-border px-2 py-1 text-[13px] hover:bg-row-header focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-                {value === "Y" ? (
-                    <CheckIcon size={14} className="shrink-0 text-yes" />
-                ) : (
-                    <XIcon size={14} className="shrink-0 text-no" />
-                )}
                 <span className="min-w-0 flex-1">{label}</span>
                 <ChevronRightIcon
                     size={14}
