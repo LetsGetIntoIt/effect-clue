@@ -597,6 +597,10 @@
                 "title": "Welcome to Clue Solver",
                 "body": "Build your game below — pick a deck, list your players, and mark the cards you're holding."
             },
+            "cardPack": {
+                "title": "Get started by picking a card pack",
+                "body": "Pick the deck you're playing with. Classic ships out of the box; tap All card packs to find another or customize your own."
+            },
             "menu": {
                 "title": "Find Game setup in this menu",
                 "body": "Once you start playing, open this menu anytime to come back here — players, decks, and hand sizes are all editable later. Undo, Account, and Install live here too."

@@ -568,27 +568,21 @@ export function TourPopover() {
         state.uiMode,
     ]);
 
-    // While a tour is active, the page beneath the veil should be
+    // While a tour is active, the page beneath the veil is
     // keyboard-inert. App-level shortcuts (`⌘K`, `⌘Z`, the per-tab
     // "go to" shortcuts, etc.) listen at the window in BUBBLE phase;
     // we install a CAPTURE-phase listener so we run first and can
     // selectively swallow events.
     //
-    //   - Escape dismisses the tour (existing behavior, kept as the
-    //     authoritative keyboard-out path) — unconditional.
-    //   - Other keys: in BLOCKING mode (the default), if the event
-    //     target is inside the popover content (Tab between Back /
-    //     Skip / Next, Enter to click), pass through; otherwise
-    //     stopPropagation + preventDefault so the page beneath gets
-    //     nothing. In NON-BLOCKING mode (`currentStep.nonBlocking`),
-    //     every non-Esc keystroke passes through so the user can
-    //     type into wizard inputs / use page shortcuts while the
-    //     informational popover floats.
+    //   - Escape dismisses the tour — unconditional.
+    //   - Other keys: if the event target is inside the popover
+    //     content (Tab between Back / Skip / Next, Enter to click),
+    //     pass through; otherwise stopPropagation + preventDefault so
+    //     the page beneath gets nothing.
     //
     // `capture: true` matters for collisions — bubble-phase listeners
     // we want to suppress fire AFTER us, so our `stopPropagation` is
     // load-bearing.
-    const nonBlocking = currentStep?.nonBlocking ?? false;
     useEffect(() => {
         if (!activeScreen) return;
         const onKey = (e: KeyboardEvent): void => {
@@ -597,7 +591,6 @@ export function TourPopover() {
                 dismissTour(DISMISS_VIA_ESC);
                 return;
             }
-            if (nonBlocking) return;
             const target = e.target;
             if (target instanceof Node) {
                 const popoverContent = document.querySelector(
@@ -613,7 +606,7 @@ export function TourPopover() {
         window.addEventListener("keydown", onKey, { capture: true });
         return () =>
             window.removeEventListener("keydown", onKey, { capture: true });
-    }, [activeScreen, dismissTour, nonBlocking]);
+    }, [activeScreen, dismissTour]);
 
     // Pull keyboard focus into the popover's "Next" button each time
     // a step becomes active. Without this, focus stays on whatever
@@ -641,11 +634,9 @@ export function TourPopover() {
     // the popover renders off-screen due to a layout we didn't
     // anticipate — the user can always tap anywhere to escape.
     //
-    // Gated on blocking mode only: in non-blocking mode the backdrop
-    // already passes clicks through to the page, so tap-to-advance
-    // would fight with normal interaction. Non-blocking tours have a
-    // visible Next button on screen anyway (the popover doesn't
-    // dim the page).
+    // Disabled on advance-on-click steps: those route clicks through
+    // to the spotlit anchor, so the backdrop is `pointer-events:
+    // none` and a tap-to-advance handler on it wouldn't fire anyway.
     //
     // Esc remains the keyboard escape; this is the touch-friendly
     // equivalent for users without a keyboard.
@@ -690,6 +681,47 @@ export function TourPopover() {
         // through useCallback in TourProvider but include it for
         // correctness.
     }, [activeScreen, stepIndex, advanceOn, nextStep]);
+
+    // Click isolator for advance-on-click steps. The spotlight +
+    // backdrop both drop `pointer-events` so the user's tap on the
+    // spotlit element reaches it natively. But that means a tap
+    // ANYWHERE on the page would also reach the page — letting the
+    // user e.g. click a cell other than the spotlit one and close
+    // the explanation row mid-tour. This capture-phase filter cancels
+    // every click EXCEPT ones that land on the `advanceOn.anchor`
+    // element(s) or inside the tour popover itself.
+    //
+    // Gated to advance-on-click steps only. Default blocking steps
+    // don't need the filter — their backdrop has `pointer-events:
+    // auto` and absorbs clicks before they reach anything.
+    // Non-blocking steps deliberately let all clicks through.
+    useEffect(() => {
+        if (!activeScreen || !advanceOn) return;
+        const onClickCapture = (e: MouseEvent): void => {
+            const target = e.target;
+            if (!(target instanceof Element)) return;
+            // Allow clicks inside the popover (X / Back / Skip).
+            const inPopover = target.closest(`[${POPOVER_CONTENT_ATTR}]`);
+            if (inPopover !== null) return;
+            // Allow clicks inside the advance-on anchor — those are
+            // the user's intended interaction. The anchor selector
+            // matches the same `~=` whitespace-list rule as
+            // `findAnchorElements`, so `<div data-tour-anchor="a b">`
+            // matches `[data-tour-anchor~="a"]`.
+            const inAnchor = target.closest(
+                `[data-tour-anchor~="${advanceOn.anchor}"]`,
+            );
+            if (inAnchor !== null) return;
+            // Everything else: cancel.
+            e.stopPropagation();
+            e.preventDefault();
+        };
+        window.addEventListener("click", onClickCapture, { capture: true });
+        return () =>
+            window.removeEventListener("click", onClickCapture, {
+                capture: true,
+            } as EventListenerOptions);
+    }, [activeScreen, advanceOn]);
 
     if (!activeScreen || !steps || !currentStep) return null;
 
@@ -773,12 +805,6 @@ export function TourPopover() {
                 the user can pan the page to find anchors that scroll
                 with content.
 
-                In non-blocking mode (`currentStep.nonBlocking`) the
-                backdrop drops its `pointer-events` so taps land on
-                the page beneath — the popover is informational and
-                the user is meant to keep interacting with the page
-                while it floats.
-
                 Tap-to-advance failsafe: after `BACKDROP_ADVANCE_DELAY`
                 the backdrop becomes clickable and a tap advances the
                 tour (or finishes it on the last step). This is the
@@ -790,19 +816,20 @@ export function TourPopover() {
                 advance-on-click steps drop the backdrop's
                 `pointer-events` so the user's click on the spotlit
                 element reaches it natively. The step's own listener
-                on that element fires alongside, advancing the tour. */}
+                on that element fires alongside, advancing the tour;
+                the window-level click filter (see the useEffect
+                above) cancels every other click outside the popover
+                or advance anchor. */}
             <div
                 aria-hidden
                 className="fixed inset-0 z-[var(--z-tour-backdrop)]"
                 style={
-                    nonBlocking || advanceOn !== undefined
+                    advanceOn !== undefined
                         ? { pointerEvents: "none" }
                         : undefined
                 }
                 onClick={
-                    !nonBlocking
-                    && advanceOn === undefined
-                    && canAdvanceFromBackdrop
+                    advanceOn === undefined && canAdvanceFromBackdrop
                         ? () => nextStep()
                         : undefined
                 }
@@ -821,29 +848,26 @@ export function TourPopover() {
                 plain dark overlay instead so the user still sees
                 they're in tour mode.
 
-                In non-blocking mode, we drop both the darkening
-                outer-shadow and `pointer-events: auto` — the
-                accent-ring is all that remains so the user sees what
-                the popover is pointing at without losing access to
-                it. */}
+                advance-on-click steps drop the spotlight's pointer
+                events so the user's tap reaches the spotlit element
+                natively. The window-level click filter higher up
+                cancels every other click that lands outside the
+                advance anchor / popover. */}
             {spotlights.length > 0 ? (
                 spotlights.map((rect, i) => {
-                    // Only paint the outer-darkening box-shadow when
-                    // there's a SINGLE spotlight. The box-shadow
-                    // approach paints darkness OUTSIDE the rect — with
-                    // multiple spotlights, the first one's "outside"
-                    // overlaps the second one's area and dims it too.
-                    // We accept multi-spotlight steps render
-                    // ring-only (no dim) since the popover is what's
-                    // commanding attention anyway.
-                    //
-                    // The dim is painted on ALL single-spotlight
-                    // steps — blocking, non-blocking, and advance-
-                    // on-click alike. The veil signals "the tour is
-                    // in command of this moment, focus on the spotlit
-                    // element"; whether clicks pass through is
-                    // orthogonal (governed by `pointer-events` below).
-                    const paintsDim = spotlights.length === 1;
+                    // The outer-darkening box-shadow paints
+                    // darkness OUTSIDE the rect, so it can't cut
+                    // cleanly around MULTIPLE spotlights — the first
+                    // one's "outside" includes the second one's area.
+                    // Multi-spotlight steps deliberately render
+                    // ring-only and let the popover carry the
+                    // attention. The gate is the step's
+                    // `multiSpotlight` config (not the current rect
+                    // count) so the dim doesn't flash on / off
+                    // during portal-mount transitions where the
+                    // count briefly hits 1 before the second element
+                    // mounts.
+                    const paintsDim = currentStep.multiSpotlight !== true;
                     return (
                         <div
                             key={i}
@@ -871,18 +895,16 @@ export function TourPopover() {
                                 // pass clicks through so the underlying element
                                 // (a nav tab, a cell, etc.) receives the user's
                                 // tap. The tap also fires our listener and
-                                // advances the tour. Non-blocking steps already
-                                // pass clicks through for the same reason.
+                                // advances the tour.
                                 pointerEvents:
-                                    nonBlocking || advanceOn !== undefined
+                                    advanceOn !== undefined
                                         ? "none"
                                         : "auto",
                                 zIndex: "var(--z-tour-spotlight)",
                             }}
                             className="tour-spotlight transition-all"
                             onClick={
-                                !nonBlocking
-                                && advanceOn === undefined
+                                advanceOn === undefined
                                 && canAdvanceFromBackdrop
                                     ? () => nextStep()
                                     : undefined
@@ -892,22 +914,20 @@ export function TourPopover() {
                 })
             ) : (
                 // Fallback dim layer: rendered when no anchor matched
-                // on the page. Paints the same `bg-black/45` veil so
+                // on the page. Paints the same `bg-black/60` veil so
                 // the user still sees "the tour is active" — pointer
-                // behavior follows the same nonBlocking / advanceOn
-                // rules as the spotlit path.
+                // behavior follows the same advanceOn rule as the
+                // spotlit path.
                 <div
                     aria-hidden
                     className="fixed inset-0 z-[var(--z-tour-backdrop)] bg-black/60"
                     style={
-                        nonBlocking || advanceOn !== undefined
+                        advanceOn !== undefined
                             ? { pointerEvents: "none" }
                             : undefined
                     }
                     onClick={
-                        !nonBlocking
-                        && advanceOn === undefined
-                        && canAdvanceFromBackdrop
+                        advanceOn === undefined && canAdvanceFromBackdrop
                             ? () => nextStep()
                             : undefined
                     }

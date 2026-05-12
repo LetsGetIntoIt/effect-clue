@@ -291,13 +291,11 @@ describe("TourPopover — M20 interaction rules", () => {
         expect(api.activeScreen).toBe("setup");
     });
 
-    test("clicking the spotlight does NOT trigger the underlying anchor's click (blocking tour)", () => {
-        // M20 interaction rule applies to BLOCKING tours only.
-        // checklistSuggest is the canonical blocking tour today (its
-        // first step targets `desktop-checklist-area`) — the setup
-        // and sharing tours are non-blocking so their spotlights
-        // intentionally pass clicks through. See `nonBlocking` on
-        // TourStep.
+    test("clicking the spotlight does NOT trigger the underlying anchor's click", () => {
+        // Every tour blocks page interaction by default — the
+        // spotlight has `pointer-events: auto` and absorbs clicks so
+        // they don't reach the anchor underneath. Only advance-on-click
+        // steps drop that and route clicks through.
         //
         // Step 0 of checklistSuggest uses `anchorByViewport` so we
         // stub matchMedia to land on the desktop branch
@@ -426,11 +424,11 @@ describe("TourPopover — veil isolation", () => {
         expect(api.activeScreen).toBeUndefined();
     });
 
-    test("non-Escape keys outside the popover are preventDefault'd + stopPropagation'd (blocking tour)", () => {
-        // Same caveat as the spotlight-click test: the key-isolator
-        // only swallows events for BLOCKING tours. The setup tour
-        // (now non-blocking) intentionally lets page-level shortcuts
-        // fire so the user can keep typing into wizard inputs.
+    test("non-Escape keys outside the popover are preventDefault'd + stopPropagation'd", () => {
+        // The key-isolator swallows every non-Escape key whose target
+        // isn't inside the popover. Same blocking model as clicks —
+        // the user navigates the tour with the popover's own buttons,
+        // not page-level shortcuts.
         //
         // Stub matchMedia → desktop so checklistSuggest step 0's
         // `anchorByViewport` lands on `desktop-checklist-area`.
@@ -481,49 +479,6 @@ describe("TourPopover — veil isolation", () => {
             expect(bubbleHandler).not.toHaveBeenCalled();
             // The tour stays active.
             expect(api.activeScreen).toBe("checklistSuggest");
-        } finally {
-            window.removeEventListener("keydown", bubbleHandler);
-        }
-    });
-
-    test("non-Escape keys are NOT swallowed by a non-blocking tour (setup welcome)", () => {
-        // New invariant: the setup tour is non-blocking so the user
-        // can type into the wizard alongside it. The key isolator's
-        // stopPropagation + preventDefault branch is gated on
-        // `currentStep.nonBlocking`. Escape still dismisses.
-        let api!: ReturnType<typeof useTour>;
-        const bubbleHandler = vi.fn();
-        window.addEventListener("keydown", bubbleHandler);
-        try {
-            render(
-                <Harness
-                    anchors={[
-                        {
-                            testId: "card-pack",
-                            anchorAttr: "setup-wizard-header",
-                        },
-                    ]}
-                >
-                    {c => {
-                        api = c;
-                        return null;
-                    }}
-                </Harness>,
-                { wrapper: TestQueryClientProvider },
-            );
-            act(() => api.startTour("setup"));
-            const ev = new KeyboardEvent("keydown", {
-                key: "k",
-                bubbles: true,
-                cancelable: true,
-            });
-            act(() => {
-                document.body.dispatchEvent(ev);
-            });
-            // Non-blocking: the page-level listener DID fire.
-            expect(bubbleHandler).toHaveBeenCalled();
-            // Tour stays active until explicitly dismissed.
-            expect(api.activeScreen).toBe("setup");
         } finally {
             window.removeEventListener("keydown", bubbleHandler);
         }

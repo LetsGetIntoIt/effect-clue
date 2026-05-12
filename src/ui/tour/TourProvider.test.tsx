@@ -97,9 +97,10 @@ describe("TourProvider — persistence on close", () => {
     test("completion: clicking Next past the last step writes lastDismissedAt", () => {
         const api = mount();
         act(() => api.current().startTour("setup"));
-        // Setup tour has two steps (welcome → overflow-menu callout).
-        // First Next: step 0 → step 1. Second Next past the last step
-        // triggers the completion path.
+        // Setup tour has three steps (welcome → card-pack →
+        // overflow-menu callout). Walk Next through the list; the
+        // final Next past the last step triggers completion.
+        act(() => api.current().nextStep());
         act(() => api.current().nextStep());
         act(() => api.current().nextStep());
         expect(api.current().activeScreen).toBeUndefined();
@@ -183,17 +184,18 @@ describe("TourProvider — viewport filter", () => {
         expect(api2.current().steps?.length).toBe(10);
     });
 
-    test("setup tour is a 2-step tour at both breakpoints", () => {
-        // Welcome + overflow-menu callout. Both run on every viewport.
+    test("setup tour is a 3-step tour at both breakpoints", () => {
+        // Welcome + "Pick a card pack" + overflow-menu callout. All
+        // three run on every viewport.
         stubMatchMedia(true);
         const api = mount();
         act(() => api.current().startTour("setup"));
-        expect(api.current().steps?.length).toBe(2);
+        expect(api.current().steps?.length).toBe(3);
 
         stubMatchMedia(false);
         const api2 = mount();
         act(() => api2.current().startTour("setup"));
-        expect(api2.current().steps?.length).toBe(2);
+        expect(api2.current().steps?.length).toBe(3);
     });
 
     test("isLastStep is true on the final step of checklistSuggest", () => {
@@ -231,8 +233,8 @@ describe("TourProvider — analytics events", () => {
             event: "tour_started",
             props: {
                 screenKey: "setup",
-                // Setup tour: welcome → overflow-menu callout.
-                stepCount: 2,
+                // Setup tour: welcome → card-pack → overflow-menu.
+                stepCount: 3,
                 reengaged: false,
                 daysSinceLastDismissal: null,
             },
@@ -243,7 +245,7 @@ describe("TourProvider — analytics events", () => {
                 screenKey: "setup",
                 stepIndex: 0,
                 stepId: "setup-wizard-header",
-                totalSteps: 2,
+                totalSteps: 3,
                 isFirstStep: true,
                 isLastStep: false,
             },
@@ -283,8 +285,9 @@ describe("TourProvider — analytics events", () => {
         const api = mount();
         act(() => api.current().startTour("setup"));
         captureCalls.length = 0;
-        // Setup has two steps. First Next advances to step 1; second
-        // Next past the last step triggers completion.
+        // Setup has three steps. Walk Next through them; the Next
+        // past the last step triggers completion.
+        act(() => api.current().nextStep());
         act(() => api.current().nextStep());
         act(() => api.current().nextStep());
         const last = captureCalls[captureCalls.length - 1];
@@ -292,7 +295,7 @@ describe("TourProvider — analytics events", () => {
         expect(last).toMatchObject({
             props: {
                 screenKey: "setup",
-                totalSteps: 2,
+                totalSteps: 3,
                 $set: { tour_setup_status: "completed" },
             },
         });

@@ -24,8 +24,8 @@
  *     desktop).
  *   - The cell-explanation walkthrough losing the three section
  *     anchors that drive the auto-open hook in `Checklist.tsx`.
- *   - `nonBlocking` getting dropped from the informational tours
- *     (Setup welcome, sharing, firstSuggestion).
+ *   - The "Pick a card pack" callout drifting off the
+ *     `setup-wizard-step-cardPack` anchor emitted by SetupStepPanel.
  */
 import { describe, expect, test } from "vitest";
 import { TOUR_PREREQUISITES, TOURS, type TourStep } from "./tours";
@@ -42,25 +42,23 @@ const findStep = (
 };
 
 describe("TOURS — setup tour", () => {
-    test("is a 2-step tour: welcome → overflow menu callout", () => {
+    test("is a 3-step tour: welcome → card pack → overflow menu callout", () => {
         // The wizard itself is largely self-explanatory (accordion +
         // sticky-footer + per-step validation banner) so we don't walk
-        // every wizard step. Two short steps:
+        // every wizard step. Three short steps:
         //   1. Welcome — orient brand-new visitors.
-        //   2. Overflow menu — show the user where Game setup lives so
-        //      they have a concrete "come back here later" affordance.
-        //      The same callout fires on step 1 of `checklistSuggest`
-        //      too; teaching it from both directions is intentional
-        //      repetition.
+        //   2. Card pack — point at the first wizard section so the
+        //      brand-new user has a concrete starting move.
+        //   3. Overflow menu — show the user where Game setup lives
+        //      so they have a concrete "come back here later"
+        //      affordance. The same callout fires on step 1 of
+        //      `checklistSuggest` too; teaching it from both
+        //      directions is intentional repetition.
         expect(TOURS.setup.map(s => s.anchor)).toEqual([
             "setup-wizard-header",
+            "setup-wizard-step-cardPack",
             "overflow-menu",
         ]);
-    });
-
-    test("welcome step is non-blocking — user can interact with the wizard alongside it", () => {
-        const step = TOURS.setup[0]!;
-        expect(step.nonBlocking).toBe(true);
     });
 
     test("welcome step copy keys point at setup.welcome.*", () => {
@@ -83,8 +81,15 @@ describe("TOURS — setup tour", () => {
         });
     });
 
-    test("overflow-menu step uses last-visible + force-opens the menu via the `overflow-menu` anchor", () => {
+    test("card-pack step targets the cardPack panel via SetupStepPanel's emitted anchor", () => {
         const step = TOURS.setup[1]!;
+        expect(step.anchor).toBe("setup-wizard-step-cardPack");
+        expect(step.titleKey).toBe("setup.cardPack.title");
+        expect(step.bodyKey).toBe("setup.cardPack.body");
+    });
+
+    test("overflow-menu step uses last-visible + force-opens the menu via the `overflow-menu` anchor", () => {
+        const step = TOURS.setup[2]!;
         expect(step.anchor).toBe("overflow-menu");
         expect(step.popoverAnchorPriority).toBe("last-visible");
         expect(step.titleKey).toBe("setup.menu.title");
@@ -261,15 +266,6 @@ describe("TOURS — checklistSuggest tour", () => {
         }
     });
 
-    test("no step is non-blocking — the cell-walkthrough orchestrates page state", () => {
-        // The Checklist auto-opens a cell during the cell-explanation
-        // steps; if the user could click into the page beneath, a
-        // misclick would close the cell and the popover would land
-        // against thin air. Pin every step as blocking.
-        for (const step of TOURS.checklistSuggest) {
-            expect(step.nonBlocking ?? false).toBe(false);
-        }
-    });
 });
 
 describe("TOURS — firstSuggestion tour", () => {
@@ -305,9 +301,6 @@ describe("TOURS — firstSuggestion tour", () => {
         expect(TOURS.firstSuggestion[0]!.hideArrow?.mobile).toBeUndefined();
     });
 
-    test("is non-blocking — the user just submitted a suggestion and should keep their flow", () => {
-        expect(TOURS.firstSuggestion[0]!.nonBlocking).toBe(true);
-    });
 });
 
 describe("TOURS — sharing follow-up tour", () => {

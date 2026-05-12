@@ -106,6 +106,12 @@ export function SetupStepPanel({
     return (
         <section
             ref={sectionRef}
+            // Stable tour-anchor per step id so the setup tour's
+            // "Get started by picking a card pack" step can spotlight
+            // the first wizard section without a bespoke anchor on
+            // each step component. Token shape:
+            // `setup-wizard-step-cardpack` / `-players` / etc.
+            data-tour-anchor={`setup-wizard-step-${stepId}`}
             className={`rounded-[var(--radius)] border bg-panel transition-colors ${
                 isEditing
                     ? "border-accent/40 shadow-[0_2px_12px_rgba(0,0,0,0.06)]"

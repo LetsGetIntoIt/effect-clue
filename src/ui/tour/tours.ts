@@ -172,25 +172,6 @@ export interface TourStep {
         readonly desktop?: boolean;
     };
     /**
-     * When `true`, the tour step lets the user keep interacting with
-     * the page beneath it. Implementation: the dim backdrop drops its
-     * `pointer-events`, the spotlight drops its click-absorbing
-     * `pointer-events: auto` and its `0 0 0 9999px rgba(0,0,0,0.45)`
-     * darkening shadow (just the accent ring stays), and the
-     * keyboard-isolation effect skips its `stopPropagation +
-     * preventDefault` branch so the page's own keyboard handlers run.
-     *
-     * Use for "informational" steps that don't actively orchestrate
-     * page state — the Setup welcome, the sharing-tour callouts, the
-     * `firstSuggestion` post-event acknowledgement. Do NOT use for the
-     * checklist-cell walkthrough: the tour programmatically opens the
-     * cell, and a misclick into the page would close it.
-     *
-     * Esc still dismisses the tour regardless of this flag — the
-     * Escape key path runs above the gate.
-     */
-    readonly nonBlocking?: boolean;
-    /**
      * When set, the popover hides its "Next" / "Finish" button and
      * waits for the user to perform `event` on an element matching
      * `anchor`. Once that event fires, the tour advances to the next
@@ -238,12 +219,12 @@ export interface TourStep {
 /**
  * Tour registry.
  *
- * - `setup`: a single non-blocking welcome popover. The setup wizard
- *   is largely self-explanatory after the recent rework
- *   (accordion + sticky footer + per-step validation banners), so the
- *   tour's job is just to orient a brand-new visitor and tell them
- *   the menu is the way back later. The user can interact with the
- *   wizard at the same time.
+ * - `setup`: a three-step orientation. Welcome → "Get started by
+ *   picking a card pack" (spotlights the first wizard step) →
+ *   overflow-menu callout. The wizard is largely self-explanatory
+ *   after the M6 rework (accordion + sticky footer + per-step
+ *   validation banners), so the tour's job is to orient a brand-new
+ *   visitor and tell them the menu is the way back later.
  * - `checklistSuggest`: the heart of the tour system. Walks the user
  *   through the two-halves layout (deduction grid + suggestion log),
  *   *opens a cell* programmatically so the explanation panel is on
@@ -254,10 +235,17 @@ export interface TourStep {
  *   `useTour().currentStep.anchor` for one of the explanation-section
  *   tokens; it auto-closes when the tour moves on.
  * - `firstSuggestion`: single-step acknowledgement after the user
- *   logs their first suggestion. Non-blocking so they keep their
- *   flow.
- * - `sharing`: three callouts for share affordances on the Setup
- *   pane. Non-blocking so the user can scroll setup alongside.
+ *   logs their first suggestion. Anchors to the deduction grid so
+ *   the user sees what their suggestion produced.
+ * - `sharing`: three callouts for share affordances inside the
+ *   overflow menu (invite a player, transfer to another device, my
+ *   card packs).
+ *
+ * Every step blocks page interaction by default — the dim veil
+ * absorbs clicks and the keyboard isolator swallows non-Esc keys.
+ * Steps that need the user to actively click an element on the page
+ * use `advanceOn` to whitelist that one element; the rest of the
+ * page stays blocked.
  *
  * `account` and `shareImport` remain reserved placeholders.
  */
@@ -271,9 +259,11 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             // popover against — Radix's collision detection ends up
             // pushing the popover above the visible viewport.
             //
-            // Non-blocking so the user can read the popover AND start
-            // working the wizard (typing into name inputs, picking a
-            // pack, etc.) at the same time.
+            // Blocking like every other tour step: the user reads,
+            // dismisses, then drives the wizard. Letting the wizard
+            // accept input alongside the popover meant a stray Tab or
+            // Enter could fire a wizard action mid-tour — a
+            // mis-orientation the welcome step is supposed to prevent.
             anchor: "setup-wizard-header",
             titleKey: "setup.welcome.title",
             bodyKey: "setup.welcome.body",
@@ -283,10 +273,31 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
                 mobile: { side: "bottom", align: "center" },
                 desktop: { side: "bottom", align: "start" },
             },
-            nonBlocking: true,
         },
         {
-            // Step 2: open the overflow menu and show the user where
+            // Step 2: spotlight the first wizard step (Pick a card
+            // pack) so the brand-new user has a concrete starting
+            // point. The whole section gets the spotlight (header +
+            // helper text + pill row) but the POPOVER anchors to the
+            // small pill row inside (`setup-step-cardpack-pills`),
+            // which sits in the lower half of the section — that
+            // gives Radix a small element to position against and
+            // leaves room for the popover above the pills (popover
+            // top stays on-screen on short viewports where the panel
+            // itself is taller than the visible viewport).
+            //
+            // Anchor token is emitted by SetupStepPanel as
+            // `setup-wizard-step-<stepId>`; the cardPack step's wrapper
+            // section thus carries `setup-wizard-step-cardPack`.
+            anchor: "setup-wizard-step-cardPack",
+            popoverAnchor: "setup-step-cardpack-pills",
+            titleKey: "setup.cardPack.title",
+            bodyKey: "setup.cardPack.body",
+            side: "bottom",
+            align: "center",
+        },
+        {
+            // Step 3: open the overflow menu and show the user where
             // Game setup lives, so they have a concrete "this is how I
             // come back" cue before they start playing. The same
             // callout fires on step 1 of `checklistSuggest` too —
@@ -521,9 +532,10 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
     ],
     /**
      * Event-triggered one-step popover after the user logs their
-     * first suggestion in any game. Non-blocking so the post-tour
-     * moment (they just submitted; the deduction grid just updated)
-     * stays interactive.
+     * first suggestion in any game. Blocking like every other tour
+     * step — the post-event moment is meant to draw the user's eye
+     * back to the grid; if they could keep clicking, a misclick
+     * elsewhere would steal focus from what the popover is pointing at.
      */
     firstSuggestion: [
         {
@@ -547,7 +559,6 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             // point at — hide it. Mobile popover sits ABOVE the
             // BottomNav tab, outside its spotlight — arrow stays.
             hideArrow: { desktop: true },
-            nonBlocking: true,
         },
     ],
     /**
