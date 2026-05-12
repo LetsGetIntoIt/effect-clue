@@ -125,6 +125,25 @@ export interface TourStep {
      */
     readonly popoverAnchor?: string;
     /**
+     * Viewport-conditional override for `popoverAnchor`. Like
+     * `anchorByViewport` (which selects a different spotlight anchor
+     * per breakpoint), this picks a different popover anchor per
+     * breakpoint when the natural target differs across layouts.
+     * Used by the M3 closer step where the desktop popover anchors
+     * to the first suggestion pill (popover sits to the left, clear
+     * of the form) while the mobile popover anchors to the form
+     * header (popover sits below it, inside the form spotlight).
+     *
+     * Resolution order: `popoverAnchorByViewport[viewport]` →
+     * `popoverAnchor` → spotlight `anchor`. SSR / test paths fall
+     * back to `popoverAnchor` (then `anchor`) when matchMedia
+     * isn't available.
+     */
+    readonly popoverAnchorByViewport?: {
+        readonly mobile?: string;
+        readonly desktop?: string;
+    };
+    /**
      * Among matched elements, which one drives popover position.
      * Defaults to `"first-visible"` — the natural "anchor to the first
      * visible element" rule that handles ordinary single-element
@@ -474,16 +493,19 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             requiredUiMode: "checklist",
         },
         {
-            // Step 9 (desktop): Suggest pane intro. The suggestion
-            // log lives in the right column. Popover anchors to a
-            // small header element so it stays stable against the
-            // tall column.
+            // Step 9 (desktop): Suggest pane intro. The suggestion log
+            // lives in the right column. Popover anchors to the column
+            // wrapper itself with `side: "left", align: "center"` so
+            // it sits to the LEFT of the suggest log, pointing at the
+            // center of its left edge — clear of every form control
+            // inside the column. The arrow on the popover's right
+            // edge points back into the suggestion log.
             anchor: "desktop-suggest-area",
-            popoverAnchor: "suggest-add-form-header",
+            popoverAnchor: "desktop-suggest-area",
             titleKey: "suggest.intro.title",
             bodyKey: "suggest.intro.body",
-            side: "bottom",
-            align: "end",
+            side: "left",
+            align: "center",
             requiredUiMode: "checklist",
             viewport: "desktop",
         },
@@ -518,20 +540,30 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             requiredUiMode: "suggest",
         },
         {
-            // Wrap-up + CTA. Spotlight rings the whole add form;
-            // popover anchors to the small form header so positioning
-            // is stable. See the long comment in the previous tour
-            // version for why the popover ends up INSIDE the
-            // spotlight here (form taller than available external
-            // space on both viewports).
+            // Wrap-up + CTA. Spotlight rings the whole add form.
+            //
+            // Desktop: popover anchors to the Suggester pill
+            // (`suggest-first-pill` — the first input the user will
+            // fill in) and sits to the LEFT of it so the popover
+            // doesn't occlude any of the form controls. The arrow on
+            // the popover's right edge points back at the first pill.
+            //
+            // Mobile: popover anchors to the small form header and
+            // sits below the form's tab header, INSIDE the spotlight
+            // — the form is taller than the room available outside it
+            // on phone-height viewports, so an external popover gets
+            // clipped. The arrow points into the form's tab header.
             anchor: "suggest-add-form",
-            popoverAnchor: "suggest-add-form-header",
+            popoverAnchorByViewport: {
+                desktop: "suggest-first-pill",
+                mobile: "suggest-add-form-header",
+            },
             titleKey: "suggest.addForm.title",
             bodyKey: "suggest.addForm.body",
             side: "bottom",
             align: "center",
             sideByViewport: {
-                desktop: { side: "bottom", align: "center" },
+                desktop: { side: "left", align: "center" },
                 mobile: { side: "bottom", align: "center" },
             },
             requiredUiMode: "suggest",

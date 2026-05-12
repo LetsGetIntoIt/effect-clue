@@ -563,6 +563,9 @@ export const SuggestionForm = forwardRef<
             label: t("pillSuggester"),
             status: pillStatusForPlayer(form.suggester, false),
             valueDisplay: displayPlayer(form.suggester),
+            // M3 closer step (desktop) anchors its popover to the
+            // first suggestion input, which is the Suggester pill.
+            tourAnchor: "suggest-first-pill",
             ...(errorReasonFor(PILL_SUGGESTER) !== undefined
                 ? { errorReason: errorReasonFor(PILL_SUGGESTER) }
                 : {}),

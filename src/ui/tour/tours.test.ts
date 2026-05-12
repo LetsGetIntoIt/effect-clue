@@ -197,7 +197,12 @@ describe("TOURS — checklistSuggest tour", () => {
             "desktop-suggest-area",
         );
         expect(desktopIntro.viewport).toBe("desktop");
-        expect(desktopIntro.popoverAnchor).toBe("suggest-add-form-header");
+        // Popover anchors to the column wrapper itself with
+        // side:left/align:center so the popover sits to the LEFT of
+        // the suggest log, clear of every form control inside it.
+        expect(desktopIntro.popoverAnchor).toBe("desktop-suggest-area");
+        expect(desktopIntro.side).toBe("left");
+        expect(desktopIntro.align).toBe("center");
         expect(desktopIntro.advanceOn).toBeUndefined();
 
         const mobileIntro = findStep(
@@ -239,17 +244,23 @@ describe("TOURS — checklistSuggest tour", () => {
         expect(hypothesis.titleKey).toBe("checklist.hypothesis.title");
     });
 
-    test("suggest-add-form: spotlight covers the whole form, popover anchored to the small header inside", () => {
+    test("suggest-add-form: popoverAnchor + side/align are viewport-conditional", () => {
         const step = findStep(TOURS.checklistSuggest, "suggest-add-form");
-        // The wrap-up step: spotlight covers the whole form (header
-        // + tabs + pill row + submit), but the form is taller than
-        // the room above or below it on both viewports (~150px above
-        // / below the form, ~400-500px tall). An external popover
-        // can't fit, so we anchor to the small header element and
-        // park the popover INSIDE the spotlight, below the header.
-        expect(step.popoverAnchor).toBe("suggest-add-form-header");
+        // The wrap-up step splits behavior by breakpoint.
+        //
+        // Desktop: popover anchors to the FIRST INPUT in the form
+        // (`suggest-first-pill` — the Suggester pill) and sits to the
+        // LEFT (`side: "left"`, `align: "center"`) so it doesn't
+        // occlude any form control.
+        //
+        // Mobile: popover anchors to the small form header and sits
+        // BELOW it (`side: "bottom"`, `align: "center"`), INSIDE the
+        // form's spotlight — the phone-height viewport doesn't have
+        // room for an external popover so we park it inside.
+        expect(step.popoverAnchorByViewport?.desktop).toBe("suggest-first-pill");
+        expect(step.popoverAnchorByViewport?.mobile).toBe("suggest-add-form-header");
         expect(step.sideByViewport?.desktop).toEqual({
-            side: "bottom",
+            side: "left",
             align: "center",
         });
         expect(step.sideByViewport?.mobile).toEqual({

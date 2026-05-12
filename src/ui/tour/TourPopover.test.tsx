@@ -29,12 +29,19 @@ vi.mock("next-intl", () => {
     // Tag callbacks (e.g. `<yes/>` rendering ProseChecklistIcon) are
     // invoked once so they don't get treated as dead code by lint
     // rules, then discarded.
+    //
+    // Non-function values (`{action: "Tap"}` etc.) are skipped — the
+    // real next-intl `t.rich` interpolates them into the string in
+    // place of `{action}`, but for keyspace tests we only care that
+    // the key resolves; we don't render the interpolated body.
     (t as unknown as { rich: unknown }).rich = (
         key: string,
-        tags?: Record<string, () => unknown>,
+        tags?: Record<string, unknown>,
     ) => {
         if (tags !== undefined) {
-            for (const fn of Object.values(tags)) fn();
+            for (const fn of Object.values(tags)) {
+                if (typeof fn === "function") fn();
+            }
         }
         return key;
     };

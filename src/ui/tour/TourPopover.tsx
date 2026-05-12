@@ -48,6 +48,7 @@ import { useEffect, useRef, useState } from "react";
 import { ProseChecklistIcon } from "../components/CellGlyph";
 import { XIcon } from "../components/Icons";
 import { Y, N } from "../../logic/Knowledge";
+import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useClue } from "../state";
 import {
     findAnchorElements,
@@ -196,6 +197,10 @@ export function TourPopover() {
         dismissTour,
     } = useTour();
     const { state, dispatch } = useClue();
+    // Touch vs. mouse — picks the verb (`Tap` / `Click`) in
+    // advance-on-click step prompts so the copy matches what the user
+    // is about to physically do.
+    const hasKeyboard = useHasKeyboard();
 
     // The virtualRef passed into Radix Popover. Each step recomputes
     // it via the effect below.
@@ -395,7 +400,10 @@ export function TourPopover() {
             //     elements (used for the overflow-menu step where
             //     the portaled menu content appears AFTER the trigger
             //     in DOM order).
-            const popoverEls = currentStep.popoverAnchor !== undefined
+            const hasPopoverAnchorOverride =
+                currentStep.popoverAnchor !== undefined
+                || currentStep.popoverAnchorByViewport !== undefined;
+            const popoverEls = hasPopoverAnchorOverride
                 ? findAnchorElements(resolvePopoverAnchorToken(currentStep))
                 : els;
             const spotlightMeasureAll = (): ReadonlyArray<DOMRect> =>
@@ -747,9 +755,17 @@ export function TourPopover() {
     // self-closing form), so the i18n strings use `<yes></yes>` etc.
     // and the callbacks for the void tags ignore the empty `chunks`
     // arg.
+    // Device-aware action verb for advance-on-click step bodies that
+    // reference what the user should physically do — `{action}` in
+    // copy resolves to "Click" on mouse/trackpad devices and "Tap" on
+    // touch. Step bodies that don't reference `{action}` ignore the
+    // value; passing it unconditionally is harmless and avoids
+    // per-step branching.
+    const actionVerb = hasKeyboard ? t("verbClick") : t("verbTap");
     const bodyNode =
         currentStep.bodyKey !== undefined
             ? t.rich(currentStep.bodyKey, {
+                  action: actionVerb,
                   yes: () => (
                       <ProseChecklistIcon
                           value={Y}
@@ -771,8 +787,19 @@ export function TourPopover() {
                   // user's eye runs together "blank if we don't know
                   // yet. Tap the highlighted cell to open the
                   // breakdown." and misses the action.
+                  //
+                  // `data-tour-action-prompt` is the boundary marker
+                  // the disabled "Next" button uses to imperatively
+                  // re-trigger the `tour-action-bounce` CSS animation
+                  // (toggling the class via classList — a React key
+                  // change doesn't reliably remount through next-intl's
+                  // rich-text output, and re-rendering the same node
+                  // doesn't restart a CSS animation either).
                   strong: (chunks) => (
-                      <strong className="mt-2 block font-semibold">
+                      <strong
+                          data-tour-action-prompt
+                          className="mt-2 block font-semibold"
+                      >
                           {chunks}
                       </strong>
                   ),
@@ -1087,21 +1114,67 @@ export function TourPopover() {
                                 >
                                     {t("back")}
                                 </button>
-                                {/* Hide Next on advance-on-click steps —
-                                    the tour advances when the user
-                                    performs the prompted action on the
-                                    spotlit element. The popover body
-                                    tells them what to do. */}
-                                {advanceOn === undefined && (
-                                    <button
-                                        ref={nextButtonRef}
-                                        type="button"
-                                        onClick={() => nextStep()}
-                                        className="tap-target-compact text-tap-compact cursor-pointer rounded-[var(--tour-radius)] border-2 border-[var(--color-tour-accent)] bg-[var(--color-tour-accent)] font-semibold text-white hover:bg-[var(--color-tour-accent-hover)]"
-                                    >
-                                        {isLastStep ? t(finishKey) : t("next")}
-                                    </button>
-                                )}
+                                {/* Next button is rendered on every
+                                    step. On advance-on-click steps it
+                                    looks primary but is visually
+                                    locked (aria-disabled + opacity);
+                                    clicking it doesn't advance the
+                                    tour — it imperatively re-fires
+                                    the `tour-action-bounce` animation
+                                    on the body's action prompt,
+                                    redirecting the user's attention
+                                    to the spotlit element they need
+                                    to click. We use `aria-disabled`
+                                    rather than the native `disabled`
+                                    attribute so the click handler
+                                    still fires. */}
+                                <button
+                                    ref={nextButtonRef}
+                                    type="button"
+                                    aria-disabled={
+                                        advanceOn !== undefined ? true : undefined
+                                    }
+                                    onClick={() => {
+                                        if (advanceOn !== undefined) {
+                                            // Imperatively bounce the
+                                            // body's action prompt to
+                                            // redirect the user's eye
+                                            // back to the spotlit
+                                            // element. Removing then
+                                            // re-adding the class
+                                            // restarts the CSS
+                                            // animation; the
+                                            // `void el.offsetWidth`
+                                            // between is a layout
+                                            // forced-reflow that
+                                            // browsers respect as a
+                                            // boundary.
+                                            const el =
+                                                document.querySelector(
+                                                    `[${POPOVER_CONTENT_ATTR}] [data-tour-action-prompt]`,
+                                                );
+                                            if (el instanceof HTMLElement) {
+                                                el.classList.remove(
+                                                    "tour-action-bounce",
+                                                );
+                                                void el.offsetWidth;
+                                                el.classList.add(
+                                                    "tour-action-bounce",
+                                                );
+                                            }
+                                            return;
+                                        }
+                                        nextStep();
+                                    }}
+                                    className={
+                                        "tap-target-compact text-tap-compact rounded-[var(--tour-radius)] border-2 border-[var(--color-tour-accent)] bg-[var(--color-tour-accent)] font-semibold text-white "
+                                        + (advanceOn !== undefined
+                                            ? "cursor-not-allowed opacity-60"
+                                            : "cursor-pointer hover:bg-[var(--color-tour-accent-hover)]")
+                                    }
+                                >
+                                    {isLastStep ? t(finishKey) : t("next")}
+                                </button>
                             </div>
                         </div>
                         </div>

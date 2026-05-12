@@ -75,6 +75,7 @@ import { Suggestion } from "../../logic/Suggestion";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useSelection } from "../SelectionContext";
 import { useClue } from "../state";
+import { useTour } from "../tour/TourProvider";
 import {
     registerChecklistFocusHandler,
     rememberChecklistCell,
@@ -634,6 +635,22 @@ export function Checklist() {
         return () =>
             window.removeEventListener("click", onClickOutside, true);
     }, [expandedCell, setExpandedCell]);
+
+    // Close any open cell when the tour reaches the cellIntro step
+    // (`anchor === "checklist-cell"`). Without this, the user can land
+    // on the step with a cell still open from earlier in the tour —
+    // e.g. by clicking "Back" from a downstream cell-explanation
+    // step — and their next tap on the highlighted cell would CLOSE
+    // the panel instead of opening it. The step's advance-on-click
+    // listener fires either way, so the tour advances to the
+    // DEDUCTIONS step looking for an explanation panel that isn't
+    // there. Clearing on entry guarantees the user's tap is an OPEN.
+    const { currentStep } = useTour();
+    const currentStepAnchor = currentStep?.anchor;
+    useEffect(() => {
+        if (currentStepAnchor !== "checklist-cell") return;
+        setExpandedCell(null);
+    }, [currentStepAnchor, setExpandedCell]);
 
     // Clear any pending long-press timer on unmount so the callback
     // can't fire setExpandedCell after the component is gone.

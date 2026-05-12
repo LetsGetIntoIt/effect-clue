@@ -55,6 +55,13 @@ export interface PillSlot {
     readonly errorReason?: string | undefined;
     /** Per-pill clear (×) affordance. When present, the pill renders the × glyph. */
     readonly onClear?: (() => void) | undefined;
+    /**
+     * Optional `data-tour-anchor` token for this pill. The trigger
+     * element renders it so a tour step can position its popover
+     * against a specific pill (e.g. the Suggester pill as the "first
+     * input" anchor in the M3 closer step).
+     */
+    readonly tourAnchor?: string;
     readonly content: ReactNode;
 }
 
@@ -359,6 +366,9 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                             onOpenChange={onOpenChangeFor(slot.id)}
                             {...(slot.onClear !== undefined
                                 ? { onClear: slot.onClear }
+                                : {})}
+                            {...(slot.tourAnchor !== undefined
+                                ? { tourAnchor: slot.tourAnchor }
                                 : {})}
                         >
                             {slot.content}

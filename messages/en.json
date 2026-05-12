@@ -592,6 +592,8 @@
         "startPlaying": "Start playing",
         "gotIt": "Got it",
         "takeTour": "Take tour",
+        "verbTap": "Tap",
+        "verbClick": "Click",
         "setup": {
             "welcome": {
                 "title": "Welcome to Clue Solver",
@@ -621,7 +623,7 @@
             },
             "cellIntro": {
                 "title": "Each cell is a deduction",
-                "body": "Each cell shows what we know about whether that player (or the case file) has that card — <yes></yes> if they do, <no></no> if they don't, blank if we don't know yet. <strong>Tap the highlighted cell to open the breakdown.</strong>"
+                "body": "Each cell shows what we know about whether that player (or the case file) has that card — <yes></yes> if they do, <no></no> if they don't, blank if we don't know yet. <strong>{action} the highlighted cell to open the breakdown.</strong>"
             },
             "deductions": {
                 "title": "DEDUCTIONS — how a cell got here",
