@@ -61,7 +61,7 @@ export function SetupStepInviteOtherPlayers({
                 type="button"
                 onClick={() => openInvitePlayer()}
                 data-tour-anchor="setup-invite-player"
-                className="tap-target text-tap inline-flex cursor-pointer items-center justify-center gap-2 self-start rounded-[var(--radius)] border-2 border-accent bg-accent px-5 font-semibold text-white hover:bg-accent-hover"
+                className="tap-target text-tap inline-flex cursor-pointer items-center justify-center gap-2 self-center rounded-[var(--radius)] border-2 border-accent bg-accent px-5 font-semibold text-white hover:bg-accent-hover"
             >
                 {t("cta")}
             </button>

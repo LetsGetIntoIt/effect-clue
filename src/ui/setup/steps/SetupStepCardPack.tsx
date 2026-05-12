@@ -3,7 +3,7 @@
 import { DateTime } from "effect";
 import { LayoutGroup, motion } from "motion/react";
 import { useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     cardPackPickerOpened,
     cardPackSelected,
@@ -140,6 +140,27 @@ export function SetupStepCardPack({
     const usageQuery = useCardPackUsage();
     const customPacks = customPacksQuery.data ?? [];
     const usage = usageQuery.data ?? new Map();
+
+    // Snapshot of MRU usage taken when this step ENTERS the editing
+    // state. The surface pill ORDER reads off this snapshot (not the
+    // live usage map), so picking a pack mid-session doesn't slide
+    // the pills around under the user's cursor / finger. The
+    // snapshot refreshes the NEXT time the user re-opens the step.
+    //
+    // Live usage still drives `activeMatch` (which pill renders with
+    // the accent "selected" styling), the dropdown picker, and the
+    // `loadedCustomPack` lookup — those say "what's true right now",
+    // which the user does want updated immediately.
+    const isEditing = state === "editing";
+    const usageSnapshotRef = useRef<typeof usage>(usage);
+    const wasEditingRef = useRef(false);
+    if (isEditing && !wasEditingRef.current) {
+        usageSnapshotRef.current = usage;
+    }
+    useEffect(() => {
+        wasEditingRef.current = isEditing;
+    }, [isEditing]);
+    const usageForOrder = isEditing ? usageSnapshotRef.current : usage;
     const recordUseMutation = useRecordCardPackUse();
     const forgetUseMutation = useForgetCardPackUse();
     const cardPackActions = useCardPackActions();
@@ -225,11 +246,25 @@ export function SetupStepCardPack({
     }, [customPacks, usage]);
 
     const recents = useMemo<ReadonlyArray<DisplayPack>>(() => {
-        const baseRecents = topRecentPacks(otherPacks, usage, RECENT_LIMIT);
+        // Pill ORDER uses the snapshot taken when the step opened —
+        // not the live `usage`. Otherwise picking a pack would
+        // immediately slide the pills around the user's cursor /
+        // finger. The snapshot refreshes on the NEXT step open.
+        //
+        // We still splice `activeMatch` in front when the user just
+        // picked a pack that wasn't in the snapshot's top-N — that
+        // keeps the just-picked pack visible as a pill (and lets it
+        // render with the accent "selected" styling) even if it
+        // would otherwise sit deep in the dropdown.
+        const baseRecents = topRecentPacks(
+            otherPacks,
+            usageForOrder,
+            RECENT_LIMIT,
+        );
         if (!activeMatch || activeMatch.id === classic.id) return baseRecents;
-        const withoutMatch = baseRecents.filter(p => p.id !== activeMatch.id);
-        return [activeMatch, ...withoutMatch].slice(0, RECENT_LIMIT);
-    }, [otherPacks, usage, activeMatch, classic.id]);
+        if (baseRecents.some(p => p.id === activeMatch.id)) return baseRecents;
+        return [...baseRecents, activeMatch].slice(0, RECENT_LIMIT);
+    }, [otherPacks, usageForOrder, activeMatch, classic.id]);
 
     const surfacePacks = useMemo<ReadonlyArray<DisplayPack>>(
         () => [classicDisplay, ...recents],

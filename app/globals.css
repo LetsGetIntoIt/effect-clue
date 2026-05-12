@@ -14,9 +14,12 @@
  */
 @theme {
     /* --- Surfaces --------------------------------------------------- */
-    /* Deep parchment, slightly warm — like aged dossier paper. */
-    --color-bg: #efe6d3;
-    /* Cream panel — one shade lighter than bg, for card/section fills. */
+    /* Deep parchment, slightly warm — like aged dossier paper. Two
+     * shades darker than `--color-panel` so the cream cards and the
+     * checklist / suggest-log content areas read as visibly elevated
+     * against the page background. */
+    --color-bg: #e2d5b3;
+    /* Cream panel — for card/section fills. */
     --color-panel: #f7f0dc;
     /* Aged-paper edge, warm taupe-brown. */
     --color-border: #cbb68c;
