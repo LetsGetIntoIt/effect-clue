@@ -90,7 +90,7 @@ function DesktopPlayLayout() {
                 spotlight covers the visible viewport-pinned region
                 even after vertical scroll. */}
             <div
-                data-tour-anchor="desktop-suggest-area"
+                data-tour-anchor="desktop-suggest-area two-halves-spotlight"
                 className="sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))] max-h-[calc(100dvh-var(--contradiction-banner-offset,0px)-var(--header-offset,0px)-1rem)] min-w-0 overflow-y-auto"
             >
                 <SuggestionLogPanel />

@@ -19,6 +19,13 @@ interface OverflowMenuButton {
      * for Undo/Redo when there's no history to act on.
      */
     readonly disabled?: boolean;
+    /**
+     * Optional `data-tour-anchor` attached to the item's button.
+     * The sharing tour uses this to spotlight specific menu items
+     * (Invite a player, Continue on another device, My card packs)
+     * while the surrounding menu stays open.
+     */
+    readonly tourAnchor?: string;
 }
 
 /**
@@ -164,6 +171,9 @@ export function OverflowMenu({
                                     {...(b.trailingIcon !== undefined
                                         ? { trailingIcon: b.trailingIcon }
                                         : {})}
+                                    {...(b.tourAnchor !== undefined
+                                        ? { tourAnchor: b.tourAnchor }
+                                        : {})}
                                     disabled={b.disabled === true}
                                     onClick={handleClick}
                                 />
@@ -205,6 +215,7 @@ function MenuItem({
     trailingIcon,
     disabled,
     onClick,
+    tourAnchor,
 }: {
     readonly label: string;
     readonly active?: boolean;
@@ -212,12 +223,16 @@ function MenuItem({
     readonly trailingIcon?: ReactNode;
     readonly disabled?: boolean;
     readonly onClick: () => void;
+    readonly tourAnchor?: string;
 }) {
     return (
         <button
             type="button"
             onClick={onClick}
             disabled={disabled}
+            {...(tourAnchor !== undefined
+                ? { "data-tour-anchor": tourAnchor }
+                : {})}
             className={
                 "tap-target-compact text-tap-compact flex w-full items-center justify-between gap-2 rounded-[var(--radius)] border-none bg-transparent text-left " +
                 (disabled

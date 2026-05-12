@@ -23,6 +23,21 @@ import { createElement, type ReactNode } from "react";
 vi.mock("next-intl", () => {
     const t = (key: string, values?: Record<string, unknown>): string =>
         values ? `${key}:${JSON.stringify(values)}` : key;
+    // `t.rich` invokes any callable tag values and returns the
+    // resulting React tree; for keyspace tests we return the key
+    // itself so existing assertions on `getByText(<key>)` still pass.
+    // Tag callbacks (e.g. `<yes/>` rendering ProseChecklistIcon) are
+    // invoked once so they don't get treated as dead code by lint
+    // rules, then discarded.
+    (t as unknown as { rich: unknown }).rich = (
+        key: string,
+        tags?: Record<string, () => unknown>,
+    ) => {
+        if (tags !== undefined) {
+            for (const fn of Object.values(tags)) fn();
+        }
+        return key;
+    };
     return { useTranslations: () => t };
 });
 
@@ -313,7 +328,7 @@ describe("TourPopover — M20 interaction rules", () => {
                         <button
                             type="button"
                             data-testid="anchor"
-                            data-tour-anchor="desktop-checklist-area"
+                            data-tour-anchor="two-halves-spotlight"
                             onClick={onAnchorClick}
                         >
                             click me
@@ -334,8 +349,8 @@ describe("TourPopover — M20 interaction rules", () => {
         );
         act(() => api.startTour("checklistSuggest"));
         // Step 0 is the overflow-menu callout (no anchor in this
-        // harness); advance to step 1 so the spotlight targets
-        // `desktop-checklist-area`.
+        // harness); advance to step 1 (the desktop two-halves
+        // multi-spotlight step which uses `two-halves-spotlight`).
         act(() => api.nextStep());
         // The spotlight overlay sits on top of the anchor. Clicking
         // it should not bubble to the anchor's onClick.
@@ -864,11 +879,11 @@ describe("TourPopover — popoverAnchor + popoverAnchorPriority", () => {
     });
 
     test("popoverAnchorPriority='last-visible' resolves to the LAST matched element (overflow-menu trigger + open content)", () => {
-        // The sharing tour's `overflow-menu` step (index 2) uses
-        // `popoverAnchorPriority: "last-visible"` so when both the
-        // trigger button and the portaled menu content are mounted,
-        // the popover binds to the menu content (which is later in
-        // DOM order via the portal).
+        // `checklistSuggest`'s step 0 (the overflow-menu callout)
+        // uses `popoverAnchorPriority: "last-visible"` so when both
+        // the trigger button and the portaled menu content are
+        // mounted, the popover binds to the menu content (which is
+        // later in DOM order via the portal).
         let api!: ReturnType<typeof useTour>;
         render(
             <Harness
@@ -890,10 +905,8 @@ describe("TourPopover — popoverAnchor + popoverAnchorPriority", () => {
             </Harness>,
             { wrapper: TestQueryClientProvider },
         );
-        act(() => api.startTour("sharing"));
-        // Advance to step 2 (`overflow-menu`, 0-indexed = 2).
-        act(() => api.nextStep());
-        act(() => api.nextStep());
+        act(() => api.startTour("checklistSuggest"));
+        // Step 0 is the overflow-menu callout — no advance needed.
         // Both anchored elements are in the DOM.
         expect(
             document.querySelectorAll(
@@ -902,7 +915,7 @@ describe("TourPopover — popoverAnchor + popoverAnchorPriority", () => {
         ).toBe(2);
         // Popover renders.
         expect(
-            screen.getByText("sharing.overflow.title"),
+            screen.getByText("checklist.menu.title"),
         ).toBeInTheDocument();
     });
 });

@@ -88,10 +88,16 @@ export function Toolbar() {
     } = useClue();
     const { onNewGame } = useToolbarActions();
     const { restartTourForScreen, currentStep } = useTour();
-    // The "Everything else lives here" tour step points at this menu.
-    // Force it open while that step is active so the user can see
-    // what's inside without having to click ⋯ themselves.
-    const tourForcesMenuOpen = currentStep?.anchor === "overflow-menu";
+    // The "Everything else lives here" tour step (and any step that
+    // spotlights a SPECIFIC menu item, like the sharing tour's three
+    // share-affordance callouts) needs the menu open. The legacy
+    // pattern observed `anchor === "overflow-menu"`, which only
+    // worked when the step's spotlight was the menu itself. The
+    // explicit `forceOpenOverflowMenu` flag generalizes that to any
+    // step that wants the menu open regardless of its spotlight.
+    const tourForcesMenuOpen =
+        currentStep?.anchor === "overflow-menu"
+        || currentStep?.forceOpenOverflowMenu === true;
     const { installable, openModal: openInstallModal } =
         useInstallPromptContext();
     const { openModal: openAccountModal, requestSignOut } = useAccountContext();
@@ -191,10 +197,12 @@ export function Toolbar() {
                     {
                         label: tShare("menuItemInvitePlayer"),
                         onClick: () => openInvitePlayer(),
+                        tourAnchor: "menu-item-invite-player",
                     },
                     {
                         label: tShare("menuItemTransferDevice"),
                         onClick: () => openContinueOnAnotherDevice(),
+                        tourAnchor: "menu-item-transfer-device",
                     },
                     { type: "divider" },
                     // Group 2: Account & content
@@ -211,6 +219,7 @@ export function Toolbar() {
                     {
                         label: tAccount("menuItemMyCardPacks"),
                         onClick: () => openAccountModal(),
+                        tourAnchor: "menu-item-my-card-packs",
                     },
                     {
                         label: tOnboarding("takeTour"),

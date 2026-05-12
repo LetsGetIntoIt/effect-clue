@@ -285,6 +285,25 @@ Use these icons consistently — picking the wrong glyph mis-signals what the af
 
 If you need a glyph that doesn't fit one of these, add it to `src/ui/components/Icons.tsx` (or `ShareIcon.tsx` for share variants) — don't reach for an emoji or a literal character (`×`, `→`, etc.) that might be misread.
 
+## Terminology
+
+A few words have specific app-wide meaning. Stay consistent in both code and user-facing copy:
+
+- **"has" / "does not have"** — the relationship between a player or the case file and a card. The deduction grid is a matrix of these relationships; a cell value of <yes></yes> means "this player **has** this card", a <no></no> means "this player **does not have** this card", blank means "we don't know yet". Avoid "owns" / "doesn't own" — Clue is about who holds which dealt cards, not ownership in the property sense. The case file isn't a "player" but the same vocabulary applies: cards the case file "has" are the murder envelope, cards it "does not have" are in someone's hand.
+- **"Case file"** is a *section* or *area*, not a "column". On desktop the case-file summary renders as a horizontal strip above the player columns; on mobile it's the top of the page. Calling it a column reads wrong on both layouts.
+
+Apply both rules wherever the user is reading copy (i18n strings, error messages, tooltips, tour text). Internal variable names can keep `owner` / `ownership` as a technical term (the codebase uses the `Owner` type widely) — those names predate this rule and renaming the type for a vocabulary nicety is more churn than it's worth.
+
+### Tour copy: use `ProseChecklistIcon` instead of "Y" / "N"
+
+When a tour step's body refers to a cell's value, splice in `ProseChecklistIcon` via next-intl's `t.rich` rather than writing the literal letters "Y" or "N". The tour popover registers `<yes></yes>` and `<no></no>` placeholder tags that render the icons inline:
+
+```json
+"hypothesis.body": "Set the cell to <yes></yes> (has the card) or <no></no> (does not have the card) as a guess."
+```
+
+The icons match what the user sees in the deduction grid, so the tour reads in the same visual language as the rest of the app. Parenthetical clarifications ("(has the card)", "(does not have the card)") are fine when the meaning needs spelling out — the icon carries the visual signal; the words spell out the semantics.
+
 ## Sharing and sync docs
 
 Two docs in `docs/` cover how user data leaves the device:
