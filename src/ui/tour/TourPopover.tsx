@@ -541,15 +541,20 @@ export function TourPopover() {
     // selectively swallow events.
     //
     //   - Escape dismisses the tour (existing behavior, kept as the
-    //     authoritative keyboard-out path).
-    //   - Other keys: if the event target is inside the popover
-    //     content (Tab between Back / Skip / Next, Enter to click),
-    //     pass through. Otherwise stopPropagation + preventDefault so
-    //     the page beneath gets nothing.
+    //     authoritative keyboard-out path) — unconditional.
+    //   - Other keys: in BLOCKING mode (the default), if the event
+    //     target is inside the popover content (Tab between Back /
+    //     Skip / Next, Enter to click), pass through; otherwise
+    //     stopPropagation + preventDefault so the page beneath gets
+    //     nothing. In NON-BLOCKING mode (`currentStep.nonBlocking`),
+    //     every non-Esc keystroke passes through so the user can
+    //     type into wizard inputs / use page shortcuts while the
+    //     informational popover floats.
     //
     // `capture: true` matters for collisions — bubble-phase listeners
     // we want to suppress fire AFTER us, so our `stopPropagation` is
     // load-bearing.
+    const nonBlocking = currentStep?.nonBlocking ?? false;
     useEffect(() => {
         if (!activeScreen) return;
         const onKey = (e: KeyboardEvent): void => {
@@ -558,6 +563,7 @@ export function TourPopover() {
                 dismissTour(DISMISS_VIA_ESC);
                 return;
             }
+            if (nonBlocking) return;
             const target = e.target;
             if (target instanceof Node) {
                 const popoverContent = document.querySelector(
@@ -573,7 +579,7 @@ export function TourPopover() {
         window.addEventListener("keydown", onKey, { capture: true });
         return () =>
             window.removeEventListener("keydown", onKey, { capture: true });
-    }, [activeScreen, dismissTour]);
+    }, [activeScreen, dismissTour, nonBlocking]);
 
     // Pull keyboard focus into the popover's "Next" button each time
     // a step becomes active. Without this, focus stays on whatever
@@ -627,10 +633,17 @@ export function TourPopover() {
                 Esc to exit. `touch-action` is left at its default
                 `auto` so vertical/horizontal scroll passes through —
                 the user can pan the page to find anchors that scroll
-                with content. */}
+                with content.
+
+                In non-blocking mode (`currentStep.nonBlocking`) the
+                backdrop drops its `pointer-events` so taps land on
+                the page beneath — the popover is informational and
+                the user is meant to keep interacting with the page
+                while it floats. */}
             <div
                 aria-hidden
                 className="fixed inset-0 z-[var(--z-tour-backdrop)]"
+                style={nonBlocking ? { pointerEvents: "none" } : undefined}
             />
             {/* Spotlight: a transparent box sized to the anchor with
                 a giant `box-shadow` painting darkness OUTSIDE the box.
@@ -644,7 +657,13 @@ export function TourPopover() {
 
                 When no anchor is on the page (fallback), render a
                 plain dark overlay instead so the user still sees
-                they're in tour mode. */}
+                they're in tour mode.
+
+                In non-blocking mode, we drop both the darkening
+                outer-shadow and `pointer-events: auto` — the
+                accent-ring is all that remains so the user sees what
+                the popover is pointing at without losing access to
+                it. */}
             {spotlight ? (
                 <div
                     aria-hidden
@@ -654,10 +673,11 @@ export function TourPopover() {
                         left: spotlight.left - SPOTLIGHT_PAD,
                         width: spotlight.width + SPOTLIGHT_PAD * 2,
                         height: spotlight.height + SPOTLIGHT_PAD * 2,
-                        boxShadow:
-                            "0 0 0 9999px rgba(0,0,0,0.45), 0 0 0 2px var(--color-tour-accent)",
+                        boxShadow: nonBlocking
+                            ? "0 0 0 2px var(--color-tour-accent)"
+                            : "0 0 0 9999px rgba(0,0,0,0.45), 0 0 0 2px var(--color-tour-accent)",
                         borderRadius: "var(--tour-radius)",
-                        pointerEvents: "auto",
+                        pointerEvents: nonBlocking ? "none" : "auto",
                         zIndex: "var(--z-tour-spotlight)",
                     }}
                     className="tour-spotlight transition-all"
@@ -665,7 +685,12 @@ export function TourPopover() {
             ) : (
                 <div
                     aria-hidden
-                    className="fixed inset-0 z-[var(--z-tour-backdrop)] bg-black/45"
+                    className={
+                        nonBlocking
+                            ? "fixed inset-0 z-[var(--z-tour-backdrop)]"
+                            : "fixed inset-0 z-[var(--z-tour-backdrop)] bg-black/45"
+                    }
+                    style={nonBlocking ? { pointerEvents: "none" } : undefined}
                 />
             )}
             {/* Key the entire Popover.Root tree on the active step

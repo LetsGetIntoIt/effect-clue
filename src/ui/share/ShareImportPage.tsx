@@ -25,7 +25,7 @@
  */
 "use client";
 
-import { Result, Schema } from "effect";
+import { DateTime, Result, Schema } from "effect";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -50,6 +50,7 @@ import { authClient } from "../account/authClient";
 import { useSession } from "../hooks/useSession";
 import { XIcon } from "../components/Icons";
 import { useConfirm } from "../hooks/useConfirm";
+import { saveTourDismissed } from "../tour/TourState";
 import {
     hasPersistedGameData,
     saveCardPackFromSnapshot,
@@ -94,6 +95,16 @@ const PLAYER_NAMES_VISIBLE = 4;
 const RECEIVE_FLOW_PACK = "pack";
 const RECEIVE_FLOW_INVITE = "invite";
 const RECEIVE_FLOW_TRANSFER = "transfer";
+
+// Module-scope constants for the post-import navigation paths. Pack
+// imports land the user on `/play` (default uiMode resolves to the
+// setup wizard so they can build a fresh game with the new deck);
+// invite / transfer imports skip setup — the share already configured
+// the game — and land on `/play?view=checklist` directly. Hoisted so
+// the `no-literal-string` lint rule treats them as wire identifiers.
+const PLAY_PATH = "/play" as const;
+const PLAY_CHECKLIST_PATH = "/play?view=checklist" as const;
+const TOUR_SCREEN_SETUP = "setup" as const;
 type ReceiveFlow =
     | typeof RECEIVE_FLOW_PACK
     | typeof RECEIVE_FLOW_INVITE
@@ -361,7 +372,7 @@ export function ShareImportPage({
                     // it as part of the message above).
                     applySnapshot(snapshot);
                 }
-                router.push("/play");
+                router.push(PLAY_PATH);
                 return;
             }
 
@@ -389,7 +400,14 @@ export function ShareImportPage({
                 triggeredNewGame: true,
                 savedPackToAccount: false,
             });
-            router.push("/play");
+            // The share already contains a fully-configured game —
+            // the receiver doesn't need the setup wizard or its
+            // welcome tour. Mark the setup tour as dismissed so
+            // `StartupCoordinator` doesn't redirect them back to
+            // setup, and route them directly to the checklist so
+            // the `checklistSuggest` tour can fire in place.
+            saveTourDismissed(TOUR_SCREEN_SETUP, DateTime.nowUnsafe());
+            router.push(PLAY_CHECKLIST_PATH);
         } finally {
             setSubmitting(false);
         }
@@ -449,7 +467,7 @@ export function ShareImportPage({
             via,
         });
         setOpen(false);
-        router.push("/play");
+        router.push(PLAY_PATH);
     };
 
     const packBullet = (() => {

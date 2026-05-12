@@ -23,6 +23,15 @@ import {
 // Analytics enum tag for the "no hypothesis" baseline. Module-scope
 // so the `no-literal-string` lint rule reads it as code, not UI text.
 const ANALYTICS_PREV_OFF = "off" as const;
+
+// `data-tour-anchor` tokens the checklistSuggest tour uses to drive a
+// deterministic cell open while it walks the explanation panel. Kept
+// here as module-scope constants so the lint rule reads them as
+// identifiers; the same string literals are emitted as attributes on
+// the three CellExplanationRow sections.
+const TOUR_ANCHOR_CELL_EXPLAIN_DEDUCTIONS = "cell-explanation-deductions" as const;
+const TOUR_ANCHOR_CELL_EXPLAIN_LEADS = "cell-explanation-leads" as const;
+const TOUR_ANCHOR_CELL_EXPLAIN_HYPOTHESIS = "cell-explanation-hypothesis" as const;
 import { useTranslations } from "next-intl";
 import {
     hypothesisCleared,
@@ -38,7 +47,13 @@ import {
     useState,
     type ReactNode,
 } from "react";
-import { Card, Owner, Player, ownerLabel } from "../../logic/GameObjects";
+import {
+    Card,
+    Owner,
+    Player,
+    PlayerOwner,
+    ownerLabel,
+} from "../../logic/GameObjects";
 import {
     allOwners,
     cardName,
@@ -74,6 +89,7 @@ import { Suggestion } from "../../logic/Suggestion";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useSelection } from "../SelectionContext";
 import { useClue } from "../state";
+import { useTour } from "../tour/TourProvider";
 import {
     registerChecklistFocusHandler,
     rememberChecklistCell,
@@ -613,6 +629,20 @@ export function Checklist() {
             }
             const rowNode = explainRowNodeRef.current;
             if (rowNode && rowNode.contains(target)) return;
+            // Tour popover content: a Next/Back/Skip/X click on the
+            // tour overlay should NOT close the cell. The
+            // checklistSuggest tour deliberately opens the cell during
+            // its DEDUCTIONS / LEADS / HYPOTHESIS steps, so a click on
+            // the tour's Next button is "navigating between
+            // walkthrough states", not "tap outside to dismiss".
+            // Pass through any click whose target is inside the
+            // popover content (marked with `data-tour-popover-content`).
+            if (target instanceof Element) {
+                const tourPopover = target.closest(
+                    "[data-tour-popover-content]",
+                );
+                if (tourPopover !== null) return;
+            }
             setExpandedCell(null);
         };
         window.addEventListener("click", onClickOutside, true);
@@ -633,6 +663,54 @@ export function Checklist() {
     );
 
     const owners: ReadonlyArray<Owner> = allOwners(setup);
+
+    // Tour-driven cell-open: while the active tour step targets one of
+    // the three cell-explanation sections (DEDUCTIONS / LEADS /
+    // HYPOTHESIS), open a deterministic cell (first player column,
+    // first card of the first category) so the panel is on screen for
+    // the popover to anchor against. When the tour step moves to a
+    // different anchor (or the tour ends), close the cell — but only
+    // if the tour was the one that opened it, so a user-driven cell
+    // open during a non-tour moment isn't clobbered by a later tour
+    // start.
+    //
+    // Safe to fire on `owners` / categories identity changes: the
+    // cell-walkthrough is part of a BLOCKING tour, so the user can't
+    // click between cells while it's active. Re-running with a fresh
+    // target cell is idempotent if the choice is stable, and correct
+    // if the user (e.g.) renames the first card mid-tour.
+    const { currentStep: tourCurrentStep } = useTour();
+    const tourWantsCellOpen =
+        tourCurrentStep?.anchor === TOUR_ANCHOR_CELL_EXPLAIN_DEDUCTIONS
+        || tourCurrentStep?.anchor === TOUR_ANCHOR_CELL_EXPLAIN_LEADS
+        || tourCurrentStep?.anchor === TOUR_ANCHOR_CELL_EXPLAIN_HYPOTHESIS;
+    // Stabilize the target by depending on the underlying branded
+    // IDs (Player + Card), not on `owners` / `setup.categories` whose
+    // reference identity changes on every render (allOwners returns a
+    // fresh array). An identity-unstable target would feed the
+    // setExpandedCell → re-render → useMemo recomputes → setExpandedCell
+    // → ... loop that maxed React's update depth in early testing.
+    const firstPlayerOwner = owners[0];
+    const firstPlayerId =
+        firstPlayerOwner !== undefined && firstPlayerOwner._tag === "Player"
+            ? firstPlayerOwner.player
+            : null;
+    const firstCardId = setup.categories[0]?.cards[0]?.id;
+    const tourTargetCell = useMemo(() => {
+        if (firstPlayerId === null || firstCardId === undefined) return null;
+        return Cell(PlayerOwner(firstPlayerId), firstCardId);
+    }, [firstPlayerId, firstCardId]);
+    const tourOpenedCellRef = useRef(false);
+    useEffect(() => {
+        if (tourWantsCellOpen) {
+            if (tourTargetCell === null) return;
+            setExpandedCell(tourTargetCell);
+            tourOpenedCellRef.current = true;
+        } else if (tourOpenedCellRef.current) {
+            setExpandedCell(null);
+            tourOpenedCellRef.current = false;
+        }
+    }, [tourWantsCellOpen, tourTargetCell, setExpandedCell]);
 
     // Flat (card → row) index used for arrow-key grid navigation.
     // Row 0 is the first card in the first category; rows run

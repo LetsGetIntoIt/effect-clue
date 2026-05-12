@@ -104,7 +104,7 @@ describe("TourPopover — anchor lookup", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-header" },
                 ]}
             >
                 {c => {
@@ -196,7 +196,7 @@ describe("TourPopover — anchor lookup", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-header" },
                 ]}
             >
                 {c => {
@@ -249,7 +249,7 @@ describe("TourPopover — M20 interaction rules", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-header" },
                 ]}
             >
                 {c => {
@@ -276,11 +276,29 @@ describe("TourPopover — M20 interaction rules", () => {
         expect(api.activeScreen).toBe("setup");
     });
 
-    test("clicking the spotlight does NOT trigger the underlying anchor's click", () => {
+    test("clicking the spotlight does NOT trigger the underlying anchor's click (blocking tour)", () => {
+        // M20 interaction rule applies to BLOCKING tours only.
+        // checklistSuggest is the canonical blocking tour today (its
+        // first step targets `desktop-checklist-area`) — the setup
+        // and sharing tours are non-blocking so their spotlights
+        // intentionally pass clicks through. See `nonBlocking` on
+        // TourStep.
+        //
+        // Step 0 of checklistSuggest uses `anchorByViewport` so we
+        // stub matchMedia to land on the desktop branch
+        // (`desktop-checklist-area`).
+        window.matchMedia = vi.fn().mockImplementation(() => ({
+            matches: true,
+            media: "",
+            onchange: null,
+            addListener: vi.fn(),
+            removeListener: vi.fn(),
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+            dispatchEvent: vi.fn(),
+        }));
         let api!: ReturnType<typeof useTour>;
         const onAnchorClick = vi.fn();
-        // Mount an anchor with an `onClick` handler so we can detect
-        // whether the click reached it through the spotlight.
         function HarnessWithClickAnchor({
             children,
         }: {
@@ -295,7 +313,7 @@ describe("TourPopover — M20 interaction rules", () => {
                         <button
                             type="button"
                             data-testid="anchor"
-                            data-tour-anchor="setup-wizard-shell"
+                            data-tour-anchor="desktop-checklist-area"
                             onClick={onAnchorClick}
                         >
                             click me
@@ -314,7 +332,7 @@ describe("TourPopover — M20 interaction rules", () => {
             </HarnessWithClickAnchor>,
             { wrapper: TestQueryClientProvider },
         );
-        act(() => api.startTour("setup"));
+        act(() => api.startTour("checklistSuggest"));
         // The spotlight overlay sits on top of the anchor. Clicking
         // it should not bubble to the anchor's onClick.
         const spotlight = document.querySelector<HTMLDivElement>(
@@ -324,7 +342,7 @@ describe("TourPopover — M20 interaction rules", () => {
         fireEvent.click(spotlight!);
         expect(onAnchorClick).not.toHaveBeenCalled();
         // Tour also stays active (spotlight click isn't a dismiss path).
-        expect(api.activeScreen).toBe("setup");
+        expect(api.activeScreen).toBe("checklistSuggest");
     });
 
     test("Skip tour explicitly dismisses", () => {
@@ -332,7 +350,7 @@ describe("TourPopover — M20 interaction rules", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-header" },
                 ]}
             >
                 {c => {
@@ -369,7 +387,7 @@ describe("TourPopover — veil isolation", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-header" },
                 ]}
             >
                 {c => {
@@ -389,11 +407,25 @@ describe("TourPopover — veil isolation", () => {
         expect(api.activeScreen).toBeUndefined();
     });
 
-    test("non-Escape keys outside the popover are preventDefault'd + stopPropagation'd", () => {
+    test("non-Escape keys outside the popover are preventDefault'd + stopPropagation'd (blocking tour)", () => {
+        // Same caveat as the spotlight-click test: the key-isolator
+        // only swallows events for BLOCKING tours. The setup tour
+        // (now non-blocking) intentionally lets page-level shortcuts
+        // fire so the user can keep typing into wizard inputs.
+        //
+        // Stub matchMedia → desktop so checklistSuggest step 0's
+        // `anchorByViewport` lands on `desktop-checklist-area`.
+        window.matchMedia = vi.fn().mockImplementation(() => ({
+            matches: true,
+            media: "",
+            onchange: null,
+            addListener: vi.fn(),
+            removeListener: vi.fn(),
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+            dispatchEvent: vi.fn(),
+        }));
         let api!: ReturnType<typeof useTour>;
-        // Bubble-phase listener that simulates an app-level keyboard
-        // shortcut. If our capture-phase isolator works, this should
-        // NOT fire while the tour is active.
         const bubbleHandler = vi.fn();
         window.addEventListener("keydown", bubbleHandler);
         try {
@@ -401,8 +433,8 @@ describe("TourPopover — veil isolation", () => {
                 <Harness
                     anchors={[
                         {
-                            testId: "card-pack",
-                            anchorAttr: "setup-wizard-shell",
+                            testId: "checklist",
+                            anchorAttr: "desktop-checklist-area",
                         },
                     ]}
                 >
@@ -413,7 +445,7 @@ describe("TourPopover — veil isolation", () => {
                 </Harness>,
                 { wrapper: TestQueryClientProvider },
             );
-            act(() => api.startTour("setup"));
+            act(() => api.startTour("checklistSuggest"));
             // Dispatch a keydown that targets <body> (outside the
             // popover content portal). The event's metaKey + key is a
             // stand-in for ⌘K; the value doesn't matter — our
@@ -429,6 +461,49 @@ describe("TourPopover — veil isolation", () => {
             });
             expect(bubbleHandler).not.toHaveBeenCalled();
             // The tour stays active.
+            expect(api.activeScreen).toBe("checklistSuggest");
+        } finally {
+            window.removeEventListener("keydown", bubbleHandler);
+        }
+    });
+
+    test("non-Escape keys are NOT swallowed by a non-blocking tour (setup welcome)", () => {
+        // New invariant: the setup tour is non-blocking so the user
+        // can type into the wizard alongside it. The key isolator's
+        // stopPropagation + preventDefault branch is gated on
+        // `currentStep.nonBlocking`. Escape still dismisses.
+        let api!: ReturnType<typeof useTour>;
+        const bubbleHandler = vi.fn();
+        window.addEventListener("keydown", bubbleHandler);
+        try {
+            render(
+                <Harness
+                    anchors={[
+                        {
+                            testId: "card-pack",
+                            anchorAttr: "setup-wizard-header",
+                        },
+                    ]}
+                >
+                    {c => {
+                        api = c;
+                        return null;
+                    }}
+                </Harness>,
+                { wrapper: TestQueryClientProvider },
+            );
+            act(() => api.startTour("setup"));
+            const ev = new KeyboardEvent("keydown", {
+                key: "k",
+                bubbles: true,
+                cancelable: true,
+            });
+            act(() => {
+                document.body.dispatchEvent(ev);
+            });
+            // Non-blocking: the page-level listener DID fire.
+            expect(bubbleHandler).toHaveBeenCalled();
+            // Tour stays active until explicitly dismissed.
             expect(api.activeScreen).toBe("setup");
         } finally {
             window.removeEventListener("keydown", bubbleHandler);
@@ -445,7 +520,7 @@ describe("TourPopover — veil isolation", () => {
                     anchors={[
                         {
                             testId: "card-pack",
-                            anchorAttr: "setup-wizard-shell",
+                            anchorAttr: "setup-wizard-header",
                         },
                     ]}
                 >
@@ -487,7 +562,7 @@ describe("TourPopover — veil isolation", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-header" },
                 ]}
             >
                 {c => {
@@ -528,7 +603,7 @@ describe("TourPopover — veil isolation", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-header" },
                 ]}
             >
                 {c => {
@@ -574,7 +649,7 @@ describe("TourPopover — veil isolation", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-header" },
                     { testId: "sticky", stickyLeft: true },
                 ]}
             >
@@ -627,7 +702,7 @@ describe("TourPopover — veil isolation", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-header" },
                     { testId: "sticky", stickyLeft: true },
                 ]}
             >
@@ -679,7 +754,7 @@ describe("TourPopover — veil isolation", () => {
         render(
             <Harness
                 anchors={[
-                    { testId: "card-pack", anchorAttr: "setup-wizard-shell" },
+                    { testId: "card-pack", anchorAttr: "setup-wizard-header" },
                     { testId: "sticky", stickyLeft: true },
                 ]}
             >
@@ -719,25 +794,40 @@ describe("TourPopover — veil isolation", () => {
 
 describe("TourPopover — popoverAnchor + popoverAnchorPriority", () => {
     test("popoverAnchor token resolves to its OWN element set, distinct from the spotlight token", () => {
-        // The setup tour's `setup-known-cell` step has
-        // `popoverAnchor: "setup-known-cell-header"`. With both tokens
-        // present in the DOM, the popover binds to the header and the
-        // spotlight unions the body cells. We can't assert on
-        // pixel positions in jsdom — but we CAN assert that the
-        // expected DOM nodes exist and the popover renders without
-        // crashing.
+        // The checklistSuggest tour's intro step (index 0) has
+        // `anchor: "desktop-checklist-area"` for the spotlight and
+        // `popoverAnchor: "checklist-case-file"` for the popover.
+        // With both tokens present in the DOM, the popover binds to
+        // the case-file element and the spotlight covers the column.
+        // We can't assert on pixel positions in jsdom — but we CAN
+        // assert that the expected DOM nodes exist and the popover
+        // renders without crashing.
+        //
+        // Stub matchMedia → desktop so `anchorByViewport` picks the
+        // `desktop-checklist-area` token.
+        window.matchMedia = vi.fn().mockImplementation(() => ({
+            matches: true,
+            media: "",
+            onchange: null,
+            addListener: vi.fn(),
+            removeListener: vi.fn(),
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+            dispatchEvent: vi.fn(),
+        }));
         let api!: ReturnType<typeof useTour>;
         render(
             <Harness
                 anchors={[
-                    // Spotlight target: 3 body cells.
-                    { testId: "cell-1", anchorAttr: "setup-known-cell" },
-                    { testId: "cell-2", anchorAttr: "setup-known-cell" },
-                    { testId: "cell-3", anchorAttr: "setup-known-cell" },
-                    // Popover target: 1 header cell.
+                    // Spotlight target: the whole column wrapper.
                     {
-                        testId: "header",
-                        anchorAttr: "setup-known-cell-header",
+                        testId: "checklist-col",
+                        anchorAttr: "desktop-checklist-area",
+                    },
+                    // Popover target: the small case-file summary.
+                    {
+                        testId: "case-file",
+                        anchorAttr: "checklist-case-file",
                     },
                 ]}
             >
@@ -748,31 +838,26 @@ describe("TourPopover — popoverAnchor + popoverAnchorPriority", () => {
             </Harness>,
             { wrapper: TestQueryClientProvider },
         );
-        act(() => api.startTour("setup"));
-        // Advance to step 4 (`setup-known-cell` — index 3, 0-indexed).
-        act(() => api.nextStep()); // → 1
-        act(() => api.nextStep()); // → 2
-        act(() => api.nextStep()); // → 3
-        // The popover renders with the right copy
-        // (`setup.knownCard.title`).
+        act(() => api.startTour("checklistSuggest"));
+        // Step 0 of checklistSuggest renders with `checklist.intro.title`.
         expect(
-            screen.getByText("setup.knownCard.title"),
+            screen.getByText("checklist.intro.title"),
         ).toBeInTheDocument();
         // Both anchor sets are queryable via `data-tour-anchor~=`.
         expect(
             document.querySelectorAll(
-                "[data-tour-anchor~='setup-known-cell']",
+                "[data-tour-anchor~='desktop-checklist-area']",
             ).length,
-        ).toBe(3);
+        ).toBe(1);
         expect(
             document.querySelectorAll(
-                "[data-tour-anchor~='setup-known-cell-header']",
+                "[data-tour-anchor~='checklist-case-file']",
             ).length,
         ).toBe(1);
     });
 
     test("popoverAnchorPriority='last-visible' resolves to the LAST matched element (overflow-menu trigger + open content)", () => {
-        // The setup tour's `overflow-menu` step uses
+        // The sharing tour's `overflow-menu` step (index 2) uses
         // `popoverAnchorPriority: "last-visible"` so when both the
         // trigger button and the portaled menu content are mounted,
         // the popover binds to the menu content (which is later in
@@ -798,9 +883,10 @@ describe("TourPopover — popoverAnchor + popoverAnchorPriority", () => {
             </Harness>,
             { wrapper: TestQueryClientProvider },
         );
-        act(() => api.startTour("setup"));
-        // Advance to step 5 (`overflow-menu`, 0-indexed = 4).
-        for (let i = 0; i < 4; i++) act(() => api.nextStep());
+        act(() => api.startTour("sharing"));
+        // Advance to step 2 (`overflow-menu`, 0-indexed = 2).
+        act(() => api.nextStep());
+        act(() => api.nextStep());
         // Both anchored elements are in the DOM.
         expect(
             document.querySelectorAll(
@@ -809,7 +895,7 @@ describe("TourPopover — popoverAnchor + popoverAnchorPriority", () => {
         ).toBe(2);
         // Popover renders.
         expect(
-            screen.getByText("setup.overflow.title"),
+            screen.getByText("sharing.overflow.title"),
         ).toBeInTheDocument();
     });
 });

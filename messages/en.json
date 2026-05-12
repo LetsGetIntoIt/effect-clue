@@ -594,52 +594,44 @@
         "takeTour": "Take tour",
         "setup": {
             "welcome": {
-                "title": "Set up your game step by step",
-                "body": "We'll walk you through the deck, who's playing, and the cards you're holding. You can always come back to any step."
-            },
-            "cardPack": {
-                "title": "Pick a card pack",
-                "body": "Pick a pack — Classic, Master Detective, or one of your saved customs. Hit Customize to build your own."
-            },
-            "players": {
-                "title": "Players in turn order",
-                "body": "Enter players in turn order — the first one listed will be dealt first. Drag to reorder, or use the up/down buttons."
-            },
-            "knownCard": {
-                "title": "Mark the cards you were dealt",
-                "body": "Tick the cards you have — the solver uses your hand to rule everything else out for you."
-            },
-            "overflow": {
-                "title": "Come back later",
-                "body": "Use the ⋯ menu anytime to come back here, restart this tour, or start a new game."
+                "title": "Welcome to Clue Solver",
+                "body": "Build your game below — pick a deck, list your players, and mark the cards you're holding. You can come back to setup anytime from the menu (⋯)."
             }
         },
         "checklist": {
             "intro": {
-                "title": "Checklist — read deductions",
-                "body": "This half is where the solver shows what it's figured out. Cells fill in as facts come in."
+                "title": "Two halves work together",
+                "body": "The grid on the left tracks what you know about each player's hand. The suggestion log on the right is where every guess gets recorded. On mobile they're tabs at the bottom."
             },
-            "cell": {
-                "title": "Each cell is a deduction",
-                "body": "Y means a player holds that card; N means they don't. The solver runs after every change and fills in everything it can derive."
+            "deductions": {
+                "title": "DEDUCTIONS — how a cell got here",
+                "body": "We've opened a cell so you can see the breakdown. DEDUCTIONS shows the chain of reasoning that produced the cell's value, and lets you mark cards you've seen with your own eyes."
+            },
+            "leads": {
+                "title": "LEADS — suggestions that could help",
+                "body": "Past suggestions that mention this card show up here as footnotes. If one gets refuted, this cell may flip from blank to Y or N."
+            },
+            "hypothesis": {
+                "title": "HYPOTHESIS — try a what-if",
+                "body": "Set the cell to Y or N as a guess. The solver propagates it and surfaces any contradictions — handy for narrowing down the case file when deductions stall."
             },
             "caseFile": {
-                "title": "The case file",
-                "body": "When the solver narrows a category to a single suspect / weapon / room, the case-file column shows it — that's your accusation."
+                "title": "The case file is your goal",
+                "body": "This column tracks the murder envelope — cards not in anyone's hand. Solve the three categories down to one each and you're done."
             }
         },
         "suggest": {
             "intro": {
-                "title": "Suggest — log suggestions",
-                "body": "The other half logs suggestions you observe. Both halves work together — on desktop side-by-side, on mobile via the tabs at the bottom."
+                "title": "Suggest pane — log what happens at the table",
+                "body": "Add a suggestion (or accusation) here. Every entry updates the deductions on the left."
             },
             "addForm": {
                 "title": "Add the first suggestion of the game to get started!",
-                "body": "After adding, switch to the checklist to see updated deductions."
+                "body": "Pick a suspect, weapon, and room. The solver re-runs after each entry, so flip back to the checklist to see what changed."
             },
             "priorLog": {
                 "title": "All suggestions are logged here",
-                "body": "Every suggestion you log shows up here. Click any row to edit it later if you mis-typed something."
+                "body": "Every suggestion you log shows up here with who passed and who showed a card. Tap a row to edit it later if you mis-typed something."
             }
         },
         "firstSuggestion": {

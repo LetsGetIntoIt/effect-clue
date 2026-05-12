@@ -312,7 +312,10 @@ export function CellExplanationRow({
     );
 
     const deductionsSection = (
-        <section className="flex flex-col gap-2">
+        <section
+            className="flex flex-col gap-2"
+            data-tour-anchor="cell-explanation-deductions"
+        >
             <div className="text-[1.125rem] font-bold uppercase tracking-wide text-accent">
                 {t("deductionsLabel")}
             </div>
@@ -361,7 +364,10 @@ export function CellExplanationRow({
     );
 
     const leadsSection = (
-        <section className="flex flex-col gap-2">
+        <section
+            className="flex flex-col gap-2"
+            data-tour-anchor="cell-explanation-leads"
+        >
             <div className="text-[1.125rem] font-bold uppercase tracking-wide text-accent">
                 {t("leadsLabel")}
             </div>
@@ -391,7 +397,10 @@ export function CellExplanationRow({
     );
 
     const hypothesisSection = (
-        <section className="flex flex-col gap-2">
+        <section
+            className="flex flex-col gap-2"
+            data-tour-anchor="cell-explanation-hypothesis"
+        >
             <div className="text-[1.125rem] font-bold uppercase tracking-wide text-accent">
                 {t("hypothesisLabel")}
             </div>

@@ -97,13 +97,9 @@ describe("TourProvider — persistence on close", () => {
     test("completion: clicking Next past the last step writes lastDismissedAt", () => {
         const api = mount();
         act(() => api.current().startTour("setup"));
-        // PR-A4: setup tour has 5 steps (welcome → cardpack → players
-        // → mycards → overflow). Click Next 5 times: steps 0→1, 1→2,
-        // 2→3, 3→4, then the 5th call past the last step triggers the
-        // completion path.
-        for (let i = 0; i < 5; i++) {
-            act(() => api.current().nextStep());
-        }
+        // The setup tour is a single welcome step. One Next click past
+        // step 0 triggers the completion path.
+        act(() => api.current().nextStep());
         expect(api.current().activeScreen).toBeUndefined();
         const persisted = loadTourState("setup");
         // The completion path writes lastDismissedAt so the per-screen
@@ -165,47 +161,47 @@ describe("TourProvider — persistence on close", () => {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe("TourProvider — viewport filter", () => {
-    test("checklistSuggest exposes the same 6 steps on desktop and mobile (no viewport-locked steps post-M10)", () => {
-        // M10 collapsed the older mobile-only `bottom-nav-suggest`
-        // wayfinding step into the new Suggest intro step, which
-        // runs on both viewports. The tour is now the same length
-        // on either breakpoint.
+    test("checklistSuggest exposes the same 8 steps on desktop and mobile (no viewport-locked steps)", () => {
+        // The cell-explanation walkthrough added three section-anchored
+        // steps (DEDUCTIONS / LEADS / HYPOTHESIS) between the intro
+        // and the case-file step. All eight steps run on both
+        // viewports — viewport-conditional behavior lives in
+        // `sideByViewport` / `anchorByViewport`, not in skipping
+        // steps.
         stubMatchMedia(true); // desktop
         const api = mount();
         act(() => api.current().startTour("checklistSuggest"));
-        expect(api.current().steps?.length).toBe(6);
+        expect(api.current().steps?.length).toBe(8);
 
         stubMatchMedia(false); // mobile
         const api2 = mount();
         act(() => api2.current().startTour("checklistSuggest"));
-        expect(api2.current().steps?.length).toBe(6);
+        expect(api2.current().steps?.length).toBe(8);
     });
 
-    test("setup tour has the same 5 steps at both breakpoints (no viewport-locked steps)", () => {
+    test("setup tour is a single welcome step at both breakpoints", () => {
         stubMatchMedia(true);
         const api = mount();
         act(() => api.current().startTour("setup"));
-        expect(api.current().steps?.length).toBe(5);
+        expect(api.current().steps?.length).toBe(1);
 
         stubMatchMedia(false);
         const api2 = mount();
         act(() => api2.current().startTour("setup"));
-        expect(api2.current().steps?.length).toBe(5);
+        expect(api2.current().steps?.length).toBe(1);
     });
 
     test("isLastStep is true on the final step of checklistSuggest", () => {
-        stubMatchMedia(true); // desktop — 6 steps
+        stubMatchMedia(true); // desktop — 8 steps
         const api = mount();
         act(() => api.current().startTour("checklistSuggest"));
-        // Step 0 of 6: not last.
+        // Step 0 of 8: not last.
         expect(api.current().isLastStep).toBe(false);
-        // Walk to step 5 (the wrap-up `suggest-add-form`).
-        act(() => api.current().nextStep());
-        act(() => api.current().nextStep());
-        act(() => api.current().nextStep());
-        act(() => api.current().nextStep());
-        act(() => api.current().nextStep());
-        // Step 5 of 6 (0-indexed) IS the last.
+        // Walk to step 7 (the wrap-up `suggest-add-form`).
+        for (let i = 0; i < 7; i++) {
+            act(() => api.current().nextStep());
+        }
+        // Step 7 of 8 (0-indexed) IS the last.
         expect(api.current().isLastStep).toBe(true);
     });
 });
@@ -230,7 +226,8 @@ describe("TourProvider — analytics events", () => {
             event: "tour_started",
             props: {
                 screenKey: "setup",
-                stepCount: 5,
+                // Setup tour is a single welcome step.
+                stepCount: 1,
                 reengaged: false,
                 daysSinceLastDismissal: null,
             },
@@ -240,10 +237,10 @@ describe("TourProvider — analytics events", () => {
             props: {
                 screenKey: "setup",
                 stepIndex: 0,
-                stepId: "setup-wizard-shell",
-                totalSteps: 5,
+                stepId: "setup-wizard-header",
+                totalSteps: 1,
                 isFirstStep: true,
-                isLastStep: false,
+                isLastStep: true,
             },
         });
     });
@@ -251,7 +248,10 @@ describe("TourProvider — analytics events", () => {
     test("nextStep emits tour_step_advanced then tour_step_viewed for the new step", () => {
         stubMatchMedia(true);
         const api = mount();
-        act(() => api.current().startTour("setup"));
+        // Use checklistSuggest — setup is single-step now, so it has
+        // no advance transition to observe. checklistSuggest step 1 is
+        // the DEDUCTIONS section step.
+        act(() => api.current().startTour("checklistSuggest"));
         captureCalls.length = 0; // discard start events
         act(() => api.current().nextStep());
         expect(eventNames()).toEqual([
@@ -261,9 +261,9 @@ describe("TourProvider — analytics events", () => {
         expect(captureCalls[1]).toMatchObject({
             event: "tour_step_viewed",
             props: {
-                screenKey: "setup",
+                screenKey: "checklistSuggest",
                 stepIndex: 1,
-                stepId: "setup-step-cardpack-pills",
+                stepId: "cell-explanation-deductions",
                 isFirstStep: false,
                 isLastStep: false,
             },
@@ -275,16 +275,15 @@ describe("TourProvider — analytics events", () => {
         const api = mount();
         act(() => api.current().startTour("setup"));
         captureCalls.length = 0;
-        for (let i = 0; i < 5; i++) {
-            act(() => api.current().nextStep());
-        }
-        // 4 advances + 4 step_views (steps 1..4) + 1 completion.
+        // Setup is single-step: one Next past step 0 triggers
+        // completion. No advance events fire (no further steps).
+        act(() => api.current().nextStep());
         const last = captureCalls[captureCalls.length - 1];
         expect(last?.event).toBe("tour_completed");
         expect(last).toMatchObject({
             props: {
                 screenKey: "setup",
-                totalSteps: 5,
+                totalSteps: 1,
                 $set: { tour_setup_status: "completed" },
             },
         });
