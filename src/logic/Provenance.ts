@@ -13,6 +13,8 @@ import {
 } from "./GameSetup";
 import { Accusation, accusationCards } from "./Accusation";
 import { Suggestion, suggestionCards } from "./Suggestion";
+import { KnownCard } from "./InitialKnowledge";
+import type { HypothesisMap } from "./Hypothesis";
 import {
     getAccusations,
     getCardSet,
@@ -91,7 +93,7 @@ export type ReasonKind =
     | FailedAccusationImpl
     | FailedAccusationPairwiseNarrowingImpl;
 
-const InitialKnownCard = (): ReasonKind => new InitialKnownCardImpl();
+export const InitialKnownCard = (): ReasonKind => new InitialKnownCardImpl();
 // InitialHandSize is declared in the ReasonKind union but not yet
 // emitted by any rule — kept for future hand-size-driven deductions.
 export const CardOwnership = (params: { readonly card: Card }): ReasonKind =>
@@ -185,7 +187,7 @@ export type Tracer = (record: SetCellRecord) => void;
  * Dedup uses a HashSet keyed on Cell directly (structural Equal), so
  * no hash-surrogate string is needed.
  */
-interface ChainEntry {
+export interface ChainEntry {
     readonly cell: Cell;
     readonly reason: Reason;
 }
@@ -239,10 +241,26 @@ interface CellParams {
     readonly value: CellValue;
 }
 
+/**
+ * Distinguishes the two ways a cell can land in `initial.checklist` —
+ * either the user marked it as a real-life observation (`observation`)
+ * or it's an active hypothesis being explored (`hypothesis`). Read at
+ * popover-render time by cross-checking the cell against the
+ * `knownCards` array and the `hypotheses` map; the value here drives
+ * the per-step label ("Known observation" vs "Hypothesis").
+ *
+ * If both sources hold, hypothesis wins — `foldHypothesesInto`
+ * overwrites the real value, so the deducer ran on the hypothesis
+ * value and the chain's `value` matches.
+ */
+export type InitialKnownCardSource = "observation" | "hypothesis";
+
 export type ReasonDescription =
     | {
           readonly kind: "initial-known-card";
-          readonly params: CellParams;
+          readonly params: CellParams & {
+              readonly source: InitialKnownCardSource;
+          };
       }
     | {
           readonly kind: "initial-hand-size";
@@ -325,17 +343,30 @@ export const describeReason = (
     setup: GameSetup,
     suggestions: ReadonlyArray<Suggestion>,
     accusations: ReadonlyArray<Accusation> = [],
+    knownCards: ReadonlyArray<KnownCard> = [],
+    hypotheses: HypothesisMap = HashMap.empty(),
 ): ReasonDescription => {
     const base: CellParams = {
         cellPlayer: ownerLabel(cell.owner),
         cellCard: cardName(setup, cell.card),
         value: reason.value,
     };
+    const classifyInitialKnownCard = (): InitialKnownCardSource => {
+        if (HashMap.has(hypotheses, cell)) return "hypothesis";
+        if (cell.owner._tag === "Player") {
+            const player = cell.owner.player;
+            const matchKnown = knownCards.some(
+                kc => kc.player === player && kc.card === cell.card,
+            );
+            if (matchKnown) return "observation";
+        }
+        return "observation";
+    };
     return Match.value(reason.kind).pipe(
         Match.tagsExhaustive({
             InitialKnownCard: (): ReasonDescription => ({
                 kind: "initial-known-card",
-                params: base,
+                params: { ...base, source: classifyInitialKnownCard() },
             }),
             InitialHandSize: (): ReasonDescription => ({
                 kind: "initial-hand-size",

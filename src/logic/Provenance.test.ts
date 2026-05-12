@@ -1,8 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { MutableHashMap, Result } from "effect";
+import { HashMap, MutableHashMap, Result } from "effect";
 import { CLASSIC_SETUP_3P } from "./GameSetup";
 import { CaseFileOwner, Player, PlayerOwner } from "./GameObjects";
 import { Cell, emptyKnowledge, N, setCell, setHandSize, Y } from "./Knowledge";
+import { KnownCard } from "./InitialKnowledge";
 import {
     CardOwnership,
     CaseFileCategory,
@@ -11,6 +12,7 @@ import {
     DisjointGroupsHandLock,
     FailedAccusation,
     FailedAccusationPairwiseNarrowing,
+    InitialKnownCard,
     NonRefuters,
     PlayerHand,
     type Provenance,
@@ -236,6 +238,63 @@ const baseReason = (
 
 describe("describeReason", () => {
     const cell = Cell(PlayerOwner(A), KNIFE);
+
+    test("InitialKnownCard with cell in knownCards → source: observation", () => {
+        const desc = describeReason(
+            baseReason(InitialKnownCard()),
+            cell,
+            setup,
+            [],
+            [],
+            [KnownCard({ player: A, card: KNIFE })],
+            HashMap.empty(),
+        );
+        expect(desc.kind).toBe("initial-known-card");
+        if (desc.kind !== "initial-known-card") throw new Error("unreachable");
+        expect(desc.params.source).toBe("observation");
+    });
+
+    test("InitialKnownCard with cell in hypotheses → source: hypothesis", () => {
+        const desc = describeReason(
+            baseReason(InitialKnownCard(), N),
+            cell,
+            setup,
+            [],
+            [],
+            [],
+            HashMap.fromIterable([[cell, N] as const]),
+        );
+        if (desc.kind !== "initial-known-card") throw new Error("unreachable");
+        expect(desc.params.source).toBe("hypothesis");
+    });
+
+    test("InitialKnownCard in both → hypothesis wins (foldHypothesesInto overwrites)", () => {
+        const desc = describeReason(
+            baseReason(InitialKnownCard()),
+            cell,
+            setup,
+            [],
+            [],
+            [KnownCard({ player: A, card: KNIFE })],
+            HashMap.fromIterable([[cell, Y] as const]),
+        );
+        if (desc.kind !== "initial-known-card") throw new Error("unreachable");
+        expect(desc.params.source).toBe("hypothesis");
+    });
+
+    test("InitialKnownCard with no matching sources → defaults to observation", () => {
+        const desc = describeReason(
+            baseReason(InitialKnownCard()),
+            cell,
+            setup,
+            [],
+            [],
+            [],
+            HashMap.empty(),
+        );
+        if (desc.kind !== "initial-known-card") throw new Error("unreachable");
+        expect(desc.params.source).toBe("observation");
+    });
 
     test("CardOwnership → `card-ownership` with resolved card name", () => {
         const desc = describeReason(

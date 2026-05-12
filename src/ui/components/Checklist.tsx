@@ -5,6 +5,7 @@ import {
     displayFor,
     statusFor,
     type CellDisplay,
+    type HypothesisMap,
     type HypothesisStatus,
     type HypothesisValue,
 } from "../../logic/Hypothesis";
@@ -55,8 +56,10 @@ import {
 } from "../../logic/Knowledge";
 import { footnotesForCell } from "../../logic/Footnotes";
 import {
+    type ChainEntry,
     chainFor,
     describeReason,
+    type InitialKnownCardSource,
     Provenance,
     ReasonDescription,
 } from "../../logic/Provenance";
@@ -961,6 +964,8 @@ export function Checklist() {
             setup,
             owner: popoverCell.owner,
             card: popoverCell.card,
+            knownCards: state.knownCards,
+            hypotheses,
             tDeduce: t,
             tReasons,
         });
@@ -1908,13 +1913,16 @@ export function Checklist() {
 /**
  * Resolve a single `ReasonDescription` (from `describeReason`) into
  * `{ headline, detail }` strings via the "reasons" i18n namespace.
+ *
+ * `initial-known-card` is not handled here — those entries flow through
+ * `groupChainEntries` → `resolveInitialRunCopy` so consecutive runs
+ * (same owner, source, value) consolidate into a single line.
  */
 const resolveReasonCopy = (
-    desc: ReasonDescription,
+    desc: Exclude<ReasonDescription, { kind: "initial-known-card" }>,
     tReasons: ReturnType<typeof useTranslations<"reasons">>,
 ): { readonly headline: string; readonly detail: string } => {
     switch (desc.kind) {
-        case "initial-known-card":
         case "initial-hand-size":
             return {
                 headline: tReasons(`${desc.kind}.headline`),
@@ -2067,6 +2075,108 @@ interface CellWhy {
     readonly chainText: string | undefined;
 }
 
+/**
+ * One displayed line in the Deductions chain. Either a single non-initial
+ * reason (rendered as-is), or a `consolidated` run of consecutive
+ * `initial-known-card` entries sharing (owner, source, value).
+ *
+ * The run shape mirrors the `player-hand` Rule-1 dependsOn shape — when
+ * the user marks an entire hand as Y, those Y cells fan into a single
+ * downstream rule, and listing each as its own "Given:" line is noise.
+ * Grouping by (owner, source, value) keeps unrelated givens distinct.
+ */
+type ChainStep =
+    | { readonly kind: "single"; readonly entry: ChainEntry }
+    | {
+          readonly kind: "initial-run";
+          readonly source: InitialKnownCardSource;
+          readonly cellPlayer: string;
+          readonly value: CellValue;
+          readonly cardNames: ReadonlyArray<string>;
+      };
+
+const groupChainEntries = (
+    chain: ReadonlyArray<ChainEntry>,
+    describe: (entry: ChainEntry) => ReasonDescription,
+): ReadonlyArray<ChainStep> => {
+    const steps: ChainStep[] = [];
+    let run:
+        | {
+              source: InitialKnownCardSource;
+              owner: Owner;
+              cellPlayer: string;
+              value: CellValue;
+              cardNames: string[];
+          }
+        | null = null;
+    const flush = () => {
+        if (run === null) return;
+        steps.push({
+            kind: "initial-run",
+            source: run.source,
+            cellPlayer: run.cellPlayer,
+            value: run.value,
+            cardNames: run.cardNames,
+        });
+        run = null;
+    };
+    for (const entry of chain) {
+        const desc = describe(entry);
+        if (desc.kind === "initial-known-card") {
+            const source = desc.params.source;
+            const owner = entry.cell.owner;
+            const value = entry.reason.value;
+            const cardName = desc.params.cellCard;
+            if (
+                run !== null &&
+                run.source === source &&
+                Equal.equals(run.owner, owner) &&
+                run.value === value
+            ) {
+                run.cardNames.push(cardName);
+            } else {
+                flush();
+                run = {
+                    source,
+                    owner,
+                    cellPlayer: desc.params.cellPlayer,
+                    value,
+                    cardNames: [cardName],
+                };
+            }
+        } else {
+            flush();
+            steps.push({ kind: "single", entry });
+        }
+    }
+    flush();
+    return steps;
+};
+
+const LIST_FORMAT = new Intl.ListFormat("en", {
+    style: "long",
+    type: "conjunction",
+});
+
+const resolveInitialRunCopy = (
+    step: Extract<ChainStep, { kind: "initial-run" }>,
+    tReasons: ReturnType<typeof useTranslations<"reasons">>,
+): { readonly headline: string; readonly detail: string } => {
+    const count = step.cardNames.length;
+    const headline = tReasons(
+        step.source === "hypothesis"
+            ? "initial-known-card.headlineHypothesis"
+            : "initial-known-card.headlineObservation",
+        { count },
+    );
+    const detail = tReasons("initial-known-card.detail", {
+        cellPlayer: step.cellPlayer,
+        value: step.value,
+        cardList: LIST_FORMAT.format(step.cardNames),
+    });
+    return { headline, detail };
+};
+
 const buildCellWhy = (args: {
     provenance: Provenance | undefined;
     suggestions: ReadonlyArray<Suggestion>;
@@ -2074,6 +2184,8 @@ const buildCellWhy = (args: {
     setup: ReturnType<typeof useClue>["state"]["setup"];
     owner: Owner;
     card: Card;
+    knownCards: ReadonlyArray<KnownCard>;
+    hypotheses: HypothesisMap;
     tDeduce: ReturnType<typeof useTranslations<"deduce">>;
     tReasons: ReturnType<typeof useTranslations<"reasons">>;
 }): CellWhy => {
@@ -2084,6 +2196,8 @@ const buildCellWhy = (args: {
         setup,
         owner,
         card,
+        knownCards,
+        hypotheses,
         tDeduce,
         tReasons,
     } = args;
@@ -2091,19 +2205,41 @@ const buildCellWhy = (args: {
     const chain = provenance
         ? chainFor(provenance, Cell(owner, card))
         : [];
-    const chainLines: string[] = chain.map(({ cell: entryCell, reason }, i) => {
-        const desc = describeReason(
-            reason,
-            entryCell,
+    const describe = (entry: ChainEntry): ReasonDescription =>
+        describeReason(
+            entry.reason,
+            entry.cell,
             setup,
             suggestions,
             accusations,
+            knownCards,
+            hypotheses,
         );
+    const steps = groupChainEntries(chain, describe);
+    const chainLines: string[] = steps.map((step, i) => {
+        if (step.kind === "initial-run") {
+            const { headline, detail } = resolveInitialRunCopy(step, tReasons);
+            return tDeduce("whyLine", {
+                index: i + 1,
+                headline,
+                iter: "none",
+                detail,
+            });
+        }
+        const desc = describe(step.entry);
+        if (desc.kind === "initial-known-card") {
+            // groupChainEntries always emits initial-known-card entries
+            // as initial-run steps; this branch is unreachable.
+            throw new Error("unreachable: initial-known-card outside run");
+        }
         const { headline, detail } = resolveReasonCopy(desc, tReasons);
         return tDeduce("whyLine", {
             index: i + 1,
             headline,
-            iter: reason.iteration > 0 ? reason.iteration : "none",
+            iter:
+                step.entry.reason.iteration > 0
+                    ? step.entry.reason.iteration
+                    : "none",
             detail,
         });
     });
