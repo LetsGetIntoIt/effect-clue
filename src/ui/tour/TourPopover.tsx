@@ -730,8 +730,19 @@ export function TourPopover() {
                           className="!inline-flex !h-[18px] !w-[18px] !align-[-3px] text-[12px]"
                       />
                   ),
+                  // Today `<strong>` is only used to mark the
+                  // "Tap [thing] to continue" action prompt at the
+                  // end of advance-on-click step bodies. Render it as
+                  // a block-level element with a top margin so the
+                  // prompt sits visually separated from the
+                  // explanation copy above it — without the gap, the
+                  // user's eye runs together "blank if we don't know
+                  // yet. Tap the highlighted cell to open the
+                  // breakdown." and misses the action.
                   strong: (chunks) => (
-                      <strong className="font-semibold">{chunks}</strong>
+                      <strong className="mt-2 block font-semibold">
+                          {chunks}
+                      </strong>
                   ),
               })
             : null;
@@ -843,8 +854,17 @@ export function TourPopover() {
                                 left: rect.left - SPOTLIGHT_PAD,
                                 width: rect.width + SPOTLIGHT_PAD * 2,
                                 height: rect.height + SPOTLIGHT_PAD * 2,
-                                boxShadow: paintsDim
-                                    ? "0 0 0 9999px rgba(0,0,0,0.45), 0 0 0 2px var(--color-tour-accent)"
+                                // 0.6 alpha for the outer darkness: the
+                            // parchment / cream surfaces in the app
+                            // are light enough that a 0.45 overlay
+                            // wasn't visibly registering as a "veil"
+                            // to users — the dim tan + dim cream read
+                            // as nearly the same color as the un-
+                            // dimmed surfaces. 0.6 puts a noticeable
+                            // gap between the spotlit area (un-
+                            // dimmed cream) and the surrounding page.
+                            boxShadow: paintsDim
+                                    ? "0 0 0 9999px rgba(0,0,0,0.6), 0 0 0 2px var(--color-tour-accent)"
                                     : "0 0 0 2px var(--color-tour-accent)",
                                 borderRadius: "var(--tour-radius)",
                                 // advance-on-click steps need the spotlight to
@@ -878,7 +898,7 @@ export function TourPopover() {
                 // rules as the spotlit path.
                 <div
                     aria-hidden
-                    className="fixed inset-0 z-[var(--z-tour-backdrop)] bg-black/45"
+                    className="fixed inset-0 z-[var(--z-tour-backdrop)] bg-black/60"
                     style={
                         nonBlocking || advanceOn !== undefined
                             ? { pointerEvents: "none" }
