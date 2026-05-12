@@ -221,7 +221,7 @@ export interface TourStep {
 export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
     setup: [
         {
-            // Single welcome step. Anchored to the wizard header (the
+            // Welcome step. Anchored to the wizard header (the
             // "Setup wizard" h2 + subheading) so the spotlight rings a
             // small, top-of-page element and the popover has somewhere
             // to land. The whole accordion is too tall to anchor the
@@ -241,6 +241,34 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
                 desktop: { side: "bottom", align: "start" },
             },
             nonBlocking: true,
+        },
+        {
+            // Step 2: open the overflow menu and show the user where
+            // Game setup lives, so they have a concrete "this is how I
+            // come back" cue before they start playing. The same
+            // callout fires on step 1 of `checklistSuggest` too —
+            // teaching it from both directions (forward from setup,
+            // back from the checklist) is intentional repetition.
+            //
+            // `anchor: "overflow-menu"` is observed by Toolbar +
+            // BottomNav, which force-open the menu while this step is
+            // active. `popoverAnchorPriority: "last-visible"` binds
+            // the popover to the open menu's portaled content rather
+            // than the trigger button.
+            anchor: "overflow-menu",
+            popoverAnchorPriority: "last-visible",
+            titleKey: "setup.menu.title",
+            bodyKey: "setup.menu.body",
+            side: "left",
+            align: "start",
+            sideByViewport: {
+                // Mobile menu opens UP from the BottomNav, so the
+                // popover sits ABOVE the menu (side: top).
+                mobile: { side: "top", align: "end" },
+                // Desktop menu opens DOWN from the top-right Toolbar
+                // trigger, so the popover sits to the LEFT.
+                desktop: { side: "left", align: "start" },
+            },
             finishLabelKey: "gotIt",
         },
     ],

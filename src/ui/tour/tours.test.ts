@@ -42,20 +42,19 @@ const findStep = (
 };
 
 describe("TOURS — setup tour", () => {
-    test("is a single welcome step (wizard is largely self-explanatory)", () => {
-        // After the heading-hierarchy + suggestion-log rework, the
-        // wizard's accordion + sticky-footer + per-step validation
-        // banner make the multi-step setup tour redundant. One welcome
-        // step orients new visitors; everything else is discoverable
-        // from the wizard itself.
-        //
-        // The step targets `setup-wizard-header` — a small element at
-        // the top of the wizard, not the full accordion shell. The
-        // shell is too tall to anchor a popover against (Radix's
-        // collision detection pushes it past the viewport edge); the
-        // header is short and predictably on-screen.
+    test("is a 2-step tour: welcome → overflow menu callout", () => {
+        // The wizard itself is largely self-explanatory (accordion +
+        // sticky-footer + per-step validation banner) so we don't walk
+        // every wizard step. Two short steps:
+        //   1. Welcome — orient brand-new visitors.
+        //   2. Overflow menu — show the user where Game setup lives so
+        //      they have a concrete "come back here later" affordance.
+        //      The same callout fires on step 1 of `checklistSuggest`
+        //      too; teaching it from both directions is intentional
+        //      repetition.
         expect(TOURS.setup.map(s => s.anchor)).toEqual([
             "setup-wizard-header",
+            "overflow-menu",
         ]);
     });
 
@@ -82,6 +81,26 @@ describe("TOURS — setup tour", () => {
             side: "bottom",
             align: "center",
         });
+    });
+
+    test("overflow-menu step uses last-visible + force-opens the menu via the `overflow-menu` anchor", () => {
+        const step = TOURS.setup[1]!;
+        expect(step.anchor).toBe("overflow-menu");
+        expect(step.popoverAnchorPriority).toBe("last-visible");
+        expect(step.titleKey).toBe("setup.menu.title");
+        // Mobile menu opens UP from the BottomNav → popover above
+        // (side: "top"). Desktop menu opens DOWN from the top-right
+        // Toolbar trigger → popover to the LEFT (side: "left").
+        expect(step.sideByViewport?.mobile).toEqual({
+            side: "top",
+            align: "end",
+        });
+        expect(step.sideByViewport?.desktop).toEqual({
+            side: "left",
+            align: "start",
+        });
+        // Last step in the setup tour wraps up with a "Got it" CTA.
+        expect(step.finishLabelKey).toBe("gotIt");
     });
 });
 

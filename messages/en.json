@@ -596,6 +596,10 @@
             "welcome": {
                 "title": "Welcome to Clue Solver",
                 "body": "Build your game below — pick a deck, list your players, and mark the cards you're holding."
+            },
+            "menu": {
+                "title": "Find Game setup in this menu",
+                "body": "Once you start playing, open this menu anytime to come back here — players, decks, and hand sizes are all editable later. Undo, Account, and Install live here too."
             }
         },
         "checklist": {

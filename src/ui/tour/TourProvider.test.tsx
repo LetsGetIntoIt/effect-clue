@@ -97,8 +97,10 @@ describe("TourProvider — persistence on close", () => {
     test("completion: clicking Next past the last step writes lastDismissedAt", () => {
         const api = mount();
         act(() => api.current().startTour("setup"));
-        // The setup tour is a single welcome step. One Next click past
-        // step 0 triggers the completion path.
+        // Setup tour has two steps (welcome → overflow-menu callout).
+        // First Next: step 0 → step 1. Second Next past the last step
+        // triggers the completion path.
+        act(() => api.current().nextStep());
         act(() => api.current().nextStep());
         expect(api.current().activeScreen).toBeUndefined();
         const persisted = loadTourState("setup");
@@ -179,16 +181,17 @@ describe("TourProvider — viewport filter", () => {
         expect(api2.current().steps?.length).toBe(9);
     });
 
-    test("setup tour is a single welcome step at both breakpoints", () => {
+    test("setup tour is a 2-step tour at both breakpoints", () => {
+        // Welcome + overflow-menu callout. Both run on every viewport.
         stubMatchMedia(true);
         const api = mount();
         act(() => api.current().startTour("setup"));
-        expect(api.current().steps?.length).toBe(1);
+        expect(api.current().steps?.length).toBe(2);
 
         stubMatchMedia(false);
         const api2 = mount();
         act(() => api2.current().startTour("setup"));
-        expect(api2.current().steps?.length).toBe(1);
+        expect(api2.current().steps?.length).toBe(2);
     });
 
     test("isLastStep is true on the final step of checklistSuggest", () => {
@@ -226,8 +229,8 @@ describe("TourProvider — analytics events", () => {
             event: "tour_started",
             props: {
                 screenKey: "setup",
-                // Setup tour is a single welcome step.
-                stepCount: 1,
+                // Setup tour: welcome → overflow-menu callout.
+                stepCount: 2,
                 reengaged: false,
                 daysSinceLastDismissal: null,
             },
@@ -238,9 +241,9 @@ describe("TourProvider — analytics events", () => {
                 screenKey: "setup",
                 stepIndex: 0,
                 stepId: "setup-wizard-header",
-                totalSteps: 1,
+                totalSteps: 2,
                 isFirstStep: true,
-                isLastStep: true,
+                isLastStep: false,
             },
         });
     });
@@ -248,10 +251,8 @@ describe("TourProvider — analytics events", () => {
     test("nextStep emits tour_step_advanced then tour_step_viewed for the new step", () => {
         stubMatchMedia(true);
         const api = mount();
-        // Use checklistSuggest — setup is single-step now, so it has
-        // no advance transition to observe. checklistSuggest step 1
-        // is the two-halves intro (`desktop-checklist-area`) — step 0
-        // is the overflow-menu callout.
+        // checklistSuggest step 0 is the overflow-menu callout, step 1
+        // is the two-halves intro (`desktop-checklist-area`).
         act(() => api.current().startTour("checklistSuggest"));
         captureCalls.length = 0; // discard start events
         act(() => api.current().nextStep());
@@ -276,15 +277,16 @@ describe("TourProvider — analytics events", () => {
         const api = mount();
         act(() => api.current().startTour("setup"));
         captureCalls.length = 0;
-        // Setup is single-step: one Next past step 0 triggers
-        // completion. No advance events fire (no further steps).
+        // Setup has two steps. First Next advances to step 1; second
+        // Next past the last step triggers completion.
+        act(() => api.current().nextStep());
         act(() => api.current().nextStep());
         const last = captureCalls[captureCalls.length - 1];
         expect(last?.event).toBe("tour_completed");
         expect(last).toMatchObject({
             props: {
                 screenKey: "setup",
-                totalSteps: 1,
+                totalSteps: 2,
                 $set: { tour_setup_status: "completed" },
             },
         });
