@@ -475,7 +475,19 @@ export function SetupWizard() {
                 "sticky bottom-0 z-[1] flex flex-wrap items-center gap-2 " +
                 "rounded-b-[var(--radius)] border-t border-border/30 " +
                 "bg-panel px-4 py-3 " +
-                "[padding-bottom:calc(env(safe-area-inset-bottom,0px)+0.75rem)]"
+                "[padding-bottom:calc(env(safe-area-inset-bottom,0px)+0.75rem)] " +
+                // On mobile setup mode the BottomNav (~56px tall, plus the
+                // device safe-area for the iOS home-bar) is fixed at the
+                // viewport bottom. Without an offset the sticky footer's
+                // Skip / Next buttons render UNDER the BottomNav and become
+                // unclickable. Pin the footer above the BottomNav on mobile;
+                // drop the in-footer safe-area padding too since the
+                // BottomNav already inset its own (double-padding would
+                // bloat the footer's height for no visual gain). Desktop
+                // hides the BottomNav, so the original `bottom: 0` +
+                // safe-area padding-bottom still applies there.
+                "[@media(max-width:799px)]:[bottom:calc(56px+env(safe-area-inset-bottom,0px))] " +
+                "[@media(max-width:799px)]:[padding-bottom:0.75rem]"
             }
         >
             <button
