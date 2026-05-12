@@ -776,6 +776,22 @@ export function TourPopover() {
                           {chunks}
                       </strong>
                   ),
+                  // `<columns><left>…</left><right>…</right></columns>`
+                  // renders two side-by-side body panels. Used today
+                  // by the desktop two-halves step to mirror the
+                  // checklist (left) / suggestion log (right)
+                  // spotlight layout in the popover's body copy.
+                  // Flex with `flex-1 basis-0` ensures both columns
+                  // get equal width regardless of text length.
+                  columns: (chunks) => (
+                      <div className="flex gap-4">{chunks}</div>
+                  ),
+                  left: (chunks) => (
+                      <div className="flex-1 basis-0">{chunks}</div>
+                  ),
+                  right: (chunks) => (
+                      <div className="flex-1 basis-0">{chunks}</div>
+                  ),
               })
             : null;
     // The "Next" button on the last step uses `currentStep.finishLabelKey`

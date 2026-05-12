@@ -355,18 +355,23 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             // rendering (one ring per column) rather than the default
             // union behavior.
             //
-            // Popover anchors to the small case-file summary so it
-            // doesn't get pushed off-screen against the columns. The
-            // dim veil is skipped on multi-spotlight steps (the
+            // Popover anchors to `two-halves-divider`, a 0-sized
+            // sentinel sitting in the gap between the two columns
+            // (added by `DesktopPlayLayout`), so the popover centers
+            // horizontally on the visual border between the halves.
+            // The body copy uses `<columns><left></left><right></right>`
+            // tags so the two descriptions sit side-by-side beneath
+            // the title — mirroring the two columns being spotlit.
+            // The dim veil is skipped on multi-spotlight steps (the
             // box-shadow approach can't cut multiple cutouts), so the
             // popover carries the user's attention.
             anchor: "two-halves-spotlight",
             multiSpotlight: true,
-            popoverAnchor: "checklist-case-file",
+            popoverAnchor: "two-halves-divider",
             titleKey: "checklist.intro.title",
             bodyKey: "checklist.intro.body",
             side: "bottom",
-            align: "start",
+            align: "center",
             requiredUiMode: "checklist",
             viewport: "desktop",
         },

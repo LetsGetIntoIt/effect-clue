@@ -156,16 +156,18 @@ describe("TOURS — checklistSuggest tour", () => {
         expect(step.forceOpenOverflowMenu).toBe(true);
     });
 
-    test("desktop two-halves step uses multi-spotlight token + case-file popoverAnchor", () => {
+    test("desktop two-halves step uses multi-spotlight + a divider popover anchor at the gap", () => {
         const step = findStep(
             TOURS.checklistSuggest,
             "two-halves-spotlight",
         );
         // `two-halves-spotlight` is attached to BOTH the Checklist
         // and SuggestionLog column wrappers, so the spotlight renderer
-        // paints two separate rings. The popover anchors to the small
-        // case-file summary so it stays stable.
-        expect(step.popoverAnchor).toBe("checklist-case-file");
+        // paints two separate rings. The popover anchors to
+        // `two-halves-divider`, a 0-sized sentinel sitting in the gap
+        // between the two columns, so the popover centers
+        // horizontally on the visual border between the halves.
+        expect(step.popoverAnchor).toBe("two-halves-divider");
         expect(step.viewport).toBe("desktop");
         expect(step.requiredUiMode).toBe("checklist");
     });

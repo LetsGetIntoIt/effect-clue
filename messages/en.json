@@ -613,7 +613,7 @@
             },
             "intro": {
                 "title": "Two halves work together",
-                "body": "The grid on the left tracks what each player has. The suggestion log on the right is where every guess gets recorded."
+                "body": "<columns><left>The grid on the left tracks what each player has.</left><right>The suggestion log on the right is where every guess gets recorded.</right></columns>"
             },
             "tapChecklist": {
                 "title": "Two halves: this is the deduction grid",
