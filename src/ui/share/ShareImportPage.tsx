@@ -510,7 +510,11 @@ export function ShareImportPage({
 
     return (
         <main className="mx-auto flex max-w-[640px] flex-col gap-5 px-5 py-8">
-            <h1 className="m-0 font-display text-[1.75rem] text-accent">
+            {/* Page heading uses the same hierarchy as SetupWizard +
+                SuggestionLogPanel: slab/display family (inherited
+                via the global h1 rule), uppercase + accent for the
+                "you are here" cue. */}
+            <h1 className="m-0 text-[1.5rem] uppercase tracking-[0.05em] text-accent">
                 {t("importTitle")}
             </h1>
             <Dialog.Root
@@ -527,7 +531,10 @@ export function ShareImportPage({
                         }
                     >
                         <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
-                            <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
+                            {/* Modal title matches SuggestionLogPanel
+                                's `h2`: uppercase + accent + slab,
+                                one notch smaller than the page H1. */}
+                            <Dialog.Title className="m-0 text-[1.25rem] uppercase tracking-[0.05em] text-accent">
                                 {t(TITLE_KEY_FOR[receiveFlow])}
                             </Dialog.Title>
                             <button
@@ -555,9 +562,14 @@ export function ShareImportPage({
                             </div>
                         ) : (
                             <>
-                                <div className="px-5 pt-4 text-[1rem] font-semibold">
+                                {/* "This share includes:" — sub-section
+                                    heading inside the modal. Matches
+                                    the DEDUCTIONS / LEADS / HYPOTHESIS
+                                    + "PRIOR SUGGESTIONS" treatment:
+                                    sans-bold-uppercase-accent. */}
+                                <h3 className="m-0 mt-4 font-sans! px-5 text-[1.125rem] font-bold uppercase tracking-wide text-accent">
                                     {includesHeader}
-                                </div>
+                                </h3>
                                 <ul
                                     className="m-0 list-disc px-5 pl-9 pt-1 text-[1rem]"
                                     data-share-import-bullets
