@@ -140,7 +140,7 @@ export function SetupStepCardPackCustomize({
                         key={String(category.id)}
                         value={category}
                         onDragEnd={() => commitCategoryReorder(categoryDraft)}
-                        className="flex touch-none flex-col gap-2 rounded border border-border/40 bg-bg p-2"
+                        className="flex touch-none flex-col gap-2 rounded border border-border/40 bg-control p-2"
                     >
                         <CategoryHeader
                             category={category}
@@ -173,7 +173,7 @@ export function SetupStepCardPackCustomize({
                         <CardList category={category} />
                         <button
                             type="button"
-                            className="self-start cursor-pointer rounded border border-border bg-bg px-2 py-1 text-[1rem] hover:bg-hover"
+                            className="self-start cursor-pointer rounded border border-border bg-control px-2 py-1 text-[1rem] hover:bg-hover"
                             onClick={() =>
                                 dispatch({
                                     type: "addCardToCategoryById",
@@ -189,7 +189,7 @@ export function SetupStepCardPackCustomize({
 
             <button
                 type="button"
-                className="tap-target-compact text-tap-compact self-start cursor-pointer rounded border border-border bg-bg hover:bg-hover"
+                className="tap-target-compact text-tap-compact self-start cursor-pointer rounded border border-border bg-control hover:bg-hover"
                 onClick={() => dispatch({ type: "addCategory" })}
             >
                 {t("addCategory")}
@@ -198,7 +198,7 @@ export function SetupStepCardPackCustomize({
             <div className="flex flex-wrap items-center gap-2 border-t border-border/30 pt-3">
                 <button
                     type="button"
-                    className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-bg hover:bg-hover"
+                    className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-control hover:bg-hover"
                     onClick={saveAsNewPack}
                 >
                     {t("saveAsNewPack")}
@@ -277,7 +277,7 @@ function CardList({ category }: { readonly category: Category }) {
                     key={String(entry.id)}
                     value={entry}
                     onDragEnd={() => commitCardReorder(cardDraft)}
-                    className="flex touch-none items-center gap-2 rounded border border-border/40 bg-bg px-1 py-0.5"
+                    className="flex touch-none items-center gap-2 rounded border border-border/40 bg-control px-1 py-0.5"
                 >
                     <CardRow
                         entry={entry}
@@ -378,7 +378,7 @@ function CategoryHeader({
             {canRemove && (
                 <button
                     type="button"
-                    className="shrink-0 cursor-pointer rounded border border-border bg-bg p-1 text-fg hover:bg-hover"
+                    className="shrink-0 cursor-pointer rounded border border-border bg-control p-1 text-fg hover:bg-hover"
                     aria-label={t("removeCategoryTitle", {
                         name: category.name,
                     })}
@@ -467,7 +467,7 @@ function CardRow({
             {canRemove && (
                 <button
                     type="button"
-                    className="shrink-0 cursor-pointer rounded border border-border bg-bg p-1 text-fg hover:bg-hover"
+                    className="shrink-0 cursor-pointer rounded border border-border bg-control p-1 text-fg hover:bg-hover"
                     aria-label={t("removeCardTitle", { name: entry.name })}
                     onClick={onRemove}
                 >

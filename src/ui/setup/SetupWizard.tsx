@@ -492,7 +492,7 @@ export function SetupWizard() {
         >
             <button
                 type="button"
-                className="tap-target-compact text-tap-compact shrink-0 cursor-pointer rounded border border-border bg-bg hover:bg-hover"
+                className="tap-target-compact text-tap-compact shrink-0 cursor-pointer rounded border border-border bg-control hover:bg-hover"
                 onClick={onStartOver}
             >
                 {t("newGame")}
@@ -500,7 +500,7 @@ export function SetupWizard() {
             <div className="ml-auto flex items-center gap-2">
                 <button
                     type="button"
-                    className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-bg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+                    className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-control hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
                     onClick={onClickSkip}
                     disabled={!skipEnabled}
                 >

@@ -91,7 +91,7 @@ export function MyHandPanel() {
                 </h2>
                 <button
                     type="button"
-                    className="cursor-pointer rounded border border-border bg-bg px-2 py-0.5 text-[1rem] hover:bg-hover"
+                    className="cursor-pointer rounded border border-border bg-control px-2 py-0.5 text-[1rem] hover:bg-hover"
                     aria-expanded={!collapsed}
                     onClick={toggle}
                 >

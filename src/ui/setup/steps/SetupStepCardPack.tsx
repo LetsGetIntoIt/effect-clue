@@ -421,7 +421,7 @@ export function SetupStepCardPack({
                                         "tap-target-compact text-tap-compact cursor-pointer rounded-full border transition-colors duration-200 ease-out " +
                                         (isActive
                                             ? "border-accent bg-accent font-semibold text-white"
-                                            : "border-border bg-bg hover:bg-hover")
+                                            : "border-border bg-control hover:bg-hover")
                                     }
                                     aria-pressed={isActive}
                                     data-card-pack-active={
@@ -456,7 +456,7 @@ export function SetupStepCardPack({
                     >
                         <button
                             type="button"
-                            className="tap-target-compact text-tap-compact cursor-pointer rounded-full border border-border bg-bg hover:bg-hover"
+                            className="tap-target-compact text-tap-compact cursor-pointer rounded-full border border-border bg-control hover:bg-hover"
                         >
                             {t("allCardPacks")}
                         </button>
@@ -467,7 +467,7 @@ export function SetupStepCardPack({
             <div className="flex flex-col gap-2">
                 <button
                     type="button"
-                    className="tap-target-compact text-tap-compact self-start cursor-pointer rounded border border-border bg-bg hover:bg-hover"
+                    className="tap-target-compact text-tap-compact self-start cursor-pointer rounded border border-border bg-control hover:bg-hover"
                     onClick={() => setShowCustomize(prev => !prev)}
                     aria-expanded={showCustomize}
                 >
