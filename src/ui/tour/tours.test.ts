@@ -42,22 +42,23 @@ const findStep = (
 };
 
 describe("TOURS — setup tour", () => {
-    test("is a 3-step tour: welcome → card pack → overflow menu callout", () => {
+    test("is a 3-step tour: welcome → overflow menu callout → card pack", () => {
         // The wizard itself is largely self-explanatory (accordion +
         // sticky-footer + per-step validation banner) so we don't walk
         // every wizard step. Three short steps:
         //   1. Welcome — orient brand-new visitors.
-        //   2. Card pack — point at the first wizard section so the
-        //      brand-new user has a concrete starting move.
-        //   3. Overflow menu — show the user where Game setup lives
+        //   2. Overflow menu — show the user where Game setup lives
         //      so they have a concrete "come back here later"
         //      affordance. The same callout fires on step 1 of
         //      `checklistSuggest` too; teaching it from both
         //      directions is intentional repetition.
+        //   3. Card pack — closer pointing at the first wizard
+        //      section so the user has a concrete first move after
+        //      the orientation lands.
         expect(TOURS.setup.map(s => s.anchor)).toEqual([
             "setup-wizard-header",
-            "setup-wizard-step-cardPack",
             "overflow-menu",
+            "setup-wizard-step-cardPack",
         ]);
     });
 
@@ -81,15 +82,8 @@ describe("TOURS — setup tour", () => {
         });
     });
 
-    test("card-pack step targets the cardPack panel via SetupStepPanel's emitted anchor", () => {
-        const step = TOURS.setup[1]!;
-        expect(step.anchor).toBe("setup-wizard-step-cardPack");
-        expect(step.titleKey).toBe("setup.cardPack.title");
-        expect(step.bodyKey).toBe("setup.cardPack.body");
-    });
-
     test("overflow-menu step uses last-visible + force-opens the menu via the `overflow-menu` anchor", () => {
-        const step = TOURS.setup[2]!;
+        const step = TOURS.setup[1]!;
         expect(step.anchor).toBe("overflow-menu");
         expect(step.popoverAnchorPriority).toBe("last-visible");
         expect(step.titleKey).toBe("setup.menu.title");
@@ -104,7 +98,14 @@ describe("TOURS — setup tour", () => {
             side: "left",
             align: "start",
         });
-        // Last step in the setup tour wraps up with a "Got it" CTA.
+    });
+
+    test("card-pack step closes the tour with a 'Got it' CTA + targets the cardPack panel", () => {
+        const step = TOURS.setup[2]!;
+        expect(step.anchor).toBe("setup-wizard-step-cardPack");
+        expect(step.titleKey).toBe("setup.cardPack.title");
+        expect(step.bodyKey).toBe("setup.cardPack.body");
+        // Final step wraps up with a "Got it" CTA.
         expect(step.finishLabelKey).toBe("gotIt");
     });
 });

@@ -219,12 +219,14 @@ export interface TourStep {
 /**
  * Tour registry.
  *
- * - `setup`: a three-step orientation. Welcome → "Get started by
- *   picking a card pack" (spotlights the first wizard step) →
- *   overflow-menu callout. The wizard is largely self-explanatory
- *   after the M6 rework (accordion + sticky footer + per-step
- *   validation banners), so the tour's job is to orient a brand-new
- *   visitor and tell them the menu is the way back later.
+ * - `setup`: a three-step orientation. Welcome → overflow-menu
+ *   callout → "Get started by picking a card pack" (spotlights the
+ *   first wizard step). Orientation lands first, then the "come back
+ *   here later" affordance, then the concrete first action — the
+ *   closer doubles as a nudge into the work. The wizard is largely
+ *   self-explanatory after the M6 rework (accordion + sticky footer
+ *   + per-step validation banners), so the tour's job is to orient a
+ *   brand-new visitor and tell them the menu is the way back later.
  * - `checklistSuggest`: the heart of the tour system. Walks the user
  *   through the two-halves layout (deduction grid + suggestion log),
  *   *opens a cell* programmatically so the explanation panel is on
@@ -275,29 +277,7 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             },
         },
         {
-            // Step 2: spotlight the first wizard step (Pick a card
-            // pack) so the brand-new user has a concrete starting
-            // point. The whole section gets the spotlight (header +
-            // helper text + pill row) but the POPOVER anchors to the
-            // small pill row inside (`setup-step-cardpack-pills`),
-            // which sits in the lower half of the section — that
-            // gives Radix a small element to position against and
-            // leaves room for the popover above the pills (popover
-            // top stays on-screen on short viewports where the panel
-            // itself is taller than the visible viewport).
-            //
-            // Anchor token is emitted by SetupStepPanel as
-            // `setup-wizard-step-<stepId>`; the cardPack step's wrapper
-            // section thus carries `setup-wizard-step-cardPack`.
-            anchor: "setup-wizard-step-cardPack",
-            popoverAnchor: "setup-step-cardpack-pills",
-            titleKey: "setup.cardPack.title",
-            bodyKey: "setup.cardPack.body",
-            side: "bottom",
-            align: "center",
-        },
-        {
-            // Step 3: open the overflow menu and show the user where
+            // Step 2: open the overflow menu and show the user where
             // Game setup lives, so they have a concrete "this is how I
             // come back" cue before they start playing. The same
             // callout fires on step 1 of `checklistSuggest` too —
@@ -323,6 +303,29 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
                 // trigger, so the popover sits to the LEFT.
                 desktop: { side: "left", align: "start" },
             },
+        },
+        {
+            // Step 3 (closer): spotlight the first wizard step (Pick a
+            // card pack) so the brand-new user has a concrete starting
+            // move after the orientation. The whole section gets the
+            // spotlight (header + helper text + pill row) but the
+            // POPOVER anchors to the small pill row inside
+            // (`setup-step-cardpack-pills`), which sits in the lower
+            // half of the section — that gives Radix a small element to
+            // position against and leaves room for the popover above
+            // the pills (popover top stays on-screen on short viewports
+            // where the panel itself is taller than the visible
+            // viewport).
+            //
+            // Anchor token is emitted by SetupStepPanel as
+            // `setup-wizard-step-<stepId>`; the cardPack step's wrapper
+            // section thus carries `setup-wizard-step-cardPack`.
+            anchor: "setup-wizard-step-cardPack",
+            popoverAnchor: "setup-step-cardpack-pills",
+            titleKey: "setup.cardPack.title",
+            bodyKey: "setup.cardPack.body",
+            side: "bottom",
+            align: "center",
             finishLabelKey: "gotIt",
         },
     ],
