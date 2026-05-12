@@ -813,17 +813,15 @@ export function TourPopover() {
                     // overlaps the second one's area and dims it too.
                     // We accept multi-spotlight steps render
                     // ring-only (no dim) since the popover is what's
-                    // commanding attention anyway. Non-blocking mode
-                    // also skips the dim by design.
+                    // commanding attention anyway.
                     //
-                    // Advance-on-click steps DO paint the dim — the
-                    // veil signals "the tour is in command of this
-                    // moment, focus on the spotlit element" even
-                    // though the user's click passes through to fire
-                    // both the element's native handler AND the
-                    // tour advance.
-                    const paintsDim =
-                        !nonBlocking && spotlights.length === 1;
+                    // The dim is painted on ALL single-spotlight
+                    // steps — blocking, non-blocking, and advance-
+                    // on-click alike. The veil signals "the tour is
+                    // in command of this moment, focus on the spotlit
+                    // element"; whether clicks pass through is
+                    // orthogonal (governed by `pointer-events` below).
+                    const paintsDim = spotlights.length === 1;
                     return (
                         <div
                             key={i}
@@ -862,13 +860,14 @@ export function TourPopover() {
                     );
                 })
             ) : (
+                // Fallback dim layer: rendered when no anchor matched
+                // on the page. Paints the same `bg-black/45` veil so
+                // the user still sees "the tour is active" — pointer
+                // behavior follows the same nonBlocking / advanceOn
+                // rules as the spotlit path.
                 <div
                     aria-hidden
-                    className={
-                        nonBlocking || advanceOn !== undefined
-                            ? "fixed inset-0 z-[var(--z-tour-backdrop)]"
-                            : "fixed inset-0 z-[var(--z-tour-backdrop)] bg-black/45"
-                    }
+                    className="fixed inset-0 z-[var(--z-tour-backdrop)] bg-black/45"
                     style={
                         nonBlocking || advanceOn !== undefined
                             ? { pointerEvents: "none" }
