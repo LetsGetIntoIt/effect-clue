@@ -85,6 +85,25 @@ const SCROLL_BEHAVIOR_AUTO: ScrollBehavior = "auto";
 // to allow keyboard events that target the popover's own buttons.
 const POPOVER_CONTENT_ATTR = "data-tour-popover-content" as const;
 const TOUR_VIEWPORT_MARGIN = 48;
+// Bounce keyframes for the action-prompt nudge. Vertical-only so the
+// layout stays stable; tail damping (-4px on the second bounce)
+// reads as physical bounce-decay. Driven via the Web Animations API
+// (`el.animate(...)`) instead of a CSS class because CSS class
+// toggling is unreliable for "restart an animation that already
+// played" — browsers cache the completed state and skip the second
+// run. WAAPI always creates a fresh animation, so each click of the
+// disabled Next button gets a fresh bounce.
+const TOUR_ACTION_BOUNCE_KEYFRAMES: Keyframe[] = [
+    { transform: "translateY(0)" },
+    { transform: "translateY(-8px)", offset: 0.3 },
+    { transform: "translateY(0)", offset: 0.6 },
+    { transform: "translateY(-4px)", offset: 0.75 },
+    { transform: "translateY(0)" },
+];
+const TOUR_ACTION_BOUNCE_OPTIONS: KeyframeAnimationOptions = {
+    duration: 550,
+    easing: "cubic-bezier(0.34, 1.56, 0.64, 1)",
+};
 const TOUR_STICKY_LEFT_GAP = 16;
 const TOUR_STICKY_LEFT_ATTR = "data-tour-sticky-left" as const;
 const SCROLL_AXIS_X = "x" as const;
@@ -1136,30 +1155,29 @@ export function TourPopover() {
                                     }
                                     onClick={() => {
                                         if (advanceOn !== undefined) {
-                                            // Imperatively bounce the
-                                            // body's action prompt to
-                                            // redirect the user's eye
-                                            // back to the spotlit
-                                            // element. Removing then
-                                            // re-adding the class
-                                            // restarts the CSS
-                                            // animation; the
-                                            // `void el.offsetWidth`
-                                            // between is a layout
-                                            // forced-reflow that
-                                            // browsers respect as a
-                                            // boundary.
+                                            // Bounce the body's action
+                                            // prompt to redirect the
+                                            // user's eye back to the
+                                            // spotlit element. WAAPI
+                                            // (instead of CSS class
+                                            // toggling) guarantees the
+                                            // animation restarts on
+                                            // every click — class
+                                            // toggling caches the
+                                            // completed state in some
+                                            // browsers and skips the
+                                            // second run.
                                             const el =
                                                 document.querySelector(
                                                     `[${POPOVER_CONTENT_ATTR}] [data-tour-action-prompt]`,
                                                 );
                                             if (el instanceof HTMLElement) {
-                                                el.classList.remove(
-                                                    "tour-action-bounce",
-                                                );
-                                                void el.offsetWidth;
-                                                el.classList.add(
-                                                    "tour-action-bounce",
+                                                for (const a of el.getAnimations()) {
+                                                    a.cancel();
+                                                }
+                                                el.animate(
+                                                    TOUR_ACTION_BOUNCE_KEYFRAMES,
+                                                    TOUR_ACTION_BOUNCE_OPTIONS,
                                                 );
                                             }
                                             return;

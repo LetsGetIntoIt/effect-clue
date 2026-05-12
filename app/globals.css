@@ -476,20 +476,3 @@ h3 {
     ) !important;
 }
 
-/* Bounce animation for the tour popover's action prompt
-   (e.g. "Tap the highlighted cell to continue"). Triggered when the
-   user clicks the disabled Next button on an advance-on-click step —
-   the prompt bounces to draw the eye back to the action that will
-   actually advance the tour. Vertical motion keeps the layout
-   stable; one-shot (no infinite loop) so it doesn't compete with the
-   user's attention once the cue has registered. */
-@keyframes tour-action-bounce {
-    0% { transform: translateY(0); }
-    30% { transform: translateY(-8px); }
-    60% { transform: translateY(0); }
-    75% { transform: translateY(-4px); }
-    100% { transform: translateY(0); }
-}
-.tour-action-bounce {
-    animation: tour-action-bounce 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
