@@ -595,10 +595,14 @@
         "setup": {
             "welcome": {
                 "title": "Welcome to Clue Solver",
-                "body": "Build your game below — pick a deck, list your players, and mark the cards you're holding. You can come back to setup anytime from the menu (⋯)."
+                "body": "Build your game below — pick a deck, list your players, and mark the cards you're holding."
             }
         },
         "checklist": {
+            "menu": {
+                "title": "Get back to setup anytime",
+                "body": "This menu hosts Game setup — open it whenever you need to fix players, swap the deck, or change hand sizes. Undo, Account, and Install live here too."
+            },
             "intro": {
                 "title": "Two halves work together",
                 "body": "The grid on the left tracks what you know about each player's hand. The suggestion log on the right is where every guess gets recorded. On mobile they're tabs at the bottom."

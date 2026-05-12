@@ -42,6 +42,7 @@
 "use client";
 
 import * as Popover from "@radix-ui/react-popover";
+import { Duration } from "effect";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { XIcon } from "../components/Icons";
@@ -71,6 +72,10 @@ type VirtualElement = {
 const KEY_ESCAPE = "Escape" as const;
 // Analytics discriminator for tour dismissal via Esc keypress.
 const DISMISS_VIA_ESC = "esc" as const;
+// How long a step must be on screen before tapping the backdrop
+// advances the tour. The delay prevents accidental skip-throughs on
+// stray taps right after a step appears.
+const BACKDROP_ADVANCE_DELAY = Duration.seconds(2);
 const SCROLL_BEHAVIOR_AUTO: ScrollBehavior = "auto";
 // Attribute we add to the Radix Popover.Content so the keyboard
 // isolator can do an O(1) `popoverContent.contains(eventTarget)` check
@@ -599,6 +604,35 @@ export function TourPopover() {
         return () => cancelAnimationFrame(id);
     }, [activeScreen, stepIndex, currentStep]);
 
+    // Tap-veil-to-advance failsafe. After a short delay (so the user
+    // doesn't accidentally skip a step they just entered by tapping
+    // the page during scroll-decay), the dim backdrop becomes
+    // clickable and advances the tour to the next step (or finishes
+    // it on the last step). This is the safety net for cases where
+    // the popover renders off-screen due to a layout we didn't
+    // anticipate — the user can always tap anywhere to escape.
+    //
+    // Gated on blocking mode only: in non-blocking mode the backdrop
+    // already passes clicks through to the page, so tap-to-advance
+    // would fight with normal interaction. Non-blocking tours have a
+    // visible Next button on screen anyway (the popover doesn't
+    // dim the page).
+    //
+    // Esc remains the keyboard escape; this is the touch-friendly
+    // equivalent for users without a keyboard.
+    const [canAdvanceFromBackdrop, setCanAdvanceFromBackdrop] =
+        useState(false);
+    useEffect(() => {
+        if (!activeScreen || !currentStep) return;
+        setCanAdvanceFromBackdrop(false);
+        const delay = Duration.toMillis(BACKDROP_ADVANCE_DELAY);
+        const id = window.setTimeout(
+            () => setCanAdvanceFromBackdrop(true),
+            delay,
+        );
+        return () => window.clearTimeout(id);
+    }, [activeScreen, stepIndex, currentStep]);
+
     if (!activeScreen || !steps || !currentStep) return null;
 
     const totalSteps = steps.length;
@@ -639,11 +673,24 @@ export function TourPopover() {
                 backdrop drops its `pointer-events` so taps land on
                 the page beneath — the popover is informational and
                 the user is meant to keep interacting with the page
-                while it floats. */}
+                while it floats.
+
+                Tap-to-advance failsafe: after `BACKDROP_ADVANCE_DELAY`
+                the backdrop becomes clickable and a tap advances the
+                tour (or finishes it on the last step). This is the
+                escape hatch for cases where the popover ends up
+                off-screen due to a layout we didn't anticipate. The
+                delay keeps an accidental tap right after step entry
+                from skipping past content the user hasn't read. */}
             <div
                 aria-hidden
                 className="fixed inset-0 z-[var(--z-tour-backdrop)]"
                 style={nonBlocking ? { pointerEvents: "none" } : undefined}
+                onClick={
+                    !nonBlocking && canAdvanceFromBackdrop
+                        ? () => nextStep()
+                        : undefined
+                }
             />
             {/* Spotlight: a transparent box sized to the anchor with
                 a giant `box-shadow` painting darkness OUTSIDE the box.
@@ -681,6 +728,11 @@ export function TourPopover() {
                         zIndex: "var(--z-tour-spotlight)",
                     }}
                     className="tour-spotlight transition-all"
+                    onClick={
+                        !nonBlocking && canAdvanceFromBackdrop
+                            ? () => nextStep()
+                            : undefined
+                    }
                 />
             ) : (
                 <div
@@ -691,6 +743,11 @@ export function TourPopover() {
                             : "fixed inset-0 z-[var(--z-tour-backdrop)] bg-black/45"
                     }
                     style={nonBlocking ? { pointerEvents: "none" } : undefined}
+                    onClick={
+                        !nonBlocking && canAdvanceFromBackdrop
+                            ? () => nextStep()
+                            : undefined
+                    }
                 />
             )}
             {/* Key the entire Popover.Root tree on the active step

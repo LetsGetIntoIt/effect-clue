@@ -86,15 +86,18 @@ describe("TOURS — setup tour", () => {
 });
 
 describe("TOURS — checklistSuggest tour", () => {
-    test("walks intro → DEDUCTIONS → LEADS → HYPOTHESIS → case file → suggest intro → prior log → add form", () => {
-        // The post-rework tour is built around the three named
-        // sections of the cell-explanation panel. Steps 2-4 share the
-        // anchor naming convention `cell-explanation-*`; the
-        // Checklist component watches for those anchors and opens a
-        // deterministic cell so the panel is on screen for the
-        // popover to land against. Step 5 (case-file) closes the
-        // cell again as the tour moves on.
+    test("walks menu → intro → DEDUCTIONS → LEADS → HYPOTHESIS → case file → suggest intro → prior log → add form", () => {
+        // Step 1 opens the overflow menu and calls out "Game setup"
+        // so the user has a concrete return-to-setup affordance —
+        // mentioned only in copy in earlier drafts, which the user
+        // flagged as too easy to miss.
+        // Steps 3-5 share the `cell-explanation-*` anchor naming
+        // convention; the Checklist component watches for those
+        // anchors and opens a deterministic cell so the panel is on
+        // screen for the popover to land against. Step 6 (case-file)
+        // closes the cell again as the tour moves on.
         expect(TOURS.checklistSuggest.map(s => s.anchor)).toEqual([
+            "overflow-menu",
             "desktop-checklist-area",
             "cell-explanation-deductions",
             "cell-explanation-leads",
@@ -106,17 +109,39 @@ describe("TOURS — checklistSuggest tour", () => {
         ]);
     });
 
+    test("opens the overflow menu on step 1 (last-visible priority + force-open via the `overflow-menu` anchor)", () => {
+        const step = TOURS.checklistSuggest[0]!;
+        expect(step.anchor).toBe("overflow-menu");
+        expect(step.popoverAnchorPriority).toBe("last-visible");
+        // Mobile menu opens UP from the BottomNav → popover above
+        // (side: "top"). Desktop menu opens DOWN from the top-right
+        // Toolbar trigger → popover to the LEFT (side: "left").
+        expect(step.sideByViewport?.mobile).toEqual({
+            side: "top",
+            align: "end",
+        });
+        expect(step.sideByViewport?.desktop).toEqual({
+            side: "left",
+            align: "start",
+        });
+    });
+
     test("intro steps use viewport-conditional anchors + popoverAnchor", () => {
-        // The Checklist + Suggest intros spotlight large regions
-        // (whole column on desktop, BottomNav tab on mobile) but pin
-        // the popover to a smaller element on desktop so it doesn't
-        // get pushed off-screen.
+        // The Checklist intro spotlights the whole column on desktop
+        // (with the popover pinned to the small case-file summary so
+        // it doesn't get pushed off-screen) and the case-file
+        // directly on mobile (same element as the popover anchor, so
+        // the tour's auto-scroll brings the popover's target into
+        // view). The Suggest intro keeps the BottomNav-tab vs
+        // whole-column split — its popover is anchored to a small
+        // header that lives within the spotlight area, so auto-
+        // scrolling on the tab still puts the popover on screen.
         const checklistIntro = findStep(
             TOURS.checklistSuggest,
             "desktop-checklist-area",
         );
         expect(checklistIntro.anchorByViewport).toEqual({
-            mobile: "bottom-nav-checklist",
+            mobile: "checklist-case-file",
             desktop: "desktop-checklist-area",
         });
         expect(checklistIntro.popoverAnchor).toBe("checklist-case-file");

@@ -333,6 +333,10 @@ describe("TourPopover — M20 interaction rules", () => {
             { wrapper: TestQueryClientProvider },
         );
         act(() => api.startTour("checklistSuggest"));
+        // Step 0 is the overflow-menu callout (no anchor in this
+        // harness); advance to step 1 so the spotlight targets
+        // `desktop-checklist-area`.
+        act(() => api.nextStep());
         // The spotlight overlay sits on top of the anchor. Clicking
         // it should not bubble to the anchor's onClick.
         const spotlight = document.querySelector<HTMLDivElement>(
@@ -839,7 +843,10 @@ describe("TourPopover — popoverAnchor + popoverAnchorPriority", () => {
             { wrapper: TestQueryClientProvider },
         );
         act(() => api.startTour("checklistSuggest"));
-        // Step 0 of checklistSuggest renders with `checklist.intro.title`.
+        // Step 0 is the overflow-menu callout; advance to step 1
+        // (the two-halves intro) where the popoverAnchor /
+        // spotlight-anchor split lives.
+        act(() => api.nextStep());
         expect(
             screen.getByText("checklist.intro.title"),
         ).toBeInTheDocument();

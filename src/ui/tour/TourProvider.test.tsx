@@ -161,22 +161,22 @@ describe("TourProvider — persistence on close", () => {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe("TourProvider — viewport filter", () => {
-    test("checklistSuggest exposes the same 8 steps on desktop and mobile (no viewport-locked steps)", () => {
-        // The cell-explanation walkthrough added three section-anchored
-        // steps (DEDUCTIONS / LEADS / HYPOTHESIS) between the intro
-        // and the case-file step. All eight steps run on both
-        // viewports — viewport-conditional behavior lives in
-        // `sideByViewport` / `anchorByViewport`, not in skipping
-        // steps.
+    test("checklistSuggest exposes the same 9 steps on desktop and mobile (no viewport-locked steps)", () => {
+        // The walk: overflow-menu callout → two-halves intro → three
+        // cell-explanation sections (DEDUCTIONS / LEADS / HYPOTHESIS)
+        // → case-file → suggest intro → prior log → add-form CTA.
+        // All nine steps run on both viewports — viewport-conditional
+        // behavior lives in `sideByViewport` / `anchorByViewport`,
+        // not in skipping steps.
         stubMatchMedia(true); // desktop
         const api = mount();
         act(() => api.current().startTour("checklistSuggest"));
-        expect(api.current().steps?.length).toBe(8);
+        expect(api.current().steps?.length).toBe(9);
 
         stubMatchMedia(false); // mobile
         const api2 = mount();
         act(() => api2.current().startTour("checklistSuggest"));
-        expect(api2.current().steps?.length).toBe(8);
+        expect(api2.current().steps?.length).toBe(9);
     });
 
     test("setup tour is a single welcome step at both breakpoints", () => {
@@ -192,16 +192,16 @@ describe("TourProvider — viewport filter", () => {
     });
 
     test("isLastStep is true on the final step of checklistSuggest", () => {
-        stubMatchMedia(true); // desktop — 8 steps
+        stubMatchMedia(true); // desktop — 9 steps
         const api = mount();
         act(() => api.current().startTour("checklistSuggest"));
-        // Step 0 of 8: not last.
+        // Step 0 of 9: not last.
         expect(api.current().isLastStep).toBe(false);
-        // Walk to step 7 (the wrap-up `suggest-add-form`).
-        for (let i = 0; i < 7; i++) {
+        // Walk to step 8 (the wrap-up `suggest-add-form`).
+        for (let i = 0; i < 8; i++) {
             act(() => api.current().nextStep());
         }
-        // Step 7 of 8 (0-indexed) IS the last.
+        // Step 8 of 9 (0-indexed) IS the last.
         expect(api.current().isLastStep).toBe(true);
     });
 });
@@ -249,8 +249,9 @@ describe("TourProvider — analytics events", () => {
         stubMatchMedia(true);
         const api = mount();
         // Use checklistSuggest — setup is single-step now, so it has
-        // no advance transition to observe. checklistSuggest step 1 is
-        // the DEDUCTIONS section step.
+        // no advance transition to observe. checklistSuggest step 1
+        // is the two-halves intro (`desktop-checklist-area`) — step 0
+        // is the overflow-menu callout.
         act(() => api.current().startTour("checklistSuggest"));
         captureCalls.length = 0; // discard start events
         act(() => api.current().nextStep());
@@ -263,7 +264,7 @@ describe("TourProvider — analytics events", () => {
             props: {
                 screenKey: "checklistSuggest",
                 stepIndex: 1,
-                stepId: "cell-explanation-deductions",
+                stepId: "desktop-checklist-area",
                 isFirstStep: false,
                 isLastStep: false,
             },

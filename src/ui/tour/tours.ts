@@ -246,14 +246,55 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
     ],
     checklistSuggest: [
         {
-            // Intro: establish the two-halves mental model. Mobile
-            // spotlight points at the BottomNav Checklist tab; desktop
-            // spotlight covers the entire Checklist column. The popover
-            // anchors to a small element (the Case file summary) so
-            // it doesn't get pushed off-screen against a wide column.
+            // Step 1: open the overflow menu and call out "Game
+            // setup" so the user has a concrete affordance for
+            // returning to the wizard later. Telling them in copy
+            // ("come back from the menu") isn't enough — they need
+            // to see the menu open with the item highlighted.
+            //
+            // The `anchor: "overflow-menu"` token is observed by
+            // both `Toolbar` and `BottomNav`, which force-open the
+            // overflow menu programmatically while this step is
+            // active. `popoverAnchorPriority: "last-visible"` makes
+            // the popover bind to the open dropdown content
+            // (portaled, later in DOM order than the trigger).
+            anchor: "overflow-menu",
+            popoverAnchorPriority: "last-visible",
+            titleKey: "checklist.menu.title",
+            bodyKey: "checklist.menu.body",
+            side: "left",
+            align: "start",
+            sideByViewport: {
+                // Mobile: menu opens UP from the BottomNav, so the
+                // popover sits ABOVE the menu (side: top).
+                mobile: { side: "top", align: "end" },
+                // Desktop: menu opens DOWN from the top-right
+                // Toolbar trigger, so the popover sits to the LEFT
+                // of the menu.
+                desktop: { side: "left", align: "start" },
+            },
+            requiredUiMode: "checklist",
+        },
+        {
+            // Intro: establish the two-halves mental model.
+            //
+            // Desktop spotlights the entire Checklist column and
+            // pins the popover to a small element (the Case file
+            // summary) so it doesn't get pushed off-screen against a
+            // tall column.
+            //
+            // Mobile spotlights the Case file summary directly —
+            // same element the popover anchors to — so the auto-
+            // scroll brings the popover's anchor into view. Earlier
+            // versions spotlit the BottomNav Checklist tab (so the
+            // auto-scroll never touched the case-file), which left
+            // the popover anchored to an off-screen target and
+            // rendering above the viewport on initial mount. Step 1
+            // already calls out the BottomNav (the overflow menu),
+            // so re-pointing at the tab here is redundant.
             anchor: "desktop-checklist-area",
             anchorByViewport: {
-                mobile: "bottom-nav-checklist",
+                mobile: "checklist-case-file",
                 desktop: "desktop-checklist-area",
             },
             popoverAnchor: "checklist-case-file",
@@ -262,7 +303,7 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             side: "bottom",
             align: "start",
             sideByViewport: {
-                mobile: { side: "top", align: "center" },
+                mobile: { side: "bottom", align: "center" },
                 desktop: { side: "bottom", align: "start" },
             },
             requiredUiMode: "checklist",
