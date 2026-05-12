@@ -613,11 +613,11 @@
             },
             "tapChecklist": {
                 "title": "Two halves: this is the deduction grid",
-                "body": "Tap Checklist below to start here. We'll get to the Suggest tab next."
+                "body": "We'll get to the Suggest tab next. <strong>Tap the Checklist tab below to continue.</strong>"
             },
             "cellIntro": {
                 "title": "Each cell is a deduction",
-                "body": "Each cell shows what we know about whether that player (or the case file) has that card — <yes></yes> if they do, <no></no> if they don't, blank if we don't know yet. Tap the highlighted cell to open the breakdown."
+                "body": "Each cell shows what we know about whether that player (or the case file) has that card — <yes></yes> if they do, <no></no> if they don't, blank if we don't know yet. <strong>Tap the highlighted cell to open the breakdown.</strong>"
             },
             "deductions": {
                 "title": "DEDUCTIONS — how a cell got here",
@@ -643,7 +643,7 @@
             },
             "tapSuggest": {
                 "title": "Switch to the Suggest tab",
-                "body": "Tap Suggest below to see where you'll log what happens at the table."
+                "body": "This is where you'll log what happens at the table. <strong>Tap the Suggest tab below to continue.</strong>"
             },
             "addForm": {
                 "title": "Add the first suggestion of the game to get started!",

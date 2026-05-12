@@ -695,9 +695,15 @@ export function TourPopover() {
     // same visual language as the rest of the app. See CLAUDE.md's
     // "Terminology" section for the rationale.
     //
+    // Advance-on-click steps use `<strong></strong>` to call out the
+    // action prompt ("Tap the highlighted cell to continue"), so the
+    // user can find what to do at a glance even if they're skimming
+    // the body copy.
+    //
     // next-intl's rich-text format expects `<tag>chunks</tag>` (no
-    // self-closing form), so the i18n strings use `<yes></yes>` and
-    // the callbacks ignore the empty `chunks` arg.
+    // self-closing form), so the i18n strings use `<yes></yes>` etc.
+    // and the callbacks for the void tags ignore the empty `chunks`
+    // arg.
     const bodyNode =
         currentStep.bodyKey !== undefined
             ? t.rich(currentStep.bodyKey, {
@@ -712,6 +718,9 @@ export function TourPopover() {
                           value={N}
                           className="!inline-flex !h-[18px] !w-[18px] !align-[-3px] text-[12px]"
                       />
+                  ),
+                  strong: (chunks) => (
+                      <strong className="font-semibold">{chunks}</strong>
                   ),
               })
             : null;
@@ -804,12 +813,17 @@ export function TourPopover() {
                     // overlaps the second one's area and dims it too.
                     // We accept multi-spotlight steps render
                     // ring-only (no dim) since the popover is what's
-                    // commanding attention anyway. Non-blocking /
-                    // advance-on modes also skip the dim by design.
+                    // commanding attention anyway. Non-blocking mode
+                    // also skips the dim by design.
+                    //
+                    // Advance-on-click steps DO paint the dim — the
+                    // veil signals "the tour is in command of this
+                    // moment, focus on the spotlit element" even
+                    // though the user's click passes through to fire
+                    // both the element's native handler AND the
+                    // tour advance.
                     const paintsDim =
-                        !nonBlocking
-                        && advanceOn === undefined
-                        && spotlights.length === 1;
+                        !nonBlocking && spotlights.length === 1;
                     return (
                         <div
                             key={i}
