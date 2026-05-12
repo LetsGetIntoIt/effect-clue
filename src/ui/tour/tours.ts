@@ -218,6 +218,21 @@ export interface TourStep {
      * keeping the surrounding menu open.
      */
     readonly forceOpenOverflowMenu?: boolean;
+    /**
+     * When `true`, multi-element anchors render as SEPARATE rings —
+     * one per matched DOM node — instead of a single union rect.
+     * Used for the desktop "Two halves work together" step where the
+     * spotlight needs to call out two distinct columns; without this
+     * opt-in, the default behavior unions matched elements into one
+     * rect (so e.g. the overflow-menu step's trigger + portaled menu
+     * read as one cohesive shape, and its dim veil paints normally).
+     *
+     * Multi-spotlight steps skip the dim veil — the box-shadow
+     * "outer-darkening" approach can't cut multiple holes out of the
+     * surrounding darkness, so we accept ring-only rendering and let
+     * the popover carry the user's attention.
+     */
+    readonly multiSpotlight?: boolean;
 }
 
 /**
@@ -321,14 +336,18 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
         {
             // Step 2 (desktop): Two halves — multi-spotlight on the
             // checklist column AND the suggestion log column. The
-            // `two-halves-spotlight` token is on BOTH wrappers, so
-            // `findAnchorElements` returns 2 elements and the
-            // spotlight renderer paints two separate rings (one per
-            // column) instead of a single union covering the gap.
+            // `two-halves-spotlight` token is on BOTH wrappers, and
+            // `multiSpotlight: true` opts this step into per-element
+            // rendering (one ring per column) rather than the default
+            // union behavior.
             //
             // Popover anchors to the small case-file summary so it
-            // doesn't get pushed off-screen against the columns.
+            // doesn't get pushed off-screen against the columns. The
+            // dim veil is skipped on multi-spotlight steps (the
+            // box-shadow approach can't cut multiple cutouts), so the
+            // popover carries the user's attention.
             anchor: "two-halves-spotlight",
+            multiSpotlight: true,
             popoverAnchor: "checklist-case-file",
             titleKey: "checklist.intro.title",
             bodyKey: "checklist.intro.body",

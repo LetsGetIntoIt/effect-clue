@@ -425,13 +425,17 @@ export function TourPopover() {
             virtualElementRef.current = {
                 getBoundingClientRect: popoverMeasure,
             };
-            let measuredRects = spotlightMeasureAll();
-            // For auto-scroll we still need a single rect that covers
-            // the whole group — scroll the union into view, not just
-            // the first rect. The render path uses the per-element
-            // rects for the visible rings.
+            // Per-element rects (for `multiSpotlight: true` steps)
+            // or a single union rect (the default). Auto-scroll
+            // always uses the union below so the whole group lands
+            // in view at once.
+            const perElementRects = spotlightMeasureAll();
             const unionMeasured =
-                unionRect([...measuredRects]) ?? fallbackVirtualRect();
+                unionRect([...perElementRects]) ?? fallbackVirtualRect();
+            let measuredRects: ReadonlyArray<DOMRect> =
+                currentStep.multiSpotlight === true
+                    ? perElementRects
+                    : [unionMeasured];
             // Auto-scroll at most once per step so anchors below the
             // fold (or off to the side on a horizontally-scrolling
             // page) come into view. This is deliberately instant:
@@ -448,7 +452,14 @@ export function TourPopover() {
                     step: stepIndex,
                 };
                 if (scrollSpotlightIntoView(unionMeasured)) {
-                    measuredRects = spotlightMeasureAll();
+                    const reMeasured = spotlightMeasureAll();
+                    measuredRects =
+                        currentStep.multiSpotlight === true
+                            ? reMeasured
+                            : [
+                                  unionRect([...reMeasured])
+                                  ?? fallbackVirtualRect(),
+                              ];
                 }
             }
             setSpotlights(measuredRects);
