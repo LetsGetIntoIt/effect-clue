@@ -259,8 +259,9 @@
     "reasons": {
         "suggestionHeadline": "Suggestion #{number}",
         "initial-known-card": {
-            "headline": "Given",
-            "detail": "You marked that {cellPlayer} {value, select, Y {owns} other {doesn't own}} {cellCard}."
+            "headlineObservation": "{count, plural, one {Known observation} other {Known observations}}",
+            "headlineHypothesis": "{count, plural, one {Hypothesis} other {Hypotheses}}",
+            "detail": "You marked that {cellPlayer} {value, select, Y {owns} other {doesn't own}} {cardList}."
         },
         "initial-hand-size": {
             "headline": "Given",
