@@ -198,24 +198,27 @@ describe("SetupWizard — accordion shell", () => {
         expect(skip).not.toBeDisabled();
     });
 
-    test("Start playing CTA appears on the last step and is enabled with defaults", async () => {
+    test("first-time flow lands the user on the wizard's last-step 'Start playing' CTA — no global Play CTA visible mid-flow", async () => {
         const user = userEvent.setup();
         render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForWizard();
-        // Click Next through every step to reach the last one. With
-        // selfPlayerId null on a fresh mount, visible steps are:
-        // cardPack → players → identity → handSizes → knownCards →
-        // inviteOtherPlayers.
-        // We hit Skip on identity to skip past it (avoids setting
-        // selfPlayerId, keeping myCards hidden).
+        // Walk every step. The wizard's `inviteOtherPlayers` step
+        // (last in the visible order with selfPlayerId null) carries
+        // the final `data-tour-anchor="setup-start-playing"` CTA;
+        // that's the only path out of first-time setup. The global
+        // PlayCTAButton stays hidden during this walkthrough — the
+        // walkthrough-done flag (in GameLifecycleState) hasn't been
+        // set yet, so the chrome's CTA is gated off.
         await user.click(stickyNext()); // cardPack → players
         await user.click(stickyNext()); // players → identity
         await user.click(stickySkip()); // identity → handSizes
         await user.click(stickyNext()); // handSizes → knownCards
         await user.click(stickyNext()); // knownCards → inviteOtherPlayers
-        // We're now on the last step. The Next button's label is
-        // "Start playing" or "Continue playing" and `data-setup-cta`
-        // is set.
+        // No global PlayCTA at any point in the walkthrough.
+        expect(
+            document.querySelector('[data-tour-anchor="play-cta"]'),
+        ).toBeNull();
+        // The wizard's last-step CTA is what the user clicks.
         await waitFor(() => {
             const cta = document.querySelector(
                 '[data-tour-anchor="setup-start-playing"]',

@@ -35,6 +35,11 @@ import {
     type CardPackUsage,
     recordCardPackUse,
 } from "../logic/CardPackUsage";
+import {
+    getGamePhase,
+    hasCardInformation,
+    phaseAtLeast,
+} from "../logic/GamePhase";
 import { cardPackUsageQueryKey } from "../data/cardPackUsage";
 import { Equal, HashMap } from "effect";
 import {
@@ -1088,11 +1093,12 @@ export function ClueProvider({ children }: { children: ReactNode }) {
     }, [state.uiMode]);
     const gameStartedRef = useRef(false);
     useEffect(() => {
-        gameStartedRef.current =
-            state.knownCards.length > 0
-            || state.suggestions.length > 0
-            || state.accusations.length > 0;
-    }, [state.knownCards, state.suggestions, state.accusations]);
+        // Broader than `phase === "gameStarted"` — smart-landing on
+        // ⌘H wants to bias toward "user has touched concrete card
+        // info," including knownCards-only entry. See
+        // {@link hasCardInformation}.
+        gameStartedRef.current = hasCardInformation(state);
+    }, [state]);
 
     // Keyboard bindings wired via the central keyMap module. Each
     // useGlobalShortcut installs one window keydown listener that only
@@ -1616,23 +1622,16 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         state.suggestions.length,
     ]);
 
-    const hasGameData = useCallback((): boolean => {
-        if (state.knownCards.length > 0) return true;
-        if (state.handSizes.length > 0) return true;
-        if (state.suggestions.length > 0) return true;
-        if (state.accusations.length > 0) return true;
-        // M6: a user who only set their identity has expressed intent
-        // ("I'm Alice in this game") that the brand-new-user redirect
-        // shouldn't override. Same for first-dealt-player.
-        if (state.selfPlayerId !== null) return true;
-        if (state.firstDealtPlayerId !== null) return true;
-        const players = state.setup.players;
-        if (players.length !== DEFAULT_SETUP.players.length) return true;
-        for (let i = 0; i < players.length; i++) {
-            if (players[i] !== DEFAULT_SETUP.players[i]) return true;
-        }
-        return false;
-    }, [state]);
+    // Brand-new-user redirect gate. True iff the game has any user
+    // touch at all — any phase above `"new"`. The phase machine's
+    // `"dirty"` predicate covers knownCards / handSizes / suggestions
+    // / accusations / selfPlayerId / firstDealtPlayerId / non-default
+    // roster / non-default deck; one of those triggering is what we
+    // want here.
+    const hasGameData = useCallback(
+        (): boolean => phaseAtLeast(getGamePhase(state), "dirty"),
+        [state],
+    );
 
     const value: ClueContextValue = useMemo(
         () => ({

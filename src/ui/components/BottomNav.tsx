@@ -20,6 +20,7 @@ import { ExternalLinkIcon } from "./Icons";
 import { useInstallPromptContext } from "./InstallPromptProvider";
 import type { InstallPromptTrigger } from "../../analytics/events";
 import { OverflowMenu } from "./OverflowMenu";
+import { PlayCTAButton } from "./PlayCTAButton";
 import { useToolbarActions } from "./Toolbar";
 
 const TRIGGER_MENU: InstallPromptTrigger = "menu";
@@ -100,11 +101,16 @@ export function BottomNav() {
                     </LayoutGroup>
                 )}
                 {setupMode && (
-                    // Spacer that pushes the overflow trigger to the
-                    // right edge — matches the visual rhythm of the
-                    // Checklist / Suggest tabs taking the left side
-                    // when not in setup mode.
-                    <li className="flex-1" aria-hidden />
+                    // Setup-mode chrome: when phase ≥ setupCompleted
+                    // the PlayCTAButton renders a centered "Start /
+                    // Continue playing" primary CTA in the row to
+                    // the left of the overflow menu. When phase
+                    // < setupCompleted the button renders an empty
+                    // <li flex-1> spacer instead so the overflow
+                    // stays right-aligned and the row keeps its
+                    // ~56px height (the wizard's sticky-footer
+                    // offset depends on that).
+                    <PlayCTAButton variant="bottomNav" />
                 )}
                 <BottomOverflowMenu
                     setupActive={setupMode}

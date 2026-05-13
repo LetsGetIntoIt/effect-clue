@@ -6,12 +6,13 @@ import { setupSelfPlayerSet } from "../../../analytics/events";
 import { useClue } from "../../state";
 import { SetupStepPanel } from "../SetupStepPanel";
 import { VALID, type WizardStepId } from "../wizardSteps";
-import type { StepPanelState } from "../SetupStepPanel";
+import type { StepPanelState, WizardMode } from "../SetupStepPanel";
 
 const STEP_ID = "identity" as const;
 
 interface Props {
     readonly state: StepPanelState;
+    readonly wizardMode: WizardMode;
     readonly stepNumber: number;
     readonly totalSteps: number;
     readonly onClickToEdit: () => void;
@@ -43,6 +44,7 @@ interface Props {
  */
 export function SetupStepIdentity({
     state,
+    wizardMode,
     stepNumber,
     totalSteps,
     onClickToEdit,
@@ -81,6 +83,7 @@ export function SetupStepIdentity({
         <SetupStepPanel
             stepId={STEP_ID}
             state={state}
+            wizardMode={wizardMode}
             stepNumber={stepNumber}
             totalSteps={totalSteps}
             title={t("title")}

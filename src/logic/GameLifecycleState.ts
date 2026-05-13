@@ -30,6 +30,16 @@ const PersistedGameLifecycleSchema = Schema.Struct({
     createdAt: Schema.optional(Schema.String),
     lastModifiedAt: Schema.optional(Schema.String),
     lastSnoozedAt: Schema.optional(Schema.String),
+    /**
+     * Set the first time the user clicks "Start playing" on the
+     * wizard's last step (or otherwise completes the linear setup
+     * walkthrough). Drives the wizard's flow → edit mode flip: a
+     * brand-new user gets the guided walkthrough; a returning user
+     * who already completed it once gets the spot-check edit page
+     * with the global Play CTA. Reset by `markGameCreated` on
+     * `newGame` so the next session starts in flow mode again.
+     */
+    setupWalkthroughDoneAt: Schema.optional(Schema.String),
 });
 
 const decodeUnknown = Schema.decodeUnknownResult(
@@ -38,11 +48,19 @@ const decodeUnknown = Schema.decodeUnknownResult(
 const encode = Schema.encodeSync(PersistedGameLifecycleSchema);
 
 const STORAGE_KEY = "effect-clue.gameLifecycle.v1";
+/**
+ * Event name dispatched on `window` whenever lifecycle state is
+ * written from within the same tab. React subscribers
+ * (`useSetupWalkthroughDone`) re-read storage on the event so a
+ * walkthrough-completion flip propagates without a full re-render.
+ */
+export const WALKTHROUGH_EVENT = "effect-clue.gameLifecycle.changed";
 
 interface GameLifecycleState {
     readonly createdAt?: DateTime.Utc;
     readonly lastModifiedAt?: DateTime.Utc;
     readonly lastSnoozedAt?: DateTime.Utc;
+    readonly setupWalkthroughDoneAt?: DateTime.Utc;
 }
 
 export const STALE_GAME_THRESHOLD_STARTED: Duration.Duration = Duration.days(3);
@@ -80,6 +98,10 @@ export const loadGameLifecycleState = (): GameLifecycleState => {
             const parsed = parseIso(decoded.success.lastSnoozedAt);
             if (parsed !== undefined) out.lastSnoozedAt = parsed;
         }
+        if (decoded.success.setupWalkthroughDoneAt !== undefined) {
+            const parsed = parseIso(decoded.success.setupWalkthroughDoneAt);
+            if (parsed !== undefined) out.setupWalkthroughDoneAt = parsed;
+        }
         return out;
     } catch {
         return {};
@@ -103,11 +125,13 @@ const writeMerged = (
         const createdAt = pickField("createdAt");
         const lastModifiedAt = pickField("lastModifiedAt");
         const lastSnoozedAt = pickField("lastSnoozedAt");
+        const setupWalkthroughDoneAt = pickField("setupWalkthroughDoneAt");
         const merged: {
             version: 1;
             createdAt?: string;
             lastModifiedAt?: string;
             lastSnoozedAt?: string;
+            setupWalkthroughDoneAt?: string;
         } = { version: 1 };
         if (createdAt !== undefined) {
             merged.createdAt = formatIso(createdAt);
@@ -118,18 +142,31 @@ const writeMerged = (
         if (lastSnoozedAt !== undefined) {
             merged.lastSnoozedAt = formatIso(lastSnoozedAt);
         }
+        if (setupWalkthroughDoneAt !== undefined) {
+            merged.setupWalkthroughDoneAt = formatIso(setupWalkthroughDoneAt);
+        }
         const encoded = encode(merged);
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(encoded));
+        // Tell React-side subscribers (useSetupWalkthroughDone) the
+        // flag may have changed. Storage events don't fire in the
+        // same tab on writes, so we dispatch a synthetic event.
+        try {
+            window.dispatchEvent(new CustomEvent(WALKTHROUGH_EVENT));
+        } catch {
+            // ignored — fallback to next React render
+        }
     } catch {
         // Quota exceeded, private mode, etc. — non-fatal.
     }
 };
 
-/** Stamp the moment a fresh game came into being. Resets snooze too. */
+/** Stamp the moment a fresh game came into being. Resets snooze
+ * AND the setup-walkthrough flag — a new game should re-run the
+ * first-time-through wizard. */
 export const markGameCreated = (now: DateTime.Utc): void =>
     writeMerged(
         { createdAt: now, lastModifiedAt: now },
-        { clear: ["lastSnoozedAt"] },
+        { clear: ["lastSnoozedAt", "setupWalkthroughDoneAt"] },
     );
 
 /** Bump the touched timestamp without changing creation or snooze. */
@@ -139,6 +176,15 @@ export const markGameTouched = (now: DateTime.Utc): void =>
 /** Record that the user just dismissed the stale-game prompt. */
 export const markStaleGameSnoozed = (now: DateTime.Utc): void =>
     writeMerged({ lastSnoozedAt: now });
+
+/**
+ * Record that the user finished the setup walkthrough (clicked the
+ * wizard's last-step "Start playing" button). The next time they
+ * visit Setup the wizard renders in spot-check edit mode, and the
+ * global Play CTA in the chrome becomes visible.
+ */
+export const markSetupWalkthroughDone = (now: DateTime.Utc): void =>
+    writeMerged({ setupWalkthroughDoneAt: now });
 
 /** Wipe lifecycle state — used after `newGame` followed by markGameCreated. */
 export const clearGameLifecycle = (): void => {

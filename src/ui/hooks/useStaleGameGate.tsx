@@ -23,6 +23,7 @@ import {
     loadGameLifecycleState,
     markStaleGameSnoozed,
 } from "../../logic/GameLifecycleState";
+import { hasCardInformation } from "../../logic/GamePhase";
 import { useStartupCoordinator } from "../onboarding/StartupCoordinator";
 import { useClue } from "../state";
 import {
@@ -48,10 +49,11 @@ export function useStaleGameGate(): UseStaleGameGateValue {
 
     const open = phase === SLOT_STALE_GAME;
 
-    const gameStarted =
-        state.knownCards.length > 0
-        || state.suggestions.length > 0
-        || state.accusations.length > 0;
+    // Broader than `phase === "gameStarted"` — the stale-game gate
+    // wants to count any concrete card engagement (knownCards alone)
+    // when picking between the 3-day "started" and 1-day "unstarted"
+    // idle thresholds. See {@link hasCardInformation}.
+    const gameStarted = hasCardInformation(state);
 
     // Snapshot the lifecycle timestamps + "now" once per open. Memoize
     // on `open` so the modal's body copy doesn't re-stringify each

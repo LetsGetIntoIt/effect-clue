@@ -22,6 +22,7 @@ import { ExternalLinkIcon, RedoIcon, UndoIcon } from "./Icons";
 import { useInstallPromptContext } from "./InstallPromptProvider";
 import type { InstallPromptTrigger } from "../../analytics/events";
 import { OverflowMenu } from "./OverflowMenu";
+import { PlayCTAButton } from "./PlayCTAButton";
 import { Tooltip } from "./Tooltip";
 
 // Module-scope discriminator values, exempt from the i18next literal
@@ -166,6 +167,7 @@ export function Toolbar() {
                     {t("redo", { shortcut: shortcutSuffix("global.redo", hasKeyboard) })}
                 </button>
             </Tooltip>
+            <PlayCTAButton variant="toolbar" />
             <OverflowMenu
                 triggerClassName={`${buttonClass} inline-flex items-center justify-center`}
                 triggerLabel={tNav("more")}

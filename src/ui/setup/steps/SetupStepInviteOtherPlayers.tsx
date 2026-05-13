@@ -3,13 +3,14 @@
 import { useTranslations } from "next-intl";
 import { SetupStepPanel } from "../SetupStepPanel";
 import { VALID, type WizardStepId } from "../wizardSteps";
-import type { StepPanelState } from "../SetupStepPanel";
+import type { StepPanelState, WizardMode } from "../SetupStepPanel";
 import { useShareContext } from "../../share/ShareProvider";
 
 const STEP_ID = "inviteOtherPlayers" as const;
 
 interface Props {
     readonly state: StepPanelState;
+    readonly wizardMode: WizardMode;
     readonly stepNumber: number;
     readonly totalSteps: number;
     readonly onClickToEdit: () => void;
@@ -33,6 +34,7 @@ interface Props {
  */
 export function SetupStepInviteOtherPlayers({
     state,
+    wizardMode,
     stepNumber,
     totalSteps,
     onClickToEdit,
@@ -45,6 +47,7 @@ export function SetupStepInviteOtherPlayers({
         <SetupStepPanel
             stepId={STEP_ID}
             state={state}
+            wizardMode={wizardMode}
             stepNumber={stepNumber}
             totalSteps={totalSteps}
             title={t("title")}

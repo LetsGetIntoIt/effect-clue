@@ -10,13 +10,14 @@ import {
     type StepValidation,
     type WizardStepId,
 } from "../wizardSteps";
-import type { StepPanelState } from "../SetupStepPanel";
+import type { StepPanelState, WizardMode } from "../SetupStepPanel";
 
 // Step id discriminator hoisted so it isn't flagged as user copy.
 const STEP_ID = "players" as const;
 
 interface Props {
     readonly state: StepPanelState;
+    readonly wizardMode: WizardMode;
     readonly stepNumber: number;
     readonly totalSteps: number;
     readonly onClickToEdit: () => void;
@@ -41,6 +42,7 @@ interface Props {
  */
 export function SetupStepPlayers({
     state,
+    wizardMode,
     stepNumber,
     totalSteps,
     onClickToEdit,
@@ -68,6 +70,7 @@ export function SetupStepPlayers({
         <SetupStepPanel
             stepId={STEP_ID}
             state={state}
+            wizardMode={wizardMode}
             stepNumber={stepNumber}
             totalSteps={totalSteps}
             title={t("title")}

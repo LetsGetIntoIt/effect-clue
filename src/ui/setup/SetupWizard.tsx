@@ -16,8 +16,17 @@ import {
 import type { ClueState } from "../../logic/ClueState";
 import { cardSetEquals } from "../../logic/CardSet";
 import { CARD_SETS, newGameSetup } from "../../logic/GameSetup";
+import { getGamePhase, phaseAtLeast } from "../../logic/GamePhase";
 import { useConfirm } from "../hooks/useConfirm";
+import { useGamePhase } from "../hooks/useGamePhase";
+import { useSetupWalkthroughDone } from "../hooks/useSetupWalkthroughDone";
 import { useClue } from "../state";
+import { useTour } from "../tour/TourProvider";
+import {
+    loadGameLifecycleState,
+    markSetupWalkthroughDone,
+} from "../../logic/GameLifecycleState";
+import { DateTime } from "effect";
 import { useSetupWizardFocus } from "./SetupWizardFocusContext";
 import { SetupStepCardPack } from "./steps/SetupStepCardPack";
 import { SetupStepHandSizes } from "./steps/SetupStepHandSizes";
@@ -27,13 +36,14 @@ import { SetupStepKnownCards } from "./steps/SetupStepKnownCards";
 import { SetupStepMyCards } from "./steps/SetupStepMyCards";
 import { SetupStepPlayers } from "./steps/SetupStepPlayers";
 import {
+    isStepDataComplete,
     stepIsSkippable,
     stepValidationLevel,
     visibleSteps,
     type StepValidationLevel,
     type WizardStepId,
 } from "./wizardSteps";
-import type { StepPanelState } from "./SetupStepPanel";
+import type { StepPanelState, WizardMode } from "./SetupStepPanel";
 
 // Default Classic deck — used to detect "deck has not been touched."
 const CLASSIC_CARD_SET = CARD_SETS[0]!.cardSet;
@@ -82,6 +92,31 @@ function hasDestructiveState(state: ClueState): boolean {
 const STEP_EDITING: StepPanelState = "editing";
 const STEP_COMPLETE: StepPanelState = "complete";
 const STEP_PENDING: StepPanelState = "pending";
+const WIZARD_MODE_FLOW: WizardMode = "flow";
+const WIZARD_MODE_EDIT: WizardMode = "edit";
+// Phase discriminator used in this file's phaseAtLeast checks. Kept
+// to module scope so the lint rule reads it as an identifier.
+const PHASE_SETUP_COMPLETED = "setupCompleted" as const;
+const PHASE_NEW = "new" as const;
+const PHASE_GAME_STARTED = "gameStarted" as const;
+
+/**
+ * Tour anchors that live INSIDE a wizard step's expanded body, mapped
+ * to the wizard step that must be open for the anchor to be in the
+ * DOM. The wizard reads this table on tour-step transitions and
+ * expands the required step as a pre-condition (per AGENTS.md
+ * "Tour steps must set up the UI to their expected pre-condition").
+ *
+ * The two entries today come from the `sharing` tour
+ * ([src/ui/tour/tours.ts]). If a future tour anchors at another
+ * in-step element, add it here and verify in the next-dev preview.
+ */
+const TOUR_ANCHOR_REQUIRES_WIZARD_STEP: Readonly<
+    Record<string, WizardStepId>
+> = {
+    "setup-share-pack-pill": "cardPack",
+    "setup-invite-player": "inviteOtherPlayers",
+};
 
 /**
  * M6 setup wizard — accordion of step panels rendered when the
@@ -116,7 +151,7 @@ export function SetupWizard() {
     const t = useTranslations("setupWizard");
     const tSetup = useTranslations("setup");
     const tToolbar = useTranslations("toolbar");
-    const { state, dispatch } = useClue();
+    const { state, dispatch, hydrated } = useClue();
     const confirm = useConfirm();
     const focus = useSetupWizardFocus();
 
@@ -135,14 +170,33 @@ export function SetupWizard() {
         () => new Set(),
     );
 
-    // Initial focused step: the focus-context hint (programmatic
-    // jumps from a future "edit this step" affordance), else the
-    // first canonical step. Always starts on cardPack on a normal
-    // mount.
+    // Initial focused step. Three regimes:
+    //   1. Explicit focus-hint (programmatic jump from an "edit this
+    //      step" affordance somewhere else) — honor it if visible.
+    //   2. Edit-mode mount (phase ≥ setupCompleted AND the user has
+    //      already finished the walkthrough for this game): open NO
+    //      step by default. The user picks what to edit.
+    //   3. Otherwise (flow mode — first-time walkthrough): legacy
+    //      "land on step 1" so first-time setup feels guided.
+    //
+    // Read phase + walkthrough flag directly (useState initializers
+    // don't re-run on prop change; we want the value at mount).
     const [focusedStep, setFocusedStep] = useState<WizardStepId | null>(
         () => {
             const hinted = focus?.consumeFocusHint() ?? null;
             if (hinted !== null && steps.includes(hinted)) return hinted;
+            const phaseAtMount = getGamePhase(state);
+            // `loadGameLifecycleState` already guards SSR (returns
+            // `{}` when window is undefined), so no extra check
+            // needed here.
+            const walkthroughDoneAtMount =
+                loadGameLifecycleState().setupWalkthroughDoneAt !== undefined;
+            if (
+                phaseAtLeast(phaseAtMount, PHASE_SETUP_COMPLETED)
+                && walkthroughDoneAtMount
+            ) {
+                return null;
+            }
             return steps[0] ?? null;
         },
     );
@@ -167,8 +221,122 @@ export function SetupWizard() {
         );
     }, [steps]);
 
+    // When phase transitions to "new" while the wizard is still
+    // mounted (e.g. user clicked "New game" in the overflow menu
+    // while already in Setup mode, or "Start over" → confirm from
+    // the wizard's own footer), snap the local nav state back to
+    // step 1. The legacy reliance on a "newGame remounts the
+    // wizard" effect was wishful — uiMode is already "setup", so
+    // the wizard never unmounts/remounts on that dispatch. Driving
+    // the reset off the phase machine handles every entry path with
+    // one effect.
+    //
+    // Deps are kept to `[phase]` (the only signal we react to);
+    // `steps` is captured via a ref so reducer ticks that produce
+    // new state objects don't re-fire this effect spuriously. See
+    // AGENTS.md "Effect deps in tour-driven entry effects."
+    const phase = useGamePhase();
+    const prevPhaseRef = useRef(phase);
+    const stepsRefForPhaseReset = useRef(steps);
+    useEffect(() => {
+        stepsRefForPhaseReset.current = steps;
+    }, [steps]);
+    useEffect(() => {
+        const prev = prevPhaseRef.current;
+        prevPhaseRef.current = phase;
+        if (phase !== PHASE_NEW) return;
+        if (prev === PHASE_NEW) return;
+        setCompleted(new Set());
+        setFocusedStep(stepsRefForPhaseReset.current[0] ?? null);
+    }, [phase]);
+
+    // Wizard mode = "edit" once the user has:
+    //   1. enough data to play (phase ≥ setupCompleted) AND
+    //   2. finished the linear walkthrough at least once for this
+    //      game (clicked Start playing on the wizard's last step,
+    //      recorded as `setupWalkthroughDoneAt` on the lifecycle
+    //      stamp). Resets on `newGame`.
+    //
+    // The double gate keeps the first-time experience strictly
+    // linear: even after the user committed handSizes mid-walk
+    // (which flips phase to setupCompleted), the wizard stays in
+    // flow mode until they reach `inviteOtherPlayers` and click its
+    // in-card Start playing button. Without #2, the global Play CTA
+    // would appear mid-flow and compete with the wizard's flow CTA.
+    const walkthroughDone = useSetupWalkthroughDone();
+    const wizardMode: WizardMode =
+        phaseAtLeast(phase, PHASE_SETUP_COMPLETED) && walkthroughDone
+            ? WIZARD_MODE_EDIT
+            : WIZARD_MODE_FLOW;
+
+    // Hydration-aware initial-focused-step correction. The useState
+    // initializer above evaluates phase off the pre-hydration state
+    // (always "new"), so a user returning to a setupCompleted+ game
+    // would otherwise land on the cardPack step "editing" — wrong for
+    // edit mode, which wants no step open by default. Once hydration
+    // completes, snap focusedStep to null IF (a) we're now in edit
+    // mode (phase ≥ setupCompleted AND the user has already finished
+    // the walkthrough for this game) AND (b) focusedStep is still
+    // the default `steps[0]` (the user hasn't already picked another
+    // step in the time between useState and the hydrated effect).
+    // Runs once on the hydration edge.
+    const correctedForHydratedEditModeRef = useRef(false);
+    useEffect(() => {
+        if (!hydrated) return;
+        if (correctedForHydratedEditModeRef.current) return;
+        correctedForHydratedEditModeRef.current = true;
+        if (!phaseAtLeast(phase, PHASE_SETUP_COMPLETED)) return;
+        if (!walkthroughDone) return;
+        setFocusedStep((prev) =>
+            prev === (stepsRefForPhaseReset.current[0] ?? null) ? null : prev,
+        );
+    }, [hydrated, phase, walkthroughDone]);
+
+    // Tour pre-condition effect. Some tour steps (today: the sharing
+    // tour's `setup-share-pack-pill` and `setup-invite-player`)
+    // anchor at DOM nodes that live INSIDE an expanded wizard step's
+    // body. In edit mode the wizard's default `focusedStep` is null
+    // (no step open), so those anchors aren't in the DOM when the
+    // tour fires — the popover would have nothing to point at.
+    //
+    // Per AGENTS.md "Tour steps must set up the UI to their expected
+    // pre-condition," each step's entry should arrange the UI for
+    // its anchor. We do that here from the consuming component (the
+    // wizard) by mapping known tour anchors → the wizard step they
+    // require, and expanding that step when the tour enters one.
+    //
+    // `steps` is captured via a ref so the effect's deps stay at
+    // just `[currentStepAnchor]` — reducer ticks that produce new
+    // state objects don't re-fire and overwrite the user's chosen
+    // open step.
+    const { currentStep } = useTour();
+    const currentStepAnchor = currentStep?.anchor;
+    const stepsRefForTour = useRef(steps);
+    useEffect(() => {
+        stepsRefForTour.current = steps;
+    }, [steps]);
+    useEffect(() => {
+        if (currentStepAnchor === undefined) return;
+        const required = TOUR_ANCHOR_REQUIRES_WIZARD_STEP[currentStepAnchor];
+        if (required === undefined) return;
+        if (!stepsRefForTour.current.includes(required)) return;
+        setFocusedStep((prev) => (prev === required ? prev : required));
+    }, [currentStepAnchor]);
+
     const stepStateFor = (id: WizardStepId): StepPanelState => {
         if (id === focusedStep) return STEP_EDITING;
+        // Edit mode: the "completed" check derives from data presence,
+        // not the local advance/skip-tracked `completed` set. That
+        // way a returning user (who never walked the wizard linearly)
+        // still sees check marks on the steps they have data for.
+        // `pending` here is just "closed without data" — the panel
+        // reads `wizardMode === "edit"` and renders it without the
+        // dim/locked treatment.
+        if (wizardMode === WIZARD_MODE_EDIT) {
+            return isStepDataComplete(id, state)
+                ? STEP_COMPLETE
+                : STEP_PENDING;
+        }
         if (completed.has(id)) return STEP_COMPLETE;
         return STEP_PENDING;
     };
@@ -380,8 +548,7 @@ export function SetupWizard() {
         (focusedSkippable || focusedValidationLevel !== "blocked");
     const nextEnabled =
         focusedStep !== null && focusedValidationLevel !== "blocked";
-    const hasGameProgress =
-        state.suggestions.length > 0 || state.accusations.length > 0;
+    const hasGameProgress = getGamePhase(state) === PHASE_GAME_STARTED;
     const startPlayingLabel = hasGameProgress
         ? tSetup("continuePlaying", { shortcut: "" })
         : tSetup("startPlaying", { shortcut: "" });
@@ -420,7 +587,26 @@ export function SetupWizard() {
             gameSetupStarted();
         }
         setupWizardCompleted();
+        // Persist "this game's setup walkthrough is done." Next time
+        // the wizard mounts (e.g. user navigates back from Play), it
+        // renders in spot-check edit mode and the global PlayCTA
+        // becomes visible. Cleared on `newGame` via
+        // `markGameCreated`'s clear list.
+        markSetupWalkthroughDone(DateTime.nowUnsafe());
         dispatch({ type: "setUiMode", mode: "checklist" });
+    };
+
+    // Edit-mode footer action: collapse the open step. Per-input
+    // changes already committed via dispatch; "Done" is a pure UI
+    // close. Flush any beforeAdvance hook the step registered (e.g.
+    // hand-sizes commits placeholder defaults) so the user's implicit
+    // "accept default" is captured. beforeSkip is intentionally NOT
+    // fired — edit mode has no skip semantics.
+    const onClickDone = () => {
+        if (focusedStep === null) return;
+        beforeAdvanceRef.current?.();
+        beforeAdvanceRef.current = null;
+        setFocusedStep(null);
     };
 
     /**
@@ -445,8 +631,12 @@ export function SetupWizard() {
         });
         if (!ok) return;
         dispatch({ type: "newGame" });
-        // newGame remounts the wizard via state reset; the fresh
-        // mount lands on step 1 via the initial-state logic above.
+        // The newGame action resets phase to "new"; the phase-
+        // transition effect above catches that and resets
+        // focusedStep + completed back to step 1. (This path runs
+        // while uiMode is already "setup", so the wizard does NOT
+        // unmount/remount — the effect is what actually performs
+        // the reset.)
     };
 
     /**
@@ -498,26 +688,42 @@ export function SetupWizard() {
                 {t("newGame")}
             </button>
             <div className="ml-auto flex items-center gap-2">
-                <button
-                    type="button"
-                    className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-control hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={onClickSkip}
-                    disabled={!skipEnabled}
-                >
-                    {t("skip")}
-                </button>
-                <button
-                    type="button"
-                    className="tap-target text-tap cursor-pointer rounded border-none bg-accent font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={onClickNext}
-                    disabled={!nextEnabled}
-                    data-tour-anchor={
-                        isLastStep ? "setup-start-playing" : undefined
-                    }
-                    data-setup-cta={isLastStep ? "" : undefined}
-                >
-                    {isLastStep ? startPlayingLabel : t("next")}
-                </button>
+                {wizardMode === WIZARD_MODE_FLOW ? (
+                    <>
+                        <button
+                            type="button"
+                            className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-control hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+                            onClick={onClickSkip}
+                            disabled={!skipEnabled}
+                        >
+                            {t("skip")}
+                        </button>
+                        <button
+                            type="button"
+                            className="tap-target text-tap cursor-pointer rounded border-none bg-accent font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                            onClick={onClickNext}
+                            disabled={!nextEnabled}
+                            data-tour-anchor={
+                                isLastStep ? "setup-start-playing" : undefined
+                            }
+                            data-setup-cta={isLastStep ? "" : undefined}
+                        >
+                            {isLastStep ? startPlayingLabel : t("next")}
+                        </button>
+                    </>
+                ) : (
+                    // Edit mode: single "Done" CTA. Collapses the
+                    // open step; no advance, no skip. The global
+                    // PlayCTAButton in the chrome carries the "go
+                    // play" affordance instead.
+                    <button
+                        type="button"
+                        className="tap-target text-tap cursor-pointer rounded border-none bg-accent font-semibold text-white hover:bg-accent-hover"
+                        onClick={onClickDone}
+                    >
+                        {t("done")}
+                    </button>
+                )}
             </div>
         </div>
     );
@@ -549,6 +755,7 @@ export function SetupWizard() {
                             <SetupStepCardPack
                                 key={id}
                                 state={panelState}
+                                wizardMode={wizardMode}
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
@@ -562,6 +769,7 @@ export function SetupWizard() {
                             <SetupStepPlayers
                                 key={id}
                                 state={panelState}
+                                wizardMode={wizardMode}
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
@@ -575,6 +783,7 @@ export function SetupWizard() {
                             <SetupStepIdentity
                                 key={id}
                                 state={panelState}
+                                wizardMode={wizardMode}
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
@@ -589,6 +798,7 @@ export function SetupWizard() {
                             <SetupStepHandSizes
                                 key={id}
                                 state={panelState}
+                                wizardMode={wizardMode}
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
@@ -609,6 +819,7 @@ export function SetupWizard() {
                             <SetupStepMyCards
                                 key={id}
                                 state={panelState}
+                                wizardMode={wizardMode}
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
                                 selfPlayerId={state.selfPlayerId}
@@ -623,6 +834,7 @@ export function SetupWizard() {
                             <SetupStepKnownCards
                                 key={id}
                                 state={panelState}
+                                wizardMode={wizardMode}
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
@@ -636,6 +848,7 @@ export function SetupWizard() {
                             <SetupStepInviteOtherPlayers
                                 key={id}
                                 state={panelState}
+                                wizardMode={wizardMode}
                                 stepNumber={stepNumber}
                                 totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}

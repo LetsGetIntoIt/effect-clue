@@ -6,7 +6,7 @@ import { useClue } from "../../state";
 import { PlayerColumnCardList } from "../shared/PlayerColumnCardList";
 import { SetupStepPanel } from "../SetupStepPanel";
 import { VALID, type WizardStepId } from "../wizardSteps";
-import type { StepPanelState } from "../SetupStepPanel";
+import type { StepPanelState, WizardMode } from "../SetupStepPanel";
 
 const STEP_ID = "myCards" as const;
 
@@ -17,6 +17,7 @@ const FIRST_ROW_TOUR_ANCHOR = "setup-step-mycards-firstrow" as const;
 
 interface Props {
     readonly state: StepPanelState;
+    readonly wizardMode: WizardMode;
     readonly stepNumber: number;
     readonly totalSteps: number;
     readonly selfPlayerId: Player;
@@ -40,6 +41,7 @@ interface Props {
  */
 export function SetupStepMyCards({
     state,
+    wizardMode,
     stepNumber,
     totalSteps,
     selfPlayerId,
@@ -61,6 +63,7 @@ export function SetupStepMyCards({
         <SetupStepPanel
             stepId={STEP_ID}
             state={state}
+            wizardMode={wizardMode}
             stepNumber={stepNumber}
             totalSteps={totalSteps}
             title={t("title")}

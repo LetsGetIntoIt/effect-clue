@@ -197,15 +197,25 @@ describe("Clue — full user-journey umbrella", () => {
         await user.click(stickyByText("skip")); // identity skipped
         await user.click(stickyByText("next")); // handSizes → knownCards
         await user.click(stickyByText("next")); // knownCards → inviteOtherPlayers
+        // The walkthrough flag is not yet set — the global Play CTA
+        // stays hidden during the first-time flow. The wizard's
+        // last-step `data-setup-cta` button is the only way to leave
+        // setup.
+        expect(
+            document.querySelector("[data-tour-anchor='play-cta']"),
+        ).toBeNull();
         await waitFor(() => {
             expect(
                 document.querySelector("[data-setup-cta]"),
             ).toBeInTheDocument();
         });
 
-        // 2. Clicking Start Playing flips the URL to checklist view.
+        // 2. Clicking the wizard's last-step Start Playing CTA flips
+        //    the URL to the checklist view AND sets the walkthrough-
+        //    done flag so future visits to Setup will surface the
+        //    global Play CTA.
         const cta = document.querySelector<HTMLElement>("[data-setup-cta]");
-        if (!cta) throw new Error("Start Playing CTA missing");
+        if (!cta) throw new Error("Wizard Start Playing CTA missing");
         await user.click(cta);
         await waitFor(() => {
             expect(window.location.search).toContain("view=checklist");

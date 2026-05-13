@@ -121,12 +121,18 @@
         "startPlaying": "Start playing →{shortcut}",
         "continuePlaying": "Continue playing →{shortcut}"
     },
+    "playCta": {
+        "startPlaying": "Start playing{shortcut}",
+        "continuePlaying": "Continue playing{shortcut}",
+        "ariaLabel": "Open the play view"
+    },
     "setupWizard": {
         "heading": "Set up your game",
         "subheading": "Walk through each step in order. You can come back to anything by clicking it.",
         "stepCounter": "Step {step} of {total}",
         "next": "Next",
         "skip": "Skip",
+        "done": "Done",
         "newGame": "Start over",
         "cardPack": {
             "title": "Pick a card pack",
