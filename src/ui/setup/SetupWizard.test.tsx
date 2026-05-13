@@ -198,27 +198,31 @@ describe("SetupWizard — accordion shell", () => {
         expect(skip).not.toBeDisabled();
     });
 
-    test("Start playing CTA appears on the last step and is enabled with defaults", async () => {
+    test("Play CTA appears once minimum setup is complete (mid-flow mode flip to edit)", async () => {
         const user = userEvent.setup();
         render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForWizard();
-        // Click Next through every step to reach the last one. With
-        // selfPlayerId null on a fresh mount, visible steps are:
-        // cardPack → players → identity → handSizes → knownCards →
-        // inviteOtherPlayers.
-        // We hit Skip on identity to skip past it (avoids setting
-        // selfPlayerId, keeping myCards hidden).
+        // Click Next through every step until handSizes is filled
+        // (committing placeholder defaults via beforeAdvance). At
+        // that point the game phase becomes "setupCompleted" and the
+        // wizard transitions out of forced-flow into spot-check edit
+        // mode — the per-step Next button is replaced by a single
+        // Done button, and the global PlayCTAButton (which lives in
+        // the chrome) becomes visible.
         await user.click(stickyNext()); // cardPack → players
         await user.click(stickyNext()); // players → identity
         await user.click(stickySkip()); // identity → handSizes
-        await user.click(stickyNext()); // handSizes → knownCards
-        await user.click(stickyNext()); // knownCards → inviteOtherPlayers
-        // We're now on the last step. The Next button's label is
-        // "Start playing" or "Continue playing" and `data-setup-cta`
-        // is set.
+        await user.click(stickyNext()); // handSizes → knownCards (commits handSizes via beforeAdvance, flips to edit mode)
+
+        // After the handSizes commit, the global PlayCTAButton renders
+        // with `data-tour-anchor="play-cta"`. It carries the play view
+        // affordance that the wizard's old last-step button used to
+        // carry. In edit mode the per-step `setup-start-playing`
+        // attribute never appears anywhere — `play-cta` is the
+        // canonical "go play now" affordance.
         await waitFor(() => {
             const cta = document.querySelector(
-                '[data-tour-anchor="setup-start-playing"]',
+                '[data-tour-anchor="play-cta"]',
             ) as HTMLButtonElement | null;
             expect(cta).not.toBeNull();
             expect(cta).not.toBeDisabled();

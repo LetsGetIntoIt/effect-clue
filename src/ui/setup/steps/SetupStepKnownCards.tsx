@@ -8,12 +8,13 @@ import { ChevronLeftIcon, ChevronRightIcon } from "../../components/Icons";
 import { PlayerColumnCardList } from "../shared/PlayerColumnCardList";
 import { SetupStepPanel } from "../SetupStepPanel";
 import { VALID, type WizardStepId } from "../wizardSteps";
-import type { StepPanelState } from "../SetupStepPanel";
+import type { StepPanelState, WizardMode } from "../SetupStepPanel";
 
 const STEP_ID = "knownCards" as const;
 
 interface Props {
     readonly state: StepPanelState;
+    readonly wizardMode: WizardMode;
     readonly stepNumber: number;
     readonly totalSteps: number;
     readonly onClickToEdit: () => void;
@@ -41,6 +42,7 @@ interface Props {
  */
 export function SetupStepKnownCards({
     state,
+    wizardMode,
     stepNumber,
     totalSteps,
     onClickToEdit,
@@ -76,6 +78,7 @@ export function SetupStepKnownCards({
             <SetupStepPanel
                 stepId={STEP_ID}
                 state={state}
+                wizardMode={wizardMode}
                 stepNumber={stepNumber}
                 totalSteps={totalSteps}
                 title={t("title")}
@@ -98,6 +101,7 @@ export function SetupStepKnownCards({
         <SetupStepPanel
             stepId={STEP_ID}
             state={state}
+            wizardMode={wizardMode}
             stepNumber={stepNumber}
             totalSteps={totalSteps}
             title={t("title")}

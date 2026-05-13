@@ -196,16 +196,23 @@ describe("Clue — full user-journey umbrella", () => {
         await user.click(stickyByText("next")); // players → identity
         await user.click(stickyByText("skip")); // identity skipped
         await user.click(stickyByText("next")); // handSizes → knownCards
-        await user.click(stickyByText("next")); // knownCards → inviteOtherPlayers
+        // After the handSizes commit (driven by Next), the game phase
+        // becomes setupCompleted and the wizard transitions to spot-
+        // check edit mode. The per-step Next is replaced by Done,
+        // and the canonical "go play" affordance lives in the chrome
+        // (PlayCTAButton, `data-tour-anchor="play-cta"`).
         await waitFor(() => {
             expect(
-                document.querySelector("[data-setup-cta]"),
+                document.querySelector("[data-tour-anchor='play-cta']"),
             ).toBeInTheDocument();
         });
 
-        // 2. Clicking Start Playing flips the URL to checklist view.
-        const cta = document.querySelector<HTMLElement>("[data-setup-cta]");
-        if (!cta) throw new Error("Start Playing CTA missing");
+        // 2. Clicking the global Play CTA flips the URL to the
+        //    checklist view.
+        const cta = document.querySelector<HTMLElement>(
+            "[data-tour-anchor='play-cta']",
+        );
+        if (!cta) throw new Error("Play CTA missing");
         await user.click(cta);
         await waitFor(() => {
             expect(window.location.search).toContain("view=checklist");

@@ -37,7 +37,7 @@ import {
     type StepValidation,
     type WizardStepId,
 } from "../wizardSteps";
-import type { StepPanelState } from "../SetupStepPanel";
+import type { StepPanelState, WizardMode } from "../SetupStepPanel";
 
 const STEP_ID = "cardPack" as const;
 // Tour anchor shared with the M6 setup tour's "Card pack" step.
@@ -90,6 +90,7 @@ const totalCardsIn = (cardSet: CardSet): number =>
 
 interface Props {
     readonly state: StepPanelState;
+    readonly wizardMode: WizardMode;
     readonly stepNumber: number;
     readonly totalSteps: number;
     readonly onClickToEdit: () => void;
@@ -126,6 +127,7 @@ interface Props {
  */
 export function SetupStepCardPack({
     state,
+    wizardMode,
     stepNumber,
     totalSteps,
     onClickToEdit,
@@ -390,6 +392,7 @@ export function SetupStepCardPack({
         <SetupStepPanel
             stepId={STEP_ID}
             state={state}
+            wizardMode={wizardMode}
             stepNumber={stepNumber}
             totalSteps={totalSteps}
             title={t("title")}

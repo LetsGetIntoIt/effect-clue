@@ -9,9 +9,25 @@ import type { StepValidation, WizardStepId } from "./wizardSteps";
 
 export type StepPanelState = "pending" | "editing" | "complete";
 
+/**
+ * Wizard's overall mode, derived from the central game-phase
+ * machine. Drives whether closed steps are openable and whether the
+ * "pending" treatment dims them.
+ *
+ * - `"flow"`: first-time setup. Steps walked in canonical order;
+ *   pending steps below the focused one are locked (greyed, header
+ *   non-interactive). Footer shows "Skip" / "Next" (or "Start
+ *   playing" on the last step).
+ * - `"edit"`: spot-check edit. Every step is openable independently;
+ *   "pending" reads as "closed without data" with no dim. Footer
+ *   shows a single "Done" that collapses the focused step.
+ */
+export type WizardMode = "flow" | "edit";
+
 interface Props {
     readonly stepId: WizardStepId;
     readonly state: StepPanelState;
+    readonly wizardMode: WizardMode;
     readonly stepNumber: number;
     readonly totalSteps: number;
     readonly title: string;
@@ -73,6 +89,7 @@ interface Props {
 export function SetupStepPanel({
     stepId,
     state,
+    wizardMode,
     stepNumber,
     totalSteps,
     title,
@@ -96,12 +113,23 @@ export function SetupStepPanel({
     const isPending = state === "pending";
     const isEditing = state === "editing";
     const isComplete = state === "complete";
+    const isEditMode = wizardMode === "edit";
 
-    const headerTextClass = isPending
-        ? "text-muted opacity-60"
-        : "text-fg";
+    // Dim the header only in flow mode's "pending" treatment.
+    // Edit mode renders every closed step at full opacity — they're
+    // all equally accessible, dimming would mis-signal "locked."
+    const headerTextClass =
+        isPending && !isEditMode ? "text-muted opacity-60" : "text-fg";
 
-    const headerClickable = isComplete && onClickToEdit !== undefined;
+    // Header click semantics:
+    //   flow mode  — only completed steps are re-enterable.
+    //   edit mode  — every non-editing step is openable. Pending
+    //               (closed-without-data) steps included; the
+    //               accordion's `reEnter` handler is symmetric on
+    //               state, so the shell's existing code path works.
+    const headerClickable =
+        onClickToEdit !== undefined
+        && (isEditMode ? !isEditing : isComplete);
 
     return (
         <section
