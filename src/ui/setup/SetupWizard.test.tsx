@@ -198,31 +198,30 @@ describe("SetupWizard — accordion shell", () => {
         expect(skip).not.toBeDisabled();
     });
 
-    test("Play CTA appears once minimum setup is complete (mid-flow mode flip to edit)", async () => {
+    test("first-time flow lands the user on the wizard's last-step 'Start playing' CTA — no global Play CTA visible mid-flow", async () => {
         const user = userEvent.setup();
         render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForWizard();
-        // Click Next through every step until handSizes is filled
-        // (committing placeholder defaults via beforeAdvance). At
-        // that point the game phase becomes "setupCompleted" and the
-        // wizard transitions out of forced-flow into spot-check edit
-        // mode — the per-step Next button is replaced by a single
-        // Done button, and the global PlayCTAButton (which lives in
-        // the chrome) becomes visible.
+        // Walk every step. The wizard's `inviteOtherPlayers` step
+        // (last in the visible order with selfPlayerId null) carries
+        // the final `data-tour-anchor="setup-start-playing"` CTA;
+        // that's the only path out of first-time setup. The global
+        // PlayCTAButton stays hidden during this walkthrough — the
+        // walkthrough-done flag (in GameLifecycleState) hasn't been
+        // set yet, so the chrome's CTA is gated off.
         await user.click(stickyNext()); // cardPack → players
         await user.click(stickyNext()); // players → identity
         await user.click(stickySkip()); // identity → handSizes
-        await user.click(stickyNext()); // handSizes → knownCards (commits handSizes via beforeAdvance, flips to edit mode)
-
-        // After the handSizes commit, the global PlayCTAButton renders
-        // with `data-tour-anchor="play-cta"`. It carries the play view
-        // affordance that the wizard's old last-step button used to
-        // carry. In edit mode the per-step `setup-start-playing`
-        // attribute never appears anywhere — `play-cta` is the
-        // canonical "go play now" affordance.
+        await user.click(stickyNext()); // handSizes → knownCards
+        await user.click(stickyNext()); // knownCards → inviteOtherPlayers
+        // No global PlayCTA at any point in the walkthrough.
+        expect(
+            document.querySelector('[data-tour-anchor="play-cta"]'),
+        ).toBeNull();
+        // The wizard's last-step CTA is what the user clicks.
         await waitFor(() => {
             const cta = document.querySelector(
-                '[data-tour-anchor="play-cta"]',
+                '[data-tour-anchor="setup-start-playing"]',
             ) as HTMLButtonElement | null;
             expect(cta).not.toBeNull();
             expect(cta).not.toBeDisabled();

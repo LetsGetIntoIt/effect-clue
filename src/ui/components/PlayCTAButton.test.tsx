@@ -53,6 +53,26 @@ beforeEach(() => {
     window.localStorage.clear();
     captureCalls.length = 0;
     hasKeyboardOverride = true;
+    // The PlayCTAButton is gated on BOTH phase ≥ setupCompleted AND
+    // the per-game "user completed the wizard walkthrough" flag in
+    // GameLifecycleState. The tests below verify visibility from a
+    // walkthrough-already-done state; seed the flag at the start so
+    // every "should render" test sees the button. The two "renders
+    // empty spacer" tests that exercise the hidden-state spacer
+    // path explicitly clear it inside the test.
+    // Also seed `createdAt` so the ClueProvider hydration effect
+    // doesn't backfill via markGameCreated, which would clear the
+    // walkthroughDoneAt flag we're trying to set up.
+    const now = new Date().toISOString();
+    window.localStorage.setItem(
+        "effect-clue.gameLifecycle.v1",
+        JSON.stringify({
+            version: 1,
+            createdAt: now,
+            lastModifiedAt: now,
+            setupWalkthroughDoneAt: now,
+        }),
+    );
 });
 
 afterEach(() => {
@@ -170,6 +190,19 @@ describe("PlayCTAButton — toolbar variant", () => {
         expect(container.querySelector("button")).toBeNull();
     });
 
+    test("renders nothing when phase ≥ setupCompleted but the walkthrough hasn't been completed yet (first-time flow)", () => {
+        // Clear the walkthrough-done flag seeded in beforeEach so the
+        // composite visibility gate fails. Phase is brought to
+        // setupCompleted via the dispatch harness.
+        window.localStorage.setItem(
+            "effect-clue.gameLifecycle.v1",
+            JSON.stringify({ version: 1 }),
+        );
+        const { container, dispatch } = mountToolbar();
+        seedSetupCompleted(dispatch());
+        expect(container.querySelector("button")).toBeNull();
+    });
+
     test("renders 'Start playing' when phase becomes setupCompleted", () => {
         const { dispatch } = mountToolbar();
         seedSetupCompleted(dispatch());
@@ -227,12 +260,36 @@ describe("PlayCTAButton — toolbar variant", () => {
 
 describe("PlayCTAButton — bottomNav variant", () => {
     test("renders empty <li> spacer in phase 'new' to preserve the BottomNav grid", () => {
+        // Clear the walkthrough flag — phase 'new' is below the gate
+        // either way, but we want this test to assert the spacer
+        // path regardless of the gate state.
+        window.localStorage.setItem(
+            "effect-clue.gameLifecycle.v1",
+            JSON.stringify({ version: 1 }),
+        );
         const { container } = mountBottomNav();
         const list = container.querySelector("[data-testid='bottom-nav-list']");
         const li = list?.querySelector("li");
         expect(li).not.toBeNull();
         expect(li?.querySelector("button")).toBeNull();
         // Spacer has the spacer testid.
+        expect(li?.getAttribute("data-testid")).toBe("play-cta-spacer");
+    });
+
+    test("renders empty <li> spacer when phase = setupCompleted but the walkthrough hasn't been completed yet", () => {
+        // Without the walkthrough flag, the global Play CTA stays
+        // hidden so the first-time wizard CTA is the only path. The
+        // spacer keeps the BottomNav's grid balanced.
+        window.localStorage.setItem(
+            "effect-clue.gameLifecycle.v1",
+            JSON.stringify({ version: 1 }),
+        );
+        const { container, dispatch } = mountBottomNav();
+        seedSetupCompleted(dispatch());
+        const list = container.querySelector("[data-testid='bottom-nav-list']");
+        const li = list?.querySelector("li");
+        expect(li).not.toBeNull();
+        expect(li?.querySelector("button")).toBeNull();
         expect(li?.getAttribute("data-testid")).toBe("play-cta-spacer");
     });
 

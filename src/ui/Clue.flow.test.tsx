@@ -196,23 +196,26 @@ describe("Clue — full user-journey umbrella", () => {
         await user.click(stickyByText("next")); // players → identity
         await user.click(stickyByText("skip")); // identity skipped
         await user.click(stickyByText("next")); // handSizes → knownCards
-        // After the handSizes commit (driven by Next), the game phase
-        // becomes setupCompleted and the wizard transitions to spot-
-        // check edit mode. The per-step Next is replaced by Done,
-        // and the canonical "go play" affordance lives in the chrome
-        // (PlayCTAButton, `data-tour-anchor="play-cta"`).
+        await user.click(stickyByText("next")); // knownCards → inviteOtherPlayers
+        // The walkthrough flag is not yet set — the global Play CTA
+        // stays hidden during the first-time flow. The wizard's
+        // last-step `data-setup-cta` button is the only way to leave
+        // setup.
+        expect(
+            document.querySelector("[data-tour-anchor='play-cta']"),
+        ).toBeNull();
         await waitFor(() => {
             expect(
-                document.querySelector("[data-tour-anchor='play-cta']"),
+                document.querySelector("[data-setup-cta]"),
             ).toBeInTheDocument();
         });
 
-        // 2. Clicking the global Play CTA flips the URL to the
-        //    checklist view.
-        const cta = document.querySelector<HTMLElement>(
-            "[data-tour-anchor='play-cta']",
-        );
-        if (!cta) throw new Error("Play CTA missing");
+        // 2. Clicking the wizard's last-step Start Playing CTA flips
+        //    the URL to the checklist view AND sets the walkthrough-
+        //    done flag so future visits to Setup will surface the
+        //    global Play CTA.
+        const cta = document.querySelector<HTMLElement>("[data-setup-cta]");
+        if (!cta) throw new Error("Wizard Start Playing CTA missing");
         await user.click(cta);
         await waitFor(() => {
             expect(window.location.search).toContain("view=checklist");

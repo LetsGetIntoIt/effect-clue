@@ -19,8 +19,14 @@ import { CARD_SETS, newGameSetup } from "../../logic/GameSetup";
 import { getGamePhase, phaseAtLeast } from "../../logic/GamePhase";
 import { useConfirm } from "../hooks/useConfirm";
 import { useGamePhase } from "../hooks/useGamePhase";
+import { useSetupWalkthroughDone } from "../hooks/useSetupWalkthroughDone";
 import { useClue } from "../state";
 import { useTour } from "../tour/TourProvider";
+import {
+    loadGameLifecycleState,
+    markSetupWalkthroughDone,
+} from "../../logic/GameLifecycleState";
+import { DateTime } from "effect";
 import { useSetupWizardFocus } from "./SetupWizardFocusContext";
 import { SetupStepCardPack } from "./steps/SetupStepCardPack";
 import { SetupStepHandSizes } from "./steps/SetupStepHandSizes";
@@ -167,21 +173,28 @@ export function SetupWizard() {
     // Initial focused step. Three regimes:
     //   1. Explicit focus-hint (programmatic jump from an "edit this
     //      step" affordance somewhere else) — honor it if visible.
-    //   2. Edit-mode mount (phase ≥ setupCompleted on first render):
-    //      open NO step by default. The user picks what to edit; we
-    //      don't want to open `cardPack` unannounced for a returning
-    //      mid-game user navigating to Setup.
-    //   3. Flow-mode mount (phase < setupCompleted): legacy "land on
-    //      step 1" so first-time setup feels guided.
+    //   2. Edit-mode mount (phase ≥ setupCompleted AND the user has
+    //      already finished the walkthrough for this game): open NO
+    //      step by default. The user picks what to edit.
+    //   3. Otherwise (flow mode — first-time walkthrough): legacy
+    //      "land on step 1" so first-time setup feels guided.
     //
-    // Read phase directly off state (no hook — useState initializers
-    // don't re-run on prop change anyway, and we want the value as
-    // of mount).
+    // Read phase + walkthrough flag directly (useState initializers
+    // don't re-run on prop change; we want the value at mount).
     const [focusedStep, setFocusedStep] = useState<WizardStepId | null>(
         () => {
             const hinted = focus?.consumeFocusHint() ?? null;
             if (hinted !== null && steps.includes(hinted)) return hinted;
-            if (phaseAtLeast(getGamePhase(state), PHASE_SETUP_COMPLETED)) {
+            const phaseAtMount = getGamePhase(state);
+            // `loadGameLifecycleState` already guards SSR (returns
+            // `{}` when window is undefined), so no extra check
+            // needed here.
+            const walkthroughDoneAtMount =
+                loadGameLifecycleState().setupWalkthroughDoneAt !== undefined;
+            if (
+                phaseAtLeast(phaseAtMount, PHASE_SETUP_COMPLETED)
+                && walkthroughDoneAtMount
+            ) {
                 return null;
             }
             return steps[0] ?? null;
@@ -237,13 +250,24 @@ export function SetupWizard() {
         setFocusedStep(stepsRefForPhaseReset.current[0] ?? null);
     }, [phase]);
 
-    // Wizard mode = "edit" once the user has enough data to play.
-    // Drives per-step click-to-open + dim, the sticky footer's
-    // primary action ("Done" vs Skip/Next), and the per-step
-    // "complete" badge logic below.
-    const wizardMode: WizardMode = phaseAtLeast(phase, PHASE_SETUP_COMPLETED)
-        ? WIZARD_MODE_EDIT
-        : WIZARD_MODE_FLOW;
+    // Wizard mode = "edit" once the user has:
+    //   1. enough data to play (phase ≥ setupCompleted) AND
+    //   2. finished the linear walkthrough at least once for this
+    //      game (clicked Start playing on the wizard's last step,
+    //      recorded as `setupWalkthroughDoneAt` on the lifecycle
+    //      stamp). Resets on `newGame`.
+    //
+    // The double gate keeps the first-time experience strictly
+    // linear: even after the user committed handSizes mid-walk
+    // (which flips phase to setupCompleted), the wizard stays in
+    // flow mode until they reach `inviteOtherPlayers` and click its
+    // in-card Start playing button. Without #2, the global Play CTA
+    // would appear mid-flow and compete with the wizard's flow CTA.
+    const walkthroughDone = useSetupWalkthroughDone();
+    const wizardMode: WizardMode =
+        phaseAtLeast(phase, PHASE_SETUP_COMPLETED) && walkthroughDone
+            ? WIZARD_MODE_EDIT
+            : WIZARD_MODE_FLOW;
 
     // Hydration-aware initial-focused-step correction. The useState
     // initializer above evaluates phase off the pre-hydration state
@@ -251,20 +275,22 @@ export function SetupWizard() {
     // would otherwise land on the cardPack step "editing" — wrong for
     // edit mode, which wants no step open by default. Once hydration
     // completes, snap focusedStep to null IF (a) we're now in edit
-    // mode AND (b) focusedStep is still the default `steps[0]` (the
-    // user hasn't already picked another step in the time between
-    // useState and the hydrated effect). Runs once on the hydration
-    // edge.
+    // mode (phase ≥ setupCompleted AND the user has already finished
+    // the walkthrough for this game) AND (b) focusedStep is still
+    // the default `steps[0]` (the user hasn't already picked another
+    // step in the time between useState and the hydrated effect).
+    // Runs once on the hydration edge.
     const correctedForHydratedEditModeRef = useRef(false);
     useEffect(() => {
         if (!hydrated) return;
         if (correctedForHydratedEditModeRef.current) return;
         correctedForHydratedEditModeRef.current = true;
         if (!phaseAtLeast(phase, PHASE_SETUP_COMPLETED)) return;
+        if (!walkthroughDone) return;
         setFocusedStep((prev) =>
             prev === (stepsRefForPhaseReset.current[0] ?? null) ? null : prev,
         );
-    }, [hydrated, phase]);
+    }, [hydrated, phase, walkthroughDone]);
 
     // Tour pre-condition effect. Some tour steps (today: the sharing
     // tour's `setup-share-pack-pill` and `setup-invite-player`)
@@ -561,6 +587,12 @@ export function SetupWizard() {
             gameSetupStarted();
         }
         setupWizardCompleted();
+        // Persist "this game's setup walkthrough is done." Next time
+        // the wizard mounts (e.g. user navigates back from Play), it
+        // renders in spot-check edit mode and the global PlayCTA
+        // becomes visible. Cleared on `newGame` via
+        // `markGameCreated`'s clear list.
+        markSetupWalkthroughDone(DateTime.nowUnsafe());
         dispatch({ type: "setUiMode", mode: "checklist" });
     };
 

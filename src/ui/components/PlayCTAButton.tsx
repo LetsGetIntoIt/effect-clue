@@ -5,6 +5,7 @@ import { playCtaClicked } from "../../analytics/events";
 import { phaseAtLeast, type GamePhase } from "../../logic/GamePhase";
 import { useGamePhase } from "../hooks/useGamePhase";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
+import { useSetupWalkthroughDone } from "../hooks/useSetupWalkthroughDone";
 import { shortcutSuffix } from "../keyMap";
 import { useClue } from "../state";
 
@@ -48,11 +49,22 @@ export function PlayCTAButton({
     readonly variant: PlayCTAButtonVariant;
 }) {
     const phase = useGamePhase();
+    const walkthroughDone = useSetupWalkthroughDone();
     const { dispatch } = useClue();
     const t = useTranslations("playCta");
     const hasKeyboard = useHasKeyboard();
 
-    const visible = phaseAtLeast(phase, PHASE_SETUP_COMPLETED);
+    // Visibility composes BOTH signals:
+    //  - phase ≥ setupCompleted: the user has enough data to play.
+    //  - walkthroughDone: the user has finished the first-time
+    //    walkthrough at least once (the wizard's last-step "Start
+    //    playing" button has been clicked for this game). Without
+    //    this, a brand-new user mid-walk would see two competing
+    //    Start-playing affordances: the wizard's per-step CTA AND
+    //    the global chrome button. We want the wizard's CTA to be
+    //    the only path during the first-time flow.
+    const visible =
+        phaseAtLeast(phase, PHASE_SETUP_COMPLETED) && walkthroughDone;
 
     if (!visible) {
         return variant === VARIANT_BOTTOM_NAV
