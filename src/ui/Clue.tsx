@@ -49,7 +49,12 @@ import {
     screensForUiMode,
     uiModeForScreenKey,
 } from "./tour/screenKey";
-import { getScroll, recordScroll, resetScrollMemory } from "./scrollMemory";
+import {
+    getScroll,
+    recordScroll,
+    resetScrollMemory,
+    touchScrollMemory,
+} from "./scrollMemory";
 
 // Non user-facing literals.
 const VARIANT_INITIAL = "initial";
@@ -550,6 +555,13 @@ function TabContent() {
     // zero. Read with the max of both and write to both — the same
     // pattern src/ui/tour/TourPopover.tsx uses.
     useEffect(() => {
+        // Mark the view as visited on enter so it doesn't expire from
+        // under a user who sits on it without scrolling. The cleanup
+        // touches again on leave (just before the next mode's effect
+        // installs) so `lastVisitedAt` lands at the leave time, not
+        // the enter time — extends the visit window across the whole
+        // duration the user was on the view.
+        touchScrollMemory(mode);
         const onScroll = (): void => {
             const y = Math.max(document.body.scrollTop, window.scrollY);
             recordScroll(mode, y);
@@ -559,6 +571,7 @@ function TabContent() {
         return () => {
             window.removeEventListener("scroll", onScroll);
             document.body.removeEventListener("scroll", onScroll);
+            touchScrollMemory(mode);
         };
     }, [mode]);
 
