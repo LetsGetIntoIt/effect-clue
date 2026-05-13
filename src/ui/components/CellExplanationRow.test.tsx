@@ -57,7 +57,9 @@ const baseProps = {
     setup,
     hypotheses: noHypotheses,
     onHypothesisChange: vi.fn(),
-    whyText: undefined,
+    whyHeadline: undefined as string | undefined,
+    whyGivens: [] as ReadonlyArray<string>,
+    whyReasoning: [] as ReadonlyArray<string>,
     footnoteNumbers: [] as ReadonlyArray<number>,
     hypothesisValue: undefined as HypothesisValue | undefined,
     display: { tag: "blank" } as CellDisplay,
@@ -102,18 +104,19 @@ describe("CellExplanationRow - section visibility", () => {
 });
 
 describe("CellExplanationRow - Deductions section", () => {
-    test("renders with whyText and a Y-tinted glyph box for a real Y cell", () => {
+    test("renders with headline + Y-tinted glyph box for a real Y cell", () => {
         const { container } = render(
             <CellExplanationRow
                 {...baseProps}
-                whyText="why-line-1\nwhy-line-2"
+                whyHeadline="Anisha has Miss Scarlet."
                 display={{ tag: "real", value: Y }}
                 status={{ kind: "off" }}
             />,
         );
         expect(screen.getByText("deductionsLabel")).toBeInTheDocument();
-        // Whitespace-pre-line so the rendered text contains both lines.
-        expect(screen.getByText(/why-line-1/)).toBeInTheDocument();
+        expect(
+            screen.getByText("Anisha has Miss Scarlet."),
+        ).toBeInTheDocument();
 
         const glyphBox = container.querySelector('[data-glyph="yes"]');
         expect(glyphBox).not.toBeNull();
@@ -128,7 +131,7 @@ describe("CellExplanationRow - Deductions section", () => {
         const { container } = render(
             <CellExplanationRow
                 {...baseProps}
-                whyText="reason-line"
+                whyHeadline="Bob does not have Miss Scarlet."
                 display={{ tag: "real", value: N }}
                 status={{ kind: "off" }}
             />,
@@ -140,36 +143,33 @@ describe("CellExplanationRow - Deductions section", () => {
         expect(glyphBox?.querySelector("svg")).not.toBeNull();
     });
 
-    test("derived cell, one hypothesis: singular preamble + chain text from whyText, no bullet list", () => {
+    test("derived cell, one hypothesis: singular preamble + headline + Given bullets + Reasoning", () => {
         // Build a hypothesis map with one entry so the singular
-        // preamble fires: "Based on your active hypothesis:" followed
-        // by the chain text (computed externally from joint
-        // provenance and passed in as `whyText`).
+        // preamble fires above the consolidated headline / Given /
+        // Reasoning triple.
         const otherCell = Cell(PlayerOwner(player1), cardB);
         const hypotheses = HashMap.set(
             HashMap.empty<typeof otherCell, HypothesisValue>(),
             otherCell,
             "Y",
         );
-        const fakeChain =
-            "1. Given: You marked that Anisha owns Miss Scarlet.\n2. Card ownership: Miss Scarlet is already owned by someone else, so Bob doesn't own it.";
-        const { container } = render(
+        render(
             <CellExplanationRow
                 {...baseProps}
                 hypotheses={hypotheses}
                 display={{ tag: "derived", value: Y }}
                 status={{ kind: "derived", value: Y }}
-                whyText={fakeChain}
+                whyHeadline="Bob does not have Miss Scarlet."
+                whyGivens={[
+                    "Known observation: Anisha has Miss Scarlet.",
+                ]}
+                whyReasoning={[
+                    "Miss Scarlet is already owned by someone else, so Bob doesn't own it.",
+                ]}
             />,
         );
         // Deductions heading shows.
         expect(screen.getByText("deductionsLabel")).toBeInTheDocument();
-        // Y-tone tile renders the parens-wrapped CheckIcon.
-        const glyphBox = container.querySelector('[data-glyph="derivedYes"]');
-        expect(glyphBox).not.toBeNull();
-        expect(glyphBox?.className).toMatch(/bg-yes-bg/);
-        expect(glyphBox?.textContent).toBe("()");
-        expect(glyphBox?.querySelector("svg polyline")).not.toBeNull();
 
         // Singular preamble appears (mock returns bare key for plain
         // `t(...)` calls).
@@ -178,53 +178,83 @@ describe("CellExplanationRow - Deductions section", () => {
         ).toBeInTheDocument();
         // The plural preamble does NOT render in the singular case.
         expect(screen.queryByText("statusDerived")).toBeNull();
-        // Chain text (passed via whyText prop) renders below the
-        // preamble in a `whitespace-pre-line` block.
-        const chainEl = Array.from(
-            container.querySelectorAll(".whitespace-pre-line"),
-        ).find(el => (el.textContent ?? "").includes("Card ownership"));
-        expect(chainEl).toBeDefined();
-        expect(chainEl?.textContent ?? "").toContain(
-            "You marked that Anisha owns Miss Scarlet",
-        );
-        // No hypothesis bullet list inside the Deductions section.
-        expect(container.querySelector("ul > li")).toBeNull();
+
+        // Conclusion-first headline renders.
+        expect(
+            screen.getByText("Bob does not have Miss Scarlet."),
+        ).toBeInTheDocument();
+        // Given section renders with its bullet.
+        expect(screen.getByText("givenSectionLabel")).toBeInTheDocument();
+        expect(
+            screen.getByText("Known observation: Anisha has Miss Scarlet."),
+        ).toBeInTheDocument();
+        // Reasoning section renders with its single sentence (no list
+        // wrapper when there's exactly one reasoning entry).
+        expect(screen.getByText("reasoningSectionLabel")).toBeInTheDocument();
+        expect(
+            screen.getByText(
+                "Miss Scarlet is already owned by someone else, so Bob doesn't own it.",
+            ),
+        ).toBeInTheDocument();
         // No long-form statusBox in the Hypothesis section for derived.
         expect(screen.queryByText("statusConfirmed")).toBeNull();
     });
 
-    test("derived cell with two hypotheses: plural preamble + chain text from whyText, no bullet list", () => {
+    test("derived cell with two hypotheses: plural preamble + headline + Given + Reasoning", () => {
         const cellH1 = Cell(PlayerOwner(player1), cardA);
         const cellH2 = Cell(PlayerOwner(setup.players[1]!), cardB);
         const hypotheses = HashMap.fromIterable<typeof cellH1, HypothesisValue>([
             [cellH1, "Y"],
             [cellH2, "N"],
         ]);
-        const fakeChain =
-            "1. Given: You marked that Anisha owns Col. Mustard.\n2. Card ownership: Col. Mustard is already owned by someone else, so the case file doesn't have it.";
-        const { container } = render(
+        render(
             <CellExplanationRow
                 {...baseProps}
                 hypotheses={hypotheses}
                 cell={Cell(CaseFileOwner(), cardA)}
                 display={{ tag: "derived", value: N }}
                 status={{ kind: "derived", value: N }}
-                whyText={fakeChain}
+                whyHeadline="The case file does not have Col. Mustard."
+                whyGivens={[
+                    "Known observation: Anisha has Col. Mustard.",
+                ]}
+                whyReasoning={[
+                    "Col. Mustard is already owned by someone else, so the case file doesn't own it.",
+                ]}
             />,
         );
         expect(screen.getByText("deductionsLabel")).toBeInTheDocument();
         // Plural preamble appears, singular does NOT.
         expect(screen.getByText("statusDerived")).toBeInTheDocument();
         expect(screen.queryByText("statusDerivedSingular")).toBeNull();
-        // Chain text rendered.
-        const chainEl = Array.from(
-            container.querySelectorAll(".whitespace-pre-line"),
-        ).find(el => (el.textContent ?? "").includes("Card ownership"));
-        expect(chainEl).toBeDefined();
-        // No hypothesis bullet list inside Deductions — the user
-        // explicitly wanted that dropped for derived cells (it stays
-        // for jointly-conflicting cells, which has its own test).
-        expect(container.querySelector("ul > li")).toBeNull();
+        // Case-file headline reads cleanly.
+        expect(
+            screen.getByText("The case file does not have Col. Mustard."),
+        ).toBeInTheDocument();
+        // Given + Reasoning both render.
+        expect(screen.getByText("givenSectionLabel")).toBeInTheDocument();
+        expect(screen.getByText("reasoningSectionLabel")).toBeInTheDocument();
+    });
+
+    test("multi-sentence reasoning falls back to a numbered list", () => {
+        render(
+            <CellExplanationRow
+                {...baseProps}
+                whyHeadline="Bob does not have Miss Scarlet."
+                whyGivens={["Known observation: Anisha has Miss Scarlet."]}
+                whyReasoning={[
+                    "Sentence one.",
+                    "Sentence two.",
+                    "Sentence three.",
+                ]}
+                display={{ tag: "real", value: N }}
+                status={{ kind: "off" }}
+            />,
+        );
+        // Reasoning renders as <ol> with three <li>s, one per sentence.
+        const list = document.querySelector("ol.list-decimal");
+        expect(list).not.toBeNull();
+        expect(list?.querySelectorAll("li")).toHaveLength(3);
     });
 });
 

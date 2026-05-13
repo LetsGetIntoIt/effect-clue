@@ -230,8 +230,13 @@
         "title": "Deduction grid",
         "caseFileProgress": "Case file · {percent}% solved",
         "candidatesCount": "{count, plural, one {# candidate} other {# candidates}}",
-        "whyLine": "{index}. {headline}{iter, select, none {} other { (iter {iter})}}: {detail}",
-        "footnoteLine": "Candidate for suggestion {labels} — refuter's unseen card could be here."
+        "footnoteLine": "Candidate for suggestion {labels} — refuter's unseen card could be here.",
+        "headlinePlayer": "{cellPlayer} {value, select, Y {has} other {does not have}} {cellCard}.",
+        "headlineCaseFile": "The case file {value, select, Y {has} other {does not have}} {cellCard}.",
+        "givenSectionLabel": "Given",
+        "reasoningSectionLabel": "Reasoning",
+        "givenBulletObservation": "{count, plural, one {Known observation} other {Known observations}}: {cellPlayer} {value, select, Y {has} other {does not have}} {cardList}.",
+        "givenBulletHypothesis": "{count, plural, one {Hypothesis} other {Hypotheses}}: {cellPlayer} {value, select, Y {has} other {does not have}} {cardList}."
     },
     "hypothesis": {
         "groupLabel": "Hypothesis",
@@ -265,9 +270,9 @@
     "reasons": {
         "suggestionHeadline": "Suggestion #{number}",
         "initial-known-card": {
-            "headlineObservation": "{count, plural, one {Known observation} other {Known observations}}",
-            "headlineHypothesis": "{count, plural, one {Hypothesis} other {Hypotheses}}",
-            "detail": "You marked that {cellPlayer} {value, select, Y {has} other {does not have}} {cardList}."
+            "detail": "You marked that {cellPlayer} {value, select, Y {has} other {does not have}} {cardList}.",
+            "evidenceClauseObservation": "you marked that {cellPlayer} {value, select, Y {has} other {does not have}} {cellCard}",
+            "evidenceClauseHypothesis": "your hypothesis says {cellPlayer} {value, select, Y {has} other {does not have}} {cellCard}"
         },
         "initial-hand-size": {
             "headline": "Given",
@@ -275,7 +280,8 @@
         },
         "card-ownership": {
             "headline": "Who has the card",
-            "detail": "{value, select, Y {Each {card} has exactly one owner — every other owner was ruled out, so {cellPlayer} must own it.} other {{card} is already owned by someone else, so {cellPlayer} doesn't own it.}}"
+            "detail": "{value, select, Y {Each {card} has exactly one owner — every other owner was ruled out, so {cellPlayer} must own it.} other {{card} is already owned by someone else, so {cellPlayer} doesn't own it.}}",
+            "evidenceClause": "{cellCard} is held by {otherOwner}"
         },
         "player-hand": {
             "headline": "Hand size",
@@ -296,7 +302,8 @@
         },
         "refuter-owns-one-of": {
             "detailKnown": "{refuter} refuted {suggester}'s suggestion #{number} ({cardLabels}); the other two were ruled out, so {refuter} must own {cellCard}.",
-            "detailUnknown": "The refuter of suggestion #{number} owned one of the three cards; the other two were ruled out, so it must be {cellCard}."
+            "detailUnknown": "The refuter of suggestion #{number} owned one of the three cards; the other two were ruled out, so it must be {cellCard}.",
+            "detailRich": "{refuter} refuted {suggester}'s suggestion #{number} ({cardLabels}). The other two are ruled out — {evidence1}, and {evidence2} — so {refuter} must own {cellCard}."
         },
         "disjoint-groups-hand-lock": {
             "headline": "Disjoint groups",
