@@ -475,3 +475,15 @@ When I ask you to "rebase on/against latest origin/main" (or "latest remote main
 
 - **Title**: a cohesive, concise summary that covers all commits in the PR.
 - **Description**: lead with the behavior changes from the user's perspective. At the bottom, include a log of the commits with code-oriented technical descriptions of what each one does.
+
+**Refresh the title and description on every push.** Once a PR exists, every time you push new commits to it — whether it's a follow-up fix, a review-comment response, a rebase, an amend, or a brand-new feature stacked on the same branch — re-derive the title and description from the **actual state of the branch**, not from the previous title/description plus a mental delta. The PR's title and body should always describe what's *currently* on the branch, not what was on the branch at the moment the PR was opened.
+
+The mechanical version:
+
+1. After pushing, run `git log --oneline origin/main..HEAD` and `git diff origin/main...HEAD --stat` to see the full set of commits and the cumulative change.
+2. Read the diff and the commit bodies. Don't just skim the latest commit — earlier commits on the branch are equally part of the PR.
+3. Rewrite the title to cover the whole branch cohesively. If the scope of the branch changed (e.g. the original feature plus a tangential fix that came up during review), the title should reflect the new scope, not the original framing.
+4. Rewrite the description from scratch: user-facing behavior changes at the top, commit-by-commit technical log at the bottom (regenerated from `git log`, not edited in place from the previous version).
+5. Update via `mcp__github__update_pull_request` — don't ask the user to do it.
+
+This applies even when the change you just pushed feels small ("just a typo fix"). The cost of re-reading the diff and regenerating the body is a few seconds; the cost of a PR whose description has silently drifted out of sync with the code is a reviewer trusting outdated copy and missing a real change. Always re-derive from the branch, never patch the existing body.
