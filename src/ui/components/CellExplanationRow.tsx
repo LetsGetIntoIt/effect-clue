@@ -431,7 +431,7 @@ export function CellExplanationRow({
     return (
         <div className="flex flex-col">
             <div className="relative px-4 py-2">
-                <h3 className="m-0 text-center text-[1.25rem] uppercase tracking-[0.05em] text-accent">
+                <h3 className="m-0 px-9 text-center text-[1.25rem] uppercase tracking-[0.05em] text-accent">
                     {t("cellHeading", {
                         owner: ownerLabel(cell.owner),
                         card: cardLabel,
