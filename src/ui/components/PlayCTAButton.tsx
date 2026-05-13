@@ -125,8 +125,13 @@ export function PlayCTAButton({
         );
     }
 
+    // BottomNav is mobile-only (hidden on desktop via the parent's
+    // `[@media(min-width:800px)]:hidden`), so this variant's styling
+    // is implicitly mobile. The slot's horizontal padding gives the
+    // pill some breathing room on either side; `rounded-full` makes
+    // the button read as a primary pill rather than a flat tab.
     return (
-        <li className="flex-1">
+        <li className="flex-1 px-3">
             <button
                 type="button"
                 aria-label={ariaLabel}
@@ -134,7 +139,7 @@ export function PlayCTAButton({
                 onClick={onClick}
                 className={
                     "flex h-12 w-full cursor-pointer items-center justify-center " +
-                    "rounded-[var(--radius)] border-0 bg-accent px-3 " +
+                    "rounded-full border-0 bg-accent px-4 " +
                     "text-[1rem] font-semibold text-white " +
                     "hover:bg-accent-hover " +
                     "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent " +

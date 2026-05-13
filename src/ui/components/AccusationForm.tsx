@@ -291,6 +291,8 @@ export const AccusationForm = forwardRef<
                 ? { onCancel, cancelLabel: t("cancelAction") }
                 : {})}
             {...(headerTitle !== undefined ? { headerTitle } : {})}
+            hasAnyInput={hasAnyInput}
+            onClearInputs={onClearInputs}
             {...(keyboardScopeRef !== undefined ? { keyboardScopeRef } : {})}
         />
     );

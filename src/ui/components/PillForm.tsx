@@ -218,6 +218,39 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                 document.removeEventListener("keydown", onKeyDown);
         }, [canSubmit, onSubmit, keyboardScopeRef]);
 
+        // Esc-to-clear: when focus is inside this form and no pill
+        // popover is open, Esc clears the inputs (the same effect as
+        // the section-header ×). When a popover is open, Radix's own
+        // dismiss-layer handles Esc by closing the popover and we
+        // bail. Edit-mode usages of PillForm don't pass onClearInputs,
+        // so this listener is skipped there and the row-level
+        // "Esc cancels the edit" handler in SuggestionLogPanel.tsx
+        // continues to win.
+        useEffect(() => {
+            if (onClearInputs === undefined) return;
+            const onKeyDown = (e: KeyboardEvent) => {
+                if (!matches("action.cancel", e)) return;
+                const root = formRootRef.current;
+                const active = document.activeElement as Element | null;
+                if (!root || !active) return;
+                const hasOpenPopover =
+                    root.querySelector(
+                        "[data-pill-id][data-state=\"open\"]",
+                    ) !== null;
+                const focusInForm =
+                    root.contains(active) ||
+                    (isInsideSuggestionPopover(active) && hasOpenPopover);
+                if (!focusInForm) return;
+                if (hasOpenPopover) return;
+                if (hasAnyInput !== true) return;
+                e.preventDefault();
+                onClearInputs();
+            };
+            document.addEventListener("keydown", onKeyDown);
+            return () =>
+                document.removeEventListener("keydown", onKeyDown);
+        }, [onClearInputs, hasAnyInput]);
+
         // Pill-to-pill navigation. ArrowLeft/Right and Tab/Shift+Tab
         // step backward/forward through the pill sequence. The handler
         // runs at the document level but bails out unless focus is

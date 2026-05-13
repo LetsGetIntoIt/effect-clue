@@ -1221,7 +1221,7 @@ export function Checklist() {
             // the resolver simply queries for whichever side of the
             // breakpoint is active.
             data-tour-anchor="desktop-checklist-area two-halves-spotlight"
-            className="rounded-[var(--radius)] border border-border bg-panel p-4"
+            className="rounded-[var(--radius)] border border-border bg-panel p-4 shadow-[0_2px_6px_rgba(0,0,0,0.05)]"
         >
             <div className="shrink-0 [@media(min-width:800px)]:sticky [@media(min-width:800px)]:left-9 [@media(min-width:800px)]:max-w-[calc(100vw-4.5rem)]">
                 <CaseFileHeader knowledge={knowledge} />
@@ -1266,10 +1266,22 @@ export function Checklist() {
                         return [
                             <motion.tr
                                 key={`h-${String(category.id)}`}
+                                // bg-category-header on the <tr> itself
+                                // closes the seam that flashed during
+                                // mobile horizontal-overscroll bounce:
+                                // when the table's cells separate by a
+                                // pixel or two mid-stretch, the page-bg
+                                // would otherwise show through the gap
+                                // between the sticky <th> and the
+                                // spanning <td>. With the maroon on the
+                                // row, the gap is filled by the same
+                                // color and reads as one continuous
+                                // strip even when bounced.
+                                className="bg-category-header"
                                 {...tableRowMotionProps}
                             >
                                 <motion.th
-                                    className={`${STICKY_FIRST_COL} overflow-hidden border-r border-b border-border bg-category-header p-0 text-left text-[1rem] uppercase tracking-[0.05em] text-white`}
+                                    className={`${STICKY_FIRST_COL} overflow-hidden border-b border-border bg-category-header p-0 text-left text-[1rem] uppercase tracking-[0.05em] text-white`}
                                     data-tour-sticky-left=""
                                     exit={cellExitTone}
                                 >
@@ -2600,7 +2612,7 @@ function CaseFileHeader({ knowledge }: { knowledge: Knowledge }) {
     return (
         <motion.div
             ref={headerRef}
-            className="mb-4 rounded-[var(--radius)] border border-border bg-case-file-bg p-3"
+            className="mb-4 rounded-[var(--radius)] border border-border bg-case-file-bg p-3 shadow-[0_2px_6px_rgba(0,0,0,0.05)]"
             data-tour-anchor="checklist-case-file"
             animate={headerAnimate}
             transition={isCelebrating ? wiggleTransition : celebrateTransition}

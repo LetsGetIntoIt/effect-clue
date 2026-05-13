@@ -745,12 +745,10 @@ export const SuggestionForm = forwardRef<
                 ? { onCancel, cancelLabel: t("cancelAction") }
                 : {})}
             {...(headerTitle !== undefined ? { headerTitle } : {})}
+            hasAnyInput={hasAnyInput}
+            onClearInputs={onClearInputs}
             {...(showClearInputs
-                ? {
-                      clearInputsLabel: t("clearInputs"),
-                      hasAnyInput,
-                      onClearInputs,
-                  }
+                ? { clearInputsLabel: t("clearInputs") }
                 : {})}
             {...(keyboardScopeRef !== undefined ? { keyboardScopeRef } : {})}
         />

@@ -901,3 +901,81 @@ describe("SuggestionForm — re-seed when `suggestion` prop id changes", () => {
         expect(B).toBeDefined(); // touch B to keep the import tidy
     });
 });
+
+// -----------------------------------------------------------------------
+// Esc-to-clear in create mode
+// -----------------------------------------------------------------------
+
+describe("SuggestionForm — Esc-to-clear (create mode)", () => {
+    test("Esc with a popover open closes the popover and leaves committed pills intact", async () => {
+        const user = userEvent.setup();
+        renderForm(<SuggestionForm setup={setup} onSubmit={vi.fn()} />);
+
+        // Commit suggester → auto-advance opens the card-0 popover.
+        const pop1 = await openPopover(user, /pillSuggester/);
+        await user.click(within(pop1).getByRole("option", { name: /Anisha/ }));
+        // A popover is open at this point (auto-advanced to card-0).
+        expect(
+            document.querySelector("[data-pill-id][data-state='open']"),
+        ).not.toBeNull();
+
+        await user.keyboard("{Escape}");
+
+        // The popover closed (Radix). The previously-committed
+        // suggester value is preserved.
+        expect(
+            document.querySelector("[data-pill-id][data-state='open']"),
+        ).toBeNull();
+        expect(
+            screen.getByRole("button", { name: /pillSuggester.*Anisha/ }),
+        ).toBeInTheDocument();
+    });
+
+    test("Esc with no popover open clears every pill", async () => {
+        const user = userEvent.setup();
+        renderForm(<SuggestionForm setup={setup} onSubmit={vi.fn()} />);
+
+        // Commit suggester then dismiss the auto-advanced popover so
+        // no dropdown is open when we hit Esc the second time.
+        const pop1 = await openPopover(user, /pillSuggester/);
+        await user.click(within(pop1).getByRole("option", { name: /Anisha/ }));
+        await user.keyboard("{Escape}"); // close auto-advanced popover
+        expect(
+            screen.getByRole("button", { name: /pillSuggester.*Anisha/ }),
+        ).toBeInTheDocument();
+
+        // Move focus inside the form. After auto-advance, focus is on
+        // a pill trigger already; the pill row counts as "inside the
+        // form" for the Esc handler. Press Esc → onClearInputs fires.
+        await user.keyboard("{Escape}");
+
+        // The suggester pill no longer displays Anisha — it reads as
+        // the plain unfilled label.
+        expect(
+            screen.queryByRole("button", { name: /pillSuggester.*Anisha/ }),
+        ).toBeNull();
+        expect(
+            screen.getByRole("button", { name: /pillSuggester/ }),
+        ).toBeInTheDocument();
+    });
+
+    test("Esc inside an open popover with no committed values is a no-op (Radix closes the popover; nothing to clear)", async () => {
+        const user = userEvent.setup();
+        renderForm(<SuggestionForm setup={setup} onSubmit={vi.fn()} />);
+
+        // Open the suggester popover without committing anything.
+        await openPopover(user, /pillSuggester/);
+
+        await user.keyboard("{Escape}");
+
+        // Popover closed.
+        expect(
+            document.querySelector("[data-pill-id][data-state='open']"),
+        ).toBeNull();
+        // No committed values either way — the suggester pill still
+        // renders the unfilled label.
+        expect(
+            screen.getByRole("button", { name: /pillSuggester/ }),
+        ).toBeInTheDocument();
+    });
+});

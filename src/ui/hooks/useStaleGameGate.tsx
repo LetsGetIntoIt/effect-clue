@@ -25,6 +25,7 @@ import {
 } from "../../logic/GameLifecycleState";
 import { hasCardInformation } from "../../logic/GamePhase";
 import { useStartupCoordinator } from "../onboarding/StartupCoordinator";
+import { resetScrollMemory } from "../scrollMemory";
 import { useClue } from "../state";
 import {
     STALE_GAME_VARIANT_STARTED,
@@ -98,6 +99,7 @@ export function useStaleGameGate(): UseStaleGameGateValue {
         // fresh createdAt is stamped immediately.
         dispatch({ type: "newGame" });
         dispatch({ type: "setUiMode", mode: "setup" });
+        resetScrollMemory();
         reportClosed(SLOT_STALE_GAME);
     }, [dispatch, reportClosed]);
 

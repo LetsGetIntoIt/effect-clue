@@ -314,10 +314,11 @@ describe("Clue — full user-journey umbrella", () => {
                 name: /Library/,
             }),
         );
-        // Pop the popover off so the submit button is what gets clicked,
-        // not the open popover's trapped focus.
-        await user.keyboard("{Escape}");
-
+        // Accusation has 4 pills (accuser + 3 cards), all now filled.
+        // Auto-advance walks off the end → openPillId becomes
+        // TARGET_SUBMIT and the submit button is auto-focused. No
+        // popover is open at this point, so no Escape is needed
+        // (and Esc would clear the form via PillForm's Esc-to-clear).
         const accusationSubmit = screen.getByRole("button", {
             name: /^submit/,
         });

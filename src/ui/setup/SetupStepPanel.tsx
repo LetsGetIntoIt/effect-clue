@@ -140,9 +140,9 @@ export function SetupStepPanel({
             // each step component. Token shape:
             // `setup-wizard-step-cardpack` / `-players` / etc.
             data-tour-anchor={`setup-wizard-step-${stepId}`}
-            className={`rounded-[var(--radius)] border bg-panel transition-colors ${
+            className={`rounded-[var(--radius)] border bg-panel transition-colors shadow-[0_2px_6px_rgba(0,0,0,0.05)] ${
                 isEditing
-                    ? "border-accent/40 shadow-[0_2px_12px_rgba(0,0,0,0.06)]"
+                    ? "border-accent/40 shadow-[0_2px_12px_rgba(0,0,0,0.08)]"
                     : "border-border/40"
             }`}
             aria-current={isEditing ? "step" : undefined}
@@ -185,10 +185,20 @@ export function SetupStepPanel({
                                 total: totalSteps,
                             })}
                         </span>
+                        {/* Narrow-viewport summary: stacks below the
+                          * step counter when there isn't horizontal
+                          * room for the title + side-summary combo.
+                          * Hidden on wider screens, where the right-
+                          * aligned span below takes over. */}
+                        {isComplete && (
+                            <span className="mt-0.5 text-[1rem] text-muted [@media(min-width:520px)]:hidden">
+                                {summary}
+                            </span>
+                        )}
                     </div>
                 </div>
                 {isComplete && (
-                    <span className="shrink-0 text-[1rem] text-muted">
+                    <span className="hidden shrink-0 text-[1rem] text-muted [@media(min-width:520px)]:inline">
                         {summary}
                     </span>
                 )}
