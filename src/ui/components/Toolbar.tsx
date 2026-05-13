@@ -10,6 +10,7 @@ import { describeAction } from "../../logic/describeAction";
 import { routes } from "../../routes";
 import { useConfirm } from "../hooks/useConfirm";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
+import { resetScrollMemory } from "../scrollMemory";
 import { useClue } from "../state";
 import { shortcutSuffix } from "../keyMap";
 import { useTour } from "../tour/TourProvider";
@@ -54,6 +55,7 @@ export function useToolbarActions() {
         if (await confirm({ message: t("newGameConfirm") })) {
             startSetup();
             dispatch({ type: "newGame" });
+            resetScrollMemory();
             gameSetupStarted();
         }
     };

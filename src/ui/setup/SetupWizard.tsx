@@ -20,6 +20,7 @@ import { getGamePhase, phaseAtLeast } from "../../logic/GamePhase";
 import { useConfirm } from "../hooks/useConfirm";
 import { useGamePhase } from "../hooks/useGamePhase";
 import { useSetupWalkthroughDone } from "../hooks/useSetupWalkthroughDone";
+import { resetScrollMemory } from "../scrollMemory";
 import { useClue } from "../state";
 import { useTour } from "../tour/TourProvider";
 import {
@@ -631,6 +632,7 @@ export function SetupWizard() {
         });
         if (!ok) return;
         dispatch({ type: "newGame" });
+        resetScrollMemory();
         // The newGame action resets phase to "new"; the phase-
         // transition effect above catches that and resets
         // focusedStep + completed back to step 1. (This path runs

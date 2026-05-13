@@ -14,22 +14,21 @@
  */
 @theme {
     /* --- Surfaces --------------------------------------------------- */
-    /* Deep parchment, slightly warm — like aged dossier paper. Two
-     * shades darker than `--color-panel` so the cream cards and the
-     * checklist / suggest-log content areas read as visibly elevated
-     * against the page background. */
-    --color-bg: #e2d5b3;
+    /* Deep parchment, slightly warm — like aged dossier paper. A few
+     * shades darker than the cream `--color-panel` so content panels
+     * (checklist, suggest log, wizard accordion cards) read as visibly
+     * elevated against the page background. */
+    --color-bg: #e8dcb8;
     /* Cream panel — for card/section fills. */
     --color-panel: #f7f0dc;
-    /* Light-parchment fill for interactive controls (buttons, pills,
-     * draggable rows, status badges). One shade lighter than the page
-     * background so controls stand out on `bg-bg` without competing
-     * with the cream `--color-panel`. Hover lifts to
-     * `--color-hover` (#e8ddbf), which is darker than control — the
-     * "press down" direction users expect. This used to be the value
-     * of `--color-bg` before the page background was darkened; keeping
-     * the value here preserves control hue and hover direction.  */
-    --color-control: #efe6d3;
+    /* Warm tan for interactive controls (buttons, pills, draggable
+     * rows, status badges). Reads as a classic dossier-tan layer —
+     * a few shades darker and noticeably more tan than the parchment
+     * page background, but lighter than the deeper honey-gold the
+     * palette experimented with previously. Hover (--color-hover) is
+     * darker so press-down feels like the surface sinking, the
+     * convention users expect. */
+    --color-control: #dac796;
     /* Aged-paper edge, warm taupe-brown. */
     --color-border: #cbb68c;
     /* Faded ink for secondary text. Darkened from #6d5a3f for WCAG
@@ -42,8 +41,9 @@
     --color-row-header: #e5d9b8;
     /* Dossier manila for the case-file header strip. */
     --color-case-file-bg: #ead9b0;
-    /* Subtle hover tint for interactive neutrals (buttons, preset chips). */
-    --color-hover: #e8ddbf;
+    /* Press-down hover tint for `--color-control`. Darker than control
+     * by ~10% lightness, keeping the "sink in on hover" direction. */
+    --color-hover: #c2a96b;
     /* Alternating "striped" row fill for dense tables. */
     --color-row-alt: #ede0c1;
 

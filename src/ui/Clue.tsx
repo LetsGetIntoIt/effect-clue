@@ -49,6 +49,7 @@ import {
     screensForUiMode,
     uiModeForScreenKey,
 } from "./tour/screenKey";
+import { getScroll, recordScroll, resetScrollMemory } from "./scrollMemory";
 
 // Non user-facing literals.
 const VARIANT_INITIAL = "initial";
@@ -489,6 +490,7 @@ function NewGameShortcut() {
                 if (ok) {
                     startSetup();
                     dispatch({ type: "newGame" });
+                    resetScrollMemory();
                     gameSetupStarted();
                 }
             });
@@ -528,21 +530,64 @@ function TabContent() {
     const topLevelKey: "setup" | "play" =
         mode === UI_SETUP ? UI_SETUP : TOP_LEVEL_PLAY;
 
-    // With document-level scroll, the page doesn't reset when the
-    // top-level view changes — a deep scroll into the Checklist
-    // would otherwise leave the user mid-page after switching to
-    // Setup. Reset to the top on top-level toggles, skipping the
-    // initial mount so we don't override hydration's restored view.
-    const prevTopLevelKey = useRef(topLevelKey);
+    // Per-view scroll memory. Tracks scrollY per uiMode and restores
+    // on view change. Continuous-track approach (save on every scroll
+    // event into the current view's slot) is robust against the timing
+    // hazard of reading scrollY in the change-triggered effect — by
+    // then the new pane is mounting and the browser may have clamped
+    // scrollY to the new pane's shorter scrollHeight. With continuous
+    // tracking, the previous view's slot is already up-to-date before
+    // the change fires. Two rAFs in the restore effect wait for the
+    // new pane's React commit + the browser's layout pass, so
+    // scrollHeight reflects the new pane before we ask the browser to
+    // scroll. Instant (not smooth) because restoring a previously-
+    // visited position shouldn't animate. `newGame` dispatch sites
+    // call `resetScrollMemory()` so a fresh game lands at the top.
+    //
+    // Page vertical scroll lives on `<body>` (per app/globals.css's
+    // `html { overflow-x: clip } body { overflow-x: auto }`), so
+    // `window.scrollY` can read 0 even while `body.scrollTop` is non-
+    // zero. Read with the max of both and write to both — the same
+    // pattern src/ui/tour/TourPopover.tsx uses.
     useEffect(() => {
-        if (prevTopLevelKey.current === topLevelKey) return;
-        prevTopLevelKey.current = topLevelKey;
-        const reduced =
-            typeof window !== "undefined" &&
-            window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        // eslint-disable-next-line i18next/no-literal-string -- ScrollBehavior enum
-        window.scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" });
-    }, [topLevelKey]);
+        const onScroll = (): void => {
+            const y = Math.max(document.body.scrollTop, window.scrollY);
+            recordScroll(mode, y);
+        };
+        window.addEventListener("scroll", onScroll, { passive: true });
+        document.body.addEventListener("scroll", onScroll, { passive: true });
+        return () => {
+            window.removeEventListener("scroll", onScroll);
+            document.body.removeEventListener("scroll", onScroll);
+        };
+    }, [mode]);
+
+    const prevUiMode = useRef(mode);
+    useEffect(() => {
+        if (prevUiMode.current === mode) return;
+        prevUiMode.current = mode;
+        const target = getScroll(mode);
+        // Two rAFs without a cleanup: React Strict Mode would
+        // double-invoke this effect in dev, and a `cancelAnimationFrame`
+        // cleanup would cancel the first run's rAF while the second
+        // run's `prevUiMode.current === mode` guard kept it from
+        // scheduling another — leaving nothing scheduled. Without
+        // cleanup the rAF runs idempotently in both modes (two
+        // back-to-back scrollTo's to the same target are a no-op).
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                // eslint-disable-next-line i18next/no-literal-string -- ScrollBehavior enum
+                const opts: ScrollToOptions = { top: target, behavior: "auto" };
+                window.scrollTo(opts);
+                // jsdom doesn't implement `body.scrollTo`. Guard so
+                // the unit-test environment doesn't throw — the scroll
+                // is verified manually in the next-dev preview.
+                if (typeof document.body.scrollTo === "function") {
+                    document.body.scrollTo(opts);
+                }
+            });
+        });
+    }, [mode]);
 
     // Apply paint containment ONLY during the Setup ↔ Play slide.
     // `contain: paint` clips painting at the container's box AND
