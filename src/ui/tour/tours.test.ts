@@ -129,8 +129,8 @@ describe("TOURS — checklistSuggest tour", () => {
         //   4. checklist-cell (both — advance-on-click, OPEN)
         //   5. cell-explanation-panel (both — whole-panel intro)
         //   6-8. cell-explanation-{deductions,leads,hypothesis} (both)
-        //   9. checklist-case-file (both)
-        //  10. checklist-cell-close (both — advance-on-click, CLOSE)
+        //   9. checklist-cell-close (both — advance-on-click, CLOSE)
+        //  10. checklist-case-file (both — panel already dismissed)
         //  11. desktop-suggest-area (desktop)
         //  12. bottom-nav-suggest (mobile)
         //  13. suggest-prior-log (both)
@@ -144,8 +144,8 @@ describe("TOURS — checklistSuggest tour", () => {
             "cell-explanation-deductions",
             "cell-explanation-leads",
             "cell-explanation-hypothesis",
-            "checklist-case-file",
             "checklist-cell-close",
+            "checklist-case-file",
             "desktop-suggest-area",
             "bottom-nav-suggest",
             "suggest-prior-log",

@@ -257,8 +257,7 @@ export function Checklist() {
         currentStepAnchor === "cell-explanation-panel"
         || currentStepAnchor === "cell-explanation-deductions"
         || currentStepAnchor === "cell-explanation-leads"
-        || currentStepAnchor === "cell-explanation-hypothesis"
-        || currentStepAnchor === "checklist-case-file";
+        || currentStepAnchor === "cell-explanation-hypothesis";
     const tourKeepsCellOpenRef = useRef(tourKeepsCellOpen);
     tourKeepsCellOpenRef.current = tourKeepsCellOpen;
     // Local alias — the SelectionContext field is named for the old

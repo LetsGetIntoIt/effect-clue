@@ -500,21 +500,6 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             requiredUiMode: "checklist",
         },
         {
-            // Case file — the explanation row may still be open from
-            // the previous steps, which is fine: the case-file
-            // summary sits ABOVE the cell-explanation row in the
-            // page layout, so the spotlight rings it cleanly. The
-            // copy says "section" (not "column") because the
-            // case-file widget isn't a column in any layout sense —
-            // it's a horizontal summary above the player columns.
-            anchor: "checklist-case-file",
-            titleKey: "checklist.caseFile.title",
-            bodyKey: "checklist.caseFile.body",
-            side: "bottom",
-            align: "end",
-            requiredUiMode: "checklist",
-        },
-        {
             // Tap the cell again to close the panel. Anchored to the
             // `checklist-cell-close` token (a sibling of
             // `checklist-cell` on the same (0,0) cell) so the
@@ -523,6 +508,12 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             // — the entry effect opens the cell here, and installs a
             // native click listener that closes the cell on tap. The
             // tour's advance-on-click listener fires alongside.
+            //
+            // Ordered BEFORE caseFile so the user dismisses the
+            // explanation panel here, and the case-file step shows
+            // with the grid fully visible (no explanation row in the
+            // way of the player columns just below the case-file
+            // summary).
             //
             // tourKeepsCellOpen is INTENTIONALLY false on this anchor
             // so the cell's onClick + outside-click handler don't
@@ -537,6 +528,22 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
                 mobile: { side: "bottom", align: "center" },
                 desktop: { side: "right", align: "center" },
             },
+            requiredUiMode: "checklist",
+        },
+        {
+            // Case file — comes AFTER cellClose so the explanation
+            // panel is dismissed by this point; the case-file
+            // summary sits above the player columns and reads
+            // cleanly without the explanation row spilling beneath
+            // it. The copy says "section" (not "column") because
+            // the case-file widget isn't a column in any layout
+            // sense — it's a horizontal summary above the player
+            // columns.
+            anchor: "checklist-case-file",
+            titleKey: "checklist.caseFile.title",
+            bodyKey: "checklist.caseFile.body",
+            side: "bottom",
+            align: "end",
             requiredUiMode: "checklist",
         },
         {
