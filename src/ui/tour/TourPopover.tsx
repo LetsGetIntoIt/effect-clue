@@ -42,9 +42,13 @@
 "use client";
 
 import * as Popover from "@radix-ui/react-popover";
+import { Duration } from "effect";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
+import { ProseChecklistIcon } from "../components/CellGlyph";
 import { XIcon } from "../components/Icons";
+import { Y, N } from "../../logic/Knowledge";
+import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useClue } from "../state";
 import {
     findAnchorElements,
@@ -71,12 +75,35 @@ type VirtualElement = {
 const KEY_ESCAPE = "Escape" as const;
 // Analytics discriminator for tour dismissal via Esc keypress.
 const DISMISS_VIA_ESC = "esc" as const;
+// How long a step must be on screen before tapping the backdrop
+// advances the tour. The delay prevents accidental skip-throughs on
+// stray taps right after a step appears.
+const BACKDROP_ADVANCE_DELAY = Duration.seconds(2);
 const SCROLL_BEHAVIOR_AUTO: ScrollBehavior = "auto";
 // Attribute we add to the Radix Popover.Content so the keyboard
 // isolator can do an O(1) `popoverContent.contains(eventTarget)` check
 // to allow keyboard events that target the popover's own buttons.
 const POPOVER_CONTENT_ATTR = "data-tour-popover-content" as const;
 const TOUR_VIEWPORT_MARGIN = 48;
+// Bounce keyframes for the action-prompt nudge. Vertical-only so the
+// layout stays stable; tail damping (-4px on the second bounce)
+// reads as physical bounce-decay. Driven via the Web Animations API
+// (`el.animate(...)`) instead of a CSS class because CSS class
+// toggling is unreliable for "restart an animation that already
+// played" — browsers cache the completed state and skip the second
+// run. WAAPI always creates a fresh animation, so each click of the
+// disabled Next button gets a fresh bounce.
+const TOUR_ACTION_BOUNCE_KEYFRAMES: Keyframe[] = [
+    { transform: "translateY(0)" },
+    { transform: "translateY(-8px)", offset: 0.3 },
+    { transform: "translateY(0)", offset: 0.6 },
+    { transform: "translateY(-4px)", offset: 0.75 },
+    { transform: "translateY(0)" },
+];
+const TOUR_ACTION_BOUNCE_OPTIONS: KeyframeAnimationOptions = {
+    duration: 550,
+    easing: "cubic-bezier(0.34, 1.56, 0.64, 1)",
+};
 const TOUR_STICKY_LEFT_GAP = 16;
 const TOUR_STICKY_LEFT_ATTR = "data-tour-sticky-left" as const;
 const SCROLL_AXIS_X = "x" as const;
@@ -189,6 +216,10 @@ export function TourPopover() {
         dismissTour,
     } = useTour();
     const { state, dispatch } = useClue();
+    // Touch vs. mouse — picks the verb (`Tap` / `Click`) in
+    // advance-on-click step prompts so the copy matches what the user
+    // is about to physically do.
+    const hasKeyboard = useHasKeyboard();
 
     // The virtualRef passed into Radix Popover. Each step recomputes
     // it via the effect below.
@@ -215,11 +246,21 @@ export function TourPopover() {
         dispatch({ type: "setUiMode", mode: currentStep.requiredUiMode });
     }, [currentStep, state.uiMode, dispatch]);
 
-    // Spotlight rect — set to the union of all anchor element rects,
-    // or null when no anchor matches. Refreshed alongside the
-    // popover position via the tracking effect below so the dim
-    // cutout follows the active step.
-    const [spotlight, setSpotlight] = useState<DOMRect | null>(null);
+    // Spotlight rects — one per matched anchor element, so multi-
+    // element anchors render as multiple separate rings rather than a
+    // single union rect. This is what makes the "two halves" step on
+    // desktop look like TWO separate spotlights (one on the checklist
+    // column, one on the suggestion log) instead of a single rect
+    // unioned across the gap between them.
+    //
+    // For single-element anchors, this is just an array of one rect.
+    // Empty array means "no anchor matched" (the fallback path renders
+    // a plain dark overlay instead of any rings).
+    //
+    // The auto-scroll logic still computes a single union rect to
+    // decide what to scroll into view — bringing the whole spotlight
+    // group on-screen at once.
+    const [spotlights, setSpotlights] = useState<ReadonlyArray<DOMRect>>([]);
 
     // We auto-scroll the page once per step to bring the anchor into
     // view — anchors that live below the fold (like the hand-size
@@ -251,7 +292,7 @@ export function TourPopover() {
             virtualElementRef.current = {
                 getBoundingClientRect: fallbackVirtualRect,
             };
-            setSpotlight(null);
+            setSpotlights([]);
             return;
         }
 
@@ -348,7 +389,7 @@ export function TourPopover() {
                 virtualElementRef.current = {
                     getBoundingClientRect: fallbackVirtualRect,
                 };
-                setSpotlight(null);
+                setSpotlights([]);
                 if (lastUnionKeyRef.current !== "") {
                     lastUnionKeyRef.current = "";
                     setAnchorTick(n => n + 1);
@@ -359,32 +400,33 @@ export function TourPopover() {
             // re-measure the same nodes — avoids re-running the
             // querySelectorAll on every frame.
             //
-            // Spotlight uses the UNION of all matched rects so it
-            // can highlight a row/column/group as one cohesive
-            // shape. Popover positioning anchors to a SINGLE element
-            // (not the union). Reasoning: for big unions (e.g. an
-            // entire column or trigger + open menu), there's nowhere
-            // for the popover to fit if Radix tries to position it
-            // against the whole union — collision detection ends up
-            // shoving the popper off-screen.
+            // Spotlight renders ONE ring per matched element rather
+            // than a single union rect — so the "two halves" step on
+            // desktop shows two separate rings (checklist + suggest)
+            // instead of a single union covering the gap between
+            // them. For single-element anchors the array has one
+            // entry, which renders identically to the old behavior.
             //
-            // Two knobs select the popover's anchor element:
+            // Popover positioning still anchors to a SINGLE element
+            // (not the union). Two knobs select which:
             //   - `step.popoverAnchor` overrides the token (lets a
             //     step keep the spotlight on a wide region while
             //     pinning the popover to a small one — used for the
-            //     player-column step).
+            //     intro steps where the spotlight covers a tall
+            //     column but the popover anchors to a small header).
             //   - `step.popoverAnchorPriority` picks `first-visible`
             //     (default) or `last-visible` from the matched
             //     elements (used for the overflow-menu step where
             //     the portaled menu content appears AFTER the trigger
             //     in DOM order).
-            const popoverEls = currentStep.popoverAnchor !== undefined
+            const hasPopoverAnchorOverride =
+                currentStep.popoverAnchor !== undefined
+                || currentStep.popoverAnchorByViewport !== undefined;
+            const popoverEls = hasPopoverAnchorOverride
                 ? findAnchorElements(resolvePopoverAnchorToken(currentStep))
                 : els;
-            const spotlightMeasure = (): DOMRect => {
-                const rects = els.map(el => el.getBoundingClientRect());
-                return unionRect(rects) ?? fallbackVirtualRect();
-            };
+            const spotlightMeasureAll = (): ReadonlyArray<DOMRect> =>
+                els.map(el => el.getBoundingClientRect());
             const popoverMeasure = (): DOMRect => {
                 // Prefer the popover's own anchor target (when set);
                 // fall back to the spotlight elements if nothing
@@ -410,7 +452,17 @@ export function TourPopover() {
             virtualElementRef.current = {
                 getBoundingClientRect: popoverMeasure,
             };
-            let measured = spotlightMeasure();
+            // Per-element rects (for `multiSpotlight: true` steps)
+            // or a single union rect (the default). Auto-scroll
+            // always uses the union below so the whole group lands
+            // in view at once.
+            const perElementRects = spotlightMeasureAll();
+            const unionMeasured =
+                unionRect([...perElementRects]) ?? fallbackVirtualRect();
+            let measuredRects: ReadonlyArray<DOMRect> =
+                currentStep.multiSpotlight === true
+                    ? perElementRects
+                    : [unionMeasured];
             // Auto-scroll at most once per step so anchors below the
             // fold (or off to the side on a horizontally-scrolling
             // page) come into view. This is deliberately instant:
@@ -426,11 +478,20 @@ export function TourPopover() {
                     screen: activeScreen,
                     step: stepIndex,
                 };
-                if (scrollSpotlightIntoView(measured)) {
-                    measured = spotlightMeasure();
+                if (scrollSpotlightIntoView(unionMeasured)) {
+                    const reMeasured = spotlightMeasureAll();
+                    measuredRects =
+                        currentStep.multiSpotlight === true
+                            ? reMeasured
+                            : [
+                                  unionRect([...reMeasured])
+                                  ?? fallbackVirtualRect(),
+                              ];
                 }
             }
-            setSpotlight(measured);
+            setSpotlights(measuredRects);
+            const measured =
+                unionRect([...measuredRects]) ?? fallbackVirtualRect();
             // Bump the Radix-remount key only when the union rect
             // changed enough to matter (sub-pixel jitter doesn't
             // count). Bumping on every recompute would remount
@@ -534,17 +595,16 @@ export function TourPopover() {
         state.uiMode,
     ]);
 
-    // While a tour is active, the page beneath the veil should be
+    // While a tour is active, the page beneath the veil is
     // keyboard-inert. App-level shortcuts (`⌘K`, `⌘Z`, the per-tab
     // "go to" shortcuts, etc.) listen at the window in BUBBLE phase;
     // we install a CAPTURE-phase listener so we run first and can
     // selectively swallow events.
     //
-    //   - Escape dismisses the tour (existing behavior, kept as the
-    //     authoritative keyboard-out path).
+    //   - Escape dismisses the tour — unconditional.
     //   - Other keys: if the event target is inside the popover
     //     content (Tab between Back / Skip / Next, Enter to click),
-    //     pass through. Otherwise stopPropagation + preventDefault so
+    //     pass through; otherwise stopPropagation + preventDefault so
     //     the page beneath gets nothing.
     //
     // `capture: true` matters for collisions — bubble-phase listeners
@@ -593,6 +653,103 @@ export function TourPopover() {
         return () => cancelAnimationFrame(id);
     }, [activeScreen, stepIndex, currentStep]);
 
+    // Tap-veil-to-advance failsafe. After a short delay (so the user
+    // doesn't accidentally skip a step they just entered by tapping
+    // the page during scroll-decay), the dim backdrop becomes
+    // clickable and advances the tour to the next step (or finishes
+    // it on the last step). This is the safety net for cases where
+    // the popover renders off-screen due to a layout we didn't
+    // anticipate — the user can always tap anywhere to escape.
+    //
+    // Disabled on advance-on-click steps: those route clicks through
+    // to the spotlit anchor, so the backdrop is `pointer-events:
+    // none` and a tap-to-advance handler on it wouldn't fire anyway.
+    //
+    // Esc remains the keyboard escape; this is the touch-friendly
+    // equivalent for users without a keyboard.
+    const [canAdvanceFromBackdrop, setCanAdvanceFromBackdrop] =
+        useState(false);
+    useEffect(() => {
+        if (!activeScreen || !currentStep) return;
+        setCanAdvanceFromBackdrop(false);
+        const delay = Duration.toMillis(BACKDROP_ADVANCE_DELAY);
+        const id = window.setTimeout(
+            () => setCanAdvanceFromBackdrop(true),
+            delay,
+        );
+        return () => window.clearTimeout(id);
+    }, [activeScreen, stepIndex, currentStep]);
+
+    // advance-on-click pattern. When the active step has `advanceOn`
+    // set, the popover hides its Next button and we listen for clicks
+    // on elements matching the `advanceOn.anchor` token. The first
+    // such click advances the tour. The spotlight rendering further
+    // down drops `pointer-events: auto` for advance-on-click steps so
+    // the click reaches the underlying element — the user's tap fires
+    // both the element's native handler (selecting a tab, opening a
+    // cell) AND our listener.
+    const advanceOn = currentStep?.advanceOn;
+    useEffect(() => {
+        if (!activeScreen || !advanceOn) return;
+        const matches = findAnchorElements(advanceOn.anchor);
+        if (matches.length === 0) return;
+        const handler = (): void => nextStep();
+        for (const el of matches) {
+            el.addEventListener(advanceOn.event, handler);
+        }
+        return () => {
+            for (const el of matches) {
+                el.removeEventListener(advanceOn.event, handler);
+            }
+        };
+        // Re-resolve elements when the step changes or the anchor
+        // token swaps (advanceOn.anchor is part of the step config so
+        // it changes with the step). `nextStep` identity is stable
+        // through useCallback in TourProvider but include it for
+        // correctness.
+    }, [activeScreen, stepIndex, advanceOn, nextStep]);
+
+    // Click isolator for advance-on-click steps. The spotlight +
+    // backdrop both drop `pointer-events` so the user's tap on the
+    // spotlit element reaches it natively. But that means a tap
+    // ANYWHERE on the page would also reach the page — letting the
+    // user e.g. click a cell other than the spotlit one and close
+    // the explanation row mid-tour. This capture-phase filter cancels
+    // every click EXCEPT ones that land on the `advanceOn.anchor`
+    // element(s) or inside the tour popover itself.
+    //
+    // Gated to advance-on-click steps only. Default blocking steps
+    // don't need the filter — their backdrop has `pointer-events:
+    // auto` and absorbs clicks before they reach anything.
+    // Non-blocking steps deliberately let all clicks through.
+    useEffect(() => {
+        if (!activeScreen || !advanceOn) return;
+        const onClickCapture = (e: MouseEvent): void => {
+            const target = e.target;
+            if (!(target instanceof Element)) return;
+            // Allow clicks inside the popover (X / Back / Skip).
+            const inPopover = target.closest(`[${POPOVER_CONTENT_ATTR}]`);
+            if (inPopover !== null) return;
+            // Allow clicks inside the advance-on anchor — those are
+            // the user's intended interaction. The anchor selector
+            // matches the same `~=` whitespace-list rule as
+            // `findAnchorElements`, so `<div data-tour-anchor="a b">`
+            // matches `[data-tour-anchor~="a"]`.
+            const inAnchor = target.closest(
+                `[data-tour-anchor~="${advanceOn.anchor}"]`,
+            );
+            if (inAnchor !== null) return;
+            // Everything else: cancel.
+            e.stopPropagation();
+            e.preventDefault();
+        };
+        window.addEventListener("click", onClickCapture, { capture: true });
+        return () =>
+            window.removeEventListener("click", onClickCapture, {
+                capture: true,
+            } as EventListenerOptions);
+    }, [activeScreen, advanceOn]);
+
     if (!activeScreen || !steps || !currentStep) return null;
 
     const totalSteps = steps.length;
@@ -600,8 +757,89 @@ export function TourPopover() {
     // Body copy is optional — short call-to-action steps (e.g. the
     // "Get started by logging the first suggestion!" wrap-up) only
     // need the title.
-    const bodyText =
-        currentStep.bodyKey !== undefined ? t(currentStep.bodyKey) : "";
+    //
+    // Tour copy uses `t.rich` so the body can splice in `<yes></yes>`
+    // and `<no></no>` glyphs (rendered as `ProseChecklistIcon`)
+    // instead of the literal letters "Y" / "N". The icons match what
+    // the user sees in the deduction grid, so the tour reads in the
+    // same visual language as the rest of the app. See CLAUDE.md's
+    // "Terminology" section for the rationale.
+    //
+    // Advance-on-click steps use `<strong></strong>` to call out the
+    // action prompt ("Tap the highlighted cell to continue"), so the
+    // user can find what to do at a glance even if they're skimming
+    // the body copy.
+    //
+    // next-intl's rich-text format expects `<tag>chunks</tag>` (no
+    // self-closing form), so the i18n strings use `<yes></yes>` etc.
+    // and the callbacks for the void tags ignore the empty `chunks`
+    // arg.
+    // Device-aware action verb for advance-on-click step bodies that
+    // reference what the user should physically do — `{action}` in
+    // copy resolves to "Click" on mouse/trackpad devices and "Tap" on
+    // touch. Step bodies that don't reference `{action}` ignore the
+    // value; passing it unconditionally is harmless and avoids
+    // per-step branching.
+    const actionVerb = hasKeyboard ? t("verbClick") : t("verbTap");
+    const bodyNode =
+        currentStep.bodyKey !== undefined
+            ? t.rich(currentStep.bodyKey, {
+                  action: actionVerb,
+                  yes: () => (
+                      <ProseChecklistIcon
+                          value={Y}
+                          className="!inline-flex !h-[18px] !w-[18px] !align-[-3px] text-[12px]"
+                      />
+                  ),
+                  no: () => (
+                      <ProseChecklistIcon
+                          value={N}
+                          className="!inline-flex !h-[18px] !w-[18px] !align-[-3px] text-[12px]"
+                      />
+                  ),
+                  // Today `<strong>` is only used to mark the
+                  // "Tap [thing] to continue" action prompt at the
+                  // end of advance-on-click step bodies. Render it as
+                  // a block-level element with a top margin so the
+                  // prompt sits visually separated from the
+                  // explanation copy above it — without the gap, the
+                  // user's eye runs together "blank if we don't know
+                  // yet. Tap the highlighted cell to open the
+                  // breakdown." and misses the action.
+                  //
+                  // `data-tour-action-prompt` is the boundary marker
+                  // the disabled "Next" button uses to imperatively
+                  // re-trigger the `tour-action-bounce` CSS animation
+                  // (toggling the class via classList — a React key
+                  // change doesn't reliably remount through next-intl's
+                  // rich-text output, and re-rendering the same node
+                  // doesn't restart a CSS animation either).
+                  strong: (chunks) => (
+                      <strong
+                          data-tour-action-prompt
+                          className="mt-2 block font-semibold"
+                      >
+                          {chunks}
+                      </strong>
+                  ),
+                  // `<columns><left>…</left><right>…</right></columns>`
+                  // renders two side-by-side body panels. Used today
+                  // by the desktop two-halves step to mirror the
+                  // checklist (left) / suggestion log (right)
+                  // spotlight layout in the popover's body copy.
+                  // Flex with `flex-1 basis-0` ensures both columns
+                  // get equal width regardless of text length.
+                  columns: (chunks) => (
+                      <div className="flex gap-4">{chunks}</div>
+                  ),
+                  left: (chunks) => (
+                      <div className="flex-1 basis-0">{chunks}</div>
+                  ),
+                  right: (chunks) => (
+                      <div className="flex-1 basis-0">{chunks}</div>
+                  ),
+              })
+            : null;
     // The "Next" button on the last step uses `currentStep.finishLabelKey`
     // when present (e.g. "Start playing" for the Checklist & Suggest
     // wrap-up); otherwise it falls back to a generic "Finish".
@@ -627,10 +865,36 @@ export function TourPopover() {
                 Esc to exit. `touch-action` is left at its default
                 `auto` so vertical/horizontal scroll passes through —
                 the user can pan the page to find anchors that scroll
-                with content. */}
+                with content.
+
+                Tap-to-advance failsafe: after `BACKDROP_ADVANCE_DELAY`
+                the backdrop becomes clickable and a tap advances the
+                tour (or finishes it on the last step). This is the
+                escape hatch for cases where the popover ends up
+                off-screen due to a layout we didn't anticipate. The
+                delay keeps an accidental tap right after step entry
+                from skipping past content the user hasn't read.
+
+                advance-on-click steps drop the backdrop's
+                `pointer-events` so the user's click on the spotlit
+                element reaches it natively. The step's own listener
+                on that element fires alongside, advancing the tour;
+                the window-level click filter (see the useEffect
+                above) cancels every other click outside the popover
+                or advance anchor. */}
             <div
                 aria-hidden
                 className="fixed inset-0 z-[var(--z-tour-backdrop)]"
+                style={
+                    advanceOn !== undefined
+                        ? { pointerEvents: "none" }
+                        : undefined
+                }
+                onClick={
+                    advanceOn === undefined && canAdvanceFromBackdrop
+                        ? () => nextStep()
+                        : undefined
+                }
             />
             {/* Spotlight: a transparent box sized to the anchor with
                 a giant `box-shadow` painting darkness OUTSIDE the box.
@@ -644,28 +908,91 @@ export function TourPopover() {
 
                 When no anchor is on the page (fallback), render a
                 plain dark overlay instead so the user still sees
-                they're in tour mode. */}
-            {spotlight ? (
-                <div
-                    aria-hidden
-                    style={{
-                        position: "fixed",
-                        top: spotlight.top - SPOTLIGHT_PAD,
-                        left: spotlight.left - SPOTLIGHT_PAD,
-                        width: spotlight.width + SPOTLIGHT_PAD * 2,
-                        height: spotlight.height + SPOTLIGHT_PAD * 2,
-                        boxShadow:
-                            "0 0 0 9999px rgba(0,0,0,0.45), 0 0 0 2px var(--color-tour-accent)",
-                        borderRadius: "var(--tour-radius)",
-                        pointerEvents: "auto",
-                        zIndex: "var(--z-tour-spotlight)",
-                    }}
-                    className="tour-spotlight transition-all"
-                />
+                they're in tour mode.
+
+                advance-on-click steps drop the spotlight's pointer
+                events so the user's tap reaches the spotlit element
+                natively. The window-level click filter higher up
+                cancels every other click that lands outside the
+                advance anchor / popover. */}
+            {spotlights.length > 0 ? (
+                spotlights.map((rect, i) => {
+                    // The outer-darkening box-shadow paints
+                    // darkness OUTSIDE the rect, so it can't cut
+                    // cleanly around MULTIPLE spotlights — the first
+                    // one's "outside" includes the second one's area.
+                    // Multi-spotlight steps deliberately render
+                    // ring-only and let the popover carry the
+                    // attention. The gate is the step's
+                    // `multiSpotlight` config (not the current rect
+                    // count) so the dim doesn't flash on / off
+                    // during portal-mount transitions where the
+                    // count briefly hits 1 before the second element
+                    // mounts.
+                    const paintsDim = currentStep.multiSpotlight !== true;
+                    return (
+                        <div
+                            key={i}
+                            aria-hidden
+                            style={{
+                                position: "fixed",
+                                top: rect.top - SPOTLIGHT_PAD,
+                                left: rect.left - SPOTLIGHT_PAD,
+                                width: rect.width + SPOTLIGHT_PAD * 2,
+                                height: rect.height + SPOTLIGHT_PAD * 2,
+                                // 0.6 alpha for the outer darkness: the
+                            // parchment / cream surfaces in the app
+                            // are light enough that a 0.45 overlay
+                            // wasn't visibly registering as a "veil"
+                            // to users — the dim tan + dim cream read
+                            // as nearly the same color as the un-
+                            // dimmed surfaces. 0.6 puts a noticeable
+                            // gap between the spotlit area (un-
+                            // dimmed cream) and the surrounding page.
+                            boxShadow: paintsDim
+                                    ? "0 0 0 9999px rgba(0,0,0,0.6), 0 0 0 2px var(--color-tour-accent)"
+                                    : "0 0 0 2px var(--color-tour-accent)",
+                                borderRadius: "var(--tour-radius)",
+                                // advance-on-click steps need the spotlight to
+                                // pass clicks through so the underlying element
+                                // (a nav tab, a cell, etc.) receives the user's
+                                // tap. The tap also fires our listener and
+                                // advances the tour.
+                                pointerEvents:
+                                    advanceOn !== undefined
+                                        ? "none"
+                                        : "auto",
+                                zIndex: "var(--z-tour-spotlight)",
+                            }}
+                            className="tour-spotlight transition-all"
+                            onClick={
+                                advanceOn === undefined
+                                && canAdvanceFromBackdrop
+                                    ? () => nextStep()
+                                    : undefined
+                            }
+                        />
+                    );
+                })
             ) : (
+                // Fallback dim layer: rendered when no anchor matched
+                // on the page. Paints the same `bg-black/60` veil so
+                // the user still sees "the tour is active" — pointer
+                // behavior follows the same advanceOn rule as the
+                // spotlit path.
                 <div
                     aria-hidden
-                    className="fixed inset-0 z-[var(--z-tour-backdrop)] bg-black/45"
+                    className="fixed inset-0 z-[var(--z-tour-backdrop)] bg-black/60"
+                    style={
+                        advanceOn !== undefined
+                            ? { pointerEvents: "none" }
+                            : undefined
+                    }
+                    onClick={
+                        advanceOn === undefined && canAdvanceFromBackdrop
+                            ? () => nextStep()
+                            : undefined
+                    }
                 />
             )}
             {/* Key the entire Popover.Root tree on the active step
@@ -760,8 +1087,16 @@ export function TourPopover() {
                                 {/* `currentStep.titleKey` is a full
                                     next-intl key under the
                                     `onboarding` namespace
-                                    (e.g. `setup.cardPack.title`). */}
-                                {t(currentStep.titleKey)}
+                                    (e.g. `setup.cardPack.title`).
+                                    `{action}` is interpolated for
+                                    titles that reference the user's
+                                    physical action ("Tap" / "Click"
+                                    per device). Step titles that
+                                    don't reference `{action}` ignore
+                                    the variable. */}
+                                {t(currentStep.titleKey, {
+                                    action: actionVerb,
+                                })}
                             </div>
                             <button
                                 type="button"
@@ -772,12 +1107,12 @@ export function TourPopover() {
                                 <XIcon size={16} />
                             </button>
                         </div>
-                        {bodyText !== "" && (
+                        {bodyNode !== null && (
                             <div
                                 id="tour-step-body"
                                 className="px-4 pb-3 text-[1rem] leading-snug text-[var(--color-tour-text)]"
                             >
-                                {bodyText}
+                                {bodyNode}
                             </div>
                         )}
                         <div
@@ -806,11 +1141,63 @@ export function TourPopover() {
                                 >
                                     {t("back")}
                                 </button>
+                                {/* Next button is rendered on every
+                                    step. On advance-on-click steps it
+                                    looks primary but is visually
+                                    locked (aria-disabled + opacity);
+                                    clicking it doesn't advance the
+                                    tour — it imperatively re-fires
+                                    the `tour-action-bounce` animation
+                                    on the body's action prompt,
+                                    redirecting the user's attention
+                                    to the spotlit element they need
+                                    to click. We use `aria-disabled`
+                                    rather than the native `disabled`
+                                    attribute so the click handler
+                                    still fires. */}
                                 <button
                                     ref={nextButtonRef}
                                     type="button"
-                                    onClick={() => nextStep()}
-                                    className="tap-target-compact text-tap-compact cursor-pointer rounded-[var(--tour-radius)] border-2 border-[var(--color-tour-accent)] bg-[var(--color-tour-accent)] font-semibold text-white hover:bg-[var(--color-tour-accent-hover)]"
+                                    aria-disabled={
+                                        advanceOn !== undefined ? true : undefined
+                                    }
+                                    onClick={() => {
+                                        if (advanceOn !== undefined) {
+                                            // Bounce the body's action
+                                            // prompt to redirect the
+                                            // user's eye back to the
+                                            // spotlit element. WAAPI
+                                            // (instead of CSS class
+                                            // toggling) guarantees the
+                                            // animation restarts on
+                                            // every click — class
+                                            // toggling caches the
+                                            // completed state in some
+                                            // browsers and skips the
+                                            // second run.
+                                            const el =
+                                                document.querySelector(
+                                                    `[${POPOVER_CONTENT_ATTR}] [data-tour-action-prompt]`,
+                                                );
+                                            if (el instanceof HTMLElement) {
+                                                for (const a of el.getAnimations()) {
+                                                    a.cancel();
+                                                }
+                                                el.animate(
+                                                    TOUR_ACTION_BOUNCE_KEYFRAMES,
+                                                    TOUR_ACTION_BOUNCE_OPTIONS,
+                                                );
+                                            }
+                                            return;
+                                        }
+                                        nextStep();
+                                    }}
+                                    className={
+                                        "tap-target-compact text-tap-compact rounded-[var(--tour-radius)] border-2 border-[var(--color-tour-accent)] bg-[var(--color-tour-accent)] font-semibold text-white "
+                                        + (advanceOn !== undefined
+                                            ? "cursor-not-allowed opacity-60"
+                                            : "cursor-pointer hover:bg-[var(--color-tour-accent-hover)]")
+                                    }
                                 >
                                     {isLastStep ? t(finishKey) : t("next")}
                                 </button>

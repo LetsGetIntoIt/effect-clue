@@ -187,6 +187,7 @@ export function PillPopover({
     open,
     onOpenChange,
     onClear,
+    tourAnchor,
     children,
 }: {
     readonly pillId: string;
@@ -199,6 +200,8 @@ export function PillPopover({
     readonly open: boolean;
     readonly onOpenChange: (open: boolean) => void;
     readonly onClear?: () => void;
+    /** Optional `data-tour-anchor` token rendered on the trigger. */
+    readonly tourAnchor?: string;
     readonly children: React.ReactNode;
 }): React.ReactElement {
     // Pill visual classes by status. Required vs. optional is
@@ -316,6 +319,7 @@ export function PillPopover({
         <RadixPopover.Root open={open} onOpenChange={onOpenChange}>
             <RadixPopover.Trigger
                 data-pill-id={pillId}
+                data-tour-anchor={tourAnchor}
                 aria-disabled={disabled ? true : undefined}
                 aria-invalid={hasError ? true : undefined}
                 aria-describedby={

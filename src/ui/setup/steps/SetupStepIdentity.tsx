@@ -108,7 +108,7 @@ export function SetupStepIdentity({
                                 className={`tap-target-compact text-tap-compact cursor-pointer rounded-full border transition-colors ${
                                     active
                                         ? "border-accent bg-accent text-white hover:bg-accent-hover"
-                                        : "border-border bg-bg text-fg hover:bg-hover"
+                                        : "border-border bg-control text-fg hover:bg-hover"
                                 }`}
                                 aria-pressed={active}
                                 onClick={() => {

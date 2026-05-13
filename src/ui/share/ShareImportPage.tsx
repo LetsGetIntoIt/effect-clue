@@ -25,7 +25,7 @@
  */
 "use client";
 
-import { Result, Schema } from "effect";
+import { DateTime, Result, Schema } from "effect";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -50,6 +50,7 @@ import { authClient } from "../account/authClient";
 import { useSession } from "../hooks/useSession";
 import { XIcon } from "../components/Icons";
 import { useConfirm } from "../hooks/useConfirm";
+import { saveTourDismissed } from "../tour/TourState";
 import {
     hasPersistedGameData,
     saveCardPackFromSnapshot,
@@ -94,6 +95,16 @@ const PLAYER_NAMES_VISIBLE = 4;
 const RECEIVE_FLOW_PACK = "pack";
 const RECEIVE_FLOW_INVITE = "invite";
 const RECEIVE_FLOW_TRANSFER = "transfer";
+
+// Module-scope constants for the post-import navigation paths. Pack
+// imports land the user on `/play` (default uiMode resolves to the
+// setup wizard so they can build a fresh game with the new deck);
+// invite / transfer imports skip setup — the share already configured
+// the game — and land on `/play?view=checklist` directly. Hoisted so
+// the `no-literal-string` lint rule treats them as wire identifiers.
+const PLAY_PATH = "/play" as const;
+const PLAY_CHECKLIST_PATH = "/play?view=checklist" as const;
+const TOUR_SCREEN_SETUP = "setup" as const;
 type ReceiveFlow =
     | typeof RECEIVE_FLOW_PACK
     | typeof RECEIVE_FLOW_INVITE
@@ -361,7 +372,7 @@ export function ShareImportPage({
                     // it as part of the message above).
                     applySnapshot(snapshot);
                 }
-                router.push("/play");
+                router.push(PLAY_PATH);
                 return;
             }
 
@@ -389,7 +400,14 @@ export function ShareImportPage({
                 triggeredNewGame: true,
                 savedPackToAccount: false,
             });
-            router.push("/play");
+            // The share already contains a fully-configured game —
+            // the receiver doesn't need the setup wizard or its
+            // welcome tour. Mark the setup tour as dismissed so
+            // `StartupCoordinator` doesn't redirect them back to
+            // setup, and route them directly to the checklist so
+            // the `checklistSuggest` tour can fire in place.
+            saveTourDismissed(TOUR_SCREEN_SETUP, DateTime.nowUnsafe());
+            router.push(PLAY_CHECKLIST_PATH);
         } finally {
             setSubmitting(false);
         }
@@ -449,7 +467,7 @@ export function ShareImportPage({
             via,
         });
         setOpen(false);
-        router.push("/play");
+        router.push(PLAY_PATH);
     };
 
     const packBullet = (() => {
@@ -492,7 +510,11 @@ export function ShareImportPage({
 
     return (
         <main className="mx-auto flex max-w-[640px] flex-col gap-5 px-5 py-8">
-            <h1 className="m-0 font-display text-[1.75rem] text-accent">
+            {/* Page heading uses the same hierarchy as SetupWizard +
+                SuggestionLogPanel: slab/display family (inherited
+                via the global h1 rule), uppercase + accent for the
+                "you are here" cue. */}
+            <h1 className="m-0 text-[1.5rem] uppercase tracking-[0.05em] text-accent">
                 {t("importTitle")}
             </h1>
             <Dialog.Root
@@ -509,7 +531,10 @@ export function ShareImportPage({
                         }
                     >
                         <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
-                            <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
+                            {/* Modal title matches SuggestionLogPanel
+                                's `h2`: uppercase + accent + slab,
+                                one notch smaller than the page H1. */}
+                            <Dialog.Title className="m-0 text-[1.25rem] uppercase tracking-[0.05em] text-accent">
                                 {t(TITLE_KEY_FOR[receiveFlow])}
                             </Dialog.Title>
                             <button
@@ -537,9 +562,14 @@ export function ShareImportPage({
                             </div>
                         ) : (
                             <>
-                                <div className="px-5 pt-4 text-[1rem] font-semibold">
+                                {/* "This share includes:" — sub-section
+                                    heading inside the modal. Matches
+                                    the DEDUCTIONS / LEADS / HYPOTHESIS
+                                    + "PRIOR SUGGESTIONS" treatment:
+                                    sans-bold-uppercase-accent. */}
+                                <h3 className="m-0 mt-4 font-sans! px-5 text-[1.125rem] font-bold uppercase tracking-wide text-accent">
                                     {includesHeader}
-                                </div>
+                                </h3>
                                 <ul
                                     className="m-0 list-disc px-5 pl-9 pt-1 text-[1rem]"
                                     data-share-import-bullets

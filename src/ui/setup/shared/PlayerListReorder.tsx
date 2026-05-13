@@ -74,7 +74,7 @@ export function PlayerListReorder() {
                         key={player}
                         value={player}
                         onDragEnd={() => commitReorder(draft)}
-                        className="flex touch-none items-center gap-2 rounded border border-border/50 bg-bg px-2 py-1.5"
+                        className="flex touch-none items-center gap-2 rounded border border-border/50 bg-control px-2 py-1.5"
                     >
                         <PlayerNameInput
                             player={player}
@@ -139,7 +139,7 @@ export function PlayerListReorder() {
 
             <button
                 type="button"
-                className="tap-target-compact text-tap-compact self-start cursor-pointer rounded border border-border bg-bg hover:bg-hover"
+                className="tap-target-compact text-tap-compact self-start cursor-pointer rounded border border-border bg-control hover:bg-hover"
                 onClick={() => dispatch({ type: "addPlayer" })}
             >
                 {tSetup("addPlayerLabel")}

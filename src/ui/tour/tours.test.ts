@@ -18,13 +18,14 @@
  * What it DOES catch (cheap & deterministic):
  *
  *   - A step's `popoverAnchor` getting silently dropped.
- *   - The mobile-only Suggest-tab step losing its `viewport: "mobile"`
- *     flag (which would make it render on desktop too).
+ *   - A step accidentally losing its `viewport` flag (would render
+ *     on the wrong breakpoint).
  *   - `sideByViewport` keys flipped (mobile config landing on
  *     desktop).
- *   - The `firstSuggestion` step's `desktop` anchor being changed
- *     back to a tall element (which previously caused the off-top
- *     popover bug).
+ *   - The cell-explanation walkthrough losing the three section
+ *     anchors that drive the auto-open hook in `Checklist.tsx`.
+ *   - The "Pick a card pack" callout drifting off the
+ *     `setup-wizard-step-cardPack` anchor emitted by SetupStepPanel.
  */
 import { describe, expect, test } from "vitest";
 import { TOUR_PREREQUISITES, TOURS, type TourStep } from "./tours";
@@ -41,109 +42,230 @@ const findStep = (
 };
 
 describe("TOURS — setup tour", () => {
-    test("walks the M6 wizard in 5 steps", () => {
-        // PR-A4 reworked the setup tour for the wizard: welcome → card
-        // pack → players → my cards → overflow. The deeper "hand sizes"
-        // and "start playing" steps from the legacy setup-mode Checklist
-        // are gone (the wizard's accordion already exposes everything;
-        // re-touring it would be repetitive).
+    test("is a 3-step tour: welcome → overflow menu callout → card pack", () => {
+        // The wizard itself is largely self-explanatory (accordion +
+        // sticky-footer + per-step validation banner) so we don't walk
+        // every wizard step. Three short steps:
+        //   1. Welcome — orient brand-new visitors.
+        //   2. Overflow menu — show the user where Game setup lives
+        //      so they have a concrete "come back here later"
+        //      affordance. The same callout fires on step 1 of
+        //      `checklistSuggest` too; teaching it from both
+        //      directions is intentional repetition.
+        //   3. Card pack — closer pointing at the first wizard
+        //      section so the user has a concrete first move after
+        //      the orientation lands.
         expect(TOURS.setup.map(s => s.anchor)).toEqual([
-            "setup-wizard-shell",
-            "setup-step-cardpack-pills",
-            "setup-step-players-list",
-            "setup-step-mycards-firstrow",
+            "setup-wizard-header",
             "overflow-menu",
+            "setup-wizard-step-cardPack",
         ]);
     });
 
-    test("mycards step auto-skips when its anchor is missing (selfPlayerId === null)", () => {
-        // The wizard hides step 5 from the accordion entirely when
-        // identity is unset; the anchor isn't mounted, so tours.ts'
-        // missing-anchor auto-skip kicks in. Pin the step exists with
-        // the anchor name we expect; the auto-skip is exercised by
-        // TourPopover's own behavior tests.
-        const step = findStep(TOURS.setup, "setup-step-mycards-firstrow");
-        expect(step.titleKey).toBe("setup.knownCard.title");
+    test("welcome step copy keys point at setup.welcome.*", () => {
+        const step = TOURS.setup[0]!;
+        expect(step.titleKey).toBe("setup.welcome.title");
+        expect(step.bodyKey).toBe("setup.welcome.body");
     });
 
-    test("overflow-menu uses popoverAnchorPriority + sideByViewport", () => {
-        const step = findStep(TOURS.setup, "overflow-menu");
-        // Trigger is in DOM order before the portaled menu content;
-        // last-visible resolves to the open dropdown.
+    test("welcome step uses sideByViewport for stable placement on both breakpoints", () => {
+        const step = TOURS.setup[0]!;
+        expect(step.sideByViewport?.desktop).toEqual({
+            side: "bottom",
+            align: "start",
+        });
+        // Mobile: popover sits below the header too — the header is at
+        // the top of the page on both breakpoints, so bottom is safe.
+        expect(step.sideByViewport?.mobile).toEqual({
+            side: "bottom",
+            align: "center",
+        });
+    });
+
+    test("overflow-menu step uses last-visible + force-opens the menu via the `overflow-menu` anchor", () => {
+        const step = TOURS.setup[1]!;
+        expect(step.anchor).toBe("overflow-menu");
         expect(step.popoverAnchorPriority).toBe("last-visible");
-        // Desktop: popover left of menu (menu opens DOWN from
-        // top-right trigger). Mobile: popover above menu (menu opens
-        // UP from bottom-right trigger).
-        expect(step.sideByViewport?.desktop.side).toBe("left");
-        expect(step.sideByViewport?.mobile.side).toBe("top");
+        expect(step.titleKey).toBe("setup.menu.title");
+        // Mobile menu opens UP from the BottomNav → popover above
+        // (side: "top"). Desktop menu opens DOWN from the top-right
+        // Toolbar trigger → popover to the LEFT (side: "left").
+        expect(step.sideByViewport?.mobile).toEqual({
+            side: "top",
+            align: "end",
+        });
+        expect(step.sideByViewport?.desktop).toEqual({
+            side: "left",
+            align: "start",
+        });
     });
 
+    test("card-pack step closes the tour with a 'Got it' CTA + targets the cardPack panel", () => {
+        const step = TOURS.setup[2]!;
+        expect(step.anchor).toBe("setup-wizard-step-cardPack");
+        expect(step.titleKey).toBe("setup.cardPack.title");
+        expect(step.bodyKey).toBe("setup.cardPack.body");
+        // Final step wraps up with a "Got it" CTA.
+        expect(step.finishLabelKey).toBe("gotIt");
+    });
 });
 
 describe("TOURS — checklistSuggest tour", () => {
-    test("has the expected six steps in declaration order", () => {
-        // M10 added the two intro steps that establish the "two
-        // halves" mental model (Checklist + Suggest) before drilling
-        // into individual content. The older mobile-only
-        // `bottom-nav-suggest` wayfinding step was folded into the
-        // new Suggest intro — both viewports now run the same step
-        // count.
+    test("registry holds 12 entries: 2 viewport-split (two-halves + suggest-pane intro) + the shared steps", () => {
+        // Two pairs of steps are viewport-locked: the two-halves intro
+        // (multi-spotlight on desktop, tap-Checklist on mobile) and
+        // the suggest-pane intro (desktop info step, tap-Suggest on
+        // mobile). They're filtered out at runtime per viewport so
+        // each user sees 12 steps total. The unfiltered registry has
+        // 14 entries (2 pairs × 2 + 10 shared steps).
+        expect(TOURS.checklistSuggest).toHaveLength(14);
+    });
+
+    test("registry anchors in order, including viewport-locked pairs", () => {
+        // Pinned in declaration order:
+        //   1. overflow-menu (both)
+        //   2. two-halves-spotlight (desktop)
+        //   3. bottom-nav-checklist (mobile)
+        //   4. checklist-cell (both — advance-on-click, OPEN)
+        //   5. cell-explanation-panel (both — whole-panel intro)
+        //   6-8. cell-explanation-{deductions,leads,hypothesis} (both)
+        //   9. checklist-cell-close (both — advance-on-click, CLOSE)
+        //  10. checklist-case-file (both — panel already dismissed)
+        //  11. desktop-suggest-area (desktop)
+        //  12. bottom-nav-suggest (mobile)
+        //  13. suggest-prior-log (both)
+        //  14. suggest-add-form (both)
         expect(TOURS.checklistSuggest.map(s => s.anchor)).toEqual([
-            "desktop-checklist-area",
+            "overflow-menu",
+            "two-halves-spotlight",
+            "bottom-nav-checklist",
             "checklist-cell",
+            "cell-explanation-panel",
+            "cell-explanation-deductions",
+            "cell-explanation-leads",
+            "cell-explanation-hypothesis",
+            "checklist-cell-close",
             "checklist-case-file",
             "desktop-suggest-area",
+            "bottom-nav-suggest",
             "suggest-prior-log",
             "suggest-add-form",
         ]);
     });
 
-    test("intro steps use viewport-conditional anchors + popoverAnchor", () => {
-        // The Checklist + Suggest intros spotlight large regions
-        // (whole column on desktop, BottomNav tab on mobile) but pin
-        // the popover to a smaller element on desktop so it doesn't
-        // get pushed off-screen.
-        const checklistIntro = findStep(
-            TOURS.checklistSuggest,
-            "desktop-checklist-area",
-        );
-        expect(checklistIntro.anchorByViewport).toEqual({
-            mobile: "bottom-nav-checklist",
-            desktop: "desktop-checklist-area",
-        });
-        expect(checklistIntro.popoverAnchor).toBe("checklist-case-file");
+    test("opens the overflow menu on step 1 via force-open + last-visible popover priority", () => {
+        const step = TOURS.checklistSuggest[0]!;
+        expect(step.anchor).toBe("overflow-menu");
+        expect(step.popoverAnchorPriority).toBe("last-visible");
+        expect(step.forceOpenOverflowMenu).toBe(true);
+    });
 
-        const suggestIntro = findStep(
+    test("desktop two-halves step uses multi-spotlight + a divider popover anchor at the gap", () => {
+        const step = findStep(
+            TOURS.checklistSuggest,
+            "two-halves-spotlight",
+        );
+        // `two-halves-spotlight` is attached to BOTH the Checklist
+        // and SuggestionLog column wrappers, so the spotlight renderer
+        // paints two separate rings. The popover anchors to
+        // `two-halves-divider`, a 0-sized sentinel sitting in the gap
+        // between the two columns, so the popover centers
+        // horizontally on the visual border between the halves.
+        expect(step.popoverAnchor).toBe("two-halves-divider");
+        expect(step.viewport).toBe("desktop");
+        expect(step.requiredUiMode).toBe("checklist");
+    });
+
+    test("mobile two-halves step asks the user to tap Checklist (advance-on-click)", () => {
+        const step = findStep(TOURS.checklistSuggest, "bottom-nav-checklist");
+        expect(step.viewport).toBe("mobile");
+        expect(step.advanceOn).toEqual({
+            event: "click",
+            anchor: "bottom-nav-checklist",
+        });
+    });
+
+    test("checklist-cell intro is advance-on-click — user clicks the cell to open the explanation", () => {
+        const step = findStep(TOURS.checklistSuggest, "checklist-cell");
+        expect(step.advanceOn).toEqual({
+            event: "click",
+            anchor: "checklist-cell",
+        });
+        expect(step.requiredUiMode).toBe("checklist");
+        expect(step.titleKey).toBe("checklist.cellIntro.title");
+    });
+
+    test("desktop suggest-intro is a normal Next step; mobile counterpart asks the user to tap Suggest", () => {
+        const desktopIntro = findStep(
             TOURS.checklistSuggest,
             "desktop-suggest-area",
         );
-        expect(suggestIntro.anchorByViewport).toEqual({
-            mobile: "bottom-nav-suggest",
-            desktop: "desktop-suggest-area",
-        });
-        expect(suggestIntro.popoverAnchor).toBe("suggest-add-form-header");
-    });
+        expect(desktopIntro.viewport).toBe("desktop");
+        // Popover anchors to the column wrapper itself with
+        // side:left/align:center so the popover sits to the LEFT of
+        // the suggest log, clear of every form control inside it.
+        expect(desktopIntro.popoverAnchor).toBe("desktop-suggest-area");
+        expect(desktopIntro.side).toBe("left");
+        expect(desktopIntro.align).toBe("center");
+        expect(desktopIntro.advanceOn).toBeUndefined();
 
-    test("no step is viewport-locked", () => {
-        // After the M10 intro steps replaced the older mobile-only
-        // wayfinding step, every step in the tour runs on both
-        // viewports. If you add a viewport-locked step, update this
-        // assertion AND walk both breakpoints.
-        const lockedSteps = TOURS.checklistSuggest.filter(
-            s => s.viewport !== undefined && s.viewport !== "both",
+        const mobileIntro = findStep(
+            TOURS.checklistSuggest,
+            "bottom-nav-suggest",
         );
-        expect(lockedSteps).toEqual([]);
+        expect(mobileIntro.viewport).toBe("mobile");
+        expect(mobileIntro.advanceOn).toEqual({
+            event: "click",
+            anchor: "bottom-nav-suggest",
+        });
     });
 
-    test("suggest-add-form spotlight covers the whole form, popover sits outside via sideByViewport", () => {
+    test("cell-explanation steps target the three section anchors that drive the Checklist auto-open hook", () => {
+        // The Checklist component watches `currentStep.anchor` for
+        // these three tokens and opens a deterministic cell so the
+        // explanation row is on screen. If a step's anchor drifts off
+        // these tokens, the hook stops firing and the popover lands
+        // against a closed panel.
+        const deductions = findStep(
+            TOURS.checklistSuggest,
+            "cell-explanation-deductions",
+        );
+        expect(deductions.requiredUiMode).toBe("checklist");
+        expect(deductions.titleKey).toBe("checklist.deductions.title");
+
+        const leads = findStep(
+            TOURS.checklistSuggest,
+            "cell-explanation-leads",
+        );
+        expect(leads.requiredUiMode).toBe("checklist");
+        expect(leads.titleKey).toBe("checklist.leads.title");
+
+        const hypothesis = findStep(
+            TOURS.checklistSuggest,
+            "cell-explanation-hypothesis",
+        );
+        expect(hypothesis.requiredUiMode).toBe("checklist");
+        expect(hypothesis.titleKey).toBe("checklist.hypothesis.title");
+    });
+
+    test("suggest-add-form: popoverAnchor + side/align are viewport-conditional", () => {
         const step = findStep(TOURS.checklistSuggest, "suggest-add-form");
-        // The wrap-up step: spotlight covers the whole form (header
-        // + tabs + pill row); popover sits ABOVE on desktop and
-        // BELOW on mobile to avoid covering the form.
-        expect(step.popoverAnchor).toBeUndefined(); // popover anchors to the same wide form
+        // The wrap-up step splits behavior by breakpoint.
+        //
+        // Desktop: popover anchors to the FIRST INPUT in the form
+        // (`suggest-first-pill` — the Suggester pill) and sits to the
+        // LEFT (`side: "left"`, `align: "center"`) so it doesn't
+        // occlude any form control.
+        //
+        // Mobile: popover anchors to the small form header and sits
+        // BELOW it (`side: "bottom"`, `align: "center"`), INSIDE the
+        // form's spotlight — the phone-height viewport doesn't have
+        // room for an external popover so we park it inside.
+        expect(step.popoverAnchorByViewport?.desktop).toBe("suggest-first-pill");
+        expect(step.popoverAnchorByViewport?.mobile).toBe("suggest-add-form-header");
         expect(step.sideByViewport?.desktop).toEqual({
-            side: "top",
-            align: "end",
+            side: "left",
+            align: "center",
         });
         expect(step.sideByViewport?.mobile).toEqual({
             side: "bottom",
@@ -161,6 +283,7 @@ describe("TOURS — checklistSuggest tour", () => {
             expect(step.requiredUiMode).toBeDefined();
         }
     });
+
 });
 
 describe("TOURS — firstSuggestion tour", () => {
@@ -169,23 +292,12 @@ describe("TOURS — firstSuggestion tour", () => {
     });
 
     test("desktop spotlight covers the WHOLE checklist; mobile points at the BottomNav Checklist tab", () => {
-        // The exact details inside the deduction grid don't matter
-        // for this step — the user just needs a "look here after
-        // dismissing" cue. Spotlight covers the whole grid on
-        // desktop; popover anchors to a smaller element so it
-        // actually fits.
         const step = TOURS.firstSuggestion[0]!;
         expect(step.anchorByViewport?.desktop).toBe("desktop-checklist-area");
         expect(step.anchorByViewport?.mobile).toBe("bottom-nav-checklist");
     });
 
     test("popover anchors to the case-file summary on desktop; falls back to the spotlight on mobile", () => {
-        // The popoverAnchor token resolves to an element on desktop
-        // (the case-file summary box at the top of the checklist)
-        // but to nothing on mobile (the checklist pane isn't
-        // mounted in the suggest viewport). The popover-measurement
-        // fallback in TourPopover.tsx handles that by reverting to
-        // the spotlight elements (`bottom-nav-checklist`).
         const step = TOURS.firstSuggestion[0]!;
         expect(step.popoverAnchor).toBe("checklist-case-file");
     });
@@ -203,49 +315,48 @@ describe("TOURS — firstSuggestion tour", () => {
     });
 
     test("hideArrow on desktop only (popover sits inside spotlight on desktop; arrow is useful on mobile)", () => {
-        // Desktop: arrow has nothing meaningful to point at (popover
-        // is inside the spotlight). Mobile: arrow points down at the
-        // BottomNav Checklist tab, which is genuinely a different
-        // element than the popover.
         expect(TOURS.firstSuggestion[0]!.hideArrow?.desktop).toBe(true);
         expect(TOURS.firstSuggestion[0]!.hideArrow?.mobile).toBeUndefined();
     });
+
 });
 
 describe("TOURS — sharing follow-up tour", () => {
-    test("has 3 steps in declaration order — pack share, invite link, overflow menu", () => {
+    test("walks the three sharing menu items: invite → transfer → my-card-packs", () => {
+        // The M22 rework moved the share-a-pack icon out of the
+        // setup wizard into the CardPackPicker dropdown + Account
+        // modal, and consolidated the other share affordances inside
+        // the overflow menu. The new sharing tour opens that menu
+        // and walks the three menu items in turn.
         expect(TOURS.sharing.map((s) => s.anchor)).toEqual([
-            "setup-share-pack-pill",
-            "setup-invite-player",
-            "overflow-menu",
+            "menu-item-invite-player",
+            "menu-item-transfer-device",
+            "menu-item-my-card-packs",
         ]);
     });
 
-    test("anchors land on actual data-tour-anchor attributes wired in the UI", () => {
-        // Sanity check the anchors are spelled exactly as they appear
-        // on the DOM nodes (CardPackRow, Checklist, OverflowMenu).
-        const anchors = TOURS.sharing.map((s) => s.anchor);
-        expect(anchors).toContain("setup-share-pack-pill");
-        expect(anchors).toContain("setup-invite-player");
-        expect(anchors).toContain("overflow-menu");
+    test("every step force-opens the overflow menu", () => {
+        for (const step of TOURS.sharing) {
+            expect(step.forceOpenOverflowMenu).toBe(true);
+        }
     });
 
-    test("overflow-menu step uses last-visible priority + sideByViewport (mirrors setup tour's pattern)", () => {
-        const step = findStep(TOURS.sharing, "overflow-menu");
-        expect(step.popoverAnchorPriority).toBe("last-visible");
-        expect(step.sideByViewport?.desktop).toEqual({
-            side: "left",
-            align: "start",
-        });
-        expect(step.sideByViewport?.mobile).toEqual({
-            side: "top",
-            align: "end",
-        });
+    test("every step uses the same sideByViewport (menu opens UP on mobile / DOWN on desktop)", () => {
+        for (const step of TOURS.sharing) {
+            expect(step.sideByViewport?.mobile).toEqual({
+                side: "top",
+                align: "end",
+            });
+            expect(step.sideByViewport?.desktop).toEqual({
+                side: "left",
+                align: "start",
+            });
+        }
     });
 
-    test("closing step uses 'gotIt' finish label (one-shot acknowledgement)", () => {
-        const overflow = findStep(TOURS.sharing, "overflow-menu");
-        expect(overflow.finishLabelKey).toBe("gotIt");
+    test("closing step uses 'gotIt' finish label", () => {
+        const last = TOURS.sharing[TOURS.sharing.length - 1]!;
+        expect(last.finishLabelKey).toBe("gotIt");
     });
 });
 

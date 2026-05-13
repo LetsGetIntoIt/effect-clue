@@ -196,13 +196,13 @@ describe("describeAction — specific tooltips", () => {
                     card: Card("card-conservatory"),
                 }),
             }),
-        ).toBe("marking that Player 2 owns Conservatory");
+        ).toBe("marking that Player 2 has Conservatory");
     });
 
     test("removeKnownCard resolves player and card via index", () => {
         expect(
             describe_({ type: "removeKnownCard", index: 0 }),
-        ).toBe("unmarking that Player 2 owns Conservatory");
+        ).toBe("unmarking that Player 2 has Conservatory");
     });
 
     test("removeKnownCard falls back when index is out of range", () => {

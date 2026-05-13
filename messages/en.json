@@ -64,8 +64,8 @@
             "removeCardById": "removing card {name} from category {category}",
             "renameCategory": "renaming category {oldName} to {newName}",
             "renameCard": "renaming card {oldName} to {newName}",
-            "addKnownCard": "marking that {player} owns {card}",
-            "removeKnownCard": "unmarking that {player} owns {card}",
+            "addKnownCard": "marking that {player} has {card}",
+            "removeKnownCard": "unmarking that {player} has {card}",
             "removeKnownCardUnknown": "unmarking a known card",
             "setHandSize": "setting {player}'s hand size to {size}",
             "setHandSizeCleared": "clearing {player}'s hand size",
@@ -79,7 +79,7 @@
             "updateAccusationUnknown": "editing an accusation",
             "removeAccusation": "removing Accusation #{number} by {player} ({cards})",
             "removeAccusationUnknown": "removing an accusation",
-            "setHypothesis": "setting hypothesis: {owner} {value, select, Y {owns} other {doesn't own}} {card}",
+            "setHypothesis": "setting hypothesis: {owner} {value, select, Y {has} other {does not have}} {card}",
             "clearHypothesis": "clearing hypothesis on {owner} / {card}",
             "reorderPlayers": "reordering players",
             "reorderCategories": "reordering categories",
@@ -117,7 +117,7 @@
         "removeCardTitle": "Remove {name}",
         "addCard": "+ add card",
         "addCategory": "+ add category",
-        "knownCardCheckboxAria": "{player} owns {card}",
+        "knownCardCheckboxAria": "{player} has {card}",
         "startPlaying": "Start playing →{shortcut}",
         "continuePlaying": "Continue playing →{shortcut}"
     },
@@ -233,7 +233,7 @@
         "hypothesisLabel": "Hypothesis",
         "observationsExpandLabel": "Did you observe this card directly?",
         "observationsCheckboxLabelOwn": "I have this card in my hand",
-        "observationsCheckboxLabelOther": "I have seen that {player} owns {card}",
+        "observationsCheckboxLabelOther": "I have seen that {player} has {card}",
         "deductionsLabel": "Deductions",
         "deductionsEmpty": "Nothing has been deduced about this cell yet.",
         "leadsLabel": "Leads",
@@ -261,14 +261,14 @@
         "initial-known-card": {
             "headlineObservation": "{count, plural, one {Known observation} other {Known observations}}",
             "headlineHypothesis": "{count, plural, one {Hypothesis} other {Hypotheses}}",
-            "detail": "You marked that {cellPlayer} {value, select, Y {owns} other {doesn't own}} {cardList}."
+            "detail": "You marked that {cellPlayer} {value, select, Y {has} other {does not have}} {cardList}."
         },
         "initial-hand-size": {
             "headline": "Given",
             "detail": "Known from {cellPlayer}'s hand size."
         },
         "card-ownership": {
-            "headline": "Card ownership",
+            "headline": "Who has the card",
             "detail": "{value, select, Y {Each {card} has exactly one owner — every other owner was ruled out, so {cellPlayer} must own it.} other {{card} is already owned by someone else, so {cellPlayer} doesn't own it.}}"
         },
         "player-hand": {
@@ -284,7 +284,7 @@
             "detailUnknown": "{cellPlayer} passed on suggestion #{number}, so {cellPlayer} can't hold {cellCard}."
         },
         "refuter-showed": {
-            "detailKnown": "{refuter} refuted suggestion #{number} by showing {seen}, so {cellPlayer} owns {cellCard}.",
+            "detailKnown": "{refuter} refuted suggestion #{number} by showing {seen}, so {cellPlayer} has {cellCard}.",
             "detailKnownNoCard": "{refuter} refuted suggestion #{number} by showing {cellCard}.",
             "detailUnknown": "The refuter showed {cellCard} when refuting suggestion #{number}."
         },
@@ -391,13 +391,13 @@
         "insightConfidenceLow": "low",
         "insightConfidenceMed": "medium",
         "insightConfidenceHigh": "high",
-        "insightAcceptAria": "Accept — pin {suggester} owns {card} as a hypothesis",
+        "insightAcceptAria": "Accept — pin {suggester} has {card} as a hypothesis",
         "insightAcceptAriaCaseFile": "Accept — pin {card} is in the case file as a hypothesis",
         "insightDismissAria": "Dismiss — suppress this insight unless evidence grows",
         "insightDismissAriaCaseFile": "Dismiss — suppress this case-file insight unless evidence grows",
         "activeHypothesisPlayer": "<strong>{player}</strong> / <strong>{card}</strong> <chip></chip>",
         "activeHypothesisCaseFile": "<strong>{caseFile}</strong> / <strong>{card}</strong> <chip></chip>",
-        "activeHypothesisOpenAriaPlayer": "Open hypothesis: {player} {value, select, Y {owns} other {does not own}} {card}",
+        "activeHypothesisOpenAriaPlayer": "Open hypothesis: {player} {value, select, Y {has} other {does not have}} {card}",
         "activeHypothesisOpenAriaCaseFile": "Open hypothesis: {card} {value, select, Y {is in} other {is not in}} the case file",
         "activeHypothesisCaseFileLabel": "Case file",
         "clearDismissalsLink": "Bring back {count, plural, one {# dismissed recommendation} other {# dismissed recommendations}}"
@@ -592,54 +592,80 @@
         "startPlaying": "Start playing",
         "gotIt": "Got it",
         "takeTour": "Take tour",
+        "verbTap": "Tap",
+        "verbClick": "Click",
         "setup": {
             "welcome": {
-                "title": "Set up your game step by step",
-                "body": "We'll walk you through the deck, who's playing, and the cards you're holding. You can always come back to any step."
+                "title": "Welcome to Clue Solver",
+                "body": "Build your game below — pick a deck, list your players, and mark the cards you're holding."
             },
             "cardPack": {
-                "title": "Pick a card pack",
-                "body": "Pick a pack — Classic, Master Detective, or one of your saved customs. Hit Customize to build your own."
+                "title": "Get started by picking a card pack",
+                "body": "Pick the deck you're playing with. Classic ships out of the box; tap All card packs to find another or customize your own."
             },
-            "players": {
-                "title": "Players in turn order",
-                "body": "Enter players in turn order — the first one listed will be dealt first. Drag to reorder, or use the up/down buttons."
-            },
-            "knownCard": {
-                "title": "Mark the cards you were dealt",
-                "body": "Tick the cards you have — the solver uses your hand to rule everything else out for you."
-            },
-            "overflow": {
-                "title": "Come back later",
-                "body": "Use the ⋯ menu anytime to come back here, restart this tour, or start a new game."
+            "menu": {
+                "title": "Find Game setup in this menu",
+                "body": "Once you start playing, open this menu anytime to come back here — players, decks, and hand sizes are all editable later. Undo, Account, and Install live here too."
             }
         },
         "checklist": {
-            "intro": {
-                "title": "Checklist — read deductions",
-                "body": "This half is where the solver shows what it's figured out. Cells fill in as facts come in."
+            "menu": {
+                "title": "Get back to setup anytime",
+                "body": "This menu hosts Game setup — open it whenever you need to fix players, swap the deck, or change hand sizes. Undo, Account, and Install live here too."
             },
-            "cell": {
+            "intro": {
+                "title": "Two halves work together",
+                "body": "<columns><left>The grid on the left tracks what each player has.</left><right>The suggestion log on the right is where every guess gets recorded.</right></columns>"
+            },
+            "tapChecklist": {
+                "title": "Two halves: this is the deduction grid",
+                "body": "We'll get to the Suggest tab next. <strong>Tap the Checklist tab below to continue.</strong>"
+            },
+            "cellIntro": {
                 "title": "Each cell is a deduction",
-                "body": "Y means a player holds that card; N means they don't. The solver runs after every change and fills in everything it can derive."
+                "body": "Each cell shows what we know about whether that player (or the case file) has that card — <yes></yes> if they do, <no></no> if they don't, blank if we don't know yet. <strong>{action} the highlighted cell to open the breakdown.</strong>"
+            },
+            "panelIntro": {
+                "title": "Here's the breakdown",
+                "body": "Every cell has its own breakdown — the reasoning behind its value, the suggestions that might help, and a what-if hypothesis tool. We'll walk through each section next."
+            },
+            "cellClose": {
+                "title": "{action} the cell to close",
+                "body": "You've seen the breakdown. <strong>{action} the same cell again to dismiss the panel.</strong>"
+            },
+            "deductions": {
+                "title": "DEDUCTIONS — how a cell got here",
+                "body": "DEDUCTIONS shows the chain of reasoning that produced this cell's value. You can also mark cards you've seen with your own eyes here."
+            },
+            "leads": {
+                "title": "LEADS — suggestions that could help",
+                "body": "Past suggestions that mention this card show up here as footnotes. If one gets refuted, this cell may flip from blank to <yes></yes> or <no></no>."
+            },
+            "hypothesis": {
+                "title": "HYPOTHESIS — try a what-if",
+                "body": "Set the cell to <yes></yes> (has the card) or <no></no> (does not have the card) as a guess. The solver propagates it and surfaces any contradictions — handy for narrowing down the case file when deductions stall."
             },
             "caseFile": {
-                "title": "The case file",
-                "body": "When the solver narrows a category to a single suspect / weapon / room, the case-file column shows it — that's your accusation."
+                "title": "The case file is your goal",
+                "body": "This section tracks the murder envelope — cards no player has. Solve the three categories down to one each and you're done."
             }
         },
         "suggest": {
             "intro": {
-                "title": "Suggest — log suggestions",
-                "body": "The other half logs suggestions you observe. Both halves work together — on desktop side-by-side, on mobile via the tabs at the bottom."
+                "title": "Suggest pane — log what happens at the table",
+                "body": "Add a suggestion (or accusation) here. Every entry updates the deductions on the left."
+            },
+            "tapSuggest": {
+                "title": "Switch to the Suggest tab",
+                "body": "This is where you'll log what happens at the table. <strong>Tap the Suggest tab below to continue.</strong>"
             },
             "addForm": {
                 "title": "Add the first suggestion of the game to get started!",
-                "body": "After adding, switch to the checklist to see updated deductions."
+                "body": "Pick a suspect, weapon, and room. The solver re-runs after each entry, so flip back to the checklist to see what changed."
             },
             "priorLog": {
                 "title": "All suggestions are logged here",
-                "body": "Every suggestion you log shows up here. Click any row to edit it later if you mis-typed something."
+                "body": "Every suggestion you log shows up here with who passed and who showed a card. Tap a row to edit it later if you mis-typed something."
             }
         },
         "firstSuggestion": {
@@ -649,17 +675,17 @@
             }
         },
         "sharing": {
-            "pack": {
-                "title": "Share any card pack",
-                "body": "You can share any card pack with the share icon next to its name. Useful for custom card packs you create — your friends can use them in their own games."
-            },
             "invite": {
                 "title": "Invite another player",
                 "body": "Send a friend a link to set them up with their own solver session for this game. They get to deduce alongside you on their own device."
             },
-            "overflow": {
-                "title": "More share options here",
-                "body": "Find Invite a player and Continue on another device under the menu — the second one moves your in-progress game to a different device."
+            "transfer": {
+                "title": "Continue on another device",
+                "body": "Hand your in-progress game off to a phone or another browser — pick up exactly where you left off."
+            },
+            "myCardPacks": {
+                "title": "My card packs",
+                "body": "Save custom decks here and share them with friends. Each saved pack syncs across your devices when you're signed in."
             }
         }
     }

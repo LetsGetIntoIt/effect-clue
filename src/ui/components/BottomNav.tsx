@@ -44,12 +44,20 @@ export function BottomNav() {
     const hasKeyboard = useHasKeyboard();
     const mode = state.uiMode;
 
-    // In setup mode, the wizard owns the page-bottom area with its
-    // own sticky CTA bar (Start over / Skip / Next / Start playing).
-    // BottomNav's tabs aren't useful there — Game-setup's already
-    // active, and the Checklist / Suggest tabs would compete with
-    // the wizard's primary navigation. Hide entirely.
-    if (mode === "setup") return null;
+    // In setup mode the wizard owns the page-bottom area with its own
+    // sticky CTA bar, so we hide the Checklist / Suggest tabs (they'd
+    // compete with the wizard's primary nav and Game setup is already
+    // the active screen). But we still surface the overflow menu (⋯)
+    // on the right side — without it, mobile setup users have no way
+    // to reach Undo / Redo / Install / Account / Restart tour, all of
+    // which live in the overflow menu. The wizard's sticky footer and
+    // this bar can co-exist: the page's `pb-24` clears the BottomNav,
+    // and the wizard footer sticks at the viewport bottom which sits
+    // visually above the BottomNav (z-order: BottomNav uses
+    // `--z-app-chrome` which is below the popovers but above page
+    // content, while the wizard footer is in-flow so it stacks under
+    // the BottomNav's fixed positioning).
+    const setupMode = mode === "setup";
 
     return (
         <nav
@@ -61,32 +69,45 @@ export function BottomNav() {
             }
         >
             <ul className="m-0 flex list-none items-stretch justify-between gap-1 p-1">
-                <LayoutGroup id="bottomnav-underline">
-                <NavTabItem
-                    label={t("checklist", {
-                        shortcut: shortcutSuffix("global.gotoChecklist", hasKeyboard),
-                    })}
-                    active={mode === "checklist"}
-                    tourAnchor="bottom-nav-checklist"
-                    onClick={() =>
-                        dispatch({ type: "setUiMode", mode: "checklist" })
-                    }
-                />
-                <NavTabItem
-                    label={t("suggest", {
-                        shortcut: shortcutSuffix("global.gotoPlay", hasKeyboard),
-                    })}
-                    active={mode === "suggest"}
-                    tourAnchor="bottom-nav-suggest"
-                    onClick={() =>
-                        dispatch({ type: "setUiMode", mode: "suggest" })
-                    }
-                />
-                </LayoutGroup>
+                {!setupMode && (
+                    <LayoutGroup id="bottomnav-underline">
+                        <NavTabItem
+                            label={t("checklist", {
+                                shortcut: shortcutSuffix(
+                                    "global.gotoChecklist",
+                                    hasKeyboard,
+                                ),
+                            })}
+                            active={mode === "checklist"}
+                            tourAnchor="bottom-nav-checklist"
+                            onClick={() =>
+                                dispatch({ type: "setUiMode", mode: "checklist" })
+                            }
+                        />
+                        <NavTabItem
+                            label={t("suggest", {
+                                shortcut: shortcutSuffix(
+                                    "global.gotoPlay",
+                                    hasKeyboard,
+                                ),
+                            })}
+                            active={mode === "suggest"}
+                            tourAnchor="bottom-nav-suggest"
+                            onClick={() =>
+                                dispatch({ type: "setUiMode", mode: "suggest" })
+                            }
+                        />
+                    </LayoutGroup>
+                )}
+                {setupMode && (
+                    // Spacer that pushes the overflow trigger to the
+                    // right edge — matches the visual rhythm of the
+                    // Checklist / Suggest tabs taking the left side
+                    // when not in setup mode.
+                    <li className="flex-1" aria-hidden />
+                )}
                 <BottomOverflowMenu
-                    // In setup mode this whole nav is unmounted, so
-                    // `setupActive` is always false from here.
-                    setupActive={false}
+                    setupActive={setupMode}
                     onSetup={() =>
                         dispatch({ type: "setUiMode", mode: "setup" })
                     }
@@ -185,7 +206,16 @@ function BottomOverflowMenu({
     const { restartTourForScreen, currentStep } = useTour();
     // Force this menu open while the "Everything else lives here" tour
     // step is active so the user can see the items without clicking ⋯.
-    const tourForcesMenuOpen = currentStep?.anchor === "overflow-menu";
+    // The "Everything else lives here" tour step (and any step that
+    // spotlights a SPECIFIC menu item, like the sharing tour's three
+    // share-affordance callouts) needs the menu open. The legacy
+    // pattern observed `anchor === "overflow-menu"`, which only
+    // worked when the step's spotlight was the menu itself. The
+    // explicit `forceOpenOverflowMenu` flag generalizes that to any
+    // step that wants the menu open regardless of its spotlight.
+    const tourForcesMenuOpen =
+        currentStep?.anchor === "overflow-menu"
+        || currentStep?.forceOpenOverflowMenu === true;
     const { installable, openModal: openInstallModal } =
         useInstallPromptContext();
     const { openModal: openAccountModal, requestSignOut } = useAccountContext();
@@ -261,10 +291,12 @@ function BottomOverflowMenu({
                     {
                         label: tShare("menuItemInvitePlayer"),
                         onClick: () => openInvitePlayer(),
+                        tourAnchor: "menu-item-invite-player",
                     },
                     {
                         label: tShare("menuItemTransferDevice"),
                         onClick: () => openContinueOnAnotherDevice(),
+                        tourAnchor: "menu-item-transfer-device",
                     },
                     { type: "divider" },
                     // Group 2: Account & content
@@ -281,6 +313,7 @@ function BottomOverflowMenu({
                     {
                         label: tAccount("menuItemMyCardPacks"),
                         onClick: () => openAccountModal(),
+                        tourAnchor: "menu-item-my-card-packs",
                     },
                     {
                         label: tOnboarding("takeTour"),

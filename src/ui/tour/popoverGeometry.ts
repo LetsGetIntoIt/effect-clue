@@ -75,11 +75,26 @@ export const resolveAnchorToken = (step: TourStep): string => {
 /**
  * Resolve the token used to position the POPOVER specifically. Falls
  * back to the spotlight token when no override is set, so steps that
- * don't care about decoupling the two get today's behavior. Same
- * viewport-conditional + SSR fallback logic as `resolveAnchorToken`.
+ * don't care about decoupling the two get today's behavior.
+ *
+ * Resolution order:
+ *   1. `popoverAnchorByViewport[active-viewport]` when set + the
+ *      viewport key is defined.
+ *   2. `popoverAnchor` (viewport-agnostic override).
+ *   3. The spotlight anchor (`anchor` / `anchorByViewport`).
+ *
+ * SSR / tests fall back through 2 and 3 since matchMedia isn't
+ * available — same convention as `resolveAnchorToken`.
  */
-export const resolvePopoverAnchorToken = (step: TourStep): string =>
-    step.popoverAnchor ?? resolveAnchorToken(step);
+export const resolvePopoverAnchorToken = (step: TourStep): string => {
+    if (step.popoverAnchorByViewport && typeof window !== "undefined") {
+        const byViewport = isDesktopViewport()
+            ? step.popoverAnchorByViewport.desktop
+            : step.popoverAnchorByViewport.mobile;
+        if (byViewport !== undefined) return byViewport;
+    }
+    return step.popoverAnchor ?? resolveAnchorToken(step);
+};
 
 /**
  * Resolve the popover's `side` and `align` for the active viewport.

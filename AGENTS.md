@@ -246,7 +246,9 @@ Sequencing and precedence are covered by `src/ui/onboarding/StartupCoordinator.t
 - **`setup`** — fires on first visit to the Setup pane. How to launch: clear `effect-clue.*` from localStorage and load `/play?view=setup`. (Brand-new users landing anywhere else get redirected here by the coordinator.)
 - **`checklistSuggest`** — fires on first visit to the Play pane (Checklist + Suggest). Launch: dismiss `setup` first (e.g. seed `effect-clue.tour.setup.v1` with `lastDismissedAt`), then load `/play?view=checklist`. Step count is viewport-conditional today (one mobile-only step) — verify the "N of M" counter matches what's visible.
 - **`firstSuggestion`** — fires once per 4-week window when the user logs the first suggestion of any session. Launch: clear all tour state, dismiss splash + the per-screen tours, set up a game with default players, navigate to suggest mode, and submit the form. The popover fires immediately after the suggestion is added.
-- **`sharing`** — follow-up tour that calls out the three share affordances on the Setup pane (per-pack share button, Invite a player link, Continue on another device in the overflow menu). Has prerequisites: both the `setup` AND `checklistSuggest` tours must have been dismissed first (any path — Skip / X / completed). Launch: seed `effect-clue.tour.setup.v1` AND `effect-clue.tour.checklistSuggest.v1` with `lastDismissedAt`, leave `effect-clue.tour.sharing.v1` unseeded, then load `/play?view=setup`. Does NOT redirect off other screens — if the user lands on `/play?view=checklist` it waits for them to navigate to setup themselves. Uses the same overflow-menu `forceOpen` wiring as the setup tour's overflow step (Toolbar / BottomNav both observe `currentStep?.anchor === "overflow-menu"`).
+- **`sharing`** — follow-up tour that opens the overflow menu and walks the three menu items inside it: Invite a player, Continue on another device, My card packs. Each step force-opens the menu via `forceOpenOverflowMenu: true` (decoupled from `anchor === "overflow-menu"` so the popover anchors to the specific menu item while the menu stays open). Has prerequisites: both the `setup` AND `checklistSuggest` tours must have been dismissed first (any path — Skip / X / completed). Launch: seed `effect-clue.tour.setup.v1` AND `effect-clue.tour.checklistSuggest.v1` with `lastDismissedAt`, leave `effect-clue.tour.sharing.v1` unseeded, then load `/play?view=setup`. Does NOT redirect off other screens.
+
+**Interaction model.** Every step blocks the page beneath it — the dim veil absorbs clicks, the keyboard isolator swallows all non-Escape keys whose target isn't inside the popover, and the spotlight has `pointer-events: auto` so taps on the spotlit element don't reach the underlying anchor. The user navigates the tour with Back / Next / Skip / X on the popover; that's it. The exception is `advanceOn: { event: "click", anchor }` steps — those route clicks through to one specific anchor (the user is being asked to perform that action), and a window-level capture-phase click filter cancels every other click that lands outside the popover or the advance anchor.
 
 If you add a new tour to the registry, add it to this list AND walk it at both breakpoints before merging.
 
@@ -268,6 +270,18 @@ When a layout change makes any of the requirements above fail, prefer fixing in 
 3. Adjust `anchorByViewport` to point at a different DOM node per breakpoint.
 4. As a last resort, add or remove a step.
 
+**Tour steps must set up the UI to their expected pre-condition.** Don't rely on the previous step having left the UI in the right state — Back navigation, partial dismissals, race conditions, or the user opening the tour from "Restart tour" mid-flow can land them on a step with the UI in any state. When a step needs the explanation panel open (`cell-explanation-*` steps) or closed (cellIntro), an entry-side effect in the affected component should `setExpandedCell(targetCell)` or `setExpandedCell(null)` on transition into that step. The pattern lives in `src/ui/components/Checklist.tsx` — search for `useTour` to find the entry effects. The user's action (Next click / advance-on-click) then operates on a known starting state and does what the copy says it will.
+
+**Advance-on-click steps on touch devices: bypass React's synthetic event with a native DOM listener.** The Checklist cell has a touch two-tap protocol (first tap focuses, second tap opens) that fundamentally breaks `advanceOn: { event: "click" }` — on the first tap, the tour advances via the click event while the cell's React onClick falls through to "focus, don't open." The fix is to attach a native `addEventListener("click", …)` on the anchor element from the consuming component, NOT to rely on the cell's React onClick. Native listeners fire on every click regardless of focus state, two-tap state, or any closure-staleness inside React's event delegation. See the `checklist-cell` / `checklist-cell-close` handling in `Checklist.tsx` for the pattern.
+
+**Guard close paths during multi-step walkthroughs of an open panel.** When the tour walks the user through sections of an open panel (the DEDUCTIONS / LEADS / HYPOTHESIS / panel-intro chain), the panel must stay open across all of those steps. Real mobile devices (notably iOS Safari) fire "ghost" clicks ~300 ms after a tap that ended via `touchend`, and those clicks can hit the page beneath the popover. The pattern is a `tourKeepsCellOpen` predicate (a list of step anchors where the panel must stay open) wrapped in a ref so close-path effects can read the latest value without re-installing on every step change. Every place the cell can close — the cell's React onClick, the window-level outside-click handler, the explanation row's onClose — checks the ref and bails when the tour says "keep this open." See `tourKeepsCellOpen` / `tourKeepsCellOpenRef` in `Checklist.tsx`.
+
+**Verify advance-on-click steps with delayed checkpoints (300 ms, 1 s, 2 s).** The user-facing bug we hit was a panel that opened on tap and closed ~300 ms later via an iOS ghost click — invisible in a single-snapshot test taken immediately after the tap. When verifying an advance-on-click step, take checkpoints at multiple delays and assert the UI is still in the expected state at each one. The verification harness in the preview can dispatch synthetic clicks at any time, so this is cheap to script.
+
+**Don't rely on focus as a pre-condition.** The TourPopover auto-focuses its Next button on every step change (a `requestAnimationFrame` inside `TourPopover.tsx`). Any "pre-focus this element so the user's tap triggers behavior X" strategy gets undone — even with a double-rAF, focus is fragile. If you need a specific element to be the click target, use a native click listener attached directly to that element instead of trying to steer focus.
+
+**Effect deps in tour-driven entry effects: prefer refs over reducer-derived state.** A `useEffect` with `state.setup` (or anything from `useClue()`) in its dep array re-fires every time the reducer produces a new top-level state object — which happens on tour advance, uiMode changes, and many other reasons unrelated to the step. If the effect's body sets cell state (e.g. `setExpandedCell(null)` to close on entry), those re-fires can clobber the user's just-opened panel. Capture the reducer-derived value into a `useRef` and dereference it inside the effect, keeping only step-transition signals (e.g. `currentStepAnchor`, `setExpandedCell` from a useState setter) in deps.
+
 ## Icons
 
 Use these icons consistently — picking the wrong glyph mis-signals what the affordance does and creates ambiguity for users on touch devices where there's no tooltip.
@@ -284,6 +298,25 @@ Use these icons consistently — picking the wrong glyph mis-signals what the af
 - **`ExternalLinkIcon`** — links that open a new tab or navigate outside the app.
 
 If you need a glyph that doesn't fit one of these, add it to `src/ui/components/Icons.tsx` (or `ShareIcon.tsx` for share variants) — don't reach for an emoji or a literal character (`×`, `→`, etc.) that might be misread.
+
+## Terminology
+
+A few words have specific app-wide meaning. Stay consistent in both code and user-facing copy:
+
+- **"has" / "does not have"** — the relationship between a player or the case file and a card. The deduction grid is a matrix of these relationships; a cell value of <yes></yes> means "this player **has** this card", a <no></no> means "this player **does not have** this card", blank means "we don't know yet". Avoid "owns" / "doesn't own" — Clue is about who holds which dealt cards, not ownership in the property sense. The case file isn't a "player" but the same vocabulary applies: cards the case file "has" are the murder envelope, cards it "does not have" are in someone's hand.
+- **"Case file"** is a *section* or *area*, not a "column". On desktop the case-file summary renders as a horizontal strip above the player columns; on mobile it's the top of the page. Calling it a column reads wrong on both layouts.
+
+Apply both rules wherever the user is reading copy (i18n strings, error messages, tooltips, tour text). Internal variable names can keep `owner` / `ownership` as a technical term (the codebase uses the `Owner` type widely) — those names predate this rule and renaming the type for a vocabulary nicety is more churn than it's worth.
+
+### Tour copy: use `ProseChecklistIcon` instead of "Y" / "N"
+
+When a tour step's body refers to a cell's value, splice in `ProseChecklistIcon` via next-intl's `t.rich` rather than writing the literal letters "Y" or "N". The tour popover registers `<yes></yes>` and `<no></no>` placeholder tags that render the icons inline:
+
+```json
+"hypothesis.body": "Set the cell to <yes></yes> (has the card) or <no></no> (does not have the card) as a guess."
+```
+
+The icons match what the user sees in the deduction grid, so the tour reads in the same visual language as the rest of the app. Parenthetical clarifications ("(has the card)", "(does not have the card)") are fine when the meaning needs spelling out — the icon carries the visual signal; the words spell out the semantics.
 
 ## Sharing and sync docs
 

@@ -239,6 +239,10 @@ const buildSnapshot = (overrides: SnapshotOverrides) => ({
 });
 
 beforeEach(() => {
+    // Clear tour state between tests — the invite/transfer flow writes
+    // `effect-clue.tour.setup.v1` to mark the setup tour dismissed,
+    // and we want each test to start from a clean slate.
+    window.localStorage.clear();
     mockHasPersistedGameData = false;
     mockSessionUser = { id: "test-user", isAnonymous: false };
     routerPushMock.mockReset();
@@ -538,7 +542,11 @@ describe("ShareImportPage — import action", () => {
         });
     });
 
-    test("invite-style import calls applySnapshot and routes to /play (clean game state)", async () => {
+    test("invite-style import calls applySnapshot, dismisses the setup tour, and routes to /play?view=checklist", async () => {
+        // The share is a complete game — the receiver doesn't need
+        // the setup wizard, so we land them on the checklist directly
+        // and mark the setup tour as dismissed so the StartupCoordinator
+        // doesn't redirect them back.
         const snapshot = buildSnapshot({
             cardPackData: CLASSIC_PACK_PAYLOAD,
             playersData: PLAYERS_PAYLOAD_TWO,
@@ -554,8 +562,17 @@ describe("ShareImportPage — import action", () => {
         fireEvent.click(cta);
         await waitFor(() => {
             expect(applyMock).toHaveBeenCalledWith(snapshot);
-            expect(routerPushMock).toHaveBeenCalledWith("/play");
+            expect(routerPushMock).toHaveBeenCalledWith(
+                "/play?view=checklist",
+            );
         });
+        // Setup tour is now marked dismissed in localStorage so the
+        // coordinator's precedence redirect doesn't pull the user back.
+        const setupTourState = window.localStorage.getItem(
+            "effect-clue.tour.setup.v1",
+        );
+        expect(setupTourState).not.toBeNull();
+        expect(setupTourState).toContain("lastDismissedAt");
         expect(sharedAnalytics.shareImported).toHaveBeenCalledWith(
             expect.objectContaining({
                 hadPack: true,
@@ -586,7 +603,10 @@ describe("ShareImportPage — import action", () => {
 
         await waitFor(() => {
             expect(applyMock).toHaveBeenCalledWith(snapshot);
-            expect(routerPushMock).toHaveBeenCalledWith("/play");
+            // Invite/transfer flow → checklist view, not bare /play.
+            expect(routerPushMock).toHaveBeenCalledWith(
+                "/play?view=checklist",
+            );
         });
     });
 

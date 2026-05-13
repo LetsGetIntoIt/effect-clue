@@ -23,6 +23,7 @@ import {
 // Analytics enum tag for the "no hypothesis" baseline. Module-scope
 // so the `no-literal-string` lint rule reads it as code, not UI text.
 const ANALYTICS_PREV_OFF = "off" as const;
+
 import { useTranslations } from "next-intl";
 import {
     hypothesisCleared,
@@ -38,7 +39,7 @@ import {
     useState,
     type ReactNode,
 } from "react";
-import { Card, Owner, Player, ownerLabel } from "../../logic/GameObjects";
+import { Card, Owner, Player, PlayerOwner, ownerLabel } from "../../logic/GameObjects";
 import {
     allOwners,
     cardName,
@@ -74,6 +75,7 @@ import { Suggestion } from "../../logic/Suggestion";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useSelection } from "../SelectionContext";
 import { useClue } from "../state";
+import { useTour } from "../tour/TourProvider";
 import {
     registerChecklistFocusHandler,
     rememberChecklistCell,
@@ -239,6 +241,25 @@ export function Checklist() {
         popoverCell,
         setPopoverCell,
     } = useSelection();
+    const { currentStep } = useTour();
+    const currentStepAnchor = currentStep?.anchor;
+    // Cell-explanation tour steps require the explanation panel to
+    // stay open beneath the popover (DEDUCTIONS / LEADS / HYPOTHESIS
+    // walk through sections of the panel; case-file references the
+    // panel above the summary row). Any stray click — iOS ghost
+    // click after the cellIntro tap, a backdrop tap that lands here
+    // because the backdrop is `pointer-events: auto` on non-
+    // advanceOn steps, a re-fired React onClick after a state
+    // bounce — that would otherwise toggle the cell closed has to
+    // be suppressed. The ref makes the latest value reachable from
+    // effects whose dep array doesn't include `currentStepAnchor`.
+    const tourKeepsCellOpen =
+        currentStepAnchor === "cell-explanation-panel"
+        || currentStepAnchor === "cell-explanation-deductions"
+        || currentStepAnchor === "cell-explanation-leads"
+        || currentStepAnchor === "cell-explanation-hypothesis";
+    const tourKeepsCellOpenRef = useRef(tourKeepsCellOpen);
+    tourKeepsCellOpenRef.current = tourKeepsCellOpen;
     // Local alias — the SelectionContext field is named for the old
     // popover, but its meaning ("which cell's explanation is currently
     // exposed") still fits the inline-row model.
@@ -597,6 +618,11 @@ export function Checklist() {
     useEffect(() => {
         if (expandedCell === null) return;
         const onClickOutside = (e: MouseEvent) => {
+            // During cell-explanation tour steps the panel must stay
+            // open; suppress every outside-click close (including the
+            // BACKDROP tap, which lands here because the backdrop has
+            // `pointer-events: auto` on these non-advanceOn steps).
+            if (tourKeepsCellOpenRef.current) return;
             const target = e.target as Node | null;
             if (target === null) return;
             // Any registered popover-interactive cell "owns" its tap —
@@ -613,12 +639,92 @@ export function Checklist() {
             }
             const rowNode = explainRowNodeRef.current;
             if (rowNode && rowNode.contains(target)) return;
+            // Tour popover content: a Next/Back/Skip/X click on the
+            // tour overlay should NOT close the cell. The
+            // checklistSuggest tour deliberately opens the cell during
+            // its DEDUCTIONS / LEADS / HYPOTHESIS steps, so a click on
+            // the tour's Next button is "navigating between
+            // walkthrough states", not "tap outside to dismiss".
+            // Pass through any click whose target is inside the
+            // popover content (marked with `data-tour-popover-content`).
+            if (target instanceof Element) {
+                const tourPopover = target.closest(
+                    "[data-tour-popover-content]",
+                );
+                if (tourPopover !== null) return;
+            }
             setExpandedCell(null);
         };
         window.addEventListener("click", onClickOutside, true);
         return () =>
             window.removeEventListener("click", onClickOutside, true);
     }, [expandedCell, setExpandedCell]);
+
+    // Two tour-driven cell behaviors share the same shape:
+    //
+    //   - `checklist-cell` (cellIntro step): the user is asked to TAP
+    //     the (0,0) cell to OPEN its explanation panel. We close any
+    //     stale panel state on entry and install a native click
+    //     listener that opens the cell on tap. The tour's
+    //     advance-on-click listener fires alongside and moves the
+    //     tour forward to the explanation walkthrough.
+    //
+    //   - `checklist-cell-close` (close step): the user is asked to
+    //     TAP the (0,0) cell AGAIN to CLOSE the panel. We open the
+    //     cell on entry (it's normally already open from the
+    //     case-file step before it, but Back navigation could land
+    //     here with the cell closed) and install a native click
+    //     listener that closes the cell on tap.
+    //
+    // Why native click listeners + setExpandedCell directly: the
+    // cell's React-managed onClick has a touch two-tap protocol
+    // that proved unreliable on real mobile devices (the cellIntro
+    // tap didn't open the panel). A native DOM listener bypasses
+    // React's event system and works on the first tap. Doesn't
+    // depend on focus — the user's tap operates regardless of
+    // where focus is.
+    //
+    // `useTour()` + `currentStepAnchor` are declared at the top of
+    // this component so they're reachable by the outside-click
+    // effect above (which guards on `tourKeepsCellOpenRef`).
+    //
+    // Setup is captured by ref so this effect — which installs a
+    // one-time listener on step entry — doesn't re-fire (and
+    // re-execute the cell-state side effect) every time the reducer
+    // produces a new top-level state object. setup itself is
+    // referentially stable across no-op renders, but other state
+    // changes (uiMode, tour advance) can give us a new top-level
+    // state reference, which would otherwise re-trigger an effect
+    // that depended on `state.setup`.
+    const setupRef = useRef(state.setup);
+    setupRef.current = state.setup;
+    useEffect(() => {
+        const isOpenStep = currentStepAnchor === "checklist-cell";
+        const isCloseStep = currentStepAnchor === "checklist-cell-close";
+        if (!isOpenStep && !isCloseStep) return;
+        // Compute the (0,0) Cell from setup. Both anchors live on
+        // row 0, col 0 of the play-mode grid — first player + first
+        // card of the first category.
+        const firstPlayer = setupRef.current.players[0];
+        const firstCard = setupRef.current.categories[0]?.cards[0];
+        if (firstPlayer === undefined || firstCard === undefined) return;
+        const targetCell = Cell(PlayerOwner(firstPlayer), firstCard.id);
+        // Set up the UI to the expected state on entry so the user's
+        // tap does what we expect.
+        setExpandedCell(isOpenStep ? null : targetCell);
+        const anchorToken = isOpenStep
+            ? "checklist-cell"
+            : "checklist-cell-close";
+        const cellEl = document.querySelector(
+            `[data-tour-anchor~="${anchorToken}"]`,
+        );
+        if (!(cellEl instanceof HTMLElement)) return;
+        const onClick = (): void => {
+            setExpandedCell(isOpenStep ? targetCell : null);
+        };
+        cellEl.addEventListener("click", onClick);
+        return () => cellEl.removeEventListener("click", onClick);
+    }, [currentStepAnchor, setExpandedCell]);
 
     // Clear any pending long-press timer on unmount so the callback
     // can't fire setExpandedCell after the component is gone.
@@ -1114,7 +1220,7 @@ export function Checklist() {
             // time. Both anchors live in the DOM unconditionally;
             // the resolver simply queries for whichever side of the
             // breakpoint is active.
-            data-tour-anchor="desktop-checklist-area"
+            data-tour-anchor="desktop-checklist-area two-halves-spotlight"
             className="rounded-[var(--radius)] border border-border bg-panel p-4"
         >
             <div className="shrink-0 [@media(min-width:800px)]:sticky [@media(min-width:800px)]:left-9 [@media(min-width:800px)]:max-w-[calc(100vw-4.5rem)]">
@@ -1217,6 +1323,12 @@ export function Checklist() {
                                         <td
                                             colSpan={cardSpan - 1}
                                             className="relative p-0"
+                                            // M3 tour: the "Here's the
+                                            // breakdown" step spotlights the
+                                            // whole explanation row before
+                                            // walking the user through its
+                                            // three sections.
+                                            data-tour-anchor="cell-explanation-panel"
                                             ref={(
                                                 el: HTMLTableCellElement | null,
                                             ) => {
@@ -1476,7 +1588,21 @@ export function Checklist() {
                                         //     know") applies only to the
                                         //     top-left cell — a
                                         //     teach-the-click anchor for
-                                        //     the play-mode tour.
+                                        //     the play-mode tour's
+                                        //     OPEN step (cellIntro).
+                                        //   - `checklist-cell-close` is
+                                        //     a sibling anchor used by
+                                        //     the play-mode tour's CLOSE
+                                        //     step ("Tap the cell again
+                                        //     to dismiss the panel"). It
+                                        //     lives on the same (0,0)
+                                        //     cell but is a separate
+                                        //     token so the tour
+                                        //     entry-side-effects
+                                        //     (`tourKeepsCellOpen`,
+                                        //     pre-close on entry) can
+                                        //     differentiate open-vs-close
+                                        //     intent.
                                         // The TourPopover unions all
                                         // matched rects via the `~=`
                                         // attribute selector.
@@ -1488,9 +1614,14 @@ export function Checklist() {
                                             rowIdx === 0 && colIdx === 0
                                                 ? "checklist-cell"
                                                 : undefined;
+                                        const firstCellCloseAnchor =
+                                            rowIdx === 0 && colIdx === 0
+                                                ? "checklist-cell-close"
+                                                : undefined;
                                         const anchorTokens = [
                                             firstColAnchor,
                                             firstCellAnchor,
+                                            firstCellCloseAnchor,
                                         ].filter(
                                             (t): t is string => t !== undefined,
                                         );
@@ -1721,6 +1852,33 @@ export function Checklist() {
                                                             // panel back.
                                                             wasLongPressRef.current =
                                                                 false;
+                                                            wasTouchSecondTapRef.current =
+                                                                null;
+                                                            return;
+                                                        }
+                                                        if (
+                                                            tourKeepsCellOpenRef.current
+                                                        ) {
+                                                            // Cell-explanation
+                                                            // tour step is
+                                                            // active. The
+                                                            // panel must stay
+                                                            // open as the
+                                                            // user's
+                                                            // reference. A
+                                                            // tap on the cell
+                                                            // here would
+                                                            // otherwise hit
+                                                            // the "tap open
+                                                            // cell again →
+                                                            // close" branch
+                                                            // below and
+                                                            // dismiss the
+                                                            // panel — exactly
+                                                            // the iOS
+                                                            // ghost-click
+                                                            // scenario the
+                                                            // user reported.
                                                             wasTouchSecondTapRef.current =
                                                                 null;
                                                             return;

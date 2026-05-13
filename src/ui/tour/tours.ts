@@ -125,6 +125,25 @@ export interface TourStep {
      */
     readonly popoverAnchor?: string;
     /**
+     * Viewport-conditional override for `popoverAnchor`. Like
+     * `anchorByViewport` (which selects a different spotlight anchor
+     * per breakpoint), this picks a different popover anchor per
+     * breakpoint when the natural target differs across layouts.
+     * Used by the M3 closer step where the desktop popover anchors
+     * to the first suggestion pill (popover sits to the left, clear
+     * of the form) while the mobile popover anchors to the form
+     * header (popover sits below it, inside the form spotlight).
+     *
+     * Resolution order: `popoverAnchorByViewport[viewport]` →
+     * `popoverAnchor` → spotlight `anchor`. SSR / test paths fall
+     * back to `popoverAnchor` (then `anchor`) when matchMedia
+     * isn't available.
+     */
+    readonly popoverAnchorByViewport?: {
+        readonly mobile?: string;
+        readonly desktop?: string;
+    };
+    /**
      * Among matched elements, which one drives popover position.
      * Defaults to `"first-visible"` — the natural "anchor to the first
      * visible element" rule that handles ordinary single-element
@@ -171,107 +190,355 @@ export interface TourStep {
         readonly mobile?: boolean;
         readonly desktop?: boolean;
     };
+    /**
+     * When set, the popover hides its "Next" / "Finish" button and
+     * waits for the user to perform `event` on an element matching
+     * `anchor`. Once that event fires, the tour advances to the next
+     * step. The spotlight on `anchor` is also rendered with
+     * `pointer-events: none` so the click reaches the underlying
+     * element — the user's click triggers the element's native
+     * behavior (selecting a tab, opening a cell) AND advances the
+     * tour at the same time.
+     *
+     * Used for steps where the tour explicitly wants the user to
+     * exercise an affordance ("tap Checklist to switch panes", "click
+     * a cell to see the breakdown") rather than passively read.
+     */
+    readonly advanceOn?: {
+        readonly event: "click";
+        readonly anchor: string;
+    };
+    /**
+     * When `true`, the Toolbar's overflow menu (desktop) and the
+     * BottomNav's overflow menu (mobile) both force-open while this
+     * step is active. Decouples "show the menu open" from
+     * `anchor === "overflow-menu"`, which only worked when the
+     * spotlight was on the menu itself — useful for steps that
+     * spotlight a SPECIFIC menu item (e.g. "Invite a player") while
+     * keeping the surrounding menu open.
+     */
+    readonly forceOpenOverflowMenu?: boolean;
+    /**
+     * When `true`, multi-element anchors render as SEPARATE rings —
+     * one per matched DOM node — instead of a single union rect.
+     * Used for the desktop "Two halves work together" step where the
+     * spotlight needs to call out two distinct columns; without this
+     * opt-in, the default behavior unions matched elements into one
+     * rect (so e.g. the overflow-menu step's trigger + portaled menu
+     * read as one cohesive shape, and its dim veil paints normally).
+     *
+     * Multi-spotlight steps skip the dim veil — the box-shadow
+     * "outer-darkening" approach can't cut multiple holes out of the
+     * surrounding darkness, so we accept ring-only rendering and let
+     * the popover carry the user's attention.
+     */
+    readonly multiSpotlight?: boolean;
 }
 
 /**
- * Tour registry. Four screens — `setup`, `checklistSuggest`, and
- * placeholder entries `account` / `shareImport` reserved for M7 / M9.
+ * Tour registry.
  *
- * The combined `checklistSuggest` tour walks first across the
- * checklist (2 steps) then across the suggest pane (2 steps).
- * `requiredUiMode` flags the suggest-pane steps so the mobile
- * driver flips to the right pane before each.
+ * - `setup`: a three-step orientation. Welcome → overflow-menu
+ *   callout → "Get started by picking a card pack" (spotlights the
+ *   first wizard step). Orientation lands first, then the "come back
+ *   here later" affordance, then the concrete first action — the
+ *   closer doubles as a nudge into the work. The wizard is largely
+ *   self-explanatory after the M6 rework (accordion + sticky footer
+ *   + per-step validation banners), so the tour's job is to orient a
+ *   brand-new visitor and tell them the menu is the way back later.
+ * - `checklistSuggest`: the heart of the tour system. Walks the user
+ *   through the two-halves layout (deduction grid + suggestion log),
+ *   *opens a cell* programmatically so the explanation panel is on
+ *   screen, calls out each of its three named sections — DEDUCTIONS,
+ *   LEADS, HYPOTHESIS — then closes the cell to introduce the case
+ *   file column, and finally walks the Suggest pane (prior log +
+ *   add form). The cell-open is driven by `Checklist.tsx` watching
+ *   `useTour().currentStep.anchor` for one of the explanation-section
+ *   tokens; it auto-closes when the tour moves on.
+ * - `firstSuggestion`: single-step acknowledgement after the user
+ *   logs their first suggestion. Anchors to the deduction grid so
+ *   the user sees what their suggestion produced.
+ * - `sharing`: three callouts for share affordances inside the
+ *   overflow menu (invite a player, transfer to another device, my
+ *   card packs).
+ *
+ * Every step blocks page interaction by default — the dim veil
+ * absorbs clicks and the keyboard isolator swallows non-Esc keys.
+ * Steps that need the user to actively click an element on the page
+ * use `advanceOn` to whitelist that one element; the rest of the
+ * page stays blocked.
+ *
+ * `account` and `shareImport` remain reserved placeholders.
  */
 export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
     setup: [
         {
-            // High-level welcome — point at the entire wizard so the
-            // user takes in the accordion shape before drilling down.
-            anchor: "setup-wizard-shell",
+            // Welcome step. Anchored to the wizard header (the
+            // "Setup wizard" h2 + subheading) so the spotlight rings a
+            // small, top-of-page element and the popover has somewhere
+            // to land. The whole accordion is too tall to anchor the
+            // popover against — Radix's collision detection ends up
+            // pushing the popover above the visible viewport.
+            //
+            // Blocking like every other tour step: the user reads,
+            // dismisses, then drives the wizard. Letting the wizard
+            // accept input alongside the popover meant a stray Tab or
+            // Enter could fire a wizard action mid-tour — a
+            // mis-orientation the welcome step is supposed to prevent.
+            anchor: "setup-wizard-header",
             titleKey: "setup.welcome.title",
             bodyKey: "setup.welcome.body",
             side: "bottom",
             align: "start",
+            sideByViewport: {
+                mobile: { side: "bottom", align: "center" },
+                desktop: { side: "bottom", align: "start" },
+            },
         },
         {
-            // Card pack — pill row inside step 1's panel. Mounted only
-            // while step 1 is in `editing` state; auto-skips otherwise.
-            anchor: "setup-step-cardpack-pills",
+            // Step 2: open the overflow menu and show the user where
+            // Game setup lives, so they have a concrete "this is how I
+            // come back" cue before they start playing. The same
+            // callout fires on step 1 of `checklistSuggest` too —
+            // teaching it from both directions (forward from setup,
+            // back from the checklist) is intentional repetition.
+            //
+            // `anchor: "overflow-menu"` is observed by Toolbar +
+            // BottomNav, which force-open the menu while this step is
+            // active. `popoverAnchorPriority: "last-visible"` binds
+            // the popover to the open menu's portaled content rather
+            // than the trigger button.
+            anchor: "overflow-menu",
+            popoverAnchorPriority: "last-visible",
+            titleKey: "setup.menu.title",
+            bodyKey: "setup.menu.body",
+            side: "left",
+            align: "start",
+            sideByViewport: {
+                // Mobile menu opens UP from the BottomNav, so the
+                // popover sits ABOVE the menu (side: top).
+                mobile: { side: "top", align: "end" },
+                // Desktop menu opens DOWN from the top-right Toolbar
+                // trigger, so the popover sits to the LEFT.
+                desktop: { side: "left", align: "start" },
+            },
+        },
+        {
+            // Step 3 (closer): spotlight the first wizard step (Pick a
+            // card pack) so the brand-new user has a concrete starting
+            // move after the orientation. The whole section gets the
+            // spotlight (header + helper text + pill row) but the
+            // POPOVER anchors to the small pill row inside
+            // (`setup-step-cardpack-pills`), which sits in the lower
+            // half of the section — that gives Radix a small element to
+            // position against and leaves room for the popover above
+            // the pills (popover top stays on-screen on short viewports
+            // where the panel itself is taller than the visible
+            // viewport).
+            //
+            // Anchor token is emitted by SetupStepPanel as
+            // `setup-wizard-step-<stepId>`; the cardPack step's wrapper
+            // section thus carries `setup-wizard-step-cardPack`.
+            anchor: "setup-wizard-step-cardPack",
+            popoverAnchor: "setup-step-cardpack-pills",
             titleKey: "setup.cardPack.title",
             bodyKey: "setup.cardPack.body",
             side: "bottom",
-            align: "start",
+            align: "center",
+            finishLabelKey: "gotIt",
         },
+    ],
+    checklistSuggest: [
         {
-            // Players in turn order — Reorder.Group inside step 2.
-            anchor: "setup-step-players-list",
-            titleKey: "setup.players.title",
-            bodyKey: "setup.players.body",
-            side: "bottom",
-            align: "start",
-        },
-        {
-            // Mark your cards — first checkbox row inside step 5. Auto-
-            // skips when `selfPlayerId === null` (the step is hidden
-            // entirely from the accordion in that case, so the anchor
-            // isn't mounted; tours.ts auto-skips missing anchors).
-            anchor: "setup-step-mycards-firstrow",
-            titleKey: "setup.knownCard.title",
-            bodyKey: "setup.knownCard.body",
-            side: "bottom",
-            align: "start",
-        },
-        {
-            // Come back later — overflow menu (existing anchor +
-            // forceOpen wiring still applies).
+            // Step 1: open the overflow menu and call out "Game
+            // setup" so the user has a concrete affordance for
+            // returning to the wizard later.
             anchor: "overflow-menu",
-            titleKey: "setup.overflow.title",
-            bodyKey: "setup.overflow.body",
             popoverAnchorPriority: "last-visible",
+            forceOpenOverflowMenu: true,
+            titleKey: "checklist.menu.title",
+            bodyKey: "checklist.menu.body",
             side: "left",
             align: "start",
             sideByViewport: {
                 mobile: { side: "top", align: "end" },
                 desktop: { side: "left", align: "start" },
             },
+            requiredUiMode: "checklist",
         },
-    ],
-    checklistSuggest: [
         {
-            // M10 — swap-discoverability intro. Establish the "two
-            // halves" mental model before drilling into either side.
-            // Mobile spotlight points at the BottomNav Checklist tab
-            // (the swap target the user is currently on); desktop
-            // spotlight covers the entire Checklist column. The
-            // popover anchor falls back to a small element at the
-            // top of the column on desktop (so the popover doesn't
-            // get pushed off-screen against a wide column) — same
-            // pattern as `firstSuggestion`.
-            anchor: "desktop-checklist-area",
-            anchorByViewport: {
-                mobile: "bottom-nav-checklist",
-                desktop: "desktop-checklist-area",
-            },
-            popoverAnchor: "checklist-case-file",
+            // Step 2 (desktop): Two halves — multi-spotlight on the
+            // checklist column AND the suggestion log column. The
+            // `two-halves-spotlight` token is on BOTH wrappers, and
+            // `multiSpotlight: true` opts this step into per-element
+            // rendering (one ring per column) rather than the default
+            // union behavior.
+            //
+            // Popover anchors to `two-halves-divider`, a 0-sized
+            // sentinel sitting in the gap between the two columns
+            // (added by `DesktopPlayLayout`), so the popover centers
+            // horizontally on the visual border between the halves.
+            // The body copy uses `<columns><left></left><right></right>`
+            // tags so the two descriptions sit side-by-side beneath
+            // the title — mirroring the two columns being spotlit.
+            // The dim veil is skipped on multi-spotlight steps (the
+            // box-shadow approach can't cut multiple cutouts), so the
+            // popover carries the user's attention.
+            anchor: "two-halves-spotlight",
+            multiSpotlight: true,
+            popoverAnchor: "two-halves-divider",
             titleKey: "checklist.intro.title",
             bodyKey: "checklist.intro.body",
             side: "bottom",
-            align: "start",
+            align: "center",
+            requiredUiMode: "checklist",
+            viewport: "desktop",
+        },
+        {
+            // Step 2 (mobile): "Tap Checklist to begin". The mobile
+            // viewport only shows ONE pane at a time, so we can't
+            // multi-spotlight the columns. Instead we teach the
+            // BottomNav gesture — highlight the Checklist tab and
+            // require the user to tap it. The same advance-on-tap
+            // pattern is reused before the Suggest pane.
+            //
+            // The user is already on the Checklist pane (uiMode is
+            // already "checklist" from the overflow-menu step's
+            // requiredUiMode), so tapping the tab is a no-op
+            // dispatch + tour advance. The tap teaches the gesture
+            // they'll need for the Suggest transition later.
+            anchor: "bottom-nav-checklist",
+            advanceOn: { event: "click", anchor: "bottom-nav-checklist" },
+            titleKey: "checklist.tapChecklist.title",
+            bodyKey: "checklist.tapChecklist.body",
+            side: "top",
+            align: "center",
+            requiredUiMode: "checklist",
+            viewport: "mobile",
+        },
+        {
+            // Cell intro + click prompt. Spotlights the single first
+            // cell (`checklist-cell` is only on row 0, col 0 — see
+            // Checklist.tsx). Body explains what a cell is and asks
+            // the user to tap it. `advanceOn: click` advances the
+            // tour the moment the user clicks; the cell's own click
+            // handler ALSO fires, opening the explanation row that
+            // the next step anchors against.
+            anchor: "checklist-cell",
+            advanceOn: { event: "click", anchor: "checklist-cell" },
+            titleKey: "checklist.cellIntro.title",
+            bodyKey: "checklist.cellIntro.body",
+            side: "bottom",
+            align: "center",
             sideByViewport: {
-                mobile: { side: "top", align: "center" },
-                desktop: { side: "bottom", align: "start" },
+                mobile: { side: "bottom", align: "center" },
+                desktop: { side: "right", align: "center" },
             },
             requiredUiMode: "checklist",
         },
         {
-            anchor: "checklist-cell",
-            titleKey: "checklist.cell.title",
-            bodyKey: "checklist.cell.body",
+            // Whole-panel overview. The user just tapped the cell
+            // to open the explanation panel; this step zooms out to
+            // introduce the panel as a whole BEFORE walking the
+            // three sections inside it. Spotlight covers the entire
+            // explanation row (`cell-explanation-panel` on the
+            // explanation `<td>`).
+            //
+            // Panel must be OPEN on entry. The Checklist's tour-
+            // driven effect for `checklist-cell` (cellIntro)
+            // already opened it via the native click listener; this
+            // step doesn't reset cell state, so the panel stays
+            // open across the transition. `tourKeepsCellOpen`
+            // covers this anchor too, so a stray click (ghost click
+            // or backdrop tap) can't close the panel.
+            anchor: "cell-explanation-panel",
+            titleKey: "checklist.panelIntro.title",
+            bodyKey: "checklist.panelIntro.body",
+            side: "bottom",
+            align: "center",
+            requiredUiMode: "checklist",
+        },
+        {
+            // DEDUCTIONS — first of three sections inside the
+            // cell-explanation panel. The user has just clicked the
+            // cell to open the panel; if they somehow close it
+            // before this step renders, the anchor won't resolve and
+            // the popover falls back to its default position.
+            //
+            // Popover side: bottom — DEDUCTIONS sits at the top of
+            // the explanation row (full-width on desktop, top of
+            // the vertical stack on mobile), so the popover goes
+            // BELOW the section and the user can read the section +
+            // popover in reading order.
+            anchor: "cell-explanation-deductions",
+            titleKey: "checklist.deductions.title",
+            bodyKey: "checklist.deductions.body",
             side: "bottom",
             align: "start",
             requiredUiMode: "checklist",
         },
         {
+            // LEADS — second section.
+            anchor: "cell-explanation-leads",
+            titleKey: "checklist.leads.title",
+            bodyKey: "checklist.leads.body",
+            side: "bottom",
+            align: "start",
+            requiredUiMode: "checklist",
+        },
+        {
+            // HYPOTHESIS — third section. Popover side: bottom
+            // because the auto-scroll centers the section in the
+            // viewport and there's room below. A side: top popover
+            // ran off the viewport top in testing because the
+            // auto-scroll positioned HYPOTHESIS near the top edge.
+            anchor: "cell-explanation-hypothesis",
+            titleKey: "checklist.hypothesis.title",
+            bodyKey: "checklist.hypothesis.body",
+            side: "bottom",
+            align: "end",
+            requiredUiMode: "checklist",
+        },
+        {
+            // Tap the cell again to close the panel. Anchored to the
+            // `checklist-cell-close` token (a sibling of
+            // `checklist-cell` on the same (0,0) cell) so the
+            // Checklist's tour-driven effect can differentiate
+            // open-intent (cellIntro) from close-intent (this step)
+            // — the entry effect opens the cell here, and installs a
+            // native click listener that closes the cell on tap. The
+            // tour's advance-on-click listener fires alongside.
+            //
+            // Ordered BEFORE caseFile so the user dismisses the
+            // explanation panel here, and the case-file step shows
+            // with the grid fully visible (no explanation row in the
+            // way of the player columns just below the case-file
+            // summary).
+            //
+            // tourKeepsCellOpen is INTENTIONALLY false on this anchor
+            // so the cell's onClick + outside-click handler don't
+            // suppress the close — we WANT the user's tap to close.
+            anchor: "checklist-cell-close",
+            advanceOn: { event: "click", anchor: "checklist-cell-close" },
+            titleKey: "checklist.cellClose.title",
+            bodyKey: "checklist.cellClose.body",
+            side: "bottom",
+            align: "center",
+            sideByViewport: {
+                mobile: { side: "bottom", align: "center" },
+                desktop: { side: "right", align: "center" },
+            },
+            requiredUiMode: "checklist",
+        },
+        {
+            // Case file — comes AFTER cellClose so the explanation
+            // panel is dismissed by this point; the case-file
+            // summary sits above the player columns and reads
+            // cleanly without the explanation row spilling beneath
+            // it. The copy says "section" (not "column") because
+            // the case-file widget isn't a column in any layout
+            // sense — it's a horizontal summary above the player
+            // columns.
             anchor: "checklist-case-file",
             titleKey: "checklist.caseFile.title",
             bodyKey: "checklist.caseFile.body",
@@ -280,39 +547,45 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             requiredUiMode: "checklist",
         },
         {
-            // M10 — swap-discoverability second half. Mirror of the
-            // intro step but spotlights the Suggest side. Mobile
-            // anchor is the BottomNav Suggest tab (still visible
-            // while the user is on checklist mode); desktop anchor
-            // covers the sticky right column. Popover anchor on
-            // desktop is the suggest form header — small element
-            // at the top of the column for stable popover placement.
-            //
-            // Replaces the older mobile-only `gotoSuggest` wayfinding
-            // step. The auto-swap to suggest pane still happens on
-            // the NEXT step's `requiredUiMode: "suggest"` transition.
+            // Step 9 (desktop): Suggest pane intro. The suggestion log
+            // lives in the right column. Popover anchors to the column
+            // wrapper itself with `side: "left", align: "center"` so
+            // it sits to the LEFT of the suggest log, pointing at the
+            // center of its left edge — clear of every form control
+            // inside the column. The arrow on the popover's right
+            // edge points back into the suggestion log.
             anchor: "desktop-suggest-area",
-            anchorByViewport: {
-                mobile: "bottom-nav-suggest",
-                desktop: "desktop-suggest-area",
-            },
-            popoverAnchor: "suggest-add-form-header",
+            popoverAnchor: "desktop-suggest-area",
             titleKey: "suggest.intro.title",
             bodyKey: "suggest.intro.body",
-            side: "top",
+            side: "left",
             align: "center",
-            sideByViewport: {
-                mobile: { side: "top", align: "center" },
-                desktop: { side: "bottom", align: "end" },
-            },
             requiredUiMode: "checklist",
+            viewport: "desktop",
         },
         {
-            // The user sees the suggestion log BEFORE we point at
-            // the form to add the first one. Order matters —
-            // landing on the form last lets the wrap-up step's
-            // "Add the first suggestion of the game" CTA dovetail
-            // straight into doing it.
+            // Step 9 (mobile): "Tap Suggest to switch to that pane".
+            // Required for mobile because the suggest pane isn't
+            // visible — the user has to swap. Same advance-on-tap
+            // pattern as step 2-mobile.
+            //
+            // requiredUiMode stays "checklist" because the user is
+            // currently on the checklist pane. Tapping Suggest fires
+            // both the BottomNav onClick (setUiMode "suggest") AND
+            // the tour advance — the next step's requiredUiMode is
+            // "suggest" and that dispatch is now a no-op.
+            anchor: "bottom-nav-suggest",
+            advanceOn: { event: "click", anchor: "bottom-nav-suggest" },
+            titleKey: "suggest.tapSuggest.title",
+            bodyKey: "suggest.tapSuggest.body",
+            side: "top",
+            align: "center",
+            requiredUiMode: "checklist",
+            viewport: "mobile",
+        },
+        {
+            // Prior log — sits below the add form. Popover above so
+            // it doesn't push off the page bottom on tall logs.
             anchor: "suggest-prior-log",
             titleKey: "suggest.priorLog.title",
             bodyKey: "suggest.priorLog.body",
@@ -321,26 +594,30 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             requiredUiMode: "suggest",
         },
         {
-            // Wrap-up step doubles as the call-to-action: "add the
-            // first suggestion of the game". The `finishLabelKey`
-            // override flips the next-button copy from generic
-            // "Finish" to "Start playing" so the user reads it as
-            // a continuation, not a chore.
+            // Wrap-up + CTA. Spotlight rings the whole add form.
             //
-            // Spotlight + popover both anchor to the whole form so
-            // the spotlight rings the user's target while the
-            // popover stays OUTSIDE that target. On desktop the
-            // form sits high in the right column so popover goes
-            // above it; on mobile the form sits at the top of the
-            // pane, so popover goes below it. Either way the
-            // spotlight + popover don't overlap.
+            // Desktop: popover anchors to the Suggester pill
+            // (`suggest-first-pill` — the first input the user will
+            // fill in) and sits to the LEFT of it so the popover
+            // doesn't occlude any of the form controls. The arrow on
+            // the popover's right edge points back at the first pill.
+            //
+            // Mobile: popover anchors to the small form header and
+            // sits below the form's tab header, INSIDE the spotlight
+            // — the form is taller than the room available outside it
+            // on phone-height viewports, so an external popover gets
+            // clipped. The arrow points into the form's tab header.
             anchor: "suggest-add-form",
+            popoverAnchorByViewport: {
+                desktop: "suggest-first-pill",
+                mobile: "suggest-add-form-header",
+            },
             titleKey: "suggest.addForm.title",
             bodyKey: "suggest.addForm.body",
-            side: "top",
-            align: "end",
+            side: "bottom",
+            align: "center",
             sideByViewport: {
-                desktop: { side: "top", align: "end" },
+                desktop: { side: "left", align: "center" },
                 mobile: { side: "bottom", align: "center" },
             },
             requiredUiMode: "suggest",
@@ -348,48 +625,19 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
         },
     ],
     /**
-     * One-step popover that fires the first time the user logs a
-     * suggestion in any game.
-     *
-     * Spotlight (`anchorByViewport`):
-     *   - mobile: the BottomNav Checklist tab. The user is on the
-     *     suggest pane post-submit; spotlight + popover prompt them
-     *     to tap over to the checklist.
-     *   - desktop: the WHOLE deduction grid wrapper
-     *     (`desktop-checklist-area`). Both panes are visible; the
-     *     spotlight rings the entire area where the user's
-     *     attention should land. The exact details inside the grid
-     *     don't matter — the user just needs a "look here" cue.
-     *
-     * Popover (`popoverAnchor`):
-     *   - desktop: anchored to the case-file summary box
-     *     (`checklist-case-file`) — small + well-positioned at the
-     *     top of the checklist, so the popover sits below it
-     *     comfortably. The popover lives INSIDE the spotlight area
-     *     which is fine: nothing important is being obscured (the
-     *     summary itself remains visible above the popover).
-     *   - mobile: `checklist-case-file` doesn't exist on mobile
-     *     (the checklist pane isn't mounted), so the popover falls
-     *     back to the spotlight anchor — the BottomNav tab. Popover
-     *     sits above the tab.
-     *
-     * Same 4-week re-engage cadence as the other tours via
-     * `useTourGate`.
+     * Event-triggered one-step popover after the user logs their
+     * first suggestion in any game. Blocking like every other tour
+     * step — the post-event moment is meant to draw the user's eye
+     * back to the grid; if they could keep clicking, a misclick
+     * elsewhere would steal focus from what the popover is pointing at.
      */
     firstSuggestion: [
         {
-            // `anchor` is a fallback for SSR + tests where matchMedia
-            // hasn't run yet; `anchorByViewport` wins on the client.
             anchor: "first-suggestion-checklist",
             anchorByViewport: {
                 mobile: "bottom-nav-checklist",
                 desktop: "desktop-checklist-area",
             },
-            // Popover anchors to the case-file summary on desktop
-            // (small, top of the checklist). On mobile this token
-            // resolves to no element, so the popover falls back to
-            // the spotlight anchor (the BottomNav tab) via
-            // `popoverMeasure`'s fallback path.
             popoverAnchor: "checklist-case-file",
             titleKey: "firstSuggestion.checklist.title",
             bodyKey: "firstSuggestion.checklist.body",
@@ -399,59 +647,71 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
                 mobile: { side: "top", align: "center" },
                 desktop: { side: "bottom", align: "start" },
             },
-            // Single-step tour ends with a "Got it" CTA — no
-            // back-button context, just an acknowledgement.
             finishLabelKey: "gotIt",
-            // Desktop: the popover sits INSIDE the wide checklist
+            // Desktop popover lives INSIDE the wide checklist
             // spotlight, so the arrow has nothing meaningful to
-            // point at — hide it. Mobile: the popover sits ABOVE
-            // the BottomNav Checklist tab (outside the small
-            // spotlight on the tab), so the arrow IS pointing at
-            // something useful — keep it.
+            // point at — hide it. Mobile popover sits ABOVE the
+            // BottomNav tab, outside its spotlight — arrow stays.
             hideArrow: { desktop: true },
         },
     ],
     /**
-     * Follow-up tour that calls out the three ways to share. Fires on
-     * the user's *next* visit to the Setup pane after they've already
-     * dismissed the setup AND checklistSuggest tours — by then they
-     * understand the app well enough to care about the share
-     * affordances. See `TOUR_PREREQUISITES` below.
+     * Follow-up tour for sharing affordances. The previous version
+     * pointed at a per-pack pill share button + a setup invite link,
+     * both of which moved during the M22 rework. The new design opens
+     * the overflow menu and walks the user through the three sharing
+     * affordances that live there:
+     *   - Invite a player (set someone else up with their own solver)
+     *   - Continue on another device (move your in-progress game)
+     *   - My card packs (save + share custom decks)
      *
-     * Doesn't redirect: per `StartupCoordinator`'s `decideTourDispatch`
-     * rule, only the setup tour pulls the user off their current
-     * screen. If a returning user lands on /play?view=checklist, the
-     * sharing tour waits for them to navigate to setup themselves.
+     * All four steps force the menu open via `forceOpenOverflowMenu`
+     * and spotlight a specific menu item via the new
+     * `menu-item-*` anchors emitted by `OverflowMenu`'s per-item
+     * tour-anchor prop. The popover sits to the left of the menu on
+     * desktop (menu opens DOWN from the top-right Toolbar trigger)
+     * and ABOVE the menu on mobile (menu opens UP from the BottomNav
+     * trigger).
      */
     sharing: [
         {
-            // Anchored at the share button on the FIRST pack pill (Classic
-            // by default). Popover phrases as "any pack" so the user
-            // generalizes from the example to their custom packs.
-            anchor: "setup-share-pack-pill",
-            titleKey: "sharing.pack.title",
-            bodyKey: "sharing.pack.body",
-            side: "bottom",
-            align: "start",
-        },
-        {
-            // The "Invite a player" link beside Start playing in the
-            // Game-setup intro card.
-            anchor: "setup-invite-player",
+            // Step 1 — "Invite a player" callout.
+            anchor: "menu-item-invite-player",
+            forceOpenOverflowMenu: true,
             titleKey: "sharing.invite.title",
             bodyKey: "sharing.invite.body",
-            side: "bottom",
-            align: "end",
+            side: "left",
+            align: "start",
+            sideByViewport: {
+                mobile: { side: "top", align: "end" },
+                desktop: { side: "left", align: "start" },
+            },
         },
         {
-            // Same overflow-menu anchor + forceOpen wiring as the setup
-            // tour's overflow step — Toolbar / BottomNav both observe
-            // `currentStep?.anchor === "overflow-menu"` and open the
-            // menu programmatically while this step is active.
-            anchor: "overflow-menu",
-            titleKey: "sharing.overflow.title",
-            bodyKey: "sharing.overflow.body",
-            popoverAnchorPriority: "last-visible",
+            // Step 2 — "Continue on another device" callout.
+            anchor: "menu-item-transfer-device",
+            forceOpenOverflowMenu: true,
+            titleKey: "sharing.transfer.title",
+            bodyKey: "sharing.transfer.body",
+            side: "left",
+            align: "start",
+            sideByViewport: {
+                mobile: { side: "top", align: "end" },
+                desktop: { side: "left", align: "start" },
+            },
+        },
+        {
+            // Step 3 — "My card packs" callout. This is the only
+            // menu item that opens a modal (the Account modal),
+            // where the user can save / share / rename / delete
+            // custom card packs. The body copy mentions that you
+            // can share packs from there too — wrapping the share
+            // story into a single tour rather than threading a
+            // share-a-pack callout into the checklistSuggest tour.
+            anchor: "menu-item-my-card-packs",
+            forceOpenOverflowMenu: true,
+            titleKey: "sharing.myCardPacks.title",
+            bodyKey: "sharing.myCardPacks.body",
             side: "left",
             align: "start",
             sideByViewport: {

@@ -88,11 +88,31 @@ function DesktopPlayLayout() {
                 anchor is intentionally on the sticky outer wrapper
                 (not on `<SuggestionLogPanel>` itself) so the
                 spotlight covers the visible viewport-pinned region
-                even after vertical scroll. */}
+                even after vertical scroll.
+
+                A 0-sized sentinel inside the wrapper sits 10px to the
+                left of the suggest column (= the middle of the
+                `gap-5` between checklist and suggest). The two-halves
+                tour step anchors its popover to `two-halves-divider`
+                so the popover centers horizontally on the visual
+                border between the two halves — mirroring the
+                two-column body copy that describes each half. The
+                sentinel rides the sticky wrapper, so the popover
+                stays put as the user scrolls. */}
             <div
-                data-tour-anchor="desktop-suggest-area"
+                data-tour-anchor="desktop-suggest-area two-halves-spotlight"
                 className="sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))] max-h-[calc(100dvh-var(--contradiction-banner-offset,0px)-var(--header-offset,0px)-1rem)] min-w-0 overflow-y-auto"
             >
+                <div
+                    aria-hidden
+                    data-tour-anchor="two-halves-divider"
+                    /* 1×1 px so `pickPopoverRect` doesn't filter
+                       this out as a zero-area rect (it ignores
+                       width/height of 0). Visually undetectable;
+                       `pointer-events: none` keeps it from
+                       intercepting clicks. */
+                    className="pointer-events-none absolute -left-2.5 top-0 h-px w-px"
+                />
                 <SuggestionLogPanel />
             </div>
         </div>

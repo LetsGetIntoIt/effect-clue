@@ -475,12 +475,24 @@ export function SetupWizard() {
                 "sticky bottom-0 z-[1] flex flex-wrap items-center gap-2 " +
                 "rounded-b-[var(--radius)] border-t border-border/30 " +
                 "bg-panel px-4 py-3 " +
-                "[padding-bottom:calc(env(safe-area-inset-bottom,0px)+0.75rem)]"
+                "[padding-bottom:calc(env(safe-area-inset-bottom,0px)+0.75rem)] " +
+                // On mobile setup mode the BottomNav (~56px tall, plus the
+                // device safe-area for the iOS home-bar) is fixed at the
+                // viewport bottom. Without an offset the sticky footer's
+                // Skip / Next buttons render UNDER the BottomNav and become
+                // unclickable. Pin the footer above the BottomNav on mobile;
+                // drop the in-footer safe-area padding too since the
+                // BottomNav already inset its own (double-padding would
+                // bloat the footer's height for no visual gain). Desktop
+                // hides the BottomNav, so the original `bottom: 0` +
+                // safe-area padding-bottom still applies there.
+                "[@media(max-width:799px)]:[bottom:calc(56px+env(safe-area-inset-bottom,0px))] " +
+                "[@media(max-width:799px)]:[padding-bottom:0.75rem]"
             }
         >
             <button
                 type="button"
-                className="tap-target-compact text-tap-compact shrink-0 cursor-pointer rounded border border-border bg-bg hover:bg-hover"
+                className="tap-target-compact text-tap-compact shrink-0 cursor-pointer rounded border border-border bg-control hover:bg-hover"
                 onClick={onStartOver}
             >
                 {t("newGame")}
@@ -488,7 +500,7 @@ export function SetupWizard() {
             <div className="ml-auto flex items-center gap-2">
                 <button
                     type="button"
-                    className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-bg hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+                    className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-control hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
                     onClick={onClickSkip}
                     disabled={!skipEnabled}
                 >
@@ -512,7 +524,10 @@ export function SetupWizard() {
 
     return (
         <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4">
-            <header className="flex flex-col gap-1">
+            <header
+                className="flex flex-col gap-1"
+                data-tour-anchor="setup-wizard-header"
+            >
                 <h2 className="m-0 text-[1.5rem] uppercase tracking-[0.05em] text-accent">
                     {t("heading")}
                 </h2>

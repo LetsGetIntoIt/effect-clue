@@ -270,7 +270,7 @@ function SuggestedRow({
                     type="button"
                     onClick={onDismiss}
                     aria-label={dismissAria}
-                    className="rounded p-1 text-muted hover:bg-bg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="rounded p-1 text-muted hover:bg-control focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     data-action="dismiss"
                 >
                     <XIcon size={16} />
@@ -368,7 +368,7 @@ const cellLayoutId = (cell: Cell): string => {
 const CONFIDENCE_PILL_CLASSES: Readonly<Record<InsightConfidence, string>> = {
     high: "bg-yes-bg text-yes",
     med: "bg-row-header text-fg",
-    low: "bg-bg text-muted",
+    low: "bg-control text-muted",
 };
 
 // i18n key per confidence level. Kept as a typed constant so the
