@@ -185,10 +185,20 @@ export function SetupStepPanel({
                                 total: totalSteps,
                             })}
                         </span>
+                        {/* Narrow-viewport summary: stacks below the
+                          * step counter when there isn't horizontal
+                          * room for the title + side-summary combo.
+                          * Hidden on wider screens, where the right-
+                          * aligned span below takes over. */}
+                        {isComplete && (
+                            <span className="mt-0.5 text-[1rem] text-muted [@media(min-width:520px)]:hidden">
+                                {summary}
+                            </span>
+                        )}
                     </div>
                 </div>
                 {isComplete && (
-                    <span className="shrink-0 text-[1rem] text-muted">
+                    <span className="hidden shrink-0 text-[1rem] text-muted [@media(min-width:520px)]:inline">
                         {summary}
                     </span>
                 )}
