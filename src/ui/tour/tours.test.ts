@@ -111,33 +111,37 @@ describe("TOURS — setup tour", () => {
 });
 
 describe("TOURS — checklistSuggest tour", () => {
-    test("registry holds 12 entries: 2 viewport-split (two-halves + suggest-pane intro) + the shared steps", () => {
-        // Two pairs of steps are viewport-locked: the two-halves intro
-        // (multi-spotlight on desktop, tap-Checklist on mobile) and
-        // the suggest-pane intro (desktop info step, tap-Suggest on
-        // mobile). They're filtered out at runtime per viewport so
-        // each user sees 12 steps total. The unfiltered registry has
-        // 14 entries (2 pairs × 2 + 10 shared steps).
-        expect(TOURS.checklistSuggest).toHaveLength(14);
+    test("registry holds 15 entries: two-halves pair (desktop spotlight + mobile spotlight + mobile tap) + suggest-pane pair + shared steps", () => {
+        // The two-halves intro is split three ways: a desktop multi-
+        // spotlight on the pane columns, a mobile multi-spotlight on
+        // the BottomNav tabs, and a mobile-only tap-Checklist step
+        // that follows the mobile multi-spotlight to teach the
+        // gesture. The suggest-pane intro is a viewport-locked pair
+        // (desktop info / mobile tap-Suggest). The unfiltered
+        // registry holds 15 entries; each viewport sees 12 (desktop)
+        // / 13 (mobile) after the filter.
+        expect(TOURS.checklistSuggest).toHaveLength(15);
     });
 
     test("registry anchors in order, including viewport-locked pairs", () => {
         // Pinned in declaration order:
         //   1. overflow-menu (both)
         //   2. two-halves-spotlight (desktop)
-        //   3. bottom-nav-checklist (mobile)
-        //   4. checklist-cell (both — advance-on-click, OPEN)
-        //   5. cell-explanation-panel (both — whole-panel intro)
-        //   6-8. cell-explanation-{deductions,leads,hypothesis} (both)
-        //   9. checklist-cell-close (both — advance-on-click, CLOSE)
-        //  10. checklist-case-file (both — panel already dismissed)
-        //  11. desktop-suggest-area (desktop)
-        //  12. bottom-nav-suggest (mobile)
-        //  13. suggest-prior-log (both)
-        //  14. suggest-add-form (both)
+        //   3. bottom-nav-two-halves (mobile, multi-spotlight)
+        //   4. bottom-nav-checklist (mobile, tap-to-advance)
+        //   5. checklist-cell (both — advance-on-click, OPEN)
+        //   6. cell-explanation-panel (both — whole-panel intro)
+        //   7-9. cell-explanation-{deductions,leads,hypothesis} (both)
+        //  10. checklist-cell-close (both — advance-on-click, CLOSE)
+        //  11. checklist-case-file (both — panel already dismissed)
+        //  12. desktop-suggest-area (desktop)
+        //  13. bottom-nav-suggest (mobile)
+        //  14. suggest-prior-log (both)
+        //  15. suggest-add-form (both)
         expect(TOURS.checklistSuggest.map(s => s.anchor)).toEqual([
             "overflow-menu",
             "two-halves-spotlight",
+            "bottom-nav-two-halves",
             "bottom-nav-checklist",
             "checklist-cell",
             "cell-explanation-panel",
@@ -176,7 +180,37 @@ describe("TOURS — checklistSuggest tour", () => {
         expect(step.requiredUiMode).toBe("checklist");
     });
 
-    test("mobile two-halves step asks the user to tap Checklist (advance-on-click)", () => {
+    test("mobile two-halves step is a multi-spotlight on both BottomNav tabs, reusing the desktop intro copy", () => {
+        const step = findStep(
+            TOURS.checklistSuggest,
+            "bottom-nav-two-halves",
+        );
+        // Mobile mirror of the desktop `two-halves-spotlight` step.
+        // `bottom-nav-two-halves` is attached to BOTH NavTabItem
+        // buttons; the spotlight renderer paints two separate rings.
+        // The popover anchors to `bottom-nav-two-halves-divider`, a
+        // 1×1 sentinel sitting between the two tabs, so the popover
+        // centers above the visual border between the halves.
+        expect(step.viewport).toBe("mobile");
+        expect(step.multiSpotlight).toBe(true);
+        expect(step.popoverAnchor).toBe("bottom-nav-two-halves-divider");
+        // No `advanceOn`: the step is informational and the user
+        // advances via Next. The window-level click filter blocks
+        // taps on the underlying tabs.
+        expect(step.advanceOn).toBeUndefined();
+        // Copy is reused from the desktop two-halves step — same
+        // two-column body lays out under the title on both
+        // viewports.
+        expect(step.titleKey).toBe("checklist.intro.title");
+        expect(step.bodyKey).toBe("checklist.intro.body");
+        expect(step.requiredUiMode).toBe("checklist");
+    });
+
+    test("mobile tap-Checklist step follows the two-halves intro (advance-on-click)", () => {
+        // After the mobile multi-spotlight introduces the two halves
+        // in the abstract, this step spotlights the Checklist tab
+        // alone and asks the user to tap it — teaching the BottomNav
+        // gesture they'll need at the Suggest transition later.
         const step = findStep(TOURS.checklistSuggest, "bottom-nav-checklist");
         expect(step.viewport).toBe("mobile");
         expect(step.advanceOn).toEqual({
@@ -287,23 +321,47 @@ describe("TOURS — checklistSuggest tour", () => {
 });
 
 describe("TOURS — firstSuggestion tour", () => {
-    test("has exactly one step", () => {
-        expect(TOURS.firstSuggestion).toHaveLength(1);
+    test("registry holds 2 entries: a mobile-only tap-Checklist step + the shared see-updates step", () => {
+        // The user just submitted their first suggestion. On mobile
+        // they're on the Suggest pane and can't see the Checklist
+        // update without navigating; step 1 (mobile-only) prompts
+        // them to tap the Checklist tab. Step 2 fires on both
+        // viewports and points at the case-file where the update
+        // is most visible. Desktop sees just step 2 (1 step total);
+        // mobile sees both (2 steps total).
+        expect(TOURS.firstSuggestion).toHaveLength(2);
     });
 
-    test("desktop spotlight covers the WHOLE checklist; mobile points at the BottomNav Checklist tab", () => {
+    test("mobile step 1 prompts the user to tap the Checklist tab (advance-on-click, mobile-only)", () => {
         const step = TOURS.firstSuggestion[0]!;
+        expect(step.viewport).toBe("mobile");
+        expect(step.anchor).toBe("bottom-nav-checklist");
+        expect(step.advanceOn).toEqual({
+            event: "click",
+            anchor: "bottom-nav-checklist",
+        });
+        expect(step.titleKey).toBe("firstSuggestion.tapChecklist.title");
+        expect(step.bodyKey).toBe("firstSuggestion.tapChecklist.body");
+    });
+
+    test("see-updates step spotlights the case-file on mobile / the whole checklist column on desktop", () => {
+        const step = TOURS.firstSuggestion[1]!;
+        // Mobile: the user is on the Checklist pane post step 1, so
+        // the spotlight lands on the case-file where a first
+        // suggestion typically produces visible updates.
+        expect(step.anchorByViewport?.mobile).toBe("checklist-case-file");
+        // Desktop: both panes are side-by-side; the spotlight covers
+        // the entire Checklist column.
         expect(step.anchorByViewport?.desktop).toBe("desktop-checklist-area");
-        expect(step.anchorByViewport?.mobile).toBe("bottom-nav-checklist");
     });
 
-    test("popover anchors to the case-file summary on desktop; falls back to the spotlight on mobile", () => {
-        const step = TOURS.firstSuggestion[0]!;
+    test("see-updates step anchors its popover at the case-file summary on both viewports", () => {
+        const step = TOURS.firstSuggestion[1]!;
         expect(step.popoverAnchor).toBe("checklist-case-file");
     });
 
-    test("sideByViewport pins desktop=bottom (below case-file box), mobile=top (above BottomNav tab)", () => {
-        const step = TOURS.firstSuggestion[0]!;
+    test("see-updates step pins desktop=bottom (below case-file), mobile=top (above case-file)", () => {
+        const step = TOURS.firstSuggestion[1]!;
         expect(step.sideByViewport?.desktop).toEqual({
             side: "bottom",
             align: "start",
@@ -314,9 +372,24 @@ describe("TOURS — firstSuggestion tour", () => {
         });
     });
 
-    test("hideArrow on desktop only (popover sits inside spotlight on desktop; arrow is useful on mobile)", () => {
-        expect(TOURS.firstSuggestion[0]!.hideArrow?.desktop).toBe(true);
-        expect(TOURS.firstSuggestion[0]!.hideArrow?.mobile).toBeUndefined();
+    test("see-updates step locks the Checklist pane via requiredUiMode (mobile guard for Back nav)", () => {
+        // Step 1 only fires on mobile; if a mobile user uses Back
+        // from step 2 → step 1 → forward, they need to land back on
+        // the Checklist pane before step 2 anchors against the case
+        // file. requiredUiMode handles that.
+        const step = TOURS.firstSuggestion[1]!;
+        expect(step.requiredUiMode).toBe("checklist");
+    });
+
+    test("see-updates step hides arrow on desktop only (popover sits inside the spotlight)", () => {
+        const step = TOURS.firstSuggestion[1]!;
+        expect(step.hideArrow?.desktop).toBe(true);
+        expect(step.hideArrow?.mobile).toBeUndefined();
+    });
+
+    test("see-updates step closes the tour with a 'Got it' CTA", () => {
+        const step = TOURS.firstSuggestion[1]!;
+        expect(step.finishLabelKey).toBe("gotIt");
     });
 
 });

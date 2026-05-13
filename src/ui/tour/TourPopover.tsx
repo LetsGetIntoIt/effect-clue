@@ -49,6 +49,7 @@ import { ProseChecklistIcon } from "../components/CellGlyph";
 import { XIcon } from "../components/Icons";
 import { Y, N } from "../../logic/Knowledge";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
+import { suppressNextScrollRestore } from "../scrollMemory";
 import { useClue } from "../state";
 import {
     findAnchorElements,
@@ -243,6 +244,12 @@ export function TourPopover() {
     useEffect(() => {
         if (!currentStep?.requiredUiMode) return;
         if (state.uiMode === currentStep.requiredUiMode) return;
+        // Set the suppression BEFORE the dispatch so it's in place
+        // before React re-renders with the new uiMode and the per-
+        // view restore effect (`src/ui/Clue.tsx`) fires. Otherwise
+        // the restore (two rAFs ≈ 32ms) would override the tour's
+        // own scroll-to-anchor and the popover would anchor offscreen.
+        suppressNextScrollRestore(currentStep.requiredUiMode);
         dispatch({ type: "setUiMode", mode: currentStep.requiredUiMode });
     }, [currentStep, state.uiMode, dispatch]);
 

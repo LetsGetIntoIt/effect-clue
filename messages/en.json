@@ -675,6 +675,10 @@
             }
         },
         "firstSuggestion": {
+            "tapChecklist": {
+                "title": "See what your suggestion did",
+                "body": "Your suggestion is logged. <strong>Tap the Checklist tab to see what the solver figured out.</strong>"
+            },
             "checklist": {
                 "title": "See updated deductions on the checklist",
                 "body": "The solver re-runs after every suggestion — your next deduction may already be on the board."

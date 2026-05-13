@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
+    consumeScrollRestoreSuppression,
     getScroll,
     recordScroll,
     resetScrollMemory,
+    suppressNextScrollRestore,
     touchScrollMemory,
 } from "./scrollMemory";
 
@@ -97,5 +99,41 @@ describe("scrollMemory TTL", () => {
         // valid for the next 2 minutes — reset doesn't poison the slot.
         recordScroll("checklist", 300);
         expect(getScroll("checklist")).toBe(300);
+    });
+});
+
+describe("scrollMemory suppression", () => {
+    test("consume returns true once after suppress, false thereafter", () => {
+        suppressNextScrollRestore("suggest");
+        expect(consumeScrollRestoreSuppression("suggest")).toBe(true);
+        expect(consumeScrollRestoreSuppression("suggest")).toBe(false);
+    });
+
+    test("consume returns false when no suppression is pending", () => {
+        expect(consumeScrollRestoreSuppression("checklist")).toBe(false);
+    });
+
+    test("suppression is per-mode — suggest does not affect checklist", () => {
+        suppressNextScrollRestore("suggest");
+        expect(consumeScrollRestoreSuppression("checklist")).toBe(false);
+        expect(consumeScrollRestoreSuppression("suggest")).toBe(true);
+    });
+
+    test("suppression does not clobber the saved y", () => {
+        recordScroll("suggest", 420);
+        suppressNextScrollRestore("suggest");
+        // Caller is expected to skip the restore when consume returns
+        // true. The saved y stays available for the next non-
+        // suppressed call.
+        expect(consumeScrollRestoreSuppression("suggest")).toBe(true);
+        expect(getScroll("suggest")).toBe(420);
+    });
+
+    test("resetScrollMemory clears pending suppressions", () => {
+        suppressNextScrollRestore("suggest");
+        suppressNextScrollRestore("checklist");
+        resetScrollMemory();
+        expect(consumeScrollRestoreSuppression("suggest")).toBe(false);
+        expect(consumeScrollRestoreSuppression("checklist")).toBe(false);
     });
 });

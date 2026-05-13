@@ -401,12 +401,46 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             viewport: "desktop",
         },
         {
-            // Step 2 (mobile): "Tap Checklist to begin". The mobile
-            // viewport only shows ONE pane at a time, so we can't
-            // multi-spotlight the columns. Instead we teach the
-            // BottomNav gesture — highlight the Checklist tab and
-            // require the user to tap it. The same advance-on-tap
-            // pattern is reused before the Suggest pane.
+            // Step 2 (mobile): Two halves — multi-spotlight on the
+            // two BottomNav tabs. Mobile only shows ONE pane at a
+            // time, so we can't spotlight the two pane columns
+            // directly the way desktop does; instead we light up the
+            // two TABS that route to those panes, giving the same
+            // two-halves framing in the only place both halves are
+            // visible at once. Reuses `checklist.intro.title/body`
+            // so the desktop and mobile messages stay in lockstep —
+            // the `<columns>` rich-tag body lays out as two columns
+            // beneath the title regardless of viewport.
+            //
+            // No `advanceOn`: this step is informational. The
+            // window-level click filter that normally blocks page
+            // taps during a tour also blocks taps on the tabs here,
+            // so the user can't accidentally switch panes — they
+            // read the framing and press Next. Step 3 (below) is
+            // where the tap-to-advance gesture gets introduced.
+            //
+            // `bottom-nav-two-halves` is on BOTH tabs;
+            // `bottom-nav-two-halves-divider` is a 1×1 sentinel
+            // sitting between them so the popover centers above the
+            // visual border between the halves. Mirror of the
+            // desktop step's `two-halves-spotlight` /
+            // `two-halves-divider` pattern.
+            anchor: "bottom-nav-two-halves",
+            multiSpotlight: true,
+            popoverAnchor: "bottom-nav-two-halves-divider",
+            titleKey: "checklist.intro.title",
+            bodyKey: "checklist.intro.body",
+            side: "top",
+            align: "center",
+            requiredUiMode: "checklist",
+            viewport: "mobile",
+        },
+        {
+            // Step 3 (mobile): "Tap Checklist to begin". Now that the
+            // user knows there are two halves, teach them the gesture
+            // by spotlighting the Checklist tab and requiring a tap
+            // to advance. The same advance-on-tap pattern is reused
+            // before the Suggest pane later in the tour.
             //
             // The user is already on the Checklist pane (uiMode is
             // already "checklist" from the overflow-menu step's
@@ -639,9 +673,36 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
      */
     firstSuggestion: [
         {
+            // Mobile-only step 1: the user just submitted a first
+            // suggestion, so they're on the Suggest pane. Prompt
+            // them to tap the Checklist tab — that flip plus a tap-
+            // to-advance lands them on the Checklist pane for the
+            // next step, where the "see updated deductions"
+            // message can actually point at the updated grid.
+            //
+            // Desktop doesn't need this step: both panes are
+            // visible side-by-side so the user can see the
+            // Checklist update without navigating anywhere.
+            anchor: "bottom-nav-checklist",
+            advanceOn: { event: "click", anchor: "bottom-nav-checklist" },
+            titleKey: "firstSuggestion.tapChecklist.title",
+            bodyKey: "firstSuggestion.tapChecklist.body",
+            side: "top",
+            align: "center",
+            viewport: "mobile",
+        },
+        {
+            // "See updated deductions" — fires on both viewports.
+            // After step 1 on mobile, the user is on the Checklist
+            // pane; on desktop, both panes are always visible. The
+            // mobile spotlight lands on the case-file section
+            // (where a first suggestion typically produces visible
+            // updates), and `requiredUiMode: "checklist"` guards
+            // against the user using Back from step 2 → step 1 →
+            // forward again from a different starting pane.
             anchor: "first-suggestion-checklist",
             anchorByViewport: {
-                mobile: "bottom-nav-checklist",
+                mobile: "checklist-case-file",
                 desktop: "desktop-checklist-area",
             },
             popoverAnchor: "checklist-case-file",
@@ -653,11 +714,12 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
                 mobile: { side: "top", align: "center" },
                 desktop: { side: "bottom", align: "start" },
             },
+            requiredUiMode: "checklist",
             finishLabelKey: "gotIt",
             // Desktop popover lives INSIDE the wide checklist
             // spotlight, so the arrow has nothing meaningful to
-            // point at — hide it. Mobile popover sits ABOVE the
-            // BottomNav tab, outside its spotlight — arrow stays.
+            // point at — hide it. Mobile popover sits above the
+            // case-file spotlight, outside it — arrow stays.
             hideArrow: { desktop: true },
         },
     ],

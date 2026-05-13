@@ -80,10 +80,27 @@ export function BottomNav() {
                                 ),
                             })}
                             active={mode === "checklist"}
-                            tourAnchor="bottom-nav-checklist"
+                            tourAnchor="bottom-nav-checklist bottom-nav-two-halves"
                             onClick={() =>
                                 dispatch({ type: "setUiMode", mode: "checklist" })
                             }
+                        />
+                        {/* 1×1 sentinel sitting between the two tabs.
+                            Mirror of `two-halves-divider` in
+                            DesktopPlayLayout — the mobile "Two
+                            halves" tour step anchors its popover here
+                            so it centers above the visual border
+                            between the Checklist and Suggest tabs.
+                            `h-px w-px` is just enough area to clear
+                            `pickPopoverRect`'s zero-area filter; the
+                            ~5px it adds between the two tabs
+                            (`gap-1 + 1px + gap-1`) is negligible.
+                            `aria-hidden` + `pointer-events-none`
+                            keeps it out of a11y and click paths. */}
+                        <li
+                            aria-hidden
+                            data-tour-anchor="bottom-nav-two-halves-divider"
+                            className="pointer-events-none h-px w-px self-center"
                         />
                         <NavTabItem
                             label={t("suggest", {
@@ -93,7 +110,7 @@ export function BottomNav() {
                                 ),
                             })}
                             active={mode === "suggest"}
-                            tourAnchor="bottom-nav-suggest"
+                            tourAnchor="bottom-nav-suggest bottom-nav-two-halves"
                             onClick={() =>
                                 dispatch({ type: "setUiMode", mode: "suggest" })
                             }
