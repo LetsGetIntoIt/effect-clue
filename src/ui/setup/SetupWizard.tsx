@@ -16,6 +16,7 @@ import {
 import type { ClueState } from "../../logic/ClueState";
 import { cardSetEquals } from "../../logic/CardSet";
 import { CARD_SETS, newGameSetup } from "../../logic/GameSetup";
+import { getGamePhase } from "../../logic/GamePhase";
 import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 import { useSetupWizardFocus } from "./SetupWizardFocusContext";
@@ -380,8 +381,7 @@ export function SetupWizard() {
         (focusedSkippable || focusedValidationLevel !== "blocked");
     const nextEnabled =
         focusedStep !== null && focusedValidationLevel !== "blocked";
-    const hasGameProgress =
-        state.suggestions.length > 0 || state.accusations.length > 0;
+    const hasGameProgress = getGamePhase(state) === "gameStarted";
     const startPlayingLabel = hasGameProgress
         ? tSetup("continuePlaying", { shortcut: "" })
         : tSetup("startPlaying", { shortcut: "" });

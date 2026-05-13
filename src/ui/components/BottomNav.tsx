@@ -20,6 +20,7 @@ import { ExternalLinkIcon } from "./Icons";
 import { useInstallPromptContext } from "./InstallPromptProvider";
 import type { InstallPromptTrigger } from "../../analytics/events";
 import { OverflowMenu } from "./OverflowMenu";
+import { PlayCTAButton } from "./PlayCTAButton";
 import { useToolbarActions } from "./Toolbar";
 
 const TRIGGER_MENU: InstallPromptTrigger = "menu";

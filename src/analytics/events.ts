@@ -898,6 +898,18 @@ export const setupSelfPlayerSet = (props: {
     cleared: boolean;
 }): void => capture("setup_self_player_set", props);
 
+/**
+ * The global "Start playing" / "Continue playing" button in the
+ * chrome (Toolbar on desktop, BottomNav on mobile setup). Fires on
+ * click — the user wants to leave the Setup page for Play. The
+ * `phase` discriminates "first time" vs "returning" so the funnel
+ * can separate the two journeys.
+ */
+export const playCtaClicked = (props: {
+    readonly phase: "setupCompleted" | "gameStarted";
+    readonly variant: "toolbar" | "bottomNav";
+}): void => capture("play_cta_clicked", props);
+
 export const setupFirstDealtPlayerSet = (props: {
     auto: boolean;
 }): void => capture("setup_first_dealt_player_set", props);

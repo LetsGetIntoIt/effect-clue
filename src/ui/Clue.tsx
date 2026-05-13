@@ -41,6 +41,7 @@ import {
     saveTourVisited,
 } from "./tour/TourState";
 import { TelemetryRuntime } from "../observability/runtime";
+import { hasCardInformation } from "../logic/GamePhase";
 import { DateTime } from "effect";
 import {
     pickFirstEligibleScreenKey,
@@ -179,12 +180,11 @@ function CoordinatedShell({
 }) {
     const { hydrated, state, dispatch } = useClue();
     const activeScreen = screenKeyForUiMode(state.uiMode);
-    // Whether the hydrated game has any progress. Drives the
-    // staleGame slot's threshold choice in the coordinator.
-    const gameStarted =
-        state.knownCards.length > 0
-        || state.suggestions.length > 0
-        || state.accusations.length > 0;
+    // Whether the hydrated game has any concrete card engagement.
+    // Drives the staleGame slot's threshold choice (3-day vs 1-day)
+    // in the coordinator — broader than `phase === "gameStarted"`
+    // because knownCards entry alone counts here.
+    const gameStarted = hasCardInformation(state);
     // Translate the coordinator's precedence-redirect request back
     // into a `setUiMode` dispatch. The coordinator only fires this
     // when the highest-priority eligible tour belongs to a screen
