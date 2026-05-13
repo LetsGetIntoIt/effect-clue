@@ -164,16 +164,24 @@ describe("TourProvider — persistence on close", () => {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe("TourProvider — viewport filter", () => {
-    test("checklistSuggest exposes 12 steps on each viewport (2 pairs of viewport-locked steps + 10 shared)", () => {
-        // The walk: overflow-menu callout → two-halves intro
-        // (multi-spotlight on desktop / tap-Checklist on mobile) →
-        // cellIntro (click to OPEN) → panel intro → three cell-
-        // explanation sections (DEDUCTIONS / LEADS / HYPOTHESIS) →
-        // case-file → cellClose (click to CLOSE) → suggest intro
-        // (desktop info / tap-Suggest on mobile) → prior log →
-        // add-form CTA. The two viewport-split pairs mean the
-        // unfiltered registry has 14 entries; either viewport sees
-        // 12 after the filter.
+    test("checklistSuggest exposes 12 steps on desktop / 13 on mobile (asymmetric viewport split)", () => {
+        // The walk: overflow-menu callout → two-halves intro (one
+        // entry on desktop = multi-spotlight on pane columns; TWO
+        // entries on mobile = multi-spotlight on tabs THEN tap-
+        // Checklist) → cellIntro (click to OPEN) → panel intro →
+        // three cell-explanation sections (DEDUCTIONS / LEADS /
+        // HYPOTHESIS) → case-file → cellClose (click to CLOSE) →
+        // suggest intro (desktop info / tap-Suggest on mobile) →
+        // prior log → add-form CTA.
+        //
+        // The unfiltered registry holds 15 entries. After the
+        // viewport filter: desktop sees 12 (skips the two mobile-
+        // only entries: bottom-nav-two-halves + bottom-nav-suggest
+        // and the mobile bottom-nav-checklist), mobile sees 13
+        // (skips the desktop-only two-halves-spotlight + desktop-
+        // suggest-area). Mobile is one longer because the two-
+        // halves intro splits into TWO steps on mobile (informational
+        // multi-spotlight + tap-to-advance) vs ONE on desktop.
         stubMatchMedia(true); // desktop
         const api = mount();
         act(() => api.current().startTour("checklistSuggest"));
@@ -182,7 +190,7 @@ describe("TourProvider — viewport filter", () => {
         stubMatchMedia(false); // mobile
         const api2 = mount();
         act(() => api2.current().startTour("checklistSuggest"));
-        expect(api2.current().steps?.length).toBe(12);
+        expect(api2.current().steps?.length).toBe(13);
     });
 
     test("setup tour is a 3-step tour at both breakpoints", () => {
@@ -271,9 +279,10 @@ describe("TourProvider — analytics events", () => {
                 screenKey: "checklistSuggest",
                 stepIndex: 1,
                 // Step 1 on desktop is the two-halves multi-spotlight
-                // step (`two-halves-spotlight`). On mobile it would be
-                // the tap-Checklist step (`bottom-nav-checklist`).
-                // The test stubs matchMedia → desktop.
+                // on the pane columns (`two-halves-spotlight`). On
+                // mobile the equivalent is `bottom-nav-two-halves`
+                // (multi-spotlight on the two BottomNav tabs). The
+                // test stubs matchMedia → desktop.
                 stepId: "two-halves-spotlight",
                 isFirstStep: false,
                 isLastStep: false,

@@ -50,6 +50,7 @@ import {
     uiModeForScreenKey,
 } from "./tour/screenKey";
 import {
+    consumeScrollRestoreSuppression,
     getScroll,
     recordScroll,
     resetScrollMemory,
@@ -579,6 +580,12 @@ function TabContent() {
     useEffect(() => {
         if (prevUiMode.current === mode) return;
         prevUiMode.current = mode;
+        // The tour signals `suppressNextScrollRestore(mode)` right
+        // before its `setUiMode` dispatch so the per-view restore
+        // doesn't race the tour's own `scrollSpotlightIntoView`. When
+        // suppression is consumed, bail entirely — the tour will move
+        // the page itself.
+        if (consumeScrollRestoreSuppression(mode)) return;
         const target = getScroll(mode);
         // Two rAFs without a cleanup: React Strict Mode would
         // double-invoke this effect in dev, and a `cancelAnimationFrame`

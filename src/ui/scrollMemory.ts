@@ -28,6 +28,19 @@ const positions: Record<UiMode, ScrollSlot> = {
     suggest: emptySlot(),
 };
 
+// Pending "skip the next restore" signals, one per uiMode. The tour
+// sets this immediately before dispatching its own `setUiMode` so the
+// per-view restore yields to the tour's `scrollSpotlightIntoView`.
+// Without this gate, both systems fire on the mode change and race:
+// the per-view restore (two rAFs ≈ 32ms) overrides the tour's
+// immediate anchor scroll, and the tour's settle timers (150ms /
+// 350ms) bail because `scrolledForStepRef` is already set. Net
+// effect: the popover anchors offscreen. The suppression is one-shot
+// and per-mode — `consumeScrollRestoreSuppression` removes the entry
+// when it reads it. See CLAUDE.md's "Tour-popover verification"
+// section for the invariant.
+const suppressedRestores = new Set<UiMode>();
+
 export const recordScroll = (mode: UiMode, y: number): void => {
     positions[mode] = { y, lastVisitedAt: DateTime.nowUnsafe() };
 };
@@ -62,4 +75,25 @@ export const resetScrollMemory = (): void => {
     positions.setup = emptySlot();
     positions.checklist = emptySlot();
     positions.suggest = emptySlot();
+    suppressedRestores.clear();
+};
+
+/**
+ * Mark the NEXT restore attempt for `mode` as a no-op. Called by the
+ * tour right before it dispatches a `setUiMode` change — the tour's
+ * own `scrollSpotlightIntoView` will move the page; the per-view
+ * restore must yield rather than race.
+ */
+export const suppressNextScrollRestore = (mode: UiMode): void => {
+    suppressedRestores.add(mode);
+};
+
+/**
+ * Returns `true` (and clears the flag) if a restore for `mode` was
+ * suppressed. The restore effect calls this immediately and bails
+ * when the return is `true`. Returns `false` when no suppression was
+ * pending — the normal path.
+ */
+export const consumeScrollRestoreSuppression = (mode: UiMode): boolean => {
+    return suppressedRestores.delete(mode);
 };
