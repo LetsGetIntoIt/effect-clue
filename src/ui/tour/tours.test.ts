@@ -377,11 +377,49 @@ describe("TOUR_PREREQUISITES", () => {
     });
 });
 
-describe("TOURS — placeholder tours", () => {
-    test("account is reserved (empty step list)", () => {
-        expect(TOURS.account).toEqual([]);
+describe("TOURS — account tour (event-triggered, My card packs modal)", () => {
+    test("has five steps in declaration order", () => {
+        // Section intro → Sync now → Share / Rename / Delete on the
+        // first pack row. Per-row anchors live on the FIRST row only;
+        // empty-state users see the auto-skip path (steps 3-5
+        // silently drop because their anchors aren't mounted).
+        expect(TOURS.account.map(s => s.anchor)).toEqual([
+            "account-my-card-packs",
+            "account-sync-now",
+            "account-pack-share",
+            "account-pack-rename",
+            "account-pack-delete",
+        ]);
     });
 
+    test("closing step uses 'gotIt' finish label", () => {
+        const last = TOURS.account[TOURS.account.length - 1]!;
+        expect(last.finishLabelKey).toBe("gotIt");
+    });
+
+    test("no step is advance-on-click — passive Next-button callouts only", () => {
+        for (const step of TOURS.account) {
+            expect(step.advanceOn).toBeUndefined();
+        }
+    });
+
+    test("titleKey + bodyKey point at onboarding.account.* keys", () => {
+        const tags = ["myCardPacks", "syncNow", "sharePack", "renamePack", "deletePack"];
+        TOURS.account.forEach((step, i) => {
+            const tag = tags[i]!;
+            expect(step.titleKey).toBe(`account.${tag}.title`);
+            expect(step.bodyKey).toBe(`account.${tag}.body`);
+        });
+    });
+});
+
+describe("TOUR_PREREQUISITES (account)", () => {
+    test("account tour has no prerequisites (event-triggered, like firstSuggestion)", () => {
+        expect(TOUR_PREREQUISITES.account).toBeUndefined();
+    });
+});
+
+describe("TOURS — placeholder tours", () => {
     test("shareImport is reserved (empty step list)", () => {
         expect(TOURS.shareImport).toEqual([]);
     });

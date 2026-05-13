@@ -261,6 +261,12 @@ export interface TourStep {
  * - `sharing`: three callouts for share affordances inside the
  *   overflow menu (invite a player, transfer to another device, my
  *   card packs).
+ * - `account`: walks the My card packs section of the Account modal.
+ *   Event-triggered like `firstSuggestion` — fires on signed-in
+ *   modal mount, gated by the same 4-week dormancy. The modal is
+ *   pushed with `dismissOnOutsideClick: false` when the gate is
+ *   fresh so a backdrop tap (or iOS ghost click) can't drop the
+ *   modal out from under the walkthrough.
  *
  * Every step blocks page interaction by default — the dim veil
  * absorbs clicks and the keyboard isolator swallows non-Esc keys.
@@ -268,7 +274,7 @@ export interface TourStep {
  * use `advanceOn` to whitelist that one element; the rest of the
  * page stays blocked.
  *
- * `account` and `shareImport` remain reserved placeholders.
+ * `shareImport` remains a reserved placeholder.
  */
 export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
     setup: [
@@ -721,8 +727,74 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             finishLabelKey: "gotIt",
         },
     ],
-    // Reserved for M7 / M9 — no content yet.
-    account: [],
+    /**
+     * Event-triggered tour for the My Card Packs section of the
+     * Account modal. Fires the first time a signed-in user opens the
+     * modal (the trigger lives in `AccountModal.tsx` itself — modal
+     * mount = "modal just opened"), then locks for 4 weeks via the
+     * standard `lastDismissedAt` gate.
+     *
+     * Walks five callouts inside the modal:
+     *   1. Intro on the My card packs section header.
+     *   2. Sync now button — push local changes / pull remote ones.
+     *   3-5. The Share / Rename / Delete actions on the first pack
+     *        row. These rely on a pack existing; empty-state users
+     *        see the auto-skip path (steps 3-5 silently drop because
+     *        their anchors aren't mounted).
+     *
+     * All five steps are passive Next-button callouts — no
+     * advance-on-click — so the native-DOM-listener gotcha for
+     * touch advance-on-click doesn't apply. The modal stays open
+     * across all five steps via `AccountProvider`'s
+     * `dismissOnOutsideClick: false` push when the gate is fresh,
+     * which is the modal analog of `tourKeepsCellOpen` in
+     * Checklist.tsx — it prevents iOS ghost clicks on the backdrop
+     * from collapsing the modal out from under the walkthrough.
+     */
+    account: [
+        {
+            // Intro — spotlights the whole My card packs section.
+            anchor: "account-my-card-packs",
+            titleKey: "account.myCardPacks.title",
+            bodyKey: "account.myCardPacks.body",
+            side: "bottom",
+            align: "center",
+        },
+        {
+            // Sync now button in the section header.
+            anchor: "account-sync-now",
+            titleKey: "account.syncNow.title",
+            bodyKey: "account.syncNow.body",
+            side: "bottom",
+            align: "end",
+        },
+        {
+            // Share on the first pack row. Auto-skips for empty-state
+            // users (no rows = no anchor).
+            anchor: "account-pack-share",
+            titleKey: "account.sharePack.title",
+            bodyKey: "account.sharePack.body",
+            side: "bottom",
+            align: "end",
+        },
+        {
+            // Rename on the first pack row.
+            anchor: "account-pack-rename",
+            titleKey: "account.renamePack.title",
+            bodyKey: "account.renamePack.body",
+            side: "bottom",
+            align: "end",
+        },
+        {
+            // Delete on the first pack row. Wrap-up CTA.
+            anchor: "account-pack-delete",
+            titleKey: "account.deletePack.title",
+            bodyKey: "account.deletePack.body",
+            side: "bottom",
+            align: "end",
+            finishLabelKey: "gotIt",
+        },
+    ],
     shareImport: [],
 };
 

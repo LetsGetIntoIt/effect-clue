@@ -60,6 +60,27 @@ vi.mock("../share/ShareProvider", () => ({
         children,
 }));
 
+// AccountModal's account-tour gate effect calls `useTour()` +
+// `useStartupCoordinator()` on mount. The shared `Wrappers` in this
+// file doesn't wrap with TourProvider / StartupCoordinatorProvider,
+// so mock both — these tests don't exercise the tour gate path
+// (covered separately). The gate effect bails when `activeScreen`
+// is undefined-but-something OR `phase` is one of the bail values;
+// returning `activeScreen: "account"` here keeps the gate's "no
+// other tour active" check from firing the tour during tests.
+const startTourMock = vi.fn();
+const dismissTourMock = vi.fn();
+vi.mock("../tour/TourProvider", () => ({
+    useTour: () => ({
+        startTour: startTourMock,
+        dismissTour: dismissTourMock,
+        activeScreen: "account" as const,
+    }),
+}));
+vi.mock("../onboarding/StartupCoordinator", () => ({
+    useStartupCoordinator: () => ({ phase: "done" as const }),
+}));
+
 import * as React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DateTime } from "effect";

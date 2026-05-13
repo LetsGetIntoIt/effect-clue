@@ -20,11 +20,13 @@ import { DateTime } from "effect";
 import { useTranslations } from "next-intl";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import {
     type SignInFromContext,
     signInFailed,
     signInStarted,
 } from "../../analytics/events";
+import { TelemetryRuntime } from "../../observability/runtime";
 import {
     getMyCardPacks,
     type PersistedCardPack,
@@ -39,6 +41,17 @@ import { decodeServerPack } from "../../data/serverPackCodec";
 import type { CardSet } from "../../logic/CardSet";
 import type { CustomCardSet } from "../../logic/CustomCardSets";
 import { useSession } from "../hooks/useSession";
+import { useStartupCoordinator } from "../onboarding/StartupCoordinator";
+import { useTour } from "../tour/TourProvider";
+import {
+    computeShouldShowTour,
+    TOUR_RE_ENGAGE_DURATION,
+} from "../tour/useTourGate";
+import {
+    loadTourState,
+    saveTourDismissed,
+    saveTourVisited,
+} from "../tour/TourState";
 import {
     CardStackIcon,
     PencilIcon,
@@ -52,6 +65,11 @@ import { useCardPackActions } from "../components/cardPackActions";
 import { AccountAvatar } from "./AccountAvatar";
 import { authClient } from "./authClient";
 import { DevSignInForm } from "./DevSignInForm";
+
+const ACCOUNT_TOUR_SCREEN_KEY = "account" as const;
+// Module-scope so the `i18next/no-literal-string` lint rule reads
+// this as a wire-format discriminator, not user copy.
+const TOUR_DISMISS_VIA_CLOSE = "close" as const;
 
 export const ACCOUNT_MODAL_ID = "account" as const;
 export const ACCOUNT_MODAL_MAX_WIDTH = "min(92vw,440px)" as const;
@@ -152,6 +170,81 @@ export function AccountModal() {
     const isInFlight = useIsSyncingCardPacks();
     const isSyncing = isInFlight || myCardPacks.isFetching;
 
+    // Event-triggered tour for the My card packs section. Fires on
+    // signed-in modal mount, gated by the standard 4-week dormancy
+    // (`computeShouldShowTour` against `effect-clue.tour.account.v1`).
+    // Matches the `FirstSuggestionTourGate` pattern in `Clue.tsx`:
+    // - Reads the gate FRESH on mount (not at component-render
+    //   snapshot) so a "Restart tour" wipe takes effect immediately.
+    // - Guards against overlapping with any other active tour.
+    // - Writes BOTH `lastVisitedAt` and `lastDismissedAt` on fire so
+    //   the gate locks for the next 4 weeks.
+    // - `firedRef` suppresses StrictMode double-mount re-fires.
+    //
+    // Cleanup-on-unmount: if the user closes the modal mid-walk (X
+    // button or Esc), dismiss the tour too — its anchors all live
+    // inside the modal, so leaving the tour active after the modal
+    // unmounts would render the popover against missing elements.
+    // `activeScreenRef` keeps the cleanup pointing at the latest
+    // value without re-installing the effect.
+    const { startTour, dismissTour, activeScreen } = useTour();
+    const { phase } = useStartupCoordinator();
+    const activeScreenRef = useRef(activeScreen);
+    activeScreenRef.current = activeScreen;
+    const firedRef = useRef(false);
+    // Reads `activeScreen` and `phase` via refs so they don't end up
+    // as effect deps that would re-fire the gate on unrelated state
+    // changes (the `FirstSuggestionTourGate` reads them directly
+    // because its trigger event IS a reducer-derived value; ours is
+    // simply "modal mount").
+    const phaseRef = useRef(phase);
+    phaseRef.current = phase;
+    const startTourRef = useRef(startTour);
+    startTourRef.current = startTour;
+    useEffect(() => {
+        if (isAnon) return;
+        if (activeScreenRef.current !== undefined) return;
+        if (firedRef.current) return;
+        const currentPhase = phaseRef.current;
+        if (
+            currentPhase === "boot"
+            || currentPhase === "splash"
+            || currentPhase === "install"
+        ) {
+            return;
+        }
+        const now = DateTime.nowUnsafe();
+        const shouldShow = TelemetryRuntime.runSync(
+            computeShouldShowTour(
+                loadTourState(ACCOUNT_TOUR_SCREEN_KEY),
+                now,
+                TOUR_RE_ENGAGE_DURATION,
+            ),
+        );
+        if (!shouldShow) return;
+        firedRef.current = true;
+        startTourRef.current(ACCOUNT_TOUR_SCREEN_KEY);
+        saveTourVisited(ACCOUNT_TOUR_SCREEN_KEY, now);
+        saveTourDismissed(ACCOUNT_TOUR_SCREEN_KEY, now);
+    }, [isAnon]);
+    // Cleanup: when AccountModal unmounts (X / Esc / `pop()`), if
+    // the tour is still active on `account`, dismiss it. Read both
+    // `activeScreen` and `dismissTour` via refs so this effect mounts
+    // exactly once — `dismissTour`'s identity changes when
+    // `activeScreen` changes (the TourProvider's useCallback chain
+    // depends on it), and a re-running cleanup effect would fire
+    // dismissTour on every step transition, dismissing the tour
+    // prematurely.
+    const dismissTourRef = useRef(dismissTour);
+    dismissTourRef.current = dismissTour;
+    useEffect(() => {
+        return () => {
+            if (activeScreenRef.current === ACCOUNT_TOUR_SCREEN_KEY) {
+                dismissTourRef.current(TOUR_DISMISS_VIA_CLOSE);
+            }
+        };
+    }, []);
+
     const handleSyncNow = async (): Promise<void> => {
         await flushPendingChanges();
         await queryClient.invalidateQueries({
@@ -235,7 +328,10 @@ export function AccountModal() {
                                         </div>
                                     </div>
                                 </div>
-                                <section className="rounded-[var(--radius)] border border-border bg-white px-3 py-2">
+                                <section
+                                    data-tour-anchor="account-my-card-packs"
+                                    className="rounded-[var(--radius)] border border-border bg-white px-3 py-2"
+                                >
                                     <div className="flex items-center justify-between gap-2">
                                         <h3 className="m-0 text-[1.125rem] font-semibold text-accent">
                                             {t("myCardPacksTitle")}
@@ -244,6 +340,7 @@ export function AccountModal() {
                                             type="button"
                                             onClick={() => void handleSyncNow()}
                                             disabled={isSyncing}
+                                            data-tour-anchor="account-sync-now"
                                             className="inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--radius)] border border-border bg-white px-2 py-1 text-[1rem] text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent disabled:cursor-not-allowed"
                                         >
                                             <RefreshIcon
@@ -277,10 +374,16 @@ export function AccountModal() {
                                         </div>
                                     ) : (
                                         <ul className="m-0 mt-2 flex list-none flex-col gap-1 p-0 text-[1rem]">
-                                            {packs.map((pack) => {
+                                            {packs.map((pack, i) => {
                                                 const hasPending =
                                                     pack.unsyncedSince !==
                                                     undefined;
+                                                // Tour anchors emit on the FIRST row only — same
+                                                // pattern as `checklist-cell` on (0,0). Empty-state
+                                                // users (no packs) see steps 3-5 auto-skip via the
+                                                // tour driver's missing-anchor path; users with
+                                                // packs always have a first row to anchor against.
+                                                const isFirst = i === 0;
                                                 return (
                                                 <li
                                                     key={pack.id}
@@ -323,6 +426,12 @@ export function AccountModal() {
                                                         onClick={() =>
                                                             sharePack(pack)
                                                         }
+                                                        {...(isFirst
+                                                            ? {
+                                                                  "data-tour-anchor":
+                                                                      "account-pack-share",
+                                                              }
+                                                            : {})}
                                                         className="inline-flex cursor-pointer items-center border-l border-border px-2.5 py-1.5 text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent"
                                                         title={t("sharePackTitle", { label: pack.label })}
                                                         aria-label={t("sharePackAria", { label: pack.label })}
@@ -334,6 +443,12 @@ export function AccountModal() {
                                                         onClick={() =>
                                                             void renamePack(pack)
                                                         }
+                                                        {...(isFirst
+                                                            ? {
+                                                                  "data-tour-anchor":
+                                                                      "account-pack-rename",
+                                                              }
+                                                            : {})}
                                                         className="inline-flex cursor-pointer items-center border-l border-border px-2.5 py-1.5 text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent"
                                                         title={t("renamePackTitle", { label: pack.label })}
                                                         aria-label={t("renamePackAria", { label: pack.label })}
@@ -345,6 +460,12 @@ export function AccountModal() {
                                                         onClick={() =>
                                                             void deletePack(pack)
                                                         }
+                                                        {...(isFirst
+                                                            ? {
+                                                                  "data-tour-anchor":
+                                                                      "account-pack-delete",
+                                                              }
+                                                            : {})}
                                                         className="inline-flex cursor-pointer items-center border-l border-border px-2.5 py-1.5 text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-danger"
                                                         title={t("deletePackTitle", { label: pack.label })}
                                                         aria-label={t("deletePackAria", { label: pack.label })}
