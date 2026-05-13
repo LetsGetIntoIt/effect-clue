@@ -18,6 +18,7 @@ import {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useMemo,
     useRef,
     type ReactNode,
@@ -50,6 +51,7 @@ import {
     LOGOUT_WARNING_MODAL_ID,
     LogoutWarningModalContent,
 } from "./LogoutWarningModal";
+import { consumePendingAccountModalIntent } from "./pendingAccountModal";
 
 const ACCOUNT_TOUR_SCREEN_KEY = "account" as const;
 
@@ -268,6 +270,43 @@ export function AccountProvider({
             });
         });
     }, [performCommitSignOut, showLogoutWarning]);
+
+    // Re-open the Account modal after a Google OAuth round-trip.
+    // `AccountModal.onGoogleSignIn` writes a sessionStorage marker
+    // before kicking off the redirect; after Better Auth lands the
+    // user back here, the SPA mounts fresh and this effect reads +
+    // clears the marker. When it was present AND the user is now
+    // signed in, we call `openModal()` so the user lands exactly
+    // where they were before sign-in.
+    //
+    // Gating:
+    //   - `session.isPending` — wait for Better Auth to finish
+    //     fetching the session from the cookie set during the OAuth
+    //     callback. Reading too early shows the anonymous state and
+    //     the modal would open with the sign-in CTA, defeating the
+    //     point.
+    //   - `!isAnonymous` — if OAuth failed silently or the user
+    //     was downgraded back to anonymous somehow, don't re-open
+    //     a sign-in CTA on top of them.
+    //   - `consumedRef` — fire at most once per mount, since the
+    //     marker has already been cleared from storage by the
+    //     consume call.
+    //
+    // The marker has a 10-minute freshness window (see
+    // `pendingAccountModal.ts`), so an old marker from an
+    // abandoned earlier flow can't surface days later.
+    const consumedRef = useRef(false);
+    const openModalRef = useRef(openModal);
+    openModalRef.current = openModal;
+    useEffect(() => {
+        if (consumedRef.current) return;
+        if (session.isPending) return;
+        const user = session.data?.user;
+        if (!user || user.isAnonymous) return;
+        if (!consumePendingAccountModalIntent()) return;
+        consumedRef.current = true;
+        openModalRef.current();
+    }, [session.isPending, session.data]);
 
     const value = useMemo<AccountContextValue>(
         () => ({ openModal, requestSignOut }),

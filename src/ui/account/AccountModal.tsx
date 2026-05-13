@@ -65,6 +65,7 @@ import { useCardPackActions } from "../components/cardPackActions";
 import { AccountAvatar } from "./AccountAvatar";
 import { authClient } from "./authClient";
 import { DevSignInForm } from "./DevSignInForm";
+import { savePendingAccountModalIntent } from "./pendingAccountModal";
 
 const ACCOUNT_TOUR_SCREEN_KEY = "account" as const;
 // Module-scope so the `i18next/no-literal-string` lint rule reads
@@ -258,6 +259,15 @@ export function AccountModal() {
     };
 
     const onGoogleSignIn = async (): Promise<void> => {
+        // Mark the OAuth round-trip as "started from the Account
+        // modal." `AccountProvider`'s mount-time consumer reads this
+        // back after Better Auth redirects the user here, then opens
+        // the modal again so the user lands exactly where they were
+        // before the sign-in flow. Written even on failure — the
+        // consumer checks freshness + clears the marker either way,
+        // so a stale entry from a cancelled OAuth flow doesn't
+        // resurface on the next page load.
+        savePendingAccountModalIntent();
         signInStarted({ provider: PROVIDER_GOOGLE, from: SIGN_IN_FROM_MENU });
         const result = await authClient.signIn.social({
             provider: PROVIDER_GOOGLE,
