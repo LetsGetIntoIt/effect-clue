@@ -52,8 +52,24 @@ interface CellExplanationRowProps {
     readonly hypotheses: HypothesisMap;
     readonly hypothesisValue: HypothesisValue | undefined;
     readonly onHypothesisChange: (next: HypothesisValue | undefined) => void;
-    /** Multi-line "why" chain text rendered as the Deductions body. */
-    readonly whyText: string | undefined;
+    /**
+     * Conclusion-first headline ("{cellPlayer} has {cellCard}.") for
+     * the Deductions section. `undefined` when the cell has no
+     * provenance to explain.
+     */
+    readonly whyHeadline: string | undefined;
+    /**
+     * "Given" bullets — pre-rendered, one per (owner, source, value)
+     * group of initial observations / hypotheses. Empty when the
+     * chain has no initials.
+     */
+    readonly whyGivens: ReadonlyArray<string>;
+    /**
+     * "Reasoning" sentences. One when R3 consolidated the chain into
+     * a single rich sentence; one-per-derivation in the verbose
+     * fallback. Empty when the cell is purely a given.
+     */
+    readonly whyReasoning: ReadonlyArray<string>;
     /**
      * Suggestion numbers driving the in-cell top-left lightbulb chip
      * (refuter-candidate footnote). When non-empty, the row renders
@@ -108,7 +124,9 @@ export function CellExplanationRow({
     hypotheses,
     hypothesisValue,
     onHypothesisChange,
-    whyText,
+    whyHeadline,
+    whyGivens,
+    whyReasoning,
     footnoteNumbers,
     observed,
     onObservationChange,
@@ -165,10 +183,12 @@ export function CellExplanationRow({
         status.kind === "jointlyConflicts";
     const isJointConflict = status.kind === "jointlyConflicts";
 
+    const hasWhy =
+        whyHeadline !== undefined ||
+        whyGivens.length > 0 ||
+        whyReasoning.length > 0;
     const showDeductions =
-        whyText !== undefined ||
-        status.kind === "derived" ||
-        display.tag === "hypothesis";
+        hasWhy || status.kind === "derived" || display.tag === "hypothesis";
     const showLeads = footnoteNumbers.length > 0;
     const showObservations = cell.owner._tag === "Player";
     const observationOwner =
@@ -331,7 +351,7 @@ export function CellExplanationRow({
                             { compact: true },
                         )}
                     </span>
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-2">
                         {status.kind === "derived" && (
                             <div className="text-[1.125rem] text-muted">
                                 {t(
@@ -341,9 +361,37 @@ export function CellExplanationRow({
                                 )}
                             </div>
                         )}
-                        {whyText !== undefined && (
-                            <div className="whitespace-pre-line text-[1.125rem] text-muted">
-                                {whyText}
+                        {whyHeadline !== undefined && (
+                            <div className="text-[1.125rem] font-semibold text-fg">
+                                {whyHeadline}
+                            </div>
+                        )}
+                        {whyGivens.length > 0 && (
+                            <div className="flex flex-col gap-1 text-[1.125rem] text-muted">
+                                <div className="font-semibold uppercase tracking-wide text-fg">
+                                    {tDeduce("givenSectionLabel")}
+                                </div>
+                                <ul className="m-0 ml-4 list-disc">
+                                    {whyGivens.map(line => (
+                                        <li key={line}>{line}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                        {whyReasoning.length > 0 && (
+                            <div className="flex flex-col gap-1 text-[1.125rem] text-muted">
+                                <div className="font-semibold uppercase tracking-wide text-fg">
+                                    {tDeduce("reasoningSectionLabel")}
+                                </div>
+                                {whyReasoning.length === 1 ? (
+                                    <p className="m-0">{whyReasoning[0]}</p>
+                                ) : (
+                                    <ol className="m-0 ml-5 list-decimal">
+                                        {whyReasoning.map(line => (
+                                            <li key={line}>{line}</li>
+                                        ))}
+                                    </ol>
+                                )}
                             </div>
                         )}
                         {display.tag === "hypothesis" &&
