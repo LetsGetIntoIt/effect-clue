@@ -1266,6 +1266,18 @@ export function Checklist() {
                         return [
                             <motion.tr
                                 key={`h-${String(category.id)}`}
+                                // bg-category-header on the <tr> itself
+                                // closes the seam that flashed during
+                                // mobile horizontal-overscroll bounce:
+                                // when the table's cells separate by a
+                                // pixel or two mid-stretch, the page-bg
+                                // would otherwise show through the gap
+                                // between the sticky <th> and the
+                                // spanning <td>. With the maroon on the
+                                // row, the gap is filled by the same
+                                // color and reads as one continuous
+                                // strip even when bounced.
+                                className="bg-category-header"
                                 {...tableRowMotionProps}
                             >
                                 <motion.th
