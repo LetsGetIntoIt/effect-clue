@@ -693,21 +693,9 @@
                 "title": "Your saved card packs live here",
                 "body": "Custom decks sync to your account, so you can pick them up on any device once you sign in."
             },
-            "syncNow": {
-                "title": "Sync your packs",
-                "body": "Tap Sync now to push local changes up and pull updates from your other devices."
-            },
-            "sharePack": {
-                "title": "Share a pack with a friend",
-                "body": "Send any pack to a friend — they get to use it in their own games."
-            },
-            "renamePack": {
-                "title": "Rename a pack",
-                "body": "Edit a pack's name to keep your library organized."
-            },
-            "deletePack": {
-                "title": "Remove a pack",
-                "body": "Delete a pack you no longer need. The change syncs to your other signed-in devices too."
+            "packActions": {
+                "title": "What you can do with each pack",
+                "body": "Share a pack with a friend, rename it to keep your library organized, or delete one you don't need anymore."
             }
         }
     }

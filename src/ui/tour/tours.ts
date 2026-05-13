@@ -734,22 +734,21 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
      * mount = "modal just opened"), then locks for 4 weeks via the
      * standard `lastDismissedAt` gate.
      *
-     * Walks five callouts inside the modal:
+     * Two passive Next-button callouts:
      *   1. Intro on the My card packs section header.
-     *   2. Sync now button — push local changes / pull remote ones.
-     *   3-5. The Share / Rename / Delete actions on the first pack
-     *        row. These rely on a pack existing; empty-state users
-     *        see the auto-skip path (steps 3-5 silently drop because
-     *        their anchors aren't mounted).
+     *   2. The per-row action group (Share / Rename / Delete) on the
+     *      first pack row — one combined callout that lists all three
+     *      actions instead of stepping through them individually. The
+     *      "Sync now" button is deliberately NOT called out: syncing
+     *      is automatic and the button is just a manual fail-safe,
+     *      so a tour step would over-explain.
      *
-     * All five steps are passive Next-button callouts — no
-     * advance-on-click — so the native-DOM-listener gotcha for
-     * touch advance-on-click doesn't apply. The modal stays open
-     * across all five steps via `AccountProvider`'s
-     * `dismissOnOutsideClick: false` push when the gate is fresh,
-     * which is the modal analog of `tourKeepsCellOpen` in
-     * Checklist.tsx — it prevents iOS ghost clicks on the backdrop
-     * from collapsing the modal out from under the walkthrough.
+     * Empty-state users (no packs) see step 2 auto-skip — they get
+     * the 1-step intro. The modal stays open across both steps via
+     * `AccountProvider`'s `dismissOnOutsideClick: false` push (the
+     * modal analog of `tourKeepsCellOpen` in Checklist.tsx —
+     * prevents iOS ghost clicks on the backdrop from collapsing the
+     * modal out from under the walkthrough).
      */
     account: [
         {
@@ -761,35 +760,14 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             align: "center",
         },
         {
-            // Sync now button in the section header.
-            anchor: "account-sync-now",
-            titleKey: "account.syncNow.title",
-            bodyKey: "account.syncNow.body",
-            side: "bottom",
-            align: "end",
-        },
-        {
-            // Share on the first pack row. Auto-skips for empty-state
-            // users (no rows = no anchor).
-            anchor: "account-pack-share",
-            titleKey: "account.sharePack.title",
-            bodyKey: "account.sharePack.body",
-            side: "bottom",
-            align: "end",
-        },
-        {
-            // Rename on the first pack row.
-            anchor: "account-pack-rename",
-            titleKey: "account.renamePack.title",
-            bodyKey: "account.renamePack.body",
-            side: "bottom",
-            align: "end",
-        },
-        {
-            // Delete on the first pack row. Wrap-up CTA.
-            anchor: "account-pack-delete",
-            titleKey: "account.deletePack.title",
-            bodyKey: "account.deletePack.body",
+            // Combined action group on the first pack row. The
+            // `account-pack-actions` token is on Share / Rename /
+            // Delete buttons of the first row, so the spotlight
+            // unions all three into one cohesive callout. Auto-skips
+            // for empty-state users (no rows = no anchor).
+            anchor: "account-pack-actions",
+            titleKey: "account.packActions.title",
+            bodyKey: "account.packActions.body",
             side: "bottom",
             align: "end",
             finishLabelKey: "gotIt",

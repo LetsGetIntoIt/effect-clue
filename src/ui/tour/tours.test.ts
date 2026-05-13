@@ -378,17 +378,15 @@ describe("TOUR_PREREQUISITES", () => {
 });
 
 describe("TOURS — account tour (event-triggered, My card packs modal)", () => {
-    test("has five steps in declaration order", () => {
-        // Section intro → Sync now → Share / Rename / Delete on the
-        // first pack row. Per-row anchors live on the FIRST row only;
-        // empty-state users see the auto-skip path (steps 3-5
-        // silently drop because their anchors aren't mounted).
+    test("has two steps in declaration order: intro → pack actions", () => {
+        // Sync now is deliberately NOT called out — syncing is
+        // automatic and the button is just a manual fail-safe.
+        // Share / Rename / Delete are folded into one combined
+        // "actions you can take" step so the user gets the full
+        // mental model without three separate popovers.
         expect(TOURS.account.map(s => s.anchor)).toEqual([
             "account-my-card-packs",
-            "account-sync-now",
-            "account-pack-share",
-            "account-pack-rename",
-            "account-pack-delete",
+            "account-pack-actions",
         ]);
     });
 
@@ -404,7 +402,7 @@ describe("TOURS — account tour (event-triggered, My card packs modal)", () => 
     });
 
     test("titleKey + bodyKey point at onboarding.account.* keys", () => {
-        const tags = ["myCardPacks", "syncNow", "sharePack", "renamePack", "deletePack"];
+        const tags = ["myCardPacks", "packActions"];
         TOURS.account.forEach((step, i) => {
             const tag = tags[i]!;
             expect(step.titleKey).toBe(`account.${tag}.title`);

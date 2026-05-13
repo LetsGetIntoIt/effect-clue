@@ -193,24 +193,23 @@ export function AccountModal() {
     const activeScreenRef = useRef(activeScreen);
     activeScreenRef.current = activeScreen;
     const firedRef = useRef(false);
-    // Reads `activeScreen` and `phase` via refs so they don't end up
-    // as effect deps that would re-fire the gate on unrelated state
-    // changes (the `FirstSuggestionTourGate` reads them directly
-    // because its trigger event IS a reducer-derived value; ours is
-    // simply "modal mount").
-    const phaseRef = useRef(phase);
-    phaseRef.current = phase;
+    // Read `activeScreen` and `startTour` via refs so dep-array
+    // churn (their identity changes when a tour starts) doesn't
+    // re-fire the gate. `phase` IS in the dep array though — when
+    // the StartupCoordinator advances from "boot" → "done" after
+    // the modal has already mounted, the gate needs to re-evaluate
+    // so the tour can fire. Same pattern as
+    // `FirstSuggestionTourGate` in `Clue.tsx`.
     const startTourRef = useRef(startTour);
     startTourRef.current = startTour;
     useEffect(() => {
         if (isAnon) return;
         if (activeScreenRef.current !== undefined) return;
         if (firedRef.current) return;
-        const currentPhase = phaseRef.current;
         if (
-            currentPhase === "boot"
-            || currentPhase === "splash"
-            || currentPhase === "install"
+            phase === "boot"
+            || phase === "splash"
+            || phase === "install"
         ) {
             return;
         }
@@ -227,7 +226,7 @@ export function AccountModal() {
         startTourRef.current(ACCOUNT_TOUR_SCREEN_KEY);
         saveTourVisited(ACCOUNT_TOUR_SCREEN_KEY, now);
         saveTourDismissed(ACCOUNT_TOUR_SCREEN_KEY, now);
-    }, [isAnon]);
+    }, [isAnon, phase]);
     // Cleanup: when AccountModal unmounts (X / Esc / `pop()`), if
     // the tour is still active on `account`, dismiss it. Read both
     // `activeScreen` and `dismissTour` via refs so this effect mounts
@@ -350,7 +349,6 @@ export function AccountModal() {
                                             type="button"
                                             onClick={() => void handleSyncNow()}
                                             disabled={isSyncing}
-                                            data-tour-anchor="account-sync-now"
                                             className="inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--radius)] border border-border bg-white px-2 py-1 text-[1rem] text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent disabled:cursor-not-allowed"
                                         >
                                             <RefreshIcon
@@ -388,12 +386,17 @@ export function AccountModal() {
                                                 const hasPending =
                                                     pack.unsyncedSince !==
                                                     undefined;
-                                                // Tour anchors emit on the FIRST row only — same
-                                                // pattern as `checklist-cell` on (0,0). Empty-state
-                                                // users (no packs) see steps 3-5 auto-skip via the
-                                                // tour driver's missing-anchor path; users with
-                                                // packs always have a first row to anchor against.
-                                                const isFirst = i === 0;
+                                                // Tour anchor emits on the FIRST row's action
+                                                // buttons only — same pattern as `checklist-cell`
+                                                // on (0,0). All three buttons share the same
+                                                // `account-pack-actions` token so the tour's
+                                                // spotlight unions them into one cohesive callout
+                                                // ("you can share, rename, or delete a pack").
+                                                // Empty-state users (no rows) see the step
+                                                // auto-skip via the missing-anchor path.
+                                                const tourAnchor = i === 0
+                                                    ? "account-pack-actions"
+                                                    : undefined;
                                                 return (
                                                 <li
                                                     key={pack.id}
@@ -436,10 +439,11 @@ export function AccountModal() {
                                                         onClick={() =>
                                                             sharePack(pack)
                                                         }
-                                                        {...(isFirst
+                                                        {...(tourAnchor !==
+                                                        undefined
                                                             ? {
                                                                   "data-tour-anchor":
-                                                                      "account-pack-share",
+                                                                      tourAnchor,
                                                               }
                                                             : {})}
                                                         className="inline-flex cursor-pointer items-center border-l border-border px-2.5 py-1.5 text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent"
@@ -453,10 +457,11 @@ export function AccountModal() {
                                                         onClick={() =>
                                                             void renamePack(pack)
                                                         }
-                                                        {...(isFirst
+                                                        {...(tourAnchor !==
+                                                        undefined
                                                             ? {
                                                                   "data-tour-anchor":
-                                                                      "account-pack-rename",
+                                                                      tourAnchor,
                                                               }
                                                             : {})}
                                                         className="inline-flex cursor-pointer items-center border-l border-border px-2.5 py-1.5 text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent"
@@ -470,10 +475,11 @@ export function AccountModal() {
                                                         onClick={() =>
                                                             void deletePack(pack)
                                                         }
-                                                        {...(isFirst
+                                                        {...(tourAnchor !==
+                                                        undefined
                                                             ? {
                                                                   "data-tour-anchor":
-                                                                      "account-pack-delete",
+                                                                      tourAnchor,
                                                               }
                                                             : {})}
                                                         className="inline-flex cursor-pointer items-center border-l border-border px-2.5 py-1.5 text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-danger"
