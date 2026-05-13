@@ -16,6 +16,7 @@ const VARIANT_BOTTOM_NAV = "bottomNav" as const;
 // lint rule from flagging these as user copy.
 const PHASE_GAME_STARTED: GamePhase = "gameStarted";
 const PHASE_SETUP_COMPLETED: GamePhase = "setupCompleted";
+const UI_MODE_SETUP = "setup" as const;
 // i18n keys (not user copy — the lint rule flags the bare literal).
 // eslint-disable-next-line i18next/no-literal-string -- i18n key, not user copy
 const I18N_KEY_CONTINUE = "continuePlaying" as const;
@@ -50,11 +51,16 @@ export function PlayCTAButton({
 }) {
     const phase = useGamePhase();
     const walkthroughDone = useSetupWalkthroughDone();
-    const { dispatch } = useClue();
+    const { state, dispatch } = useClue();
     const t = useTranslations("playCta");
     const hasKeyboard = useHasKeyboard();
 
-    // Visibility composes BOTH signals:
+    // Visibility composes three signals:
+    //  - uiMode === "setup": this CTA's whole purpose is "go play
+    //    from the Setup page." On the Checklist or Suggest views
+    //    the user is already in Play, so the button is redundant
+    //    (and on desktop, where both panes are always visible, also
+    //    pointless).
     //  - phase ≥ setupCompleted: the user has enough data to play.
     //  - walkthroughDone: the user has finished the first-time
     //    walkthrough at least once (the wizard's last-step "Start
@@ -64,7 +70,9 @@ export function PlayCTAButton({
     //    the global chrome button. We want the wizard's CTA to be
     //    the only path during the first-time flow.
     const visible =
-        phaseAtLeast(phase, PHASE_SETUP_COMPLETED) && walkthroughDone;
+        state.uiMode === UI_MODE_SETUP
+        && phaseAtLeast(phase, PHASE_SETUP_COMPLETED)
+        && walkthroughDone;
 
     if (!visible) {
         return variant === VARIANT_BOTTOM_NAV

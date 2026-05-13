@@ -51,6 +51,13 @@ vi.mock("../hooks/useHasKeyboard", () => ({
 
 beforeEach(() => {
     window.localStorage.clear();
+    // The ClueProvider mirrors uiMode to `?view=…` on each
+    // dispatch; without resetting the URL between tests, the
+    // previous test's "setUiMode('checklist')" click would leak
+    // into the next mount's hydration (viewParam = "checklist"),
+    // and PlayCTA's setup-mode-only visibility gate would then
+    // fail because uiMode isn't "setup" on mount.
+    window.history.replaceState(null, "", "/");
     captureCalls.length = 0;
     hasKeyboardOverride = true;
     // The PlayCTAButton is gated on BOTH phase ≥ setupCompleted AND
@@ -255,6 +262,32 @@ describe("PlayCTAButton — toolbar variant", () => {
         seedSetupCompleted(dispatch());
         const button = screen.getByRole("button");
         expect(button.getAttribute("data-tour-anchor")).toBe("play-cta");
+    });
+
+    test("hides on Play views (uiMode = checklist or suggest), even at gameStarted phase", () => {
+        // The CTA's purpose is the Setup → Play handoff. On the
+        // Checklist or Suggest views the user is already in Play,
+        // so the button is redundant. Verify it hides when uiMode
+        // flips to checklist OR suggest, regardless of phase.
+        const { container, dispatch } = mountToolbar();
+        seedGameStarted(dispatch());
+        // Sanity: visible on setup.
+        expect(container.querySelector("button")).not.toBeNull();
+        // Flip to checklist → button hides.
+        act(() => {
+            dispatch()({ type: "setUiMode", mode: "checklist" });
+        });
+        expect(container.querySelector("button")).toBeNull();
+        // Flip to suggest → still hidden.
+        act(() => {
+            dispatch()({ type: "setUiMode", mode: "suggest" });
+        });
+        expect(container.querySelector("button")).toBeNull();
+        // Back to setup → reappears.
+        act(() => {
+            dispatch()({ type: "setUiMode", mode: "setup" });
+        });
+        expect(container.querySelector("button")).not.toBeNull();
     });
 });
 
