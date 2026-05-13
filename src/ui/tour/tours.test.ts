@@ -116,9 +116,9 @@ describe("TOURS — checklistSuggest tour", () => {
         // (multi-spotlight on desktop, tap-Checklist on mobile) and
         // the suggest-pane intro (desktop info step, tap-Suggest on
         // mobile). They're filtered out at runtime per viewport so
-        // each user sees 10 steps total. The unfiltered registry has
-        // 12 entries (2 pairs × 2 + 8 shared steps).
-        expect(TOURS.checklistSuggest).toHaveLength(12);
+        // each user sees 12 steps total. The unfiltered registry has
+        // 14 entries (2 pairs × 2 + 10 shared steps).
+        expect(TOURS.checklistSuggest).toHaveLength(14);
     });
 
     test("registry anchors in order, including viewport-locked pairs", () => {
@@ -126,22 +126,26 @@ describe("TOURS — checklistSuggest tour", () => {
         //   1. overflow-menu (both)
         //   2. two-halves-spotlight (desktop)
         //   3. bottom-nav-checklist (mobile)
-        //   4. checklist-cell (both — advance-on-click)
-        //   5-7. cell-explanation-{deductions,leads,hypothesis} (both)
-        //   8. checklist-case-file (both)
-        //   9. desktop-suggest-area (desktop)
-        //  10. bottom-nav-suggest (mobile)
-        //  11. suggest-prior-log (both)
-        //  12. suggest-add-form (both)
+        //   4. checklist-cell (both — advance-on-click, OPEN)
+        //   5. cell-explanation-panel (both — whole-panel intro)
+        //   6-8. cell-explanation-{deductions,leads,hypothesis} (both)
+        //   9. checklist-case-file (both)
+        //  10. checklist-cell-close (both — advance-on-click, CLOSE)
+        //  11. desktop-suggest-area (desktop)
+        //  12. bottom-nav-suggest (mobile)
+        //  13. suggest-prior-log (both)
+        //  14. suggest-add-form (both)
         expect(TOURS.checklistSuggest.map(s => s.anchor)).toEqual([
             "overflow-menu",
             "two-halves-spotlight",
             "bottom-nav-checklist",
             "checklist-cell",
+            "cell-explanation-panel",
             "cell-explanation-deductions",
             "cell-explanation-leads",
             "cell-explanation-hypothesis",
             "checklist-case-file",
+            "checklist-cell-close",
             "desktop-suggest-area",
             "bottom-nav-suggest",
             "suggest-prior-log",

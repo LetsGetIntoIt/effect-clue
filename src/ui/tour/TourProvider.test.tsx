@@ -164,24 +164,25 @@ describe("TourProvider — persistence on close", () => {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe("TourProvider — viewport filter", () => {
-    test("checklistSuggest exposes 10 steps on each viewport (2 pairs of viewport-locked steps + 8 shared)", () => {
+    test("checklistSuggest exposes 12 steps on each viewport (2 pairs of viewport-locked steps + 10 shared)", () => {
         // The walk: overflow-menu callout → two-halves intro
         // (multi-spotlight on desktop / tap-Checklist on mobile) →
-        // checklist-cell click intro → three cell-explanation
-        // sections (DEDUCTIONS / LEADS / HYPOTHESIS) → case-file →
-        // suggest intro (desktop info / tap-Suggest on mobile) →
-        // prior log → add-form CTA. The two viewport-split pairs
-        // mean the unfiltered registry has 12 entries; either
-        // viewport sees 10 after the filter.
+        // cellIntro (click to OPEN) → panel intro → three cell-
+        // explanation sections (DEDUCTIONS / LEADS / HYPOTHESIS) →
+        // case-file → cellClose (click to CLOSE) → suggest intro
+        // (desktop info / tap-Suggest on mobile) → prior log →
+        // add-form CTA. The two viewport-split pairs mean the
+        // unfiltered registry has 14 entries; either viewport sees
+        // 12 after the filter.
         stubMatchMedia(true); // desktop
         const api = mount();
         act(() => api.current().startTour("checklistSuggest"));
-        expect(api.current().steps?.length).toBe(10);
+        expect(api.current().steps?.length).toBe(12);
 
         stubMatchMedia(false); // mobile
         const api2 = mount();
         act(() => api2.current().startTour("checklistSuggest"));
-        expect(api2.current().steps?.length).toBe(10);
+        expect(api2.current().steps?.length).toBe(12);
     });
 
     test("setup tour is a 3-step tour at both breakpoints", () => {
@@ -199,16 +200,16 @@ describe("TourProvider — viewport filter", () => {
     });
 
     test("isLastStep is true on the final step of checklistSuggest", () => {
-        stubMatchMedia(true); // desktop — 10 visible steps
+        stubMatchMedia(true); // desktop — 12 visible steps
         const api = mount();
         act(() => api.current().startTour("checklistSuggest"));
-        // Step 0 of 10: not last.
+        // Step 0 of 12: not last.
         expect(api.current().isLastStep).toBe(false);
-        // Walk to step 9 (the wrap-up `suggest-add-form`).
-        for (let i = 0; i < 9; i++) {
+        // Walk to step 11 (the wrap-up `suggest-add-form`).
+        for (let i = 0; i < 11; i++) {
             act(() => api.current().nextStep());
         }
-        // Step 9 of 10 (0-indexed) IS the last.
+        // Step 11 of 12 (0-indexed) IS the last.
         expect(api.current().isLastStep).toBe(true);
     });
 });

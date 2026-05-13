@@ -625,6 +625,14 @@
                 "title": "Each cell is a deduction",
                 "body": "Each cell shows what we know about whether that player (or the case file) has that card — <yes></yes> if they do, <no></no> if they don't, blank if we don't know yet. <strong>{action} the highlighted cell to open the breakdown.</strong>"
             },
+            "panelIntro": {
+                "title": "Here's the breakdown",
+                "body": "Every cell has its own breakdown — the reasoning behind its value, the suggestions that might help, and a what-if hypothesis tool. We'll walk through each section next."
+            },
+            "cellClose": {
+                "title": "{action} the cell to close",
+                "body": "You've seen the breakdown. <strong>{action} the same cell again to dismiss the panel.</strong>"
+            },
             "deductions": {
                 "title": "DEDUCTIONS — how a cell got here",
                 "body": "DEDUCTIONS shows the chain of reasoning that produced this cell's value. You can also mark cards you've seen with your own eyes here."

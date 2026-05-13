@@ -437,6 +437,28 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             requiredUiMode: "checklist",
         },
         {
+            // Whole-panel overview. The user just tapped the cell
+            // to open the explanation panel; this step zooms out to
+            // introduce the panel as a whole BEFORE walking the
+            // three sections inside it. Spotlight covers the entire
+            // explanation row (`cell-explanation-panel` on the
+            // explanation `<td>`).
+            //
+            // Panel must be OPEN on entry. The Checklist's tour-
+            // driven effect for `checklist-cell` (cellIntro)
+            // already opened it via the native click listener; this
+            // step doesn't reset cell state, so the panel stays
+            // open across the transition. `tourKeepsCellOpen`
+            // covers this anchor too, so a stray click (ghost click
+            // or backdrop tap) can't close the panel.
+            anchor: "cell-explanation-panel",
+            titleKey: "checklist.panelIntro.title",
+            bodyKey: "checklist.panelIntro.body",
+            side: "bottom",
+            align: "center",
+            requiredUiMode: "checklist",
+        },
+        {
             // DEDUCTIONS — first of three sections inside the
             // cell-explanation panel. The user has just clicked the
             // cell to open the panel; if they somehow close it
@@ -490,6 +512,31 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             bodyKey: "checklist.caseFile.body",
             side: "bottom",
             align: "end",
+            requiredUiMode: "checklist",
+        },
+        {
+            // Tap the cell again to close the panel. Anchored to the
+            // `checklist-cell-close` token (a sibling of
+            // `checklist-cell` on the same (0,0) cell) so the
+            // Checklist's tour-driven effect can differentiate
+            // open-intent (cellIntro) from close-intent (this step)
+            // — the entry effect opens the cell here, and installs a
+            // native click listener that closes the cell on tap. The
+            // tour's advance-on-click listener fires alongside.
+            //
+            // tourKeepsCellOpen is INTENTIONALLY false on this anchor
+            // so the cell's onClick + outside-click handler don't
+            // suppress the close — we WANT the user's tap to close.
+            anchor: "checklist-cell-close",
+            advanceOn: { event: "click", anchor: "checklist-cell-close" },
+            titleKey: "checklist.cellClose.title",
+            bodyKey: "checklist.cellClose.body",
+            side: "bottom",
+            align: "center",
+            sideByViewport: {
+                mobile: { side: "bottom", align: "center" },
+                desktop: { side: "right", align: "center" },
+            },
             requiredUiMode: "checklist",
         },
         {

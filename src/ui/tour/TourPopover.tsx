@@ -1087,8 +1087,16 @@ export function TourPopover() {
                                 {/* `currentStep.titleKey` is a full
                                     next-intl key under the
                                     `onboarding` namespace
-                                    (e.g. `setup.cardPack.title`). */}
-                                {t(currentStep.titleKey)}
+                                    (e.g. `setup.cardPack.title`).
+                                    `{action}` is interpolated for
+                                    titles that reference the user's
+                                    physical action ("Tap" / "Click"
+                                    per device). Step titles that
+                                    don't reference `{action}` ignore
+                                    the variable. */}
+                                {t(currentStep.titleKey, {
+                                    action: actionVerb,
+                                })}
                             </div>
                             <button
                                 type="button"

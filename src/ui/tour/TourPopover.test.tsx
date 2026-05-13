@@ -21,8 +21,13 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { createElement, type ReactNode } from "react";
 
 vi.mock("next-intl", () => {
-    const t = (key: string, values?: Record<string, unknown>): string =>
-        values ? `${key}:${JSON.stringify(values)}` : key;
+    // For keyspace tests, `t(key)` returns the key verbatim — and
+    // `t(key, values)` ignores `values`. Production code passes
+    // `{action: "Tap" | "Click"}` for device-aware copy; we don't
+    // exercise that interpolation in unit tests, so dropping it keeps
+    // existing `getByText(<key>)` assertions stable. The real
+    // next-intl substitutes `{action}` into the resolved string.
+    const t = (key: string, _values?: Record<string, unknown>): string => key;
     // `t.rich` invokes any callable tag values and returns the
     // resulting React tree; for keyspace tests we return the key
     // itself so existing assertions on `getByText(<key>)` still pass.

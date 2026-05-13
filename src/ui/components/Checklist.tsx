@@ -254,7 +254,8 @@ export function Checklist() {
     // be suppressed. The ref makes the latest value reachable from
     // effects whose dep array doesn't include `currentStepAnchor`.
     const tourKeepsCellOpen =
-        currentStepAnchor === "cell-explanation-deductions"
+        currentStepAnchor === "cell-explanation-panel"
+        || currentStepAnchor === "cell-explanation-deductions"
         || currentStepAnchor === "cell-explanation-leads"
         || currentStepAnchor === "cell-explanation-hypothesis"
         || currentStepAnchor === "checklist-case-file";
@@ -660,60 +661,67 @@ export function Checklist() {
             window.removeEventListener("click", onClickOutside, true);
     }, [expandedCell, setExpandedCell]);
 
-    // When the tour reaches the cellIntro step
-    // (`anchor === "checklist-cell"`) we do two things:
+    // Two tour-driven cell behaviors share the same shape:
     //
-    //   1. Close any open cell so the user's tap is unambiguously an
-    //      OPEN. Without this, a user landing on the step with a
-    //      cell still open from earlier in the tour (e.g. by clicking
-    //      Back from DEDUCTIONS) would have their next tap CLOSE the
-    //      panel, while the advance-on-click listener fired anyway —
-    //      leaving the tour on DEDUCTIONS pointing at no panel.
+    //   - `checklist-cell` (cellIntro step): the user is asked to TAP
+    //     the (0,0) cell to OPEN its explanation panel. We close any
+    //     stale panel state on entry and install a native click
+    //     listener that opens the cell on tap. The tour's
+    //     advance-on-click listener fires alongside and moves the
+    //     tour forward to the explanation walkthrough.
     //
-    //   2. Install a native click listener on the cell element that
-    //      opens the (0,0) cell on tap. The cell's React-managed
-    //      onClick has a two-tap touch protocol that — even with the
-    //      tour-aware bypass — has proven unreliable on real mobile
-    //      devices (the user reported tapping doing nothing). A
-    //      native listener at the DOM level bypasses React's event
-    //      system entirely and fires for every click reaching the
-    //      cell. The tour's `advanceOn` listener fires alongside on
-    //      the same click, advancing to DEDUCTIONS with the panel
-    //      open.
+    //   - `checklist-cell-close` (close step): the user is asked to
+    //     TAP the (0,0) cell AGAIN to CLOSE the panel. We open the
+    //     cell on entry (it's normally already open from the
+    //     case-file step before it, but Back navigation could land
+    //     here with the cell closed) and install a native click
+    //     listener that closes the cell on tap.
     //
-    //      Doesn't depend on the cell being focused — the user's
-    //      first tap opens the panel regardless of where focus is.
+    // Why native click listeners + setExpandedCell directly: the
+    // cell's React-managed onClick has a touch two-tap protocol
+    // that proved unreliable on real mobile devices (the cellIntro
+    // tap didn't open the panel). A native DOM listener bypasses
+    // React's event system and works on the first tap. Doesn't
+    // depend on focus — the user's tap operates regardless of
+    // where focus is.
     //
-    //      `useTour()` + `currentStepAnchor` are declared at the top
-    //      of this component so they're reachable by the
-    //      outside-click effect above (which guards on
-    //      `tourKeepsCellOpenRef`).
-    // Setup is captured by ref so the effect below — which installs
-    // a one-time click listener on cellIntro entry — doesn't re-fire
-    // (and re-execute its `setExpandedCell(null)` line!) every time
-    // the reducer produces a new state object. The setup itself is
+    // `useTour()` + `currentStepAnchor` are declared at the top of
+    // this component so they're reachable by the outside-click
+    // effect above (which guards on `tourKeepsCellOpenRef`).
+    //
+    // Setup is captured by ref so this effect — which installs a
+    // one-time listener on step entry — doesn't re-fire (and
+    // re-execute the cell-state side effect) every time the reducer
+    // produces a new top-level state object. setup itself is
     // referentially stable across no-op renders, but other state
     // changes (uiMode, tour advance) can give us a new top-level
-    // state reference, which would re-trigger an effect that
-    // depended on `state.setup`.
+    // state reference, which would otherwise re-trigger an effect
+    // that depended on `state.setup`.
     const setupRef = useRef(state.setup);
     setupRef.current = state.setup;
     useEffect(() => {
-        if (currentStepAnchor !== "checklist-cell") return;
-        setExpandedCell(null);
-        const cellEl = document.querySelector(
-            `[data-tour-anchor~="checklist-cell"]`,
-        );
-        if (!(cellEl instanceof HTMLElement)) return;
-        // Compute the (0,0) Cell from setup. The `checklist-cell`
-        // anchor is on row 0, col 0 of the play-mode grid — first
-        // player + first card of the first category.
+        const isOpenStep = currentStepAnchor === "checklist-cell";
+        const isCloseStep = currentStepAnchor === "checklist-cell-close";
+        if (!isOpenStep && !isCloseStep) return;
+        // Compute the (0,0) Cell from setup. Both anchors live on
+        // row 0, col 0 of the play-mode grid — first player + first
+        // card of the first category.
         const firstPlayer = setupRef.current.players[0];
         const firstCard = setupRef.current.categories[0]?.cards[0];
         if (firstPlayer === undefined || firstCard === undefined) return;
         const targetCell = Cell(PlayerOwner(firstPlayer), firstCard.id);
+        // Set up the UI to the expected state on entry so the user's
+        // tap does what we expect.
+        setExpandedCell(isOpenStep ? null : targetCell);
+        const anchorToken = isOpenStep
+            ? "checklist-cell"
+            : "checklist-cell-close";
+        const cellEl = document.querySelector(
+            `[data-tour-anchor~="${anchorToken}"]`,
+        );
+        if (!(cellEl instanceof HTMLElement)) return;
         const onClick = (): void => {
-            setExpandedCell(targetCell);
+            setExpandedCell(isOpenStep ? targetCell : null);
         };
         cellEl.addEventListener("click", onClick);
         return () => cellEl.removeEventListener("click", onClick);
@@ -1316,6 +1324,12 @@ export function Checklist() {
                                         <td
                                             colSpan={cardSpan - 1}
                                             className="relative p-0"
+                                            // M3 tour: the "Here's the
+                                            // breakdown" step spotlights the
+                                            // whole explanation row before
+                                            // walking the user through its
+                                            // three sections.
+                                            data-tour-anchor="cell-explanation-panel"
                                             ref={(
                                                 el: HTMLTableCellElement | null,
                                             ) => {
@@ -1575,7 +1589,21 @@ export function Checklist() {
                                         //     know") applies only to the
                                         //     top-left cell — a
                                         //     teach-the-click anchor for
-                                        //     the play-mode tour.
+                                        //     the play-mode tour's
+                                        //     OPEN step (cellIntro).
+                                        //   - `checklist-cell-close` is
+                                        //     a sibling anchor used by
+                                        //     the play-mode tour's CLOSE
+                                        //     step ("Tap the cell again
+                                        //     to dismiss the panel"). It
+                                        //     lives on the same (0,0)
+                                        //     cell but is a separate
+                                        //     token so the tour
+                                        //     entry-side-effects
+                                        //     (`tourKeepsCellOpen`,
+                                        //     pre-close on entry) can
+                                        //     differentiate open-vs-close
+                                        //     intent.
                                         // The TourPopover unions all
                                         // matched rects via the `~=`
                                         // attribute selector.
@@ -1587,9 +1615,14 @@ export function Checklist() {
                                             rowIdx === 0 && colIdx === 0
                                                 ? "checklist-cell"
                                                 : undefined;
+                                        const firstCellCloseAnchor =
+                                            rowIdx === 0 && colIdx === 0
+                                                ? "checklist-cell-close"
+                                                : undefined;
                                         const anchorTokens = [
                                             firstColAnchor,
                                             firstCellAnchor,
+                                            firstCellCloseAnchor,
                                         ].filter(
                                             (t): t is string => t !== undefined,
                                         );
