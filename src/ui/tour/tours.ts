@@ -261,6 +261,12 @@ export interface TourStep {
  * - `sharing`: three callouts for share affordances inside the
  *   overflow menu (invite a player, transfer to another device, my
  *   card packs).
+ * - `account`: walks the My card packs section of the Account modal.
+ *   Event-triggered like `firstSuggestion` — fires on signed-in
+ *   modal mount, gated by the same 4-week dormancy. The modal is
+ *   pushed with `dismissOnOutsideClick: false` when the gate is
+ *   fresh so a backdrop tap (or iOS ghost click) can't drop the
+ *   modal out from under the walkthrough.
  *
  * Every step blocks page interaction by default — the dim veil
  * absorbs clicks and the keyboard isolator swallows non-Esc keys.
@@ -268,7 +274,7 @@ export interface TourStep {
  * use `advanceOn` to whitelist that one element; the rest of the
  * page stays blocked.
  *
- * `account` and `shareImport` remain reserved placeholders.
+ * `shareImport` remains a reserved placeholder.
  */
 export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
     setup: [
@@ -721,8 +727,52 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             finishLabelKey: "gotIt",
         },
     ],
-    // Reserved for M7 / M9 — no content yet.
-    account: [],
+    /**
+     * Event-triggered tour for the My Card Packs section of the
+     * Account modal. Fires the first time a signed-in user opens the
+     * modal (the trigger lives in `AccountModal.tsx` itself — modal
+     * mount = "modal just opened"), then locks for 4 weeks via the
+     * standard `lastDismissedAt` gate.
+     *
+     * Two passive Next-button callouts:
+     *   1. Intro on the My card packs section header.
+     *   2. The per-row action group (Share / Rename / Delete) on the
+     *      first pack row — one combined callout that lists all three
+     *      actions instead of stepping through them individually. The
+     *      "Sync now" button is deliberately NOT called out: syncing
+     *      is automatic and the button is just a manual fail-safe,
+     *      so a tour step would over-explain.
+     *
+     * Empty-state users (no packs) see step 2 auto-skip — they get
+     * the 1-step intro. The modal stays open across both steps via
+     * `AccountProvider`'s `dismissOnOutsideClick: false` push (the
+     * modal analog of `tourKeepsCellOpen` in Checklist.tsx —
+     * prevents iOS ghost clicks on the backdrop from collapsing the
+     * modal out from under the walkthrough).
+     */
+    account: [
+        {
+            // Intro — spotlights the whole My card packs section.
+            anchor: "account-my-card-packs",
+            titleKey: "account.myCardPacks.title",
+            bodyKey: "account.myCardPacks.body",
+            side: "bottom",
+            align: "center",
+        },
+        {
+            // Combined action group on the first pack row. The
+            // `account-pack-actions` token is on Share / Rename /
+            // Delete buttons of the first row, so the spotlight
+            // unions all three into one cohesive callout. Auto-skips
+            // for empty-state users (no rows = no anchor).
+            anchor: "account-pack-actions",
+            titleKey: "account.packActions.title",
+            bodyKey: "account.packActions.body",
+            side: "bottom",
+            align: "end",
+            finishLabelKey: "gotIt",
+        },
+    ],
     shareImport: [],
 };
 

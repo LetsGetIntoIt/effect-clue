@@ -18,10 +18,12 @@ import {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useMemo,
     useRef,
     type ReactNode,
 } from "react";
+import { DateTime } from "effect";
 import { useTranslations } from "next-intl";
 import { signOut as signOutEvent } from "../../analytics/events";
 import {
@@ -31,8 +33,14 @@ import {
     type FlushReason,
     type UnsyncedSummary,
 } from "../../data/cardPacksSync";
+import { TelemetryRuntime } from "../../observability/runtime";
 import { useModalStack } from "../components/ModalStack";
 import { useSession } from "../hooks/useSession";
+import { loadTourState } from "../tour/TourState";
+import {
+    computeShouldShowTour,
+    TOUR_RE_ENGAGE_DURATION,
+} from "../tour/useTourGate";
 import {
     ACCOUNT_MODAL_ID,
     ACCOUNT_MODAL_MAX_WIDTH,
@@ -43,6 +51,9 @@ import {
     LOGOUT_WARNING_MODAL_ID,
     LogoutWarningModalContent,
 } from "./LogoutWarningModal";
+import { consumePendingAccountModalIntent } from "./pendingAccountModal";
+
+const ACCOUNT_TOUR_SCREEN_KEY = "account" as const;
 
 interface AccountContextValue {
     /** Open the modal. Idempotent; calling while open re-pushes the
@@ -105,13 +116,38 @@ export function AccountProvider({
     const logoutStateRef = useRef<LogoutModalState | null>(null);
 
     const openModal = useCallback(() => {
+        // Ghost-click guard for the My card packs walkthrough. When
+        // the account tour will fire on this open (gate is fresh and
+        // the user is signed in — `AccountModal`'s mount effect does
+        // the actual fire), push the modal with backdrop close
+        // disabled. iOS Safari can fire a synthetic "ghost click" up
+        // to ~300 ms after a tap that ended on `touchend`, and that
+        // click can land on the backdrop and dismiss the modal out
+        // from under the walkthrough. Esc + the X button stay
+        // enabled — those are deliberate exits.
+        //
+        // We don't need to also guard signed-out opens (no walk
+        // there) or already-dismissed-gate opens (no walk either),
+        // so cheap to check inline. The gate read here mirrors the
+        // one inside AccountModal — both reads should agree.
+        const willFireTour =
+            session.data?.user
+            && !session.data.user.isAnonymous
+            && TelemetryRuntime.runSync(
+                computeShouldShowTour(
+                    loadTourState(ACCOUNT_TOUR_SCREEN_KEY),
+                    DateTime.nowUnsafe(),
+                    TOUR_RE_ENGAGE_DURATION,
+                ),
+            );
         push({
             id: ACCOUNT_MODAL_ID,
             title: tAccount("titleSignedIn"),
             maxWidth: ACCOUNT_MODAL_MAX_WIDTH,
             content: <AccountModal />,
+            ...(willFireTour ? { dismissOnOutsideClick: false } : {}),
         });
-    }, [push, tAccount]);
+    }, [push, tAccount, session]);
     const closeAccountModal = useCallback(() => {
         popTo(ACCOUNT_MODAL_ID);
     }, [popTo]);
@@ -234,6 +270,43 @@ export function AccountProvider({
             });
         });
     }, [performCommitSignOut, showLogoutWarning]);
+
+    // Re-open the Account modal after a Google OAuth round-trip.
+    // `AccountModal.onGoogleSignIn` writes a sessionStorage marker
+    // before kicking off the redirect; after Better Auth lands the
+    // user back here, the SPA mounts fresh and this effect reads +
+    // clears the marker. When it was present AND the user is now
+    // signed in, we call `openModal()` so the user lands exactly
+    // where they were before sign-in.
+    //
+    // Gating:
+    //   - `session.isPending` — wait for Better Auth to finish
+    //     fetching the session from the cookie set during the OAuth
+    //     callback. Reading too early shows the anonymous state and
+    //     the modal would open with the sign-in CTA, defeating the
+    //     point.
+    //   - `!isAnonymous` — if OAuth failed silently or the user
+    //     was downgraded back to anonymous somehow, don't re-open
+    //     a sign-in CTA on top of them.
+    //   - `consumedRef` — fire at most once per mount, since the
+    //     marker has already been cleared from storage by the
+    //     consume call.
+    //
+    // The marker has a 10-minute freshness window (see
+    // `pendingAccountModal.ts`), so an old marker from an
+    // abandoned earlier flow can't surface days later.
+    const consumedRef = useRef(false);
+    const openModalRef = useRef(openModal);
+    openModalRef.current = openModal;
+    useEffect(() => {
+        if (consumedRef.current) return;
+        if (session.isPending) return;
+        const user = session.data?.user;
+        if (!user || user.isAnonymous) return;
+        if (!consumePendingAccountModalIntent()) return;
+        consumedRef.current = true;
+        openModalRef.current();
+    }, [session.isPending, session.data]);
 
     const value = useMemo<AccountContextValue>(
         () => ({ openModal, requestSignOut }),

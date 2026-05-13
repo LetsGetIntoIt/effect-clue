@@ -687,6 +687,16 @@
                 "title": "My card packs",
                 "body": "Save custom decks here and share them with friends. Each saved pack syncs across your devices when you're signed in."
             }
+        },
+        "account": {
+            "myCardPacks": {
+                "title": "Your saved card packs live here",
+                "body": "Custom decks sync to your account, so you can pick them up on any device once you sign in."
+            },
+            "packActions": {
+                "title": "What you can do with each pack",
+                "body": "Share a pack with a friend, rename it to keep your library organized, or delete one you don't need anymore."
+            }
         }
     }
 }
