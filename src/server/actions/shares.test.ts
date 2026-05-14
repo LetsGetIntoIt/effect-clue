@@ -20,10 +20,14 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
     accusationsCodec,
     cardPackCodec,
+    dismissedInsightsCodec,
+    firstDealtPlayerIdCodec,
     handSizesCodec,
     hypothesesCodec,
+    hypothesisOrderCodec,
     knownCardsCodec,
     playersCodec,
+    selfPlayerIdCodec,
     suggestionsCodec,
 } from "../../logic/ShareCodec";
 import { Card, CardCategory, Player } from "../../logic/GameObjects";
@@ -43,6 +47,10 @@ interface RecordedInsert {
     readonly suggestionsData: string | null;
     readonly accusationsData: string | null;
     readonly hypothesesData: string | null;
+    readonly selfPlayerIdData: string | null;
+    readonly firstDealtPlayerIdData: string | null;
+    readonly dismissedInsightsData: string | null;
+    readonly hypothesisOrderData: string | null;
 }
 const recordedInserts: RecordedInsert[] = [];
 
@@ -190,6 +198,15 @@ const SAMPLE_HYPOTHESES = JSON.stringify([
     },
 ]);
 
+const SAMPLE_SELF_PLAYER_ID = JSON.stringify(Player("Alice"));
+const SAMPLE_FIRST_DEALT_PLAYER_ID = JSON.stringify(Player("Bob"));
+const SAMPLE_DISMISSED_INSIGHTS = JSON.stringify([
+    { key: "FrequentSuggester:Alice:Knife", atConfidence: "med" },
+]);
+const SAMPLE_HYPOTHESIS_ORDER = JSON.stringify([
+    { player: Player("Alice"), card: Card("card-scarlet") },
+]);
+
 /** Verify a JSON string round-trips through its codec — used in the
  * smoke tests below to make sure SAMPLE_* are valid before we hand
  * them to the action. If a constant ever drifts out of shape, the
@@ -213,6 +230,22 @@ assertRoundTrips("knownCards", SAMPLE_KNOWN_CARDS, knownCardsCodec);
 assertRoundTrips("suggestions", SAMPLE_SUGGESTIONS, suggestionsCodec);
 assertRoundTrips("accusations", SAMPLE_ACCUSATIONS, accusationsCodec);
 assertRoundTrips("hypotheses", SAMPLE_HYPOTHESES, hypothesesCodec);
+assertRoundTrips("selfPlayerId", SAMPLE_SELF_PLAYER_ID, selfPlayerIdCodec);
+assertRoundTrips(
+    "firstDealtPlayerId",
+    SAMPLE_FIRST_DEALT_PLAYER_ID,
+    firstDealtPlayerIdCodec,
+);
+assertRoundTrips(
+    "dismissedInsights",
+    SAMPLE_DISMISSED_INSIGHTS,
+    dismissedInsightsCodec,
+);
+assertRoundTrips(
+    "hypothesisOrder",
+    SAMPLE_HYPOTHESIS_ORDER,
+    hypothesisOrderCodec,
+);
 
 /**
  * Mirror of the action's own column projection. Used by the test
@@ -250,6 +283,22 @@ const projectInsert = (id: string, input: unknown): RecordedInsert => {
             kind === "transfer"
                 ? ((obj["hypothesesData"] as string | undefined) ?? null)
                 : null,
+        selfPlayerIdData:
+            kind === "transfer"
+                ? ((obj["selfPlayerIdData"] as string | undefined) ?? null)
+                : null,
+        firstDealtPlayerIdData:
+            kind === "invite" || kind === "transfer"
+                ? ((obj["firstDealtPlayerIdData"] as string | undefined) ?? null)
+                : null,
+        dismissedInsightsData:
+            kind === "transfer"
+                ? ((obj["dismissedInsightsData"] as string | undefined) ?? null)
+                : null,
+        hypothesisOrderData:
+            kind === "transfer"
+                ? ((obj["hypothesisOrderData"] as string | undefined) ?? null)
+                : null,
     };
 };
 
@@ -280,6 +329,7 @@ describe("createShare — universal sign-in", () => {
             cardPackData: SAMPLE_PACK,
             playersData: SAMPLE_PLAYERS,
             handSizesData: SAMPLE_HAND_SIZES,
+            firstDealtPlayerIdData: SAMPLE_FIRST_DEALT_PLAYER_ID,
         });
         expect(result).toBeInstanceOf(Error);
         expect((result as Error).message).toContain(
@@ -297,6 +347,11 @@ describe("createShare — universal sign-in", () => {
             knownCardsData: SAMPLE_KNOWN_CARDS,
             suggestionsData: SAMPLE_SUGGESTIONS,
             accusationsData: SAMPLE_ACCUSATIONS,
+            hypothesesData: SAMPLE_HYPOTHESES,
+            selfPlayerIdData: SAMPLE_SELF_PLAYER_ID,
+            firstDealtPlayerIdData: SAMPLE_FIRST_DEALT_PLAYER_ID,
+            dismissedInsightsData: SAMPLE_DISMISSED_INSIGHTS,
+            hypothesisOrderData: SAMPLE_HYPOTHESIS_ORDER,
         });
         expect(result).toBeInstanceOf(Error);
         expect((result as Error).message).toContain(
@@ -329,21 +384,31 @@ describe("createShare — kind dispatch (signed-in)", () => {
         expect(insert.accusationsData).toBeNull();
     });
 
-    test("kind: invite (no progress) → cardPack + players + handSizes only", async () => {
+    test("kind: invite (no progress) → cardPack + players + handSizes + firstDealtPlayerId only", async () => {
         setMockSession(SIGNED_IN);
         await callCreateShare({
             kind: "invite",
             cardPackData: SAMPLE_PACK,
             playersData: SAMPLE_PLAYERS,
             handSizesData: SAMPLE_HAND_SIZES,
+            firstDealtPlayerIdData: SAMPLE_FIRST_DEALT_PLAYER_ID,
         });
         const insert = recordedInserts[0]!;
         expect(insert.cardPackData).toBe(SAMPLE_PACK);
         expect(insert.playersData).toBe(SAMPLE_PLAYERS);
         expect(insert.handSizesData).toBe(SAMPLE_HAND_SIZES);
+        expect(insert.firstDealtPlayerIdData).toBe(
+            SAMPLE_FIRST_DEALT_PLAYER_ID,
+        );
         expect(insert.knownCardsData).toBeNull();
         expect(insert.suggestionsData).toBeNull();
         expect(insert.accusationsData).toBeNull();
+        // Identity + scratchwork stay NULL on invites — they go to a
+        // different player.
+        expect(insert.selfPlayerIdData).toBeNull();
+        expect(insert.dismissedInsightsData).toBeNull();
+        expect(insert.hypothesisOrderData).toBeNull();
+        expect(insert.hypothesesData).toBeNull();
     });
 
     test("kind: invite (with progress) → adds suggestions + accusations, knownCards stays NULL", async () => {
@@ -353,6 +418,7 @@ describe("createShare — kind dispatch (signed-in)", () => {
             cardPackData: SAMPLE_PACK,
             playersData: SAMPLE_PLAYERS,
             handSizesData: SAMPLE_HAND_SIZES,
+            firstDealtPlayerIdData: SAMPLE_FIRST_DEALT_PLAYER_ID,
             suggestionsData: SAMPLE_SUGGESTIONS,
             accusationsData: SAMPLE_ACCUSATIONS,
         });
@@ -360,9 +426,26 @@ describe("createShare — kind dispatch (signed-in)", () => {
         expect(insert.suggestionsData).toBe(SAMPLE_SUGGESTIONS);
         expect(insert.accusationsData).toBe(SAMPLE_ACCUSATIONS);
         expect(insert.knownCardsData).toBeNull();
+        expect(insert.firstDealtPlayerIdData).toBe(
+            SAMPLE_FIRST_DEALT_PLAYER_ID,
+        );
     });
 
-    test("kind: transfer → all seven columns populated, including hypotheses", async () => {
+    test("kind: invite rejects a missing firstDealtPlayerId", async () => {
+        setMockSession(SIGNED_IN);
+        const result = await callCreateShare({
+            kind: "invite",
+            cardPackData: SAMPLE_PACK,
+            playersData: SAMPLE_PLAYERS,
+            handSizesData: SAMPLE_HAND_SIZES,
+        });
+        expect(result).toBeInstanceOf(Error);
+        expect((result as Error).message).toContain(
+            "share_malformed_input",
+        );
+    });
+
+    test("kind: transfer → all eleven columns populated, including identity + scratchwork", async () => {
         setMockSession(SIGNED_IN);
         await callCreateShare({
             kind: "transfer",
@@ -373,6 +456,10 @@ describe("createShare — kind dispatch (signed-in)", () => {
             suggestionsData: SAMPLE_SUGGESTIONS,
             accusationsData: SAMPLE_ACCUSATIONS,
             hypothesesData: SAMPLE_HYPOTHESES,
+            selfPlayerIdData: SAMPLE_SELF_PLAYER_ID,
+            firstDealtPlayerIdData: SAMPLE_FIRST_DEALT_PLAYER_ID,
+            dismissedInsightsData: SAMPLE_DISMISSED_INSIGHTS,
+            hypothesisOrderData: SAMPLE_HYPOTHESIS_ORDER,
         });
         const insert = recordedInserts[0]!;
         expect(insert.cardPackData).toBe(SAMPLE_PACK);
@@ -382,6 +469,12 @@ describe("createShare — kind dispatch (signed-in)", () => {
         expect(insert.suggestionsData).toBe(SAMPLE_SUGGESTIONS);
         expect(insert.accusationsData).toBe(SAMPLE_ACCUSATIONS);
         expect(insert.hypothesesData).toBe(SAMPLE_HYPOTHESES);
+        expect(insert.selfPlayerIdData).toBe(SAMPLE_SELF_PLAYER_ID);
+        expect(insert.firstDealtPlayerIdData).toBe(
+            SAMPLE_FIRST_DEALT_PLAYER_ID,
+        );
+        expect(insert.dismissedInsightsData).toBe(SAMPLE_DISMISSED_INSIGHTS);
+        expect(insert.hypothesisOrderData).toBe(SAMPLE_HYPOTHESIS_ORDER);
     });
 
     test("kind: pack rejects extraneous hypothesesData", async () => {
@@ -401,9 +494,55 @@ describe("createShare — kind dispatch (signed-in)", () => {
             cardPackData: SAMPLE_PACK,
             playersData: SAMPLE_PLAYERS,
             handSizesData: SAMPLE_HAND_SIZES,
+            firstDealtPlayerIdData: SAMPLE_FIRST_DEALT_PLAYER_ID,
             hypothesesData: SAMPLE_HYPOTHESES,
         });
         expect(result).toBeInstanceOf(Error);
+    });
+
+    test("kind: invite rejects extraneous selfPlayerIdData (private to sender)", async () => {
+        setMockSession(SIGNED_IN);
+        const result = await callCreateShare({
+            kind: "invite",
+            cardPackData: SAMPLE_PACK,
+            playersData: SAMPLE_PLAYERS,
+            handSizesData: SAMPLE_HAND_SIZES,
+            firstDealtPlayerIdData: SAMPLE_FIRST_DEALT_PLAYER_ID,
+            selfPlayerIdData: SAMPLE_SELF_PLAYER_ID,
+        });
+        expect(result).toBeInstanceOf(Error);
+        expect((result as Error).message).toContain(
+            "unexpected_field:selfPlayerIdData",
+        );
+    });
+
+    test("kind: invite rejects extraneous dismissedInsightsData", async () => {
+        setMockSession(SIGNED_IN);
+        const result = await callCreateShare({
+            kind: "invite",
+            cardPackData: SAMPLE_PACK,
+            playersData: SAMPLE_PLAYERS,
+            handSizesData: SAMPLE_HAND_SIZES,
+            firstDealtPlayerIdData: SAMPLE_FIRST_DEALT_PLAYER_ID,
+            dismissedInsightsData: SAMPLE_DISMISSED_INSIGHTS,
+        });
+        expect(result).toBeInstanceOf(Error);
+        expect((result as Error).message).toContain(
+            "unexpected_field:dismissedInsightsData",
+        );
+    });
+
+    test("kind: pack rejects extraneous firstDealtPlayerIdData", async () => {
+        setMockSession(SIGNED_IN);
+        const result = await callCreateShare({
+            kind: "pack",
+            cardPackData: SAMPLE_PACK,
+            firstDealtPlayerIdData: SAMPLE_FIRST_DEALT_PLAYER_ID,
+        });
+        expect(result).toBeInstanceOf(Error);
+        expect((result as Error).message).toContain(
+            "unexpected_field:firstDealtPlayerIdData",
+        );
     });
 });
 
@@ -427,6 +566,7 @@ describe("createShare — input validation", () => {
             cardPackData: SAMPLE_PACK,
             playersData: SAMPLE_PLAYERS,
             handSizesData: SAMPLE_HAND_SIZES,
+            firstDealtPlayerIdData: SAMPLE_FIRST_DEALT_PLAYER_ID,
             suggestionsData: SAMPLE_SUGGESTIONS,
             // accusationsData missing — pairing violation
         });
@@ -441,6 +581,7 @@ describe("createShare — input validation", () => {
             cardPackData: SAMPLE_PACK,
             playersData: SAMPLE_PLAYERS,
             handSizesData: SAMPLE_HAND_SIZES,
+            firstDealtPlayerIdData: SAMPLE_FIRST_DEALT_PLAYER_ID,
             accusationsData: SAMPLE_ACCUSATIONS,
         });
         expect(result).toBeInstanceOf(Error);

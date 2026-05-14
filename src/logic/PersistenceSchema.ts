@@ -157,8 +157,8 @@ const PersistedPendingSuggestionSchema = Schema.Struct({
 
 /**
  * Convenience array wrappers for the share codec — the shares wire
- * format ships these as top-level JSON arrays rather than wrapped
- * inside a versioned envelope.
+ * format ships these as top-level JSON arrays (or nullable scalars)
+ * rather than wrapped inside a versioned envelope.
  */
 export const PlayersArraySchema = Schema.Array(PlayerSchema);
 export const HandSizesArraySchema = Schema.Array(PersistedHandSizeSchema);
@@ -166,6 +166,14 @@ export const HandsArraySchema = Schema.Array(PersistedHandSchema);
 export const SuggestionsArraySchema = Schema.Array(PersistedSuggestionSchema);
 export const AccusationsArraySchema = Schema.Array(PersistedAccusationSchema);
 export const HypothesesArraySchema = Schema.Array(PersistedHypothesisSchema);
+
+/**
+ * Nullable single-player wire shapes for the M6 identity fields —
+ * `selfPlayerId` ("which player am I") and `firstDealtPlayerId` ("who
+ * got the first card"). Both round-trip as JSON-encoded `Player | null`.
+ */
+export const SelfPlayerIdSchema = Schema.NullOr(PlayerSchema);
+export const FirstDealtPlayerIdSchema = Schema.NullOr(PlayerSchema);
 
 /**
  * Wire shape for the card-pack half of a share. The `name` field is
@@ -235,7 +243,7 @@ const PersistedDismissedInsightSchema = Schema.Struct({
     atConfidence: Schema.Literals(["low", "med", "high"]),
 });
 
-const DismissedInsightsArraySchema = Schema.Array(
+export const DismissedInsightsArraySchema = Schema.Array(
     PersistedDismissedInsightSchema,
 );
 
@@ -251,7 +259,7 @@ const PersistedHypothesisOrderEntrySchema = Schema.Struct({
     card: CardSchema,
 });
 
-const HypothesisOrderArraySchema = Schema.Array(
+export const HypothesisOrderArraySchema = Schema.Array(
     PersistedHypothesisOrderEntrySchema,
 );
 

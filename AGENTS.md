@@ -324,7 +324,7 @@ The icons match what the user sees in the deduction grid, so the tour reads in t
 
 Two docs in `docs/` cover how user data leaves the device:
 
-- [docs/shares-and-sync.md](docs/shares-and-sync.md) — the sharing UX, the kind-discriminated wire contract, and the seven Effect-Schema-validated wire fields (cardPack / players / handSizes / knownCards / suggestions / accusations / hypotheses). Hypotheses are `transfer`-only.
+- [docs/shares-and-sync.md](docs/shares-and-sync.md) — the sharing UX, the kind-discriminated wire contract, and the eleven Effect-Schema-validated wire fields (cardPack / players / handSizes / knownCards / suggestions / accusations / hypotheses / selfPlayerId / firstDealtPlayerId / dismissedInsights / hypothesisOrder). `firstDealtPlayerId` rides invite + transfer (publicly known game state); `hypotheses`, `selfPlayerId`, `dismissedInsights`, and `hypothesisOrder` are `transfer`-only.
 - [docs/card-pack-sync.md](docs/card-pack-sync.md) — the deep dive on how localStorage and the server stay in sync once the user is signed in: per-pack metadata (`unsyncedSince`, `lastSyncedSnapshot`), tombstones, the `<CardPacksSync />` reconcile loop, the `flushPendingChanges` logout chokepoint, and four "life of a card pack" timelines.
 
 **Whenever you touch sync-or-share code, update the corresponding doc as part of the same change.** This is non-negotiable — these systems have enough subtlety (auth gating, conflict resolution, in-flight registry, tombstones, the four-quadrant pack-state matrix) that drift between the code and the doc will burn the next person to come in.
@@ -338,9 +338,39 @@ The three rules from `docs/shares-and-sync.md` that govern sharing and shouldn't
 
 - **Universal sign-in.** Every share requires a real, non-anonymous user. The check lives at the top of `createShare` and the DB enforces it via `owner_id NOT NULL`. Don't reintroduce per-flow auth conditionals. The same gate (`useSignedInUserId` / `requireSignedInUser`) governs server-side card-pack mirroring.
 - **Kind-based wire contract.** `createShare`'s input is a discriminated union by `kind`. The server whitelists fields per kind and rejects anything extraneous. Don't expose the column structure to the client; add new flows by adding new kinds.
-- **Effect-Schema-validated wire format.** All seven wire fields go through codecs in `src/logic/ShareCodec.ts`. Don't add a new wire field with a raw `JSON.stringify` / `JSON.parse` — write a codec, route both sender and receiver through it.
+- **Effect-Schema-validated wire format.** All eleven wire fields go through codecs in `src/logic/ShareCodec.ts`. Don't add a new wire field with a raw `JSON.stringify` / `JSON.parse` — write a codec, route both sender and receiver through it.
 
 The card-pack sync architecture has its own load-bearing invariants that `docs/card-pack-sync.md` covers in depth — the four-quadrant pack-state matrix (`unsyncedSince` × `lastSyncedSnapshot`), the conflict-resolution rules (local-wins when `unsyncedSince` is set, otherwise server-wins), the always-tombstone-when-signed-in delete policy, and the `clearAccountTiedLocalState` keys list. Read the doc before changing those.
+
+### Adding state? Decide its share fate
+
+Every new field in `ClueState` (or anything else persisted via the canonical `GameSession` codec) needs an explicit categorisation against the three share kinds, made in the same PR that adds the field. Several fields have drifted in the past — added to state, persisted to localStorage, but never pulled into the wire format — because contributors thought of sharing only when touching `src/ui/share/` directly. The recipe below is the antidote: walk it whenever you add state, not just when you change share code.
+
+**The five-bucket recipe:**
+
+1. **Card-pack data?** — properties of the cards themselves, not of *this game*. Goes in `pack` (and therefore in `invite` and `transfer` too, since they include the pack).
+   *Examples: category definitions, card names.*
+
+2. **Publicly known game state?** — anything every player at the physical table can see or has heard out loud. Goes in `invite` (and `transfer`).
+   *Examples: roster, hand sizes, suggestion log, accusation log, `firstDealtPlayerId`.*
+
+3. **Private to the sender, but objective game state?** — facts about the sender's own hand or what they've been told privately by other players. Goes in `transfer` only. (`invite` excludes this — it ships to a *different* player who shouldn't see your hand.)
+   *Examples: `knownCards`, the `seenCard` on a suggestion the sender refuted.*
+
+4. **Personal scratchwork / identity?** — the sender's hunches, annotations, dismissals, "who am I" choice. Goes in `transfer` only. (`invite` excludes this — the recipient is a different person with a different perspective.)
+   *Examples: `hypotheses`, `hypothesisOrder`, `selfPlayerId`, `dismissedInsights`.*
+
+5. **Ephemeral UI / in-flight drafts?** — anything that's persisted to survive reloads but doesn't represent committed game state. **Never shared, including in `transfer`.** The receiver enters their own.
+   *Examples: `pendingSuggestion`, `uiMode`, scroll memory.*
+
+A new field that doesn't fit any of these is a signal that the share-kind taxonomy needs to grow, not that the field should be shoehorned. Surface that in PR review rather than picking the closest-fit kind silently.
+
+**Concrete steps when adding a field:**
+
+1. Categorise via the recipe above.
+2. If the field belongs in `invite` and/or `transfer`: add or reuse a schema in `src/logic/PersistenceSchema.ts`, a codec in `src/logic/ShareCodec.ts`, a nullable column in a new forward-only migration, fields on the discriminated `CreateShareInput` plus the kind's `ALLOWED_KEYS_FOR` whitelist, projection in `createShare` / `getShare`, encoding in `ShareCreateModal`'s `buildInviteInput` / `buildTransferInput`, and decoding in `useApplyShareSnapshot`'s `buildSessionFromSnapshot`. Plus tests at each layer (codec round-trip, server input validation, modal payload shape, hydration builder).
+3. If the field is ephemeral and shouldn't ship: still note that explicitly in the PR description (`<fieldName>` is intentionally not on the wire — see recipe in `AGENTS.md`).
+4. Update the wire-fields table in [docs/shares-and-sync.md](docs/shares-and-sync.md) and the field counts in this file's preamble.
 
 ## Tests
 

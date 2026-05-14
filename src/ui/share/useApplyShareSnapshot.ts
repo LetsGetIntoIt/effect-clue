@@ -32,6 +32,7 @@
 
 import { DateTime, Result, Schema } from "effect";
 import { Accusation, newAccusationId } from "../../logic/Accusation";
+import { type InsightConfidence } from "../../logic/BehavioralInsights";
 import {
     cardSetEquals,
     CardSet,
@@ -68,10 +69,14 @@ import { PlayerSet } from "../../logic/PlayerSet";
 import {
     accusationsCodec,
     cardPackCodec,
+    dismissedInsightsCodec,
+    firstDealtPlayerIdCodec,
     handSizesCodec,
     hypothesesCodec,
+    hypothesisOrderCodec,
     knownCardsCodec,
     playersCodec,
+    selfPlayerIdCodec,
     suggestionsCodec,
 } from "../../logic/ShareCodec";
 import { newSuggestionId, Suggestion } from "../../logic/Suggestion";
@@ -84,6 +89,10 @@ export interface ShareSnapshotForHydration {
     readonly suggestionsData: string | null;
     readonly accusationsData: string | null;
     readonly hypothesesData: string | null;
+    readonly selfPlayerIdData: string | null;
+    readonly firstDealtPlayerIdData: string | null;
+    readonly dismissedInsightsData: string | null;
+    readonly hypothesisOrderData: string | null;
 }
 
 // Wire-format field names. Module-scope so they don't trip the
@@ -96,6 +105,10 @@ const F_KNOWN_CARDS_DATA = "knownCardsData";
 const F_SUGGESTIONS_DATA = "suggestionsData";
 const F_ACCUSATIONS_DATA = "accusationsData";
 const F_HYPOTHESES_DATA = "hypothesesData";
+const F_SELF_PLAYER_ID_DATA = "selfPlayerIdData";
+const F_FIRST_DEALT_PLAYER_ID_DATA = "firstDealtPlayerIdData";
+const F_DISMISSED_INSIGHTS_DATA = "dismissedInsightsData";
+const F_HYPOTHESIS_ORDER_DATA = "hypothesisOrderData";
 
 const DECODE_ERROR_PREFIX = "share snapshot decode failed: ";
 
@@ -267,7 +280,7 @@ export const buildSessionFromSnapshot = (
             hypothesesCodec,
         );
         let m: HypothesisMap = emptyHypotheses;
-        const order: Array<Cell> = [];
+        const fallbackOrder: Array<Cell> = [];
         for (const h of decoded) {
             const owner =
                 h.player !== null
@@ -275,9 +288,71 @@ export const buildSessionFromSnapshot = (
                     : CaseFileOwner();
             const cell = Cell(owner, h.card);
             m = HashMap.set(m, cell, h.value as HypothesisValue);
-            order.push(cell);
+            fallbackOrder.push(cell);
         }
+        // Prefer the sender's explicit ordering when present (transfer
+        // ships `hypothesisOrderData`). For older / non-transfer
+        // payloads, fall back to the array order in `hypothesesData`
+        // — that's the order the sender saw rendered.
+        if (snapshot.hypothesisOrderData === null) {
+            return { hypotheses: m, hypothesisOrder: fallbackOrder };
+        }
+        const decodedOrder = decodeField(
+            F_HYPOTHESIS_ORDER_DATA,
+            snapshot.hypothesisOrderData,
+            hypothesisOrderCodec,
+        );
+        const order: Array<Cell> = decodedOrder.map(({ player, card }) =>
+            Cell(player !== null ? PlayerOwner(player) : CaseFileOwner(), card),
+        );
         return { hypotheses: m, hypothesisOrder: order };
+    })();
+
+    // `transfer` payloads restore the sender's identity choice so the
+    // receiving device doesn't re-prompt "Who are you?". `invite` and
+    // older shares leave the field null — that's the M6 wizard's
+    // "skipped" state, which the wizard surfaces as a discoverable
+    // CTA on the setup pane.
+    const selfPlayerId =
+        snapshot.selfPlayerIdData !== null
+            ? decodeField(
+                  F_SELF_PLAYER_ID_DATA,
+                  snapshot.selfPlayerIdData,
+                  selfPlayerIdCodec,
+              )
+            : null;
+
+    // `firstDealtPlayerId` rides both `invite` and `transfer` — it's
+    // publicly known game state every player at the physical table
+    // heard called out. Older shares (pre-migration rows) leave it
+    // null, which is the wizard's "skipped" state.
+    const firstDealtPlayerId =
+        snapshot.firstDealtPlayerIdData !== null
+            ? decodeField(
+                  F_FIRST_DEALT_PLAYER_ID_DATA,
+                  snapshot.firstDealtPlayerIdData,
+                  firstDealtPlayerIdCodec,
+              )
+            : null;
+
+    // Dismissed insights are personal scratchwork — `transfer` only.
+    // Keys are deterministic `<DetectorKind>:<Player>:<Card>` strings;
+    // the receiver's regenerated insights produce the same keys so
+    // this map plugs in directly. Missing field → empty dismissals.
+    const dismissedInsights: ReadonlyMap<string, InsightConfidence> = (() => {
+        if (snapshot.dismissedInsightsData === null) {
+            return new Map<string, InsightConfidence>();
+        }
+        const decoded = decodeField(
+            F_DISMISSED_INSIGHTS_DATA,
+            snapshot.dismissedInsightsData,
+            dismissedInsightsCodec,
+        );
+        const out = new Map<string, InsightConfidence>();
+        for (const { key, atConfidence } of decoded) {
+            out.set(key, atConfidence);
+        }
+        return out;
     })();
 
     return {
@@ -290,17 +365,9 @@ export const buildSessionFromSnapshot = (
         hypothesisOrder,
         // Drafts are local-only; the receiver enters their own.
         pendingSuggestion: null,
-        // Identity is local-only too — the share wire format
-        // intentionally does NOT carry `selfPlayerId` /
-        // `firstDealtPlayerId`. The receiver picks their own
-        // identity post-import (the M6 wizard's "Who are you?" step
-        // is skippable, so null is the right starting value).
-        selfPlayerId: null,
-        firstDealtPlayerId: null,
-        // Dismissals are personal scratchwork — the share wire format
-        // doesn't carry them (same policy as hypotheses for non-transfer
-        // share kinds). Receivers start with a clean dismissal map.
-        dismissedInsights: new Map(),
+        selfPlayerId,
+        firstDealtPlayerId,
+        dismissedInsights,
     };
 };
 

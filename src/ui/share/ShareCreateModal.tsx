@@ -62,10 +62,14 @@ import type { Card, Player } from "../../logic/GameObjects";
 import {
     accusationsCodec,
     cardPackCodec,
+    dismissedInsightsCodec,
+    firstDealtPlayerIdCodec,
     handSizesCodec,
     hypothesesCodec,
+    hypothesisOrderCodec,
     knownCardsCodec,
     playersCodec,
+    selfPlayerIdCodec,
     suggestionsCodec,
 } from "../../logic/ShareCodec";
 import {
@@ -268,8 +272,10 @@ const buildPackInput = (
 
 /**
  * Build the wire payload for an `invite` share — pack + players +
- * hand sizes, with optional suggestions/accusations when the user
- * checked the "include progress" box (and there's progress to ship).
+ * hand sizes + `firstDealtPlayerId`, with optional suggestions/
+ * accusations when the user checked the "include progress" box (and
+ * there's progress to ship). `firstDealtPlayerId` is publicly known
+ * game state and rides every invite.
  */
 const buildInviteInput = (
     session: GameSession,
@@ -284,6 +290,9 @@ const buildInviteInput = (
         ),
         playersData: Schema.encodeSync(playersCodec)(playerSlice),
         handSizesData: Schema.encodeSync(handSizesCodec)(session.handSizes),
+        firstDealtPlayerIdData: Schema.encodeSync(firstDealtPlayerIdCodec)(
+            session.firstDealtPlayerId,
+        ),
         ...(includeProgress
             ? {
                   suggestionsData: Schema.encodeSync(suggestionsCodec)(
@@ -322,9 +331,50 @@ const projectHypotheses = (
 };
 
 /**
+ * Project hypothesis ordering into the wire shape — same flat
+ * `(player|null, card)` encoding as the persistence layer's
+ * `hypothesisOrder`. The value lives in `hypotheses`; this list
+ * carries keys only, in most-recent-first order. Restored on the
+ * receive side so the panel reads as the same historical log.
+ */
+const projectHypothesisOrder = (
+    order: GameSession["hypothesisOrder"],
+): ReadonlyArray<{ readonly player: Player | null; readonly card: Card }> =>
+    order.map((cell) => ({
+        player: cell.owner._tag === "Player" ? cell.owner.player : null,
+        card: cell.card,
+    }));
+
+/**
+ * Project the dismissed-insights `ReadonlyMap` into the wire shape
+ * (array of `{ key, atConfidence }`). Keys are deterministic
+ * `<DetectorKind>:<Player>:<Card>` strings — the receiver's
+ * regenerated insights produce the same keys, so the shipped map
+ * filters them without needing any ID-resolution layer.
+ */
+const projectDismissedInsights = (
+    map: GameSession["dismissedInsights"],
+): ReadonlyArray<{
+    readonly key: string;
+    readonly atConfidence: "low" | "med" | "high";
+}> => {
+    const out: Array<{
+        key: string;
+        atConfidence: "low" | "med" | "high";
+    }> = [];
+    for (const [key, atConfidence] of map) {
+        out.push({ key, atConfidence });
+    }
+    return out;
+};
+
+/**
  * Build the wire payload for a `transfer` share — everything,
- * including known cards and the user's active hypotheses (transfer is
- * the "move my game to another device" flow, same user).
+ * including known cards, hypotheses, identity, dismissed insights,
+ * and hypothesis ordering. Transfer is the "move my game to another
+ * device" flow (same user), so the receive side can drop the user
+ * back exactly where they left off without re-prompting "Who are
+ * you?" or losing scratchwork.
  */
 const buildTransferInput = (
     session: GameSession,
@@ -345,6 +395,18 @@ const buildTransferInput = (
     ),
     hypothesesData: Schema.encodeSync(hypothesesCodec)(
         projectHypotheses(session.hypotheses),
+    ),
+    selfPlayerIdData: Schema.encodeSync(selfPlayerIdCodec)(
+        session.selfPlayerId,
+    ),
+    firstDealtPlayerIdData: Schema.encodeSync(firstDealtPlayerIdCodec)(
+        session.firstDealtPlayerId,
+    ),
+    dismissedInsightsData: Schema.encodeSync(dismissedInsightsCodec)(
+        projectDismissedInsights(session.dismissedInsights),
+    ),
+    hypothesisOrderData: Schema.encodeSync(hypothesisOrderCodec)(
+        projectHypothesisOrder(session.hypothesisOrder),
     ),
 });
 
@@ -493,24 +555,27 @@ export function ShareCreateModal({
             suggestions: derived.suggestionsAsData,
             accusations: derived.accusationsAsData,
             hypotheses: state.hypotheses,
-            // Hypothesis ordering is local-only UI state; the wire
-            // format omits it (receivers start with whatever order the
-            // share codec hands back, which today is empty for all
-            // non-transfer kinds).
+            // `transfer` payloads include the panel's most-recent-first
+            // ordering so the receive side renders the same historical
+            // log. `invite` shares don't carry hypotheses at all, so
+            // `buildInviteInput` ignores this field.
             hypothesisOrder: state.hypothesisOrder,
             // Drafts aren't part of the share wire format — the
             // receiver enters their own. The local `pendingSuggestion`
             // exists in `state` but doesn't ride the share.
             pendingSuggestion: null,
-            // Identity is per-user and stays local. The wire format
-            // does NOT carry these — receivers pick their own
-            // identity post-import (see `useApplyShareSnapshot.ts`,
-            // which defaults both to null on the receive side).
-            selfPlayerId: null,
-            firstDealtPlayerId: null,
-            // Dismissals stay local — the share codec doesn't pick
-            // this field, but the GameSession type requires it.
-            dismissedInsights: new Map(),
+            // `transfer` payloads carry the sender's identity choice
+            // and the publicly-known "first dealt" so the receiving
+            // device drops the user back exactly where they left off.
+            // `invite` payloads ship `firstDealtPlayerId` only — it's
+            // publicly known game state every player heard called out.
+            // `buildInviteInput` reads `firstDealtPlayerId` from this
+            // session and ignores `selfPlayerId`.
+            selfPlayerId: state.selfPlayerId,
+            firstDealtPlayerId: state.firstDealtPlayerId,
+            // Behavioral-insight dismissals ride `transfer` only —
+            // `buildTransferInput` projects this into the wire shape.
+            dismissedInsights: state.dismissedInsights,
         };
         if (variant === VARIANT_INVITE) {
             return buildInviteInput(
@@ -526,8 +591,13 @@ export function ShareCreateModal({
         derived.accusationsAsData,
         derived.suggestionsAsData,
         includeProgress,
+        state.dismissedInsights,
+        state.firstDealtPlayerId,
         state.handSizes,
+        state.hypotheses,
+        state.hypothesisOrder,
         state.knownCards,
+        state.selfPlayerId,
         state.setup,
         variant,
     ]);

@@ -1,5 +1,5 @@
 /**
- * Effect-Schema codecs for the six wire fields that flow through
+ * Effect-Schema codecs for the eleven wire fields that flow through
  * the M9 share path.
  *
  * The shares feature serialises sub-slices of a `GameSession` to
@@ -17,15 +17,29 @@
  * `Schema.fromJsonString(Inner)` is the Effect-4 combinator that
  * packages "JSON-string ↔ schema-validated object" into a single
  * Codec — `Type` is the domain shape, `Encoded` is `string`.
+ *
+ * Per-kind usage (see `docs/shares-and-sync.md` for the full table):
+ *
+ *   - `pack`:     cardPackCodec
+ *   - `invite`:   cardPackCodec, playersCodec, handSizesCodec,
+ *                 suggestionsCodec, accusationsCodec,
+ *                 firstDealtPlayerIdCodec
+ *   - `transfer`: all of the above plus knownCardsCodec, hypothesesCodec,
+ *                 selfPlayerIdCodec, dismissedInsightsCodec,
+ *                 hypothesisOrderCodec
  */
 import { Schema } from "effect";
 import {
     AccusationsArraySchema,
     CardSetSchema,
+    DismissedInsightsArraySchema,
+    FirstDealtPlayerIdSchema,
     HandSizesArraySchema,
     HandsArraySchema,
     HypothesesArraySchema,
+    HypothesisOrderArraySchema,
     PlayersArraySchema,
+    SelfPlayerIdSchema,
     SuggestionsArraySchema,
 } from "./PersistenceSchema";
 
@@ -44,3 +58,27 @@ export const accusationsCodec = Schema.fromJsonString(AccusationsArraySchema);
  * kind-discriminated wire-format rule.
  */
 export const hypothesesCodec = Schema.fromJsonString(HypothesesArraySchema);
+
+/**
+ * Identity + scratchwork codecs (added when share-kind coverage was
+ * re-evaluated against ClueState — see `docs/shares-and-sync.md`).
+ *
+ * - `firstDealtPlayerIdCodec` rides `invite` AND `transfer` — who was
+ *   dealt the first card is publicly known game state, every player
+ *   at the table heard it called out.
+ * - `selfPlayerIdCodec`, `dismissedInsightsCodec`, and
+ *   `hypothesisOrderCodec` are `transfer`-only. They encode the
+ *   sender's identity choice and personal scratchwork; invite shares
+ *   go to a *different* player who picks their own identity and
+ *   starts with empty scratchwork.
+ */
+export const selfPlayerIdCodec = Schema.fromJsonString(SelfPlayerIdSchema);
+export const firstDealtPlayerIdCodec = Schema.fromJsonString(
+    FirstDealtPlayerIdSchema,
+);
+export const dismissedInsightsCodec = Schema.fromJsonString(
+    DismissedInsightsArraySchema,
+);
+export const hypothesisOrderCodec = Schema.fromJsonString(
+    HypothesisOrderArraySchema,
+);
