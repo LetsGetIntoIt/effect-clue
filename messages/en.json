@@ -31,7 +31,7 @@
     },
     "about": {
         "title": "More than process of elimination",
-        "motivation": "Every suggestion leaks information. Keeping track of who must hold what gets hard fast — too much to do in your head.",
+        "motivation": "Every suggestion leaks information. Keeping track of who must have what gets hard fast — too much to do in your head.",
         "videoCallout": "This solver does the bookkeeping for you. It finds clues you'd miss and teaches the strategy as you play. Watch the kickoff video to learn the logic — so you can be the best detective in the room.",
         "videoTitle": "Clue strategy explainer",
         "pageHeading": "About the Clue solver"
@@ -281,19 +281,19 @@
         "card-ownership": {
             "headline": "Who has the card",
             "detail": "{value, select, Y {Each {card} has exactly one owner — every other owner was ruled out, so {cellPlayer} must own it.} other {{card} is already owned by someone else, so {cellPlayer} doesn't own it.}}",
-            "evidenceClause": "{cellCard} is held by {otherOwner}"
+            "evidenceClause": "{otherOwner} has {cellCard}"
         },
         "player-hand": {
             "headline": "Hand size",
-            "detail": "{value, select, Y {{player}'s hand is a fixed size and their other cards are all ruled out, so {player} must own {cellCard}.} other {{player}'s hand is a fixed size and already full, so {player} can't also hold {cellCard}.}}"
+            "detail": "{value, select, Y {{player}'s hand is a fixed size and their other cards are all ruled out, so {player} must own {cellCard}.} other {{player}'s hand is a fixed size and already full, so {player} cannot also have {cellCard}.}}"
         },
         "case-file-category": {
             "headline": "Case file",
-            "detail": "{value, select, Y {The case file holds exactly one {category} — the others are ruled out, so the answer is {cellCard}.} other {The case file holds exactly one {category}; another card in that category is the answer, so it isn't {cellCard}.}}"
+            "detail": "{value, select, Y {The case file has exactly one {category} — the others are ruled out, so the answer is {cellCard}.} other {The case file has exactly one {category}; another card in that category is the answer, so it is not {cellCard}.}}"
         },
         "non-refuters": {
-            "detailKnown": "{cellPlayer} passed on {suggester}'s suggestion #{number}, so {cellPlayer} can't hold {cellCard}.",
-            "detailUnknown": "{cellPlayer} passed on suggestion #{number}, so {cellPlayer} can't hold {cellCard}."
+            "detailKnown": "{cellPlayer} passed on {suggester}'s suggestion #{number}, so {cellPlayer} cannot have {cellCard}.",
+            "detailUnknown": "{cellPlayer} passed on suggestion #{number}, so {cellPlayer} cannot have {cellCard}."
         },
         "refuter-showed": {
             "detailKnown": "{refuter} refuted suggestion #{number} by showing {seen}, so {cellPlayer} has {cellCard}.",
@@ -307,7 +307,7 @@
         },
         "disjoint-groups-hand-lock": {
             "headline": "Disjoint groups",
-            "detail": "{player} refuted {groupCount} suggestions ({suggestionNumbers}) whose cards don't overlap, accounting for every remaining card in {player}'s hand. So {cellPlayer} can't hold {cellCard}."
+            "detail": "{player} refuted {groupCount} suggestions ({suggestionNumbers}) whose cards don't overlap, accounting for every remaining card in {player}'s hand. So {cellPlayer} cannot have {cellCard}."
         },
         "accusationHeadline": "Accusation #{number}",
         "failed-accusation": {
@@ -452,8 +452,8 @@
         "removeAccusation": "Remove accusation",
         "conflictCardHasOtherOwner": "But <strong>{card}</strong> already has another owner.",
         "conflictCardNoPossibleOwner": "But <strong>{card}</strong> has been ruled out for every possible owner.",
-        "conflictHandSizeOverflow": "But <strong>{player}</strong> would hold more than {handSize} cards.",
-        "conflictHandSizeUnderflow": "But <strong>{player}</strong> can't hold {handSize} cards if all of these are ruled out.",
+        "conflictHandSizeOverflow": "But <strong>{player}</strong> would have more than {handSize} cards.",
+        "conflictHandSizeUnderflow": "But <strong>{player}</strong> cannot have {handSize} cards if all of these are ruled out.",
         "conflictCaseFileCategoryConflict": "But the case file's {category} is already accounted for.",
         "conflictCaseFileCategoryNoOption": "But every card in the {category} category has been ruled out for the case file.",
         "knownCardFix": "Known card: <strong>{player}</strong> has <strong>{card}</strong>",
@@ -610,7 +610,7 @@
         "setup": {
             "welcome": {
                 "title": "Welcome to Clue Solver",
-                "body": "Build your game below — pick a deck, list your players, and mark the cards you're holding."
+                "body": "Build your game below — pick a deck, list your players, and mark the cards you have."
             },
             "cardPack": {
                 "title": "Get started by picking a card pack",
