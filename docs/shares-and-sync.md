@@ -43,8 +43,8 @@ just summarises what's in the link.
 | Variant | Entry points | What ships | Notes |
 |---|---|---|---|
 | `pack` | Card-pack row in Setup ("Share this pack" button), per-pack share icon in the "All card packs" picker | Card pack only | Picker entry passes `forcedCardPack` so the share contains the *picked* pack rather than the live setup pack |
-| `invite` | Setup pane near the Start playing CTA, overflow menu ("Invite a player") | Card pack + players + hand sizes; optional checkbox adds suggestions + accusations together when at least one of either has been logged | Checkbox is hidden when neither suggestions nor accusations exist. Label adapts to what's there: "Include all N prior suggestions and M failed accusations", "Include all N prior suggestions", or "Include all M prior failed accusations". **No hypotheses** — they're personal scratch notes; another player shouldn't see them. |
-| `transfer` | Overflow menu only ("Continue on another device") | Everything: card pack + players + hand sizes + known cards + suggestions + accusations + **hypotheses** | Renders a prominent privacy warning above the CTA — this link discloses your hand AND your in-progress hunches |
+| `invite` | Setup pane near the Start playing CTA, overflow menu ("Invite a player") | Card pack + players + hand sizes + `firstDealtPlayerId`; optional checkbox adds suggestions + accusations together when at least one of either has been logged | Checkbox is hidden when neither suggestions nor accusations exist. Label adapts to what's there: "Include all N prior suggestions and M failed accusations", "Include all N prior suggestions", or "Include all M prior failed accusations". `firstDealtPlayerId` rides every invite — it's publicly known game state, every player at the physical table heard it called out. **No hypotheses, no `selfPlayerId`, no `dismissedInsights`** — those are personal scratch notes / identity; another player shouldn't see them. |
+| `transfer` | Overflow menu only ("Continue on another device") | Everything: card pack + players + hand sizes + known cards + suggestions + accusations + **hypotheses + `selfPlayerId` + `firstDealtPlayerId` + `dismissedInsights` + `hypothesisOrder`** | Renders a prominent privacy warning above the CTA — this link discloses your hand AND your in-progress hunches. Restores identity + dismissed insights + hypothesis ordering on the receiving device so the user lands back exactly where they left off (no "Who are you?" re-prompt). |
 
 The flow taxonomy intentionally hides the underlying column structure
 from the user. Earlier versions of the modal exposed four toggles
@@ -111,15 +111,41 @@ rejects it before any data lands.
 type CreateShareInput =
   | { kind: "pack"; cardPackData: string }
   | { kind: "invite"; cardPackData; playersData; handSizesData;
+      firstDealtPlayerIdData;                  // publicly known
       suggestionsData?; accusationsData? }     // pair both or neither
   | { kind: "transfer"; cardPackData; playersData; handSizesData;
       knownCardsData; suggestionsData; accusationsData;
-      hypothesesData };                        // transfer-only
+      hypothesesData;                          // private scratchwork
+      selfPlayerIdData;                        // sender's identity
+      firstDealtPlayerIdData;                  // publicly known
+      dismissedInsightsData;                   // private scratchwork
+      hypothesisOrderData };                   // private scratchwork
 ```
 
-The hypotheses field is `transfer`-only by design — hypotheses are
-the user's private scratch notes about who-might-own-what, and an
-`invite` share goes to *another* player who shouldn't see them.
+Per-kind wire-field coverage:
+
+| Wire field | `pack` | `invite` | `transfer` |
+|---|---|---|---|
+| `cardPackData` | yes | yes | yes |
+| `playersData` | — | yes | yes |
+| `handSizesData` | — | yes | yes |
+| `knownCardsData` | — | — | yes |
+| `suggestionsData` | — | optional (paired with accusations) | yes |
+| `accusationsData` | — | optional (paired with suggestions) | yes |
+| `hypothesesData` | — | — | yes |
+| `firstDealtPlayerIdData` | — | yes | yes |
+| `selfPlayerIdData` | — | — | yes |
+| `dismissedInsightsData` | — | — | yes |
+| `hypothesisOrderData` | — | — | yes |
+
+The `firstDealtPlayerId` field is the only identity-related slice
+that crosses to a different player — it's publicly-known game state
+("Player X was dealt the first card") that every player at the
+physical table heard called out. The other identity / scratchwork
+fields (`selfPlayerId`, `dismissedInsights`, `hypothesisOrder`, plus
+`hypotheses` itself) are `transfer`-only by design: an invite share
+goes to *another* player who picks their own identity and starts
+with empty scratchwork.
 
 The server whitelists the fields each `kind` is allowed to carry.
 A `kind: "pack"` request with an extraneous `playersData` is
@@ -148,17 +174,21 @@ kind is a wire-and-server change, not a schema change.
 
 ## Effect-Schema-validated wire format
 
-All seven wire fields round-trip through Effect `Schema` codecs in
+All eleven wire fields round-trip through Effect `Schema` codecs in
 [src/logic/ShareCodec.ts](../src/logic/ShareCodec.ts):
 
 ```ts
-export const cardPackCodec    = Schema.fromJsonString(CardSetSchema);
-export const playersCodec     = Schema.fromJsonString(...);
-export const handSizesCodec   = Schema.fromJsonString(...);
-export const knownCardsCodec  = Schema.fromJsonString(...);
-export const suggestionsCodec = Schema.fromJsonString(...);
-export const accusationsCodec = Schema.fromJsonString(...);
-export const hypothesesCodec  = Schema.fromJsonString(...);
+export const cardPackCodec            = Schema.fromJsonString(CardSetSchema);
+export const playersCodec             = Schema.fromJsonString(...);
+export const handSizesCodec           = Schema.fromJsonString(...);
+export const knownCardsCodec          = Schema.fromJsonString(...);
+export const suggestionsCodec         = Schema.fromJsonString(...);
+export const accusationsCodec         = Schema.fromJsonString(...);
+export const hypothesesCodec          = Schema.fromJsonString(...);
+export const selfPlayerIdCodec        = Schema.fromJsonString(...);
+export const firstDealtPlayerIdCodec  = Schema.fromJsonString(...);
+export const dismissedInsightsCodec   = Schema.fromJsonString(...);
+export const hypothesisOrderCodec     = Schema.fromJsonString(...);
 ```
 
 Each codec packages "JSON-string ↔ schema-validated object" into one
@@ -240,6 +270,29 @@ before swapping it into the live setup. Defensive empty-share branch
 for legacy / direct API calls) renders an empty-state message and
 disables Import.
 
+**Why shipping `dismissedInsights` "just works" on receive:** the
+`dismissedKey` in each behavioral insight (`BehavioralInsights.ts`)
+is a deterministic string of the form
+`<DetectorKind>:<Player>:<Card>` — e.g.
+`"FrequentSuggester:Alice:Knife"`. All inputs to that key —
+`players`, `cards`, `selfPlayerId` — already round-trip through the
+wire format intact. So when the receive side runs `generateInsights()`
+over the imported game, the regenerated insights produce *the same
+dismissed keys*. The shipped
+`dismissedInsights: Map<dismissedKey, confidence>` plugs straight
+in — no key-rewriting or ID-resolution layer needed. If the
+detector-kind enum or cell encoding ever changes, that's a
+forward-only versioning concern for the codec (same as any other
+wire field), not a new design problem.
+
+**`hypothesisOrder` precedence on receive:** when a transfer payload
+carries both `hypothesesData` and `hypothesisOrderData`, the explicit
+order wins — that's what the sender saw rendered, most-recent-first.
+When only `hypothesesData` is present (older transfer rows from
+pre-migration shares, or future kinds that ship hypotheses without
+the order column), the receive side falls back to the array iteration
+order in `hypothesesData`.
+
 ## Universal sign-in (receive side)
 
 Just like creating a share, **receiving a share requires a non-
@@ -275,22 +328,30 @@ Migration history:
   — tightens `owner_id` to `NOT NULL` (M22 universal sign-in).
 - [0007_shares_hypotheses.ts](../src/server/migrations/0007_shares_hypotheses.ts)
   — adds `snapshot_hypotheses_data` for the `transfer` kind.
+- [0008_shares_identity_and_scratchwork.ts](../src/server/migrations/0008_shares_identity_and_scratchwork.ts)
+  — adds four nullable columns: `snapshot_self_player_id_data`,
+  `snapshot_first_dealt_player_id_data`,
+  `snapshot_dismissed_insights_data`, `snapshot_hypothesis_order_data`.
 
-Schema (post-0007):
+Schema (post-0008):
 
 ```sql
 shares (
-  id                          TEXT PRIMARY KEY,
-  owner_id                    TEXT NOT NULL REFERENCES "user"(id) ON DELETE SET NULL,
-  snapshot_card_pack_data     TEXT,         -- JSON-encoded CardSetSchema
-  snapshot_players_data       TEXT,         -- JSON-encoded Schema.Array(PlayerSchema)
-  snapshot_hand_sizes_data    TEXT,
-  snapshot_known_cards_data   TEXT,
-  snapshot_suggestions_data   TEXT,
-  snapshot_accusations_data   TEXT,
-  snapshot_hypotheses_data    TEXT,         -- JSON-encoded Hypotheses; transfer-only
-  created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  expires_at                  TIMESTAMPTZ,  -- NOW() + SHARE_TTL on insert
+  id                                       TEXT PRIMARY KEY,
+  owner_id                                 TEXT NOT NULL REFERENCES "user"(id) ON DELETE SET NULL,
+  snapshot_card_pack_data                  TEXT,         -- JSON-encoded CardSetSchema
+  snapshot_players_data                    TEXT,         -- JSON-encoded Schema.Array(PlayerSchema)
+  snapshot_hand_sizes_data                 TEXT,
+  snapshot_known_cards_data                TEXT,
+  snapshot_suggestions_data                TEXT,
+  snapshot_accusations_data                TEXT,
+  snapshot_hypotheses_data                 TEXT,         -- transfer-only
+  snapshot_self_player_id_data             TEXT,         -- transfer-only ("which player I am")
+  snapshot_first_dealt_player_id_data      TEXT,         -- invite + transfer (publicly known)
+  snapshot_dismissed_insights_data         TEXT,         -- transfer-only (scratchwork)
+  snapshot_hypothesis_order_data           TEXT,         -- transfer-only (UI ordering)
+  created_at                               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at                               TIMESTAMPTZ,  -- NOW() + SHARE_TTL on insert
   -- index: shares_owner_id_idx, shares_expires_at_idx
 )
 ```

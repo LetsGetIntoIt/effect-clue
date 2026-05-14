@@ -316,7 +316,7 @@ describe("ShareCreateModal — wire payload by variant", () => {
         expect(payload.cardPackIsCustom).toBeUndefined();
     });
 
-    test("invite variant sends kind: 'invite' with cardPack + players + handSizes", async () => {
+    test("invite variant sends kind: 'invite' with cardPack + players + handSizes + firstDealtPlayerId", async () => {
         mockSession = {
             data: { user: { id: "u1", isAnonymous: false } },
         };
@@ -332,13 +332,23 @@ describe("ShareCreateModal — wire payload by variant", () => {
         expect(payload.cardPackData).toBeTypeOf("string");
         expect(payload.playersData).toBeTypeOf("string");
         expect(payload.handSizesData).toBeTypeOf("string");
+        // firstDealtPlayerId always rides invite — encoded as JSON-null
+        // when the wizard skipped that step (the default ClueProvider
+        // state).
+        expect(payload.firstDealtPlayerIdData).toBeTypeOf("string");
+        expect(JSON.parse(payload.firstDealtPlayerIdData)).toBeNull();
         // No progress logged → optional fields absent.
         expect(payload.suggestionsData).toBeUndefined();
         expect(payload.accusationsData).toBeUndefined();
         expect(payload.knownCardsData).toBeUndefined();
+        // Identity + scratchwork stay off invite payloads.
+        expect(payload.selfPlayerIdData).toBeUndefined();
+        expect(payload.dismissedInsightsData).toBeUndefined();
+        expect(payload.hypothesisOrderData).toBeUndefined();
+        expect(payload.hypothesesData).toBeUndefined();
     });
 
-    test("transfer variant sends kind: 'transfer' with all six fields", async () => {
+    test("transfer variant sends kind: 'transfer' with all eleven fields", async () => {
         mockSession = {
             data: { user: { id: "u1", isAnonymous: false } },
         };
@@ -357,6 +367,97 @@ describe("ShareCreateModal — wire payload by variant", () => {
         expect(payload.knownCardsData).toBeTypeOf("string");
         expect(payload.suggestionsData).toBeTypeOf("string");
         expect(payload.accusationsData).toBeTypeOf("string");
+        expect(payload.hypothesesData).toBeTypeOf("string");
+        expect(payload.selfPlayerIdData).toBeTypeOf("string");
+        expect(payload.firstDealtPlayerIdData).toBeTypeOf("string");
+        expect(payload.dismissedInsightsData).toBeTypeOf("string");
+        expect(payload.hypothesisOrderData).toBeTypeOf("string");
+    });
+
+    test("transfer variant ships the user's selfPlayerId + firstDealtPlayerId from state", async () => {
+        // Pre-seed localStorage with a session that has both identity
+        // fields set + a behavioral-insight dismissal + a hypothesis,
+        // then verify the modal projects them into the wire payload.
+        const { saveToLocalStorage } = await import(
+            "../../logic/Persistence"
+        );
+        const { GameSetup } = await import("../../logic/GameSetup");
+        const { PlayerSet } = await import("../../logic/PlayerSet");
+        const { CardSet, Category, CardEntry } = await import(
+            "../../logic/CardSet"
+        );
+        const { Player, Card, CardCategory } = await import(
+            "../../logic/GameObjects"
+        );
+        const { emptyHypotheses } = await import("../../logic/Hypothesis");
+        const { Cell } = await import("../../logic/Knowledge");
+        const { PlayerOwner } = await import("../../logic/GameObjects");
+        const { HashMap } = await import("effect");
+
+        const distinctDeck = CardSet({
+            categories: [
+                Category({
+                    id: CardCategory("category-distinct"),
+                    name: "Distinct",
+                    cards: [
+                        CardEntry({
+                            id: Card("card-distinct-1"),
+                            name: "Distinct 1",
+                        }),
+                    ],
+                }),
+            ],
+        });
+        const cell = Cell(PlayerOwner(Player("Alice")), Card("card-distinct-1"));
+        const hypotheses = HashMap.set(emptyHypotheses, cell, "Y" as const);
+        saveToLocalStorage({
+            setup: GameSetup({
+                cardSet: distinctDeck,
+                playerSet: PlayerSet({
+                    players: [Player("Alice"), Player("Bob")],
+                }),
+            }),
+            hands: [],
+            handSizes: [
+                { player: Player("Alice"), size: 1 },
+                { player: Player("Bob"), size: 1 },
+            ],
+            suggestions: [],
+            accusations: [],
+            hypotheses,
+            hypothesisOrder: [cell],
+            pendingSuggestion: null,
+            selfPlayerId: Player("Alice"),
+            firstDealtPlayerId: Player("Bob"),
+            dismissedInsights: new Map([
+                ["FrequentSuggester:Alice:Knife", "med"],
+            ]),
+        });
+
+        mockSession = {
+            data: { user: { id: "u1", isAnonymous: false } },
+        };
+        mountModal("transfer");
+        await act(async () => {
+            fireEvent.click(findCta());
+        });
+        await waitFor(() => {
+            expect(createShareMock).toHaveBeenCalled();
+        });
+        const payload = createShareMock.mock.calls[0]?.[0];
+        expect(JSON.parse(payload.selfPlayerIdData)).toBe("Alice");
+        expect(JSON.parse(payload.firstDealtPlayerIdData)).toBe("Bob");
+        const dismissals = JSON.parse(payload.dismissedInsightsData);
+        expect(dismissals).toEqual([
+            {
+                key: "FrequentSuggester:Alice:Knife",
+                atConfidence: "med",
+            },
+        ]);
+        const order = JSON.parse(payload.hypothesisOrderData);
+        expect(order).toEqual([
+            { player: "Alice", card: "card-distinct-1" },
+        ]);
     });
 
     test("invite variant embeds the loaded custom pack's name on the wire", async () => {

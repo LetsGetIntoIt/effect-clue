@@ -25,9 +25,14 @@ import { PlayerSet } from "../../logic/PlayerSet";
 import {
     accusationsCodec,
     cardPackCodec,
+    dismissedInsightsCodec,
+    firstDealtPlayerIdCodec,
     handSizesCodec,
+    hypothesesCodec,
+    hypothesisOrderCodec,
     knownCardsCodec,
     playersCodec,
+    selfPlayerIdCodec,
     suggestionsCodec,
 } from "../../logic/ShareCodec";
 import {
@@ -139,6 +144,10 @@ const sampleSnapshot = (overrides: {
               ])
             : null,
     hypothesesData: null,
+    selfPlayerIdData: null,
+    firstDealtPlayerIdData: null,
+    dismissedInsightsData: null,
+    hypothesisOrderData: null,
 });
 
 const apply = (
@@ -230,6 +239,10 @@ describe("buildSessionFromSnapshot — variant shapes", () => {
             suggestionsData: null,
             accusationsData: null,
             hypothesesData: null,
+            selfPlayerIdData: null,
+            firstDealtPlayerIdData: null,
+            dismissedInsightsData: null,
+            hypothesisOrderData: null,
         });
         expect(session.setup.cardSet).toBe(RECEIVER_FALLBACK_PACK);
         expect(session.setup.players).toEqual(
@@ -237,6 +250,178 @@ describe("buildSessionFromSnapshot — variant shapes", () => {
         );
         expect(session.handSizes).toEqual([]);
         expect(session.suggestions).toEqual([]);
+    });
+});
+
+describe("buildSessionFromSnapshot — identity + scratchwork", () => {
+    test("missing identity/scratchwork columns default to null + empty (pre-migration share)", () => {
+        const session = apply(
+            sampleSnapshot({
+                cardPack: true,
+                players: true,
+                handSizes: true,
+                knownCards: true,
+                suggestions: true,
+                accusations: true,
+            }),
+        );
+        expect(session.selfPlayerId).toBeNull();
+        expect(session.firstDealtPlayerId).toBeNull();
+        expect(session.dismissedInsights.size).toBe(0);
+        expect(session.hypothesisOrder).toEqual([]);
+    });
+
+    test("selfPlayerId + firstDealtPlayerId decode from a transfer payload", () => {
+        const session = apply({
+            cardPackData: Schema.encodeSync(cardPackCodec)(SHARE_PACK),
+            playersData: Schema.encodeSync(playersCodec)([
+                Player("Alice"),
+                Player("Bob"),
+            ]),
+            handSizesData: null,
+            knownCardsData: null,
+            suggestionsData: null,
+            accusationsData: null,
+            hypothesesData: null,
+            selfPlayerIdData: Schema.encodeSync(selfPlayerIdCodec)(
+                Player("Alice"),
+            ),
+            firstDealtPlayerIdData: Schema.encodeSync(firstDealtPlayerIdCodec)(
+                Player("Bob"),
+            ),
+            dismissedInsightsData: null,
+            hypothesisOrderData: null,
+        });
+        expect(session.selfPlayerId).toBe(Player("Alice"));
+        expect(session.firstDealtPlayerId).toBe(Player("Bob"));
+    });
+
+    test("firstDealtPlayerId rides invite payloads too (publicly known)", () => {
+        const session = apply({
+            cardPackData: Schema.encodeSync(cardPackCodec)(SHARE_PACK),
+            playersData: Schema.encodeSync(playersCodec)([
+                Player("Alice"),
+                Player("Bob"),
+            ]),
+            handSizesData: null,
+            knownCardsData: null,
+            suggestionsData: null,
+            accusationsData: null,
+            hypothesesData: null,
+            selfPlayerIdData: null,
+            firstDealtPlayerIdData: Schema.encodeSync(firstDealtPlayerIdCodec)(
+                Player("Alice"),
+            ),
+            dismissedInsightsData: null,
+            hypothesisOrderData: null,
+        });
+        // Invite shares don't carry identity, but firstDealt is shared.
+        expect(session.selfPlayerId).toBeNull();
+        expect(session.firstDealtPlayerId).toBe(Player("Alice"));
+    });
+
+    test("dismissedInsights round-trip rebuilds the Map keyed by dismissedKey", () => {
+        const session = apply({
+            cardPackData: Schema.encodeSync(cardPackCodec)(SHARE_PACK),
+            playersData: null,
+            handSizesData: null,
+            knownCardsData: null,
+            suggestionsData: null,
+            accusationsData: null,
+            hypothesesData: null,
+            selfPlayerIdData: null,
+            firstDealtPlayerIdData: null,
+            dismissedInsightsData: Schema.encodeSync(dismissedInsightsCodec)([
+                {
+                    key: "FrequentSuggester:Alice:Knife",
+                    atConfidence: "med",
+                },
+                {
+                    key: "InsistentDenier:Bob:Rope",
+                    atConfidence: "high",
+                },
+            ]),
+            hypothesisOrderData: null,
+        });
+        expect(session.dismissedInsights.size).toBe(2);
+        expect(
+            session.dismissedInsights.get("FrequentSuggester:Alice:Knife"),
+        ).toBe("med");
+        expect(
+            session.dismissedInsights.get("InsistentDenier:Bob:Rope"),
+        ).toBe("high");
+    });
+
+    test("hypothesisOrder column wins over array order when both present", () => {
+        // Decoded hypotheses arrive in this order: [Knife, Scarlet].
+        // The explicit hypothesisOrder reverses them to [Scarlet, Knife]
+        // — what the user actually saw rendered, most-recent-first.
+        const session = apply({
+            cardPackData: Schema.encodeSync(cardPackCodec)(SHARE_PACK),
+            playersData: null,
+            handSizesData: null,
+            knownCardsData: null,
+            suggestionsData: null,
+            accusationsData: null,
+            hypothesesData: Schema.encodeSync(hypothesesCodec)([
+                {
+                    player: Player("Alice"),
+                    card: Card("card-knife"),
+                    value: "Y",
+                },
+                {
+                    player: Player("Alice"),
+                    card: Card("card-scarlet"),
+                    value: "N",
+                },
+            ]),
+            selfPlayerIdData: null,
+            firstDealtPlayerIdData: null,
+            dismissedInsightsData: null,
+            hypothesisOrderData: Schema.encodeSync(hypothesisOrderCodec)([
+                {
+                    player: Player("Alice"),
+                    card: Card("card-scarlet"),
+                },
+                {
+                    player: Player("Alice"),
+                    card: Card("card-knife"),
+                },
+            ]),
+        });
+        expect(session.hypothesisOrder.length).toBe(2);
+        expect(session.hypothesisOrder[0]!.card).toBe(Card("card-scarlet"));
+        expect(session.hypothesisOrder[1]!.card).toBe(Card("card-knife"));
+    });
+
+    test("hypothesisOrder falls back to array order when only hypothesesData is present", () => {
+        const session = apply({
+            cardPackData: Schema.encodeSync(cardPackCodec)(SHARE_PACK),
+            playersData: null,
+            handSizesData: null,
+            knownCardsData: null,
+            suggestionsData: null,
+            accusationsData: null,
+            hypothesesData: Schema.encodeSync(hypothesesCodec)([
+                {
+                    player: Player("Alice"),
+                    card: Card("card-knife"),
+                    value: "Y",
+                },
+                {
+                    player: Player("Bob"),
+                    card: Card("card-scarlet"),
+                    value: "N",
+                },
+            ]),
+            selfPlayerIdData: null,
+            firstDealtPlayerIdData: null,
+            dismissedInsightsData: null,
+            hypothesisOrderData: null,
+        });
+        expect(session.hypothesisOrder.length).toBe(2);
+        expect(session.hypothesisOrder[0]!.card).toBe(Card("card-knife"));
+        expect(session.hypothesisOrder[1]!.card).toBe(Card("card-scarlet"));
     });
 });
 
@@ -251,6 +436,10 @@ describe("buildSessionFromSnapshot — decode failures", () => {
                 suggestionsData: null,
                 accusationsData: null,
                 hypothesesData: null,
+                selfPlayerIdData: null,
+                firstDealtPlayerIdData: null,
+                dismissedInsightsData: null,
+                hypothesisOrderData: null,
             }),
         ).toThrow(ShareSnapshotDecodeError);
         try {
@@ -262,6 +451,10 @@ describe("buildSessionFromSnapshot — decode failures", () => {
                 suggestionsData: null,
                 accusationsData: null,
                 hypothesesData: null,
+                selfPlayerIdData: null,
+                firstDealtPlayerIdData: null,
+                dismissedInsightsData: null,
+                hypothesisOrderData: null,
             });
         } catch (e) {
             expect((e as ShareSnapshotDecodeError).field).toBe("cardPackData");
@@ -287,6 +480,10 @@ describe("buildSessionFromSnapshot — decode failures", () => {
             ]),
             accusationsData: null,
             hypothesesData: null,
+            selfPlayerIdData: null,
+            firstDealtPlayerIdData: null,
+            dismissedInsightsData: null,
+            hypothesisOrderData: null,
         });
         expect(session.suggestions[0]!.id).toBeTruthy();
         expect(String(session.suggestions[0]!.id).length).toBeGreaterThan(0);
@@ -535,6 +732,10 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
             suggestionsData: null,
             accusationsData: null,
             hypothesesData: null,
+            selfPlayerIdData: null,
+            firstDealtPlayerIdData: null,
+            dismissedInsightsData: null,
+            hypothesisOrderData: null,
         };
 
         const result = saveCardPackFromSnapshot(snapshot);
@@ -557,6 +758,10 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
                 suggestionsData: null,
                 accusationsData: null,
                 hypothesesData: null,
+                selfPlayerIdData: null,
+                firstDealtPlayerIdData: null,
+                dismissedInsightsData: null,
+                hypothesisOrderData: null,
             }),
         ).toThrow(ShareSnapshotDecodeError);
         expect(loadCustomCardSets()).toEqual([]);
@@ -594,6 +799,10 @@ describe("applyShareSnapshotToLocalStorage — pack save side effect", () => {
             suggestionsData: null,
             accusationsData: null,
             hypothesesData: null,
+            selfPlayerIdData: null,
+            firstDealtPlayerIdData: null,
+            dismissedInsightsData: null,
+            hypothesisOrderData: null,
         };
         applyShareSnapshotToLocalStorage(snapshot);
         expect(loadCustomCardSets()).toEqual([]);

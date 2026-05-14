@@ -72,6 +72,10 @@ interface ShareSnapshot {
     readonly suggestionsData: string | null;
     readonly accusationsData: string | null;
     readonly hypothesesData: string | null;
+    readonly selfPlayerIdData: string | null;
+    readonly firstDealtPlayerIdData: string | null;
+    readonly dismissedInsightsData: string | null;
+    readonly hypothesisOrderData: string | null;
     readonly ownerName: string | null;
     readonly ownerIsAnonymous: boolean | null;
 }

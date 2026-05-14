@@ -20,9 +20,14 @@ import { newAccusationId } from "./Accusation";
 import {
     accusationsCodec,
     cardPackCodec,
+    dismissedInsightsCodec,
+    firstDealtPlayerIdCodec,
     handSizesCodec,
+    hypothesesCodec,
+    hypothesisOrderCodec,
     knownCardsCodec,
     playersCodec,
+    selfPlayerIdCodec,
     suggestionsCodec,
 } from "./ShareCodec";
 
@@ -184,5 +189,148 @@ describe("accusationsCodec", () => {
         if (Result.isSuccess(decoded)) {
             expect(decoded.success[0]!.accuser).toBe(Player("Alice"));
         }
+    });
+});
+
+describe("hypothesesCodec", () => {
+    test("round-trips a hypothesis cell with player owner", () => {
+        const hypotheses = [
+            {
+                player: Player("Alice"),
+                card: Card("card-scarlet"),
+                value: "Y" as const,
+            },
+        ];
+        const encoded = encode(hypothesesCodec)(hypotheses);
+        const decoded = decode(hypothesesCodec)(encoded);
+        expect(Result.isSuccess(decoded)).toBe(true);
+        if (Result.isSuccess(decoded)) {
+            expect(decoded.success[0]!.player).toBe(Player("Alice"));
+            expect(decoded.success[0]!.card).toBe(Card("card-scarlet"));
+            expect(decoded.success[0]!.value).toBe("Y");
+        }
+    });
+
+    test("round-trips a hypothesis cell with case-file owner (player=null)", () => {
+        const hypotheses = [
+            {
+                player: null,
+                card: Card("card-knife"),
+                value: "N" as const,
+            },
+        ];
+        const encoded = encode(hypothesesCodec)(hypotheses);
+        const decoded = decode(hypothesesCodec)(encoded);
+        expect(Result.isSuccess(decoded)).toBe(true);
+        if (Result.isSuccess(decoded)) {
+            expect(decoded.success[0]!.player).toBeNull();
+        }
+    });
+});
+
+describe("selfPlayerIdCodec", () => {
+    test("round-trips a Player value", () => {
+        const encoded = encode(selfPlayerIdCodec)(Player("Alice"));
+        const decoded = decode(selfPlayerIdCodec)(encoded);
+        expect(Result.isSuccess(decoded)).toBe(true);
+        if (Result.isSuccess(decoded)) {
+            expect(decoded.success).toBe(Player("Alice"));
+        }
+    });
+
+    test("round-trips null (skipped identity)", () => {
+        const encoded = encode(selfPlayerIdCodec)(null);
+        expect(encoded).toBe("null");
+        const decoded = decode(selfPlayerIdCodec)(encoded);
+        expect(Result.isSuccess(decoded)).toBe(true);
+        if (Result.isSuccess(decoded)) {
+            expect(decoded.success).toBeNull();
+        }
+    });
+
+    test("rejects non-string non-null payloads", () => {
+        const decoded = decode(selfPlayerIdCodec)(
+            JSON.stringify({ player: "Alice" }),
+        );
+        expect(Result.isFailure(decoded)).toBe(true);
+    });
+});
+
+describe("firstDealtPlayerIdCodec", () => {
+    test("round-trips a Player value", () => {
+        const encoded = encode(firstDealtPlayerIdCodec)(Player("Bob"));
+        const decoded = decode(firstDealtPlayerIdCodec)(encoded);
+        expect(Result.isSuccess(decoded)).toBe(true);
+        if (Result.isSuccess(decoded)) {
+            expect(decoded.success).toBe(Player("Bob"));
+        }
+    });
+
+    test("round-trips null", () => {
+        const decoded = decode(firstDealtPlayerIdCodec)("null");
+        expect(Result.isSuccess(decoded)).toBe(true);
+        if (Result.isSuccess(decoded)) {
+            expect(decoded.success).toBeNull();
+        }
+    });
+});
+
+describe("dismissedInsightsCodec", () => {
+    test("round-trips a list of dismissals", () => {
+        const dismissals = [
+            { key: "FrequentSuggester:Alice:Knife", atConfidence: "med" as const },
+            { key: "InsistentDenier:Bob:Rope", atConfidence: "high" as const },
+        ];
+        const encoded = encode(dismissedInsightsCodec)(dismissals);
+        const decoded = decode(dismissedInsightsCodec)(encoded);
+        expect(Result.isSuccess(decoded)).toBe(true);
+        if (Result.isSuccess(decoded)) {
+            expect(decoded.success.length).toBe(2);
+            expect(decoded.success[0]!.key).toBe(
+                "FrequentSuggester:Alice:Knife",
+            );
+            expect(decoded.success[0]!.atConfidence).toBe("med");
+        }
+    });
+
+    test("round-trips an empty dismissal list", () => {
+        const encoded = encode(dismissedInsightsCodec)([]);
+        const decoded = decode(dismissedInsightsCodec)(encoded);
+        expect(Result.isSuccess(decoded)).toBe(true);
+        if (Result.isSuccess(decoded)) {
+            expect(decoded.success.length).toBe(0);
+        }
+    });
+
+    test("rejects an unknown atConfidence value", () => {
+        const decoded = decode(dismissedInsightsCodec)(
+            JSON.stringify([{ key: "X", atConfidence: "extreme" }]),
+        );
+        expect(Result.isFailure(decoded)).toBe(true);
+    });
+});
+
+describe("hypothesisOrderCodec", () => {
+    test("round-trips an ordering with player + case-file entries", () => {
+        const order = [
+            { player: Player("Alice"), card: Card("card-scarlet") },
+            { player: null, card: Card("card-knife") },
+        ];
+        const encoded = encode(hypothesisOrderCodec)(order);
+        const decoded = decode(hypothesisOrderCodec)(encoded);
+        expect(Result.isSuccess(decoded)).toBe(true);
+        if (Result.isSuccess(decoded)) {
+            expect(decoded.success.length).toBe(2);
+            expect(decoded.success[0]!.player).toBe(Player("Alice"));
+            expect(decoded.success[1]!.player).toBeNull();
+            expect(decoded.success[1]!.card).toBe(Card("card-knife"));
+        }
+    });
+
+    test("rejects entries missing a card", () => {
+        const decoded = decode(hypothesisOrderCodec)(
+            JSON.stringify([{ player: "Alice" }]),
+        );
+        expect(Result.isFailure(decoded)).toBe(true);
     });
 });
