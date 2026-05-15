@@ -106,7 +106,7 @@
 		"@vitest/coverage-v8": "4.1.6",
 		"babel-plugin-react-compiler": "1.0.0",
 		"esbuild": "0.28.0",
-		"eslint": "10.3.0",
+		"eslint": "10.4.0",
 		"eslint-plugin-i18next": "6.1.4",
 		"jsdom": "29.1.1",
 		"knip": "6.13.1",
