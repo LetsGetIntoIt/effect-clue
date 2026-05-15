@@ -42,7 +42,9 @@ import {
 import { CARD_SETS, DEFAULT_SETUP, GameSetup } from "../../logic/GameSetup";
 import { HashMap } from "effect";
 import {
+    type Card,
     CaseFileOwner,
+    type Player,
     PlayerOwner,
 } from "../../logic/GameObjects";
 import {
@@ -50,6 +52,7 @@ import {
     type HypothesisMap,
     type HypothesisValue,
 } from "../../logic/Hypothesis";
+import type { KnownCard } from "../../logic/InitialKnowledge";
 import { Cell } from "../../logic/Knowledge";
 import {
     loadFromLocalStorage,
@@ -93,6 +96,23 @@ export interface ShareSnapshotForHydration {
     readonly firstDealtPlayerIdData: string | null;
     readonly dismissedInsightsData: string | null;
     readonly hypothesisOrderData: string | null;
+}
+
+/**
+ * Optional receiver-side overrides applied during hydration. Used by
+ * the share-import modal so an invite-share recipient can pick "which
+ * player are you" and "which cards are in your hand" before the
+ * snapshot lands. `undefined` for a field means "no override — fall
+ * back to whatever the snapshot encodes"; an explicit value wins.
+ *
+ * `selfPlayerId === null` is a meaningful override (the user
+ * deliberately skipped identity), distinct from `undefined` (no
+ * override applied). `knownCards: []` is similarly a meaningful
+ * override (user picked identity but no cards yet).
+ */
+export interface ApplyOverrides {
+    readonly selfPlayerId?: Player | null;
+    readonly knownCards?: ReadonlyArray<KnownCard>;
 }
 
 // Wire-format field names. Module-scope so they don't trip the
@@ -170,6 +190,7 @@ export const buildSessionFromSnapshot = (
     snapshot: ShareSnapshotForHydration,
     fallbackCardSet: CardSet,
     fallbackPlayerSet: GameSession["setup"]["playerSet"],
+    overrides?: ApplyOverrides,
 ): GameSession => {
     const cardSet = (() => {
         if (snapshot.cardPackData === null) return fallbackCardSet;
@@ -212,19 +233,42 @@ export const buildSessionFromSnapshot = (
               ).map((h) => ({ player: h.player, size: h.size }))
             : [];
 
-    const hands =
-        snapshot.knownCardsData !== null
-            ? decodeField(
-                  F_KNOWN_CARDS_DATA,
-                  snapshot.knownCardsData,
-                  knownCardsCodec,
-              ).map((h) => ({
-                  player: h.player,
-                  cards: h.cards as ReadonlyArray<
-                      GameSession["hands"][number]["cards"][number]
-                  >,
-              }))
-            : [];
+    // Receiver's optional override (from the share-import modal) wins
+    // over the snapshot. We group the flat `KnownCard[]` shape by
+    // player so the resulting hands match `GameSession["hands"]`'s
+    // hands-per-player layout. An empty override array is meaningful —
+    // "user picked identity but logged no cards yet" — and produces an
+    // empty `hands` slot, NOT a fallback to the snapshot.
+    const hands: GameSession["hands"] =
+        overrides?.knownCards !== undefined
+            ? (() => {
+                  const byPlayer = new Map<Player, Card[]>();
+                  for (const kc of overrides.knownCards) {
+                      const arr = byPlayer.get(kc.player);
+                      if (arr) arr.push(kc.card);
+                      else byPlayer.set(kc.player, [kc.card]);
+                  }
+                  return Array.from(byPlayer.entries()).map(
+                      ([player, cards]) => ({
+                          player,
+                          cards: cards as ReadonlyArray<
+                              GameSession["hands"][number]["cards"][number]
+                          >,
+                      }),
+                  );
+              })()
+            : snapshot.knownCardsData !== null
+              ? decodeField(
+                    F_KNOWN_CARDS_DATA,
+                    snapshot.knownCardsData,
+                    knownCardsCodec,
+                ).map((h) => ({
+                    player: h.player,
+                    cards: h.cards as ReadonlyArray<
+                        GameSession["hands"][number]["cards"][number]
+                    >,
+                }))
+              : [];
 
     const suggestions =
         snapshot.suggestionsData !== null
@@ -313,14 +357,22 @@ export const buildSessionFromSnapshot = (
     // older shares leave the field null — that's the M6 wizard's
     // "skipped" state, which the wizard surfaces as a discoverable
     // CTA on the setup pane.
+    //
+    // The share-import modal can override this for invite shares (so
+    // the receiver picks their identity in the modal). `undefined`
+    // means "no override"; explicit `null` means "user picked nothing,
+    // record as skipped" — both paths are distinct from snapshot
+    // decode.
     const selfPlayerId =
-        snapshot.selfPlayerIdData !== null
-            ? decodeField(
-                  F_SELF_PLAYER_ID_DATA,
-                  snapshot.selfPlayerIdData,
-                  selfPlayerIdCodec,
-              )
-            : null;
+        overrides?.selfPlayerId !== undefined
+            ? overrides.selfPlayerId
+            : snapshot.selfPlayerIdData !== null
+              ? decodeField(
+                    F_SELF_PLAYER_ID_DATA,
+                    snapshot.selfPlayerIdData,
+                    selfPlayerIdCodec,
+                )
+              : null;
 
     // `firstDealtPlayerId` rides both `invite` and `transfer` — it's
     // publicly known game state every player at the physical table
@@ -526,12 +578,14 @@ export const saveCardPackFromSnapshot = (
 
 export const applyShareSnapshotToLocalStorage = (
     snapshot: ShareSnapshotForHydration,
+    overrides?: ApplyOverrides,
 ): GameSession => {
     const currentSession = loadFromLocalStorage();
     const session = buildSessionFromSnapshot(
         snapshot,
         currentSession?.setup.cardSet ?? DEFAULT_SETUP.cardSet,
         currentSession?.setup.playerSet ?? DEFAULT_SETUP.playerSet,
+        overrides,
     );
     saveToLocalStorage(session);
     // Invite/transfer also feeds the imported pack into the local
@@ -543,8 +597,9 @@ export const applyShareSnapshotToLocalStorage = (
 
 export function useApplyShareSnapshot(): (
     snapshot: ShareSnapshotForHydration,
+    overrides?: ApplyOverrides,
 ) => void {
-    return (snapshot) => {
-        applyShareSnapshotToLocalStorage(snapshot);
+    return (snapshot, overrides) => {
+        applyShareSnapshotToLocalStorage(snapshot, overrides);
     };
 }

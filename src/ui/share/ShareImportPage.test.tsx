@@ -48,10 +48,13 @@ vi.mock("./useApplyShareSnapshot", () => ({
 }));
 
 const consumePendingImportIntentMock = vi.fn();
+const peekPendingImportIntentMock = vi.fn();
 const savePendingImportIntentMock = vi.fn();
 vi.mock("./pendingImport", () => ({
     consumePendingImportIntent: (id: string) =>
         consumePendingImportIntentMock(id),
+    peekPendingImportIntent: (id: string) =>
+        peekPendingImportIntentMock(id),
     savePendingImportIntent: (intent: unknown) =>
         savePendingImportIntentMock(intent),
 }));
@@ -259,7 +262,9 @@ beforeEach(() => {
     invalidateQueriesMock.mockReset();
     invalidateQueriesMock.mockResolvedValue(undefined);
     consumePendingImportIntentMock.mockReset();
-    consumePendingImportIntentMock.mockReturnValue(false);
+    consumePendingImportIntentMock.mockReturnValue(null);
+    peekPendingImportIntentMock.mockReset();
+    peekPendingImportIntentMock.mockReturnValue(null);
     savePendingImportIntentMock.mockReset();
     signInSocialMock.mockReset();
     signInSocialMock.mockResolvedValue({ error: null });
@@ -663,7 +668,7 @@ describe("ShareImportPage — sign-in gate", () => {
 
     test("anonymous → no logged-out user can be tricked into auto-import (no sessionStorage intent)", () => {
         mockSessionUser = { id: "anon", isAnonymous: true };
-        consumePendingImportIntentMock.mockReturnValue(false);
+        consumePendingImportIntentMock.mockReturnValue(null);
         const snapshot = buildSnapshot({ cardPackData: CUSTOM_PACK_PAYLOAD });
         renderImportPage(snapshot);
         // Render alone must not auto-fire any imports.
@@ -673,7 +678,9 @@ describe("ShareImportPage — sign-in gate", () => {
 
     test("signed-in user with matching pendingImport intent → auto-imports on mount", async () => {
         mockSessionUser = { id: "test-user", isAnonymous: false };
-        consumePendingImportIntentMock.mockReturnValue(true);
+        // Empty overrides bag — the intent existed without picker
+        // selections, so auto-import behaves like the pre-picker flow.
+        consumePendingImportIntentMock.mockReturnValue({});
         const snapshot = buildSnapshot({ cardPackData: CUSTOM_PACK_PAYLOAD });
         renderImportPage(snapshot);
 
@@ -687,12 +694,252 @@ describe("ShareImportPage — sign-in gate", () => {
 
     test("signed-in user without pendingImport intent → renders modal idle (malicious-URL safe)", () => {
         mockSessionUser = { id: "test-user", isAnonymous: false };
-        consumePendingImportIntentMock.mockReturnValue(false);
+        consumePendingImportIntentMock.mockReturnValue(null);
         const snapshot = buildSnapshot({ cardPackData: CUSTOM_PACK_PAYLOAD });
         renderImportPage(snapshot);
         // No auto-import without an explicit intent — the user (or a
         // malicious sender) sending the URL alone can't kick off import.
         expect(saveCardPackFromSnapshotMock).not.toHaveBeenCalled();
         expect(applyMock).not.toHaveBeenCalled();
+    });
+});
+
+describe("ShareImportPage — invite picker (identity + cards)", () => {
+    const inviteSnapshot = () =>
+        buildSnapshot({
+            cardPackData: CUSTOM_PACK_PAYLOAD,
+            playersData: PLAYERS_PAYLOAD_TWO,
+            handSizesData: HAND_SIZES_PAYLOAD,
+        });
+
+    test("invite share renders picker block with one pill per player", () => {
+        renderImportPage(inviteSnapshot());
+        const picker = document.querySelector("[data-share-import-picker]");
+        expect(picker).not.toBeNull();
+        const pills = document.querySelectorAll(
+            "[data-share-import-identity-pill]",
+        );
+        expect(pills.length).toBe(2);
+        expect(pills[0]!.textContent).toBe("Alice");
+        expect(pills[1]!.textContent).toBe("Bob");
+        // Cards section is hidden until an identity is picked.
+        expect(
+            document.querySelector("[data-share-import-cards-section]"),
+        ).toBeNull();
+    });
+
+    test("pack-only share does NOT render the picker", () => {
+        renderImportPage(
+            buildSnapshot({ cardPackData: CUSTOM_PACK_PAYLOAD }),
+        );
+        expect(
+            document.querySelector("[data-share-import-picker]"),
+        ).toBeNull();
+    });
+
+    test("transfer share does NOT render the picker", () => {
+        renderImportPage(
+            buildSnapshot({
+                cardPackData: CUSTOM_PACK_PAYLOAD,
+                playersData: PLAYERS_PAYLOAD_TWO,
+                handSizesData: HAND_SIZES_PAYLOAD,
+                knownCardsData: KNOWN_CARDS_PAYLOAD,
+            }),
+        );
+        expect(
+            document.querySelector("[data-share-import-picker]"),
+        ).toBeNull();
+    });
+
+    test("picking a pill reveals the cards section; clicking it again hides it", () => {
+        renderImportPage(inviteSnapshot());
+        const pills = document.querySelectorAll(
+            "[data-share-import-identity-pill]",
+        ) as NodeListOf<HTMLButtonElement>;
+        fireEvent.click(pills[0]!);
+        expect(
+            document.querySelector("[data-share-import-cards-section]"),
+        ).not.toBeNull();
+        // aria-pressed flips to true on the active pill.
+        expect(pills[0]!.getAttribute("aria-pressed")).toBe("true");
+        // Click again to toggle off.
+        fireEvent.click(pills[0]!);
+        expect(
+            document.querySelector("[data-share-import-cards-section]"),
+        ).toBeNull();
+        expect(pills[0]!.getAttribute("aria-pressed")).toBe("false");
+    });
+
+    test("manual Join with picker selections passes overrides to applySnapshot", async () => {
+        const snapshot = inviteSnapshot();
+        renderImportPage(snapshot);
+        // Pick Alice as self.
+        const pills = document.querySelectorAll(
+            "[data-share-import-identity-pill]",
+        ) as NodeListOf<HTMLButtonElement>;
+        fireEvent.click(pills[0]!);
+        // Pick one card by clicking its checkbox (the cards section
+        // renders a single grid with Alice as the only column).
+        const firstCheckbox = document.querySelector(
+            "[data-share-import-cards-section] input[type='checkbox']",
+        ) as HTMLInputElement | null;
+        expect(firstCheckbox).not.toBeNull();
+        fireEvent.click(firstCheckbox!);
+
+        // Click Join.
+        fireEvent.click(
+            document.querySelector("[data-share-import-cta]")!,
+        );
+        await waitFor(() => {
+            expect(applyMock).toHaveBeenCalled();
+        });
+        const callArgs = applyMock.mock.calls[0]!;
+        expect(callArgs[0]).toBe(snapshot);
+        // Second arg is ApplyOverrides — selfPlayerId set, knownCards
+        // contains at least one entry for Alice.
+        expect(callArgs[1]).toMatchObject({
+            selfPlayerId: Player("Alice"),
+        });
+        expect((callArgs[1] as { knownCards?: unknown[] }).knownCards)
+            .toBeDefined();
+        expect(
+            (callArgs[1] as { knownCards: unknown[] }).knownCards.length,
+        ).toBeGreaterThan(0);
+    });
+
+    test("manual Join with NO picker selections omits overrides arg", async () => {
+        const snapshot = inviteSnapshot();
+        renderImportPage(snapshot);
+        fireEvent.click(
+            document.querySelector("[data-share-import-cta]")!,
+        );
+        await waitFor(() => {
+            expect(applyMock).toHaveBeenCalledWith(snapshot);
+        });
+        // Sanity: only one arg passed (no undefined slot).
+        expect(applyMock.mock.calls[0]!.length).toBe(1);
+    });
+
+    test("changing identity discards previously-picked cards", () => {
+        renderImportPage(inviteSnapshot());
+        const pills = document.querySelectorAll(
+            "[data-share-import-identity-pill]",
+        ) as NodeListOf<HTMLButtonElement>;
+        // Pick Alice, tick a card.
+        fireEvent.click(pills[0]!);
+        const aliceCheckbox = document.querySelector(
+            "[data-share-import-cards-section] input[type='checkbox']",
+        ) as HTMLInputElement;
+        fireEvent.click(aliceCheckbox);
+        expect(aliceCheckbox.checked).toBe(true);
+        // Switch to Bob — the cards section re-renders for Bob.
+        fireEvent.click(pills[1]!);
+        const bobCheckboxes = document.querySelectorAll(
+            "[data-share-import-cards-section] input[type='checkbox']",
+        ) as NodeListOf<HTMLInputElement>;
+        // None of Bob's cells should be checked — Alice's picks were
+        // discarded on the identity change.
+        for (const cb of bobCheckboxes) {
+            expect(cb.checked).toBe(false);
+        }
+    });
+
+    test("anonymous user signing in encodes picks into the pendingImport intent", async () => {
+        mockSessionUser = { id: "anon", isAnonymous: true };
+        const snapshot = inviteSnapshot();
+        renderImportPage(snapshot);
+        // Pick Alice + one card.
+        const pills = document.querySelectorAll(
+            "[data-share-import-identity-pill]",
+        ) as NodeListOf<HTMLButtonElement>;
+        fireEvent.click(pills[0]!);
+        const checkbox = document.querySelector(
+            "[data-share-import-cards-section] input[type='checkbox']",
+        ) as HTMLInputElement;
+        fireEvent.click(checkbox);
+        // Click "Sign in to import".
+        fireEvent.click(
+            document.querySelector("[data-share-import-cta]")!,
+        );
+        await waitFor(() => {
+            expect(savePendingImportIntentMock).toHaveBeenCalled();
+        });
+        const intent = savePendingImportIntentMock.mock.calls[0]![0] as {
+            shareId: string;
+            t: number;
+            selfPlayerIdData?: string;
+            knownCardsData?: string;
+        };
+        expect(intent.shareId).toBe(snapshot.id);
+        expect(intent.selfPlayerIdData).toBeDefined();
+        expect(intent.knownCardsData).toBeDefined();
+    });
+
+    test("anonymous user signing in with NO picks omits override fields from the intent", async () => {
+        mockSessionUser = { id: "anon", isAnonymous: true };
+        const snapshot = inviteSnapshot();
+        renderImportPage(snapshot);
+        fireEvent.click(
+            document.querySelector("[data-share-import-cta]")!,
+        );
+        await waitFor(() => {
+            expect(savePendingImportIntentMock).toHaveBeenCalled();
+        });
+        const intent = savePendingImportIntentMock.mock.calls[0]![0] as {
+            shareId: string;
+            t: number;
+            selfPlayerIdData?: string;
+            knownCardsData?: string;
+        };
+        expect(intent.selfPlayerIdData).toBeUndefined();
+        expect(intent.knownCardsData).toBeUndefined();
+    });
+
+    test("auto-import applies decoded overrides from pendingImport", async () => {
+        mockSessionUser = { id: "test-user", isAnonymous: false };
+        // Simulate a returning user whose intent carried picks.
+        const selfPlayerIdData = Schema.encodeSync(
+            (await import("../../logic/ShareCodec")).selfPlayerIdCodec,
+        )(Player("Alice"));
+        const knownCardsData = Schema.encodeSync(
+            (await import("../../logic/ShareCodec")).knownCardsCodec,
+        )([
+            {
+                player: Player("Alice"),
+                cards: [Card("card-pam")],
+            },
+        ]);
+        consumePendingImportIntentMock.mockReturnValue({
+            selfPlayerIdData,
+            knownCardsData,
+        });
+        const snapshot = inviteSnapshot();
+        renderImportPage(snapshot);
+        await waitFor(() => {
+            expect(applyMock).toHaveBeenCalled();
+        });
+        const [snapArg, overridesArg] = applyMock.mock.calls[0]!;
+        expect(snapArg).toBe(snapshot);
+        expect(overridesArg).toMatchObject({
+            selfPlayerId: Player("Alice"),
+        });
+        expect((overridesArg as { knownCards: unknown[] }).knownCards.length)
+            .toBe(1);
+    });
+
+    test("anonymous-mount restore re-seeds picker state from peeked intent", () => {
+        mockSessionUser = { id: "anon", isAnonymous: true };
+        const selfPlayerIdData = `"Alice"`;
+        peekPendingImportIntentMock.mockReturnValue({ selfPlayerIdData });
+        const snapshot = inviteSnapshot();
+        renderImportPage(snapshot);
+        // Picker is restored — Alice pill is active, cards section visible.
+        const alicePill = document.querySelectorAll(
+            "[data-share-import-identity-pill]",
+        )[0] as HTMLButtonElement;
+        expect(alicePill.getAttribute("aria-pressed")).toBe("true");
+        expect(
+            document.querySelector("[data-share-import-cards-section]"),
+        ).not.toBeNull();
     });
 });

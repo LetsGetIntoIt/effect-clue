@@ -26,7 +26,7 @@
 "use client";
 
 import { DateTime, Result, Schema } from "effect";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
@@ -41,17 +41,43 @@ import {
     type ShareDismissVia,
     type SignInFromContext,
 } from "../../analytics/events";
-import { cardSetEquals } from "../../logic/CardSet";
-import { CARD_SETS } from "../../logic/GameSetup";
-import { cardPackCodec, playersCodec } from "../../logic/ShareCodec";
+import {
+    CardSet,
+    CardEntry,
+    Category,
+    cardSetEquals,
+} from "../../logic/CardSet";
+import { deduceSync } from "../../logic/Deducer";
+import {
+    CARD_SETS,
+    GameSetup,
+} from "../../logic/GameSetup";
+import type { Card, Player } from "../../logic/GameObjects";
+import {
+    buildInitialKnowledge,
+    KnownCard,
+} from "../../logic/InitialKnowledge";
+import { emptyKnowledge, type Knowledge } from "../../logic/Knowledge";
+import { PlayerSet } from "../../logic/PlayerSet";
+import {
+    cardPackCodec,
+    firstDealtPlayerIdCodec,
+    handSizesCodec,
+    knownCardsCodec,
+    playersCodec,
+    selfPlayerIdCodec,
+} from "../../logic/ShareCodec";
 import { customCardPacksQueryKey } from "../../data/customCardPacks";
 import { cardPackUsageQueryKey } from "../../data/cardPackUsage";
 import { authClient } from "../account/authClient";
 import { useSession } from "../hooks/useSession";
 import { XIcon } from "../components/Icons";
 import { useConfirm } from "../hooks/useConfirm";
+import { CardSelectionGrid } from "../setup/shared/CardSelectionGrid";
+import { firstDealtHandSizes } from "../setup/firstDealt";
 import { saveTourDismissed } from "../tour/TourState";
 import {
+    type ApplyOverrides,
     hasPersistedGameData,
     saveCardPackFromSnapshot,
     useApplyShareSnapshot,
@@ -60,6 +86,9 @@ import {
 import { hashShareId } from "./shareAnalytics";
 import {
     consumePendingImportIntent,
+    peekPendingImportIntent,
+    type PendingImportIntent,
+    type PendingImportOverrides,
     savePendingImportIntent,
 } from "./pendingImport";
 
@@ -251,6 +280,48 @@ const countKnownCards = (raw: string): number | null => {
     }
 };
 
+/**
+ * Decode the wire-format pick strings carried in a pending-import
+ * intent back into `ApplyOverrides`. Used by the auto-import effect
+ * after `consumePendingImportIntent` returns the matched intent's
+ * override strings. Decode failures are silently dropped — a malformed
+ * or stale entry imports without overrides, same as a pre-picker
+ * intent would.
+ *
+ * Returns `undefined` when there are no decodable overrides so the
+ * caller's `applySnapshot(snapshot, overrides)` call falls through to
+ * the no-override path.
+ */
+const decodeOverridesFromPendingImport = (
+    overrides: PendingImportOverrides,
+): ApplyOverrides | undefined => {
+    const out: { selfPlayerId?: Player | null; knownCards?: ReadonlyArray<KnownCard> } = {};
+    if (overrides.selfPlayerIdData !== undefined) {
+        const decoded = Schema.decodeUnknownResult(selfPlayerIdCodec)(
+            overrides.selfPlayerIdData,
+        );
+        if (Result.isSuccess(decoded)) out.selfPlayerId = decoded.success;
+    }
+    if (overrides.knownCardsData !== undefined) {
+        const decoded = Schema.decodeUnknownResult(knownCardsCodec)(
+            overrides.knownCardsData,
+        );
+        if (Result.isSuccess(decoded)) {
+            const flat: KnownCard[] = [];
+            for (const hand of decoded.success) {
+                for (const card of hand.cards) {
+                    flat.push(KnownCard({ player: hand.player, card }));
+                }
+            }
+            out.knownCards = flat;
+        }
+    }
+    if (out.selfPlayerId === undefined && out.knownCards === undefined) {
+        return undefined;
+    }
+    return out;
+};
+
 export function ShareImportPage({
     snapshot,
 }: {
@@ -306,6 +377,191 @@ export function ShareImportPage({
         [hasAccu, snapshot.accusationsData],
     );
 
+    // --- Invite-share "optional identity + cards" picker ---
+    //
+    // Modal-local state for the receiver's picks. Both fields are
+    // optional from the user's perspective (the existing summary +
+    // CTA continues to work when neither is filled). The fields are
+    // surfaced ONLY when `receiveFlow === RECEIVE_FLOW_INVITE` — pack
+    // and transfer flows don't render the picker.
+    //
+    // The picks are encoded into `pendingImport` sessionStorage at
+    // sign-in time so they survive the OAuth round-trip; auto-import
+    // applies them as `ApplyOverrides`. If the user navigates back
+    // from OAuth while still anonymous, the anonymous-mount restore
+    // effect (below) peeks the entry and seeds local state, so the
+    // picks don't disappear.
+    const [importIdentity, setImportIdentity] = useState<Player | null>(null);
+    const [importKnownCards, setImportKnownCards] = useState<
+        ReadonlyArray<KnownCard>
+    >([]);
+
+    // Tracks the last identity that was committed to local state.
+    // Used by the clear-cards-on-identity-change effect below; the
+    // anonymous-mount restore effect updates this synchronously when
+    // it seeds state from sessionStorage so the clear effect (which
+    // runs in the next tick) sees no mismatch and doesn't blow the
+    // freshly-restored cards away.
+    const lastIdentityRef = useRef<Player | null>(null);
+
+    // Snapshot-derived bits the picker needs. Pre-decoded once per
+    // snapshot. Each memo returns `null` on decode failure so the
+    // render can gracefully omit the picker rather than crash on a
+    // malformed invite share.
+    const modalCardSet = useMemo<CardSet | null>(() => {
+        if (snapshot.cardPackData === null) return null;
+        const decoded = Schema.decodeUnknownResult(cardPackCodec)(
+            snapshot.cardPackData,
+        );
+        if (Result.isFailure(decoded)) return null;
+        return CardSet({
+            categories: decoded.success.categories.map((c) =>
+                Category({
+                    id: c.id,
+                    name: c.name,
+                    cards: c.cards.map((card) =>
+                        CardEntry({ id: card.id, name: card.name }),
+                    ),
+                }),
+            ),
+        });
+    }, [snapshot.cardPackData]);
+
+    const modalPlayers = useMemo<ReadonlyArray<Player>>(() => {
+        if (snapshot.playersData === null) return [];
+        const decoded = Schema.decodeUnknownResult(playersCodec)(
+            snapshot.playersData,
+        );
+        return Result.isSuccess(decoded) ? decoded.success : [];
+    }, [snapshot.playersData]);
+
+    const modalFirstDealtPlayerId = useMemo<Player | null>(() => {
+        if (snapshot.firstDealtPlayerIdData === null) return null;
+        const decoded = Schema.decodeUnknownResult(firstDealtPlayerIdCodec)(
+            snapshot.firstDealtPlayerIdData,
+        );
+        return Result.isSuccess(decoded) ? decoded.success : null;
+    }, [snapshot.firstDealtPlayerIdData]);
+
+    const modalHandSizesArr = useMemo<
+        ReadonlyArray<readonly [Player, number]>
+    >(() => {
+        if (snapshot.handSizesData === null) return [];
+        const decoded = Schema.decodeUnknownResult(handSizesCodec)(
+            snapshot.handSizesData,
+        );
+        if (Result.isFailure(decoded)) return [];
+        return decoded.success.map(
+            (h) => [h.player, h.size] as readonly [Player, number],
+        );
+    }, [snapshot.handSizesData]);
+
+    const modalSetup = useMemo<GameSetup | null>(() => {
+        if (modalCardSet === null) return null;
+        if (modalPlayers.length === 0) return null;
+        return GameSetup({
+            cardSet: modalCardSet,
+            playerSet: PlayerSet({ players: modalPlayers }),
+        });
+    }, [modalCardSet, modalPlayers]);
+
+    // Hand-size denominator map for the picker grid. Combines the
+    // share's `handSizes` entries with `firstDealtHandSizes` as
+    // fallback so a malformed-or-missing entry for any one player
+    // still produces a sensible "X of Y" denominator. Empty when the
+    // share is missing the bits we need (caller falls through to
+    // not rendering the picker).
+    const modalHandSizesMap = useMemo<ReadonlyMap<Player, number>>(() => {
+        if (modalSetup === null) return new Map();
+        const map = new Map<Player, number>();
+        for (const [player, size] of modalHandSizesArr) {
+            map.set(player, size);
+        }
+        const dealt = new Map(
+            firstDealtHandSizes(modalSetup, modalFirstDealtPlayerId),
+        );
+        for (const p of modalPlayers) {
+            if (!map.has(p)) map.set(p, dealt.get(p) ?? 0);
+        }
+        return map;
+    }, [
+        modalSetup,
+        modalPlayers,
+        modalHandSizesArr,
+        modalFirstDealtPlayerId,
+    ]);
+
+    // Mini-deducer for cell backgrounds — gives the grid the same
+    // "X === Y → fill remaining red" visual the wizard provides via
+    // global state. Invite shares have no suggestions / accusations,
+    // so the deducer sees ONLY the share's setup + the user's picks.
+    // Failure (theoretically unreachable for invite, defensive) falls
+    // back to `initialKnowledge`, same pattern the wizard uses.
+    const modalInitialKnowledge = useMemo<Knowledge>(() => {
+        if (modalSetup === null) return emptyKnowledge;
+        return buildInitialKnowledge(
+            modalSetup,
+            importKnownCards,
+            Array.from(modalHandSizesMap.entries()),
+        );
+    }, [modalSetup, importKnownCards, modalHandSizesMap]);
+
+    const modalDeductionKnowledge = useMemo<Knowledge>(() => {
+        if (modalSetup === null) return emptyKnowledge;
+        const result = deduceSync(modalSetup, [], [], modalInitialKnowledge);
+        return Result.isSuccess(result) ? result.success : modalInitialKnowledge;
+    }, [modalSetup, modalInitialKnowledge]);
+
+    // Anonymous-mount restore: when the user navigates back from the
+    // OAuth provider before completing sign-in (e.g. hit back, closed
+    // the auth tab, etc.), the modal remounts with the same shareId.
+    // Peek (don't consume) the pending intent and re-seed local state
+    // from any encoded picks so they don't disappear on the round-trip.
+    // A subsequent successful OAuth completes the consume + auto-import.
+    const anonymousRestoreRanRef = useRef(false);
+    useEffect(() => {
+        if (anonymousRestoreRanRef.current) return;
+        if (!isAnonymous) return;
+        if (receiveFlow !== RECEIVE_FLOW_INVITE) return;
+        const peeked = peekPendingImportIntent(snapshot.id);
+        if (peeked === null) return;
+        anonymousRestoreRanRef.current = true;
+        if (peeked.selfPlayerIdData !== undefined) {
+            const decoded = Schema.decodeUnknownResult(selfPlayerIdCodec)(
+                peeked.selfPlayerIdData,
+            );
+            if (Result.isSuccess(decoded)) {
+                setImportIdentity(decoded.success);
+                lastIdentityRef.current = decoded.success;
+            }
+        }
+        if (peeked.knownCardsData !== undefined) {
+            const decoded = Schema.decodeUnknownResult(knownCardsCodec)(
+                peeked.knownCardsData,
+            );
+            if (Result.isSuccess(decoded)) {
+                const flat: KnownCard[] = [];
+                for (const hand of decoded.success) {
+                    for (const card of hand.cards) {
+                        flat.push(KnownCard({ player: hand.player, card }));
+                    }
+                }
+                setImportKnownCards(flat);
+            }
+        }
+    }, [isAnonymous, receiveFlow, snapshot.id]);
+
+    // Identity-change clears cards (runs after the restore above has
+    // settled because the restore sets `lastIdentityRef` in the same
+    // tick it sets identity). On any subsequent real change of
+    // `importIdentity`, drop the previously-picked cards — they
+    // belong to a different player's hand.
+    useEffect(() => {
+        if (lastIdentityRef.current === importIdentity) return;
+        lastIdentityRef.current = importIdentity;
+        setImportKnownCards([]);
+    }, [importIdentity]);
+
     useEffect(() => {
         shareOpened({ shareIdHash: hashShareId(snapshot.id) });
     }, [snapshot.id]);
@@ -322,7 +578,24 @@ export function ShareImportPage({
         return "";
     };
 
-    const performImport = async (): Promise<void> => {
+    /**
+     * Build `ApplyOverrides` from the modal-local picker state. Used
+     * by the manual Join path on invite shares. Returns `undefined`
+     * when nothing was picked, so the snapshot path runs unmodified.
+     */
+    const buildOverridesFromLocalState = (): ApplyOverrides | undefined => {
+        if (importIdentity === null && importKnownCards.length === 0) {
+            return undefined;
+        }
+        const overrides: { selfPlayerId?: Player | null; knownCards?: ReadonlyArray<KnownCard> } = {};
+        if (importIdentity !== null) overrides.selfPlayerId = importIdentity;
+        if (importKnownCards.length > 0) overrides.knownCards = importKnownCards;
+        return overrides;
+    };
+
+    const performImport = async (
+        overrides?: ApplyOverrides,
+    ): Promise<void> => {
         setSubmitting(true);
         shareImportStarted({ shareIdHash: hashShareId(snapshot.id) });
         try {
@@ -388,7 +661,23 @@ export function ShareImportPage({
                 });
                 if (!ok) return;
             }
-            applySnapshot(snapshot);
+            // Pick overrides: explicit param (auto-import path, from
+            // decoded pendingImport entry) wins; otherwise build from
+            // local picker state (manual Join on invite); transfer
+            // shares ignore the picker entirely. Only pass the second
+            // arg when we actually have overrides to apply — keeps
+            // the call shape symmetric with the pack-only branch and
+            // the historical no-override path.
+            const effectiveOverrides =
+                overrides ??
+                (receiveFlow === RECEIVE_FLOW_INVITE
+                    ? buildOverridesFromLocalState()
+                    : undefined);
+            if (effectiveOverrides !== undefined) {
+                applySnapshot(snapshot, effectiveOverrides);
+            } else {
+                applySnapshot(snapshot);
+            }
             await queryClient.invalidateQueries({
                 queryKey: customCardPacksQueryKey,
             });
@@ -423,7 +712,33 @@ export function ShareImportPage({
         // even on failure — better-auth's redirect is opaque, so we
         // can't reliably clean up here, and a stale entry is rejected
         // by `consumePendingImportIntent`'s shareId + age check.
-        savePendingImportIntent({ shareId: snapshot.id, t: Date.now() });
+        //
+        // Encode the user's optional invite-share picks (identity +
+        // cards in hand) into the same intent so they survive the
+        // OAuth round-trip. Auto-import on return applies them as
+        // ApplyOverrides; the user doesn't have to re-pick.
+        const intent: PendingImportIntent = {
+            shareId: snapshot.id,
+            t: Date.now(),
+        };
+        if (receiveFlow === RECEIVE_FLOW_INVITE && importIdentity !== null) {
+            (intent as { selfPlayerIdData?: string }).selfPlayerIdData =
+                Schema.encodeSync(selfPlayerIdCodec)(importIdentity);
+        }
+        if (
+            receiveFlow === RECEIVE_FLOW_INVITE &&
+            importIdentity !== null &&
+            importKnownCards.length > 0
+        ) {
+            // Group flat KnownCard[] into the wire's hands-per-player
+            // shape before encoding.
+            const cards: Card[] = importKnownCards.map((kc) => kc.card);
+            (intent as { knownCardsData?: string }).knownCardsData =
+                Schema.encodeSync(knownCardsCodec)([
+                    { player: importIdentity, cards },
+                ]);
+        }
+        savePendingImportIntent(intent);
         signInStarted({
             provider: SOCIAL_SIGN_IN_PROVIDER,
             from: SIGN_IN_FROM_RECEIVE,
@@ -440,13 +755,18 @@ export function ShareImportPage({
         }
     };
 
-    const onImport = useCallback(async (): Promise<void> => {
+    // `performImport` and `onSignInToImport` close over picker state
+    // (`importIdentity`, `importKnownCards`), so memoizing this with a
+    // stale dep list would lock them to the first render's empty
+    // picks. Define fresh per render — the CTA button doesn't need
+    // referential stability here.
+    const onImport = async (): Promise<void> => {
         if (isAnonymous) {
             await onSignInToImport();
             return;
         }
         await performImport();
-    }, [isAnonymous]);
+    };
 
     /**
      * Auto-import after OAuth lands the user back here. Guarded by a
@@ -455,14 +775,21 @@ export function ShareImportPage({
      * `autoImportRanRef` rejects re-entry under React StrictMode (or
      * any future re-mount). A drive-by malicious URL doesn't trigger
      * this branch because no intent was ever written.
+     *
+     * The intent may carry encoded `selfPlayerIdData` + `knownCardsData`
+     * picks from the modal (invite shares only) — we decode them here
+     * and forward as `ApplyOverrides` to `performImport`. Decode
+     * failures fall back to no overrides (same as a pre-picker intent).
      */
     const autoImportRanRef = useRef(false);
     useEffect(() => {
         if (autoImportRanRef.current) return;
         if (isAnonymous) return;
-        if (!consumePendingImportIntent(snapshot.id)) return;
+        const consumed = consumePendingImportIntent(snapshot.id);
+        if (consumed === null) return;
         autoImportRanRef.current = true;
-        void performImport();
+        const overrides = decodeOverridesFromPendingImport(consumed);
+        void performImport(overrides);
     }, [isAnonymous, snapshot.id]);
 
     const close = (via: ShareDismissVia): void => {
@@ -530,10 +857,20 @@ export function ShareImportPage({
                     <Dialog.Content
                         className={
                             "fixed left-1/2 top-1/2 z-[var(--z-dialog-content)] flex w-[min(92vw,480px)] flex-col " +
+                            "max-h-[calc(100dvh-2rem)] overflow-hidden " +
                             "-translate-x-1/2 -translate-y-1/2 rounded-[var(--radius)] border border-border " +
                             "bg-panel shadow-[0_10px_28px_rgba(0,0,0,0.28)] focus:outline-none"
                         }
                     >
+                        {/* Header band — pinned, doesn't scroll. The modal's
+                            structural ladder mirrors `ModalStack`'s shell:
+                            header is `shrink-0`, the body in between is the
+                            `flex-1 min-h-0 overflow-y-auto` scroll
+                            container, and the footer below is `shrink-0
+                            z-[40]` so any sticky-thead inside the body
+                            (e.g. `CardSelectionGrid`'s player-name row)
+                            pins to the top of THIS scroll context and the
+                            grid never scrolls past the action buttons. */}
                         <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
                             {/* Modal title matches SuggestionLogPanel
                                 's `h2`: uppercase + accent + slab,
@@ -550,6 +887,15 @@ export function ShareImportPage({
                                 <XIcon size={18} />
                             </button>
                         </div>
+                        {/* Scrollable body. `relative z-0` traps inner
+                            stacking contexts (high-z grid cells, sticky
+                            thead at z-39) below the footer band (z-40) so
+                            the picker grid can't paint over the action
+                            buttons. `min-h-0` is the load-bearing piece —
+                            without it, `flex-1` can't shrink below the
+                            children's intrinsic height and the modal grows
+                            past the viewport regardless of `max-h`. */}
+                        <div className="relative z-0 flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
                         {snapshot.ownerName !== null ? (
                             <Dialog.Description
                                 className="px-5 pt-3 text-[1rem] leading-relaxed"
@@ -638,7 +984,88 @@ export function ShareImportPage({
                                 </ul>
                             </>
                         )}
-                        <div className="mt-4 flex items-center justify-end gap-2 border-t border-border bg-panel px-5 pt-4 pb-5">
+                        {receiveFlow === RECEIVE_FLOW_INVITE &&
+                        modalSetup !== null &&
+                        modalCardSet !== null ? (
+                            <div
+                                className="flex flex-col gap-2 px-5 pt-4"
+                                data-share-import-picker
+                            >
+                                <h3
+                                    className="m-0 font-sans! text-[1.125rem] font-bold uppercase tracking-wide text-accent"
+                                    data-share-import-identity-heading
+                                >
+                                    {t("importIdentityHeading")}
+                                </h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {modalPlayers.map((player) => {
+                                        const active =
+                                            importIdentity === player;
+                                        return (
+                                            <button
+                                                key={String(player)}
+                                                type="button"
+                                                aria-pressed={active}
+                                                data-share-import-identity-pill
+                                                onClick={() =>
+                                                    setImportIdentity(
+                                                        active ? null : player,
+                                                    )
+                                                }
+                                                className={`tap-target-compact text-tap-compact cursor-pointer rounded-full border transition-colors ${
+                                                    active
+                                                        ? "border-accent bg-accent text-white hover:bg-accent-hover"
+                                                        : "border-border bg-control text-fg hover:bg-hover"
+                                                }`}
+                                            >
+                                                {String(player)}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {importIdentity !== null ? (
+                                    <div
+                                        className="flex flex-col gap-2 pt-2"
+                                        data-share-import-cards-section
+                                    >
+                                        <h3 className="m-0 font-sans! text-[1.125rem] font-bold uppercase tracking-wide text-accent">
+                                            {t("importCardsHeading")}
+                                        </h3>
+                                        <CardSelectionGrid
+                                            players={[importIdentity]}
+                                            cardSet={modalCardSet}
+                                            knownCards={importKnownCards}
+                                            handSizes={modalHandSizesMap}
+                                            deductionKnowledge={
+                                                modalDeductionKnowledge
+                                            }
+                                            onAddKnownCard={(card) =>
+                                                setImportKnownCards((prev) => [
+                                                    ...prev,
+                                                    card,
+                                                ])
+                                            }
+                                            onRemoveKnownCard={(index) =>
+                                                setImportKnownCards((prev) =>
+                                                    prev.filter(
+                                                        (_, i) => i !== index,
+                                                    ),
+                                                )
+                                            }
+                                        />
+                                    </div>
+                                ) : null}
+                            </div>
+                        ) : null}
+                        </div>
+                        {/* Sticky footer band. `relative z-[40]` wins
+                            against any z-index inside the body up
+                            through 39 (the checklist-style grid's
+                            sticky-header layer tops out at 39). The
+                            scroll boundary above ends here, so the
+                            grid's body scrolls UNDER this row instead
+                            of pushing it off-screen. */}
+                        <div className="relative z-[40] flex shrink-0 items-center justify-end gap-2 border-t border-border bg-panel px-5 pt-4 pb-5">
                             <button
                                 type="button"
                                 onClick={() => close(VIA_X)}

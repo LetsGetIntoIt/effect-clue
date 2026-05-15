@@ -8,6 +8,10 @@
  * client because it needs access to the receiver's
  * `<ClueProvider>`.
  */
+import {
+    ModalStackProvider,
+    ModalStackShell,
+} from "../../../src/ui/components/ModalStack";
 import { ConfirmProvider } from "../../../src/ui/hooks/useConfirm";
 import { getShare } from "../../../src/server/actions/shares";
 import { ERR_SHARE_NOT_FOUND } from "../../../src/server/shares/errors";
@@ -34,8 +38,11 @@ export default async function SharePageRoute({
         throw e;
     }
     return (
-        <ConfirmProvider>
-            <ShareImportPage snapshot={snapshot} />
-        </ConfirmProvider>
+        <ModalStackProvider>
+            <ConfirmProvider>
+                <ShareImportPage snapshot={snapshot} />
+                <ModalStackShell />
+            </ConfirmProvider>
+        </ModalStackProvider>
     );
 }

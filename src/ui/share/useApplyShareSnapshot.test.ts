@@ -17,6 +17,7 @@ import { Schema } from "effect";
 import { beforeEach, describe, expect, test } from "vitest";
 import { Card, CardCategory, Player } from "../../logic/GameObjects";
 import { emptyHypotheses } from "../../logic/Hypothesis";
+import { KnownCard } from "../../logic/InitialKnowledge";
 import { newAccusationId } from "../../logic/Accusation";
 import { newSuggestionId } from "../../logic/Suggestion";
 import { CARD_SETS, GameSetup } from "../../logic/GameSetup";
@@ -422,6 +423,148 @@ describe("buildSessionFromSnapshot — identity + scratchwork", () => {
         expect(session.hypothesisOrder.length).toBe(2);
         expect(session.hypothesisOrder[0]!.card).toBe(Card("card-knife"));
         expect(session.hypothesisOrder[1]!.card).toBe(Card("card-scarlet"));
+    });
+});
+
+describe("buildSessionFromSnapshot — receiver overrides", () => {
+    // The share-import modal uses these overrides to apply the receiver's
+    // picker selections (identity + cards in hand) before the snapshot
+    // lands. `undefined` for a field means "no override — fall back to
+    // snapshot". An explicit `null` for `selfPlayerId` is a meaningful
+    // override (user picked-then-deselected); an empty `knownCards`
+    // array is similarly meaningful (user picked identity but no cards).
+
+    test("selfPlayerId override wins over snapshot decode", () => {
+        const session = buildSessionFromSnapshot(
+            sampleSnapshot({
+                cardPack: true,
+                players: true,
+                handSizes: true,
+            }),
+            RECEIVER_FALLBACK_PACK,
+            RECEIVER_FALLBACK_PLAYERS,
+            { selfPlayerId: Player("Bob") },
+        );
+        expect(session.selfPlayerId).toBe(Player("Bob"));
+    });
+
+    test("explicit null selfPlayerId override records as skipped", () => {
+        // Even if the snapshot had a selfPlayerIdData encoded (a stray
+        // transfer-shaped payload), an explicit null override forces
+        // the session into the "skipped" state. This is distinct from
+        // omitting the override entirely (which falls back to snapshot).
+        const session = buildSessionFromSnapshot(
+            {
+                cardPackData: Schema.encodeSync(cardPackCodec)(SHARE_PACK),
+                playersData: Schema.encodeSync(playersCodec)([
+                    Player("Alice"),
+                    Player("Bob"),
+                ]),
+                handSizesData: null,
+                knownCardsData: null,
+                suggestionsData: null,
+                accusationsData: null,
+                hypothesesData: null,
+                selfPlayerIdData: Schema.encodeSync(selfPlayerIdCodec)(
+                    Player("Alice"),
+                ),
+                firstDealtPlayerIdData: null,
+                dismissedInsightsData: null,
+                hypothesisOrderData: null,
+            },
+            RECEIVER_FALLBACK_PACK,
+            RECEIVER_FALLBACK_PLAYERS,
+            { selfPlayerId: null },
+        );
+        expect(session.selfPlayerId).toBeNull();
+    });
+
+    test("knownCards override replaces snapshot hands (grouped by player)", () => {
+        const session = buildSessionFromSnapshot(
+            sampleSnapshot({
+                cardPack: true,
+                players: true,
+                handSizes: true,
+            }),
+            RECEIVER_FALLBACK_PACK,
+            RECEIVER_FALLBACK_PLAYERS,
+            {
+                knownCards: [
+                    KnownCard({
+                        player: Player("Alice"),
+                        card: Card("card-scarlet"),
+                    }),
+                    KnownCard({
+                        player: Player("Alice"),
+                        card: Card("card-plum"),
+                    }),
+                ],
+            },
+        );
+        expect(session.hands.length).toBe(1);
+        expect(session.hands[0]!.player).toBe(Player("Alice"));
+        expect(session.hands[0]!.cards).toEqual([
+            Card("card-scarlet"),
+            Card("card-plum"),
+        ]);
+    });
+
+    test("empty knownCards override = explicit empty hands (not snapshot fallback)", () => {
+        // The user picked identity but didn't tick any cards yet. The
+        // empty array is meaningful — don't reach back to the
+        // snapshot's knownCardsData (which is null for invite anyway).
+        const session = buildSessionFromSnapshot(
+            sampleSnapshot({
+                cardPack: true,
+                players: true,
+                handSizes: true,
+            }),
+            RECEIVER_FALLBACK_PACK,
+            RECEIVER_FALLBACK_PLAYERS,
+            { knownCards: [] },
+        );
+        expect(session.hands).toEqual([]);
+    });
+
+    test("both overrides applied together produce the expected session shape", () => {
+        const session = buildSessionFromSnapshot(
+            sampleSnapshot({
+                cardPack: true,
+                players: true,
+                handSizes: true,
+            }),
+            RECEIVER_FALLBACK_PACK,
+            RECEIVER_FALLBACK_PLAYERS,
+            {
+                selfPlayerId: Player("Alice"),
+                knownCards: [
+                    KnownCard({
+                        player: Player("Alice"),
+                        card: Card("card-scarlet"),
+                    }),
+                ],
+            },
+        );
+        expect(session.selfPlayerId).toBe(Player("Alice"));
+        expect(session.hands.length).toBe(1);
+        expect(session.hands[0]!.cards[0]).toBe(Card("card-scarlet"));
+    });
+
+    test("undefined overrides fall back to snapshot — backwards compatible", () => {
+        // Pre-picker callers (auto-import path with empty intent, e.g.)
+        // pass `undefined` and the builder behaves identically to the
+        // pre-overrides signature.
+        const session = buildSessionFromSnapshot(
+            sampleSnapshot({
+                cardPack: true,
+                players: true,
+                handSizes: true,
+            }),
+            RECEIVER_FALLBACK_PACK,
+            RECEIVER_FALLBACK_PLAYERS,
+        );
+        expect(session.selfPlayerId).toBeNull();
+        expect(session.hands).toEqual([]);
     });
 });
 
