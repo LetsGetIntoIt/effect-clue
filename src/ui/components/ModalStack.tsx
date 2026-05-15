@@ -353,11 +353,26 @@ function DialogShellInternal({
                                 transition={transition}
                                 className="flex max-h-[calc(100dvh-2rem)] flex-col"
                             >
-                                <div className="min-h-0 flex-1 overflow-y-auto">
+                                {/* `relative z-0` makes the body wrapper
+                                    its own stacking context — any
+                                    `z-index` on `top.content`'s
+                                    descendants resolves WITHIN this
+                                    context, so high-z body elements
+                                    (e.g. a `CardSelectionGrid`'s
+                                    sticky-left column at z-30) can't
+                                    paint over the footer slot below.
+
+                                    Paired with `z-[40]` on the footer
+                                    slot: footer wins against any
+                                    content z-index up through 39. The
+                                    common stacking ladder used inside
+                                    cards / grids tops out at 39 so 40
+                                    is a comfortable buffer. */}
+                                <div className="relative z-0 min-h-0 flex-1 overflow-y-auto">
                                     {top.content}
                                 </div>
                                 {top.footer !== undefined && (
-                                    <div className="shrink-0 border-t border-border/30">
+                                    <div className="relative z-[40] shrink-0 border-t border-border/30">
                                         {top.footer}
                                     </div>
                                 )}

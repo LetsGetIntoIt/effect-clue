@@ -214,7 +214,23 @@ export function CardSelectionGrid({
                             return (
                                 <th
                                     key={String(player)}
-                                    className={`border-l border-border bg-panel px-4 py-2 text-center align-bottom shadow-[inset_0_-1px_0_var(--color-border)] ${COLUMN_HEADER_STACK}`}
+                                    // Both LEFT and BOTTOM borders are
+                                    // painted as inset shadows inside
+                                    // the cell's bg-panel layer. The
+                                    // CSS `border-collapse: collapse`
+                                    // merges adjacent borders at the
+                                    // seam between the sticky thead
+                                    // and the body's category-header
+                                    // row beneath — at sub-pixel
+                                    // boundaries the maroon
+                                    // `bg-category-header` flashes
+                                    // through both the bottom seam
+                                    // AND the vertical column-divider
+                                    // seams during scroll. Painting
+                                    // the borders inside the cell's
+                                    // own paint layer pins them with
+                                    // the sticky cell.
+                                    className={`bg-panel px-4 py-2 text-center align-bottom shadow-[inset_1px_0_0_var(--color-border),inset_0_-1px_0_var(--color-border)] ${COLUMN_HEADER_STACK}`}
                                 >
                                     <div className="truncate font-semibold">
                                         {String(player)}
