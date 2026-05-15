@@ -298,6 +298,64 @@ export const checklistRowClicked = (props: {
     cardType: "suspect" | "weapon" | "room";
 }): void => capture("checklist_row_clicked", props);
 
+// ── My Cards surface ─────────────────────────────────────────────────────
+//
+// Toggles of the My Cards section and suggestion-aware banner
+// lifecycle. Two questions these events answer:
+//   1. How often do users expand vs collapse the My Cards reference,
+//      split by surface (desktop section vs mobile FAB / panel)?
+//   2. When the refute / self-suggesting banner shows during a
+//      suggestion draft, how often do users engage with it (open the
+//      section / panel while the banner is visible) vs let it pass
+//      without expanding?
+//
+// `myCardsBannerDismissed.expandedDuringDisplay === false` is the
+// "shown but ignored" count for the engagement-rate funnel.
+
+export type MyCardsSurface = "section" | "fab";
+export type MyCardsBannerKind = "canRefute" | "cannotRefute" | "self";
+
+/** Constants for the `MyCardsSurface` union — re-export so call
+ *  sites can pass the value without a literal-string lint flag. */
+export const MY_CARDS_SURFACE_SECTION: MyCardsSurface = "section";
+export const MY_CARDS_SURFACE_FAB: MyCardsSurface = "fab";
+
+/** Fires whenever the user opens or closes the My Cards reference
+ *  surface. On desktop the section's chevron / tap-on-teaser-banner
+ *  drives this; on mobile the FAB tap, stacked-teaser tap, and
+ *  panel-close chevron all flow through here. */
+export const myCardsSectionToggled = (props: {
+    surface: MyCardsSurface;
+    /** New state after the toggle — `true` when the user just
+     *  expanded (cards now visible), `false` when collapsed. */
+    expanded: boolean;
+    /** Whether the suggestion-aware banner had visible content at
+     *  the moment of the toggle. Distinguishes "user engaged with
+     *  the refute hint" from "user just toggled chrome". */
+    bannerShowing: boolean;
+}): void => capture("my_cards_section_toggled", props);
+
+/** Fires the moment the suggestion-aware banner becomes visible
+ *  during a draft — one event per visibility window (kind changes
+ *  mid-window don't re-emit). Pair with `myCardsBannerDismissed` to
+ *  compute the engagement rate. */
+export const myCardsBannerShown = (props: {
+    kind: MyCardsBannerKind;
+    surface: MyCardsSurface;
+}): void => capture("my_cards_banner_shown", props);
+
+/** Fires when the banner stops being visible — the draft ended, the
+ *  user cleared a card slot, or the parent surface unmounted.
+ *  `expandedDuringDisplay` is `true` if the parent surface was in
+ *  its expanded state at any point during the banner's visibility
+ *  window — the engagement signal. Filter for `false` to count
+ *  "banner shown but user did not expand". */
+export const myCardsBannerDismissed = (props: {
+    kind: MyCardsBannerKind;
+    surface: MyCardsSurface;
+    expandedDuringDisplay: boolean;
+}): void => capture("my_cards_banner_dismissed", props);
+
 // ── Behavioral insights ──────────────────────────────────────────────────
 //
 // Soft "behavioral hypothesis" rows surfaced from suggestion-log

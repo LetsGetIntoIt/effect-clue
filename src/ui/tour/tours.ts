@@ -587,6 +587,40 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             requiredUiMode: "checklist",
         },
         {
+            // My Cards section (desktop). Spotlights the always-on
+            // section above the play grid that holds the user's hand
+            // and the suggestion-aware banner. Sits between the
+            // case-file callout (Checklist's finale) and the
+            // Suggest-pane intro so the user has seen everything in
+            // the grid before being introduced to the My Cards
+            // reference surface and the refute banner that fires
+            // inside it during drafts.
+            //
+            // Project 4 (teach-me mode) will filter this step out
+            // when teach-mode is on — the banner is teach-mode-
+            // suppressed there, so the step would describe an
+            // affordance the user can't see.
+            anchor: "my-cards-section",
+            titleKey: "checklist.myCardsDesktop.title",
+            bodyKey: "checklist.myCardsDesktop.body",
+            side: "bottom",
+            align: "start",
+            requiredUiMode: "checklist",
+            viewport: "desktop",
+        },
+        {
+            // My Cards FAB (mobile). The fixed bottom-left FAB is the
+            // mobile entry point to the same surface; the popover sits
+            // above the FAB. Same teach-mode filter applies as above.
+            anchor: "my-cards-fab",
+            titleKey: "checklist.myCardsMobile.title",
+            bodyKey: "checklist.myCardsMobile.body",
+            side: "top",
+            align: "start",
+            requiredUiMode: "checklist",
+            viewport: "mobile",
+        },
+        {
             // Step 9 (desktop): Suggest pane intro. The suggestion log
             // lives in the right column. Popover anchors to the column
             // wrapper itself with `side: "left", align: "center"` so

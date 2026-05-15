@@ -111,16 +111,19 @@ describe("TOURS — setup tour", () => {
 });
 
 describe("TOURS — checklistSuggest tour", () => {
-    test("registry holds 15 entries: two-halves pair (desktop spotlight + mobile spotlight + mobile tap) + suggest-pane pair + shared steps", () => {
+    test("registry holds 17 entries: two-halves pair + suggest-pane pair + My Cards pair (desktop + mobile) + shared steps", () => {
         // The two-halves intro is split three ways: a desktop multi-
         // spotlight on the pane columns, a mobile multi-spotlight on
         // the BottomNav tabs, and a mobile-only tap-Checklist step
         // that follows the mobile multi-spotlight to teach the
-        // gesture. The suggest-pane intro is a viewport-locked pair
-        // (desktop info / mobile tap-Suggest). The unfiltered
-        // registry holds 15 entries; each viewport sees 12 (desktop)
-        // / 13 (mobile) after the filter.
-        expect(TOURS.checklistSuggest).toHaveLength(15);
+        // gesture. Project 3 added a viewport-locked My Cards pair
+        // (desktop section + mobile FAB) between the case-file step
+        // and the suggest-pane intro. The suggest-pane intro is
+        // another viewport-locked pair (desktop info / mobile
+        // tap-Suggest). The unfiltered registry holds 17 entries;
+        // each viewport sees 13 (desktop) / 14 (mobile) after the
+        // filter.
+        expect(TOURS.checklistSuggest).toHaveLength(17);
     });
 
     test("registry anchors in order, including viewport-locked pairs", () => {
@@ -134,10 +137,12 @@ describe("TOURS — checklistSuggest tour", () => {
         //   7-9. cell-explanation-{deductions,leads,hypothesis} (both)
         //  10. checklist-cell-close (both — advance-on-click, CLOSE)
         //  11. checklist-case-file (both — panel already dismissed)
-        //  12. desktop-suggest-area (desktop)
-        //  13. bottom-nav-suggest (mobile)
-        //  14. suggest-prior-log (both)
-        //  15. suggest-add-form (both)
+        //  12. my-cards-section (desktop — Project 3)
+        //  13. my-cards-fab (mobile — Project 3)
+        //  14. desktop-suggest-area (desktop)
+        //  15. bottom-nav-suggest (mobile)
+        //  16. suggest-prior-log (both)
+        //  17. suggest-add-form (both)
         expect(TOURS.checklistSuggest.map(s => s.anchor)).toEqual([
             "overflow-menu",
             "two-halves-spotlight",
@@ -150,6 +155,8 @@ describe("TOURS — checklistSuggest tour", () => {
             "cell-explanation-hypothesis",
             "checklist-cell-close",
             "checklist-case-file",
+            "my-cards-section",
+            "my-cards-fab",
             "desktop-suggest-area",
             "bottom-nav-suggest",
             "suggest-prior-log",

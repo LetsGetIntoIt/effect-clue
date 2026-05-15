@@ -476,3 +476,47 @@ h3 {
     ) !important;
 }
 
+/* Attention bounce for the My Cards suggestion-aware banner — fires
+   once every 2 seconds with a spring-overshoot keyframe shape:
+
+     0–8%   linear ramp from rest into the first compression (1 → 1.07)
+     8–16%  rebound past rest with a slight undershoot (1.07 → 0.97)
+     16–22% second, smaller overshoot (0.97 → 1.03)
+     22–32% settle back to 1 with a tiny final dip
+     32–100% rest at scale(1) for the remainder of the 2s cycle
+
+   The animation runs continuously on `.animate-banner-bounce` and is
+   gated on `prefers-reduced-motion: no-preference` so reduced-motion
+   users see a static banner. The bounce is paused (class dropped by
+   the React component) once the user's mouse enters the section / the
+   FAB is tapped.
+
+   `transform-origin: center` is set on the element via the
+   `origin-center` utility — the bounce scales around the banner's
+   center rather than expanding from a corner. */
+@keyframes bannerBounce {
+    0% {
+        transform: scale(1);
+    }
+    8% {
+        transform: scale(1.07);
+    }
+    16% {
+        transform: scale(0.97);
+    }
+    22% {
+        transform: scale(1.03);
+    }
+    28% {
+        transform: scale(0.99);
+    }
+    32%,
+    100% {
+        transform: scale(1);
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .animate-banner-bounce {
+        animation: bannerBounce 2s linear infinite;
+    }
+}

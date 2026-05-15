@@ -239,7 +239,7 @@ function ClueShell({
         <InstallPromptProvider>
         <AccountProvider>
         <ShareProvider>
-            <main className="mx-auto flex max-w-[1400px] flex-col gap-5 px-5 pb-24 [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))]">
+            <main className="mx-auto flex max-w-[1400px] flex-col gap-5 px-5 pb-[calc(env(safe-area-inset-bottom,0px)+8rem+var(--my-cards-panel-offset,0px)+var(--my-cards-teaser-offset,0px))] [@media(min-width:800px)]:pb-5 [padding-top:calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))]">
                 {/*
                   Header is `position: fixed` so its `bg-bg` always
                   spans the full visible viewport, even when the body
