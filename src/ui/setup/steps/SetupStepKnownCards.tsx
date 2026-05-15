@@ -182,7 +182,7 @@ export function SetupStepKnownCards({
                 <div className="flex items-center justify-between gap-2">
                     <button
                         type="button"
-                        className="cursor-pointer rounded border border-border bg-control p-1.5 hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-control"
+                        className="cursor-pointer rounded border border-border bg-control p-1.5 hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-control"
                         disabled={activeIndex === 0}
                         aria-label={t("prevPlayer")}
                         onClick={() =>
@@ -200,7 +200,7 @@ export function SetupStepKnownCards({
                     </span>
                     <button
                         type="button"
-                        className="cursor-pointer rounded border border-border bg-control p-1.5 hover:bg-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-control"
+                        className="cursor-pointer rounded border border-border bg-control p-1.5 hover:bg-control-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-control"
                         disabled={activeIndex >= targets.length - 1}
                         aria-label={t("nextPlayer")}
                         onClick={() =>

@@ -207,7 +207,7 @@ function CardPackEditorModal({
                 />
                 <button
                     type="button"
-                    className="tap-target-compact text-tap-compact self-start cursor-pointer rounded border border-border bg-control hover:bg-hover"
+                    className="tap-target-compact text-tap-compact self-start cursor-pointer rounded border border-border bg-control hover:bg-control-hover"
                     onClick={() =>
                         setDraft(prev => addCategoryToCardSet(prev))
                     }
@@ -218,14 +218,14 @@ function CardPackEditorModal({
             <div className="sticky bottom-0 z-[40] flex flex-wrap items-center justify-end gap-2 border-t border-border/30 bg-panel px-5 py-3">
                 <button
                     type="button"
-                    className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-control hover:bg-hover"
+                    className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-control hover:bg-control-hover"
                     onClick={close}
                 >
                     {t("cancel")}
                 </button>
                 <button
                     type="button"
-                    className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-control hover:bg-hover"
+                    className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-control hover:bg-control-hover"
                     onClick={saveAsNewPack}
                 >
                     {t("saveAsNewPack")}
@@ -346,7 +346,7 @@ function CategoriesEditor({
                     />
                     <button
                         type="button"
-                        className="self-start cursor-pointer rounded border border-border bg-control px-2 py-1 text-[1rem] hover:bg-hover"
+                        className="self-start cursor-pointer rounded border border-border bg-control px-2 py-1 text-[1rem] hover:bg-control-hover"
                         onClick={() =>
                             setDraft(prev =>
                                 addCardToCategoryInCardSet(
@@ -512,7 +512,7 @@ function CategoryHeader({
             {canRemove && (
                 <button
                     type="button"
-                    className="shrink-0 cursor-pointer rounded border border-border bg-control p-1 text-fg hover:bg-hover"
+                    className="shrink-0 cursor-pointer rounded border border-border bg-control p-1 text-fg hover:bg-control-hover"
                     aria-label={t("removeCategoryTitle", {
                         name: category.name,
                     })}
@@ -595,7 +595,7 @@ function CardRow({
             {canRemove && (
                 <button
                     type="button"
-                    className="shrink-0 cursor-pointer rounded border border-border bg-control p-1 text-fg hover:bg-hover"
+                    className="shrink-0 cursor-pointer rounded border border-border bg-control p-1 text-fg hover:bg-control-hover"
                     aria-label={t("removeCardTitle", { name: entry.name })}
                     onClick={onRemove}
                 >

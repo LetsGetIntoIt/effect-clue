@@ -42,9 +42,18 @@
     --color-row-header: #e5d9b8;
     /* Dossier manila for the case-file header strip. */
     --color-case-file-bg: #ead9b0;
-    /* Press-down hover tint for `--color-control`. Darker than control
-     * by ~10% lightness, keeping the "sink in on hover" direction. */
+    /* Press-down hover tint shared by every `hover:bg-hover` site that
+     * isn't a secondary button — transparent close-X buttons, modal
+     * Cancel buttons, overflow-menu items, the toolbar's white pills.
+     * Darker than --color-control so the hover reads as a clear
+     * surface change. */
     --color-hover: #c2a96b;
+    /* Press-down hover tint specifically for secondary buttons
+     * (`bg-control`). Lands a single step darker than the new
+     * lighter --color-control so the hover feels like a soft
+     * "sink in" rather than the dramatic jump to --color-hover.
+     * Equivalent to the previous --color-control value. */
+    --color-control-hover: #dac796;
     /* Alternating "striped" row fill for dense tables. */
     --color-row-alt: #ede0c1;
 
