@@ -61,7 +61,7 @@ export function ShareMissingPage({
                             <Dialog.Title className="m-0 text-[1.25rem] uppercase tracking-[0.05em] text-accent">
                                 {t("missingTitle")}
                             </Dialog.Title>
-                            <Dialog.Description className="pt-3 text-[1rem] leading-relaxed text-muted">
+                            <Dialog.Description className="pt-3 text-[1rem] leading-normal text-muted">
                                 {t("missingBody")}
                             </Dialog.Description>
                         </div>

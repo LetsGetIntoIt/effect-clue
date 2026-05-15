@@ -129,7 +129,7 @@ function StaleGameModalContent({
                     <XIcon size={18} />
                 </button>
             </div>
-            <p className="px-5 pt-3 pb-1 text-[1rem] leading-relaxed">
+            <p className="px-5 pt-3 pb-1 text-[1rem] leading-normal">
                 {t(descriptionKey, { humanDuration })}
             </p>
             <div className="mt-4 flex items-center justify-end gap-2 border-t border-border bg-panel px-5 pt-4 pb-5">

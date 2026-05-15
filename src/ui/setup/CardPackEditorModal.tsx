@@ -184,7 +184,7 @@ function CardPackEditorModal({
                 </button>
             </div>
             <div className="flex flex-col gap-3 overflow-y-auto px-5 pt-3 pb-2">
-                <p className="m-0 text-[1rem] text-muted">{t("helperText")}</p>
+                <p className="m-0 text-[1rem] leading-normal text-muted">{t("helperText")}</p>
                 <CategoriesEditor
                     draft={draft}
                     setDraft={setDraft}
