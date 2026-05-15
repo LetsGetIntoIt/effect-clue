@@ -346,27 +346,34 @@ export function SetupWizard() {
             // unit-test environment doesn't throw — the scroll is
             // verified manually in the next-dev preview.
             if (typeof body.scrollTo !== "function") return;
-            // Only scroll if the newly-focused step's top edge sits
-            // in the bottom 20% of the viewport (or below it). When
-            // the step is already comfortably in view, scrolling
-            // every advance reads as jumpy — everything shifts while
-            // the user is still mid-interaction. Leaving scroll alone
-            // keeps the user's reading position stable.
-            const viewportTop = el.getBoundingClientRect().top;
-            const viewportHeight = window.innerHeight;
-            if (viewportTop <= viewportHeight * 0.8) return;
-            // The page header is `position: sticky` and its measured
+            // The page header is `position: fixed` and its measured
             // height is published as `--header-offset` on `:root` by
-            // a ResizeObserver in `Clue.tsx`. Reading it ensures the
-            // scrolled-to heading isn't hidden behind the sticky
-            // header on either breakpoint. Add a small extra gap
-            // (16px) so a sliver of the previous step's bottom is
-            // still visible — confirms forward progress.
+            // a ResizeObserver in `Clue.tsx`. Reading it lets us both
+            // (a) detect when the focused step's heading is hidden
+            // above the visible area, and (b) land the heading just
+            // below the header when we do scroll. The extra 16px gap
+            // leaves a sliver of context above the heading.
             const rootStyle = window.getComputedStyle(
                 document.documentElement,
             );
             const headerOffset =
                 parseFloat(rootStyle.getPropertyValue("--header-offset")) || 0;
+            const viewportTop = el.getBoundingClientRect().top;
+            const viewportHeight = window.innerHeight;
+            // Scroll DOWN when the step's top sits in the bottom 20%
+            // of the viewport (or below it) — the heading is too far
+            // down to be a comfortable starting point. Scroll UP when
+            // the step's top is hidden behind the sticky page header
+            // (top < headerOffset), which happens when a tall step
+            // expands from a scrolled-down position: the previous
+            // step collapses, the new step's body fills the viewport
+            // but its heading is offscreen above. Otherwise the
+            // heading is already comfortably in view — leaving the
+            // scroll alone keeps the user's reading position stable.
+            const isBelowBottomThreshold =
+                viewportTop > viewportHeight * 0.8;
+            const isAboveStickyHeader = viewportTop < headerOffset;
+            if (!isBelowBottomThreshold && !isAboveStickyHeader) return;
             const top = viewportTop + body.scrollTop;
             body.scrollTo({
                 top: Math.max(0, top - headerOffset - 16),
