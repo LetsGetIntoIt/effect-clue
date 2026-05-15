@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 import type { Player } from "../../../logic/GameObjects";
 import { useClue } from "../../state";
-import { PlayerColumnCardList } from "../shared/PlayerColumnCardList";
+import { CardSelectionGrid } from "../shared/CardSelectionGrid";
 import { SetupStepPanel } from "../SetupStepPanel";
 import { VALID, type WizardStepId } from "../wizardSteps";
 import type { StepPanelState, WizardMode } from "../SetupStepPanel";
@@ -19,7 +19,6 @@ interface Props {
     readonly state: StepPanelState;
     readonly wizardMode: WizardMode;
     readonly stepNumber: number;
-    readonly totalSteps: number;
     readonly selfPlayerId: Player;
     readonly onClickToEdit: () => void;
     readonly registerPanelEl?: (
@@ -43,7 +42,6 @@ export function SetupStepMyCards({
     state,
     wizardMode,
     stepNumber,
-    totalSteps,
     selfPlayerId,
     onClickToEdit,
     registerPanelEl,
@@ -65,7 +63,6 @@ export function SetupStepMyCards({
             state={state}
             wizardMode={wizardMode}
             stepNumber={stepNumber}
-            totalSteps={totalSteps}
             title={t("title")}
             summary={summary}
             validation={VALID}
@@ -74,10 +71,9 @@ export function SetupStepMyCards({
             footer={footer}
         >
             <p className="m-0 text-[1rem] text-muted">{t("helperText")}</p>
-            <PlayerColumnCardList
-                player={selfPlayerId}
-                heading={t("yourHand")}
-                firstRowTourAnchor={FIRST_ROW_TOUR_ANCHOR}
+            <CardSelectionGrid
+                players={[selfPlayerId]}
+                firstCellTourAnchor={FIRST_ROW_TOUR_ANCHOR}
             />
         </SetupStepPanel>
     );

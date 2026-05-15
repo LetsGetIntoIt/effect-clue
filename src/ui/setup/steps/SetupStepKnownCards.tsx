@@ -1,22 +1,47 @@
 "use client";
 
+import { AnimatePresence, motion, type Variants } from "motion/react";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Player } from "../../../logic/GameObjects";
 import { useClue } from "../../state";
+import { T_STANDARD, useReducedTransition } from "../../motion";
 import { ChevronLeftIcon, ChevronRightIcon } from "../../components/Icons";
-import { PlayerColumnCardList } from "../shared/PlayerColumnCardList";
+import { CardSelectionGrid } from "../shared/CardSelectionGrid";
 import { SetupStepPanel } from "../SetupStepPanel";
 import { VALID, type WizardStepId } from "../wizardSteps";
 import type { StepPanelState, WizardMode } from "../SetupStepPanel";
 
 const STEP_ID = "knownCards" as const;
 
+// Slide-variant identifiers — pulled to module scope so the
+// i18next/no-literal-string lint reads them as wire identifiers.
+const VARIANT_INITIAL = "initial" as const;
+const VARIANT_ANIMATE = "animate" as const;
+const VARIANT_EXIT = "exit" as const;
+
+type SlideDirection = 1 | -1;
+
+// Mirror of `slideVariants` in `PlayLayout.tsx` — the paginator slide
+// uses the same direction-driven enter-from / exit-to pattern as the
+// mobile Checklist ↔ Suggest swap so the motion language is
+// consistent across mobile screens.
+const playerSlideVariants: Variants = {
+    initial: (dir: SlideDirection) => ({
+        x: dir === 1 ? "100%" : "-100%",
+        opacity: 0,
+    }),
+    animate: { x: 0, opacity: 1 },
+    exit: (dir: SlideDirection) => ({
+        x: dir === 1 ? "-100%" : "100%",
+        opacity: 0,
+    }),
+};
+
 interface Props {
     readonly state: StepPanelState;
     readonly wizardMode: WizardMode;
     readonly stepNumber: number;
-    readonly totalSteps: number;
     readonly onClickToEdit: () => void;
     readonly registerPanelEl?: (
         stepId: WizardStepId,
@@ -31,20 +56,21 @@ interface Props {
  * Iterates non-self players when `selfPlayerId` is set, or every
  * player when it isn't. Layout:
  *
- * - **Desktop (≥ 800px):** all relevant `<PlayerColumnCardList>`
- *   columns rendered side-by-side in a horizontal grid.
- * - **Mobile (< 800px):** single column with paginator (left / right
- *   arrow buttons + a "Player N of M" indicator).
+ * - **Desktop (≥ 800px):** a single `<CardSelectionGrid>` with every
+ *   relevant player as a column. Per-column "Identified X of Y"
+ *   counters appear in the grid header and deduction-driven cell
+ *   backgrounds light up as the user enters known cards.
+ * - **Mobile (< 800px):** the same grid sliced to a one-player array,
+ *   wrapped in a paginator (left / right arrow buttons + a "Player N
+ *   of M" indicator) so each column gets its own viewport-width.
  *
- * Same component on both layouts; only the container differs. The
- * mobile variant uses local state (`activeIndex`) to track which
- * player's column is showing; the desktop variant ignores it.
+ * The grid is the same component in both branches; only its `players`
+ * prop changes. `activeIndex` (local state) drives the mobile slice.
  */
 export function SetupStepKnownCards({
     state,
     wizardMode,
     stepNumber,
-    totalSteps,
     onClickToEdit,
     registerPanelEl,
     footer,
@@ -65,6 +91,32 @@ export function SetupStepKnownCards({
         }
     }, [targets.length, activeIndex]);
 
+    // Direction for the paginator slide: +1 when advancing to a later
+    // player, -1 when stepping back. Computed against the previous
+    // render's `activeIndex` so AnimatePresence can swap the enter /
+    // exit sides correctly. The ref updates AFTER the render that
+    // consumed it, so each render sees the right "previous" value.
+    const prevIndexRef = useRef(activeIndex);
+    const slideDirection: SlideDirection =
+        activeIndex >= prevIndexRef.current ? 1 : -1;
+    useEffect(() => {
+        prevIndexRef.current = activeIndex;
+    }, [activeIndex]);
+    const transition = useReducedTransition(T_STANDARD, { fadeMs: 120 });
+
+    // `overflow-x: clip` on the slide container is required mid-slide
+    // (the off-screen pane's `translateX(±100%)` would otherwise extend
+    // `body.scrollWidth` and flash a horizontal scrollbar). But ANY
+    // non-`visible` overflow makes the element the nearest scrolling
+    // ancestor for sticky positioning of descendants — and the table's
+    // sticky thead would pin to the slide container instead of the
+    // viewport, dropping behind the body cells. Same toggle pattern as
+    // `MobilePlayLayout` in `PlayLayout.tsx`: clip ONLY while the slide
+    // is in flight, otherwise drop the clip so the grid's sticky thead
+    // resolves to `body` (the page's scroll container).
+    const [isSliding, setIsSliding] = useState(false);
+    const animationClipClass = isSliding ? " overflow-x-clip" : "";
+
     const otherKnownCount = clue.knownCards.filter(
         kc => kc.player !== selfPlayerId,
     ).length;
@@ -80,7 +132,6 @@ export function SetupStepKnownCards({
                 state={state}
                 wizardMode={wizardMode}
                 stepNumber={stepNumber}
-                totalSteps={totalSteps}
                 title={t("title")}
                 summary={t("summaryEmpty")}
                 validation={VALID}
@@ -103,7 +154,6 @@ export function SetupStepKnownCards({
             state={state}
             wizardMode={wizardMode}
             stepNumber={stepNumber}
-            totalSteps={totalSteps}
             title={t("title")}
             summary={summary}
             validation={VALID}
@@ -113,17 +163,12 @@ export function SetupStepKnownCards({
         >
             <p className="m-0 text-[1rem] text-muted">{t("helperText")}</p>
 
-            {/* Desktop: side-by-side grid. */}
-            <div className="hidden gap-3 [@media(min-width:800px)]:grid [@media(min-width:800px)]:grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
-                {targets.map(player => (
-                    <PlayerColumnCardList
-                        key={String(player)}
-                        player={player}
-                    />
-                ))}
+            {/* Desktop: every player as a column in one grid. */}
+            <div className="hidden [@media(min-width:800px)]:block">
+                <CardSelectionGrid players={targets} />
             </div>
 
-            {/* Mobile: paginated. */}
+            {/* Mobile: single-player slice + paginator chrome. */}
             <div className="flex flex-col gap-2 [@media(min-width:800px)]:hidden">
                 <div className="flex items-center justify-between gap-2">
                     <button
@@ -158,7 +203,31 @@ export function SetupStepKnownCards({
                         <ChevronRightIcon size={16} />
                     </button>
                 </div>
-                <PlayerColumnCardList player={currentPlayer} />
+                <div
+                    className={`relative grid grid-cols-[minmax(0,1fr)] [grid-template-areas:'stack']${animationClipClass}`}
+                >
+                    <AnimatePresence
+                        custom={slideDirection}
+                        initial={false}
+                        onExitComplete={() => setIsSliding(false)}
+                    >
+                        <motion.div
+                            key={String(currentPlayer)}
+                            custom={slideDirection}
+                            variants={playerSlideVariants}
+                            initial={VARIANT_INITIAL}
+                            animate={VARIANT_ANIMATE}
+                            exit={VARIANT_EXIT}
+                            transition={transition}
+                            onAnimationStart={() => setIsSliding(true)}
+                            className="[grid-area:stack] min-w-0"
+                        >
+                            <CardSelectionGrid
+                                players={[currentPlayer]}
+                            />
+                        </motion.div>
+                    </AnimatePresence>
+                </div>
             </div>
         </SetupStepPanel>
     );

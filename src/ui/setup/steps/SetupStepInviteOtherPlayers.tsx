@@ -12,7 +12,6 @@ interface Props {
     readonly state: StepPanelState;
     readonly wizardMode: WizardMode;
     readonly stepNumber: number;
-    readonly totalSteps: number;
     readonly onClickToEdit: () => void;
     readonly registerPanelEl?: (
         stepId: WizardStepId,
@@ -36,7 +35,6 @@ export function SetupStepInviteOtherPlayers({
     state,
     wizardMode,
     stepNumber,
-    totalSteps,
     onClickToEdit,
     registerPanelEl,
     footer,
@@ -49,7 +47,6 @@ export function SetupStepInviteOtherPlayers({
             state={state}
             wizardMode={wizardMode}
             stepNumber={stepNumber}
-            totalSteps={totalSteps}
             title={t("title")}
             summary={t("summarySkipped")}
             validation={VALID}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Duration, HashMap } from "effect";
+import { Duration } from "effect";
 import { useReducedMotion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -11,16 +11,10 @@ import {
     setupWizardCompleted,
     setupWizardStepAdvanced,
     setupWizardStepReentered,
-    setupWizardStepSkipped,
 } from "../../analytics/events";
-import type { ClueState } from "../../logic/ClueState";
-import { cardSetEquals } from "../../logic/CardSet";
-import { CARD_SETS, newGameSetup } from "../../logic/GameSetup";
 import { getGamePhase, phaseAtLeast } from "../../logic/GamePhase";
-import { useConfirm } from "../hooks/useConfirm";
 import { useGamePhase } from "../hooks/useGamePhase";
 import { useSetupWalkthroughDone } from "../hooks/useSetupWalkthroughDone";
-import { resetScrollMemory } from "../scrollMemory";
 import { useClue } from "../state";
 import { useTour } from "../tour/TourProvider";
 import {
@@ -38,7 +32,6 @@ import { SetupStepMyCards } from "./steps/SetupStepMyCards";
 import { SetupStepPlayers } from "./steps/SetupStepPlayers";
 import {
     isStepDataComplete,
-    stepIsSkippable,
     stepValidationLevel,
     visibleSteps,
     type StepValidationLevel,
@@ -46,47 +39,10 @@ import {
 } from "./wizardSteps";
 import type { StepPanelState, WizardMode } from "./SetupStepPanel";
 
-// Default Classic deck — used to detect "deck has not been touched."
-const CLASSIC_CARD_SET = CARD_SETS[0]!.cardSet;
-// Default roster from `newGameSetup` — used to detect "players
-// have not been renamed or rearranged from defaults."
-const DEFAULT_PLAYERS = newGameSetup().players.map(p => String(p));
 // Wire-format scroll behaviors — module-scope so the
 // i18next/no-literal-string lint reads them as identifiers.
 const SCROLL_BEHAVIOR_AUTO = "auto" as const;
 const SCROLL_BEHAVIOR_SMOOTH = "smooth" as const;
-
-/**
- * Does the current state contain anything we'd lose by a `newGame`
- * dispatch? Used by the wizard's "Start over" button to decide
- * whether to no-op clear (just rewind the accordion) or pop a
- * confirm modal first.
- *
- * Counts as destructive: any game-progress entry (suggestions,
- * accusations, hypotheses, knownCards, handSizes, pendingSuggestion)
- * AND any setup-edit beyond the fresh-mount defaults (selfPlayerId,
- * firstDealtPlayerId, renamed players, swapped/edited deck).
- *
- * Module-internal — verified through the wizard's behavior tests
- * (no-op rewind on fresh mount, modal on edited state).
- */
-function hasDestructiveState(state: ClueState): boolean {
-    if (state.suggestions.length > 0) return true;
-    if (state.accusations.length > 0) return true;
-    if (HashMap.size(state.hypotheses) > 0) return true;
-    if (state.knownCards.length > 0) return true;
-    if (state.handSizes.length > 0) return true;
-    if (state.selfPlayerId !== null) return true;
-    if (state.firstDealtPlayerId !== null) return true;
-    if (state.pendingSuggestion !== null) return true;
-    const players = state.setup.players;
-    const defaultRoster =
-        players.length === DEFAULT_PLAYERS.length &&
-        players.every((p, i) => String(p) === DEFAULT_PLAYERS[i]);
-    if (!defaultRoster) return true;
-    if (!cardSetEquals(state.setup.cardSet, CLASSIC_CARD_SET)) return true;
-    return false;
-}
 
 // Module-scope discriminators so the i18next/no-literal-string lint
 // rule treats these as identifiers, not user-facing copy.
@@ -151,9 +107,8 @@ const TOUR_ANCHOR_REQUIRES_WIZARD_STEP: Readonly<
 export function SetupWizard() {
     const t = useTranslations("setupWizard");
     const tSetup = useTranslations("setup");
-    const tToolbar = useTranslations("toolbar");
+    const tCommon = useTranslations("common");
     const { state, dispatch, hydrated } = useClue();
-    const confirm = useConfirm();
     const focus = useSetupWizardFocus();
 
     // PR-A3 ships steps 1, 5, 6 alongside the existing 2-4 — every
@@ -492,25 +447,6 @@ export function SetupWizard() {
         setupWizardStepAdvanced({ step: currentId });
     };
 
-    const skip = (currentId: WizardStepId) => {
-        // Skip fires beforeSkip first (e.g. identity clears
-        // `selfPlayerId`), then beforeAdvance (e.g. hand-sizes
-        // commits placeholder defaults), then the canonical
-        // advance.
-        beforeSkipRef.current?.();
-        beforeSkipRef.current = null;
-        beforeAdvanceRef.current?.();
-        beforeAdvanceRef.current = null;
-        const nextCompleted = new Set(completed);
-        nextCompleted.add(currentId);
-        setCompleted(nextCompleted);
-        const currentIdx = steps.indexOf(currentId);
-        const nextStep = steps[currentIdx + 1] ?? null;
-        scrollOnNextFocusRef.current = true;
-        setFocusedStep(nextStep);
-        setupWizardStepSkipped({ step: currentId });
-    };
-
     const reEnter = (id: WizardStepId) => {
         // Clicking a complete step: collapse the previously-editing
         // panel into "complete" with current values, expand the
@@ -537,16 +473,10 @@ export function SetupWizard() {
     const isLastStep =
         focusedStep !== null &&
         steps.indexOf(focusedStep) === steps.length - 1;
+    const isFirstStep =
+        focusedStep !== null && steps.indexOf(focusedStep) === 0;
     const focusedValidationLevel: StepValidationLevel | null =
         focusedStep === null ? null : stepValidationLevel(focusedStep, state);
-    const focusedSkippable: boolean =
-        focusedStep === null ? false : stepIsSkippable(focusedStep);
-    // Skip is always visible. Disabled only when a required step has
-    // BLOCKED validation (defaults don't satisfy it) — Skip then
-    // can't safely act as "accept defaults."
-    const skipEnabled =
-        focusedStep !== null &&
-        (focusedSkippable || focusedValidationLevel !== "blocked");
     const nextEnabled =
         focusedStep !== null && focusedValidationLevel !== "blocked";
     const hasGameProgress = getGamePhase(state) === PHASE_GAME_STARTED;
@@ -564,10 +494,17 @@ export function SetupWizard() {
         advance(focusedStep);
     };
 
-    const onClickSkip = () => {
+    // Back: previous-step navigation, used only in flow mode while the
+    // user is walking the wizard for the first time. After completion
+    // the wizard renders in edit mode and steps are individually
+    // re-openable, so Back is redundant there.
+    const onClickBack = () => {
         if (focusedStep === null) return;
-        if (!skipEnabled) return;
-        skip(focusedStep);
+        const currentIdx = steps.indexOf(focusedStep);
+        const prevStep = steps[currentIdx - 1] ?? null;
+        if (prevStep === null) return;
+        scrollOnNextFocusRef.current = true;
+        setFocusedStep(prevStep);
     };
 
     const onClickStartPlaying = () => {
@@ -611,37 +548,6 @@ export function SetupWizard() {
     };
 
     /**
-     * "Start over" branches on whether anything destructive would be
-     * lost. With a fresh wizard mount (default deck, default roster,
-     * no game progress) the click is a no-op clear that just rewinds
-     * the accordion to step 1. Otherwise pop a confirm — Cancel is
-     * Radix-AlertDialog's default focus, so an accidental Enter
-     * cancels and preserves state.
-     */
-    const onStartOver = async () => {
-        if (!hasDestructiveState(state)) {
-            setCompleted(new Set());
-            const first = steps[0] ?? null;
-            setFocusedStep(first);
-            return;
-        }
-        const ok = await confirm({
-            message: tToolbar("newGameConfirm"),
-            confirmLabel: tToolbar("startNewGame"),
-            destructive: true,
-        });
-        if (!ok) return;
-        dispatch({ type: "newGame" });
-        resetScrollMemory();
-        // The newGame action resets phase to "new"; the phase-
-        // transition effect above catches that and resets
-        // focusedStep + completed back to step 1. (This path runs
-        // while uiMode is already "setup", so the wizard does NOT
-        // unmount/remount — the effect is what actually performs
-        // the reset.)
-    };
-
-    /**
      * Footer JSX for the editing step. Styled to look like a clear
      * extension of the card body — same `bg-panel` as the section,
      * a top divider matching the body's separator, and rounded
@@ -664,7 +570,15 @@ export function SetupWizard() {
     const stickyFooter = (
         <div
             className={
-                "sticky bottom-0 z-[1] flex flex-wrap items-center gap-2 " +
+                // z-index must clear the card-selection grid's
+                // sticky-left tiers (`--z-checklist-sticky-column`
+                // at 30 for card-name cells, `--z-checklist-sticky-header`
+                // at 39 for the thead). Without this, the grid's
+                // sticky-left card-name column paints over the CTA
+                // bar as the user scrolls vertically past the bar's
+                // pin position — "Conservatory" / "Dining room" et
+                // al leak through the bg-panel.
+                "sticky bottom-0 z-[40] flex flex-wrap items-center gap-2 " +
                 "rounded-b-[var(--radius)] border-t border-border/30 " +
                 "bg-panel px-4 py-3 " +
                 "[padding-bottom:calc(env(safe-area-inset-bottom,0px)+0.75rem)] " +
@@ -682,42 +596,37 @@ export function SetupWizard() {
                 "[@media(max-width:799px)]:[padding-bottom:0.75rem]"
             }
         >
-            <button
-                type="button"
-                className="tap-target-compact text-tap-compact shrink-0 cursor-pointer rounded border border-border bg-control hover:bg-hover"
-                onClick={onStartOver}
-            >
-                {t("newGame")}
-            </button>
+            {/* Flow mode: Back (left) on every step except the
+                first; Next / Start playing on the right. Optional
+                steps used to have a separate Skip — Next now handles
+                both since their validation never blocks. Edit mode:
+                no left button (every step is independently
+                re-openable from its header), single Done on right
+                that collapses the active step. */}
+            {wizardMode === WIZARD_MODE_FLOW && !isFirstStep ? (
+                <button
+                    type="button"
+                    className="tap-target-compact text-tap-compact shrink-0 cursor-pointer rounded border border-border bg-control hover:bg-hover"
+                    onClick={onClickBack}
+                >
+                    {tCommon("back")}
+                </button>
+            ) : null}
             <div className="ml-auto flex items-center gap-2">
                 {wizardMode === WIZARD_MODE_FLOW ? (
-                    <>
-                        <button
-                            type="button"
-                            className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-control hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
-                            onClick={onClickSkip}
-                            disabled={!skipEnabled}
-                        >
-                            {t("skip")}
-                        </button>
-                        <button
-                            type="button"
-                            className="tap-target text-tap cursor-pointer rounded border-none bg-accent font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-                            onClick={onClickNext}
-                            disabled={!nextEnabled}
-                            data-tour-anchor={
-                                isLastStep ? "setup-start-playing" : undefined
-                            }
-                            data-setup-cta={isLastStep ? "" : undefined}
-                        >
-                            {isLastStep ? startPlayingLabel : t("next")}
-                        </button>
-                    </>
+                    <button
+                        type="button"
+                        className="tap-target text-tap cursor-pointer rounded border-none bg-accent font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={onClickNext}
+                        disabled={!nextEnabled}
+                        data-tour-anchor={
+                            isLastStep ? "setup-start-playing" : undefined
+                        }
+                        data-setup-cta={isLastStep ? "" : undefined}
+                    >
+                        {isLastStep ? startPlayingLabel : t("next")}
+                    </button>
                 ) : (
-                    // Edit mode: single "Done" CTA. Collapses the
-                    // open step; no advance, no skip. The global
-                    // PlayCTAButton in the chrome carries the "go
-                    // play" affordance instead.
                     <button
                         type="button"
                         className="tap-target text-tap cursor-pointer rounded border-none bg-accent font-semibold text-white hover:bg-accent-hover"
@@ -750,7 +659,6 @@ export function SetupWizard() {
             >
                 {steps.map((id, idx) => {
                     const stepNumber = idx + 1;
-                    const totalSteps = steps.length;
                     const panelState = stepStateFor(id);
                     if (id === "cardPack") {
                         return (
@@ -759,7 +667,6 @@ export function SetupWizard() {
                                 state={panelState}
                                 wizardMode={wizardMode}
                                 stepNumber={stepNumber}
-                                totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
                                 registerPanelEl={registerPanelEl}
                                 footer={stickyFooter}
@@ -773,7 +680,6 @@ export function SetupWizard() {
                                 state={panelState}
                                 wizardMode={wizardMode}
                                 stepNumber={stepNumber}
-                                totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
                                 registerPanelEl={registerPanelEl}
                                 footer={stickyFooter}
@@ -787,7 +693,6 @@ export function SetupWizard() {
                                 state={panelState}
                                 wizardMode={wizardMode}
                                 stepNumber={stepNumber}
-                                totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
                                 registerBeforeSkip={registerBeforeSkip}
                                 registerPanelEl={registerPanelEl}
@@ -802,7 +707,6 @@ export function SetupWizard() {
                                 state={panelState}
                                 wizardMode={wizardMode}
                                 stepNumber={stepNumber}
-                                totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
                                 registerBeforeAdvance={
                                     registerBeforeAdvance
@@ -823,7 +727,6 @@ export function SetupWizard() {
                                 state={panelState}
                                 wizardMode={wizardMode}
                                 stepNumber={stepNumber}
-                                totalSteps={totalSteps}
                                 selfPlayerId={state.selfPlayerId}
                                 onClickToEdit={() => reEnter(id)}
                                 registerPanelEl={registerPanelEl}
@@ -838,7 +741,6 @@ export function SetupWizard() {
                                 state={panelState}
                                 wizardMode={wizardMode}
                                 stepNumber={stepNumber}
-                                totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
                                 registerPanelEl={registerPanelEl}
                                 footer={stickyFooter}
@@ -852,7 +754,6 @@ export function SetupWizard() {
                                 state={panelState}
                                 wizardMode={wizardMode}
                                 stepNumber={stepNumber}
-                                totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
                                 registerPanelEl={registerPanelEl}
                                 footer={stickyFooter}

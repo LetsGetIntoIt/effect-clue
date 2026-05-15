@@ -14,7 +14,6 @@ interface Props {
     readonly state: StepPanelState;
     readonly wizardMode: WizardMode;
     readonly stepNumber: number;
-    readonly totalSteps: number;
     readonly onClickToEdit: () => void;
     /**
      * Register a beforeSkip callback the wizard fires before
@@ -46,7 +45,6 @@ export function SetupStepIdentity({
     state,
     wizardMode,
     stepNumber,
-    totalSteps,
     onClickToEdit,
     registerBeforeSkip,
     registerPanelEl,
@@ -85,7 +83,6 @@ export function SetupStepIdentity({
             state={state}
             wizardMode={wizardMode}
             stepNumber={stepNumber}
-            totalSteps={totalSteps}
             title={t("title")}
             summary={summary}
             validation={VALID}

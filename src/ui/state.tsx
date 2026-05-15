@@ -13,23 +13,24 @@ import {
 } from "react";
 import {
     Card,
-    newCardId,
-    newCategoryId,
     Player,
 } from "../logic/GameObjects";
 import {
+    addCardToCategoryInCardSet,
+    addCategoryToCardSet,
     allCardEntries,
-    CardEntry,
     CARD_SETS,
     categoryName as resolveCategoryName,
     categoryOfCard,
-    Category,
     DEFAULT_SETUP,
-    disambiguateName,
-    findCardEntry,
-    findCategoryEntry,
     GameSetup,
     newGameSetup,
+    removeCardFromCardSet,
+    removeCategoryFromCardSet,
+    renameCardInCardSet,
+    renameCategoryInCardSet,
+    reorderCardsInCategoryInCardSet,
+    reorderCategoriesInCardSet,
 } from "../logic/GameSetup";
 import {
     type CardPackUsage,
@@ -220,137 +221,88 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
         case "setSetup":
             return pruneSessionToSetup(state, action.setup);
 
-        case "addCategory": {
-            const existingCategoryNames = state.setup.categories.map(c => c.name);
-            const existingCardNames = allCardEntries(state.setup).map(c => c.name);
-            const catName = disambiguateName(
-                nextNumberedCategoryName(existingCategoryNames),
-                existingCategoryNames,
-            );
-            const cardName = disambiguateName(
-                nextNumberedCardName(existingCardNames),
-                existingCardNames,
-            );
-            const newCat: Category = Category({
-                id: newCategoryId(),
-                name: catName,
-                cards: [CardEntry({ id: newCardId(), name: cardName })],
-            });
+        case "addCategory":
             return {
                 ...state,
                 setup: GameSetup({
-                    players: state.setup.players,
-                    categories: [...state.setup.categories, newCat],
+                    cardSet: addCategoryToCardSet(state.setup.cardSet),
+                    playerSet: state.setup.playerSet,
                 }),
             };
-        }
 
         case "removeCategoryById": {
-            if (state.setup.categories.length <= 1) return state;
-            const nextSetup = GameSetup({
-                players: state.setup.players,
-                categories: state.setup.categories.filter(
-                    c => c.id !== action.categoryId,
-                ),
-            });
-            return pruneSessionToSetup(state, nextSetup);
+            const nextCardSet = removeCategoryFromCardSet(
+                state.setup.cardSet,
+                action.categoryId,
+            );
+            if (nextCardSet === state.setup.cardSet) return state;
+            return pruneSessionToSetup(
+                state,
+                GameSetup({
+                    cardSet: nextCardSet,
+                    playerSet: state.setup.playerSet,
+                }),
+            );
         }
 
         case "addCardToCategoryById": {
-            const existingCardNames = allCardEntries(state.setup).map(c => c.name);
-            const cardName = disambiguateName(
-                nextNumberedCardName(existingCardNames),
-                existingCardNames,
+            const nextCardSet = addCardToCategoryInCardSet(
+                state.setup.cardSet,
+                action.categoryId,
             );
+            if (nextCardSet === state.setup.cardSet) return state;
             return {
                 ...state,
                 setup: GameSetup({
-                    players: state.setup.players,
-                    categories: state.setup.categories.map(c =>
-                        c.id === action.categoryId
-                            ? Category({
-                                  id: c.id,
-                                  name: c.name,
-                                  cards: [
-                                      ...c.cards,
-                                      CardEntry({ id: newCardId(), name: cardName }),
-                                  ],
-                              })
-                            : c,
-                    ),
+                    cardSet: nextCardSet,
+                    playerSet: state.setup.playerSet,
                 }),
             };
         }
 
         case "removeCardById": {
-            const target = state.setup.categories.find(c =>
-                c.cards.some(e => e.id === action.cardId),
+            const nextCardSet = removeCardFromCardSet(
+                state.setup.cardSet,
+                action.cardId,
             );
-            if (!target) return state;
-            if (target.cards.length <= 1) return state;
-            const nextSetup = GameSetup({
-                players: state.setup.players,
-                categories: state.setup.categories.map(c =>
-                    c.id === target.id
-                        ? Category({
-                              id: c.id,
-                              name: c.name,
-                              cards: c.cards.filter(
-                                  e => e.id !== action.cardId,
-                              ),
-                          })
-                        : c,
-                ),
-            });
-            return pruneSessionToSetup(state, nextSetup);
+            if (nextCardSet === state.setup.cardSet) return state;
+            return pruneSessionToSetup(
+                state,
+                GameSetup({
+                    cardSet: nextCardSet,
+                    playerSet: state.setup.playerSet,
+                }),
+            );
         }
 
         case "renameCategory": {
-            const current = findCategoryEntry(state.setup, action.categoryId);
-            if (!current) return state;
-            const proposed = action.name.trim();
-            if (proposed.length === 0) return state;
-            if (proposed === current.name) return state;
-            const othersNames = state.setup.categories
-                .filter(c => c.id !== action.categoryId)
-                .map(c => c.name);
-            const finalName = disambiguateName(proposed, othersNames);
+            const nextCardSet = renameCategoryInCardSet(
+                state.setup.cardSet,
+                action.categoryId,
+                action.name,
+            );
+            if (nextCardSet === state.setup.cardSet) return state;
             return {
                 ...state,
                 setup: GameSetup({
-                    players: state.setup.players,
-                    categories: state.setup.categories.map(c =>
-                        c.id === action.categoryId
-                            ? Category({ id: c.id, name: finalName, cards: c.cards })
-                            : c,
-                    ),
+                    cardSet: nextCardSet,
+                    playerSet: state.setup.playerSet,
                 }),
             };
         }
 
         case "renameCard": {
-            const current = findCardEntry(state.setup, action.cardId);
-            if (!current) return state;
-            const proposed = action.name.trim();
-            if (proposed.length === 0) return state;
-            if (proposed === current.name) return state;
-            const othersNames = allCardEntries(state.setup)
-                .filter(e => e.id !== action.cardId)
-                .map(e => e.name);
-            const finalName = disambiguateName(proposed, othersNames);
+            const nextCardSet = renameCardInCardSet(
+                state.setup.cardSet,
+                action.cardId,
+                action.name,
+            );
+            if (nextCardSet === state.setup.cardSet) return state;
             return {
                 ...state,
                 setup: GameSetup({
-                    players: state.setup.players,
-                    categories: state.setup.categories.map(c => Category({
-                        id: c.id,
-                        name: c.name,
-                        cards: c.cards.map(e =>
-                            e.id === action.cardId
-                                ? CardEntry({ id: e.id, name: finalName })
-                                : e,
-                        ),
-                    })),
+                    cardSet: nextCardSet,
+                    playerSet: state.setup.playerSet,
                 }),
             };
         }
@@ -700,42 +652,32 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
         }
 
         case "reorderCategories": {
-            const current = state.setup.categories;
-            const next = action.categories;
-            if (next.length !== current.length) return state;
-            const currentIds = new Set(current.map(c => c.id));
-            for (const c of next) {
-                if (!currentIds.has(c.id)) return state;
-            }
+            const nextCardSet = reorderCategoriesInCardSet(
+                state.setup.cardSet,
+                action.categories,
+            );
+            if (nextCardSet === state.setup.cardSet) return state;
             return {
                 ...state,
                 setup: GameSetup({
-                    players: state.setup.players,
-                    categories: next,
+                    cardSet: nextCardSet,
+                    playerSet: state.setup.playerSet,
                 }),
             };
         }
 
         case "reorderCardsInCategory": {
-            const cat = state.setup.categories.find(
-                c => c.id === action.categoryId,
+            const nextCardSet = reorderCardsInCategoryInCardSet(
+                state.setup.cardSet,
+                action.categoryId,
+                action.cards,
             );
-            if (cat === undefined) return state;
-            // Permutation check on the card ids.
-            if (action.cards.length !== cat.cards.length) return state;
-            const currentIds = new Set(cat.cards.map(c => c.id));
-            for (const card of action.cards) {
-                if (!currentIds.has(card.id)) return state;
-            }
+            if (nextCardSet === state.setup.cardSet) return state;
             return {
                 ...state,
                 setup: GameSetup({
-                    players: state.setup.players,
-                    categories: state.setup.categories.map(c =>
-                        c.id === action.categoryId
-                            ? Category({ ...c, cards: action.cards })
-                            : c,
-                    ),
+                    cardSet: nextCardSet,
+                    playerSet: state.setup.playerSet,
                 }),
             };
         }
@@ -1668,26 +1610,6 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         </ClueContext.Provider>
     );
 }
-
-/** Pick the next "Category N" that doesn't collide with any existing one. */
-const nextNumberedCategoryName = (
-    existingNames: ReadonlyArray<string>,
-): string => {
-    const taken = new Set(existingNames);
-    let n = 1;
-    while (taken.has(`Category ${n}`)) n++;
-    return `Category ${n}`;
-};
-
-/** Pick the next "Card N" that doesn't collide anywhere in the deck. */
-const nextNumberedCardName = (
-    existingNames: ReadonlyArray<string>,
-): string => {
-    const taken = new Set(existingNames);
-    let n = 1;
-    while (taken.has(`Card ${n}`)) n++;
-    return `Card ${n}`;
-};
 
 const groupKnownCardsByPlayer = (
     cards: ReadonlyArray<KnownCard>,

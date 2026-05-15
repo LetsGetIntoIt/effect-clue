@@ -68,8 +68,15 @@ interface ModalEntry {
      *  visible heading). */
     readonly title: string;
     /** The modal body. Must NOT wrap itself in another `Dialog.Root` /
-     *  `Dialog.Content` — the shell provides those. */
+     *  `Dialog.Content` — the shell provides those. Rendered inside a
+     *  scrollable region so content overflowing the viewport scrolls
+     *  while `footer` stays pinned. */
     readonly content: ReactNode;
+    /** Optional sticky footer pinned to the bottom of the modal,
+     *  outside the scrollable content region. Modals with action
+     *  buttons (Save / Cancel / Confirm) should pass them here so the
+     *  buttons remain visible no matter how tall the body grows. */
+    readonly footer?: ReactNode;
     /** Backdrop click pops this entry (default true). Set false for
      *  confirm/prompt/logout-warning style modals where dismissal must
      *  go through an explicit button. */
@@ -313,7 +320,16 @@ function DialogShellInternal({
                         dialog) — the shell's `aria-label` above is the
                         fallback that suppresses Radix's
                         missing-Title dev warning when a content
-                        component opts to omit it. */}
+                        component opts to omit it.
+
+                        Layout: the motion.div is a flex column that
+                        fills the Dialog.Content's `max-h-[calc(100dvh-2rem)]`.
+                        `content` lives inside a `flex-1 min-h-0
+                        overflow-y-auto` body so it scrolls when too
+                        tall to fit. `footer`, when provided, sits in a
+                        `shrink-0` band below and stays pinned. Modals
+                        without a footer still scroll the same way —
+                        the body fills the whole modal height. */}
                     <AnimatePresence
                         mode={PRESENCE_WAIT_MODE}
                         custom={direction}
@@ -335,9 +351,31 @@ function DialogShellInternal({
                                     opacity: direction === 0 ? 1 : 0,
                                 }}
                                 transition={transition}
-                                className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-y-auto"
+                                className="flex max-h-[calc(100dvh-2rem)] flex-col"
                             >
-                                {top.content}
+                                {/* `relative z-0` makes the body wrapper
+                                    its own stacking context — any
+                                    `z-index` on `top.content`'s
+                                    descendants resolves WITHIN this
+                                    context, so high-z body elements
+                                    (e.g. a `CardSelectionGrid`'s
+                                    sticky-left column at z-30) can't
+                                    paint over the footer slot below.
+
+                                    Paired with `z-[40]` on the footer
+                                    slot: footer wins against any
+                                    content z-index up through 39. The
+                                    common stacking ladder used inside
+                                    cards / grids tops out at 39 so 40
+                                    is a comfortable buffer. */}
+                                <div className="relative z-0 min-h-0 flex-1 overflow-y-auto">
+                                    {top.content}
+                                </div>
+                                {top.footer !== undefined && (
+                                    <div className="relative z-[40] shrink-0 border-t border-border/30">
+                                        {top.footer}
+                                    </div>
+                                )}
                             </motion.div>
                         ) : null}
                     </AnimatePresence>

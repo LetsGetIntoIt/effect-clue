@@ -179,10 +179,11 @@ describe("Clue — full user-journey umbrella", () => {
         render(<Clue />, { wrapper: TestQueryClientProvider });
 
         // 1. Setup mode lands on cardPack. Walk Next through every
-        //    step (skipping identity to keep myCards hidden) until
-        //    the sticky CTA flips to "Start playing" with
-        //    `data-setup-cta` set. The next-intl mock above strips
-        //    namespaces, so the button text is just "next" / "skip".
+        //    step until the sticky CTA flips to "Start playing" with
+        //    `data-setup-cta` set. Next handles optional steps too
+        //    now (the prior Skip button was removed). The next-intl
+        //    mock above strips namespaces, so the button text is just
+        //    "next".
         const stickyByText = (text: string): HTMLButtonElement => {
             const btns = Array.from(
                 document.querySelectorAll<HTMLButtonElement>("button"),
@@ -194,7 +195,7 @@ describe("Clue — full user-journey umbrella", () => {
         await waitFor(() => stickyByText("next"));
         await user.click(stickyByText("next")); // cardPack → players
         await user.click(stickyByText("next")); // players → identity
-        await user.click(stickyByText("skip")); // identity skipped
+        await user.click(stickyByText("next")); // identity → handSizes
         await user.click(stickyByText("next")); // handSizes → knownCards
         await user.click(stickyByText("next")); // knownCards → inviteOtherPlayers
         // The walkthrough flag is not yet set — the global Play CTA
