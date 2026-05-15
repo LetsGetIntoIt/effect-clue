@@ -6,17 +6,39 @@ import { KnownCard } from "../../logic/InitialKnowledge";
 import { cardByName } from "../../logic/test-utils/CardByName";
 import type { PendingSuggestionDraft } from "../../logic/ClueState";
 
-// next-intl mock — echoes back `${namespace}.${key}:${values}` so we can
-// assert which template + arguments the banner picked.
+// next-intl mock — echoes back `${namespace}.${key}:${values}` for `t()`,
+// and for `t.rich()` returns a React-node array that includes the
+// key + every value/tag-callback so tests can assert on textContent
+// regardless of whether the call site uses interpolation or rich tags.
 vi.mock("next-intl", () => ({
-    useTranslations: (ns?: string) =>
-        Object.assign(
-            (key: string, values?: Record<string, unknown>) => {
-                const full = ns ? `${ns}.${key}` : key;
-                return values ? `${full}:${JSON.stringify(values)}` : full;
-            },
-            { rich: (key: string) => (ns ? `${ns}.${key}` : key) },
-        ),
+    useTranslations: (ns?: string) => {
+        const t = (key: string, values?: Record<string, unknown>) => {
+            const full = ns ? `${ns}.${key}` : key;
+            return values ? `${full}:${JSON.stringify(values)}` : full;
+        };
+        (t as unknown as { rich: unknown }).rich = (
+            key: string,
+            values?: Record<string, unknown>,
+        ): unknown => {
+            const full = ns ? `${ns}.${key}` : key;
+            if (values === undefined) return full;
+            const out: Array<unknown> = [`${full}:`];
+            for (const [chunkName, val] of Object.entries(values)) {
+                if (typeof val === "function") {
+                    // Tag callback — invoke with no chunks. The
+                    // wrapping element (e.g. <strong/>) still
+                    // renders, so its contents are absent here but
+                    // the value-based version above already includes
+                    // the readable text via `[chunkName=value]`.
+                    out.push((val as () => unknown)());
+                } else {
+                    out.push(`[${chunkName}=${String(val)}]`);
+                }
+            }
+            return out;
+        };
+        return t;
+    },
 }));
 
 const A = Player("Anisha");

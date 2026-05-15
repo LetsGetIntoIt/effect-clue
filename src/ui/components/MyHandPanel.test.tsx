@@ -6,8 +6,25 @@ vi.mock("next-intl", () => {
             const full = ns ? `${ns}.${key}` : key;
             return values ? `${full}:${JSON.stringify(values)}` : full;
         };
-        (t as unknown as { rich: unknown }).rich = (key: string): string =>
-            ns ? `${ns}.${key}` : key;
+        (t as unknown as { rich: unknown }).rich = (
+            key: string,
+            values?: Record<string, unknown>,
+        ): unknown => {
+            const full = ns ? `${ns}.${key}` : key;
+            if (values === undefined) return full;
+            // For rich-text calls, build a React-node array including
+            // each named value so textContent assertions can match on
+            // card names even when wrapped in tag callbacks.
+            const out: Array<unknown> = [`${full}:`];
+            for (const [chunkName, val] of Object.entries(values)) {
+                if (typeof val === "function") {
+                    out.push((val as () => unknown)());
+                } else {
+                    out.push(`[${chunkName}=${String(val)}]`);
+                }
+            }
+            return out;
+        };
         return t;
     };
     return {

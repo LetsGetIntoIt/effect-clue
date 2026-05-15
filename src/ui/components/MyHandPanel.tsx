@@ -114,13 +114,25 @@ export function MyHandPanel() {
             className="contain-inline-size rounded border border-border/40 bg-panel/60 px-3 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
         >
             <header className="flex items-center justify-between gap-2">
-                <h3 className="m-0 flex items-center gap-2 font-sans! text-[1.125rem] font-bold uppercase tracking-wide text-accent">
+                <h3 className="m-0 flex shrink-0 items-center gap-2 font-sans! text-[1.125rem] font-bold uppercase tracking-wide text-accent">
                     <HandOfCardsIcon size={20} className="text-accent" />
                     {t("title")}
                 </h3>
+                {/* Banner sits INLINE in the header row so its
+                    arrival (e.g. when a draft starts during a
+                    suggestion-log interaction) doesn't grow the
+                    section and shift everything below. When the
+                    banner has no content `:empty:hidden` removes the
+                    wrapper from layout entirely, keeping the header
+                    visually balanced (title left, chevron right). */}
+                <BannerSlot
+                    collapsed={collapsed}
+                    paused={isHovered}
+                    onTap={expandFromBanner}
+                />
                 <button
                     type="button"
-                    className="tap-icon flex cursor-pointer items-center justify-center rounded border border-border bg-control text-fg hover:bg-hover"
+                    className="tap-icon flex shrink-0 cursor-pointer items-center justify-center rounded border border-border bg-control text-fg hover:bg-hover"
                     aria-expanded={!collapsed}
                     aria-label={
                         collapsed
@@ -136,16 +148,6 @@ export function MyHandPanel() {
                     )}
                 </button>
             </header>
-            {/* Banner sits outside the collapsible wrapper so it stays
-                visible in banner-only mode. In the collapsed state it
-                runs in teaser form (cards hidden behind a "click to
-                reveal" hint); tapping the banner is the implicit
-                expand affordance. */}
-            <BannerSlot
-                collapsed={collapsed}
-                paused={isHovered}
-                onTap={expandFromBanner}
-            />
             <motion.div
                 data-my-hand-panel-body=""
                 initial={false}
@@ -178,10 +180,13 @@ export function MyHandPanel() {
 }
 
 /**
- * Banner wrapper that handles the teaser display + tap-to-expand
- * affordance for the collapsed-but-banner-visible mode. Outside the
- * `MyHandPanel` body wrapper so the banner stays put when the body
- * animates collapsed.
+ * Banner wrapper that sits inline in the header row. When the section
+ * is collapsed and the banner has content, the wrapper is a tap
+ * target — clicking expands the section. When expanded, the banner
+ * is purely informational. When `SuggestionBanner` returns `null`
+ * (no draft / no overlap), the wrapper has no children and Tailwind's
+ * `empty:hidden` drops it from layout so the header collapses back
+ * to title + chevron at the row's edges.
  */
 function BannerSlot({
     collapsed,
@@ -192,35 +197,32 @@ function BannerSlot({
     readonly paused: boolean;
     readonly onTap: () => void;
 }) {
-    if (collapsed) {
-        return (
-            <div
-                role="button"
-                tabIndex={0}
-                onClick={onTap}
-                onKeyDown={e => {
-                    if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        onTap();
-                    }
-                }}
-                className="mt-1.5 cursor-pointer"
-            >
-                <SuggestionBanner
-                    teaser
-                    paused={paused}
-                    surface={MY_CARDS_SURFACE_SECTION}
-                    expanded={false}
-                />
-            </div>
-        );
-    }
+    const clickable = collapsed;
     return (
-        <div className="mt-1.5">
+        <div
+            role={clickable ? "button" : undefined}
+            tabIndex={clickable ? 0 : undefined}
+            onClick={clickable ? onTap : undefined}
+            onKeyDown={
+                clickable
+                    ? e => {
+                          if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              onTap();
+                          }
+                      }
+                    : undefined
+            }
+            className={
+                "min-w-0 flex-1 empty:hidden" +
+                (clickable ? " cursor-pointer" : "")
+            }
+        >
             <SuggestionBanner
+                teaser={collapsed}
                 paused={paused}
                 surface={MY_CARDS_SURFACE_SECTION}
-                expanded
+                expanded={!collapsed}
             />
         </div>
     );
