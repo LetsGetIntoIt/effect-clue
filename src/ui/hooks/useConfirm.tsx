@@ -118,7 +118,7 @@ function ConfirmModalContent({
                     {confirmTitle}
                 </Dialog.Title>
             )}
-            <p className="m-0 text-[1rem] leading-snug text-[#2a1f12]">
+            <p className="m-0 text-[1rem] leading-normal text-[#2a1f12]">
                 {options.message}
             </p>
             <div className="mt-5 flex flex-wrap justify-end gap-2">

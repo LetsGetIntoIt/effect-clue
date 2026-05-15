@@ -303,7 +303,7 @@ export function AccountModal() {
                             <XIcon size={18} />
                         </button>
                     </div>
-                    <Dialog.Description className="px-5 pt-3 text-[1rem] leading-relaxed">
+                    <Dialog.Description className="px-5 pt-3 text-[1rem] leading-normal">
                         {isAnon ? t("descriptionSignedOut") : t("descriptionSignedIn")}
                     </Dialog.Description>
                     <div className="px-5 pb-5">

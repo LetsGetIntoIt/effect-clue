@@ -898,7 +898,7 @@ export function ShareImportPage({
                         <div className="relative z-0 flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
                         {snapshot.ownerName !== null ? (
                             <Dialog.Description
-                                className="px-5 pt-3 text-[1rem] leading-relaxed"
+                                className="px-5 pt-3 text-[1rem] leading-normal"
                                 data-share-import-sender
                             >
                                 {t("importSharedBy", {
@@ -907,7 +907,7 @@ export function ShareImportPage({
                             </Dialog.Description>
                         ) : null}
                         {isEmpty ? (
-                            <div className="px-5 pt-3 text-[1rem] leading-relaxed text-muted">
+                            <div className="px-5 pt-3 text-[1rem] leading-normal text-muted">
                                 {t("importEmpty")}
                             </div>
                         ) : (

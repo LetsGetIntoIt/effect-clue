@@ -114,10 +114,10 @@ function InstallPromptModalContent({
                     <XIcon size={18} />
                 </button>
             </div>
-            <p className="px-5 pt-3 text-[1rem] leading-relaxed">
+            <p className="px-5 pt-3 text-[1rem] leading-normal">
                 {t("description")}
             </p>
-            <ul className="m-0 list-disc px-5 pl-9 pt-3 text-[1rem] leading-relaxed">
+            <ul className="m-0 list-disc px-5 pl-9 pt-3 text-[1rem] leading-normal">
                 <li>{t("benefitOffline")}</li>
                 <li>{t("benefitHomeScreen")}</li>
                 <li>{t("benefitFastLaunch")}</li>

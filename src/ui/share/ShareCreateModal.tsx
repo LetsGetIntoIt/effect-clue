@@ -880,7 +880,7 @@ export function ShareCreateModal({
                                     transition={transition}
                                     className="[grid-area:stack] min-w-0"
                                 >
-                                    <Dialog.Description className="px-5 pt-3 text-[1rem] leading-relaxed">
+                                    <Dialog.Description className="px-5 pt-3 text-[1rem] leading-normal">
                                         {t(descriptionKey)}
                                     </Dialog.Description>
                                     {variant === VARIANT_PACK ? (
@@ -1078,7 +1078,7 @@ export function ShareCreateModal({
                                     transition={transition}
                                     className="[grid-area:stack] min-w-0"
                                 >
-                                    <Dialog.Description className="px-5 pt-3 text-[1rem] leading-relaxed">
+                                    <Dialog.Description className="px-5 pt-3 text-[1rem] leading-normal">
                                         {t(SIGN_IN_DESCRIPTION_KEY)}
                                     </Dialog.Description>
                                     <div className="flex flex-col gap-2 px-5 pt-4 pb-2">
