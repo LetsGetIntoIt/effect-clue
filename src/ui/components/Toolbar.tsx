@@ -226,18 +226,18 @@ export function Toolbar() {
                 items={[
                     // Group 1: Game
                     {
+                        label: t("newGame", {
+                            shortcut: shortcutSuffix("global.newGame", hasKeyboard),
+                        }),
+                        onClick: onNewGame,
+                    },
+                    {
                         label: tNav("gameSetup", {
                             shortcut: shortcutSuffix("global.gotoSetup", hasKeyboard),
                         }),
                         active: state.uiMode === "setup",
                         onClick: () =>
                             dispatch({ type: "setUiMode", mode: "setup" }),
-                    },
-                    {
-                        label: t("newGame", {
-                            shortcut: shortcutSuffix("global.newGame", hasKeyboard),
-                        }),
-                        onClick: onNewGame,
                     },
                     {
                         label: tShare("menuItemInvitePlayer"),

@@ -329,17 +329,17 @@ function BottomOverflowMenu({
                     { type: "divider" },
                     // Group 1: Game
                     {
+                        label: tToolbar("newGame", {
+                            shortcut: shortcutSuffix("global.newGame", hasKeyboard),
+                        }),
+                        onClick: onNewGame,
+                    },
+                    {
                         label: t("gameSetup", {
                             shortcut: shortcutSuffix("global.gotoSetup", hasKeyboard),
                         }),
                         active: setupActive,
                         onClick: onSetup,
-                    },
-                    {
-                        label: tToolbar("newGame", {
-                            shortcut: shortcutSuffix("global.newGame", hasKeyboard),
-                        }),
-                        onClick: onNewGame,
                     },
                     {
                         label: tShare("menuItemInvitePlayer"),
