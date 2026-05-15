@@ -10,6 +10,10 @@ import {
     useRef,
     useState,
 } from "react";
+import {
+    myCardsSectionToggled,
+    MY_CARDS_SURFACE_FAB,
+} from "../../analytics/events";
 import { T_STANDARD, useReducedTransition } from "../motion";
 import { ChevronDownIcon, HandOfCardsIcon } from "./Icons";
 import { MyHandPanelBody } from "./MyHandPanel";
@@ -214,10 +218,25 @@ export function MyCardsFAB() {
             wasLongPressRef.current = false;
             return;
         }
-        setPanelOpen(true);
+        openPanel();
     };
 
-    const openPanel = () => setPanelOpen(true);
+    const openPanel = () => {
+        setPanelOpen(true);
+        myCardsSectionToggled({
+            surface: MY_CARDS_SURFACE_FAB,
+            expanded: true,
+            bannerShowing: bannerVisible,
+        });
+    };
+    const closePanel = () => {
+        setPanelOpen(false);
+        myCardsSectionToggled({
+            surface: MY_CARDS_SURFACE_FAB,
+            expanded: false,
+            bannerShowing: bannerVisible,
+        });
+    };
 
     return (
         <>
@@ -292,6 +311,8 @@ export function MyCardsFAB() {
                             teaser
                             paused={false}
                             variant="stacked"
+                            surface={MY_CARDS_SURFACE_FAB}
+                            expanded={false}
                         />
                     </motion.div>
                 )}
@@ -322,7 +343,7 @@ export function MyCardsFAB() {
                                 type="button"
                                 aria-label={t("panelCloseAriaLabel")}
                                 className="tap-icon flex cursor-pointer items-center justify-center rounded border border-border bg-control text-fg hover:bg-hover"
-                                onClick={() => setPanelOpen(false)}
+                                onClick={closePanel}
                             >
                                 <ChevronDownIcon size={18} />
                             </button>
@@ -334,7 +355,11 @@ export function MyCardsFAB() {
                           passing `paused`.
                         */}
                         <div className="mt-1.5">
-                            <SuggestionBanner paused />
+                            <SuggestionBanner
+                                paused
+                                surface={MY_CARDS_SURFACE_FAB}
+                                expanded
+                            />
                         </div>
                         <div className="mt-1.5">
                             <MyHandPanelBody />

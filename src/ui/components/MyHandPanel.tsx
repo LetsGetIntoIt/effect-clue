@@ -3,14 +3,21 @@
 import { motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { setupSelfPlayerSet } from "../../analytics/events";
+import {
+    myCardsSectionToggled,
+    MY_CARDS_SURFACE_SECTION,
+    setupSelfPlayerSet,
+} from "../../analytics/events";
 import { categoryName } from "../../logic/CardSet";
 import type { Card, CardCategory } from "../../logic/GameObjects";
 import { T_STANDARD, useReducedTransition } from "../motion";
 import { useClue } from "../state";
 import { ChevronDownIcon, ChevronUpIcon, HandOfCardsIcon } from "./Icons";
 import { useOpenMyCardsModal } from "./MyCardsModal";
-import { SuggestionBanner } from "./SuggestionBanner";
+import {
+    SuggestionBanner,
+    useSuggestionBannerVisible,
+} from "./SuggestionBanner";
 
 const STORAGE_KEY = "effect-clue.my-hand-panel.collapsed.v1";
 
@@ -74,6 +81,10 @@ export function MyHandPanel() {
         };
     }, []);
 
+    const bannerVisible = useSuggestionBannerVisible();
+    const bannerVisibleRef = useRef(bannerVisible);
+    bannerVisibleRef.current = bannerVisible;
+
     const persistCollapsed = (next: boolean) => {
         setCollapsed(next);
         try {
@@ -81,6 +92,11 @@ export function MyHandPanel() {
         } catch {
             // Quota / private mode — non-fatal.
         }
+        myCardsSectionToggled({
+            surface: MY_CARDS_SURFACE_SECTION,
+            expanded: !next,
+            bannerShowing: bannerVisibleRef.current,
+        });
     };
     const toggle = () => persistCollapsed(!collapsed);
     const expandFromBanner = () => {
@@ -190,13 +206,22 @@ function BannerSlot({
                 }}
                 className="mt-1.5 cursor-pointer"
             >
-                <SuggestionBanner teaser paused={paused} />
+                <SuggestionBanner
+                    teaser
+                    paused={paused}
+                    surface={MY_CARDS_SURFACE_SECTION}
+                    expanded={false}
+                />
             </div>
         );
     }
     return (
         <div className="mt-1.5">
-            <SuggestionBanner paused={paused} />
+            <SuggestionBanner
+                paused={paused}
+                surface={MY_CARDS_SURFACE_SECTION}
+                expanded
+            />
         </div>
     );
 }

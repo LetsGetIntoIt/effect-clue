@@ -1,7 +1,13 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+    myCardsBannerDismissed,
+    myCardsBannerShown,
+    type MyCardsBannerKind,
+    type MyCardsSurface,
+} from "../../analytics/events";
 import { cardName } from "../../logic/CardSet";
 import type { Card } from "../../logic/GameObjects";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
@@ -12,9 +18,9 @@ import { HandOfCardsIcon } from "./Icons";
 // and CSS hooks. Hoisted into named constants so the literal values
 // don't trip the i18next no-literal-string lint rule — they're enum
 // values, not user-facing copy.
-const KIND_SELF = "self" as const;
-const KIND_CAN_REFUTE = "canRefute" as const;
-const KIND_CANNOT_REFUTE = "cannotRefute" as const;
+const KIND_SELF: MyCardsBannerKind = "self";
+const KIND_CAN_REFUTE: MyCardsBannerKind = "canRefute";
+const KIND_CANNOT_REFUTE: MyCardsBannerKind = "cannotRefute";
 
 // i18n key constants for the device-aware reveal hint. Hoisted out
 // of the inline ternary for the same reason as the kind tags above
@@ -22,11 +28,6 @@ const KIND_CANNOT_REFUTE = "cannotRefute" as const;
 // strings flags inline ternaries that happen to be string literals.
 const REVEAL_HINT_KEY_MOUSE = "revealHintMouse" as const;
 const REVEAL_HINT_KEY_TOUCH = "revealHintTouch" as const;
-
-type BannerKind =
-    | typeof KIND_SELF
-    | typeof KIND_CAN_REFUTE
-    | typeof KIND_CANNOT_REFUTE;
 
 type BannerVariant = "default" | "stacked";
 
@@ -55,6 +56,57 @@ interface Props {
      * the panel is closed but a draft has banner content.
      */
     readonly variant?: BannerVariant;
+    /**
+     * Whether the parent surface is currently in its expanded state
+     * (cards visible). Drives the `expandedDuringDisplay` analytics
+     * flag — the banner records `true` if `expanded` was ever `true`
+     * during the banner's visibility window. Defaults to `false`,
+     * matching the stacked-teaser context where the parent is
+     * collapsed by definition.
+     */
+    readonly expanded?: boolean;
+    /**
+     * Analytics tag for the parent surface. `"section"` is the
+     * desktop in-flow section; `"fab"` is the mobile FAB entry point
+     * (covering both the stacked teaser and the open panel — they're
+     * the same surface from the user's perspective). Defaults to
+     * `"section"`.
+     */
+    readonly surface?: MyCardsSurface;
+}
+
+/**
+ * Computes the banner's `MyCardsBannerKind` (or `null` when the
+ * banner shouldn't be visible) from the current draft + self hand.
+ * Used by both `SuggestionBanner`'s render path and the analytics
+ * lifecycle effect — capturing kind via a hook keeps the two in
+ * lockstep and avoids drift between "visible?" and "what kind?".
+ */
+function useBannerKind(): MyCardsBannerKind | null {
+    const { state } = useClue();
+    const myCards = useMyCards();
+    const selfPlayerId = state.selfPlayerId;
+    const draft = state.pendingSuggestion;
+
+    return useMemo<MyCardsBannerKind | null>(() => {
+        if (selfPlayerId === null) return null;
+        if (draft === null) return null;
+        const filledCards = draft.cards.filter(
+            (c): c is Card => c !== null,
+        );
+        if (filledCards.length === 0) return null;
+
+        const intersection = filledCards.filter(c => myCards.has(c));
+        const allFilled =
+            filledCards.length === state.setup.cardSet.categories.length;
+        const isSelfSuggester = draft.suggester === selfPlayerId;
+
+        if (isSelfSuggester) {
+            return intersection.length > 0 ? KIND_SELF : null;
+        }
+        if (intersection.length > 0) return KIND_CAN_REFUTE;
+        return allFilled ? KIND_CANNOT_REFUTE : null;
+    }, [selfPlayerId, draft, myCards, state.setup.cardSet.categories.length]);
 }
 
 /**
@@ -65,25 +117,7 @@ interface Props {
  * can branch without rendering a probe.
  */
 export function useSuggestionBannerVisible(): boolean {
-    const { state } = useClue();
-    const myCards = useMyCards();
-
-    const selfPlayerId = state.selfPlayerId;
-    const draft = state.pendingSuggestion;
-    if (selfPlayerId === null) return false;
-    if (draft === null) return false;
-
-    const filledCards = draft.cards.filter((c): c is Card => c !== null);
-    if (filledCards.length === 0) return false;
-
-    const intersection = filledCards.filter(c => myCards.has(c));
-    const allFilled =
-        filledCards.length === state.setup.cardSet.categories.length;
-    const isSelfSuggester = draft.suggester === selfPlayerId;
-
-    if (isSelfSuggester) return intersection.length > 0;
-    if (intersection.length > 0) return true;
-    return allFilled;
+    return useBannerKind() !== null;
 }
 
 /**
@@ -115,6 +149,8 @@ export function SuggestionBanner({
     teaser = false,
     paused = false,
     variant = "default",
+    expanded = false,
+    surface = "section",
 }: Props = {}) {
     const t = useTranslations("refuteHint");
     const hasKeyboard = useHasKeyboard();
@@ -127,36 +163,30 @@ export function SuggestionBanner({
         ? REVEAL_HINT_KEY_MOUSE
         : REVEAL_HINT_KEY_TOUCH;
     const { state } = useClue();
-    const selfPlayerId = state.selfPlayerId;
-    const draft = state.pendingSuggestion;
     const myCards = useMyCards();
+    const kind = useBannerKind();
 
-    const filledCards = useMemo<ReadonlyArray<Card>>(() => {
-        if (draft === null) return [];
-        return draft.cards.filter((c): c is Card => c !== null);
-    }, [draft]);
+    // Analytics lifecycle — fire `shown` when the banner becomes
+    // visible, `dismissed` when it stops being visible (or the
+    // component unmounts). `expandedDuringDisplay` is the OR-
+    // aggregate of `expanded` across the visibility window: true if
+    // the parent surface was ever in its expanded state while this
+    // banner was visible, false otherwise. The "shown but not
+    // expanded" funnel filters dismissed events on
+    // `expandedDuringDisplay === false`.
+    useBannerLifecycleAnalytics({ kind, surface, expanded });
 
-    const intersection = useMemo<ReadonlyArray<Card>>(() => {
-        if (filledCards.length === 0) return [];
-        return filledCards.filter(card => myCards.has(card));
-    }, [filledCards, myCards]);
+    if (kind === null) return null;
 
-    if (selfPlayerId === null) return null;
-    if (draft === null) return null;
-    if (filledCards.length === 0) return null;
-
-    const allFilled =
-        filledCards.length === state.setup.cardSet.categories.length;
-    const isSelfSuggester = draft.suggester === selfPlayerId;
+    const draft = state.pendingSuggestion!;
+    const filledCards = draft.cards.filter((c): c is Card => c !== null);
     const setup = state.setup;
+    const intersection = filledCards.filter(c => myCards.has(c));
 
-    // Self-suggester case: only useful when something the user is
-    // suggesting is actually in their hand. No copy for the empty case.
-    if (isSelfSuggester) {
-        if (intersection.length === 0) return null;
+    if (kind === KIND_SELF) {
         if (teaser) {
             return (
-                <Banner kind={KIND_SELF} paused={paused} variant={variant}>
+                <Banner kind={kind} paused={paused} variant={variant}>
                     <span>{t("selfSuggestingTeaser")}</span>
                     <RevealHint label={t(revealHintKey)} />
                 </Banner>
@@ -164,18 +194,16 @@ export function SuggestionBanner({
         }
         const names = intersection.map(c => cardName(setup.cardSet, c));
         return (
-            <Banner kind={KIND_SELF} paused={paused} variant={variant}>
+            <Banner kind={kind} paused={paused} variant={variant}>
                 {t("selfSuggesting", { cards: names.join(t("join")) })}
             </Banner>
         );
     }
 
-    // Non-self suggester with a match: show intersection eagerly,
-    // including during a partial draft.
-    if (intersection.length > 0) {
+    if (kind === KIND_CAN_REFUTE) {
         if (teaser) {
             return (
-                <Banner kind={KIND_CAN_REFUTE} paused={paused} variant={variant}>
+                <Banner kind={kind} paused={paused} variant={variant}>
                     <span>{t("canRefuteTeaser")}</span>
                     <RevealHint label={t(revealHintKey)} />
                 </Banner>
@@ -183,25 +211,75 @@ export function SuggestionBanner({
         }
         const names = intersection.map(c => cardName(setup.cardSet, c));
         return (
-            <Banner kind={KIND_CAN_REFUTE} paused={paused} variant={variant}>
+            <Banner kind={kind} paused={paused} variant={variant}>
                 {t("canRefute", { cards: names.join(t("join")) })}
             </Banner>
         );
     }
 
-    // Non-self suggester with no match: the definitive "cannot refute"
-    // line waits for all slots to be filled — a partial draft might
-    // still produce a match in the next slot. No card-listing here,
-    // so the teaser mode renders the same copy as the expanded mode.
-    if (allFilled) {
-        return (
-            <Banner kind={KIND_CANNOT_REFUTE} paused={paused} variant={variant}>
-                {t("cannotRefute")}
-            </Banner>
-        );
-    }
+    // kind === KIND_CANNOT_REFUTE
+    return (
+        <Banner kind={kind} paused={paused} variant={variant}>
+            {t("cannotRefute")}
+        </Banner>
+    );
+}
 
-    return null;
+/**
+ * Fires `myCardsBannerShown` when the banner becomes visible,
+ * `myCardsBannerDismissed` when it stops being visible. Tracks
+ * `expandedDuringDisplay` via a ref aggregated across the
+ * visibility window. The dismiss event uses the latest non-null
+ * kind seen during the window (banner kind can transition mid-life
+ * as the user fills in cards).
+ */
+function useBannerLifecycleAnalytics({
+    kind,
+    surface,
+    expanded,
+}: {
+    readonly kind: MyCardsBannerKind | null;
+    readonly surface: MyCardsSurface;
+    readonly expanded: boolean;
+}) {
+    // Keep the latest-non-null kind around so the dismiss event can
+    // report what was on screen at the end of the visibility window
+    // — `kind` itself drops to `null` on the render that ends the
+    // window, which is when the dismiss cleanup fires.
+    const latestKindRef = useRef<MyCardsBannerKind | null>(kind);
+    if (kind !== null) latestKindRef.current = kind;
+    const surfaceRef = useRef(surface);
+    surfaceRef.current = surface;
+    const expandedSeenRef = useRef(false);
+    // Track expansion during the current visibility window — set on
+    // each render where both the banner is visible AND the parent
+    // surface is expanded.
+    if (kind !== null && expanded) expandedSeenRef.current = true;
+
+    const visible = kind !== null;
+    useEffect(() => {
+        if (!visible) return;
+        const showKind = latestKindRef.current;
+        if (showKind === null) return;
+        expandedSeenRef.current = expanded;
+        myCardsBannerShown({ kind: showKind, surface: surfaceRef.current });
+        return () => {
+            const dismissKind = latestKindRef.current ?? showKind;
+            myCardsBannerDismissed({
+                kind: dismissKind,
+                surface: surfaceRef.current,
+                expandedDuringDisplay: expandedSeenRef.current,
+            });
+            // Reset latest-kind so a future visibility window starts
+            // fresh. (We don't reset expandedSeenRef here — the
+            // visibility-true branch above does, on next show.)
+            latestKindRef.current = null;
+        };
+        // Effect deps intentionally limited to `visible` — the only
+        // signal that should tear down + re-emit. `expanded`,
+        // `surface`, and the latest kind are read through refs so
+        // mid-window changes don't reset the analytics window.
+    }, [visible]);
 }
 
 /**
@@ -230,7 +308,7 @@ function Banner({
     variant,
     children,
 }: {
-    readonly kind: BannerKind;
+    readonly kind: MyCardsBannerKind;
     readonly paused: boolean;
     readonly variant: BannerVariant;
     readonly children: React.ReactNode;

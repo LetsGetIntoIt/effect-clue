@@ -56,6 +56,20 @@ vi.mock("../state", () => ({
     useClue: () => ({ state: mockClueState }),
 }));
 
+const myCardsBannerShownMock = vi.fn();
+const myCardsBannerDismissedMock = vi.fn();
+vi.mock("../../analytics/events", async () => {
+    const actual = await vi.importActual<
+        typeof import("../../analytics/events")
+    >("../../analytics/events");
+    return {
+        ...actual,
+        myCardsBannerShown: (props: unknown) => myCardsBannerShownMock(props),
+        myCardsBannerDismissed: (props: unknown) =>
+            myCardsBannerDismissedMock(props),
+    };
+});
+
 const importBanner = async () => {
     const mod = await import("./SuggestionBanner");
     return mod.SuggestionBanner;
@@ -66,6 +80,8 @@ beforeEach(() => {
     mockClueState.selfPlayerId = A;
     mockClueState.knownCards = [];
     mockClueState.pendingSuggestion = null;
+    myCardsBannerShownMock.mockReset();
+    myCardsBannerDismissedMock.mockReset();
 });
 
 const findBanner = (): HTMLElement | null =>
@@ -255,5 +271,111 @@ describe("SuggestionBanner — device-aware reveal hint", () => {
         render(<SuggestionBanner teaser />);
         const el = findBanner();
         expect(el?.textContent).toContain("refuteHint.revealHintTouch");
+    });
+});
+
+describe("SuggestionBanner — analytics lifecycle", () => {
+    test("emits banner_shown on first visible render with the kind + surface", async () => {
+        const SuggestionBanner = await importBanner();
+        mockClueState.knownCards = [KnownCard({ player: A, card: MS_WHITE })];
+        mockClueState.pendingSuggestion = draft({
+            suggester: B,
+            cards: [MS_WHITE, null, null],
+        });
+        render(<SuggestionBanner surface="section" />);
+        expect(myCardsBannerShownMock).toHaveBeenCalledTimes(1);
+        expect(myCardsBannerShownMock).toHaveBeenCalledWith({
+            kind: "canRefute",
+            surface: "section",
+        });
+    });
+
+    test("does NOT emit banner_shown when the banner has no content", async () => {
+        const SuggestionBanner = await importBanner();
+        mockClueState.knownCards = [KnownCard({ player: A, card: PLUM })];
+        mockClueState.pendingSuggestion = draft({
+            suggester: B,
+            cards: [MS_WHITE, null, null], // not in hand → no banner
+        });
+        render(<SuggestionBanner surface="section" />);
+        expect(myCardsBannerShownMock).not.toHaveBeenCalled();
+        expect(myCardsBannerDismissedMock).not.toHaveBeenCalled();
+    });
+
+    test("emits banner_dismissed with expandedDuringDisplay=false when unmounted while parent was collapsed", async () => {
+        const SuggestionBanner = await importBanner();
+        mockClueState.knownCards = [KnownCard({ player: A, card: MS_WHITE })];
+        mockClueState.pendingSuggestion = draft({
+            suggester: B,
+            cards: [MS_WHITE, null, null],
+        });
+        const { unmount } = render(
+            <SuggestionBanner surface="section" expanded={false} />,
+        );
+        expect(myCardsBannerShownMock).toHaveBeenCalledTimes(1);
+        unmount();
+        expect(myCardsBannerDismissedMock).toHaveBeenCalledTimes(1);
+        expect(myCardsBannerDismissedMock).toHaveBeenCalledWith({
+            kind: "canRefute",
+            surface: "section",
+            expandedDuringDisplay: false,
+        });
+    });
+
+    test("emits banner_dismissed with expandedDuringDisplay=true when expanded is set on mount", async () => {
+        const SuggestionBanner = await importBanner();
+        mockClueState.knownCards = [KnownCard({ player: A, card: MS_WHITE })];
+        mockClueState.pendingSuggestion = draft({
+            suggester: B,
+            cards: [MS_WHITE, null, null],
+        });
+        const { unmount } = render(
+            <SuggestionBanner surface="section" expanded={true} />,
+        );
+        unmount();
+        expect(myCardsBannerDismissedMock).toHaveBeenCalledWith({
+            kind: "canRefute",
+            surface: "section",
+            expandedDuringDisplay: true,
+        });
+    });
+
+    test("captures expansion that happens mid-visibility-window", async () => {
+        const SuggestionBanner = await importBanner();
+        mockClueState.knownCards = [KnownCard({ player: A, card: MS_WHITE })];
+        mockClueState.pendingSuggestion = draft({
+            suggester: B,
+            cards: [MS_WHITE, null, null],
+        });
+        const { rerender, unmount } = render(
+            <SuggestionBanner surface="section" expanded={false} />,
+        );
+        // Parent surface expanded mid-life — should latch true.
+        rerender(<SuggestionBanner surface="section" expanded={true} />);
+        // Then collapsed again — still latched true.
+        rerender(<SuggestionBanner surface="section" expanded={false} />);
+        unmount();
+        expect(myCardsBannerDismissedMock).toHaveBeenCalledWith({
+            kind: "canRefute",
+            surface: "section",
+            expandedDuringDisplay: true,
+        });
+    });
+
+    test("surface prop flows through both shown and dismissed events", async () => {
+        const SuggestionBanner = await importBanner();
+        mockClueState.knownCards = [KnownCard({ player: A, card: MS_WHITE })];
+        mockClueState.pendingSuggestion = draft({
+            suggester: B,
+            cards: [MS_WHITE, null, null],
+        });
+        const { unmount } = render(<SuggestionBanner surface="fab" />);
+        expect(myCardsBannerShownMock).toHaveBeenCalledWith(
+            expect.objectContaining({ surface: "fab" }),
+        );
+        unmount();
+        expect(myCardsBannerDismissedMock).toHaveBeenCalledWith(
+            expect.objectContaining({ surface: "fab" }),
+        );
     });
 });
