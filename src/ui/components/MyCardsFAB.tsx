@@ -339,7 +339,7 @@ export function MyCardsFAB() {
                             <button
                                 type="button"
                                 aria-label={t("panelCloseAriaLabel")}
-                                className="tap-icon flex cursor-pointer items-center justify-center rounded border border-border bg-control text-fg hover:bg-hover"
+                                className="tap-icon flex cursor-pointer items-center justify-center rounded border border-border bg-control text-fg hover:bg-control-hover"
                                 onClick={closePanel}
                             >
                                 <ChevronDownIcon size={18} />

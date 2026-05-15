@@ -113,7 +113,7 @@ export function PlayerNameInput({
                 />
                 <button
                     type="button"
-                    className="shrink-0 cursor-pointer rounded border border-border bg-control p-1.5 text-fg hover:bg-hover"
+                    className="shrink-0 cursor-pointer rounded border border-border bg-control p-1.5 text-fg hover:bg-control-hover"
                     aria-label={t("removePlayerTitle", {
                         player: String(player),
                     })}

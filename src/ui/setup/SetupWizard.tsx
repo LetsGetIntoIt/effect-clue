@@ -606,7 +606,7 @@ export function SetupWizard() {
             {wizardMode === WIZARD_MODE_FLOW && !isFirstStep ? (
                 <button
                     type="button"
-                    className="tap-target-compact text-tap-compact shrink-0 cursor-pointer rounded border border-border bg-control hover:bg-hover"
+                    className="tap-target-compact text-tap-compact shrink-0 cursor-pointer rounded border border-border bg-control hover:bg-control-hover"
                     onClick={onClickBack}
                 >
                     {tCommon("back")}

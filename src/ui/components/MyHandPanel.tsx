@@ -132,7 +132,7 @@ export function MyHandPanel() {
                 />
                 <button
                     type="button"
-                    className="tap-icon flex shrink-0 cursor-pointer items-center justify-center rounded border border-border bg-control text-fg hover:bg-hover"
+                    className="tap-icon flex shrink-0 cursor-pointer items-center justify-center rounded border border-border bg-control text-fg hover:bg-control-hover"
                     aria-expanded={!collapsed}
                     aria-label={
                         collapsed
@@ -292,7 +292,7 @@ export function MyHandPanelBody() {
                             <button
                                 key={String(player)}
                                 type="button"
-                                className="tap-target-compact text-tap-compact cursor-pointer rounded-full border border-border bg-control text-fg hover:bg-hover"
+                                className="tap-target-compact text-tap-compact cursor-pointer rounded-full border border-border bg-control text-fg hover:bg-control-hover"
                                 onClick={() => {
                                     dispatch({
                                         type: "setSelfPlayer",
