@@ -8,6 +8,7 @@ import { useClue } from "../../state";
 import { T_STANDARD, useReducedTransition } from "../../motion";
 import { ChevronLeftIcon, ChevronRightIcon } from "../../components/Icons";
 import { CardSelectionGrid } from "../shared/CardSelectionGrid";
+import { useCardSelectionGridProps } from "../shared/useCardSelectionGridProps";
 import { SetupStepPanel } from "../SetupStepPanel";
 import { VALID, type WizardStepId } from "../wizardSteps";
 import type { StepPanelState, WizardMode } from "../SetupStepPanel";
@@ -84,6 +85,13 @@ export function SetupStepKnownCards({
             ? players
             : players.filter(p => p !== selfPlayerId);
 
+    // Compose grid props once against the full `targets` list. The
+    // returned `handSizes` Map carries an entry per target, which both
+    // the desktop "all columns" grid and the mobile "single column"
+    // grid can read from — the Map is keyed by Player, so extra
+    // entries are invisible to the mobile slice.
+    const gridProps = useCardSelectionGridProps(targets);
+
     const [activeIndex, setActiveIndex] = useState(0);
     useEffect(() => {
         if (activeIndex >= targets.length) {
@@ -147,6 +155,7 @@ export function SetupStepKnownCards({
     }
 
     const currentPlayer = targets[activeIndex] as Player;
+    const mobileSlicePlayers: ReadonlyArray<Player> = [currentPlayer];
 
     return (
         <SetupStepPanel
@@ -165,7 +174,7 @@ export function SetupStepKnownCards({
 
             {/* Desktop: every player as a column in one grid. */}
             <div className="hidden [@media(min-width:800px)]:block">
-                <CardSelectionGrid players={targets} />
+                <CardSelectionGrid players={targets} {...gridProps} />
             </div>
 
             {/* Mobile: single-player slice + paginator chrome. */}
@@ -223,7 +232,8 @@ export function SetupStepKnownCards({
                             className="[grid-area:stack] min-w-0"
                         >
                             <CardSelectionGrid
-                                players={[currentPlayer]}
+                                players={mobileSlicePlayers}
+                                {...gridProps}
                             />
                         </motion.div>
                     </AnimatePresence>

@@ -1,13 +1,11 @@
 "use client";
 
-import { Result } from "effect";
 import { useTranslations } from "next-intl";
 import { useMemo } from "react";
+import type { CardSet } from "../../../logic/CardSet";
 import { type Card, type Player, PlayerOwner } from "../../../logic/GameObjects";
 import { KnownCard } from "../../../logic/InitialKnowledge";
-import { getCellByOwnerCard, N, Y } from "../../../logic/Knowledge";
-import { useClue } from "../../state";
-import { firstDealtHandSizes } from "../firstDealt";
+import { getCellByOwnerCard, type Knowledge, N, Y } from "../../../logic/Knowledge";
 
 /**
  * Checklist-style grid for "which player has which card."
@@ -15,31 +13,42 @@ import { firstDealtHandSizes } from "../firstDealt";
  * Rows are cards (grouped by category header rows that mirror the
  * play-mode Checklist's `bg-category-header` strip). Columns are the
  * players passed in `players`. Each cell is a checkbox: ticking
- * dispatches `addKnownCard` / `removeKnownCard` against the same
- * `state.knownCards` slice that `PlayerColumnCardList` used to.
+ * invokes `onAddKnownCard` / `onRemoveKnownCard`, which the parent
+ * wires up against the right `knownCards` slice.
  *
- * Cell **backgrounds** are derived from the **deduction-only** slice
- * of knowledge (`state.derived.deductionResult`). They paint green for
- * a deduced Y and red for a deduced N — so as the user ticks cards
- * into a player's hand and the deducer concludes "this column is now
- * full", the remaining cells visually fill red without any auto-fill
- * logic here. The deducer's failure mode (a manual tick that
- * contradicts deductions) is surfaced by the global
- * `GlobalContradictionBanner`; no inline error UI in the grid.
+ * Cell **backgrounds** are derived from `deductionKnowledge` — pass
+ * the deduction-only slice of knowledge to paint green for a deduced
+ * Y and red for a deduced N. As the user ticks cards into a player's
+ * hand and the parent's deducer concludes "this column is now full",
+ * the remaining cells visually fill red without any auto-fill logic
+ * here. The deducer's failure mode (a manual tick that contradicts
+ * deductions) is surfaced by the global `GlobalContradictionBanner`;
+ * no inline error UI in the grid.
  *
- * Per-column counter shows "Identified X of Y in hand" using the hand
- * size from (1) `handSizeOverrides`, (2) `setup.handSizes` user
- * override, or (3) `firstDealtHandSizes` default — first match wins.
+ * Per-column counter shows "Identified X of Y in hand" using the
+ * `handSizes` Map passed in by the caller. Empty entries (player
+ * missing from the map) display "0 of 0".
  *
  * Single-column mode is just `players.length === 1` — no separate
  * layout branch. That's how Projects 2 (share import) and 3 (My Cards
  * null state) consume this component.
+ *
+ * The grid is intentionally stateless and unaware of `useClue()` —
+ * wizard call sites compose the props via `useCardSelectionGridProps`,
+ * while the share-import modal wires them from snapshot-derived
+ * state. Project 3 (My Cards null state in play mode) will use the
+ * hook the same way the wizard does.
  */
 interface Props {
     readonly players: ReadonlyArray<Player>;
+    readonly cardSet: CardSet;
+    readonly knownCards: ReadonlyArray<KnownCard>;
+    readonly handSizes: ReadonlyMap<Player, number>;
+    readonly deductionKnowledge: Knowledge;
+    readonly onAddKnownCard: (card: KnownCard) => void;
+    readonly onRemoveKnownCard: (index: number) => void;
     readonly firstCellTourAnchor?: string;
     readonly readOnly?: boolean;
-    readonly handSizeOverrides?: ReadonlyMap<Player, number>;
 }
 
 // Whole-cell click target. The label fills the td, so any tap inside
@@ -87,32 +96,25 @@ const COLUMN_HEADER_STACK =
 
 export function CardSelectionGrid({
     players,
+    cardSet,
+    knownCards,
+    handSizes,
+    deductionKnowledge,
+    onAddKnownCard,
+    onRemoveKnownCard,
     firstCellTourAnchor,
     readOnly = false,
-    handSizeOverrides,
 }: Props) {
     const t = useTranslations("setupWizard.cardSelection");
-    const { state, derived, dispatch } = useClue();
-    const setup = state.setup;
-
-    // The deduction-only knowledge slice. Used purely for cell
-    // backgrounds. When the deducer fails (contradiction), fall back
-    // to the initial knowledge — the user's manual ticks still paint
-    // through (initial knowledge contains the user's known cards),
-    // and `GlobalContradictionBanner` handles the failure messaging.
-    const knowledge = useMemo(() => {
-        const dr = derived.deductionResult;
-        return Result.isSuccess(dr) ? dr.success : derived.initialKnowledge;
-    }, [derived.deductionResult, derived.initialKnowledge]);
 
     // O(1) "does this player have this card" lookup for checkbox state.
     const ownedSet = useMemo(() => {
         const set = new Set<string>();
-        for (const kc of state.knownCards) {
+        for (const kc of knownCards) {
             set.add(`${String(kc.player)}::${String(kc.card)}`);
         }
         return set;
-    }, [state.knownCards]);
+    }, [knownCards]);
 
     const isOwned = (player: Player, card: Card) =>
         ownedSet.has(`${String(player)}::${String(card)}`);
@@ -120,15 +122,12 @@ export function CardSelectionGrid({
     const toggle = (player: Player, card: Card) => {
         if (readOnly) return;
         if (isOwned(player, card)) {
-            const idx = state.knownCards.findIndex(
+            const idx = knownCards.findIndex(
                 kc => kc.player === player && kc.card === card,
             );
-            if (idx >= 0) dispatch({ type: "removeKnownCard", index: idx });
+            if (idx >= 0) onRemoveKnownCard(idx);
         } else {
-            dispatch({
-                type: "addKnownCard",
-                card: KnownCard({ player, card }),
-            });
+            onAddKnownCard(KnownCard({ player, card }));
         }
     };
 
@@ -137,50 +136,19 @@ export function CardSelectionGrid({
     const ownedCountByPlayer = useMemo(() => {
         const counts = new Map<Player, number>();
         for (const p of players) counts.set(p, 0);
-        for (const kc of state.knownCards) {
+        for (const kc of knownCards) {
             if (counts.has(kc.player)) {
                 counts.set(kc.player, (counts.get(kc.player) ?? 0) + 1);
             }
         }
         return counts;
-    }, [state.knownCards, players]);
-
-    // Hand size denominator. Override > setup.handSizes user pin >
-    // firstDealtHandSizes default.
-    const handSizeByPlayer = useMemo(() => {
-        const result = new Map<Player, number>();
-        const dealtDefaults = new Map(
-            firstDealtHandSizes(setup, state.firstDealtPlayerId),
-        );
-        for (const p of players) {
-            const override = handSizeOverrides?.get(p);
-            if (override !== undefined) {
-                result.set(p, override);
-                continue;
-            }
-            const fromSetup = state.handSizes.find(
-                ([h]: readonly [Player, number]) => h === p,
-            )?.[1];
-            if (fromSetup !== undefined) {
-                result.set(p, fromSetup);
-                continue;
-            }
-            result.set(p, dealtDefaults.get(p) ?? 0);
-        }
-        return result;
-    }, [
-        players,
-        setup,
-        state.handSizes,
-        state.firstDealtPlayerId,
-        handSizeOverrides,
-    ]);
+    }, [knownCards, players]);
 
     // First interactive cell — receives the optional tour anchor.
-    const firstCardId = setup.categories[0]?.cards[0]?.id;
+    const firstCardId = cardSet.categories[0]?.cards[0]?.id;
     const firstPlayerId = players[0];
 
-    if (players.length === 0 || setup.categories.length === 0) {
+    if (players.length === 0 || cardSet.categories.length === 0) {
         return null;
     }
 
@@ -210,7 +178,7 @@ export function CardSelectionGrid({
                             const owned =
                                 ownedCountByPlayer.get(player) ?? 0;
                             const total =
-                                handSizeByPlayer.get(player) ?? 0;
+                                handSizes.get(player) ?? 0;
                             return (
                                 <th
                                     key={String(player)}
@@ -247,7 +215,7 @@ export function CardSelectionGrid({
                     </tr>
                 </thead>
                 <tbody>
-                    {setup.categories.flatMap(category => {
+                    {cardSet.categories.flatMap(category => {
                         const rows: React.ReactNode[] = [];
                         rows.push(
                             // Category-header row mirrors the play-mode
@@ -285,7 +253,7 @@ export function CardSelectionGrid({
                                     {players.map(player => {
                                         const owned = isOwned(player, entry.id);
                                         const deduced = getCellByOwnerCard(
-                                            knowledge,
+                                            deductionKnowledge,
                                             PlayerOwner(player),
                                             entry.id,
                                         );

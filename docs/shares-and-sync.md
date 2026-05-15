@@ -258,7 +258,11 @@ to detect built-ins — the `name` is informational, not authoritative.
      AND also routes through `saveOrRecognisePack` so the imported
      deck appears in the local registry (or recognises an existing
      match) and lights up the active pill in `CardPackRow` once the
-     user lands on `/play`.
+     user lands on `/play`. For invite shares, the modal additionally
+     offers an optional **identity + cards-in-hand picker** (see
+     "Invite-share import-time picker" below) whose selections are
+     applied as receiver-side overrides during hydration — no wire
+     format change.
 6. Router pushes to `/play`.
 
 **Hydration semantics:** the share is the new game. Sections present
@@ -315,6 +319,64 @@ checks: (1) the stored shareId matches the current page's, (2) the
 saved timestamp is within `Duration.minutes(10)` of now, and (3)
 single-use — `consume` always clears the entry, so a successful
 import can't be replayed by a follow-up share's auto-import path.
+
+## Invite-share import-time picker (identity + cards in hand)
+
+`invite` shares omit the sender's identity and the sender's hand from
+the wire — those are private to the sender, and the receiver is a
+different player with a different perspective. Historically the
+receiver landed on `/play?view=checklist` with `selfPlayerId === null`
+and had to find the setup wizard's identity step to fill it in.
+
+The receive modal now offers two **optional** sections for
+`invite` shares only (gated on `receiveFlow === RECEIVE_FLOW_INVITE`):
+
+1. **"Which player are you?"** — a pill row of the share's roster.
+   Clicking a pill toggles it active; clicking again deselects.
+2. **"Which cards are in your hand?"** — reveals only after an identity
+   is picked. Renders `CardSelectionGrid` in single-column mode for the
+   picked player, fed by snapshot-derived `cardSet` + `handSizes` +
+   `firstDealtPlayerId`. A mini-deducer (`deduceSync`) runs against the
+   snapshot setup + the user's picks so the auto-fill-red-when-full
+   visual mirrors the wizard.
+
+Changing the identity discards previously-picked cards (they belong
+to a different player's hand). Both sections are skippable — the Join
+CTA always works regardless.
+
+**No wire format change.** The picks are receiver-side overrides
+applied during `buildSessionFromSnapshot` via a new `ApplyOverrides`
+parameter. `selfPlayerId` resolution becomes
+`override ?? snapshot.selfPlayerIdData ?? null`; an `undefined`
+override falls back to snapshot, an explicit `null` is preserved as
+"user picked nothing." `knownCards` overrides similarly group the
+flat `KnownCard[]` shape into the wire's hands-per-player shape and
+replace `snapshot.knownCardsData` (invite has none anyway).
+
+**OAuth round-trip preservation.** Anonymous users see the picker
+from the start. Clicking "Sign in to import" encodes the current
+picks via the same `selfPlayerIdCodec` + `knownCardsCodec` from
+[ShareCodec.ts](../src/logic/ShareCodec.ts) and stores them as
+optional fields on the `pendingImport` intent alongside the shareId.
+After OAuth returns, `consumePendingImportIntent` surfaces the
+override strings; `decodeOverridesFromPendingImport` turns them back
+into `ApplyOverrides` and `performImport` applies them so auto-import
+proceeds without a second click. A separate `peekPendingImportIntent`
+(read-without-clearing) restores picks into modal-local state when
+the user navigates back from the OAuth provider before completing
+sign-in — picks don't disappear mid-flow.
+
+The `pendingImport` shape now distinguishes:
+- `null` from `consume`/`peek` → no valid intent (no entry / wrong
+  shareId / expired / malformed).
+- `{}` from `consume`/`peek` → intent matched but carried no picks
+  (pre-picker behavior, transfer/pack auto-import).
+- `{ selfPlayerIdData? , knownCardsData? }` → intent matched with
+  partial or full picker overrides.
+
+Decode failures on the override strings (stale codec shape, tampered
+sessionStorage) silently drop the override and fall back to the
+no-override import — the same outcome as a pre-picker intent.
 
 ## DB representation
 

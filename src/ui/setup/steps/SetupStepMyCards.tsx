@@ -1,9 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useMemo } from "react";
 import type { Player } from "../../../logic/GameObjects";
 import { useClue } from "../../state";
 import { CardSelectionGrid } from "../shared/CardSelectionGrid";
+import { useCardSelectionGridProps } from "../shared/useCardSelectionGridProps";
 import { SetupStepPanel } from "../SetupStepPanel";
 import { VALID, type WizardStepId } from "../wizardSteps";
 import type { StepPanelState, WizardMode } from "../SetupStepPanel";
@@ -49,6 +51,8 @@ export function SetupStepMyCards({
 }: Props) {
     const t = useTranslations("setupWizard.myCards");
     const { state: clue } = useClue();
+    const players = useMemo(() => [selfPlayerId], [selfPlayerId]);
+    const gridProps = useCardSelectionGridProps(players);
     const ownedCount = clue.knownCards.filter(
         kc => kc.player === selfPlayerId,
     ).length;
@@ -72,7 +76,8 @@ export function SetupStepMyCards({
         >
             <p className="m-0 text-[1rem] text-muted">{t("helperText")}</p>
             <CardSelectionGrid
-                players={[selfPlayerId]}
+                players={players}
+                {...gridProps}
                 firstCellTourAnchor={FIRST_ROW_TOUR_ANCHOR}
             />
         </SetupStepPanel>
