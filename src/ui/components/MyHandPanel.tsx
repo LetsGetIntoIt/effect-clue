@@ -1,31 +1,56 @@
 "use client";
 
+import { motion } from "motion/react";
 import { useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
-import { cardName, categoryName } from "../../logic/CardSet";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { setupSelfPlayerSet } from "../../analytics/events";
+import { categoryName } from "../../logic/CardSet";
 import type { Card, CardCategory } from "../../logic/GameObjects";
+import { T_STANDARD, useReducedTransition } from "../motion";
 import { useClue } from "../state";
+import { ChevronDownIcon, ChevronUpIcon, HandOfCardsIcon } from "./Icons";
+import { useOpenMyCardsModal } from "./MyCardsModal";
+import { SuggestionBanner } from "./SuggestionBanner";
 
 const STORAGE_KEY = "effect-clue.my-hand-panel.collapsed.v1";
 
+// Animation target sizes for the collapsible body. Numeric pixel
+// values (not rem strings) so motion can interpolate smoothly between
+// `0` and the open size — string→number transitions otherwise jump at
+// the boundary.
+const BODY_OPEN_PADDING_TOP = 6; // 0.375rem
+const BODY_OPEN_PADDING_BOTTOM = 6;
+const BODY_OPEN_MARGIN_TOP = 6;
+
 /**
- * Persistent "your hand" affordance shown above the play layout when
- * the user has identified themselves (`selfPlayerId !== null`) and
- * has marked at least one card as their own. Renders nothing when
- * either condition is false — per the M6 plan's 0i decision, gated
- * UI is hidden, not shown with apologetic empty-state copy.
+ * Always-on My Cards section for the desktop play layout. Persistent
+ * reference surface for the cards in the user's hand. Renders the
+ * `SuggestionBanner` above a collapsible body — collapse only hides
+ * the body (chip row / null states), the banner remains so its
+ * refute hint is always reachable.
  *
- * Cards are grouped by category so the row reads as
- * "Suspect: Miss Scarlet · Weapon: Knife · Room: Library" — that
- * keeps the grouping cue users already learned in the checklist.
+ * Body states:
+ *   - **Null state A** — no identity set. Shows a pill row of players.
+ *   - **Null state B** — identity set but no cards marked. Shows a
+ *     "Select cards in your hand" button that opens `MyCardsModal`.
+ *   - **Populated** — identity set + ≥1 card. Shows the grouped chip
+ *     row.
  *
- * Collapse toggle persists across reloads. The panel is intentionally
- * compact (a single horizontal scroll-free strip with `flex-wrap`)
- * so it doesn't fight the play view for vertical space.
+ * The banner runs a looping bounce until the user's mouse enters the
+ * section (`paused` flips to true), at which point the bounce
+ * latches off for the rest of that banner's lifetime. In collapsed
+ * mode, the banner runs in `teaser` form — copy ends with an
+ * ellipsis + "(click to reveal)" so the listed cards stay hidden
+ * until the user expands the section.
+ *
+ * The mobile FAB (`MyCardsFAB`) reuses `MyHandPanelBody` and renders
+ * its own `<SuggestionBanner paused={true} />` — once the FAB is
+ * tapped open, the user has acknowledged the surface so the bounce
+ * doesn't continue.
  */
 export function MyHandPanel() {
     const t = useTranslations("myHand");
-    const { state } = useClue();
+    const sectionRef = useRef<HTMLElement>(null);
     const [collapsed, setCollapsed] = useState<boolean>(() => {
         if (typeof window === "undefined") return false;
         try {
@@ -34,8 +59,161 @@ export function MyHandPanel() {
             return false;
         }
     });
+    const [isHovered, setIsHovered] = useState(false);
 
+    useEffect(() => {
+        const el = sectionRef.current;
+        if (!el) return;
+        const onEnter = () => setIsHovered(true);
+        const onLeave = () => setIsHovered(false);
+        el.addEventListener("mouseenter", onEnter);
+        el.addEventListener("mouseleave", onLeave);
+        return () => {
+            el.removeEventListener("mouseenter", onEnter);
+            el.removeEventListener("mouseleave", onLeave);
+        };
+    }, []);
+
+    const persistCollapsed = (next: boolean) => {
+        setCollapsed(next);
+        try {
+            window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+        } catch {
+            // Quota / private mode — non-fatal.
+        }
+    };
+    const toggle = () => persistCollapsed(!collapsed);
+    const expandFromBanner = () => {
+        if (collapsed) persistCollapsed(false);
+    };
+
+    const bodyTransition = useReducedTransition(T_STANDARD, { fadeMs: 120 });
+
+    return (
+        <section
+            ref={sectionRef}
+            aria-label={t("title")}
+            data-tour-anchor="my-cards-section"
+            data-my-hand-panel=""
+            className="contain-inline-size rounded border border-border/40 bg-panel/60 px-3 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.05)]"
+        >
+            <header className="flex items-center justify-between gap-2">
+                <h3 className="m-0 flex items-center gap-2 font-sans! text-[1.125rem] font-bold uppercase tracking-wide text-accent">
+                    <HandOfCardsIcon size={20} className="text-accent" />
+                    {t("title")}
+                </h3>
+                <button
+                    type="button"
+                    className="tap-icon flex cursor-pointer items-center justify-center rounded border border-border bg-control text-fg hover:bg-hover"
+                    aria-expanded={!collapsed}
+                    aria-label={
+                        collapsed
+                            ? t("expandAriaLabel")
+                            : t("collapseAriaLabel")
+                    }
+                    onClick={toggle}
+                >
+                    {collapsed ? (
+                        <ChevronDownIcon size={18} />
+                    ) : (
+                        <ChevronUpIcon size={18} />
+                    )}
+                </button>
+            </header>
+            {/* Banner sits outside the collapsible wrapper so it stays
+                visible in banner-only mode. In the collapsed state it
+                runs in teaser form (cards hidden behind a "click to
+                reveal" hint); tapping the banner is the implicit
+                expand affordance. */}
+            <BannerSlot
+                collapsed={collapsed}
+                paused={isHovered}
+                onTap={expandFromBanner}
+            />
+            <motion.div
+                data-my-hand-panel-body=""
+                initial={false}
+                animate={
+                    collapsed
+                        ? {
+                              height: 0,
+                              opacity: 0,
+                              marginTop: 0,
+                              paddingTop: 0,
+                              paddingBottom: 0,
+                          }
+                        : {
+                              // eslint-disable-next-line i18next/no-literal-string -- CSS keyword
+                              height: "auto",
+                              opacity: 1,
+                              marginTop: BODY_OPEN_MARGIN_TOP,
+                              paddingTop: BODY_OPEN_PADDING_TOP,
+                              paddingBottom: BODY_OPEN_PADDING_BOTTOM,
+                          }
+                }
+                transition={bodyTransition}
+                style={{ overflow: "hidden" }}
+                aria-hidden={collapsed}
+            >
+                <MyHandPanelBody />
+            </motion.div>
+        </section>
+    );
+}
+
+/**
+ * Banner wrapper that handles the teaser display + tap-to-expand
+ * affordance for the collapsed-but-banner-visible mode. Outside the
+ * `MyHandPanel` body wrapper so the banner stays put when the body
+ * animates collapsed.
+ */
+function BannerSlot({
+    collapsed,
+    paused,
+    onTap,
+}: {
+    readonly collapsed: boolean;
+    readonly paused: boolean;
+    readonly onTap: () => void;
+}) {
+    if (collapsed) {
+        return (
+            <div
+                role="button"
+                tabIndex={0}
+                onClick={onTap}
+                onKeyDown={e => {
+                    if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onTap();
+                    }
+                }}
+                className="mt-1.5 cursor-pointer"
+            >
+                <SuggestionBanner teaser paused={paused} />
+            </div>
+        );
+    }
+    return (
+        <div className="mt-1.5">
+            <SuggestionBanner paused={paused} />
+        </div>
+    );
+}
+
+/**
+ * Shared body for the desktop section's collapsible area and the
+ * mobile FAB panel. Renders the non-banner content: null state A
+ * (identity picker), null state B (Select-cards button), or the
+ * populated chip row. The wrappers handle the banner themselves so
+ * the banner can persist across collapse animations.
+ */
+export function MyHandPanelBody() {
+    const t = useTranslations("myHand");
+    const { state, dispatch } = useClue();
+    const openModal = useOpenMyCardsModal();
     const selfPlayer = state.selfPlayerId;
+
     const myCards = useMemo<ReadonlyArray<Card>>(() => {
         if (selfPlayer === null) return [];
         return state.knownCards
@@ -43,9 +221,6 @@ export function MyHandPanel() {
             .map(kc => kc.card);
     }, [state.knownCards, selfPlayer]);
 
-    // Grouped lookup: category id → category name + card names in that
-    // category that the user owns. Iterates the deck order so the
-    // grouping reads in canonical category order.
     const grouped = useMemo(() => {
         if (selfPlayer === null || myCards.length === 0) return [];
         const myCardSet = new Set(myCards);
@@ -60,137 +235,78 @@ export function MyHandPanel() {
             .filter(g => g.cards.length > 0);
     }, [state.setup.cardSet, myCards, selfPlayer]);
 
-    if (selfPlayer === null) return null;
-    if (myCards.length === 0) return null;
-
-    const toggle = () => {
-        setCollapsed(prev => {
-            const next = !prev;
-            try {
-                window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
-            } catch {
-                // Quota / private mode — non-fatal.
-            }
-            return next;
-        });
-    };
-
-    return (
-        <section
-            aria-label={t("title")}
-            data-my-hand-panel=""
-            // contain-inline-size: stops the wrapped chip rows from
-            // propagating their no-wrap intrinsic size into
-            // `<main>`'s `min-w-max` calculation on mobile (mirrors
-            // SuggestionLogPanel's pill row pattern).
-            className="contain-inline-size rounded border border-border/40 bg-panel/60 px-3 py-2"
-        >
-            <header className="flex items-center justify-between gap-2">
-                <h2 className="m-0 text-[1.25rem] font-semibold uppercase tracking-wide text-muted">
-                    {t("title")}
-                </h2>
-                <button
-                    type="button"
-                    className="cursor-pointer rounded border border-border bg-control px-2 py-0.5 text-[1rem] hover:bg-hover"
-                    aria-expanded={!collapsed}
-                    onClick={toggle}
-                >
-                    {collapsed ? t("toggleShow") : t("toggleHide")}
-                </button>
-            </header>
-            {!collapsed && (
-                <ul className="m-0 mt-1.5 flex list-none flex-wrap gap-x-3 gap-y-1 p-0">
-                    {grouped.map(group => (
-                        <li
-                            key={String(group.id)}
-                            className="flex items-baseline gap-1.5 text-[1rem]"
-                        >
-                            <span className="font-semibold text-muted">
-                                {t("categoryLabel", { category: group.label })}
-                            </span>
-                            <span>{group.cards.join(", ")}</span>
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </section>
-    );
-}
-
-/**
- * Helper used by `RefuteHint` to derive the user's hand. Module-
- * internal — no other consumer today, and exporting it would invite
- * call-site drift. Returns the set of card ids in the current
- * user's hand; empty when identity is unset or no cards are marked.
- */
-function useMyCards(): ReadonlySet<Card> {
-    const { state } = useClue();
-    return useMemo(() => {
-        if (state.selfPlayerId === null) return new Set();
-        return new Set(
-            state.knownCards
-                .filter(kc => kc.player === state.selfPlayerId)
-                .map(kc => kc.card),
-        );
-    }, [state.knownCards, state.selfPlayerId]);
-}
-
-/**
- * Inline hint shown beneath the "Add a suggestion" form when the
- * three suggested cards are filled in. Tells the user whether they
- * can refute (and with which cards) given their identified hand.
- *
- * Visibility rules per the M8 plan:
- *   - Hidden when `selfPlayerId === null`.
- *   - Hidden until all three suggested cards are filled in.
- *   - Empty intersection → "You can't refute this."
- *   - Non-empty intersection → "You can refute with: X, Y, or Z."
- *
- * Reads directly from `useClue` so the form (which is intentionally
- * decoupled from the reducer — it dispatches via an `onSubmit`
- * callback) doesn't have to take new props. The hint mounts as a
- * sibling of the form inside `SuggestionLogPanel`'s AddForm wrapper.
- */
-export function RefuteHint() {
-    const t = useTranslations("refuteHint");
-    const { state } = useClue();
-    const myCards = useMyCards();
-
-    if (state.selfPlayerId === null) return null;
-    const draft = state.pendingSuggestion;
-    if (draft === null) return null;
-    const filledCards = draft.cards.filter(
-        (c): c is Card => c !== null,
-    );
-    if (filledCards.length !== state.setup.cardSet.categories.length) {
-        return null;
-    }
-
-    const intersect = filledCards.filter(card => myCards.has(card));
-    const setup = state.setup;
-
-    if (intersect.length === 0) {
+    if (selfPlayer === null) {
         return (
-            <p
-                className="m-0 px-1 py-1 text-[1rem] text-muted"
-                data-refute-hint=""
-            >
-                {t("cannotRefute")}
-            </p>
+            <div className="flex flex-col gap-2">
+                <p className="m-0 text-[1rem] text-muted">
+                    {t("nullStateAPrompt")}
+                </p>
+                {state.setup.players.length > 0 && (
+                    <div
+                        className="flex flex-wrap gap-2"
+                        data-tour-anchor="my-cards-identity-picker"
+                    >
+                        {state.setup.players.map(player => (
+                            <button
+                                key={String(player)}
+                                type="button"
+                                className="tap-target-compact text-tap-compact cursor-pointer rounded-full border border-border bg-control text-fg hover:bg-hover"
+                                onClick={() => {
+                                    dispatch({
+                                        type: "setSelfPlayer",
+                                        player,
+                                    });
+                                    setupSelfPlayerSet({ cleared: false });
+                                }}
+                            >
+                                {String(player)}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
         );
     }
 
-    const names = intersect.map(card =>
-        cardName(setup.cardSet, card),
-    );
+    if (myCards.length === 0) {
+        return (
+            <div className="flex flex-col gap-2">
+                <p className="m-0 text-[1rem] text-muted">
+                    {t("nullStateBPrompt")}
+                </p>
+                <div>
+                    <button
+                        type="button"
+                        data-tour-anchor="my-cards-add-button"
+                        className="tap-target-compact text-tap-compact cursor-pointer rounded-[var(--radius)] border border-accent bg-accent px-3 text-white hover:bg-accent-hover"
+                        onClick={() => openModal()}
+                    >
+                        {t("selectCardsButton")}
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <p
-            className="m-0 px-1 py-1 text-[1rem] text-fg"
-            data-refute-hint=""
-        >
-            {t("canRefute", {
-                cards: names.join(t("join")),
-            })}
-        </p>
+        <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0">
+            {grouped.map(group => (
+                <li
+                    key={String(group.id)}
+                    className="flex items-center gap-1.5 text-[1rem]"
+                >
+                    {/* Category pill — mirrors the deduction-grid
+                        category-header style (bg-category-header,
+                        white text, uppercase, tracking-[0.05em]) so
+                        the chip row reads in the same visual
+                        vocabulary the user has already learned in the
+                        grid. */}
+                    <span className="rounded bg-category-header px-1.5 py-0 text-[0.75rem] font-semibold uppercase tracking-[0.05em] text-white">
+                        {group.label}
+                    </span>
+                    <span>{group.cards.join(", ")}</span>
+                </li>
+            ))}
+        </ul>
     );
 }

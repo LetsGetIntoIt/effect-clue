@@ -491,3 +491,90 @@ export function ExternalLinkIcon({ className, size = 14 }: IconProps) {
         </svg>
     );
 }
+
+/** Down-pointing chevron — paired with collapse / expand toggles where
+ *  rotation reads as "collapse this open section". */
+export function ChevronDownIcon({ className, size = 16 }: IconProps) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+            className={className}
+        >
+            <polyline points="6 9 12 15 18 9" />
+        </svg>
+    );
+}
+
+/** Up-pointing chevron — the inverse of `ChevronDownIcon` for the
+ *  "this section is currently collapsed, click to expand" state. */
+export function ChevronUpIcon({ className, size = 16 }: IconProps) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+            className={className}
+        >
+            <polyline points="6 15 12 9 18 15" />
+        </svg>
+    );
+}
+
+/** Fan of three cards — used on the mobile My Cards FAB to evoke "the
+ *  cards in your hand". Stroke-style consistent with the rest of the
+ *  set; the suits inside are abstract pips so the glyph reads as
+ *  "cards" regardless of the user's deck. */
+export function HandOfCardsIcon({ className, size = 20 }: IconProps) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+            className={className}
+        >
+            <rect
+                x="3"
+                y="6"
+                width="9"
+                height="14"
+                rx="1.5"
+                transform="rotate(-12 7.5 13)"
+            />
+            <rect x="7.5" y="5" width="9" height="14" rx="1.5" />
+            <rect
+                x="12"
+                y="6"
+                width="9"
+                height="14"
+                rx="1.5"
+                transform="rotate(12 16.5 13)"
+            />
+        </svg>
+    );
+}

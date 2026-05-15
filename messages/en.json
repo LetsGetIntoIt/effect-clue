@@ -217,14 +217,25 @@
     },
     "myHand": {
         "title": "Your cards",
-        "empty": "Mark your cards in setup to see them here.",
-        "categoryLabel": "{category}:",
-        "toggleHide": "Hide my cards",
-        "toggleShow": "Show my cards"
+        "collapseAriaLabel": "Collapse my cards",
+        "expandAriaLabel": "Expand my cards",
+        "nullStateAPrompt": "A quick reference for the cards in your hand. Which player are you?",
+        "nullStateBPrompt": "No cards in your hand yet.",
+        "selectCardsButton": "Select cards in your hand",
+        "modalTitle": "Cards in your hand",
+        "modalDone": "Done",
+        "fabAriaLabel": "Open my cards",
+        "fabTooltip": "My cards",
+        "panelCloseAriaLabel": "Close my cards"
     },
     "refuteHint": {
-        "canRefute": "You can refute with: {cards}",
-        "cannotRefute": "You can't refute this — none of your cards match.",
+        "canRefute": "You can refute this suggestion with: {cards}",
+        "canRefuteTeaser": "You can refute this suggestion with…",
+        "cannotRefute": "You cannot refute this suggestion.",
+        "selfSuggesting": "You are suggesting from your hand: {cards}",
+        "selfSuggestingTeaser": "You are suggesting from your hand…",
+        "revealHintMouse": "(click to reveal)",
+        "revealHintTouch": "(tap to reveal)",
         "join": ", "
     },
     "deduce": {
@@ -666,6 +677,14 @@
             "caseFile": {
                 "title": "The case file is your goal",
                 "body": "This section tracks the murder envelope — cards no player has. Solve the three categories down to one each and you're done."
+            },
+            "myCardsDesktop": {
+                "title": "Your cards live here",
+                "body": "A quick reference for the cards in your hand. During a suggestion draft, this section also tells you whether you can refute it."
+            },
+            "myCardsMobile": {
+                "title": "Your cards are one tap away",
+                "body": "Tap this to open the My cards panel — a quick reference for the cards in your hand. During a suggestion draft, the panel also tells you whether you can refute it."
             }
         },
         "suggest": {

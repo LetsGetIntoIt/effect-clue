@@ -26,23 +26,82 @@ beforeEach(() => {
     window.localStorage.clear();
     seedOnboardingDismissed();
     window.history.replaceState(null, "", "/?view=checklist");
+    // Project 3: MyHandPanel renders only on desktop (≥800px); the
+    // mobile entry point is MyCardsFAB (tested separately). Mock
+    // matchMedia to desktop so `useIsDesktop` returns true.
+    Object.defineProperty(window, "matchMedia", {
+        writable: true,
+        configurable: true,
+        value: (query: string): MediaQueryList =>
+            ({
+                matches: query.includes("min-width: 800px"),
+                media: query,
+                onchange: null,
+                addListener: () => {},
+                removeListener: () => {},
+                addEventListener: () => {},
+                removeEventListener: () => {},
+                dispatchEvent: () => false,
+            }) as unknown as MediaQueryList,
+    });
 });
 
 const findMyHand = (): HTMLElement | null =>
     document.querySelector("[data-my-hand-panel]");
 
-describe("MyHandPanel — visibility", () => {
-    test("does NOT mount when selfPlayerId is null (default state)", async () => {
+const waitForPanel = async (): Promise<HTMLElement> => {
+    return await waitFor(() => {
+        const found = findMyHand();
+        if (!found) throw new Error("panel not mounted");
+        return found;
+    });
+};
+
+describe("MyHandPanel — always-on rendering", () => {
+    test("mounts even when selfPlayerId is null (null state A)", async () => {
+        // Default session has selfPlayerId === null AND a default
+        // setup with players present (so the pill row can render).
+        const session = {
+            version: 9,
+            setup: {
+                players: ["Alice", "Bob", "Cho"],
+                categories: [
+                    {
+                        id: "category-suspects",
+                        name: "Suspect",
+                        cards: [
+                            { id: "card-miss-scarlet", name: "Miss Scarlet" },
+                        ],
+                    },
+                ],
+            },
+            hands: [],
+            handSizes: [],
+            suggestions: [],
+            accusations: [],
+            hypotheses: [],
+            pendingSuggestion: null,
+            selfPlayerId: null,
+            firstDealtPlayerId: null,
+        };
+        window.localStorage.setItem(
+            "effect-clue.session.v9",
+            JSON.stringify(session),
+        );
         render(<Clue />, { wrapper: TestQueryClientProvider });
-        // Wait for play layout to mount
-        await waitFor(() => {
-            expect(document.getElementById("checklist")).toBeInTheDocument();
-        });
-        expect(findMyHand()).toBeNull();
+        const panel = await waitForPanel();
+        // Null state A copy + identity picker present.
+        expect(panel.textContent).toContain("myHand.nullStateAPrompt");
+        const pickerWrap = panel.querySelector(
+            "[data-tour-anchor~='my-cards-identity-picker']",
+        );
+        expect(pickerWrap).not.toBeNull();
+        // One pill per player.
+        const pills = pickerWrap?.querySelectorAll("button");
+        expect(pills?.length).toBe(3);
     });
 
-    test("does NOT mount when self is set but no cards are marked", async () => {
-        // Seed a session with selfPlayerId set but hands empty.
+    test("mounts when identity is set but no cards marked (null state B)", async () => {
         const session = {
             version: 9,
             setup: {
@@ -71,13 +130,14 @@ describe("MyHandPanel — visibility", () => {
             JSON.stringify(session),
         );
         render(<Clue />, { wrapper: TestQueryClientProvider });
-        await waitFor(() => {
-            expect(document.getElementById("checklist")).toBeInTheDocument();
-        });
-        expect(findMyHand()).toBeNull();
+        const panel = await waitForPanel();
+        expect(panel.textContent).toContain("myHand.nullStateBPrompt");
+        expect(
+            panel.querySelector("[data-tour-anchor~='my-cards-add-button']"),
+        ).not.toBeNull();
     });
 
-    test("mounts when self is set AND cards are marked", async () => {
+    test("mounts in populated state (identity + cards)", async () => {
         const session = {
             version: 9,
             setup: {
@@ -94,9 +154,7 @@ describe("MyHandPanel — visibility", () => {
                     {
                         id: "category-weapons",
                         name: "Weapon",
-                        cards: [
-                            { id: "card-knife", name: "Knife" },
-                        ],
+                        cards: [{ id: "card-knife", name: "Knife" }],
                     },
                 ],
             },
@@ -119,12 +177,7 @@ describe("MyHandPanel — visibility", () => {
             JSON.stringify(session),
         );
         render(<Clue />, { wrapper: TestQueryClientProvider });
-        const panel = await waitFor(() => {
-            const found = findMyHand();
-            if (!found) throw new Error("panel not mounted");
-            return found;
-        });
-        // Both cards visible, grouped by category.
+        const panel = await waitForPanel();
         expect(panel.textContent).toContain("Miss Scarlet");
         expect(panel.textContent).toContain("Knife");
         expect(panel.textContent).toContain("Suspect");
@@ -132,9 +185,74 @@ describe("MyHandPanel — visibility", () => {
     });
 });
 
-describe("RefuteHint", () => {
+describe("MyHandPanel — collapse toggle", () => {
+    test("chevron toggles aria-expanded + aria-hides the body and persists to localStorage", async () => {
+        const session = {
+            version: 9,
+            setup: {
+                players: ["Alice", "Bob"],
+                categories: [
+                    {
+                        id: "category-suspects",
+                        name: "Suspect",
+                        cards: [
+                            { id: "card-miss-scarlet", name: "Miss Scarlet" },
+                        ],
+                    },
+                ],
+            },
+            hands: [{ player: "Alice", cards: ["card-miss-scarlet"] }],
+            handSizes: [],
+            suggestions: [],
+            accusations: [],
+            hypotheses: [],
+            pendingSuggestion: null,
+            selfPlayerId: "Alice",
+            firstDealtPlayerId: null,
+        };
+        window.localStorage.setItem(
+            "effect-clue.session.v9",
+            JSON.stringify(session),
+        );
+        const user = userEvent.setup();
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        const panel = await waitForPanel();
+
+        const chevron = panel.querySelector<HTMLButtonElement>(
+            "button[aria-expanded]",
+        );
+        if (!chevron) throw new Error("no chevron button");
+        // Default expanded.
+        expect(chevron.getAttribute("aria-expanded")).toBe("true");
+
+        const bodyWrapper = panel.querySelector<HTMLElement>(
+            "[data-my-hand-panel-body]",
+        );
+        if (!bodyWrapper) throw new Error("no body wrapper");
+        expect(bodyWrapper.getAttribute("aria-hidden")).toBe("false");
+
+        await user.click(chevron);
+
+        // After collapse: aria-expanded flips, body wrapper aria-hides
+        // (the body remains in the DOM so motion can animate height
+        // from auto → 0 instead of unmounting; the user-observable
+        // change is the aria + visual height, not removal).
+        await waitFor(() => {
+            expect(chevron.getAttribute("aria-expanded")).toBe("false");
+        });
+        expect(bodyWrapper.getAttribute("aria-hidden")).toBe("true");
+        expect(
+            window.localStorage.getItem(
+                "effect-clue.my-hand-panel.collapsed.v1",
+            ),
+        ).toBe("1");
+    });
+});
+
+describe("MyHandPanel — banner integration", () => {
     const seedSessionWithDraft = (
         suggestedCards: ReadonlyArray<string>,
+        opts: { selfHand?: ReadonlyArray<string>; suggester?: string } = {},
     ): void => {
         const session = {
             version: 9,
@@ -170,7 +288,7 @@ describe("RefuteHint", () => {
             hands: [
                 {
                     player: "Alice",
-                    cards: [
+                    cards: opts.selfHand ?? [
                         "card-miss-scarlet",
                         "card-knife",
                         "card-library",
@@ -183,7 +301,7 @@ describe("RefuteHint", () => {
             hypotheses: [],
             pendingSuggestion: {
                 id: "draft-1",
-                suggester: "Bob",
+                suggester: opts.suggester ?? "Bob",
                 cards: suggestedCards,
                 nonRefutersDecided: false,
                 nonRefutersIsNobody: false,
@@ -204,108 +322,51 @@ describe("RefuteHint", () => {
         );
     };
 
-    test("hides when selfPlayerId is null", async () => {
-        // Default session has selfPlayerId === null.
-        window.history.replaceState(null, "", "/?view=suggest");
-        render(<Clue />, { wrapper: TestQueryClientProvider });
-        await waitFor(() => {
-            expect(
-                document.getElementById("prior-suggestions"),
-            ).toBeInTheDocument();
-        });
-        expect(document.querySelector("[data-refute-hint]")).toBeNull();
-    });
+    const findBanner = (): HTMLElement | null =>
+        document.querySelector("[data-tour-anchor~='my-cards-banner']");
 
-    test("'You can refute with' lists intersection cards", async () => {
+    test("banner mounts inside the My Cards section when intersection has matches", async () => {
         seedSessionWithDraft([
             "card-miss-scarlet", // in hand
             "card-rope", // not in hand
             "card-library", // in hand
         ]);
-        window.history.replaceState(null, "", "/?view=suggest");
         render(<Clue />, { wrapper: TestQueryClientProvider });
-        const hint = await waitFor(() => {
-            const found = document.querySelector("[data-refute-hint]");
-            if (!found) throw new Error("hint not rendered");
-            return found;
+        await waitForPanel();
+        await waitFor(() => {
+            const banner = findBanner();
+            if (!banner) throw new Error("banner not rendered");
+            expect(banner.textContent).toContain("Miss Scarlet");
         });
-        expect(hint.textContent).toContain("Miss Scarlet");
-        expect(hint.textContent).toContain("Library");
-        expect(hint.textContent).not.toContain("Rope");
     });
 
-    test("'You can't refute' shows when no cards intersect", async () => {
+    test("banner stays hidden on partial draft with empty intersection", async () => {
+        // Only 1 slot filled, not in hand. Banner should NOT show
+        // (per the partial-draft hide rule).
+        seedSessionWithDraft([
+            "card-col-mustard", // not in hand
+            null as unknown as string,
+            null as unknown as string,
+        ]);
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitForPanel();
+        // Give it a beat to settle.
+        await new Promise(r => setTimeout(r, 50));
+        expect(findBanner()).toBeNull();
+    });
+
+    test("'You can't refute' shows on a complete draft with no intersection", async () => {
         seedSessionWithDraft([
             "card-col-mustard", // not in hand
             "card-rope", // not in hand
             "card-kitchen", // not in hand
         ]);
-        window.history.replaceState(null, "", "/?view=suggest");
         render(<Clue />, { wrapper: TestQueryClientProvider });
-        const hint = await waitFor(() => {
-            const found = document.querySelector("[data-refute-hint]");
-            if (!found) throw new Error("hint not rendered");
-            return found;
-        });
-        expect(hint.textContent).toContain("refuteHint.cannotRefute");
-    });
-});
-
-describe("MyHandPanel — collapse toggle", () => {
-    test("toggle hides the cards and persists to localStorage", async () => {
-        const session = {
-            version: 9,
-            setup: {
-                players: ["Alice", "Bob"],
-                categories: [
-                    {
-                        id: "category-suspects",
-                        name: "Suspect",
-                        cards: [
-                            { id: "card-miss-scarlet", name: "Miss Scarlet" },
-                        ],
-                    },
-                ],
-            },
-            hands: [
-                { player: "Alice", cards: ["card-miss-scarlet"] },
-            ],
-            handSizes: [],
-            suggestions: [],
-            accusations: [],
-            hypotheses: [],
-            pendingSuggestion: null,
-            selfPlayerId: "Alice",
-            firstDealtPlayerId: null,
-        };
-        window.localStorage.setItem(
-            "effect-clue.session.v9",
-            JSON.stringify(session),
-        );
-        const user = userEvent.setup();
-        render(<Clue />, { wrapper: TestQueryClientProvider });
-        const panel = await waitFor(() => {
-            const found = findMyHand();
-            if (!found) throw new Error("panel not mounted");
-            return found;
-        });
-
-        // Cards visible by default.
-        expect(panel.textContent).toContain("Miss Scarlet");
-
-        const hideBtn = Array.from(panel.querySelectorAll("button")).find(
-            b => b.textContent === "myHand.toggleHide",
-        );
-        if (!hideBtn) throw new Error("no hide button");
-        await user.click(hideBtn);
-
+        await waitForPanel();
         await waitFor(() => {
-            expect(panel.textContent).not.toContain("Miss Scarlet");
+            const banner = findBanner();
+            if (!banner) throw new Error("banner not rendered");
+            expect(banner.getAttribute("data-banner-kind")).toBe("cannotRefute");
         });
-        expect(
-            window.localStorage.getItem(
-                "effect-clue.my-hand-panel.collapsed.v1",
-            ),
-        ).toBe("1");
     });
 });

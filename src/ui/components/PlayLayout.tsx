@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { T_STANDARD, useReducedTransition } from "../motion";
 import { Checklist } from "./Checklist";
+import { MyCardsFAB } from "./MyCardsFAB";
 import { MyHandPanel } from "./MyHandPanel";
 import { SuggestionLogPanel } from "./SuggestionLogPanel";
 
@@ -68,7 +69,12 @@ export function PlayLayout({ mode }: { readonly mode: PlayMode }) {
     const isDesktop = useIsDesktop();
     return (
         <div className="flex min-w-0 flex-col gap-3">
-            <MyHandPanel />
+            {/* Project 3: desktop renders MyHandPanel inline; mobile
+                renders MyCardsFAB instead, a fixed bottom-left FAB
+                that opens a fixed bottom panel above the BottomNav.
+                Both surfaces share `MyHandPanelBody` so the content
+                and null states match across viewports. */}
+            {isDesktop ? <MyHandPanel /> : <MyCardsFAB />}
             {isDesktop ? (
                 <DesktopPlayLayout />
             ) : (
