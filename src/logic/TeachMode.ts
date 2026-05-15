@@ -226,6 +226,39 @@ export const seedFromKnowledge = (knowledge: Knowledge): UserDeductionMap => {
 };
 
 /**
+ * Seed `userDeductions` with the "free" facts derived from the user's
+ * own hand: for every card the user holds, Y on their cell + N on
+ * every other player's column AND the case file. This is the natural
+ * starting state when the user enables teach-mode from the setup
+ * wizard — they don't need to mark these cells by hand because they
+ * literally have the cards in their hand at the physical table.
+ *
+ * Returns an empty map when `selfPlayerId === null` (the user skipped
+ * the identity step) or the user has no recorded hand yet.
+ */
+export const seedFromOwnHand = (
+    knownCards: ReadonlyArray<{ readonly player: Player; readonly card: import("./GameObjects").Card }>,
+    selfPlayerId: Player | null,
+    allPlayers: ReadonlyArray<Player>,
+): UserDeductionMap => {
+    if (selfPlayerId === null) return emptyUserDeductions;
+    let m: UserDeductionMap = emptyUserDeductions;
+    for (const kc of knownCards) {
+        if (kc.player !== selfPlayerId) continue;
+        // Y on the user's own column for this card.
+        m = HashMap.set(m, Cell(PlayerOwner(selfPlayerId), kc.card), "Y");
+        // N on every other player's column for the same card.
+        for (const p of allPlayers) {
+            if (p === selfPlayerId) continue;
+            m = HashMap.set(m, Cell(PlayerOwner(p), kc.card), "N");
+        }
+        // N on the case file for the same card.
+        m = HashMap.set(m, Cell(CaseFileOwner(), kc.card), "N");
+    }
+    return m;
+};
+
+/**
  * Combine `deductionResult` and a `UserDeductionMap` into a tally of
  * verdict counts. Used by the Check feature's vague summary banner
  * (does not need per-cell detail — just the buckets).

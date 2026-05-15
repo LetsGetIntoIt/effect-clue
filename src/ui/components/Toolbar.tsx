@@ -278,6 +278,20 @@ export function Toolbar() {
                             ),
                         tourAnchor: "menu-item-teach-mode",
                     },
+                    // Cross-platform Check affordance — the Toolbar
+                    // top-level button covers desktop, but a menu item
+                    // is the primary entry point on mobile (the
+                    // Toolbar isn't rendered below 800px) and a
+                    // secondary discoverable path on desktop.
+                    ...(state.teachMode && state.uiMode !== "setup"
+                        ? [
+                              {
+                                  label: tTeach("toolbarCheckLabel"),
+                                  onClick: onCheckClick,
+                                  tourAnchor: "menu-item-teach-mode-check",
+                              } as const,
+                          ]
+                        : []),
                     {
                         label: tOnboarding("takeTour"),
                         onClick: () =>

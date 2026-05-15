@@ -4,7 +4,10 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { HashMap, Result } from "effect";
 import { useTranslations } from "next-intl";
 import { useCallback, useRef } from "react";
-import { seedFromKnowledge } from "../../logic/TeachMode";
+import {
+    seedFromKnowledge,
+    seedFromOwnHand,
+} from "../../logic/TeachMode";
 import {
     teachModeDisabled,
     teachModeEnabled,
@@ -60,7 +63,33 @@ export function useTeachModeToggle(): (
                 return;
             }
 
-            // Turning ON — always prompt.
+            // Setup wizard: skip the prompt — auto-seed the "free"
+            // facts derived from the user's own hand (Y on their
+            // column for each card they hold, N on every other
+            // player + the case file for the same cards). The user
+            // gets these for free without manual marking; they
+            // physically have the cards in their hand at the
+            // table. This matches user intuition during setup,
+            // where there's no in-progress work to preserve and a
+            // three-option prompt would be friction.
+            if (source === "wizard") {
+                const seed = seedFromOwnHand(
+                    state.knownCards,
+                    state.selfPlayerId,
+                    state.setup.players,
+                );
+                dispatch({
+                    type: "replaceUserDeductions",
+                    userDeductions: seed,
+                });
+                dispatch({ type: "setTeachMode", enabled: true });
+                teachModeEnabled({ source });
+                return;
+            }
+
+            // Mid-game (overflowMenu / shareImport) — prompt the
+            // user. Preserves any prior teach-mode marks the user
+            // worked through before toggling off.
             nextIdRef.current += 1;
             const id = `${PROMPT_ID_PREFIX}-${nextIdRef.current}`;
             const hasMarks = HashMap.size(state.userDeductions) > 0;
@@ -123,7 +152,17 @@ export function useTeachModeToggle(): (
                 ),
             });
         },
-        [dispatch, derived.deductionResult, push, pop, state.userDeductions, t],
+        [
+            dispatch,
+            derived.deductionResult,
+            push,
+            pop,
+            state.userDeductions,
+            state.knownCards,
+            state.selfPlayerId,
+            state.setup.players,
+            t,
+        ],
     );
 }
 

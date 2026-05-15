@@ -23,6 +23,9 @@ import { OverflowMenu } from "./OverflowMenu";
 import { PlayCTAButton } from "./PlayCTAButton";
 import { useToolbarActions } from "./Toolbar";
 import { useTeachModeToggle } from "./useTeachModeToggle";
+import { useTeachModeCheck } from "./TeachModeCheckContext";
+import { tallyVerdicts } from "../../logic/TeachMode";
+import { teachModeCheckUsed } from "../../analytics/events";
 
 const TRIGGER_MENU: InstallPromptTrigger = "menu";
 
@@ -231,9 +234,28 @@ function BottomOverflowMenu({
     const tShare = useTranslations("share");
     const tTeach = useTranslations("teachMode");
     const hasKeyboard = useHasKeyboard();
-    const { state, canUndo, canRedo, undo, redo } = useClue();
+    const { state, derived, canUndo, canRedo, undo, redo } = useClue();
     const { onNewGame } = useToolbarActions();
     const requestTeachMode = useTeachModeToggle();
+    const { openBanner } = useTeachModeCheck();
+    const onCheckClick = () => {
+        const tally = tallyVerdicts(
+            state.setup,
+            state.userDeductions,
+            derived.deductionResult,
+            derived.intrinsicContradictions,
+        );
+        teachModeCheckUsed({
+            revealLevel: "vague",
+            verifiable: tally.verifiable,
+            falsifiable: tally.falsifiable,
+            plausible: tally.plausible,
+            missed: tally.missed,
+            inconsistent: tally.inconsistent,
+            evidenceContradiction: tally.evidenceContradiction,
+        });
+        openBanner();
+    };
     const { restartTourForScreen, currentStep } = useTour();
     // Force this menu open while the "Everything else lives here" tour
     // step is active so the user can see the items without clicking ⋯.
@@ -358,6 +380,20 @@ function BottomOverflowMenu({
                             ),
                         tourAnchor: "menu-item-teach-mode",
                     },
+                    // Cross-platform Check affordance — mobile's
+                    // primary entry point (the desktop Toolbar's
+                    // top-level button isn't rendered below 800px).
+                    // Visible only when teach-mode is on and the user
+                    // is in play mode.
+                    ...(state.teachMode && state.uiMode !== "setup"
+                        ? [
+                              {
+                                  label: tTeach("toolbarCheckLabel"),
+                                  onClick: onCheckClick,
+                                  tourAnchor: "menu-item-teach-mode-check",
+                              } as const,
+                          ]
+                        : []),
                     {
                         label: tOnboarding("takeTour"),
                         onClick: () =>
