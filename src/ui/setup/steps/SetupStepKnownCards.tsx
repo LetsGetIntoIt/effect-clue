@@ -104,6 +104,19 @@ export function SetupStepKnownCards({
     }, [activeIndex]);
     const transition = useReducedTransition(T_STANDARD, { fadeMs: 120 });
 
+    // `overflow-x: clip` on the slide container is required mid-slide
+    // (the off-screen pane's `translateX(±100%)` would otherwise extend
+    // `body.scrollWidth` and flash a horizontal scrollbar). But ANY
+    // non-`visible` overflow makes the element the nearest scrolling
+    // ancestor for sticky positioning of descendants — and the table's
+    // sticky thead would pin to the slide container instead of the
+    // viewport, dropping behind the body cells. Same toggle pattern as
+    // `MobilePlayLayout` in `PlayLayout.tsx`: clip ONLY while the slide
+    // is in flight, otherwise drop the clip so the grid's sticky thead
+    // resolves to `body` (the page's scroll container).
+    const [isSliding, setIsSliding] = useState(false);
+    const animationClipClass = isSliding ? " overflow-x-clip" : "";
+
     const otherKnownCount = clue.knownCards.filter(
         kc => kc.player !== selfPlayerId,
     ).length;
@@ -190,8 +203,14 @@ export function SetupStepKnownCards({
                         <ChevronRightIcon size={16} />
                     </button>
                 </div>
-                <div className="relative grid grid-cols-[minmax(0,1fr)] overflow-x-clip [grid-template-areas:'stack']">
-                    <AnimatePresence custom={slideDirection} initial={false}>
+                <div
+                    className={`relative grid grid-cols-[minmax(0,1fr)] [grid-template-areas:'stack']${animationClipClass}`}
+                >
+                    <AnimatePresence
+                        custom={slideDirection}
+                        initial={false}
+                        onExitComplete={() => setIsSliding(false)}
+                    >
                         <motion.div
                             key={String(currentPlayer)}
                             custom={slideDirection}
@@ -200,6 +219,7 @@ export function SetupStepKnownCards({
                             animate={VARIANT_ANIMATE}
                             exit={VARIANT_EXIT}
                             transition={transition}
+                            onAnimationStart={() => setIsSliding(true)}
                             className="[grid-area:stack] min-w-0"
                         >
                             <CardSelectionGrid

@@ -215,7 +215,7 @@ function CardPackEditorModal({
                     {t("addCategory")}
                 </button>
             </div>
-            <div className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-border/30 bg-panel px-5 py-3">
+            <div className="sticky bottom-0 z-[40] flex flex-wrap items-center justify-end gap-2 border-t border-border/30 bg-panel px-5 py-3">
                 <button
                     type="button"
                     className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-control hover:bg-hover"

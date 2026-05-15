@@ -202,7 +202,13 @@ export function SetupStepPanel({
                     </div>
                 </div>
                 {isComplete && (
-                    <span className="hidden shrink-0 text-[1rem] text-muted [@media(min-width:520px)]:inline">
+                    // `truncate` ellipsizes when the summary is too
+                    // long for the available width (10 players list
+                    // a 80-char string that used to push the title
+                    // into a second line). `min-w-0 max-w-[60%]`
+                    // caps the summary's share so the title side
+                    // always has half the row to itself.
+                    <span className="hidden min-w-0 max-w-[60%] truncate text-[1rem] text-muted [@media(min-width:520px)]:inline-block">
                         {summary}
                     </span>
                 )}

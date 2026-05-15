@@ -190,7 +190,21 @@ export function CardSelectionGrid({
                 <thead className={STICKY_THEAD_TOP}>
                     <tr>
                         <th
-                            className={`border-b border-border bg-panel ${STICKY_FIRST_COL_HEADER}`}
+                            // `border-b` is replaced with an inset
+                            // box-shadow because `border-collapse:
+                            // collapse` shares the bottom border with
+                            // the next row's top border — the merged
+                            // line sits at the seam between thead and
+                            // tbody. As tbody rows scroll under the
+                            // sticky thead, the seam can flash the
+                            // body row's bg (especially the maroon
+                            // `bg-category-header` strip) at sub-pixel
+                            // boundaries. Painting the bottom edge as
+                            // an inset shadow inside the cell's
+                            // bg-panel layer keeps it pinned with the
+                            // sticky cell instead of at the merge
+                            // line, eliminating the bleed.
+                            className={`bg-panel shadow-[inset_0_-1px_0_var(--color-border)] ${STICKY_FIRST_COL_HEADER}`}
                         />
                         {players.map(player => {
                             const owned =
@@ -200,7 +214,7 @@ export function CardSelectionGrid({
                             return (
                                 <th
                                     key={String(player)}
-                                    className={`border-b border-l border-border bg-panel px-4 py-2 text-center align-bottom ${COLUMN_HEADER_STACK}`}
+                                    className={`border-l border-border bg-panel px-4 py-2 text-center align-bottom shadow-[inset_0_-1px_0_var(--color-border)] ${COLUMN_HEADER_STACK}`}
                                 >
                                     <div className="truncate font-semibold">
                                         {String(player)}

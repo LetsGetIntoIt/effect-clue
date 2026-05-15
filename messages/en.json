@@ -44,8 +44,7 @@
         "redoAria": "Redo",
         "redoTitle": "Redo (⌘⇧Z / Ctrl+Shift+Z)",
         "newGame": "New game{shortcut}",
-        "newGameConfirm": "Start a new game? This will clear all players, cards, known hands, and suggestions from your current game.",
-        "startNewGame": "Start new game"
+        "newGameConfirm": "Start a new game? This will clear all players, cards, known hands, and suggestions from your current game."
     },
     "history": {
         "undoTooltip": "Undo: {description}",
@@ -129,9 +128,7 @@
         "heading": "Set up your game",
         "subheading": "Walk through each step in order. You can come back to anything by clicking it.",
         "next": "Next",
-        "skip": "Skip",
         "done": "Done",
-        "newGame": "Start over",
         "cardPack": {
             "title": "Pick a card pack",
             "helperText": "The deck decides what cards exist. You can save your own custom packs after editing.",

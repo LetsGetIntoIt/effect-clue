@@ -116,23 +116,17 @@ const waitForWizard = async (): Promise<HTMLElement> => {
     ) as HTMLElement;
 };
 
-// The Next / Skip / Start playing buttons live in the page-fixed
-// sticky CTA bar, siblings of the wizard shell. Helpers query at
-// document scope.
+// The Next / Start playing button lives in the page-fixed sticky CTA
+// bar, sibling of the wizard shell. Next now handles both required-
+// step advance and optional-step "accept defaults" (the previous Skip
+// button was removed since its semantics overlapped on every
+// non-blocked step).
 const stickyNext = (): HTMLButtonElement => {
     const buttons = Array.from(
         document.querySelectorAll<HTMLButtonElement>("button"),
     );
     const found = buttons.find(b => b.textContent === "setupWizard.next");
     if (!found) throw new Error("Next button not found in sticky bar");
-    return found;
-};
-const stickySkip = (): HTMLButtonElement => {
-    const buttons = Array.from(
-        document.querySelectorAll<HTMLButtonElement>("button"),
-    );
-    const found = buttons.find(b => b.textContent === "setupWizard.skip");
-    if (!found) throw new Error("Skip button not found in sticky bar");
     return found;
 };
 
@@ -189,29 +183,23 @@ describe("SetupWizard — accordion shell", () => {
         });
     });
 
-    test("Skip button is visible on every step (including required steps)", async () => {
-        render(<Clue />, { wrapper: TestQueryClientProvider });
-        await waitForWizard();
-        // Skip is in the sticky bar; with default Classic + 4 players
-        // valid, Skip on cardPack is enabled (acts as "accept defaults").
-        const skip = stickySkip();
-        expect(skip).not.toBeDisabled();
-    });
-
     test("first-time flow lands the user on the wizard's last-step 'Start playing' CTA — no global Play CTA visible mid-flow", async () => {
         const user = userEvent.setup();
         render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForWizard();
-        // Walk every step. The wizard's `inviteOtherPlayers` step
-        // (last in the visible order with selfPlayerId null) carries
-        // the final `data-tour-anchor="setup-start-playing"` CTA;
-        // that's the only path out of first-time setup. The global
-        // PlayCTAButton stays hidden during this walkthrough — the
-        // walkthrough-done flag (in GameLifecycleState) hasn't been
-        // set yet, so the chrome's CTA is gated off.
+        // Walk every step via Next (which now handles optional steps
+        // too — the prior Skip button was removed because its semantic
+        // collapsed into Next on every non-blocked step). The wizard's
+        // `inviteOtherPlayers` step (last in the visible order with
+        // selfPlayerId null) carries the final
+        // `data-tour-anchor="setup-start-playing"` CTA; that's the
+        // only path out of first-time setup. The global PlayCTAButton
+        // stays hidden during this walkthrough — the walkthrough-done
+        // flag (in GameLifecycleState) hasn't been set yet, so the
+        // chrome's CTA is gated off.
         await user.click(stickyNext()); // cardPack → players
         await user.click(stickyNext()); // players → identity
-        await user.click(stickySkip()); // identity → handSizes
+        await user.click(stickyNext()); // identity → handSizes
         await user.click(stickyNext()); // handSizes → knownCards
         await user.click(stickyNext()); // knownCards → inviteOtherPlayers
         // No global PlayCTA at any point in the walkthrough.
@@ -233,10 +221,11 @@ describe("SetupWizard — accordion shell", () => {
         render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForWizard();
 
-        // Advance cardPack → players → identity, then skip.
+        // Advance cardPack → players → identity, then through
+        // identity without selecting a pill.
         await user.click(stickyNext()); // cardPack → players
         await user.click(stickyNext()); // players → identity
-        await user.click(stickySkip()); // identity skipped
+        await user.click(stickyNext()); // identity → handSizes
 
         // Wizard's `setup` localStorage doesn't carry selfPlayerId;
         // the persistence v9→v10 lift defaults it to null. Verify the
