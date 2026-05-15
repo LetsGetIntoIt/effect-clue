@@ -128,7 +128,6 @@
     "setupWizard": {
         "heading": "Set up your game",
         "subheading": "Walk through each step in order. You can come back to anything by clicking it.",
-        "stepCounter": "Step {step} of {total}",
         "next": "Next",
         "skip": "Skip",
         "done": "Done",

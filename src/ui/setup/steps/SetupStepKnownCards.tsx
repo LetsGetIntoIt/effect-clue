@@ -16,7 +16,6 @@ interface Props {
     readonly state: StepPanelState;
     readonly wizardMode: WizardMode;
     readonly stepNumber: number;
-    readonly totalSteps: number;
     readonly onClickToEdit: () => void;
     readonly registerPanelEl?: (
         stepId: WizardStepId,
@@ -46,7 +45,6 @@ export function SetupStepKnownCards({
     state,
     wizardMode,
     stepNumber,
-    totalSteps,
     onClickToEdit,
     registerPanelEl,
     footer,
@@ -82,7 +80,6 @@ export function SetupStepKnownCards({
                 state={state}
                 wizardMode={wizardMode}
                 stepNumber={stepNumber}
-                totalSteps={totalSteps}
                 title={t("title")}
                 summary={t("summaryEmpty")}
                 validation={VALID}
@@ -105,7 +102,6 @@ export function SetupStepKnownCards({
             state={state}
             wizardMode={wizardMode}
             stepNumber={stepNumber}
-            totalSteps={totalSteps}
             title={t("title")}
             summary={summary}
             validation={VALID}

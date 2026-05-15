@@ -1,8 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { T_STANDARD, useReducedTransition } from "../motion";
 import { AlertIcon, CheckIcon } from "../components/Icons";
 import type { StepValidation, WizardStepId } from "./wizardSteps";
@@ -29,7 +28,6 @@ interface Props {
     readonly state: StepPanelState;
     readonly wizardMode: WizardMode;
     readonly stepNumber: number;
-    readonly totalSteps: number;
     readonly title: string;
     readonly summary: ReactNode;
     readonly children: ReactNode;
@@ -91,7 +89,6 @@ export function SetupStepPanel({
     state,
     wizardMode,
     stepNumber,
-    totalSteps,
     title,
     summary,
     children,
@@ -100,8 +97,21 @@ export function SetupStepPanel({
     registerPanelEl,
     footer,
 }: Props) {
-    const t = useTranslations("setupWizard");
     const transition = useReducedTransition(T_STANDARD, { fadeMs: 120 });
+    // `overflow-hidden` is required during the height: 0 ↔ auto reveal
+    // (otherwise the panel's content would briefly leak out of the
+    // animated wrapper). But at rest, that same `overflow-hidden`
+    // becomes the nearest scrolling-ancestor for `position: sticky`
+    // descendants — and breaks them, because the wrapper itself
+    // doesn't scroll. The `CardSelectionGrid`'s sticky thead and
+    // first column would pin to the wrapper instead of the page.
+    //
+    // Toggle the overflow class around the animation. While the body
+    // is mid-transition we clip; once Framer fires
+    // `onAnimationComplete`, drop the clip so sticky resolves to body
+    // (the page's scroll container). On exit the component unmounts,
+    // so the cleanup is implicit.
+    const [bodyAnimating, setBodyAnimating] = useState(true);
 
     // Ref-callback that lets the wizard look up this panel's DOM
     // node for smooth-scroll on advance. Cleans up on unmount via
@@ -179,17 +189,11 @@ export function SetupStepPanel({
                         <h3 className="m-0 font-sans! text-[1.125rem] font-bold uppercase tracking-wide text-accent leading-tight">
                             {title}
                         </h3>
-                        <span className="text-[1rem] uppercase tracking-wide text-muted">
-                            {t("stepCounter", {
-                                step: stepNumber,
-                                total: totalSteps,
-                            })}
-                        </span>
                         {/* Narrow-viewport summary: stacks below the
-                          * step counter when there isn't horizontal
-                          * room for the title + side-summary combo.
-                          * Hidden on wider screens, where the right-
-                          * aligned span below takes over. */}
+                          * title when there isn't horizontal room for
+                          * the title + side-summary combo. Hidden on
+                          * wider screens, where the right-aligned
+                          * span below takes over. */}
                         {isComplete && (
                             <span className="mt-0.5 text-[1rem] text-muted [@media(min-width:520px)]:hidden">
                                 {summary}
@@ -204,7 +208,10 @@ export function SetupStepPanel({
                 )}
             </button>
 
-            <AnimatePresence initial={false}>
+            <AnimatePresence
+                initial={false}
+                onExitComplete={() => setBodyAnimating(true)}
+            >
                 {isEditing && (
                     <motion.div
                         key="body"
@@ -213,7 +220,9 @@ export function SetupStepPanel({
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={transition}
-                        className="overflow-hidden"
+                        onAnimationStart={() => setBodyAnimating(true)}
+                        onAnimationComplete={() => setBodyAnimating(false)}
+                        className={bodyAnimating ? "overflow-hidden" : ""}
                     >
                         <div className="border-t border-border/30 px-4 py-4">
                             <div className="flex flex-col gap-4">

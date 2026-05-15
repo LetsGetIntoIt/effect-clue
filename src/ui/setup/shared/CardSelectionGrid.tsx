@@ -49,6 +49,38 @@ interface Props {
 const CELL_INTERACTIVE_RING =
     "cursor-pointer hover:not-focus-within:ring-2 hover:not-focus-within:ring-accent/30 focus-within:ring-[3px] focus-within:ring-accent focus-within:outline-none";
 
+// Sticky positioning for the grid, mirroring `Checklist.tsx`'s token
+// ladder so the visual language of "headers stay visible during scroll"
+// reads the same in setup as in play. Z-index variables are defined in
+// `app/globals.css`:
+//   - --z-checklist-sticky-column (30): tbody first column (card
+//     category-header + card name cells)
+//   - --z-checklist-sticky-top-left (36): the top-left corner cell —
+//     sticky in both axes, must cover the sticky-left column on
+//     horizontal scroll
+//   - --z-checklist-sticky-header (39): thead non-corner cells —
+//     covers the body's sticky-left column on horizontal scroll
+//
+// `top` resolves to "below the fixed page header (and contradiction
+// banner if it's visible)" via the same CSS variables Clue.tsx
+// publishes for the play-mode Checklist. When the wizard is the only
+// thing on screen, those variables fall back to 0 so the thead pins
+// to viewport top.
+const STICKY_THEAD_TOP =
+    "sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))]";
+const STICKY_FIRST_COL =
+    "sticky left-0 z-[var(--z-checklist-sticky-column)]";
+const STICKY_FIRST_COL_HEADER =
+    "sticky left-0 z-[var(--z-checklist-sticky-top-left)]";
+// `relative` so the non-corner thead cells form their own stacking
+// context above the body's sticky-left column. Without this, the
+// sticky-left tbody cells (z-[--z-checklist-sticky-column] = 30)
+// would render OVER non-positioned thead cells during horizontal
+// scroll — the player-name column headers would slide under the
+// card-name column. Matches `COLUMN_HEADER_STACK` in `Checklist.tsx`.
+const COLUMN_HEADER_STACK =
+    "relative z-[var(--z-checklist-sticky-header)]";
+
 export function CardSelectionGrid({
     players,
     firstCellTourAnchor,
@@ -149,11 +181,13 @@ export function CardSelectionGrid({
     }
 
     return (
-        <div className="flex justify-center overflow-x-auto">
+        <div className="flex justify-center">
             <table className="border-collapse rounded border border-border/40 text-[1rem]">
-                <thead>
+                <thead className={STICKY_THEAD_TOP}>
                     <tr>
-                        <th className="border-b border-border bg-panel" />
+                        <th
+                            className={`border-b border-border bg-panel ${STICKY_FIRST_COL_HEADER}`}
+                        />
                         {players.map(player => {
                             const owned =
                                 ownedCountByPlayer.get(player) ?? 0;
@@ -162,7 +196,7 @@ export function CardSelectionGrid({
                             return (
                                 <th
                                     key={String(player)}
-                                    className="border-b border-l border-border px-4 py-2 text-center align-bottom"
+                                    className={`border-b border-l border-border bg-panel px-4 py-2 text-center align-bottom ${COLUMN_HEADER_STACK}`}
                                 >
                                     <div className="truncate font-semibold">
                                         {String(player)}
@@ -182,16 +216,27 @@ export function CardSelectionGrid({
                     {setup.categories.flatMap(category => {
                         const rows: React.ReactNode[] = [];
                         rows.push(
+                            // Category-header row mirrors the play-mode
+                            // Checklist: a sticky-left `<th>` carrying the
+                            // label, plus a spanning `<td>` filler. Both
+                            // cells paint the maroon `bg-category-header`
+                            // tone so the strip reads as one continuous row
+                            // even when the table scrolls horizontally and
+                            // the sticky-left `<th>` floats above the
+                            // filler.
                             <tr
                                 key={`h-${String(category.id)}`}
                                 className="bg-category-header"
                             >
                                 <th
-                                    colSpan={players.length + 1}
-                                    className="border-b border-border px-2 py-1 text-left text-[1rem] font-semibold uppercase tracking-[0.05em] text-white"
+                                    className={`border-b border-border bg-category-header px-2 py-1 text-left text-[1rem] font-semibold uppercase tracking-[0.05em] text-white ${STICKY_FIRST_COL}`}
                                 >
                                     {category.name}
                                 </th>
+                                <td
+                                    colSpan={players.length}
+                                    className="border-b border-border bg-category-header"
+                                />
                             </tr>,
                         );
                         for (const entry of category.cards) {
@@ -199,7 +244,7 @@ export function CardSelectionGrid({
                                 <tr key={String(entry.id)}>
                                     <th
                                         scope="row"
-                                        className="truncate border-b border-border bg-panel px-3 py-1 text-left font-normal"
+                                        className={`truncate border-b border-border bg-panel px-3 py-1 text-left font-normal ${STICKY_FIRST_COL}`}
                                     >
                                         {entry.name}
                                     </th>

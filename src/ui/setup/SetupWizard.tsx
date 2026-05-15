@@ -750,7 +750,6 @@ export function SetupWizard() {
             >
                 {steps.map((id, idx) => {
                     const stepNumber = idx + 1;
-                    const totalSteps = steps.length;
                     const panelState = stepStateFor(id);
                     if (id === "cardPack") {
                         return (
@@ -759,7 +758,6 @@ export function SetupWizard() {
                                 state={panelState}
                                 wizardMode={wizardMode}
                                 stepNumber={stepNumber}
-                                totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
                                 registerPanelEl={registerPanelEl}
                                 footer={stickyFooter}
@@ -773,7 +771,6 @@ export function SetupWizard() {
                                 state={panelState}
                                 wizardMode={wizardMode}
                                 stepNumber={stepNumber}
-                                totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
                                 registerPanelEl={registerPanelEl}
                                 footer={stickyFooter}
@@ -787,7 +784,6 @@ export function SetupWizard() {
                                 state={panelState}
                                 wizardMode={wizardMode}
                                 stepNumber={stepNumber}
-                                totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
                                 registerBeforeSkip={registerBeforeSkip}
                                 registerPanelEl={registerPanelEl}
@@ -802,7 +798,6 @@ export function SetupWizard() {
                                 state={panelState}
                                 wizardMode={wizardMode}
                                 stepNumber={stepNumber}
-                                totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
                                 registerBeforeAdvance={
                                     registerBeforeAdvance
@@ -823,7 +818,6 @@ export function SetupWizard() {
                                 state={panelState}
                                 wizardMode={wizardMode}
                                 stepNumber={stepNumber}
-                                totalSteps={totalSteps}
                                 selfPlayerId={state.selfPlayerId}
                                 onClickToEdit={() => reEnter(id)}
                                 registerPanelEl={registerPanelEl}
@@ -838,7 +832,6 @@ export function SetupWizard() {
                                 state={panelState}
                                 wizardMode={wizardMode}
                                 stepNumber={stepNumber}
-                                totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
                                 registerPanelEl={registerPanelEl}
                                 footer={stickyFooter}
@@ -852,7 +845,6 @@ export function SetupWizard() {
                                 state={panelState}
                                 wizardMode={wizardMode}
                                 stepNumber={stepNumber}
-                                totalSteps={totalSteps}
                                 onClickToEdit={() => reEnter(id)}
                                 registerPanelEl={registerPanelEl}
                                 footer={stickyFooter}

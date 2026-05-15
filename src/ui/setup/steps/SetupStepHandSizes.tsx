@@ -22,7 +22,6 @@ interface Props {
     readonly state: StepPanelState;
     readonly wizardMode: WizardMode;
     readonly stepNumber: number;
-    readonly totalSteps: number;
     readonly onClickToEdit: () => void;
     /**
      * Register a callback the wizard fires before transitioning
@@ -62,7 +61,6 @@ export function SetupStepHandSizes({
     state,
     wizardMode,
     stepNumber,
-    totalSteps,
     onClickToEdit,
     registerBeforeAdvance,
     registerPanelEl,
@@ -157,7 +155,6 @@ export function SetupStepHandSizes({
             state={state}
             wizardMode={wizardMode}
             stepNumber={stepNumber}
-            totalSteps={totalSteps}
             title={t("title")}
             summary={summary}
             validation={validation}
