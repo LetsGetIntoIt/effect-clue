@@ -77,6 +77,8 @@ export function useTeachModeToggle(): (
                     state.knownCards,
                     state.selfPlayerId,
                     state.setup.players,
+                    state.handSizes,
+                    state.setup.cardSet,
                 );
                 dispatch({
                     type: "replaceUserDeductions",
@@ -161,6 +163,8 @@ export function useTeachModeToggle(): (
             state.knownCards,
             state.selfPlayerId,
             state.setup.players,
+            state.setup.cardSet,
+            state.handSizes,
             t,
         ],
     );

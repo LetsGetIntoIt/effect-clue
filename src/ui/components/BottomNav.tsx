@@ -352,7 +352,7 @@ function BottomOverflowMenu({
                         tourAnchor: "menu-item-transfer-device",
                     },
                     { type: "divider" },
-                    // Group 2: Account & content
+                    // Group 2: Account
                     {
                         label: accountLabel,
                         leadingIcon: (
@@ -363,11 +363,13 @@ function BottomOverflowMenu({
                         ),
                         onClick: onAccountClick,
                     },
-                    {
-                        label: tAccount("menuItemMyCardPacks"),
-                        onClick: () => openAccountModal(),
-                        tourAnchor: "menu-item-my-card-packs",
-                    },
+                    { type: "divider" },
+                    // Group 3: Teach-me mode + Check my work — own
+                    // section so the toggle's "(on)" indicator and the
+                    // Check shortcut sit together, distinct from the
+                    // surrounding chrome. Mobile-primary surface for
+                    // Check (the Toolbar's top-level button is
+                    // desktop-only).
                     {
                         label: state.teachMode
                             ? tTeach("menuLabelActive")
@@ -380,11 +382,6 @@ function BottomOverflowMenu({
                             ),
                         tourAnchor: "menu-item-teach-mode",
                     },
-                    // Cross-platform Check affordance — mobile's
-                    // primary entry point (the desktop Toolbar's
-                    // top-level button isn't rendered below 800px).
-                    // Visible only when teach-mode is on and the user
-                    // is in play mode.
                     ...(state.teachMode && state.uiMode !== "setup"
                         ? [
                               {
@@ -394,6 +391,13 @@ function BottomOverflowMenu({
                               } as const,
                           ]
                         : []),
+                    { type: "divider" },
+                    // Group 4: Content + onboarding
+                    {
+                        label: tAccount("menuItemMyCardPacks"),
+                        onClick: () => openAccountModal(),
+                        tourAnchor: "menu-item-my-card-packs",
+                    },
                     {
                         label: tOnboarding("takeTour"),
                         onClick: () =>

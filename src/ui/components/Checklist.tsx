@@ -2548,21 +2548,28 @@ function AnimatedCellGlyph({
 const CELL_BASE =
     "border-r border-b border-border text-center font-semibold relative overflow-hidden align-top";
 
-// Teach-mode reveal verdict discriminators + matching outline classes.
-// Hoisted so the `i18next/no-literal-string` lint rule reads them as
-// code identifiers, not UI text.
+// Teach-mode reveal verdict discriminators. Outline classes mirror
+// `CELL_HIGHLIGHTED`'s structure (3px dashed + the
+// `--z-checklist-cell-hover` z-index so the ring paints above
+// neighbouring cells, and `!rounded-[2px]` to match the corner
+// radius), only swapping the color to communicate the verdict. Reuses
+// the existing related-cell highlight vocabulary so the visual
+// treatment is consistent between teach-mode reveal and the popover's
+// chain highlight.
 const VERDICT_FALSIFIABLE = "falsifiable" as const;
 const VERDICT_INCONSISTENT = "inconsistent" as const;
 const VERDICT_MISSED = "missed" as const;
 const VERDICT_PLAUSIBLE = "plausible" as const;
  
-const REVEAL_CLASS_FALSIFIABLE = " !outline !outline-[3px] !outline-dashed !outline-no !outline-offset-2";
+const REVEAL_CLASS_BASE = " z-[var(--z-checklist-cell-hover)] !outline !outline-[3px] !outline-dashed !rounded-[2px]";
  
-const REVEAL_CLASS_INCONSISTENT = " !outline !outline-[3px] !outline-dashed !outline-danger !outline-offset-2";
+const REVEAL_CLASS_FALSIFIABLE = REVEAL_CLASS_BASE + " !outline-no";
  
-const REVEAL_CLASS_MISSED = " !outline !outline-[3px] !outline-dashed !outline-accent !outline-offset-2";
+const REVEAL_CLASS_INCONSISTENT = REVEAL_CLASS_BASE + " !outline-danger";
  
-const REVEAL_CLASS_PLAUSIBLE = " !outline !outline-[2px] !outline-dotted !outline-accent !outline-offset-2";
+const REVEAL_CLASS_MISSED = REVEAL_CLASS_BASE + " !outline-accent";
+ 
+const REVEAL_CLASS_PLAUSIBLE = REVEAL_CLASS_BASE + " !outline-accent";
 const STICKY_FIRST_COL =
     "sticky left-0 z-[var(--z-checklist-sticky-column)]";
 

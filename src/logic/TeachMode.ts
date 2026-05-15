@@ -227,24 +227,35 @@ export const seedFromKnowledge = (knowledge: Knowledge): UserDeductionMap => {
 
 /**
  * Seed `userDeductions` with the "free" facts derived from the user's
- * own hand: for every card the user holds, Y on their cell + N on
- * every other player's column AND the case file. This is the natural
- * starting state when the user enables teach-mode from the setup
- * wizard — they don't need to mark these cells by hand because they
- * literally have the cards in their hand at the physical table.
+ * own hand:
  *
- * Returns an empty map when `selfPlayerId === null` (the user skipped
- * the identity step) or the user has no recorded hand yet.
+ * - For every card the user holds: Y on their column, N on every
+ *   other player's column AND the case file. The user physically
+ *   has those cards at the table, so the solver gets them as
+ *   givens.
+ * - When the user has marked all cards in their hand (i.e.
+ *   `knownCards count == selfHandSize`), every OTHER card in the
+ *   deck gets N for the user's own column too — because their
+ *   hand is full, they cannot have any more cards. This is the
+ *   same "auto-fill column with red when count reaches Y" rule the
+ *   non-teach-mode deducer already enforces.
+ *
+ * Returns an empty map when `selfPlayerId === null` (the user
+ * skipped the identity step) or the user has no recorded hand yet.
  */
 export const seedFromOwnHand = (
     knownCards: ReadonlyArray<{ readonly player: Player; readonly card: import("./GameObjects").Card }>,
     selfPlayerId: Player | null,
     allPlayers: ReadonlyArray<Player>,
+    handSizes: ReadonlyArray<readonly [Player, number]>,
+    cardSet: CardSet,
 ): UserDeductionMap => {
     if (selfPlayerId === null) return emptyUserDeductions;
     let m: UserDeductionMap = emptyUserDeductions;
+    const ownCards = new Set<string>();
     for (const kc of knownCards) {
         if (kc.player !== selfPlayerId) continue;
+        ownCards.add(String(kc.card));
         // Y on the user's own column for this card.
         m = HashMap.set(m, Cell(PlayerOwner(selfPlayerId), kc.card), "Y");
         // N on every other player's column for the same card.
@@ -254,6 +265,16 @@ export const seedFromOwnHand = (
         }
         // N on the case file for the same card.
         m = HashMap.set(m, Cell(CaseFileOwner(), kc.card), "N");
+    }
+    // If the user has marked their full hand, every other card in the
+    // deck is also N for them (they can't have more cards than their
+    // hand size).
+    const selfHandSize = handSizes.find(([p]) => p === selfPlayerId)?.[1];
+    if (selfHandSize !== undefined && ownCards.size === selfHandSize) {
+        for (const card of allCardIds(cardSet)) {
+            if (ownCards.has(String(card))) continue;
+            m = HashMap.set(m, Cell(PlayerOwner(selfPlayerId), card), "N");
+        }
     }
     return m;
 };

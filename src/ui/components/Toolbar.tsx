@@ -250,7 +250,7 @@ export function Toolbar() {
                         tourAnchor: "menu-item-transfer-device",
                     },
                     { type: "divider" },
-                    // Group 2: Account & content
+                    // Group 2: Account
                     {
                         label: accountLabel,
                         leadingIcon: (
@@ -261,11 +261,11 @@ export function Toolbar() {
                         ),
                         onClick: onAccountClick,
                     },
-                    {
-                        label: tAccount("menuItemMyCardPacks"),
-                        onClick: () => openAccountModal(),
-                        tourAnchor: "menu-item-my-card-packs",
-                    },
+                    { type: "divider" },
+                    // Group 3: Teach-me mode + Check my work — own
+                    // section so the toggle's "(on)" indicator and the
+                    // Check shortcut sit together, distinct from the
+                    // surrounding chrome.
                     {
                         label: state.teachMode
                             ? tTeach("menuLabelActive")
@@ -278,11 +278,12 @@ export function Toolbar() {
                             ),
                         tourAnchor: "menu-item-teach-mode",
                     },
-                    // Cross-platform Check affordance — the Toolbar
-                    // top-level button covers desktop, but a menu item
-                    // is the primary entry point on mobile (the
-                    // Toolbar isn't rendered below 800px) and a
-                    // secondary discoverable path on desktop.
+                    // Check my work — hidden when not in teach-mode
+                    // or while still in setup. The Toolbar top-level
+                    // button covers desktop; this menu item is the
+                    // primary entry point on mobile (Toolbar isn't
+                    // rendered below 800px) and a secondary path on
+                    // desktop.
                     ...(state.teachMode && state.uiMode !== "setup"
                         ? [
                               {
@@ -292,6 +293,13 @@ export function Toolbar() {
                               } as const,
                           ]
                         : []),
+                    { type: "divider" },
+                    // Group 4: Content + onboarding
+                    {
+                        label: tAccount("menuItemMyCardPacks"),
+                        onClick: () => openAccountModal(),
+                        tourAnchor: "menu-item-my-card-packs",
+                    },
                     {
                         label: tOnboarding("takeTour"),
                         onClick: () =>
