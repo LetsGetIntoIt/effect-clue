@@ -250,19 +250,7 @@ export function Toolbar() {
                         tourAnchor: "menu-item-transfer-device",
                     },
                     { type: "divider" },
-                    // Group 2: Account
-                    {
-                        label: accountLabel,
-                        leadingIcon: (
-                            <AccountAvatar
-                                user={signedIn ? user : null}
-                                sizeClassName="h-6 w-6"
-                            />
-                        ),
-                        onClick: onAccountClick,
-                    },
-                    { type: "divider" },
-                    // Group 3: Teach-me mode + Check my work — own
+                    // Group 2: Teach-me mode + Check my work — own
                     // section so the toggle's "(on)" indicator and the
                     // Check shortcut sit together, distinct from the
                     // surrounding chrome.
@@ -294,7 +282,19 @@ export function Toolbar() {
                           ]
                         : []),
                     { type: "divider" },
-                    // Group 4: Content + onboarding
+                    // Group 3: Account + content. Sign in / out sits
+                    // alongside My card packs since both flows are
+                    // account-driven.
+                    {
+                        label: accountLabel,
+                        leadingIcon: (
+                            <AccountAvatar
+                                user={signedIn ? user : null}
+                                sizeClassName="h-6 w-6"
+                            />
+                        ),
+                        onClick: onAccountClick,
+                    },
                     {
                         label: tAccount("menuItemMyCardPacks"),
                         onClick: () => openAccountModal(),
