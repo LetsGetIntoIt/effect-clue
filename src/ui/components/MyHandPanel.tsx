@@ -12,7 +12,7 @@ import { categoryName } from "../../logic/CardSet";
 import type { Card, CardCategory } from "../../logic/GameObjects";
 import { T_STANDARD, useReducedTransition } from "../motion";
 import { useClue } from "../state";
-import { ChevronDownIcon, ChevronUpIcon, HandOfCardsIcon } from "./Icons";
+import { ChevronDownIcon, HandOfCardsBadge } from "./Icons";
 import { useOpenMyCardsModal } from "./MyCardsModal";
 import {
     SuggestionBanner,
@@ -115,7 +115,7 @@ export function MyHandPanel() {
         >
             <header className="flex items-center justify-between gap-2">
                 <h3 className="m-0 flex shrink-0 items-center gap-2 font-sans! text-[1.125rem] font-bold uppercase tracking-wide text-accent">
-                    <HandOfCardsIcon size={20} className="text-accent" />
+                    <HandOfCardsBadge size={28} />
                     {t("title")}
                 </h3>
                 {/* Banner sits INLINE in the header row so its
@@ -141,11 +141,26 @@ export function MyHandPanel() {
                     }
                     onClick={toggle}
                 >
-                    {collapsed ? (
+                    {/* Animate the chevron rotation — one icon (down-
+                        pointing at rest), rotated 180° when the
+                        section is expanded. Uses motion.span +
+                        `transform: rotate(…)` so the rotation
+                        interpolates smoothly; a plain `rotate-0` /
+                        `rotate-180` toggle wouldn't animate
+                        cross-browser because `rotate: 0deg` computes
+                        to `none` and isn't interpolatable. */}
+                    <span
+                        aria-hidden
+                        className="flex motion-reduce:transition-none"
+                        style={{
+                            transform: collapsed
+                                ? "rotate(0deg)"
+                                : "rotate(180deg)",
+                            transition: "transform 200ms cubic-bezier(0.22, 1, 0.36, 1)",
+                        }}
+                    >
                         <ChevronDownIcon size={18} />
-                    ) : (
-                        <ChevronUpIcon size={18} />
-                    )}
+                    </span>
                 </button>
             </header>
             <motion.div
