@@ -1,9 +1,11 @@
 "use client";
 
+import { AnimatePresence, motion, type Variants } from "motion/react";
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Player } from "../../../logic/GameObjects";
 import { useClue } from "../../state";
+import { T_STANDARD, useReducedTransition } from "../../motion";
 import { ChevronLeftIcon, ChevronRightIcon } from "../../components/Icons";
 import { CardSelectionGrid } from "../shared/CardSelectionGrid";
 import { SetupStepPanel } from "../SetupStepPanel";
@@ -11,6 +13,30 @@ import { VALID, type WizardStepId } from "../wizardSteps";
 import type { StepPanelState, WizardMode } from "../SetupStepPanel";
 
 const STEP_ID = "knownCards" as const;
+
+// Slide-variant identifiers — pulled to module scope so the
+// i18next/no-literal-string lint reads them as wire identifiers.
+const VARIANT_INITIAL = "initial" as const;
+const VARIANT_ANIMATE = "animate" as const;
+const VARIANT_EXIT = "exit" as const;
+
+type SlideDirection = 1 | -1;
+
+// Mirror of `slideVariants` in `PlayLayout.tsx` — the paginator slide
+// uses the same direction-driven enter-from / exit-to pattern as the
+// mobile Checklist ↔ Suggest swap so the motion language is
+// consistent across mobile screens.
+const playerSlideVariants: Variants = {
+    initial: (dir: SlideDirection) => ({
+        x: dir === 1 ? "100%" : "-100%",
+        opacity: 0,
+    }),
+    animate: { x: 0, opacity: 1 },
+    exit: (dir: SlideDirection) => ({
+        x: dir === 1 ? "-100%" : "100%",
+        opacity: 0,
+    }),
+};
 
 interface Props {
     readonly state: StepPanelState;
@@ -64,6 +90,19 @@ export function SetupStepKnownCards({
             setActiveIndex(Math.max(0, targets.length - 1));
         }
     }, [targets.length, activeIndex]);
+
+    // Direction for the paginator slide: +1 when advancing to a later
+    // player, -1 when stepping back. Computed against the previous
+    // render's `activeIndex` so AnimatePresence can swap the enter /
+    // exit sides correctly. The ref updates AFTER the render that
+    // consumed it, so each render sees the right "previous" value.
+    const prevIndexRef = useRef(activeIndex);
+    const slideDirection: SlideDirection =
+        activeIndex >= prevIndexRef.current ? 1 : -1;
+    useEffect(() => {
+        prevIndexRef.current = activeIndex;
+    }, [activeIndex]);
+    const transition = useReducedTransition(T_STANDARD, { fadeMs: 120 });
 
     const otherKnownCount = clue.knownCards.filter(
         kc => kc.player !== selfPlayerId,
@@ -151,7 +190,24 @@ export function SetupStepKnownCards({
                         <ChevronRightIcon size={16} />
                     </button>
                 </div>
-                <CardSelectionGrid players={[currentPlayer]} />
+                <div className="relative grid grid-cols-[minmax(0,1fr)] overflow-x-clip [grid-template-areas:'stack']">
+                    <AnimatePresence custom={slideDirection} initial={false}>
+                        <motion.div
+                            key={String(currentPlayer)}
+                            custom={slideDirection}
+                            variants={playerSlideVariants}
+                            initial={VARIANT_INITIAL}
+                            animate={VARIANT_ANIMATE}
+                            exit={VARIANT_EXIT}
+                            transition={transition}
+                            className="[grid-area:stack] min-w-0"
+                        >
+                            <CardSelectionGrid
+                                players={[currentPlayer]}
+                            />
+                        </motion.div>
+                    </AnimatePresence>
+                </div>
             </div>
         </SetupStepPanel>
     );

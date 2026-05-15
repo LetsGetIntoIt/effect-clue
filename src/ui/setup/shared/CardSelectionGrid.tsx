@@ -65,9 +65,13 @@ const CELL_INTERACTIVE_RING =
 // banner if it's visible)" via the same CSS variables Clue.tsx
 // publishes for the play-mode Checklist. When the wizard is the only
 // thing on screen, those variables fall back to 0 so the thead pins
-// to viewport top.
+// to viewport top. The `z-index` on the thead element itself is
+// load-bearing — `position: sticky` alone doesn't elevate the thead
+// above tbody in the table's stacking, so without the explicit
+// z-index the body's `<td>` (later in document order) would paint
+// over the thead during scroll. Matches `Checklist.tsx`'s thead.
 const STICKY_THEAD_TOP =
-    "sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))]";
+    "sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))] z-[var(--z-checklist-sticky-header)]";
 const STICKY_FIRST_COL =
     "sticky left-0 z-[var(--z-checklist-sticky-column)]";
 const STICKY_FIRST_COL_HEADER =
@@ -269,7 +273,25 @@ export function CardSelectionGrid({
                                         return (
                                             <td
                                                 key={`${String(player)}::${String(entry.id)}`}
-                                                className={`relative border-b border-l border-border p-0 ${tone}`}
+                                                // Explicit `z-0` traps the
+                                                // native `<input
+                                                // type=checkbox>` inside
+                                                // the cell's stacking
+                                                // context. Without it,
+                                                // Chrome / Safari can
+                                                // promote the form
+                                                // control to a higher
+                                                // paint layer, so the
+                                                // checkbox glyph leaks
+                                                // through the sticky
+                                                // thead (z-index 39) and
+                                                // sticky-left column
+                                                // (z-index 30) during
+                                                // scroll. The cell is
+                                                // already `position:
+                                                // relative` from the
+                                                // ring + label sizing.
+                                                className={`relative z-0 border-b border-l border-border p-0 ${tone}`}
                                                 {...(isFirstCell
                                                     ? {
                                                           "data-tour-anchor":
