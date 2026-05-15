@@ -229,10 +229,10 @@
         "panelCloseAriaLabel": "Close my cards"
     },
     "refuteHint": {
-        "canRefute": "You can refute this suggestion with: {cards}",
+        "canRefute": "You can refute this suggestion with: <bold>{cards}</bold>",
         "canRefuteTeaser": "You can refute this suggestion with…",
         "cannotRefute": "You cannot refute this suggestion.",
-        "selfSuggesting": "You are suggesting from your hand: {cards}",
+        "selfSuggesting": "You are suggesting from your hand: <bold>{cards}</bold>",
         "selfSuggestingTeaser": "You are suggesting from your hand…",
         "revealHintMouse": "(click to reveal)",
         "revealHintTouch": "(tap to reveal)",

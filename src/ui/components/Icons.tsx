@@ -515,26 +515,33 @@ export function ChevronDownIcon({ className, size = 16 }: IconProps) {
     );
 }
 
-/** Up-pointing chevron — the inverse of `ChevronDownIcon` for the
- *  "this section is currently collapsed, click to expand" state. */
-export function ChevronUpIcon({ className, size = 16 }: IconProps) {
+/**
+ * "Mini-FAB" badge that wraps `HandOfCardsIcon` in a filled
+ * accent-colored circle with white strokes — the same look as the
+ * mobile FAB button but inline and non-interactive. Used in any
+ * "collapsed entry point" surface (the desktop section header, the
+ * mobile open-panel header, the stacked teaser bar) so the My Cards
+ * affordance reads in the same visual language as the FAB.
+ *
+ * Default size is `28px` — fits the h3 line-height without growing
+ * the header row. Bump `size` for taller contexts.
+ */
+export function HandOfCardsBadge({
+    className,
+    size = 28,
+}: IconProps) {
+    const iconSize = Math.round(size * 0.6);
     return (
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width={size}
-            height={size}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        <span
             aria-hidden="true"
-            focusable="false"
-            className={className}
+            className={
+                "inline-flex shrink-0 items-center justify-center rounded-full bg-accent text-white " +
+                (className ?? "")
+            }
+            style={{ width: size, height: size }}
         >
-            <polyline points="6 15 12 9 18 15" />
-        </svg>
+            <HandOfCardsIcon size={iconSize} />
+        </span>
     );
 }
 

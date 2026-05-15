@@ -15,7 +15,7 @@ import {
     MY_CARDS_SURFACE_FAB,
 } from "../../analytics/events";
 import { T_STANDARD, useReducedTransition } from "../motion";
-import { ChevronDownIcon, HandOfCardsIcon } from "./Icons";
+import { ChevronDownIcon, HandOfCardsBadge, HandOfCardsIcon } from "./Icons";
 import { MyHandPanelBody } from "./MyHandPanel";
 import {
     SuggestionBanner,
@@ -333,10 +333,7 @@ export function MyCardsFAB() {
                     >
                         <header className="flex items-center justify-between gap-2">
                             <h3 className="m-0 flex items-center gap-2 font-sans! text-[1.125rem] font-bold uppercase tracking-wide text-accent">
-                                <HandOfCardsIcon
-                                    size={20}
-                                    className="text-accent"
-                                />
+                                <HandOfCardsBadge size={28} />
                                 {t("title")}
                             </h3>
                             <button

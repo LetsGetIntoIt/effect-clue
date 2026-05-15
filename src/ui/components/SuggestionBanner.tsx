@@ -12,7 +12,7 @@ import { cardName } from "../../logic/CardSet";
 import type { Card } from "../../logic/GameObjects";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useClue } from "../state";
-import { HandOfCardsIcon } from "./Icons";
+import { HandOfCardsBadge } from "./Icons";
 
 // Banner-kind tags used as a `data-banner-kind` attribute for tests
 // and CSS hooks. Hoisted into named constants so the literal values
@@ -195,7 +195,10 @@ export function SuggestionBanner({
         const names = intersection.map(c => cardName(setup.cardSet, c));
         return (
             <Banner kind={kind} paused={paused} variant={variant}>
-                {t("selfSuggesting", { cards: names.join(t("join")) })}
+                {t.rich("selfSuggesting", {
+                    cards: names.join(t("join")),
+                    bold: boldChunks,
+                })}
             </Banner>
         );
     }
@@ -212,7 +215,10 @@ export function SuggestionBanner({
         const names = intersection.map(c => cardName(setup.cardSet, c));
         return (
             <Banner kind={kind} paused={paused} variant={variant}>
-                {t("canRefute", { cards: names.join(t("join")) })}
+                {t.rich("canRefute", {
+                    cards: names.join(t("join")),
+                    bold: boldChunks,
+                })}
             </Banner>
         );
     }
@@ -349,10 +355,7 @@ function Banner({
                     bounceClass
                 }
             >
-                <HandOfCardsIcon
-                    size={22}
-                    className="shrink-0 text-accent"
-                />
+                <HandOfCardsBadge size={32} />
                 <span className="min-w-0 flex-1">{children}</span>
             </p>
         );
@@ -375,4 +378,13 @@ function Banner({
 
 function RevealHint({ label }: { readonly label: string }) {
     return <span className="ml-1.5 text-muted">{label}</span>;
+}
+
+// Tag callback for `t.rich` — wraps the card-name listing inside a
+// `<strong>` so the names visually stand out from the surrounding
+// sentence ("You can refute this suggestion with: **Miss Scarlet,
+// Knife**"). Defined as a module-level constant so the function
+// identity stays stable across renders.
+function boldChunks(chunks: React.ReactNode): React.ReactNode {
+    return <strong>{chunks}</strong>;
 }
