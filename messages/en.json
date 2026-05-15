@@ -117,7 +117,6 @@
         "removeCardTitle": "Remove {name}",
         "addCard": "+ add card",
         "addCategory": "+ add category",
-        "knownCardCheckboxAria": "{player} has {card}",
         "startPlaying": "Start playing →{shortcut}",
         "continuePlaying": "Continue playing →{shortcut}"
     },
@@ -141,28 +140,12 @@
             "summaryEmpty": "No cards yet",
             "validationEmpty": "Add at least one category to continue.",
             "loadConfirm": "Loading a card pack will discard your current hand sizes, known cards, and suggestions. Continue?",
-            "customizeExpand": "Customize cards",
-            "customizeCollapse": "Done customizing",
-            "allCardPacks": "All card packs",
-            "customize": {
-                "helperText": "Drag to reorder. Rename, add, or remove categories and cards. Save your custom deck for next time.",
-                "addCategory": "+ add category",
-                "addCard": "+ add card",
-                "categoryNameAria": "Rename category {name}",
-                "cardNameAria": "Rename card {name}",
-                "removeCategoryTitle": "Remove category {name}",
-                "removeCategoryConfirm": "Remove {name}? Known-card marks and suggestions referencing its cards will be cleared.",
-                "removeCardTitle": "Remove card {name}",
-                "removeCardConfirm": "Remove {card}? Known-card marks and suggestions referencing this card will be cleared.",
-                "moveCategoryUpAria": "Move {name} up",
-                "moveCategoryDownAria": "Move {name} down",
-                "moveCardUpAria": "Move {name} up",
-                "moveCardDownAria": "Move {name} down",
-                "saveAsNewPack": "Save as new pack",
-                "saveAsPackPromptTitle": "Save your deck",
-                "saveAsPackPromptLabel": "Pack name",
-                "updatePack": "Update \"{label}\""
-            }
+            "customize": "Customize cards…",
+            "allCardPacks": "All card packs"
+        },
+        "cardSelection": {
+            "counter": "Identified {count} of {total} in hand",
+            "cellAria": "{player} has {card}"
         },
         "players": {
             "title": "Who's playing?",
@@ -193,7 +176,6 @@
         "myCards": {
             "title": "Which cards do you have?",
             "helperText": "Tick the cards you were dealt — the solver knows you don't have anything else.",
-            "yourHand": "Your hand",
             "summary": "{count} {count, plural, one {card} other {cards}} marked",
             "summaryEmpty": "No cards marked"
         },
@@ -213,6 +195,29 @@
             "cta": "Invite a player",
             "summarySkipped": "You can always invite players later from the menu"
         }
+    },
+    "cardPackEditor": {
+        "titleEdit": "Edit card pack \"{label}\"",
+        "titleCustomize": "Customize card pack \"{label}\"",
+        "titleCreate": "Create new card pack",
+        "helperText": "Drag to reorder. Rename, add, or remove categories and cards. Save your custom deck for next time.",
+        "addCategory": "+ add category",
+        "addCard": "+ add card",
+        "categoryNameAria": "Rename category {name}",
+        "cardNameAria": "Rename card {name}",
+        "removeCategoryTitle": "Remove category {name}",
+        "removeCategoryConfirm": "Remove {name}? Known-card marks and suggestions referencing its cards will be cleared.",
+        "removeCardTitle": "Remove card {name}",
+        "removeCardConfirm": "Remove {card}? Known-card marks and suggestions referencing this card will be cleared.",
+        "moveCategoryUpAria": "Move {name} up",
+        "moveCategoryDownAria": "Move {name} down",
+        "moveCardUpAria": "Move {name} up",
+        "moveCardDownAria": "Move {name} down",
+        "cancel": "Cancel",
+        "saveAsNewPack": "Save as new pack",
+        "saveAsPackPromptTitle": "Save your deck",
+        "saveAsPackPromptLabel": "Pack name",
+        "updatePack": "Update \"{label}\""
     },
     "myHand": {
         "title": "Your cards",
@@ -557,6 +562,8 @@
         "renamePackInputLabel": "New name",
         "sharePackTitle": "Share {label} with a friend",
         "sharePackAria": "Share card pack {label}",
+        "editPackTitle": "Edit card pack \"{label}\"",
+        "editPackAria": "Edit card pack {label}",
         "deletePackTitle": "Delete card pack \"{label}\"",
         "deletePackAria": "Delete card pack {label}",
         "deletePackConfirm": "Delete card pack \"{label}\"?",

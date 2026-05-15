@@ -29,7 +29,7 @@ import {
     CardPackPicker,
     type PickerPack,
 } from "../../components/CardPackPicker";
-import { SetupStepCardPackCustomize } from "./SetupStepCardPackCustomize";
+import { useOpenCardPackEditor } from "../CardPackEditorModal";
 import { SetupStepPanel } from "../SetupStepPanel";
 import {
     VALID,
@@ -168,8 +168,8 @@ export function SetupStepCardPack({
     const cardPackActions = useCardPackActions();
     const setup = clue.setup;
 
-    const [showCustomize, setShowCustomize] = useState(false);
     const [pickerOpen, setPickerOpen] = useState(false);
+    const openCardPackEditor = useOpenCardPackEditor();
 
     // Single transition routed through useReducedTransition so the
     // pill reposition (Framer Motion FLIP) collapses to instant when
@@ -471,21 +471,39 @@ export function SetupStepCardPack({
                 <button
                     type="button"
                     className="tap-target-compact text-tap-compact self-start cursor-pointer rounded border border-border bg-control hover:bg-hover"
-                    onClick={() => setShowCustomize(prev => !prev)}
-                    aria-expanded={showCustomize}
+                    onClick={() => {
+                        const customLoaded = loadedCustomPack;
+                        // `loadedCustomPack` covers customs; built-in
+                        // packs surface through `activeMatch`. When
+                        // neither matches (the user customised the
+                        // deck since loading), the modal opens with
+                        // no pack identity — "Save as new pack" is
+                        // the only path forward.
+                        const initialPackId =
+                            customLoaded?.id ?? activeMatch?.id;
+                        const initialPackLabel =
+                            customLoaded?.label ?? activeMatch?.label;
+                        const isBuiltIn =
+                            customLoaded === undefined &&
+                            activeMatch !== undefined &&
+                            activeMatch.isCustom === false;
+                        openCardPackEditor({
+                            initialCardSet: setup.cardSet,
+                            ...(initialPackId !== undefined
+                                ? { initialPackId }
+                                : {}),
+                            ...(initialPackLabel !== undefined
+                                ? { initialPackLabel }
+                                : {}),
+                            initialPackIsBuiltIn: isBuiltIn,
+                            applyToActiveGame: true,
+                            onSaved: (packId: string) =>
+                                recordUseMutation.mutate(packId),
+                        });
+                    }}
                 >
-                    {showCustomize
-                        ? t("customizeCollapse")
-                        : t("customizeExpand")}
+                    {t("customize")}
                 </button>
-                {showCustomize && (
-                    <SetupStepCardPackCustomize
-                        loadedCustomPack={loadedCustomPack ?? null}
-                        onSavedAsNewPack={packId =>
-                            recordUseMutation.mutate(packId)
-                        }
-                    />
-                )}
             </div>
         </SetupStepPanel>
     );

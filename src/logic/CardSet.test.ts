@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { Equal } from "effect";
 import {
+    addCardToCategoryInCardSet,
+    addCategoryToCardSet,
     allCardEntries,
     allCardIds,
     CardEntry,
@@ -12,8 +14,15 @@ import {
     caseFileSize,
     categoryName,
     categoryOfCard,
+    disambiguateName,
     findCardEntry,
     findCategoryEntry,
+    removeCardFromCardSet,
+    removeCategoryFromCardSet,
+    renameCardInCardSet,
+    renameCategoryInCardSet,
+    reorderCardsInCategoryInCardSet,
+    reorderCategoriesInCardSet,
 } from "./CardSet";
 import { Card, CardCategory } from "./GameObjects";
 
@@ -399,5 +408,186 @@ describe("cardSetEquals", () => {
             },
         ]);
         expect(cardSetEquals(a, b)).toBe(false);
+    });
+});
+
+describe("disambiguateName", () => {
+    test("returns the proposed name when it doesn't collide", () => {
+        expect(disambiguateName("Suspect", ["Weapon", "Room"])).toBe(
+            "Suspect",
+        );
+    });
+
+    test("appends Roman suffix when the proposed name is taken", () => {
+        expect(disambiguateName("Suspect", ["Suspect"])).toBe("Suspect (ii)");
+    });
+
+    test("skips suffixes that are also taken", () => {
+        expect(
+            disambiguateName("Suspect", ["Suspect", "Suspect (ii)"]),
+        ).toBe("Suspect (iii)");
+    });
+});
+
+describe("addCategoryToCardSet", () => {
+    test("adds a new category with a single card at the end", () => {
+        const next = addCategoryToCardSet(set);
+        expect(next.categories).toHaveLength(set.categories.length + 1);
+        const added = next.categories[next.categories.length - 1]!;
+        expect(added.cards).toHaveLength(1);
+        // Name is auto-generated and non-colliding.
+        expect(added.name).toMatch(/^Category \d+/);
+    });
+
+    test("preserves existing categories' identities", () => {
+        const next = addCategoryToCardSet(set);
+        expect(next.categories[0]).toBe(weaponCat);
+        expect(next.categories[1]).toBe(roomCat);
+    });
+});
+
+describe("removeCategoryFromCardSet", () => {
+    test("returns the same set when the id doesn't exist", () => {
+        const next = removeCategoryFromCardSet(
+            set,
+            CardCategory("cat-missing"),
+        );
+        expect(next).toBe(set);
+    });
+
+    test("returns the same set when removing would empty the deck", () => {
+        const oneCat = CardSet({ categories: [weaponCat] });
+        const next = removeCategoryFromCardSet(oneCat, weaponId);
+        expect(next).toBe(oneCat);
+    });
+
+    test("removes the named category and preserves the others", () => {
+        const next = removeCategoryFromCardSet(set, weaponId);
+        expect(next.categories.map(c => c.id)).toEqual([roomId]);
+    });
+});
+
+describe("renameCategoryInCardSet", () => {
+    test("renames the named category", () => {
+        const next = renameCategoryInCardSet(set, weaponId, "Tools");
+        expect(findCategoryEntry(next, weaponId)?.name).toBe("Tools");
+    });
+
+    test("returns the same set when the new name is unchanged", () => {
+        expect(
+            renameCategoryInCardSet(set, weaponId, weaponCat.name),
+        ).toBe(set);
+    });
+
+    test("returns the same set when the new name is empty after trim", () => {
+        expect(renameCategoryInCardSet(set, weaponId, "   ")).toBe(set);
+    });
+
+    test("disambiguates against other categories' names", () => {
+        const next = renameCategoryInCardSet(set, weaponId, "Room");
+        expect(findCategoryEntry(next, weaponId)?.name).toBe("Room (ii)");
+    });
+});
+
+describe("addCardToCategoryInCardSet", () => {
+    test("appends a card to the named category", () => {
+        const next = addCardToCategoryInCardSet(set, weaponId);
+        const cat = findCategoryEntry(next, weaponId)!;
+        expect(cat.cards).toHaveLength(weaponCat.cards.length + 1);
+        const added = cat.cards[cat.cards.length - 1]!;
+        expect(added.name).toMatch(/^Card \d+/);
+    });
+
+    test("leaves untouched categories unchanged", () => {
+        const next = addCardToCategoryInCardSet(set, weaponId);
+        expect(findCategoryEntry(next, roomId)).toBe(roomCat);
+    });
+});
+
+describe("removeCardFromCardSet", () => {
+    test("removes the card from its containing category", () => {
+        const next = removeCardFromCardSet(set, knifeId);
+        const cat = findCategoryEntry(next, weaponId)!;
+        expect(cat.cards.map(c => c.id)).toEqual([ropeId]);
+    });
+
+    test("returns the same set when the card id is unknown", () => {
+        const next = removeCardFromCardSet(set, Card("card-missing"));
+        expect(next).toBe(set);
+    });
+
+    test("returns the same set when removing would empty the category", () => {
+        const single = CardSet({
+            categories: [
+                Category({
+                    id: weaponId,
+                    name: "Weapon",
+                    cards: [CardEntry({ id: knifeId, name: "Knife" })],
+                }),
+            ],
+        });
+        expect(removeCardFromCardSet(single, knifeId)).toBe(single);
+    });
+});
+
+describe("renameCardInCardSet", () => {
+    test("renames the named card", () => {
+        const next = renameCardInCardSet(set, knifeId, "Dagger");
+        expect(findCardEntry(next, knifeId)?.name).toBe("Dagger");
+    });
+
+    test("returns the same set when the new name is unchanged", () => {
+        expect(renameCardInCardSet(set, knifeId, "Knife")).toBe(set);
+    });
+
+    test("disambiguates against other cards' names across categories", () => {
+        const next = renameCardInCardSet(set, knifeId, "Hall");
+        expect(findCardEntry(next, knifeId)?.name).toBe("Hall (ii)");
+    });
+});
+
+describe("reorderCategoriesInCardSet", () => {
+    test("reorders categories by id permutation", () => {
+        const next = reorderCategoriesInCardSet(set, [roomCat, weaponCat]);
+        expect(next.categories.map(c => c.id)).toEqual([roomId, weaponId]);
+    });
+
+    test("returns the same set when ids don't match a permutation", () => {
+        const bogusCat = Category({
+            id: CardCategory("cat-bogus"),
+            name: "Bogus",
+            cards: [CardEntry({ id: Card("card-bogus"), name: "Bogus" })],
+        });
+        expect(
+            reorderCategoriesInCardSet(set, [bogusCat, weaponCat]),
+        ).toBe(set);
+    });
+
+    test("returns the same set when lengths differ", () => {
+        expect(reorderCategoriesInCardSet(set, [weaponCat])).toBe(set);
+    });
+});
+
+describe("reorderCardsInCategoryInCardSet", () => {
+    test("reorders cards within the named category", () => {
+        const knife = weaponCat.cards[0]!;
+        const rope = weaponCat.cards[1]!;
+        const next = reorderCardsInCategoryInCardSet(set, weaponId, [
+            rope,
+            knife,
+        ]);
+        expect(
+            findCategoryEntry(next, weaponId)!.cards.map(c => c.id),
+        ).toEqual([ropeId, knifeId]);
+    });
+
+    test("returns the same set when the category id is unknown", () => {
+        expect(
+            reorderCardsInCategoryInCardSet(
+                set,
+                CardCategory("cat-missing"),
+                weaponCat.cards,
+            ),
+        ).toBe(set);
     });
 });

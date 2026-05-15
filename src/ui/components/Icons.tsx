@@ -338,6 +338,37 @@ export function CardStackIcon({ className, size = 14 }: IconProps) {
 }
 
 /**
+ * Document with horizontal lines — represents "edit list / contents."
+ * Used in the My Card Packs row to differentiate "edit the pack's
+ * categories and cards" from `PencilIcon` (which handles label
+ * rename in the same row). The two actions sit next to each other,
+ * so the visual distinction matters.
+ */
+export function ListEditIcon({ className, size = 14 }: IconProps) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+            className={className}
+        >
+            <rect x="4" y="3" width="16" height="18" rx="2" />
+            <path d="M8 8h8" />
+            <path d="M8 12h8" />
+            <path d="M8 16h5" />
+        </svg>
+    );
+}
+
+/**
  * Two curved arrows forming a circle — the standard refresh / sync
  * glyph. Used in the account modal to indicate a pack has pending
  * changes (and, with `animate-spin`, that a sync is in progress).

@@ -16,7 +16,6 @@ import { CardEntry, Category } from "./CardSet";
 // the canonical home for anything that operates on just the card half.
 export { CardEntry, Category } from "./CardSet";
 export {
-    findCategoryEntry,
     findCardEntry,
     cardName,
     categoryName,
@@ -24,6 +23,16 @@ export {
     allCardIds,
     allCardEntries,
     categoryOfCard,
+    disambiguateName,
+    toRoman,
+    addCategoryToCardSet,
+    removeCategoryFromCardSet,
+    renameCategoryInCardSet,
+    addCardToCategoryInCardSet,
+    removeCardFromCardSet,
+    renameCardInCardSet,
+    reorderCategoriesInCardSet,
+    reorderCardsInCategoryInCardSet,
 } from "./CardSet";
 
 /**
@@ -112,61 +121,6 @@ export const defaultHandSizes = (
     const extras = dealt - base * n;
     return players.map((player, i) =>
         [player, base + (i < extras ? 1 : 0)] as const);
-};
-
-// ---- Name disambiguation ----------------------------------------------
-
-/**
- * Roman numeral suffix used when a proposed name collides with an
- * existing one. Starts at ii (not i) because the first occurrence
- * keeps its bare name — only duplicates get a suffix.
- *
- * We go Roman deliberately: user-entered parenthesised suffixes like
- * "(2)", "(v2)", "(alt)" stay verbatim and don't get clobbered.
- */
-const ROMAN_DIGITS: ReadonlyArray<readonly [number, string]> = [
-    [1000, "m"], [900, "cm"], [500, "d"], [400, "cd"],
-    [100, "c"], [90, "xc"], [50, "l"], [40, "xl"],
-    [10, "x"], [9, "ix"], [5, "v"], [4, "iv"], [1, "i"],
-];
-
-export const toRoman = (n: number): string => {
-    if (n <= 0) return "";
-    let remaining = n;
-    let out = "";
-    for (const [value, symbol] of ROMAN_DIGITS) {
-        while (remaining >= value) {
-            out += symbol;
-            remaining -= value;
-        }
-    }
-    return out;
-};
-
-/**
- * Given a proposed name and a set of existing names, return a
- * guaranteed-unique variant. If `proposed` itself is free, it comes
- * back unchanged. Otherwise we append " (ii)", " (iii)", ... until
- * we find a free slot.
- *
- * The `existing` argument is the set of names we're disambiguating
- * *against* (callers exclude the current entry's own name when
- * renaming, so an idempotent rename doesn't double up).
- */
-export const disambiguateName = (
-    proposed: string,
-    existing: ReadonlyArray<string>,
-): string => {
-    const trimmed = proposed.trim();
-    if (trimmed.length === 0) return trimmed;
-    const taken = new Set(existing.map(s => s.trim()));
-    if (!taken.has(trimmed)) return trimmed;
-    for (let n = 2; n < 10000; n++) {
-        const candidate = `${trimmed} (${toRoman(n)})`;
-        if (!taken.has(candidate)) return candidate;
-    }
-    // Absurd fallback — we're not rendering 10k card names.
-    return `${trimmed} (${Date.now().toString(36)})`;
 };
 
 // ---- Presets -----------------------------------------------------------

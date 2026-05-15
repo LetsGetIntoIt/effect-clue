@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import type { Player } from "../../../logic/GameObjects";
 import { useClue } from "../../state";
 import { ChevronLeftIcon, ChevronRightIcon } from "../../components/Icons";
-import { PlayerColumnCardList } from "../shared/PlayerColumnCardList";
+import { CardSelectionGrid } from "../shared/CardSelectionGrid";
 import { SetupStepPanel } from "../SetupStepPanel";
 import { VALID, type WizardStepId } from "../wizardSteps";
 import type { StepPanelState, WizardMode } from "../SetupStepPanel";
@@ -31,14 +31,16 @@ interface Props {
  * Iterates non-self players when `selfPlayerId` is set, or every
  * player when it isn't. Layout:
  *
- * - **Desktop (≥ 800px):** all relevant `<PlayerColumnCardList>`
- *   columns rendered side-by-side in a horizontal grid.
- * - **Mobile (< 800px):** single column with paginator (left / right
- *   arrow buttons + a "Player N of M" indicator).
+ * - **Desktop (≥ 800px):** a single `<CardSelectionGrid>` with every
+ *   relevant player as a column. Per-column "Identified X of Y"
+ *   counters appear in the grid header and deduction-driven cell
+ *   backgrounds light up as the user enters known cards.
+ * - **Mobile (< 800px):** the same grid sliced to a one-player array,
+ *   wrapped in a paginator (left / right arrow buttons + a "Player N
+ *   of M" indicator) so each column gets its own viewport-width.
  *
- * Same component on both layouts; only the container differs. The
- * mobile variant uses local state (`activeIndex`) to track which
- * player's column is showing; the desktop variant ignores it.
+ * The grid is the same component in both branches; only its `players`
+ * prop changes. `activeIndex` (local state) drives the mobile slice.
  */
 export function SetupStepKnownCards({
     state,
@@ -113,17 +115,12 @@ export function SetupStepKnownCards({
         >
             <p className="m-0 text-[1rem] text-muted">{t("helperText")}</p>
 
-            {/* Desktop: side-by-side grid. */}
-            <div className="hidden gap-3 [@media(min-width:800px)]:grid [@media(min-width:800px)]:grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
-                {targets.map(player => (
-                    <PlayerColumnCardList
-                        key={String(player)}
-                        player={player}
-                    />
-                ))}
+            {/* Desktop: every player as a column in one grid. */}
+            <div className="hidden [@media(min-width:800px)]:block">
+                <CardSelectionGrid players={targets} />
             </div>
 
-            {/* Mobile: paginated. */}
+            {/* Mobile: single-player slice + paginator chrome. */}
             <div className="flex flex-col gap-2 [@media(min-width:800px)]:hidden">
                 <div className="flex items-center justify-between gap-2">
                     <button
@@ -158,7 +155,7 @@ export function SetupStepKnownCards({
                         <ChevronRightIcon size={16} />
                     </button>
                 </div>
-                <PlayerColumnCardList player={currentPlayer} />
+                <CardSelectionGrid players={[currentPlayer]} />
             </div>
         </SetupStepPanel>
     );

@@ -54,6 +54,7 @@ import {
 } from "../tour/TourState";
 import {
     CardStackIcon,
+    ListEditIcon,
     PencilIcon,
     RefreshIcon,
     TrashIcon,
@@ -62,6 +63,7 @@ import {
 import { useModalStack } from "../components/ModalStack";
 import { ShareIcon } from "../components/ShareIcon";
 import { useCardPackActions } from "../components/cardPackActions";
+import { useOpenCardPackEditor } from "../setup/CardPackEditorModal";
 import { AccountAvatar } from "./AccountAvatar";
 import { authClient } from "./authClient";
 import { DevSignInForm } from "./DevSignInForm";
@@ -167,6 +169,7 @@ export function AccountModal() {
         myCardPacks.data ?? [],
     );
     const { sharePack, renamePack, deletePack } = useCardPackActions();
+    const openCardPackEditor = useOpenCardPackEditor();
     const queryClient = useQueryClient();
     const isInFlight = useIsSyncingCardPacks();
     const isSyncing = isInFlight || myCardPacks.isFetching;
@@ -451,6 +454,54 @@ export function AccountModal() {
                                                         aria-label={t("sharePackAria", { label: pack.label })}
                                                     >
                                                         <ShareIcon size={14} />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            // Match the rename
+                                                            // pattern: the
+                                                            // local pack's id
+                                                            // may be either
+                                                            // the server id
+                                                            // (post-reconcile)
+                                                            // or the cgid
+                                                            // (pre-reconcile).
+                                                            const local =
+                                                                localCardPacks.data?.find(
+                                                                    (p) =>
+                                                                        p.id ===
+                                                                            pack.id ||
+                                                                        p.id ===
+                                                                            pack.clientGeneratedId,
+                                                                );
+                                                            openCardPackEditor(
+                                                                {
+                                                                    initialCardSet:
+                                                                        pack.cardSet,
+                                                                    initialPackId:
+                                                                        local?.id ??
+                                                                        pack.clientGeneratedId,
+                                                                    initialPackLabel:
+                                                                        pack.label,
+                                                                    initialPackIsBuiltIn:
+                                                                        false,
+                                                                    applyToActiveGame:
+                                                                        false,
+                                                                },
+                                                            );
+                                                        }}
+                                                        {...(tourAnchor !==
+                                                        undefined
+                                                            ? {
+                                                                  "data-tour-anchor":
+                                                                      tourAnchor,
+                                                              }
+                                                            : {})}
+                                                        className="inline-flex cursor-pointer items-center border-l border-border px-2.5 py-1.5 text-muted transition-colors duration-200 ease-out hover:bg-hover hover:text-accent"
+                                                        title={t("editPackTitle", { label: pack.label })}
+                                                        aria-label={t("editPackAria", { label: pack.label })}
+                                                    >
+                                                        <ListEditIcon size={14} />
                                                     </button>
                                                     <button
                                                         type="button"
