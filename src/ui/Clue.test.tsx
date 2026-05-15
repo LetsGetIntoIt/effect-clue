@@ -242,6 +242,9 @@ describe("Clue — URL-based view hydration", () => {
         const { emptyHypotheses } = await import(
             "../logic/Hypothesis"
         );
+        const { emptyUserDeductions } = await import(
+            "../logic/TeachMode"
+        );
         const { saveToLocalStorage } = await import(
             "../logic/Persistence"
         );
@@ -276,6 +279,8 @@ describe("Clue — URL-based view hydration", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
+            teachMode: false,
+            userDeductions: emptyUserDeductions,
         });
         render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitFor(() => {

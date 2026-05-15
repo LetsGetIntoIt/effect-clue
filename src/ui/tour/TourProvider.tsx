@@ -39,6 +39,7 @@ import {
     type TourDismissVia,
 } from "../../analytics/events";
 import { TelemetryRuntime } from "../../observability/runtime";
+import { useClueOptional } from "../state";
 import { TOURS, type TourStep } from "./tours";
 import {
     loadTourState,
@@ -159,6 +160,21 @@ const useFilterStepsByViewport = (
     );
 };
 
+/**
+ * Filter the step list by `state.teachMode`. Steps with
+ * `requiredTeachMode === true` render only when teach-mode is on;
+ * `false` renders only when teach-mode is off; `undefined` always
+ * renders. Composes with `useFilterStepsByViewport`.
+ */
+const filterStepsByTeachMode = (
+    steps: ReadonlyArray<TourStep>,
+    teachMode: boolean,
+): ReadonlyArray<TourStep> =>
+    steps.filter(step => {
+        if (step.requiredTeachMode === undefined) return true;
+        return step.requiredTeachMode === teachMode;
+    });
+
 // Empty array used as the no-active-tour stand-in so the viewport
 // filter hook can run unconditionally (Rules of Hooks). Module-scope
 // so React sees a stable identity across renders.
@@ -203,7 +219,17 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
     // count and (if needed) the current index re-derive.
     const allSteps: ReadonlyArray<TourStep> =
         activeScreen ? TOURS[activeScreen] : EMPTY_STEPS;
-    const filteredSteps = useFilterStepsByViewport(allSteps);
+    const filteredByViewport = useFilterStepsByViewport(allSteps);
+    // `useClueOptional` returns undefined under bare-tree unit tests
+    // that don't mount ClueProvider. Default teach-mode off in that
+    // case — the filter then has no effect (steps with
+    // `requiredTeachMode === false` show, ones with `true` are hidden,
+    // ones with `undefined` always show).
+    const teachModeForTour = useClueOptional()?.state.teachMode ?? false;
+    const filteredSteps = useMemo(
+        () => filterStepsByTeachMode(filteredByViewport, teachModeForTour),
+        [filteredByViewport, teachModeForTour],
+    );
     const steps = activeScreen ? filteredSteps : undefined;
     const currentStep = steps?.[stepIndex];
     const totalSteps = steps?.length ?? 0;

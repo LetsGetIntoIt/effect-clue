@@ -52,6 +52,7 @@ import {
     type HypothesisMap,
     type HypothesisValue,
 } from "../../logic/Hypothesis";
+import { emptyUserDeductions } from "../../logic/TeachMode";
 import type { KnownCard } from "../../logic/InitialKnowledge";
 import { Cell } from "../../logic/Knowledge";
 import {
@@ -81,6 +82,7 @@ import {
     playersCodec,
     selfPlayerIdCodec,
     suggestionsCodec,
+    teachModeCodec,
 } from "../../logic/ShareCodec";
 import { newSuggestionId, Suggestion } from "../../logic/Suggestion";
 
@@ -96,6 +98,7 @@ export interface ShareSnapshotForHydration {
     readonly firstDealtPlayerIdData: string | null;
     readonly dismissedInsightsData: string | null;
     readonly hypothesisOrderData: string | null;
+    readonly teachModeData: string | null;
 }
 
 /**
@@ -113,6 +116,17 @@ export interface ShareSnapshotForHydration {
 export interface ApplyOverrides {
     readonly selfPlayerId?: Player | null;
     readonly knownCards?: ReadonlyArray<KnownCard>;
+    /**
+     * Optional teach-mode override. Used by the invite-share import
+     * modal's opt-in checkbox: invite shares don't carry teach-mode on
+     * the wire (it's a personal preference), so the receiver picks it
+     * themselves. Transfer shares carry it on the wire and don't need
+     * this override — the wire value is honored.
+     *
+     * `undefined` means "no override — use whatever the snapshot
+     * decodes (or `false` if absent)"; `true` / `false` win.
+     */
+    readonly teachMode?: boolean;
 }
 
 // Wire-format field names. Module-scope so they don't trip the
@@ -129,6 +143,7 @@ const F_SELF_PLAYER_ID_DATA = "selfPlayerIdData";
 const F_FIRST_DEALT_PLAYER_ID_DATA = "firstDealtPlayerIdData";
 const F_DISMISSED_INSIGHTS_DATA = "dismissedInsightsData";
 const F_HYPOTHESIS_ORDER_DATA = "hypothesisOrderData";
+const F_TEACH_MODE_DATA = "teachModeData";
 
 const DECODE_ERROR_PREFIX = "share snapshot decode failed: ";
 
@@ -420,6 +435,23 @@ export const buildSessionFromSnapshot = (
         selfPlayerId,
         firstDealtPlayerId,
         dismissedInsights,
+        // Teach-mode precedence: override > wire field > false. Invite
+        // shares omit the wire field entirely (kind-discriminated
+        // contract); the import modal supplies the override via the
+        // optional opt-in checkbox. Transfer shares put the value on
+        // the wire and the override is typically `undefined`.
+        teachMode:
+            overrides?.teachMode
+            ?? (snapshot.teachModeData === null
+                ? false
+                : decodeField(
+                      F_TEACH_MODE_DATA,
+                      snapshot.teachModeData,
+                      teachModeCodec,
+                  )),
+        // User deductions are personal scratchwork — never on the wire,
+        // so the receiver starts blank.
+        userDeductions: emptyUserDeductions,
     };
 };
 

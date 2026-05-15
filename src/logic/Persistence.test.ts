@@ -16,8 +16,9 @@ import {
     type GameSession,
 } from "./Persistence";
 import { emptyHypotheses } from "./Hypothesis";
+import { emptyUserDeductions } from "./TeachMode";
 
-const STORAGE_KEY = "effect-clue.session.v11";
+const STORAGE_KEY = "effect-clue.session.v12";
 const LEGACY_STORAGE_KEY_V10 = "effect-clue.session.v10";
 const LEGACY_STORAGE_KEY_V9 = "effect-clue.session.v9";
 const LEGACY_STORAGE_KEY_V8 = "effect-clue.session.v8";
@@ -50,6 +51,8 @@ const minimalSession: GameSession = {
     selfPlayerId: null,
     firstDealtPlayerId: null,
     dismissedInsights: new Map(),
+    teachMode: false,
+    userDeductions: emptyUserDeductions,
 };
 
 const richSession = (): GameSession => ({
@@ -107,6 +110,8 @@ const richSession = (): GameSession => ({
     selfPlayerId: null,
     firstDealtPlayerId: null,
     dismissedInsights: new Map(),
+    teachMode: false,
+    userDeductions: emptyUserDeductions,
 });
 
 describe("encode/decode — rich sessions", () => {
@@ -204,11 +209,11 @@ describe("saveToLocalStorage / loadFromLocalStorage", () => {
         expect(loaded?.handSizes).toHaveLength(3);
     });
 
-    test("save writes under the v11-scoped storage key", () => {
+    test("save writes under the v12-scoped storage key", () => {
         saveToLocalStorage(minimalSession);
         const raw = window.localStorage.getItem(STORAGE_KEY);
         expect(raw).not.toBeNull();
-        expect(JSON.parse(raw as string).version).toBe(11);
+        expect(JSON.parse(raw as string).version).toBe(12);
     });
 
     test("loads a v10 blob and lifts to v11 with hypothesisOrder derived from the v10 hypotheses array", () => {
@@ -227,6 +232,8 @@ describe("saveToLocalStorage / loadFromLocalStorage", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: [],
+            teachMode: false,
+            userDeductions: emptyUserDeductions,
         };
         window.localStorage.setItem(
             LEGACY_STORAGE_KEY_V10,

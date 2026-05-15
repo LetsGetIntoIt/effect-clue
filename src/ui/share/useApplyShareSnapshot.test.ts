@@ -17,6 +17,7 @@ import { Schema } from "effect";
 import { beforeEach, describe, expect, test } from "vitest";
 import { Card, CardCategory, Player } from "../../logic/GameObjects";
 import { emptyHypotheses } from "../../logic/Hypothesis";
+import { emptyUserDeductions } from "../../logic/TeachMode";
 import { KnownCard } from "../../logic/InitialKnowledge";
 import { newAccusationId } from "../../logic/Accusation";
 import { newSuggestionId } from "../../logic/Suggestion";
@@ -149,6 +150,7 @@ const sampleSnapshot = (overrides: {
     firstDealtPlayerIdData: null,
     dismissedInsightsData: null,
     hypothesisOrderData: null,
+    teachModeData: null,
 });
 
 const apply = (
@@ -244,6 +246,7 @@ describe("buildSessionFromSnapshot — variant shapes", () => {
             firstDealtPlayerIdData: null,
             dismissedInsightsData: null,
             hypothesisOrderData: null,
+            teachModeData: null,
         });
         expect(session.setup.cardSet).toBe(RECEIVER_FALLBACK_PACK);
         expect(session.setup.players).toEqual(
@@ -292,6 +295,7 @@ describe("buildSessionFromSnapshot — identity + scratchwork", () => {
             ),
             dismissedInsightsData: null,
             hypothesisOrderData: null,
+            teachModeData: null,
         });
         expect(session.selfPlayerId).toBe(Player("Alice"));
         expect(session.firstDealtPlayerId).toBe(Player("Bob"));
@@ -315,6 +319,7 @@ describe("buildSessionFromSnapshot — identity + scratchwork", () => {
             ),
             dismissedInsightsData: null,
             hypothesisOrderData: null,
+            teachModeData: null,
         });
         // Invite shares don't carry identity, but firstDealt is shared.
         expect(session.selfPlayerId).toBeNull();
@@ -343,6 +348,7 @@ describe("buildSessionFromSnapshot — identity + scratchwork", () => {
                 },
             ]),
             hypothesisOrderData: null,
+            teachModeData: null,
         });
         expect(session.dismissedInsights.size).toBe(2);
         expect(
@@ -389,6 +395,7 @@ describe("buildSessionFromSnapshot — identity + scratchwork", () => {
                     card: Card("card-knife"),
                 },
             ]),
+            teachModeData: null,
         });
         expect(session.hypothesisOrder.length).toBe(2);
         expect(session.hypothesisOrder[0]!.card).toBe(Card("card-scarlet"));
@@ -419,6 +426,7 @@ describe("buildSessionFromSnapshot — identity + scratchwork", () => {
             firstDealtPlayerIdData: null,
             dismissedInsightsData: null,
             hypothesisOrderData: null,
+            teachModeData: null,
         });
         expect(session.hypothesisOrder.length).toBe(2);
         expect(session.hypothesisOrder[0]!.card).toBe(Card("card-knife"));
@@ -471,6 +479,7 @@ describe("buildSessionFromSnapshot — receiver overrides", () => {
                 firstDealtPlayerIdData: null,
                 dismissedInsightsData: null,
                 hypothesisOrderData: null,
+                teachModeData: null,
             },
             RECEIVER_FALLBACK_PACK,
             RECEIVER_FALLBACK_PLAYERS,
@@ -583,6 +592,7 @@ describe("buildSessionFromSnapshot — decode failures", () => {
                 firstDealtPlayerIdData: null,
                 dismissedInsightsData: null,
                 hypothesisOrderData: null,
+                teachModeData: null,
             }),
         ).toThrow(ShareSnapshotDecodeError);
         try {
@@ -598,6 +608,7 @@ describe("buildSessionFromSnapshot — decode failures", () => {
                 firstDealtPlayerIdData: null,
                 dismissedInsightsData: null,
                 hypothesisOrderData: null,
+                teachModeData: null,
             });
         } catch (e) {
             expect((e as ShareSnapshotDecodeError).field).toBe("cardPackData");
@@ -627,6 +638,7 @@ describe("buildSessionFromSnapshot — decode failures", () => {
             firstDealtPlayerIdData: null,
             dismissedInsightsData: null,
             hypothesisOrderData: null,
+            teachModeData: null,
         });
         expect(session.suggestions[0]!.id).toBeTruthy();
         expect(String(session.suggestions[0]!.id).length).toBeGreaterThan(0);
@@ -669,6 +681,8 @@ describe("applyShareSnapshotToLocalStorage — receive page handoff", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
+            teachMode: false,
+            userDeductions: emptyUserDeductions,
         });
 
         const session = applyShareSnapshotToLocalStorage(
@@ -701,6 +715,8 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
+            teachMode: false,
+            userDeductions: emptyUserDeductions,
         };
         saveToLocalStorage(currentSession);
 
@@ -879,6 +895,7 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
             firstDealtPlayerIdData: null,
             dismissedInsightsData: null,
             hypothesisOrderData: null,
+            teachModeData: null,
         };
 
         const result = saveCardPackFromSnapshot(snapshot);
@@ -905,6 +922,7 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
                 firstDealtPlayerIdData: null,
                 dismissedInsightsData: null,
                 hypothesisOrderData: null,
+                teachModeData: null,
             }),
         ).toThrow(ShareSnapshotDecodeError);
         expect(loadCustomCardSets()).toEqual([]);
@@ -946,6 +964,7 @@ describe("applyShareSnapshotToLocalStorage — pack save side effect", () => {
             firstDealtPlayerIdData: null,
             dismissedInsightsData: null,
             hypothesisOrderData: null,
+            teachModeData: null,
         };
         applyShareSnapshotToLocalStorage(snapshot);
         expect(loadCustomCardSets()).toEqual([]);
@@ -970,6 +989,8 @@ describe("share receive dirty-state detection", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
+            teachMode: false,
+            userDeductions: emptyUserDeductions,
         };
 
         expect(sessionHasGameData(clean)).toBe(false);
@@ -994,6 +1015,8 @@ describe("share receive dirty-state detection", () => {
                 selfPlayerId: null,
                 firstDealtPlayerId: null,
                 dismissedInsights: new Map(),
+                teachMode: false,
+                userDeductions: emptyUserDeductions,
             }),
         ).toBe(true);
         expect(
@@ -1014,6 +1037,8 @@ describe("share receive dirty-state detection", () => {
                 selfPlayerId: null,
                 firstDealtPlayerId: null,
                 dismissedInsights: new Map(),
+                teachMode: false,
+                userDeductions: emptyUserDeductions,
             }),
         ).toBe(true);
     });
@@ -1035,6 +1060,8 @@ describe("share receive dirty-state detection", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
+            teachMode: false,
+            userDeductions: emptyUserDeductions,
         });
         expect(hasPersistedGameData()).toBe(true);
     });

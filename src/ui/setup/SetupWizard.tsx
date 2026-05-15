@@ -28,6 +28,7 @@ import { SetupStepHandSizes } from "./steps/SetupStepHandSizes";
 import { SetupStepIdentity } from "./steps/SetupStepIdentity";
 import { SetupStepInviteOtherPlayers } from "./steps/SetupStepInviteOtherPlayers";
 import { SetupStepKnownCards } from "./steps/SetupStepKnownCards";
+import { SetupStepTeachMode } from "./steps/SetupStepTeachMode";
 import { SetupStepMyCards } from "./steps/SetupStepMyCards";
 import { SetupStepPlayers } from "./steps/SetupStepPlayers";
 import {
@@ -737,6 +738,19 @@ export function SetupWizard() {
                     if (id === "knownCards") {
                         return (
                             <SetupStepKnownCards
+                                key={id}
+                                state={panelState}
+                                wizardMode={wizardMode}
+                                stepNumber={stepNumber}
+                                onClickToEdit={() => reEnter(id)}
+                                registerPanelEl={registerPanelEl}
+                                footer={stickyFooter}
+                            />
+                        );
+                    }
+                    if (id === "teachMode") {
+                        return (
+                            <SetupStepTeachMode
                                 key={id}
                                 state={panelState}
                                 wizardMode={wizardMode}

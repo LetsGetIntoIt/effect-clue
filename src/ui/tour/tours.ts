@@ -108,6 +108,16 @@ export interface TourStep {
      */
     readonly requiredUiMode?: UiMode;
     /**
+     * Filter the step by the current `state.teachMode`. `undefined`
+     * (the default) renders the step always; `true` renders only
+     * when teach-mode is ON; `false` renders only when teach-mode is
+     * OFF. Used to drop deducer-derived steps (hypotheses, leads,
+     * refute hint) when teach-mode is on, and to show the
+     * teach-mode-specific Check-button step only when teach-mode is
+     * on.
+     */
+    readonly requiredTeachMode?: boolean;
+    /**
      * Optional next-intl key (under the `onboarding` namespace) used
      * for the "next" button on the LAST step. Defaults to
      * `onboarding.finish` ("Finish"). Use this on a closing step to
@@ -518,13 +528,16 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             requiredUiMode: "checklist",
         },
         {
-            // LEADS — second section.
+            // LEADS — second section. Filtered out in teach-mode
+            // because the lead superscripts inside cells are suppressed
+            // there (deducer-derived).
             anchor: "cell-explanation-leads",
             titleKey: "checklist.leads.title",
             bodyKey: "checklist.leads.body",
             side: "bottom",
             align: "start",
             requiredUiMode: "checklist",
+            requiredTeachMode: false,
         },
         {
             // HYPOTHESIS — third section. Popover side: bottom
@@ -532,12 +545,16 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             // viewport and there's room below. A side: top popover
             // ran off the viewport top in testing because the
             // auto-scroll positioned HYPOTHESIS near the top edge.
+            //
+            // Filtered out in teach-mode (HypothesisControl is
+            // replaced by the per-cell "Check this cell" affordance).
             anchor: "cell-explanation-hypothesis",
             titleKey: "checklist.hypothesis.title",
             bodyKey: "checklist.hypothesis.body",
             side: "bottom",
             align: "end",
             requiredUiMode: "checklist",
+            requiredTeachMode: false,
         },
         {
             // Tap the cell again to close the panel. Anchored to the
@@ -607,6 +624,7 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             align: "start",
             requiredUiMode: "checklist",
             viewport: "desktop",
+            requiredTeachMode: false,
         },
         {
             // My Cards FAB (mobile). The fixed bottom-left FAB is the
@@ -619,6 +637,23 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             align: "start",
             requiredUiMode: "checklist",
             viewport: "mobile",
+            requiredTeachMode: false,
+        },
+        {
+            // Teach-me Check button — only shown when teach-mode is
+            // active. Introduces the global Check affordance after the
+            // user has seen the cell, the panel, and the case file.
+            // Side: bottom so the popover sits below the Toolbar (the
+            // anchor lives in the page header on desktop and the
+            // Toolbar on mobile, since the Check button is in the
+            // Toolbar markup).
+            anchor: "teach-mode-check",
+            titleKey: "checklist.teachModeCheck.title",
+            bodyKey: "checklist.teachModeCheck.body",
+            side: "bottom",
+            align: "end",
+            requiredUiMode: "checklist",
+            requiredTeachMode: true,
         },
         {
             // Step 9 (desktop): Suggest pane intro. The suggestion log
@@ -814,6 +849,22 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             forceOpenOverflowMenu: true,
             titleKey: "sharing.myCardPacks.title",
             bodyKey: "sharing.myCardPacks.body",
+            side: "left",
+            align: "start",
+            sideByViewport: {
+                mobile: { side: "top", align: "end" },
+                desktop: { side: "left", align: "start" },
+            },
+        },
+        {
+            // Step 4 — "Teach me mode" callout. Surfaces the toggle
+            // inside the overflow menu so the user knows the mode is
+            // available without diving into the wizard. The menu
+            // stays force-opened by `forceOpenOverflowMenu`.
+            anchor: "menu-item-teach-mode",
+            forceOpenOverflowMenu: true,
+            titleKey: "sharing.teachMode.title",
+            bodyKey: "sharing.teachMode.body",
             side: "left",
             align: "start",
             sideByViewport: {

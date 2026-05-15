@@ -22,8 +22,17 @@ import type { InstallPromptTrigger } from "../../analytics/events";
 import { OverflowMenu } from "./OverflowMenu";
 import { PlayCTAButton } from "./PlayCTAButton";
 import { useToolbarActions } from "./Toolbar";
+import { useTeachModeToggle } from "./useTeachModeToggle";
+import { useTeachModeCheck } from "./TeachModeCheckContext";
+import { tallyVerdicts } from "../../logic/TeachMode";
+import { teachModeCheckUsed } from "../../analytics/events";
 
 const TRIGGER_MENU: InstallPromptTrigger = "menu";
+
+// Source token for the teach-mode toggle dispatched from the overflow
+// menu. Hoisted to module scope so the `i18next/no-literal-string`
+// lint rule reads it as a code identifier.
+const TEACH_SOURCE_OVERFLOW_MENU = "overflowMenu" as const;
 
 /**
  * Mobile-only fixed-bottom navigation. Shown only under 800px — the
@@ -223,9 +232,30 @@ function BottomOverflowMenu({
     const tInstall = useTranslations("installPrompt");
     const tAccount = useTranslations("account");
     const tShare = useTranslations("share");
+    const tTeach = useTranslations("teachMode");
     const hasKeyboard = useHasKeyboard();
-    const { state, canUndo, canRedo, undo, redo } = useClue();
+    const { state, derived, canUndo, canRedo, undo, redo } = useClue();
     const { onNewGame } = useToolbarActions();
+    const requestTeachMode = useTeachModeToggle();
+    const { openBanner } = useTeachModeCheck();
+    const onCheckClick = () => {
+        const tally = tallyVerdicts(
+            state.setup,
+            state.userDeductions,
+            derived.deductionResult,
+            derived.intrinsicContradictions,
+        );
+        teachModeCheckUsed({
+            revealLevel: "vague",
+            verifiable: tally.verifiable,
+            falsifiable: tally.falsifiable,
+            plausible: tally.plausible,
+            missed: tally.missed,
+            inconsistent: tally.inconsistent,
+            evidenceContradiction: tally.evidenceContradiction,
+        });
+        openBanner();
+    };
     const { restartTourForScreen, currentStep } = useTour();
     // Force this menu open while the "Everything else lives here" tour
     // step is active so the user can see the items without clicking ⋯.
@@ -299,17 +329,17 @@ function BottomOverflowMenu({
                     { type: "divider" },
                     // Group 1: Game
                     {
+                        label: tToolbar("newGame", {
+                            shortcut: shortcutSuffix("global.newGame", hasKeyboard),
+                        }),
+                        onClick: onNewGame,
+                    },
+                    {
                         label: t("gameSetup", {
                             shortcut: shortcutSuffix("global.gotoSetup", hasKeyboard),
                         }),
                         active: setupActive,
                         onClick: onSetup,
-                    },
-                    {
-                        label: tToolbar("newGame", {
-                            shortcut: shortcutSuffix("global.newGame", hasKeyboard),
-                        }),
-                        onClick: onNewGame,
                     },
                     {
                         label: tShare("menuItemInvitePlayer"),
@@ -322,7 +352,37 @@ function BottomOverflowMenu({
                         tourAnchor: "menu-item-transfer-device",
                     },
                     { type: "divider" },
-                    // Group 2: Account & content
+                    // Group 2: Teach-me mode + Check my work — own
+                    // section so the toggle's "(on)" indicator and the
+                    // Check shortcut sit together, distinct from the
+                    // surrounding chrome. Mobile-primary surface for
+                    // Check (the Toolbar's top-level button is
+                    // desktop-only).
+                    {
+                        label: state.teachMode
+                            ? tTeach("menuLabelActive")
+                            : tTeach("menuLabel"),
+                        active: state.teachMode,
+                        onClick: () =>
+                            requestTeachMode(
+                                !state.teachMode,
+                                TEACH_SOURCE_OVERFLOW_MENU,
+                            ),
+                        tourAnchor: "menu-item-teach-mode",
+                    },
+                    ...(state.teachMode && state.uiMode !== "setup"
+                        ? [
+                              {
+                                  label: tTeach("toolbarCheckLabel"),
+                                  onClick: onCheckClick,
+                                  tourAnchor: "menu-item-teach-mode-check",
+                              } as const,
+                          ]
+                        : []),
+                    { type: "divider" },
+                    // Group 3: Account + content. Sign in / out sits
+                    // alongside My card packs since both flows are
+                    // account-driven.
                     {
                         label: accountLabel,
                         leadingIcon: (

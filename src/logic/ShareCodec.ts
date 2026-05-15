@@ -26,7 +26,11 @@
  *                 firstDealtPlayerIdCodec
  *   - `transfer`: all of the above plus knownCardsCodec, hypothesesCodec,
  *                 selfPlayerIdCodec, dismissedInsightsCodec,
- *                 hypothesisOrderCodec
+ *                 hypothesisOrderCodec, teachModeCodec
+ *
+ * `teachModeCodec` carries the per-game teach-me preference; the
+ * receiver inherits the mode but always starts with empty
+ * `userDeductions` (personal scratchwork; deliberately not on the wire).
  */
 import { Schema } from "effect";
 import {
@@ -42,6 +46,14 @@ import {
     SelfPlayerIdSchema,
     SuggestionsArraySchema,
 } from "./PersistenceSchema";
+
+/**
+ * Teach-mode wire schema — a single boolean. `transfer` shares carry
+ * this so the receiver's destination device inherits the sender's
+ * mode preference. Invite shares omit it (the receiver's import
+ * modal offers an opt-in checkbox instead).
+ */
+const TeachModeSchema = Schema.Boolean;
 
 export const cardPackCodec = Schema.fromJsonString(CardSetSchema);
 export const playersCodec = Schema.fromJsonString(PlayersArraySchema);
@@ -82,3 +94,10 @@ export const dismissedInsightsCodec = Schema.fromJsonString(
 export const hypothesisOrderCodec = Schema.fromJsonString(
     HypothesisOrderArraySchema,
 );
+
+/**
+ * Teach-mode codec — `transfer`-only. Boolean indicating whether the
+ * sender's game was in teach-me mode. Receivers inherit the mode but
+ * always start with empty `userDeductions`.
+ */
+export const teachModeCodec = Schema.fromJsonString(TeachModeSchema);

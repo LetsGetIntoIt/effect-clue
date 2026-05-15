@@ -123,7 +123,7 @@ describe("TOURS — checklistSuggest tour", () => {
         // tap-Suggest). The unfiltered registry holds 17 entries;
         // each viewport sees 13 (desktop) / 14 (mobile) after the
         // filter.
-        expect(TOURS.checklistSuggest).toHaveLength(17);
+        expect(TOURS.checklistSuggest).toHaveLength(18);
     });
 
     test("registry anchors in order, including viewport-locked pairs", () => {
@@ -139,10 +139,11 @@ describe("TOURS — checklistSuggest tour", () => {
         //  11. checklist-case-file (both — panel already dismissed)
         //  12. my-cards-section (desktop — Project 3)
         //  13. my-cards-fab (mobile — Project 3)
-        //  14. desktop-suggest-area (desktop)
-        //  15. bottom-nav-suggest (mobile)
-        //  16. suggest-prior-log (both)
-        //  17. suggest-add-form (both)
+        //  14. teach-mode-check (both, requiredTeachMode: true)
+        //  15. desktop-suggest-area (desktop)
+        //  16. bottom-nav-suggest (mobile)
+        //  17. suggest-prior-log (both)
+        //  18. suggest-add-form (both)
         expect(TOURS.checklistSuggest.map(s => s.anchor)).toEqual([
             "overflow-menu",
             "two-halves-spotlight",
@@ -157,6 +158,7 @@ describe("TOURS — checklistSuggest tour", () => {
             "checklist-case-file",
             "my-cards-section",
             "my-cards-fab",
+            "teach-mode-check",
             "desktop-suggest-area",
             "bottom-nav-suggest",
             "suggest-prior-log",
@@ -402,16 +404,17 @@ describe("TOURS — firstSuggestion tour", () => {
 });
 
 describe("TOURS — sharing follow-up tour", () => {
-    test("walks the three sharing menu items: invite → transfer → my-card-packs", () => {
+    test("walks the share menu items + teach-mode toggle", () => {
         // The M22 rework moved the share-a-pack icon out of the
         // setup wizard into the CardPackPicker dropdown + Account
         // modal, and consolidated the other share affordances inside
-        // the overflow menu. The new sharing tour opens that menu
-        // and walks the three menu items in turn.
+        // the overflow menu. The teach-me toggle joined the same
+        // tour in Project 4 since it's also accessible from the menu.
         expect(TOURS.sharing.map((s) => s.anchor)).toEqual([
             "menu-item-invite-player",
             "menu-item-transfer-device",
             "menu-item-my-card-packs",
+            "menu-item-teach-mode",
         ]);
     });
 

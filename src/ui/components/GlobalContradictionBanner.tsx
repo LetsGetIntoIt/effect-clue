@@ -38,13 +38,22 @@ const KEY_JOINT = "joint" as const;
  *      "Turn off" CTAs.
  */
 export function GlobalContradictionBanner() {
-    const { derived } = useClue();
+    const { derived, state } = useClue();
     const result = derived.deductionResult;
     const realTrace = Result.isFailure(result) ? result.failure : undefined;
     const conflict = derived.hypothesisConflict;
     const transition = useReducedTransition(T_STANDARD, { fadeMs: 120 });
 
-    const bodyKey = realTrace ? KEY_REAL : conflict ? KEY_JOINT : undefined;
+    // Teach-mode fully suppresses the banner — contradictions (both
+    // intrinsic user-mark and evidence) surface only when the user
+    // presses the Toolbar "Check" button.
+    const bodyKey = state.teachMode
+        ? undefined
+        : realTrace
+        ? KEY_REAL
+        : conflict
+        ? KEY_JOINT
+        : undefined;
 
     return (
         <AnimatePresence

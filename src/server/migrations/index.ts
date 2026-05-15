@@ -23,6 +23,7 @@ import migration0005 from "./0005_share_expiry_backfill";
 import migration0006 from "./0006_shares_owner_required";
 import migration0007 from "./0007_shares_hypotheses";
 import migration0008 from "./0008_shares_identity_and_scratchwork";
+import migration0009 from "./0009_shares_teach_mode";
 
 export const migrations: Record<
     string,
@@ -36,4 +37,5 @@ export const migrations: Record<
     "0006_shares_owner_required": migration0006,
     "0007_shares_hypotheses": migration0007,
     "0008_shares_identity_and_scratchwork": migration0008,
+    "0009_shares_teach_mode": migration0009,
 };

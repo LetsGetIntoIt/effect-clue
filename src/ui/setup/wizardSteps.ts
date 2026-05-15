@@ -19,6 +19,7 @@ export type WizardStepId =
     | "handSizes"
     | "myCards"
     | "knownCards"
+    | "teachMode"
     | "inviteOtherPlayers";
 
 /**
@@ -36,6 +37,7 @@ const ALL_STEP_IDS: ReadonlyArray<WizardStepId> = [
     "handSizes",
     "myCards",
     "knownCards",
+    "teachMode",
     "inviteOtherPlayers",
 ];
 
@@ -97,6 +99,10 @@ export function isStepDataComplete(
             );
         case "knownCards":
             return state.knownCards.length > 0;
+        case "teachMode":
+            // Always considered complete — the toggle has a default
+            // value (off), so the step is "done" the moment it loads.
+            return true;
         case "inviteOtherPlayers":
             // Always considered complete — the step is purely an
             // optional outbound action with no stored data to gate on.
@@ -156,6 +162,7 @@ export function stepIsSkippable(stepId: WizardStepId): boolean {
         case "handSizes":
         case "myCards":
         case "knownCards":
+        case "teachMode":
         case "inviteOtherPlayers":
             return true;
     }
@@ -208,6 +215,8 @@ export function stepValidationLevel(
         case "myCards":
             return VALIDATION_VALID;
         case "knownCards":
+            return VALIDATION_VALID;
+        case "teachMode":
             return VALIDATION_VALID;
         case "inviteOtherPlayers":
             return VALIDATION_VALID;

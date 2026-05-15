@@ -17,6 +17,7 @@ import {
     phaseAtLeast,
 } from "./GamePhase";
 import { emptyHypotheses } from "./Hypothesis";
+import { emptyUserDeductions } from "./TeachMode";
 import { KnownCard } from "./InitialKnowledge";
 import { newSuggestionId } from "./Suggestion";
 import { newAccusationId } from "./Accusation";
@@ -37,6 +38,8 @@ const baseState: ClueState = {
     selfPlayerId: null,
     firstDealtPlayerId: null,
     dismissedInsights: new Map(),
+    teachMode: false,
+    userDeductions: emptyUserDeductions,
 };
 
 // Fixture state with a card pack + 3 players + every player's hand

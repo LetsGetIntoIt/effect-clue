@@ -66,6 +66,7 @@ import { KnownCard } from "../../logic/InitialKnowledge";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useSelection } from "../SelectionContext";
 import { useClue } from "../state";
+import { useTeachModeCheck } from "./TeachModeCheckContext";
 import { useTour } from "../tour/TourProvider";
 import {
     registerChecklistFocusHandler,
@@ -226,6 +227,7 @@ export function Checklist() {
     const tReasons = useTranslations("reasons");
     const hasKeyboard = useHasKeyboard();
     const { state, dispatch, derived } = useClue();
+    const { verdictForCell } = useTeachModeCheck();
     const {
         activeSuggestionIndex,
         activeAccusationIndex,
@@ -1146,6 +1148,7 @@ export function Checklist() {
                     }
                 }}
                 selfPlayerId={state.selfPlayerId}
+                teachMode={state.teachMode}
                 onClose={() => setExpandedCell(null)}
             />
         );
@@ -1164,6 +1167,7 @@ export function Checklist() {
         setup,
         state.knownCards,
         state.selfPlayerId,
+        state.teachMode,
         dispatch,
         setExpandedCell,
         t,
@@ -1467,23 +1471,49 @@ export function Checklist() {
                                     {owners.flatMap((owner, colIdx) => {
                                         const rowIdx =
                                             rowIdxByCard.get(entry.id) ?? -1;
-                                        const value = getCellByOwnerCard(
-                                            knowledge,
-                                            owner,
-                                            entry.id,
-                                        );
                                         const cellRef = Cell(owner, entry.id);
-                                        const hypothesisValue = hypothesisValueFor(
-                                            hypotheses,
-                                            cellRef,
-                                        );
-                                        const hypothesisStatus = statusFor(
-                                            cellRef,
-                                            realKnowledge,
-                                            jointKnowledge,
-                                            hypotheses,
-                                            jointFailed,
-                                        );
+                                        // In teach-mode the cell renders the
+                                        // user's manual mark from
+                                        // `state.userDeductions` instead of
+                                        // the deducer's joint knowledge. The
+                                        // hypothesis system is suppressed
+                                        // (status fixed to "off"), so the
+                                        // cell looks identical to a normal
+                                        // real-valued cell of that Y/N value
+                                        // — "silent until Check," per spec.
+                                        const teachModeMark = state.teachMode
+                                            ? HashMap.get(
+                                                  state.userDeductions,
+                                                  cellRef,
+                                              )
+                                            : undefined;
+                                        const teachModeValue =
+                                            teachModeMark !== undefined
+                                            && teachModeMark._tag === "Some"
+                                                ? teachModeMark.value
+                                                : undefined;
+                                        const value = state.teachMode
+                                            ? teachModeValue
+                                            : getCellByOwnerCard(
+                                                  knowledge,
+                                                  owner,
+                                                  entry.id,
+                                              );
+                                        const hypothesisValue = state.teachMode
+                                            ? undefined
+                                            : hypothesisValueFor(
+                                                  hypotheses,
+                                                  cellRef,
+                                              );
+                                        const hypothesisStatus = state.teachMode
+                                            ? ({ kind: "off" } as const)
+                                            : statusFor(
+                                                  cellRef,
+                                                  realKnowledge,
+                                                  jointKnowledge,
+                                                  hypotheses,
+                                                  jointFailed,
+                                              );
                                         const display = displayFor(
                                             value,
                                             hypothesisStatus,
@@ -1504,7 +1534,8 @@ export function Checklist() {
                                         // owns that flow).
                                         const playInteractive = isPlayerCell;
                                         const showChip =
-                                            footnoteNumbers.length > 0
+                                            !state.teachMode
+                                            && footnoteNumbers.length > 0
                                             && value === undefined;
                                         const topLeft = showChip ? (
                                             <span
@@ -1559,13 +1590,39 @@ export function Checklist() {
                                         // hypothesis control still lives there.
                                         const popoverInteractive =
                                             playInteractive || !isPlayerCell;
-                                        const tdClassName = cellClass(
+                                        const baseTdClassName = cellClass(
                                             display,
                                             playInteractive
                                                 || popoverInteractive,
                                             isHighlighted,
                                             hypothesisStatus,
                                         );
+                                        // When teach-mode is on and the
+                                        // user has tapped "Show me where"
+                                        // inside the Check banner, paint
+                                        // a dashed outline on cells with
+                                        // a non-Verifiable verdict so the
+                                        // user can see WHERE their marks
+                                        // need attention. The verdict
+                                        // outline uses CSS `outline`
+                                        // (not box-shadow) since outline
+                                        // doesn't change the cell's box
+                                        // and supports dashed style.
+                                        const revealVerdict = state.teachMode
+                                            ? verdictForCell(cellRef)
+                                            : undefined;
+                                        const revealClass =
+                                            revealVerdict === VERDICT_FALSIFIABLE
+                                                ? REVEAL_CLASS_FALSIFIABLE
+                                                : revealVerdict === VERDICT_INCONSISTENT
+                                                ? REVEAL_CLASS_INCONSISTENT
+                                                : revealVerdict === VERDICT_MISSED
+                                                ? REVEAL_CLASS_MISSED
+                                                : revealVerdict === VERDICT_PLAUSIBLE
+                                                ? REVEAL_CLASS_PLAUSIBLE
+                                                : "";
+                                        const tdClassName =
+                                            baseTdClassName + revealClass;
                                         // Arrow-key grid navigation: walk to
                                         // the nearest neighbour cell with a
                                         // data-cell-row/col pair. Shared by
@@ -2490,6 +2547,29 @@ function AnimatedCellGlyph({
 // edge with the grid's 2px padding as their corner inset.
 const CELL_BASE =
     "border-r border-b border-border text-center font-semibold relative overflow-hidden align-top";
+
+// Teach-mode reveal verdict discriminators. Outline classes mirror
+// `CELL_HIGHLIGHTED`'s structure (3px dashed + the
+// `--z-checklist-cell-hover` z-index so the ring paints above
+// neighbouring cells, and `!rounded-[2px]` to match the corner
+// radius), only swapping the color to communicate the verdict. Reuses
+// the existing related-cell highlight vocabulary so the visual
+// treatment is consistent between teach-mode reveal and the popover's
+// chain highlight.
+const VERDICT_FALSIFIABLE = "falsifiable" as const;
+const VERDICT_INCONSISTENT = "inconsistent" as const;
+const VERDICT_MISSED = "missed" as const;
+const VERDICT_PLAUSIBLE = "plausible" as const;
+ 
+const REVEAL_CLASS_BASE = " z-[var(--z-checklist-cell-hover)] !outline !outline-[3px] !outline-dashed !rounded-[2px]";
+ 
+const REVEAL_CLASS_FALSIFIABLE = REVEAL_CLASS_BASE + " !outline-no";
+ 
+const REVEAL_CLASS_INCONSISTENT = REVEAL_CLASS_BASE + " !outline-danger";
+ 
+const REVEAL_CLASS_MISSED = REVEAL_CLASS_BASE + " !outline-accent";
+ 
+const REVEAL_CLASS_PLAUSIBLE = REVEAL_CLASS_BASE + " !outline-accent";
 const STICKY_FIRST_COL =
     "sticky left-0 z-[var(--z-checklist-sticky-column)]";
 

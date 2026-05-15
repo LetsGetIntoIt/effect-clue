@@ -51,6 +51,7 @@ import {
 } from "../../logic/CardSet";
 import { CARD_SETS } from "../../logic/GameSetup";
 import type { GameSession } from "../../logic/Persistence";
+import { emptyUserDeductions } from "../../logic/TeachMode";
 import {
     accusationCards,
 } from "../../logic/Accusation";
@@ -67,6 +68,7 @@ import {
     handSizesCodec,
     hypothesesCodec,
     hypothesisOrderCodec,
+    teachModeCodec,
     knownCardsCodec,
     playersCodec,
     selfPlayerIdCodec,
@@ -408,6 +410,7 @@ const buildTransferInput = (
     hypothesisOrderData: Schema.encodeSync(hypothesisOrderCodec)(
         projectHypothesisOrder(session.hypothesisOrder),
     ),
+    teachModeData: Schema.encodeSync(teachModeCodec)(session.teachMode),
 });
 
 interface ShareCreateModalProps {
@@ -576,6 +579,8 @@ export function ShareCreateModal({
             // Behavioral-insight dismissals ride `transfer` only —
             // `buildTransferInput` projects this into the wire shape.
             dismissedInsights: state.dismissedInsights,
+            teachMode: false,
+            userDeductions: emptyUserDeductions,
         };
         if (variant === VARIANT_INVITE) {
             return buildInviteInput(

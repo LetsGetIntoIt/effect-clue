@@ -22,6 +22,7 @@ import {
     XIcon,
 } from "./Icons";
 import { HypothesisControl } from "./HypothesisControl";
+import { TeachModeCellCheck } from "./TeachModeCellCheck";
 import {
     cellToneClass,
     glyphKindFor,
@@ -84,6 +85,18 @@ interface CellExplanationRowProps {
     readonly observed: boolean;
     readonly onObservationChange: (next: boolean) => void;
     readonly selfPlayerId: Player | null;
+    /**
+     * When true, replaces the entire body (deductions / leads /
+     * hypothesis sections) with a single "Check this cell" affordance.
+     * The body re-renders via `TeachModeCellCheck`, which pulls
+     * `userDeductions` / deducer verdict / intrinsic contradictions
+     * from `useClue()` directly to compute its five-state verdict.
+     *
+     * Optional with a `false` default so existing render-shape tests
+     * don't have to pass it explicitly; production callers should
+     * always pass `state.teachMode`.
+     */
+    readonly teachMode?: boolean;
     /** Closes the row. Wired to the row's [×] button. */
     readonly onClose: () => void;
 }
@@ -131,6 +144,7 @@ export function CellExplanationRow({
     observed,
     onObservationChange,
     selfPlayerId,
+    teachMode = false,
     onClose,
 }: CellExplanationRowProps) {
     const t = useTranslations("hypothesis");
@@ -476,6 +490,10 @@ export function CellExplanationRow({
     // full-width on row 1, Leads + Hypothesis side-by-side on row 2.
     // Every section renders unconditionally with null-state copy when
     // empty so the grid never reflows when content fills in.
+    //
+    // Teach-mode replaces the whole 3-section grid with a single
+    // `TeachModeCellCheck` body — the user hasn't asked the deducer
+    // to talk yet, so we don't pre-render its reasoning.
     return (
         <div className="flex flex-col">
             <div className="relative px-4 py-2">
@@ -494,35 +512,23 @@ export function CellExplanationRow({
                     <XIcon size={16} />
                 </button>
             </div>
-            {/*
-                Section grid. The dividers between sections are the
-                grid's `gap-px` showing through the parent's `bg-border`
-                color — so no section needs its own border, which means
-                no "first-in-row" / "leftmost-on-narrow" CSS detection
-                problem. Outer edges of the grid sit flush against the
-                motion.div's accent border (the gap fills only between
-                items, never around them).
-
-                Deductions explicitly spans both columns at the desktop
-                breakpoint via `@[400px]/sections:col-span-2`. With a
-                fixed 3-section count and Deductions always full-width,
-                Leads + Hypothesis always sit side-by-side on row 2 at
-                desktop and stacked at mobile — the layout never
-                reflows in response to content changes.
-            */}
-            <div className="@container/sections">
-                <div className="grid grid-cols-1 gap-px bg-border @[400px]/sections:grid-cols-2">
-                    <div className="flex flex-col gap-2 bg-panel px-4 py-3 @[400px]/sections:col-span-2">
-                        {deductionsSection}
-                    </div>
-                    <div className="flex flex-col gap-2 bg-panel px-4 py-3">
-                        {leadsSection}
-                    </div>
-                    <div className="flex flex-col gap-2 bg-panel px-4 py-3">
-                        {hypothesisSection}
+            {teachMode ? (
+                <TeachModeCellCheck cell={cell} setup={setup} />
+            ) : (
+                <div className="@container/sections">
+                    <div className="grid grid-cols-1 gap-px bg-border @[400px]/sections:grid-cols-2">
+                        <div className="flex flex-col gap-2 bg-panel px-4 py-3 @[400px]/sections:col-span-2">
+                            {deductionsSection}
+                        </div>
+                        <div className="flex flex-col gap-2 bg-panel px-4 py-3">
+                            {leadsSection}
+                        </div>
+                        <div className="flex flex-col gap-2 bg-panel px-4 py-3">
+                            {hypothesisSection}
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 }

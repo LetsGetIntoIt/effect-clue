@@ -117,6 +117,13 @@ export function BehavioralInsights() {
         }
     };
 
+    // Teach-mode hides the entire panel: both the "Suggested" insights
+    // (deducer-driven recommendations) and the "Active" hypotheses
+    // (which themselves don't render in teach-mode). The state and
+    // hooks above still run so the Rules of Hooks aren't violated when
+    // the user toggles teach-mode mid-game.
+    if (state.teachMode) return null;
+
     return (
         <div
             className="mt-4 border-t border-border pt-4"

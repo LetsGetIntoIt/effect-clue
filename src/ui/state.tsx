@@ -14,6 +14,7 @@ import {
 import {
     Card,
     Player,
+    PlayerOwner,
 } from "../logic/GameObjects";
 import {
     addCardToCategoryInCardSet,
@@ -51,6 +52,12 @@ import {
     type HypothesisMap,
 } from "../logic/Hypothesis";
 import {
+    emptyUserDeductions,
+    findIntrinsicContradictions,
+    type IntrinsicContradictionReport,
+    type UserDeductionMap,
+} from "../logic/TeachMode";
+import {
     generateInsights,
     isConfidenceGreater,
     type Insight,
@@ -75,7 +82,7 @@ import {
     setupDurationMs,
     startSetup,
 } from "../analytics/gameSession";
-import { type Cell, type CellValue, type Knowledge } from "../logic/Knowledge";
+import { Cell, type CellValue, type Knowledge } from "../logic/Knowledge";
 import { chainFor } from "../logic/Provenance";
 import {
     buildInitialKnowledge,
@@ -181,6 +188,8 @@ const initialState: ClueState = {
     selfPlayerId: null,
     firstDealtPlayerId: null,
     dismissedInsights: new Map<string, InsightConfidence>(),
+    teachMode: false,
+    userDeductions: emptyUserDeductions,
 };
 
 const reducer = (state: ClueState, action: ClueAction): ClueState => {
@@ -202,6 +211,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
             // references the old deck's cards, so drop it too.
             // Behavioral-insight dismissals key on `(player, card)` —
             // discard them too since the card ids no longer exist.
+            // User deductions key on `(owner, card)` too — discard.
             return {
                 ...state,
                 setup: GameSetup({
@@ -216,6 +226,7 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 hypothesisOrder: [],
                 pendingSuggestion: null,
                 dismissedInsights: new Map<string, InsightConfidence>(),
+                userDeductions: emptyUserDeductions,
             };
 
         case "setSetup":
@@ -441,6 +452,13 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     state.firstDealtPlayerId === action.player
                         ? null
                         : state.firstDealtPlayerId,
+                // Drop any user-deductions referencing the removed
+                // player — the cell key (Owner × Card) would dangle
+                // and the renderer would have no column to put it in.
+                userDeductions: pruneUserDeductionsForPlayer(
+                    state.userDeductions,
+                    action.player,
+                ),
             };
 
         case "movePlayer": {
@@ -531,6 +549,12 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                     state.firstDealtPlayerId === oldName
                         ? newName
                         : state.firstDealtPlayerId,
+                // Migrate any user-deductions on the renamed player.
+                userDeductions: renameUserDeductionsPlayer(
+                    state.userDeductions,
+                    oldName,
+                    newName,
+                ),
             };
         }
 
@@ -618,6 +642,13 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 dismissedInsights:
                     session.dismissedInsights
                         ?? new Map<string, InsightConfidence>(),
+                // Teach-me preference rides `transfer` shares (so the
+                // user's destination device inherits the mode); local
+                // round-trip preserves it. `userDeductions` is local-
+                // only — receivers of a transfer share inherit the
+                // mode but start with no marks.
+                teachMode: session.teachMode ?? false,
+                userDeductions: session.userDeductions ?? emptyUserDeductions,
             };
         }
 
@@ -629,6 +660,28 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
 
         case "setFirstDealtPlayer":
             return { ...state, firstDealtPlayerId: action.player };
+
+        case "setTeachMode":
+            return { ...state, teachMode: action.enabled };
+
+        case "setUserDeduction": {
+            const next =
+                action.value === null
+                    ? HashMap.remove(state.userDeductions, action.cell)
+                    : HashMap.set(
+                          state.userDeductions,
+                          action.cell,
+                          action.value,
+                      );
+            if (next === state.userDeductions) return state;
+            return { ...state, userDeductions: next };
+        }
+
+        case "clearUserDeductions":
+            return { ...state, userDeductions: emptyUserDeductions };
+
+        case "replaceUserDeductions":
+            return { ...state, userDeductions: action.userDeductions };
 
         case "reorderPlayers": {
             // Validate the input is a permutation of the current
@@ -758,6 +811,14 @@ interface ClueDerived {
      * hypotheses, and the dismissal map.
      */
     readonly behavioralInsights: ReadonlyArray<Insight>;
+    /**
+     * Intrinsic contradictions in the user's teach-me marks (e.g. two
+     * players marked Y for the same card). Computed only when
+     * `teachMode` is on; otherwise reports `offendingCells: new Set()`.
+     * Drives the Check feature's "Inconsistent" verdict and the
+     * vague-summary banner copy. Independent of the deducer.
+     */
+    readonly intrinsicContradictions: IntrinsicContradictionReport;
 }
 
 const deriveState = (
@@ -911,6 +972,16 @@ export const useClue = (): ClueContextValue => {
     }
     return ctx;
 };
+
+/**
+ * Non-throwing variant of `useClue`. Returns `undefined` when no
+ * `<ClueProvider>` is mounted above. Used by providers that compose
+ * inside ClueProvider in production but render under bare React trees
+ * in unit tests (e.g. `TourProvider` reading `state.teachMode` for
+ * the step filter).
+ */
+export const useClueOptional = (): ClueContextValue | undefined =>
+    useContext(ClueContext);
 
 // ---- Provider -----------------------------------------------------------
 
@@ -1327,6 +1398,28 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         state.dismissedInsights,
     ]);
 
+    const intrinsicContradictions = useMemo<IntrinsicContradictionReport>(
+        () => {
+            if (!state.teachMode) {
+                return {
+                    offendingCells: new Set(),
+                    conflictsByCell: new Map(),
+                };
+            }
+            return findIntrinsicContradictions(
+                state.userDeductions,
+                state.setup.cardSet,
+                state.handSizes,
+            );
+        },
+        [
+            state.teachMode,
+            state.userDeductions,
+            state.setup.cardSet,
+            state.handSizes,
+        ],
+    );
+
     const derived: ClueDerived = useMemo(
         () => ({
             suggestionsAsData,
@@ -1340,6 +1433,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             jointDeductionResult,
             hypothesisConflict,
             behavioralInsights,
+            intrinsicContradictions,
         }),
         [
             suggestionsAsData,
@@ -1353,6 +1447,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             jointDeductionResult,
             hypothesisConflict,
             behavioralInsights,
+            intrinsicContradictions,
         ],
     );
 
@@ -1467,6 +1562,8 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             selfPlayerId: state.selfPlayerId,
             firstDealtPlayerId: state.firstDealtPlayerId,
             dismissedInsights: state.dismissedInsights,
+            teachMode: state.teachMode,
+            userDeductions: state.userDeductions,
         };
         saveToLocalStorage(session);
         queryClient.setQueryData(gameSessionQueryKey, session);
@@ -1656,6 +1753,16 @@ const pruneSessionToSetup = (
             playerSet.has(String(cell.owner.player));
         return cardOk && ownerOk;
     });
+    let prunedUserDeductions = state.userDeductions;
+    for (const [cell] of state.userDeductions) {
+        const cardOk = cardIdSet.has(String(cell.card));
+        const ownerOk =
+            cell.owner._tag === "CaseFile" ||
+            playerSet.has(String(cell.owner.player));
+        if (!cardOk || !ownerOk) {
+            prunedUserDeductions = HashMap.remove(prunedUserDeductions, cell);
+        }
+    }
     return {
         ...state,
         setup,
@@ -1691,10 +1798,54 @@ const pruneSessionToSetup = (
             .filter(a => a.cards.every(c => cardIdSet.has(String(c)))),
         hypotheses: prunedHypotheses,
         hypothesisOrder: prunedHypothesisOrder,
+        userDeductions: prunedUserDeductions,
         // The in-flight draft references Player and Card ids. Rather
         // than partial-prune slots in place, drop the whole draft when
         // the setup changes — the user is mid-flow at the keyboard, so
         // re-entering is cheaper than auditing per-slot validity.
         pendingSuggestion: null,
     };
+};
+
+/**
+ * Drop user-deduction marks for cells owned by a removed player. Used
+ * by `removePlayer` so the cell key (Owner × Card) doesn't dangle.
+ */
+const pruneUserDeductionsForPlayer = (
+    deductions: UserDeductionMap,
+    removed: Player,
+): UserDeductionMap => {
+    let out = deductions;
+    for (const [cell] of deductions) {
+        if (cell.owner._tag === "Player" && cell.owner.player === removed) {
+            out = HashMap.remove(out, cell);
+        }
+    }
+    return out;
+};
+
+/**
+ * Rebuild user-deduction marks with cells re-keyed to a renamed player.
+ * Used by `renamePlayer` so the user's marks follow the rename.
+ */
+const renameUserDeductionsPlayer = (
+    deductions: UserDeductionMap,
+    oldName: Player,
+    newName: Player,
+): UserDeductionMap => {
+    if (oldName === newName) return deductions;
+    let out = deductions;
+    let changed = false;
+    for (const [cell, value] of deductions) {
+        if (cell.owner._tag === "Player" && cell.owner.player === oldName) {
+            out = HashMap.remove(out, cell);
+            out = HashMap.set(
+                out,
+                Cell(PlayerOwner(newName), cell.card),
+                value,
+            );
+            changed = true;
+        }
+    }
+    return changed ? out : deductions;
 };

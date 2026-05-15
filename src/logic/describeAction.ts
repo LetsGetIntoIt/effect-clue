@@ -232,6 +232,29 @@ export const describeAction = (
                 : t("actions.setFirstDealtPlayer", {
                       player: String(action.player),
                   });
+        case "setTeachMode":
+            return action.enabled
+                ? t("actions.enableTeachMode")
+                : t("actions.disableTeachMode");
+        case "setUserDeduction":
+            return action.value === null
+                ? t("actions.clearUserDeduction", {
+                      owner: ownerLabel(action.cell.owner),
+                      card:
+                          findCardEntry(setup, action.cell.card)?.name ??
+                          String(action.cell.card),
+                  })
+                : t("actions.setUserDeduction", {
+                      owner: ownerLabel(action.cell.owner),
+                      card:
+                          findCardEntry(setup, action.cell.card)?.name ??
+                          String(action.cell.card),
+                      value: action.value,
+                  });
+        case "clearUserDeductions":
+            return t("actions.clearUserDeductions");
+        case "replaceUserDeductions":
+            return t("actions.replaceUserDeductions");
         // Non-undoable actions — should never reach the describer
         // because the history reducer bypasses them.
         case "setSetup":

@@ -57,6 +57,7 @@ const BODY_OPEN_MARGIN_TOP = 6;
  */
 export function MyHandPanel() {
     const t = useTranslations("myHand");
+    const { state } = useClue();
     const sectionRef = useRef<HTMLElement>(null);
     const [collapsed, setCollapsed] = useState<boolean>(() => {
         if (typeof window === "undefined") return false;
@@ -124,12 +125,17 @@ export function MyHandPanel() {
                     section and shift everything below. When the
                     banner has no content `:empty:hidden` removes the
                     wrapper from layout entirely, keeping the header
-                    visually balanced (title left, chevron right). */}
-                <BannerSlot
-                    collapsed={collapsed}
-                    paused={isHovered}
-                    onTap={expandFromBanner}
-                />
+                    visually balanced (title left, chevron right).
+                    Suppressed in teach-mode — the refute hint is
+                    deducer-derived and would defeat the "do the work
+                    yourself" promise. */}
+                {!state.teachMode && (
+                    <BannerSlot
+                        collapsed={collapsed}
+                        paused={isHovered}
+                        onTap={expandFromBanner}
+                    />
+                )}
                 <button
                     type="button"
                     className="tap-icon flex shrink-0 cursor-pointer items-center justify-center rounded border border-border bg-control text-fg hover:bg-control-hover"
