@@ -22,8 +22,14 @@ import type { InstallPromptTrigger } from "../../analytics/events";
 import { OverflowMenu } from "./OverflowMenu";
 import { PlayCTAButton } from "./PlayCTAButton";
 import { useToolbarActions } from "./Toolbar";
+import { useTeachModeToggle } from "./useTeachModeToggle";
 
 const TRIGGER_MENU: InstallPromptTrigger = "menu";
+
+// Source token for the teach-mode toggle dispatched from the overflow
+// menu. Hoisted to module scope so the `i18next/no-literal-string`
+// lint rule reads it as a code identifier.
+const TEACH_SOURCE_OVERFLOW_MENU = "overflowMenu" as const;
 
 /**
  * Mobile-only fixed-bottom navigation. Shown only under 800px — the
@@ -223,9 +229,11 @@ function BottomOverflowMenu({
     const tInstall = useTranslations("installPrompt");
     const tAccount = useTranslations("account");
     const tShare = useTranslations("share");
+    const tTeach = useTranslations("teachMode");
     const hasKeyboard = useHasKeyboard();
     const { state, canUndo, canRedo, undo, redo } = useClue();
     const { onNewGame } = useToolbarActions();
+    const requestTeachMode = useTeachModeToggle();
     const { restartTourForScreen, currentStep } = useTour();
     // Force this menu open while the "Everything else lives here" tour
     // step is active so the user can see the items without clicking ⋯.
@@ -337,6 +345,18 @@ function BottomOverflowMenu({
                         label: tAccount("menuItemMyCardPacks"),
                         onClick: () => openAccountModal(),
                         tourAnchor: "menu-item-my-card-packs",
+                    },
+                    {
+                        label: state.teachMode
+                            ? tTeach("menuLabelActive")
+                            : tTeach("menuLabel"),
+                        active: state.teachMode,
+                        onClick: () =>
+                            requestTeachMode(
+                                !state.teachMode,
+                                TEACH_SOURCE_OVERFLOW_MENU,
+                            ),
+                        tourAnchor: "menu-item-teach-mode",
                     },
                     {
                         label: tOnboarding("takeTour"),

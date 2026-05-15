@@ -86,7 +86,13 @@
             "setSelfPlayer": "identifying yourself as {player}",
             "clearSelfPlayer": "clearing your identity",
             "setFirstDealtPlayer": "marking {player} as the first dealt",
-            "clearFirstDealtPlayer": "clearing the first-dealt player"
+            "clearFirstDealtPlayer": "clearing the first-dealt player",
+            "enableTeachMode": "turning on teach-me mode",
+            "disableTeachMode": "turning off teach-me mode",
+            "setUserDeduction": "marking {owner} {value, select, Y {has} other {does not have}} {card}",
+            "clearUserDeduction": "clearing your mark on {owner} / {card}",
+            "clearUserDeductions": "clearing all your teach-me marks",
+            "replaceUserDeductions": "filling your teach-me board from the deducer"
         }
     },
     "setup": {
@@ -340,6 +346,47 @@
         "accuseNowLogTitle": "Add this accusation to the failed-accusation log (only if it turns out to be wrong)",
         "nearlySolvedTitle": "One refutation away",
         "nearlySolvedBody": "Every category but {category} is pinned. Two candidates remain in {category} — one well-chosen suggestion narrows it to one."
+    },
+    "teachMode": {
+        "yourMarkLabel": "Your mark",
+        "markOff": "Off",
+        "checkThisCellButton": "Check {card}",
+        "verdictVerifiable": "You are right — this is provable from the evidence.",
+        "verdictFalsifiable": "This contradicts the evidence — the evidence proves <deducerVerdict></deducerVerdict>.",
+        "verdictPlausible": "This could be true, but there is no proof yet — keep gathering clues.",
+        "verdictMissed": "You missed one — the evidence proves <deducerVerdict></deducerVerdict>.",
+        "verdictInconsistent": "This contradicts another mark you made — only one of them can be right.",
+        "verdictUnknown": "Nothing to check yet — mark this cell or wait for more clues.",
+        "toolbarCheckLabel": "Check my work",
+        "toolbarCheckAria": "Check your teach-me marks against the evidence",
+        "bannerLookingGood": "Looking good — every mark is consistent with the evidence.",
+        "bannerNothingMarked": "Mark some cells first, then press Check.",
+        "bannerEvidenceContradiction": "Your evidence is inconsistent — review your suggestion log.",
+        "bannerHasFalsifiable": "Some marks contradict the evidence.",
+        "bannerHasMissed": "You missed some deductions.",
+        "bannerHasPlausible": "Some marks are not yet supported by the evidence.",
+        "bannerHasInconsistent": "Some marks contradict each other.",
+        "bannerShowMeWhere": "Show me where",
+        "bannerDismissAria": "Dismiss feedback",
+        "bannerSummaryAnd": " and ",
+        "midGamePromptTitle": "Turn on teach-me mode?",
+        "midGamePromptBodyEmpty": "Teach-me mode hides deductions, hypotheses, and hints so you can solve the puzzle yourself. We will keep running the deducer in the background — press the Check button to see how your marks compare.",
+        "midGamePromptBodyHasMarks": "You already have some teach-me marks from a previous session. Pick up where you left off, or replace them with the deducer's current state of the puzzle.",
+        "midGameOptionBlank": "Start blank",
+        "midGameOptionPreviousMarks": "Start with my previous marks",
+        "midGameOptionKeepDeduced": "Keep what we have deduced so far",
+        "midGameOptionKeepDeducedOverwrite": "Replace my marks with the current deductions",
+        "midGameOptionCancel": "Cancel",
+        "menuLabel": "Teach me mode",
+        "menuLabelActive": "Teach me mode (on)",
+        "wizardStepTitle": "Teach-me mode",
+        "wizardStepSummary": "Solve the puzzle yourself — we will hide deductions, hypotheses, and hints until you ask us to check your work.",
+        "wizardToggleLabel": "Teach me as I solve",
+        "wizardToggleHelp": "Optional. You can change this mid-game from the overflow menu.",
+        "shareImportInviteCheckbox": "Use teach-me mode for this game",
+        "shareImportInviteHelp": "Solve the puzzle yourself; press Check to compare your marks against the evidence.",
+        "shareImportTransferSummaryOn": "Includes teach-me mode: on",
+        "shareImportTransferSummaryOff": "Includes teach-me mode: off"
     },
     "suggestions": {
         "title": "Suggestion log",
@@ -685,6 +732,10 @@
             "myCardsMobile": {
                 "title": "Your cards are one tap away",
                 "body": "Tap this to open the My cards panel — a quick reference for the cards in your hand. During a suggestion draft, the panel also tells you whether you can refute it."
+            },
+            "teachModeCheck": {
+                "title": "Check your work",
+                "body": "Press <strong>Check</strong> whenever you want a sanity check. We will compare your marks against the evidence and tell you what is consistent, missing, or wrong."
             }
         },
         "suggest": {
@@ -727,6 +778,10 @@
             "myCardPacks": {
                 "title": "My card packs",
                 "body": "Save custom decks here and share them with friends. Each saved pack syncs across your devices when you're signed in."
+            },
+            "teachMode": {
+                "title": "Solve it yourself with teach-me mode",
+                "body": "Turn this on to hide deductions, hypotheses, and hints. Mark the checklist yourself, and press Check when you want a sanity check from the solver."
             }
         },
         "account": {

@@ -137,6 +137,7 @@ Per-kind wire-field coverage:
 | `selfPlayerIdData` | — | — | yes |
 | `dismissedInsightsData` | — | — | yes |
 | `hypothesisOrderData` | — | — | yes |
+| `teachModeData` | — | — | yes |
 
 The `firstDealtPlayerId` field is the only identity-related slice
 that crosses to a different player — it's publicly-known game state
@@ -146,6 +147,16 @@ fields (`selfPlayerId`, `dismissedInsights`, `hypothesisOrder`, plus
 `hypotheses` itself) are `transfer`-only by design: an invite share
 goes to *another* player who picks their own identity and starts
 with empty scratchwork.
+
+`teachModeData` is `transfer`-only for a different reason: it's a
+per-game user preference. Sending it on a transfer means the user's
+destination device inherits the mode (no "did I have teach-me on?"
+re-prompt). Invite shares deliberately omit it — the receiver is a
+different player who may or may not want teach-me mode; the import
+modal offers an optional opt-in checkbox so they pick for themselves.
+The user's actual teach-me marks (`userDeductions`) are NEVER on the
+wire for any share kind — they're personal scratchwork; the receiver
+always starts with an empty marks board.
 
 The server whitelists the fields each `kind` is allowed to carry.
 A `kind: "pack"` request with an extraneous `playersData` is
@@ -174,7 +185,7 @@ kind is a wire-and-server change, not a schema change.
 
 ## Effect-Schema-validated wire format
 
-All eleven wire fields round-trip through Effect `Schema` codecs in
+All twelve wire fields round-trip through Effect `Schema` codecs in
 [src/logic/ShareCodec.ts](../src/logic/ShareCodec.ts):
 
 ```ts
@@ -189,6 +200,7 @@ export const selfPlayerIdCodec        = Schema.fromJsonString(...);
 export const firstDealtPlayerIdCodec  = Schema.fromJsonString(...);
 export const dismissedInsightsCodec   = Schema.fromJsonString(...);
 export const hypothesisOrderCodec     = Schema.fromJsonString(...);
+export const teachModeCodec           = Schema.fromJsonString(Schema.Boolean);
 ```
 
 Each codec packages "JSON-string ↔ schema-validated object" into one

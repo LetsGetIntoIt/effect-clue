@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import { Result } from "effect";
 import { CLASSIC_SETUP_3P } from "./GameSetup";
 import { emptyHypotheses } from "./Hypothesis";
+import { emptyUserDeductions } from "./TeachMode";
 import { decodeSession, encodeSession } from "./Persistence";
 import { decodeV6Unknown } from "./PersistenceSchema";
 import { Player } from "./GameObjects";
@@ -13,7 +14,7 @@ import { Player } from "./GameObjects";
  * starts a fresh session.
  */
 describe("Schema-backed persistence", () => {
-    test("encode produces version: 11 and round-trips through decode", () => {
+    test("encode produces version: 12 and round-trips through decode", () => {
         const encoded = encodeSession({
             setup: CLASSIC_SETUP_3P,
             hands: [],
@@ -26,8 +27,10 @@ describe("Schema-backed persistence", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
+            teachMode: false,
+            userDeductions: emptyUserDeductions,
         });
-        expect(encoded.version).toBe(11);
+        expect(encoded.version).toBe(12);
 
         const decoded = decodeSession(encoded);
         expect(decoded).toBeDefined();
@@ -117,6 +120,8 @@ describe("Schema-backed persistence", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: dismissed,
+            teachMode: false,
+            userDeductions: emptyUserDeductions,
         });
         const decoded = decodeSession(encoded);
         expect(decoded).toBeDefined();

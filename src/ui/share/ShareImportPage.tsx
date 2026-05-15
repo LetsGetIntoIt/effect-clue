@@ -105,6 +105,7 @@ interface ShareSnapshot {
     readonly firstDealtPlayerIdData: string | null;
     readonly dismissedInsightsData: string | null;
     readonly hypothesisOrderData: string | null;
+    readonly teachModeData: string | null;
     readonly ownerName: string | null;
     readonly ownerIsAnonymous: boolean | null;
 }
@@ -346,6 +347,20 @@ export function ShareImportPage({
     const hasKnown = snapshot.knownCardsData !== null;
     const hasSugg = snapshot.suggestionsData !== null;
     const hasAccu = snapshot.accusationsData !== null;
+    // Teach-me preference rides `transfer` shares only. `null` here
+    // means "not on the wire" (invite / pack share, or pre-migration
+    // transfer share). On decode, default to `false`. The boolean is
+    // surfaced in the import summary so the receiver knows what they
+    // are about to inherit.
+    const teachModeSnapshot: boolean | null = (() => {
+        if (snapshot.teachModeData === null) return null;
+        try {
+            const parsed = JSON.parse(snapshot.teachModeData);
+            return typeof parsed === "boolean" ? parsed : null;
+        } catch {
+            return null;
+        }
+    })();
     const isEmpty = !hasPack && !hasPlayers;
     const receiveFlow: ReceiveFlow =
         !hasPlayers
@@ -395,6 +410,11 @@ export function ShareImportPage({
     const [importKnownCards, setImportKnownCards] = useState<
         ReadonlyArray<KnownCard>
     >([]);
+    // Invite-share opt-in for teach-me mode. Default off — the user
+    // ticks it in the modal if they want to learn the deduction
+    // themselves. Transfer shares carry teach-mode on the wire and
+    // bypass this checkbox.
+    const [importTeachMode, setImportTeachMode] = useState<boolean>(false);
 
     // Tracks the last identity that was committed to local state.
     // Used by the clear-cards-on-identity-change effect below; the
@@ -584,12 +604,21 @@ export function ShareImportPage({
      * when nothing was picked, so the snapshot path runs unmodified.
      */
     const buildOverridesFromLocalState = (): ApplyOverrides | undefined => {
-        if (importIdentity === null && importKnownCards.length === 0) {
+        if (
+            importIdentity === null
+            && importKnownCards.length === 0
+            && !importTeachMode
+        ) {
             return undefined;
         }
-        const overrides: { selfPlayerId?: Player | null; knownCards?: ReadonlyArray<KnownCard> } = {};
+        const overrides: {
+            selfPlayerId?: Player | null;
+            knownCards?: ReadonlyArray<KnownCard>;
+            teachMode?: boolean;
+        } = {};
         if (importIdentity !== null) overrides.selfPlayerId = importIdentity;
         if (importKnownCards.length > 0) overrides.knownCards = importKnownCards;
+        if (importTeachMode) overrides.teachMode = true;
         return overrides;
     };
 
@@ -1055,8 +1084,18 @@ export function ShareImportPage({
                                         />
                                     </div>
                                 ) : null}
+                                <TeachModeInviteCheckbox
+                                    checked={importTeachMode}
+                                    onChange={setImportTeachMode}
+                                />
                             </div>
                         ) : null}
+                        {receiveFlow === RECEIVE_FLOW_TRANSFER
+                            && teachModeSnapshot !== null && (
+                                <TeachModeTransferSummary
+                                    on={teachModeSnapshot}
+                                />
+                            )}
                         </div>
                         {/* Sticky footer band. `relative z-[40]` wins
                             against any z-index inside the body up
@@ -1091,5 +1130,55 @@ export function ShareImportPage({
                 </Dialog.Portal>
             </Dialog.Root>
         </main>
+    );
+}
+
+/**
+ * Optional opt-in for teach-me mode on an invite-share import. Invite
+ * shares deliberately omit teach-mode from the wire format (it's a
+ * personal preference, not part of the publicly-known game state), so
+ * the receiver picks it themselves. Default off.
+ */
+function TeachModeInviteCheckbox({
+    checked,
+    onChange,
+}: {
+    readonly checked: boolean;
+    readonly onChange: (next: boolean) => void;
+}) {
+    const t = useTranslations("teachMode");
+    return (
+        <label className="mt-2 flex cursor-pointer items-start gap-3 rounded border border-border bg-control p-3">
+            <input
+                type="checkbox"
+                checked={checked}
+                onChange={(e) => onChange(e.currentTarget.checked)}
+                className="mt-1"
+            />
+            <span className="flex flex-col gap-1">
+                <span className="text-[1.125rem] font-semibold text-fg">
+                    {t("shareImportInviteCheckbox")}
+                </span>
+                <span className="text-[1rem] text-muted">
+                    {t("shareImportInviteHelp")}
+                </span>
+            </span>
+        </label>
+    );
+}
+
+/**
+ * Surfaces the sender's teach-mode preference in the transfer-share
+ * import summary. Transfer shares carry teach-mode on the wire so the
+ * receiver inherits the mode; this row makes the inheritance visible.
+ */
+function TeachModeTransferSummary({ on }: { readonly on: boolean }) {
+    const t = useTranslations("teachMode");
+    return (
+        <p className="m-0 text-[1.125rem] text-muted">
+            {on
+                ? t("shareImportTransferSummaryOn")
+                : t("shareImportTransferSummaryOff")}
+        </p>
     );
 }

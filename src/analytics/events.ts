@@ -935,6 +935,7 @@ type WizardStep =
     | "handSizes"
     | "myCards"
     | "knownCards"
+    | "teachMode"
     | "inviteOtherPlayers";
 
 export const setupWizardStepAdvanced = (props: {
@@ -971,3 +972,49 @@ export const playCtaClicked = (props: {
 export const setupFirstDealtPlayerSet = (props: {
     auto: boolean;
 }): void => capture("setup_first_dealt_player_set", props);
+
+// ── Teach-me mode ───────────────────────────────────────────────────────
+
+/**
+ * Fired when the user turns teach-me mode on. `source` records WHERE
+ * the toggle was triggered so we can see whether the wizard step,
+ * the overflow menu, or a share import is the primary entry point.
+ */
+export const teachModeEnabled = (props: {
+    source: "wizard" | "overflowMenu" | "shareImport";
+    midGameAction?: "blank" | "previousMarks" | "keepDeduced";
+}): void => capture("teach_mode_enabled", props);
+
+export const teachModeDisabled = (props: {
+    source: "overflowMenu" | "shareImport";
+}): void => capture("teach_mode_disabled", props);
+
+/**
+ * Fired when the user presses the global Check button. `revealLevel`
+ * distinguishes the initial vague summary press from the subsequent
+ * "Show me where" reveal so the funnel can see whether users typically
+ * stop at the vague feedback or dig into the per-cell outlines.
+ */
+export const teachModeCheckUsed = (props: {
+    revealLevel: "vague" | "full";
+    verifiable: number;
+    falsifiable: number;
+    plausible: number;
+    missed: number;
+    inconsistent: number;
+    evidenceContradiction: boolean;
+}): void => capture("teach_mode_check_used", props);
+
+/**
+ * Fired when the user presses "Check this cell" inside the cell
+ * explanation panel. `verdict` is one of the five taxonomy states.
+ */
+export const teachModeCellCheckUsed = (props: {
+    verdict:
+        | "verifiable"
+        | "falsifiable"
+        | "plausible"
+        | "missed"
+        | "inconsistent"
+        | "unknown";
+}): void => capture("teach_mode_cell_check_used", props);

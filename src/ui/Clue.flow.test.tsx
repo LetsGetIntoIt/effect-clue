@@ -133,6 +133,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { saveToLocalStorage } from "../logic/Persistence";
 import { emptyHypotheses } from "../logic/Hypothesis";
+import { emptyUserDeductions } from "../logic/TeachMode";
 import { CLASSIC_SETUP_3P } from "../logic/GameSetup";
 import { Clue } from "./Clue";
 import { TestQueryClientProvider } from "../test-utils/queryClient";
@@ -153,6 +154,8 @@ const seedSetupSession = (): void => {
         selfPlayerId: null,
         firstDealtPlayerId: null,
         dismissedInsights: new Map(),
+        teachMode: false,
+        userDeductions: emptyUserDeductions,
     });
 };
 
@@ -197,7 +200,8 @@ describe("Clue — full user-journey umbrella", () => {
         await user.click(stickyByText("next")); // players → identity
         await user.click(stickyByText("next")); // identity → handSizes
         await user.click(stickyByText("next")); // handSizes → knownCards
-        await user.click(stickyByText("next")); // knownCards → inviteOtherPlayers
+        await user.click(stickyByText("next")); // knownCards → teachMode
+        await user.click(stickyByText("next")); // teachMode → inviteOtherPlayers
         // The walkthrough flag is not yet set — the global Play CTA
         // stays hidden during the first-time flow. The wizard's
         // last-step `data-setup-cta` button is the only way to leave

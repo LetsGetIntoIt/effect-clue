@@ -330,7 +330,7 @@ The icons match what the user sees in the deduction grid, so the tour reads in t
 
 Two docs in `docs/` cover how user data leaves the device:
 
-- [docs/shares-and-sync.md](docs/shares-and-sync.md) — the sharing UX, the kind-discriminated wire contract, and the eleven Effect-Schema-validated wire fields (cardPack / players / handSizes / knownCards / suggestions / accusations / hypotheses / selfPlayerId / firstDealtPlayerId / dismissedInsights / hypothesisOrder). `firstDealtPlayerId` rides invite + transfer (publicly known game state); `hypotheses`, `selfPlayerId`, `dismissedInsights`, and `hypothesisOrder` are `transfer`-only.
+- [docs/shares-and-sync.md](docs/shares-and-sync.md) — the sharing UX, the kind-discriminated wire contract, and the twelve Effect-Schema-validated wire fields (cardPack / players / handSizes / knownCards / suggestions / accusations / hypotheses / selfPlayerId / firstDealtPlayerId / dismissedInsights / hypothesisOrder / teachMode). `firstDealtPlayerId` rides invite + transfer (publicly known game state); `hypotheses`, `selfPlayerId`, `dismissedInsights`, `hypothesisOrder`, and `teachMode` are `transfer`-only. `userDeductions` (teach-mode marks) are never on the wire — personal scratchwork that the receiver always starts blank.
 - [docs/card-pack-sync.md](docs/card-pack-sync.md) — the deep dive on how localStorage and the server stay in sync once the user is signed in: per-pack metadata (`unsyncedSince`, `lastSyncedSnapshot`), tombstones, the `<CardPacksSync />` reconcile loop, the `flushPendingChanges` logout chokepoint, and four "life of a card pack" timelines.
 
 **Whenever you touch sync-or-share code, update the corresponding doc as part of the same change.** This is non-negotiable — these systems have enough subtlety (auth gating, conflict resolution, in-flight registry, tombstones, the four-quadrant pack-state matrix) that drift between the code and the doc will burn the next person to come in.
@@ -363,11 +363,11 @@ Every new field in `ClueState` (or anything else persisted via the canonical `Ga
 3. **Private to the sender, but objective game state?** — facts about the sender's own hand or what they've been told privately by other players. Goes in `transfer` only. (`invite` excludes this — it ships to a *different* player who shouldn't see your hand.)
    *Examples: `knownCards`, the `seenCard` on a suggestion the sender refuted.*
 
-4. **Personal scratchwork / identity?** — the sender's hunches, annotations, dismissals, "who am I" choice. Goes in `transfer` only. (`invite` excludes this — the recipient is a different person with a different perspective.)
-   *Examples: `hypotheses`, `hypothesisOrder`, `selfPlayerId`, `dismissedInsights`.*
+4. **Personal scratchwork / identity / per-game preferences?** — the sender's hunches, annotations, dismissals, "who am I" choice, mode preferences they want their destination device to inherit. Goes in `transfer` only. (`invite` excludes this — the recipient is a different person with a different perspective.)
+   *Examples: `hypotheses`, `hypothesisOrder`, `selfPlayerId`, `dismissedInsights`, `teachMode`.*
 
-5. **Ephemeral UI / in-flight drafts?** — anything that's persisted to survive reloads but doesn't represent committed game state. **Never shared, including in `transfer`.** The receiver enters their own.
-   *Examples: `pendingSuggestion`, `uiMode`, scroll memory.*
+5. **Ephemeral UI / in-flight drafts / personal solving work?** — anything that's persisted to survive reloads but doesn't represent committed game state, plus a sender's in-progress solving annotations that a receiver would want to do themselves. **Never shared, including in `transfer`.** The receiver enters their own.
+   *Examples: `pendingSuggestion`, `uiMode`, scroll memory, `userDeductions`.*
 
 A new field that doesn't fit any of these is a signal that the share-kind taxonomy needs to grow, not that the field should be shoehorned. Surface that in PR review rather than picking the closest-fit kind silently.
 

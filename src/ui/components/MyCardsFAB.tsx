@@ -21,6 +21,7 @@ import {
     SuggestionBanner,
     useSuggestionBannerVisible,
 } from "./SuggestionBanner";
+import { useClue } from "../state";
 
 // Match the long-press constants used by the Checklist cell — same
 // timing keeps the gesture vocabulary consistent across the app.
@@ -63,6 +64,7 @@ const TEASER_OFFSET_VAR = "--my-cards-teaser-offset" as const;
  */
 export function MyCardsFAB() {
     const t = useTranslations("myHand");
+    const { state: clueState } = useClue();
     const [panelOpen, setPanelOpen] = useState(false);
     const [tooltipOpen, setTooltipOpen] = useState(false);
     const panelRef = useRef<HTMLDivElement>(null);
@@ -80,7 +82,13 @@ export function MyCardsFAB() {
     // teaser carries the hand-of-cards icon on its left for continuity
     // with the FAB and the desktop section. Otherwise the FAB is the
     // sole entry point.
-    const bannerVisible = useSuggestionBannerVisible();
+    const bannerVisibleRaw = useSuggestionBannerVisible();
+    // Teach-mode suppresses the SuggestionBanner everywhere (refute
+    // hint is deducer-derived). Without this gate, the FAB would flip
+    // into stacked-teaser mode whenever the user had a draft suggestion
+    // in flight, even though the teaser bar (which renders
+    // `<SuggestionBanner />`) would be empty in teach-mode.
+    const bannerVisible = clueState.teachMode ? false : bannerVisibleRaw;
     const showTeaser = !panelOpen && bannerVisible;
     const showFab = !panelOpen && !bannerVisible;
 
@@ -349,15 +357,18 @@ export function MyCardsFAB() {
                           The mobile panel is always-on while open —
                           opening the FAB acknowledges the surface, so
                           the banner skips its attention bounce by
-                          passing `paused`.
+                          passing `paused`. Suppressed in teach-mode
+                          (refute hint is deducer-derived).
                         */}
-                        <div className="mt-1.5">
-                            <SuggestionBanner
-                                paused
-                                surface={MY_CARDS_SURFACE_FAB}
-                                expanded
-                            />
-                        </div>
+                        {!clueState.teachMode && (
+                            <div className="mt-1.5">
+                                <SuggestionBanner
+                                    paused
+                                    surface={MY_CARDS_SURFACE_FAB}
+                                    expanded
+                                />
+                            </div>
+                        )}
                         <div className="mt-1.5">
                             <MyHandPanelBody />
                         </div>

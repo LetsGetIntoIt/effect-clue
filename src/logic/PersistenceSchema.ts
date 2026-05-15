@@ -49,6 +49,14 @@ import { SuggestionId } from "./Suggestion";
  * keys. Local round-trip only; share wire format omits it for the
  * same reason hypotheses themselves are omitted.
  *
+ * v12 adds `teachMode: boolean` and `userDeductions: Array<{ player,
+ * card, value }>` — the per-game teach-me preference and the user's
+ * manual checklist marks. `teachMode` is on the wire for `transfer`
+ * shares only (personal preference, but the user wants their
+ * destination device to inherit it). `userDeductions` is local
+ * round-trip only — never on the wire (personal scratchwork; the
+ * receiver of a transfer share starts with empty marks).
+ *
  * Branded strings (Player, Card, CardCategory, SuggestionId,
  * AccusationId) are decoded straight into their nominal types via
  * `Schema.fromBrand`, so downstream code receives properly-branded
@@ -301,12 +309,9 @@ const PersistedSessionV10Schema = Schema.Struct({
 });
 
 /**
- * Canonical v11 session shape. Adds `hypothesisOrder` — UI-only
- * ordering of active hypotheses, most-recent first. Mirrors the keys
- * of `hypotheses` 1:1; the Hypotheses panel renders top-to-bottom
- * from this list so adopted hypotheses read like a historical log.
- * Local round-trip only; the share wire format omits it for the same
- * reason hypotheses themselves are omitted (personal scratchwork).
+ * v11 session shape — kept for back-compat reads. v12 supersedes it.
+ * Adds `hypothesisOrder` — UI-only ordering of active hypotheses,
+ * most-recent first.
  */
 const PersistedSessionV11Schema = Schema.Struct({
     version: Schema.Literal(11),
@@ -321,6 +326,46 @@ const PersistedSessionV11Schema = Schema.Struct({
     selfPlayerId: Schema.NullOr(PlayerSchema),
     firstDealtPlayerId: Schema.NullOr(PlayerSchema),
     dismissedInsights: DismissedInsightsArraySchema,
+});
+
+/**
+ * Persisted shape of a single user-deduction mark — same flat
+ * `player: NullOr | card | value` encoding as
+ * `PersistedHypothesisSchema` (same `Schema.Union`-avoidance reason).
+ */
+const PersistedUserDeductionSchema = Schema.Struct({
+    player: Schema.NullOr(PlayerSchema),
+    card: CardSchema,
+    value: Schema.Literals(["Y", "N"]),
+});
+
+const UserDeductionsArraySchema = Schema.Array(
+    PersistedUserDeductionSchema,
+);
+
+/**
+ * Canonical v12 session shape. Adds `teachMode` (per-game preference
+ * flag) and `userDeductions` (the user's manual checklist marks while
+ * teach-me mode is on). `userDeductions` is local round-trip only;
+ * the share wire format omits it for the same reason hypotheses do
+ * (personal scratchwork). `teachMode` is on the wire for `transfer`
+ * shares only (so the user's destination device inherits the mode).
+ */
+const PersistedSessionV12Schema = Schema.Struct({
+    version: Schema.Literal(12),
+    setup: PersistedGameSetupSchema,
+    hands: Schema.Array(PersistedHandSchema),
+    handSizes: Schema.Array(PersistedHandSizeSchema),
+    suggestions: Schema.Array(PersistedSuggestionSchema),
+    accusations: Schema.Array(PersistedAccusationSchema),
+    hypotheses: HypothesesArraySchema,
+    hypothesisOrder: HypothesisOrderArraySchema,
+    pendingSuggestion: Schema.NullOr(PersistedPendingSuggestionSchema),
+    selfPlayerId: Schema.NullOr(PlayerSchema),
+    firstDealtPlayerId: Schema.NullOr(PlayerSchema),
+    dismissedInsights: DismissedInsightsArraySchema,
+    teachMode: Schema.Boolean,
+    userDeductions: UserDeductionsArraySchema,
 });
 
 /**
@@ -346,6 +391,9 @@ export const decodeV10Unknown = Schema.decodeUnknownResult(
 export const decodeV11Unknown = Schema.decodeUnknownResult(
     PersistedSessionV11Schema,
 );
+export const decodeV12Unknown = Schema.decodeUnknownResult(
+    PersistedSessionV12Schema,
+);
 
 /**
  * Runtime types of decoded sessions — the branded, Schema-validated
@@ -358,8 +406,12 @@ export type PersistedSessionV8 = Schema.Schema.Type<typeof PersistedSessionV8Sch
 export type PersistedSessionV9 = Schema.Schema.Type<typeof PersistedSessionV9Schema>;
 export type PersistedSessionV10 = Schema.Schema.Type<typeof PersistedSessionV10Schema>;
 export type PersistedSessionV11 = Schema.Schema.Type<typeof PersistedSessionV11Schema>;
+export type PersistedSessionV12 = Schema.Schema.Type<typeof PersistedSessionV12Schema>;
 export type PersistedDismissedInsight = Schema.Schema.Type<
     typeof PersistedDismissedInsightSchema
+>;
+export type PersistedUserDeduction = Schema.Schema.Type<
+    typeof PersistedUserDeductionSchema
 >;
 
 export type PersistedHypothesis = Schema.Schema.Type<typeof PersistedHypothesisSchema>;

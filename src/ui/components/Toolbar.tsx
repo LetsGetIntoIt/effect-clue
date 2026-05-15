@@ -24,11 +24,19 @@ import { useInstallPromptContext } from "./InstallPromptProvider";
 import type { InstallPromptTrigger } from "../../analytics/events";
 import { OverflowMenu } from "./OverflowMenu";
 import { PlayCTAButton } from "./PlayCTAButton";
+import { teachModeCheckUsed } from "../../analytics/events";
+import { tallyVerdicts } from "../../logic/TeachMode";
+import { useTeachModeCheck } from "./TeachModeCheckContext";
+import { useTeachModeToggle } from "./useTeachModeToggle";
 import { Tooltip } from "./Tooltip";
 
 // Module-scope discriminator values, exempt from the i18next literal
 // lint rule.
 const TRIGGER_MENU: InstallPromptTrigger = "menu";
+
+// Source token passed to `requestTeachMode` from the overflow menu.
+// Hoisted so the lint rule reads it as a code identifier.
+const TEACH_SOURCE_OVERFLOW_MENU = "overflowMenu" as const;
 
 const buttonClass =
     "tap-target-compact text-tap-compact rounded-[var(--radius)] border border-border bg-white " +
@@ -78,10 +86,12 @@ export function Toolbar() {
     const tInstall = useTranslations("installPrompt");
     const tAccount = useTranslations("account");
     const tShare = useTranslations("share");
+    const tTeach = useTranslations("teachMode");
     const hasKeyboard = useHasKeyboard();
     const {
         state,
         dispatch,
+        derived,
         canUndo,
         canRedo,
         undo,
@@ -90,6 +100,26 @@ export function Toolbar() {
         nextRedo,
     } = useClue();
     const { onNewGame } = useToolbarActions();
+    const { openBanner } = useTeachModeCheck();
+    const requestTeachMode = useTeachModeToggle();
+    const onCheckClick = () => {
+        const tally = tallyVerdicts(
+            state.setup,
+            state.userDeductions,
+            derived.deductionResult,
+            derived.intrinsicContradictions,
+        );
+        teachModeCheckUsed({
+            revealLevel: "vague",
+            verifiable: tally.verifiable,
+            falsifiable: tally.falsifiable,
+            plausible: tally.plausible,
+            missed: tally.missed,
+            inconsistent: tally.inconsistent,
+            evidenceContradiction: tally.evidenceContradiction,
+        });
+        openBanner();
+    };
     const { restartTourForScreen, currentStep } = useTour();
     // The "Everything else lives here" tour step (and any step that
     // spotlights a SPECIFIC menu item, like the sharing tour's three
@@ -169,6 +199,17 @@ export function Toolbar() {
                     {t("redo", { shortcut: shortcutSuffix("global.redo", hasKeyboard) })}
                 </button>
             </Tooltip>
+            {state.teachMode && state.uiMode !== "setup" && (
+                <button
+                    type="button"
+                    onClick={onCheckClick}
+                    className={`${buttonClass} inline-flex items-center gap-1.5`}
+                    aria-label={tTeach("toolbarCheckAria")}
+                    data-tour-anchor="teach-mode-check"
+                >
+                    {tTeach("toolbarCheckLabel")}
+                </button>
+            )}
             <PlayCTAButton variant="toolbar" />
             <OverflowMenu
                 triggerClassName={`${buttonClass} inline-flex items-center justify-center`}
@@ -224,6 +265,18 @@ export function Toolbar() {
                         label: tAccount("menuItemMyCardPacks"),
                         onClick: () => openAccountModal(),
                         tourAnchor: "menu-item-my-card-packs",
+                    },
+                    {
+                        label: state.teachMode
+                            ? tTeach("menuLabelActive")
+                            : tTeach("menuLabel"),
+                        active: state.teachMode,
+                        onClick: () =>
+                            requestTeachMode(
+                                !state.teachMode,
+                                TEACH_SOURCE_OVERFLOW_MENU,
+                            ),
+                        tourAnchor: "menu-item-teach-mode",
                     },
                     {
                         label: tOnboarding("takeTour"),

@@ -4,6 +4,7 @@ import { CardSet } from "../../logic/CardSet";
 import { Player } from "../../logic/GameObjects";
 import { CLASSIC_SETUP_3P, GameSetup } from "../../logic/GameSetup";
 import { emptyHypotheses } from "../../logic/Hypothesis";
+import { emptyUserDeductions } from "../../logic/TeachMode";
 import { PlayerSet } from "../../logic/PlayerSet";
 import {
     isStepDataComplete,
@@ -25,6 +26,8 @@ const baseState: ClueState = {
     selfPlayerId: null,
     firstDealtPlayerId: null,
     dismissedInsights: new Map(),
+    teachMode: false,
+    userDeductions: emptyUserDeductions,
 };
 
 describe("visibleSteps", () => {
@@ -55,6 +58,7 @@ describe("visibleSteps", () => {
             "handSizes",
             "myCards",
             "knownCards",
+            "teachMode",
             "inviteOtherPlayers",
         ]);
     });

@@ -201,7 +201,8 @@ describe("SetupWizard — accordion shell", () => {
         await user.click(stickyNext()); // players → identity
         await user.click(stickyNext()); // identity → handSizes
         await user.click(stickyNext()); // handSizes → knownCards
-        await user.click(stickyNext()); // knownCards → inviteOtherPlayers
+        await user.click(stickyNext()); // knownCards → teachMode
+        await user.click(stickyNext()); // teachMode → inviteOtherPlayers
         // No global PlayCTA at any point in the walkthrough.
         expect(
             document.querySelector('[data-tour-anchor="play-cta"]'),
@@ -234,7 +235,7 @@ describe("SetupWizard — accordion shell", () => {
         // payload should NOT mention any player as selfPlayerId.
         await waitFor(() => {
             const raw = window.localStorage.getItem(
-                "effect-clue.session.v11",
+                "effect-clue.session.v12",
             );
             expect(raw).not.toBeNull();
             const parsed = JSON.parse(raw!) as { selfPlayerId: unknown };

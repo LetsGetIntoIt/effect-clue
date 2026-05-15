@@ -9,6 +9,8 @@ import { AccountProvider } from "./account/AccountProvider";
 import { ShareProvider } from "./share/ShareProvider";
 import { BottomNav } from "./components/BottomNav";
 import { GlobalContradictionBanner } from "./components/GlobalContradictionBanner";
+import { TeachModeCheckBanner } from "./components/TeachModeCheckBanner";
+import { TeachModeCheckProvider } from "./components/TeachModeCheckContext";
 import { InstallPromptProvider } from "./components/InstallPromptProvider";
 import { PlayLayout } from "./components/PlayLayout";
 import { Toolbar } from "./components/Toolbar";
@@ -162,7 +164,9 @@ export function Clue() {
            <PromptProvider>
            <SelectionProvider>
            <SetupWizardFocusProvider>
+           <TeachModeCheckProvider>
             <CoordinatedShell headerRef={headerRef} />
+           </TeachModeCheckProvider>
            </SetupWizardFocusProvider>
            </SelectionProvider>
            </PromptProvider>
@@ -278,6 +282,7 @@ function ClueShell({
                 </header>
 
                 <GlobalContradictionBanner />
+                <TeachModeCheckBanner />
 
                 <div className="flex flex-col">
                     <TabContent />
