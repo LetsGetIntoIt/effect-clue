@@ -37,9 +37,15 @@ import {
     type PendingShareIntent,
 } from "./pendingShare";
 import {
+    createModalSlotStore,
+    initialShareCreateHandlers,
+    initialShareCreateStoreState,
     SHARE_CREATE_MODAL_ID,
     SHARE_CREATE_MODAL_MAX_WIDTH,
+    ShareCreateFooter,
+    ShareCreateHeader,
     ShareCreateModal,
+    type ShareCreateHandlers,
     type ShareVariant,
 } from "./ShareCreateModal";
 
@@ -111,13 +117,35 @@ export function ShareProvider({
                 readonly resumeIntent?: PendingShareIntent;
             } = {},
         ) => {
+            // Fresh store + handlersRef per push — matches the
+            // body's existing "modal mounts fresh on each push" model,
+            // so push() with the same id (i.e. a re-push of share-
+            // create) starts from clean state. The body publishes
+            // reactive state into the store and fills handlersRef
+            // on every render so the header and footer slots see
+            // live state and handlers.
+            const store = createModalSlotStore(
+                initialShareCreateStoreState(),
+            );
+            const handlersRef: { current: ShareCreateHandlers } = {
+                current: initialShareCreateHandlers(),
+            };
             push({
                 id: SHARE_CREATE_MODAL_ID,
                 title: t(TITLE_KEY_FOR[variant]),
                 maxWidth: SHARE_CREATE_MODAL_MAX_WIDTH,
+                header: (
+                    <ShareCreateHeader
+                        variant={variant}
+                        store={store}
+                        handlersRef={handlersRef}
+                    />
+                ),
                 content: (
                     <ShareCreateModal
                         variant={variant}
+                        store={store}
+                        handlersRef={handlersRef}
                         {...(opts.forcedCardPack !== undefined
                             ? { forcedCardPack: opts.forcedCardPack }
                             : {})}
@@ -130,6 +158,12 @@ export function ShareProvider({
                         onResumeConsumed={() => {
                             resumeIntentRef.current = null;
                         }}
+                    />
+                ),
+                footer: (
+                    <ShareCreateFooter
+                        store={store}
+                        handlersRef={handlersRef}
                     />
                 ),
             });
