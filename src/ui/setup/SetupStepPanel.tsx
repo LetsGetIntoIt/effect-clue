@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { T_STANDARD, useReducedTransition } from "../motion";
 import { AlertIcon, CheckIcon } from "../components/Icons";
 import type { StepValidation, WizardStepId } from "./wizardSteps";
@@ -125,6 +125,37 @@ export function SetupStepPanel({
     const isComplete = state === "complete";
     const isEditMode = wizardMode === "edit";
 
+    // While the panel is open, publish its sticky header's height to
+    // `--setup-accordion-header-offset` so descendant sticky-thead
+    // rules (e.g. `CardSelectionGrid`'s `<thead>`) can stack BELOW
+    // the pinned accordion header instead of behind it. Matches the
+    // `--header-offset` ResizeObserver pattern in `Clue.tsx`. Cleared
+    // to `0px` on collapse so closed panels don't leave a phantom
+    // offset behind. Only one panel is `editing` at a time, so the
+    // single document-root variable is safely owned by the open one.
+    const headerRef = useRef<HTMLButtonElement>(null);
+    useEffect(() => {
+        if (!isEditing) return;
+        const el = headerRef.current;
+        if (!el) return;
+        const root = document.documentElement;
+        const write = () =>
+            root.style.setProperty(
+                "--setup-accordion-header-offset",
+                `${el.offsetHeight}px`,
+            );
+        write();
+        const ro = new ResizeObserver(write);
+        ro.observe(el);
+        return () => {
+            ro.disconnect();
+            root.style.setProperty(
+                "--setup-accordion-header-offset",
+                "0px",
+            );
+        };
+    }, [isEditing]);
+
     // Dim the header only in flow mode's "pending" treatment.
     // Edit mode renders every closed step at full opacity — they're
     // all equally accessible, dimming would mis-signal "locked."
@@ -158,8 +189,23 @@ export function SetupStepPanel({
             aria-current={isEditing ? "step" : undefined}
         >
             <button
+                ref={headerRef}
                 type="button"
+                // When the panel is open, the header pins to the top
+                // of the page (below the fixed page header + the
+                // contradiction banner if present) so the user keeps
+                // sight of the current step's question as they scroll
+                // through long body content. `bg-panel` covers the
+                // body content scrolling under it, and the conditional
+                // `border-b` carries the body/header divider with the
+                // sticky header (instead of the body wrapper, where
+                // it would scroll out of view). Closed panels stay
+                // in normal flow — no sticky treatment.
                 className={`flex w-full items-center justify-between gap-3 rounded-t-[var(--radius)] px-4 py-3 text-left ${
+                    isEditing
+                        ? "sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))] z-[var(--z-checklist-sticky-header)] border-b border-border/30 bg-panel"
+                        : ""
+                } ${
                     headerClickable
                         ? "cursor-pointer hover:bg-hover"
                         : "cursor-default"
@@ -230,7 +276,7 @@ export function SetupStepPanel({
                         onAnimationComplete={() => setBodyAnimating(false)}
                         className={bodyAnimating ? "overflow-hidden" : ""}
                     >
-                        <div className="border-t border-border/30 px-4 py-4">
+                        <div className="px-4 py-4">
                             <div className="flex flex-col gap-4">
                                 {children}
 

@@ -70,17 +70,22 @@ const CELL_INTERACTIVE_RING =
 //   - --z-checklist-sticky-header (39): thead non-corner cells —
 //     covers the body's sticky-left column on horizontal scroll
 //
-// `top` resolves to "below the fixed page header (and contradiction
-// banner if it's visible)" via the same CSS variables Clue.tsx
-// publishes for the play-mode Checklist. When the wizard is the only
-// thing on screen, those variables fall back to 0 so the thead pins
-// to viewport top. The `z-index` on the thead element itself is
-// load-bearing — `position: sticky` alone doesn't elevate the thead
-// above tbody in the table's stacking, so without the explicit
-// z-index the body's `<td>` (later in document order) would paint
-// over the thead during scroll. Matches `Checklist.tsx`'s thead.
+// `top` resolves to "below the fixed page header, the contradiction
+// banner if it's visible, and the sticky setup accordion-step header
+// when this grid is rendered inside an open wizard step." Each
+// offset is published by its owner (Clue.tsx for `--header-offset`,
+// GlobalContradictionBanner for `--contradiction-banner-offset`,
+// SetupStepPanel for `--setup-accordion-header-offset`) via
+// ResizeObserver; outside their scope each falls back to 0 so the
+// thead degrades gracefully (e.g. when this grid is rendered in the
+// share-import modal, none of the wizard offset applies). The
+// `z-index` on the thead element itself is load-bearing —
+// `position: sticky` alone doesn't elevate the thead above tbody in
+// the table's stacking, so without the explicit z-index the body's
+// `<td>` (later in document order) would paint over the thead
+// during scroll. Matches `Checklist.tsx`'s thead.
 const STICKY_THEAD_TOP =
-    "sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px))] z-[var(--z-checklist-sticky-header)]";
+    "sticky top-[calc(var(--contradiction-banner-offset,0px)+var(--header-offset,0px)+var(--setup-accordion-header-offset,0px))] z-[var(--z-checklist-sticky-header)]";
 const STICKY_FIRST_COL =
     "sticky left-0 z-[var(--z-checklist-sticky-column)]";
 const STICKY_FIRST_COL_HEADER =
