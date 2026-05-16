@@ -26,6 +26,11 @@ import {
     XIcon,
 } from "../components/Icons";
 import { useModalStack } from "../components/ModalStack";
+import {
+    createModalSlotStore,
+    type ModalSlotStore,
+    useModalSlotStoreSelector,
+} from "../components/modalSlotStore";
 import { useConfirm } from "../hooks/useConfirm";
 import { usePrompt } from "../hooks/usePrompt";
 import { useClue } from "../state";
@@ -71,42 +76,62 @@ interface Props {
     readonly onSaved?: (savedPackId: string) => void;
 }
 
-function CardPackEditorModal({
-    initialCardSet,
-    initialPackId,
-    initialPackLabel,
-    initialPackIsBuiltIn = false,
-    applyToActiveGame,
-    onSaved,
-}: Props) {
-    const t = useTranslations("cardPackEditor");
+interface EditorStoreState {
+    readonly draft: CardSet;
+}
+
+function CardPackEditorHeader({
+    titleText,
+    onClose,
+}: {
+    readonly titleText: string;
+    readonly onClose: () => void;
+}) {
     const tCommon = useTranslations("common");
-    const { state, dispatch } = useClue();
-    const { pop } = useModalStack();
+    return (
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+            <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
+                {titleText}
+            </Dialog.Title>
+            <button
+                type="button"
+                aria-label={tCommon("close")}
+                onClick={onClose}
+                className="-mt-1 -mr-1 cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-fg hover:bg-hover"
+            >
+                <XIcon size={18} />
+            </button>
+        </div>
+    );
+}
+
+function CardPackEditorBody({
+    store,
+    applyToActiveGame,
+}: {
+    readonly store: ModalSlotStore<EditorStoreState>;
+    readonly applyToActiveGame: boolean;
+}) {
+    const t = useTranslations("cardPackEditor");
+    const { state } = useClue();
     const confirm = useConfirm();
-    const prompt = usePrompt();
-    const { savePack } = useCardPackActions();
+    const draft = useModalSlotStoreSelector(store, (s) => s.draft);
 
-    const [draft, setDraft] = useState<CardSet>(initialCardSet);
-
-    // Title flavor by state:
-    //   - editing a saved custom pack → "Edit card pack \"{label}\""
-    //   - editing a built-in pack     → "Customize card pack \"{label}\""
-    //   - no pack identity (the live deck has drifted from any saved
-    //     pack, so the modal can only Save-as-new) → "Create new card pack"
-    const titleText =
-        initialPackId === undefined
-            ? t("titleCreate")
-            : initialPackIsBuiltIn
-              ? t("titleCustomize", { label: initialPackLabel ?? "" })
-              : t("titleEdit", { label: initialPackLabel ?? "" });
-
-    const close = () => pop();
+    const setDraft: React.Dispatch<React.SetStateAction<CardSet>> = (
+        next,
+    ) => {
+        store.set((s) => ({
+            draft:
+                typeof next === "function"
+                    ? (next as (prev: CardSet) => CardSet)(s.draft)
+                    : next,
+        }));
+    };
 
     const cardHasSessionRefs = (cardId: string): boolean => {
         if (!applyToActiveGame) return false;
         const inKnownCards = state.knownCards.some(
-            kc => String(kc.card) === cardId,
+            (kc) => String(kc.card) === cardId,
         );
         const inSuggestions = state.suggestions.length > 0;
         return inKnownCards || inSuggestions;
@@ -114,11 +139,86 @@ function CardPackEditorModal({
 
     const categoryHasSessionRefs = (cat: Category): boolean => {
         if (!applyToActiveGame) return false;
-        const inKnownCards = state.knownCards.some(kc =>
-            cat.cards.some(c => c.id === kc.card),
+        const inKnownCards = state.knownCards.some((kc) =>
+            cat.cards.some((c) => c.id === kc.card),
         );
         const inSuggestions = state.suggestions.length > 0;
         return inKnownCards || inSuggestions;
+    };
+
+    return (
+        <div className="flex flex-col gap-3 px-5 pt-3 pb-3">
+            <p className="m-0 text-[1rem] leading-normal text-muted">
+                {t("helperText")}
+            </p>
+            <CategoriesEditor
+                draft={draft}
+                setDraft={setDraft}
+                confirmRemoveCategory={async (cat) => {
+                    if (!categoryHasSessionRefs(cat)) return true;
+                    return await confirm({
+                        message: t("removeCategoryConfirm", {
+                            name: cat.name,
+                        }),
+                    });
+                }}
+                confirmRemoveCard={async (entry) => {
+                    if (!cardHasSessionRefs(String(entry.id)))
+                        return true;
+                    return await confirm({
+                        message: t("removeCardConfirm", {
+                            card: entry.name,
+                        }),
+                    });
+                }}
+            />
+            <button
+                type="button"
+                className="tap-target text-tap self-start cursor-pointer rounded border border-border bg-control hover:bg-control-hover"
+                onClick={() =>
+                    setDraft((prev) => addCategoryToCardSet(prev))
+                }
+            >
+                {t("addCategory")}
+            </button>
+        </div>
+    );
+}
+
+function CardPackEditorFooter({
+    store,
+    initialPackId,
+    initialPackLabel,
+    initialPackIsBuiltIn,
+    applyToActiveGame,
+    onClose,
+    onSaved,
+}: {
+    readonly store: ModalSlotStore<EditorStoreState>;
+    readonly initialPackId: string | undefined;
+    readonly initialPackLabel: string | undefined;
+    readonly initialPackIsBuiltIn: boolean;
+    readonly applyToActiveGame: boolean;
+    readonly onClose: () => void;
+    readonly onSaved?: (savedPackId: string) => void;
+}) {
+    const t = useTranslations("cardPackEditor");
+    const tCommon = useTranslations("common");
+    const prompt = usePrompt();
+    const { savePack } = useCardPackActions();
+    const { state, dispatch } = useClue();
+
+    const applyDraftToActiveGameIfRequested = (draft: CardSet) => {
+        if (!applyToActiveGame) return;
+        // `setSetup` prunes session entries referencing removed
+        // cards/categories but preserves entries for the survivors.
+        dispatch({
+            type: "setSetup",
+            setup: GameSetup({
+                cardSet: draft,
+                playerSet: state.setup.playerSet,
+            }),
+        });
     };
 
     const saveAsNewPack = async () => {
@@ -131,117 +231,57 @@ function CardPackEditorModal({
         if (name === null) return;
         const trimmed = name.trim();
         if (trimmed.length === 0) return;
+        const draft = store.get().draft;
         const saved = await savePack({
             label: trimmed,
             cardSet: draft,
         });
         onSaved?.(saved.id);
-        applyDraftToActiveGameIfRequested();
-        close();
+        applyDraftToActiveGameIfRequested(draft);
+        onClose();
     };
 
     const updateLoadedPack = async () => {
         if (initialPackId === undefined || initialPackIsBuiltIn) return;
         const label = initialPackLabel ?? "";
+        const draft = store.get().draft;
         await savePack({
             label,
             cardSet: draft,
             existingId: initialPackId,
         });
         onSaved?.(initialPackId);
-        applyDraftToActiveGameIfRequested();
-        close();
-    };
-
-    const applyDraftToActiveGameIfRequested = () => {
-        if (!applyToActiveGame) return;
-        // `setSetup` prunes session entries referencing removed
-        // cards/categories but preserves entries for the survivors —
-        // exactly what we want here (a rename should not nuke the
-        // user's mid-game state).
-        dispatch({
-            type: "setSetup",
-            setup: GameSetup({
-                cardSet: draft,
-                playerSet: state.setup.playerSet,
-            }),
-        });
+        applyDraftToActiveGameIfRequested(draft);
+        onClose();
     };
 
     return (
-        <div className="flex flex-col">
-            <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
-                <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
-                    {titleText}
-                </Dialog.Title>
+        <div className="flex flex-wrap items-center justify-end gap-2 bg-panel px-5 pt-4 pb-5">
+            <button
+                type="button"
+                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white font-semibold text-[#2a1f12] hover:bg-hover"
+                onClick={onClose}
+            >
+                {t("cancel")}
+            </button>
+            <button
+                type="button"
+                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white font-semibold text-[#2a1f12] hover:bg-hover"
+                onClick={saveAsNewPack}
+            >
+                {t("saveAsNewPack")}
+            </button>
+            {initialPackId !== undefined && !initialPackIsBuiltIn && (
                 <button
                     type="button"
-                    aria-label={tCommon("close")}
-                    onClick={close}
-                    className="-mt-1 -mr-1 cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-fg hover:bg-hover"
+                    className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent font-semibold text-white hover:bg-accent-hover"
+                    onClick={updateLoadedPack}
                 >
-                    <XIcon size={18} />
+                    {t("updatePack", {
+                        label: initialPackLabel ?? "",
+                    })}
                 </button>
-            </div>
-            <div className="flex flex-col gap-3 overflow-y-auto px-5 pt-3 pb-2">
-                <p className="m-0 text-[1rem] leading-normal text-muted">{t("helperText")}</p>
-                <CategoriesEditor
-                    draft={draft}
-                    setDraft={setDraft}
-                    confirmRemoveCategory={async (cat) => {
-                        if (!categoryHasSessionRefs(cat)) return true;
-                        return await confirm({
-                            message: t("removeCategoryConfirm", {
-                                name: cat.name,
-                            }),
-                        });
-                    }}
-                    confirmRemoveCard={async (entry) => {
-                        if (!cardHasSessionRefs(String(entry.id))) return true;
-                        return await confirm({
-                            message: t("removeCardConfirm", {
-                                card: entry.name,
-                            }),
-                        });
-                    }}
-                />
-                <button
-                    type="button"
-                    className="tap-target-compact text-tap-compact self-start cursor-pointer rounded border border-border bg-control hover:bg-control-hover"
-                    onClick={() =>
-                        setDraft(prev => addCategoryToCardSet(prev))
-                    }
-                >
-                    {t("addCategory")}
-                </button>
-            </div>
-            <div className="sticky bottom-0 z-[40] flex flex-wrap items-center justify-end gap-2 border-t border-border/30 bg-panel px-5 py-3">
-                <button
-                    type="button"
-                    className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-control hover:bg-control-hover"
-                    onClick={close}
-                >
-                    {t("cancel")}
-                </button>
-                <button
-                    type="button"
-                    className="tap-target-compact text-tap-compact cursor-pointer rounded border border-border bg-control hover:bg-control-hover"
-                    onClick={saveAsNewPack}
-                >
-                    {t("saveAsNewPack")}
-                </button>
-                {initialPackId !== undefined && !initialPackIsBuiltIn && (
-                    <button
-                        type="button"
-                        className="tap-target-compact text-tap-compact cursor-pointer rounded border-none bg-accent text-white hover:bg-accent-hover"
-                        onClick={updateLoadedPack}
-                    >
-                        {t("updatePack", {
-                            label: initialPackLabel ?? "",
-                        })}
-                    </button>
-                )}
-            </div>
+            )}
         </div>
     );
 }
@@ -662,7 +702,7 @@ const EDITOR_MODAL_MAX_WIDTH = "min(92vw, 720px)" as const;
  * "edits only close via explicit buttons" behavior.
  */
 export function useOpenCardPackEditor(): (args: Props) => void {
-    const { push } = useModalStack();
+    const { push, pop } = useModalStack();
     const tEditor = useTranslations("cardPackEditor");
     return (args) => {
         const title =
@@ -675,13 +715,43 @@ export function useOpenCardPackEditor(): (args: Props) => void {
                   : tEditor("titleEdit", {
                         label: args.initialPackLabel ?? "",
                     });
+        const store = createModalSlotStore<EditorStoreState>({
+            draft: args.initialCardSet,
+        });
+        const close = () => pop();
         push({
             id: EDITOR_MODAL_ID,
             title,
             maxWidth: EDITOR_MODAL_MAX_WIDTH,
             dismissOnOutsideClick: false,
             dismissOnEscape: false,
-            content: <CardPackEditorModal {...args} />,
+            header: (
+                <CardPackEditorHeader
+                    titleText={title}
+                    onClose={close}
+                />
+            ),
+            content: (
+                <CardPackEditorBody
+                    store={store}
+                    applyToActiveGame={args.applyToActiveGame}
+                />
+            ),
+            footer: (
+                <CardPackEditorFooter
+                    store={store}
+                    initialPackId={args.initialPackId}
+                    initialPackLabel={args.initialPackLabel}
+                    initialPackIsBuiltIn={
+                        args.initialPackIsBuiltIn ?? false
+                    }
+                    applyToActiveGame={args.applyToActiveGame}
+                    onClose={close}
+                    {...(args.onSaved !== undefined
+                        ? { onSaved: args.onSaved }
+                        : {})}
+                />
+            ),
         });
     };
 }

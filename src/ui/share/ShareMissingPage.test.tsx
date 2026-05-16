@@ -21,6 +21,10 @@ vi.mock("../../analytics/events", () => ({
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ShareMissingPage } from "./ShareMissingPage";
+import {
+    ModalStackProvider,
+    ModalStackShell,
+} from "../components/ModalStack";
 
 beforeEach(() => {
     mockHasPersistedGameData = false;
@@ -28,12 +32,30 @@ beforeEach(() => {
     shareOpenFailedMock.mockReset();
 });
 
+// `ShareMissingPage` pushes its modal entry onto the global stack —
+// wrap with the provider so the push has a target and the shell
+// renders the content into the DOM.
+const renderInStack = (ui: React.ReactElement) =>
+    render(
+        <ModalStackProvider>
+            {ui}
+            <ModalStackShell />
+        </ModalStackProvider>,
+    );
+
 describe("ShareMissingPage", () => {
     test("empty local state offers to start a new game", async () => {
-        render(<ShareMissingPage shareId="missing-share" />);
+        renderInStack(<ShareMissingPage shareId="missing-share" />);
 
-        expect(screen.getByText("missingTitle")).toBeInTheDocument();
+        await waitFor(() => {
+            expect(screen.getByText("missingTitle")).toBeInTheDocument();
+        });
         expect(screen.getByText("missingBody")).toBeInTheDocument();
+        await waitFor(() => {
+            expect(
+                screen.getByText("missingActionStart"),
+            ).toBeInTheDocument();
+        });
         fireEvent.click(screen.getByText("missingActionStart"));
 
         expect(routerPushMock).toHaveBeenCalledWith("/play?view=setup");
@@ -48,7 +70,7 @@ describe("ShareMissingPage", () => {
 
     test("existing local progress offers to continue the current game", async () => {
         mockHasPersistedGameData = true;
-        render(<ShareMissingPage shareId="missing-share" />);
+        renderInStack(<ShareMissingPage shareId="missing-share" />);
 
         await waitFor(() => {
             expect(

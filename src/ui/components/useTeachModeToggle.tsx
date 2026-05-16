@@ -151,11 +151,21 @@ export function useTeachModeToggle(): (
                     // Defensive — clear without side effects if popTo
                     // closes us from outside.
                 },
+                header: (
+                    <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+                        <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
+                            {t("midGamePromptTitle")}
+                        </Dialog.Title>
+                    </div>
+                ),
                 content: (
-                    <MidGamePromptContent
+                    <Dialog.Description className="m-0 px-5 pt-3 pb-3 text-[1rem] leading-normal text-[#2a1f12]">
+                        {t("midGamePromptBody")}
+                    </Dialog.Description>
+                ),
+                footer: (
+                    <MidGamePromptFooter
                         onResolve={resolveChoice}
-                        title={t("midGamePromptTitle")}
-                        body={t("midGamePromptBody")}
                         optionKeepExplicit={t("midGameOptionKeepExplicit")}
                         optionAdoptDeductions={t(
                             "midGameOptionAdoptDeductions",
@@ -182,65 +192,44 @@ export function useTeachModeToggle(): (
     );
 }
 
-/**
- * Mid-game prompt body. Visual style matches `ConfirmModalContent` in
- * `useConfirm.tsx` — same `p-5` padding, same `font-display` title at
- * `text-[1.125rem]` accent, same `text-[1rem]` body copy, same right-
- * aligned button row with `border-accent bg-accent` for the primary
- * actions and a ghost `border-border bg-transparent` for cancel. The
- * one shape difference from `useConfirm` is two primary actions
- * instead of one; we render Cancel + two filled action buttons.
- */
-function MidGamePromptContent({
+function MidGamePromptFooter({
     onResolve,
-    title,
-    body,
     optionKeepExplicit,
     optionAdoptDeductions,
     optionCancel,
 }: {
     readonly onResolve: (choice: MidGameChoice) => void;
-    readonly title: string;
-    readonly body: string;
     readonly optionKeepExplicit: string;
     readonly optionAdoptDeductions: string;
     readonly optionCancel: string;
 }) {
     const primaryClass =
-        "tap-target text-tap cursor-pointer rounded-[var(--radius)] border font-semibold border-accent bg-accent text-white hover:bg-accent-hover";
+        "tap-target text-tap cursor-pointer rounded-[var(--radius)] border-2 font-semibold border-accent bg-accent text-white hover:bg-accent-hover";
     const cancelClass =
         "tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-transparent font-semibold text-[#2a1f12] hover:bg-hover";
     return (
-        <div className="p-5">
-            <Dialog.Title className="m-0 mb-2 font-display text-[1.125rem] text-accent">
-                {title}
-            </Dialog.Title>
-            <Dialog.Description className="m-0 text-[1rem] leading-normal text-[#2a1f12]">
-                {body}
-            </Dialog.Description>
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
-                <button
-                    type="button"
-                    onClick={() => onResolve("cancel")}
-                    className={cancelClass}
-                >
-                    {optionCancel}
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onResolve("keep-explicit")}
-                    className={primaryClass}
-                >
-                    {optionKeepExplicit}
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onResolve("adopt-deductions")}
-                    className={primaryClass}
-                >
-                    {optionAdoptDeductions}
-                </button>
-            </div>
+        <div className="flex flex-wrap items-center justify-end gap-2 bg-panel px-5 pt-4 pb-5">
+            <button
+                type="button"
+                onClick={() => onResolve("cancel")}
+                className={cancelClass}
+            >
+                {optionCancel}
+            </button>
+            <button
+                type="button"
+                onClick={() => onResolve("keep-explicit")}
+                className={primaryClass}
+            >
+                {optionKeepExplicit}
+            </button>
+            <button
+                type="button"
+                onClick={() => onResolve("adopt-deductions")}
+                className={primaryClass}
+            >
+                {optionAdoptDeductions}
+            </button>
         </div>
     );
 }

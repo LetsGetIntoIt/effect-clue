@@ -149,9 +149,38 @@ export const mergeCardPacks = (
     return [...decodedServer, ...localOnly];
 };
 
-export function AccountModal() {
+/**
+ * Header band — title + X close. Pushed as the `header:` slot of the
+ * AccountModal entry. Reads the session itself so the title flips
+ * between "titleSignedOut" / "titleSignedIn"; React Query dedupes
+ * the call against `AccountModal`'s own session read.
+ */
+export function AccountModalHeader() {
     const t = useTranslations("account");
     const tCommon = useTranslations("common");
+    const session = useSession();
+    const { pop } = useModalStack();
+    const user = session.data?.user;
+    const isAnon = !user || user.isAnonymous;
+    return (
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+            <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
+                {isAnon ? t("titleSignedOut") : t("titleSignedIn")}
+            </Dialog.Title>
+            <button
+                type="button"
+                aria-label={tCommon("close")}
+                onClick={pop}
+                className="-mt-1 -mr-1 cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-[#2a1f12] hover:bg-hover"
+            >
+                <XIcon size={18} />
+            </button>
+        </div>
+    );
+}
+
+export function AccountModal() {
+    const t = useTranslations("account");
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const session = useSession();
@@ -289,20 +318,7 @@ export function AccountModal() {
     };
 
     return (
-                <div className="flex flex-col">
-                    <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
-                        <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
-                            {isAnon ? t("titleSignedOut") : t("titleSignedIn")}
-                        </Dialog.Title>
-                        <button
-                            type="button"
-                            aria-label={tCommon("close")}
-                            onClick={pop}
-                            className="-mt-1 -mr-1 cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-[#2a1f12] hover:bg-hover"
-                        >
-                            <XIcon size={18} />
-                        </button>
-                    </div>
+                <div>
                     <Dialog.Description className="px-5 pt-3 text-[1rem] leading-normal">
                         {isAnon ? t("descriptionSignedOut") : t("descriptionSignedIn")}
                     </Dialog.Description>
@@ -551,3 +567,4 @@ export function AccountModal() {
                 </div>
     );
 }
+

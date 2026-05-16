@@ -21,9 +21,9 @@
  * destructive action, so an Enter on muscle memory should NOT be the
  * thing that wipes it. Mirrors the install-prompt focus bias.
  *
- * Rendered via the global modal stack — the content component itself
- * has no `Dialog.Root`. `useStaleGameModalGate` watches the consumer
- * gate and pushes / pops the entry as the gate flips.
+ * Pushed onto the shared `ModalStack` with the standard three slots —
+ * `header` (title + X), `content` (one-paragraph description), `footer`
+ * (Keep working / Set up new game).
  */
 "use client";
 
@@ -74,89 +74,6 @@ const humanizeIdleDuration = (
     });
 };
 
-interface StaleGameModalContentProps {
-    readonly variant: StaleGameVariant;
-    readonly referenceTimestamp: DateTime.Utc;
-    readonly now: DateTime.Utc;
-    readonly onSetupNewGame: () => void;
-    readonly onKeepWorking: () => void;
-}
-
-function StaleGameModalContent({
-    variant,
-    referenceTimestamp,
-    now,
-    onSetupNewGame,
-    onKeepWorking,
-}: StaleGameModalContentProps) {
-    const t = useTranslations("staleGame");
-    const tCommon = useTranslations("common");
-    const keepWorkingRef = useRef<HTMLButtonElement | null>(null);
-
-    const idleDuration = useMemo(
-        () => DateTime.distance(referenceTimestamp, now),
-        [referenceTimestamp, now],
-    );
-    const humanDuration = humanizeIdleDuration(idleDuration, t);
-
-    // Focus the safe option on mount (single rAF — see SplashModal for
-    // the same pattern). Wiping the game is the destructive action;
-    // muscle-memory Enter should NOT be what triggers it.
-    useEffect(() => {
-        const id = window.requestAnimationFrame(() => {
-            keepWorkingRef.current?.focus();
-        });
-        return () => window.cancelAnimationFrame(id);
-    }, []);
-
-    const descriptionKey =
-        variant === STALE_GAME_VARIANT_STARTED
-            ? STALE_GAME_DESCRIPTION_KEY_STARTED
-            : STALE_GAME_DESCRIPTION_KEY_UNSTARTED;
-
-    return (
-        <div className="flex flex-col">
-            <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
-                <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
-                    {t("title")}
-                </Dialog.Title>
-                <button
-                    type="button"
-                    aria-label={tCommon("close")}
-                    onClick={onKeepWorking}
-                    className="-mt-1 -mr-1 cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-[#2a1f12] hover:bg-hover"
-                >
-                    <XIcon size={18} />
-                </button>
-            </div>
-            <p className="px-5 pt-3 pb-1 text-[1rem] leading-normal">
-                {t(descriptionKey, { humanDuration })}
-            </p>
-            <div className="mt-4 flex items-center justify-end gap-2 border-t border-border bg-panel px-5 pt-4 pb-5">
-                <button
-                    ref={keepWorkingRef}
-                    type="button"
-                    onClick={onKeepWorking}
-                    className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white hover:bg-hover"
-                >
-                    {t("keepWorking")}
-                </button>
-                <button
-                    type="button"
-                    onClick={onSetupNewGame}
-                    className={
-                        "tap-target text-tap inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius)] border-2 border-accent bg-accent "
-                        + "font-semibold text-white hover:bg-accent-hover"
-                    }
-                >
-                    <span>{t("setupNew")}</span>
-                    <ArrowRightIcon size={16} />
-                </button>
-            </div>
-        </div>
-    );
-}
-
 interface StaleGameModalGateProps {
     readonly open: boolean;
     readonly variant: StaleGameVariant;
@@ -181,40 +98,100 @@ function useStaleGameModalGate({
     onKeepWorking,
 }: StaleGameModalGateProps): void {
     const t = useTranslations("staleGame");
+    const tCommon = useTranslations("common");
     const { push, popTo } = useModalStack();
-    // Hold callbacks + translated title in refs (see SplashModal for
-    // why — `useTranslations` returns an unstable reference under some
-    // test mocks, and the consumer recreates handlers every render).
     const handlersRef = useRef({ onSetupNewGame, onKeepWorking });
     handlersRef.current = { onSetupNewGame, onKeepWorking };
-    const titleRef = useRef("");
-    titleRef.current = t("title");
+    const tRef = useRef(t);
+    tRef.current = t;
+    const tCommonRef = useRef(tCommon);
+    tCommonRef.current = tCommon;
+    const keepWorkingRef = useRef<HTMLButtonElement | null>(null);
+
+    const idleDuration = useMemo(
+        () => DateTime.distance(referenceTimestamp, now),
+        [referenceTimestamp, now],
+    );
+
     useEffect(() => {
         if (!open) return;
+        const t = tRef.current;
+        const tCommon = tCommonRef.current;
+        const title = t("title");
+        const descriptionKey =
+            variant === STALE_GAME_VARIANT_STARTED
+                ? STALE_GAME_DESCRIPTION_KEY_STARTED
+                : STALE_GAME_DESCRIPTION_KEY_UNSTARTED;
+        const humanDuration = humanizeIdleDuration(idleDuration, t);
+        const dismissKeepWorking = () => {
+            popTo(STALE_GAME_MODAL_ID);
+            handlersRef.current.onKeepWorking();
+        };
+        const dismissSetupNewGame = () => {
+            popTo(STALE_GAME_MODAL_ID);
+            handlersRef.current.onSetupNewGame();
+        };
         push({
             id: STALE_GAME_MODAL_ID,
-            title: titleRef.current,
+            title,
             maxWidth: STALE_GAME_MAX_WIDTH,
+            header: (
+                <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+                    <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
+                        {title}
+                    </Dialog.Title>
+                    <button
+                        type="button"
+                        aria-label={tCommon("close")}
+                        onClick={dismissKeepWorking}
+                        className="-mt-1 -mr-1 cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-[#2a1f12] hover:bg-hover"
+                    >
+                        <XIcon size={18} />
+                    </button>
+                </div>
+            ),
             content: (
-                <StaleGameModalContent
-                    variant={variant}
-                    referenceTimestamp={referenceTimestamp}
-                    now={now}
-                    onSetupNewGame={() => {
-                        popTo(STALE_GAME_MODAL_ID);
-                        handlersRef.current.onSetupNewGame();
-                    }}
-                    onKeepWorking={() => {
-                        popTo(STALE_GAME_MODAL_ID);
-                        handlersRef.current.onKeepWorking();
-                    }}
-                />
+                <p className="m-0 px-5 pt-3 pb-3 text-[1rem] leading-normal">
+                    {t(descriptionKey, { humanDuration })}
+                </p>
+            ),
+            footer: (
+                <div className="flex items-center justify-end gap-2 bg-panel px-5 pt-4 pb-5">
+                    <button
+                        ref={keepWorkingRef}
+                        type="button"
+                        onClick={dismissKeepWorking}
+                        className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white hover:bg-hover"
+                    >
+                        {t("keepWorking")}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={dismissSetupNewGame}
+                        className={
+                            "tap-target text-tap inline-flex cursor-pointer items-center gap-2 rounded-[var(--radius)] border-2 border-accent bg-accent "
+                            + "font-semibold text-white hover:bg-accent-hover"
+                        }
+                    >
+                        <span>{t("setupNew")}</span>
+                        <ArrowRightIcon size={16} />
+                    </button>
+                </div>
             ),
         });
         return () => {
             popTo(STALE_GAME_MODAL_ID);
         };
-    }, [open, variant, referenceTimestamp, now, push, popTo]);
+    }, [open, variant, idleDuration, push, popTo]);
+
+    // Focus the safe option on mount (single rAF — wiping is destructive).
+    useEffect(() => {
+        if (!open) return;
+        const id = window.requestAnimationFrame(() => {
+            keepWorkingRef.current?.focus();
+        });
+        return () => window.cancelAnimationFrame(id);
+    }, [open]);
 }
 
 /**

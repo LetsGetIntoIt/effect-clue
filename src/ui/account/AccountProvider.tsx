@@ -45,11 +45,14 @@ import {
     ACCOUNT_MODAL_ID,
     ACCOUNT_MODAL_MAX_WIDTH,
     AccountModal,
+    AccountModalHeader,
 } from "./AccountModal";
 import {
     LOGOUT_WARNING_MAX_WIDTH,
     LOGOUT_WARNING_MODAL_ID,
-    LogoutWarningModalContent,
+    LogoutWarningBody,
+    LogoutWarningFooter,
+    LogoutWarningHeader,
 } from "./LogoutWarningModal";
 import { consumePendingAccountModalIntent } from "./pendingAccountModal";
 
@@ -144,6 +147,7 @@ export function AccountProvider({
             id: ACCOUNT_MODAL_ID,
             title: tAccount("titleSignedIn"),
             maxWidth: ACCOUNT_MODAL_MAX_WIDTH,
+            header: <AccountModalHeader />,
             content: <AccountModal />,
             ...(willFireTour ? { dismissOnOutsideClick: false } : {}),
         });
@@ -220,9 +224,15 @@ export function AccountProvider({
                 dismissOnOutsideClick: false,
                 dismissOnEscape: false,
                 maxWidth: LOGOUT_WARNING_MAX_WIDTH,
+                header: <LogoutWarningHeader />,
                 content: (
-                    <LogoutWarningModalContent
+                    <LogoutWarningBody
                         summary={next.summary}
+                        reason={next.reason}
+                    />
+                ),
+                footer: (
+                    <LogoutWarningFooter
                         reason={next.reason}
                         retrying={next.retrying}
                         onStay={onStay}

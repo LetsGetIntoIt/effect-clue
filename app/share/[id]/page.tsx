@@ -1,12 +1,12 @@
 /**
  * Server-stored share landing page.
  *
- * Server-side: looks up the share by id; on not-found / expired,
- * renders a client-side missing-share modal. On hit, renders the
- * `<ShareImportPage>` with the snapshot. The actual import logic
- * (decode → toggle UI → apply to local game state) lives on the
- * client because it needs access to the receiver's
- * `<ClueProvider>`.
+ * Server-side: looks up the share by id. On hit, renders
+ * `<ShareImportPage>`; on not-found / expired, renders
+ * `<ShareMissingPage>`. Both branches sit inside the same
+ * `ModalStackProvider` + `ConfirmProvider` + `ModalStackShell` so the
+ * modal content (always rendered via `useModalStack().push`) has
+ * access to confirm-style dialogs.
  */
 import {
     ModalStackProvider,
@@ -29,18 +29,24 @@ export default async function SharePageRoute({
 }): Promise<React.ReactElement> {
     const { id } = await params;
     let snapshot;
+    let isMissing = false;
     try {
         snapshot = await getShare({ id });
     } catch (e) {
         if (String(e).includes(ERR_SHARE_NOT_FOUND)) {
-            return <ShareMissingPage shareId={id} />;
+            isMissing = true;
+        } else {
+            throw e;
         }
-        throw e;
     }
     return (
         <ModalStackProvider>
             <ConfirmProvider>
-                <ShareImportPage snapshot={snapshot} />
+                {isMissing || snapshot === undefined ? (
+                    <ShareMissingPage shareId={id} />
+                ) : (
+                    <ShareImportPage snapshot={snapshot} />
+                )}
                 <ModalStackShell />
             </ConfirmProvider>
         </ModalStackProvider>
