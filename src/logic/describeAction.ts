@@ -212,6 +212,8 @@ export const describeAction = (
                     findCardEntry(setup, action.cell.card)?.name ??
                     String(action.cell.card),
             });
+        case "replaceHypotheses":
+            return t("actions.replaceHypotheses");
         case "reorderPlayers":
             return t("actions.reorderPlayers");
         case "reorderCategories":

@@ -92,7 +92,8 @@
             "setUserDeduction": "marking {owner} {value, select, Y {has} other {does not have}} {card}",
             "clearUserDeduction": "clearing your mark on {owner} / {card}",
             "clearUserDeductions": "clearing all your teach-me marks",
-            "replaceUserDeductions": "filling your teach-me board from the deducer"
+            "replaceUserDeductions": "filling your teach-me board from the deducer",
+            "replaceHypotheses": "carrying your teach-me marks over as hypotheses"
         }
     },
     "setup": {
@@ -370,11 +371,11 @@
         "bannerDismissAria": "Dismiss feedback",
         "bannerSummaryAnd": " and ",
         "midGamePromptTitle": "Turn on teach-me mode?",
-        "midGamePromptBody": "Teach-me mode hides the solver's deductions so you can work the puzzle yourself. You can either start from your own explicit marks (and figure out the rest), or adopt everything the Clue Solver has already deduced as your starting point.",
+        "midGamePromptBody": "Teach-me mode hides the solver's deductions so you can work the puzzle yourself. You can either start from your own explicit marks (any active hypotheses come along as editable marks too), or adopt everything the Clue Solver has already deduced as your starting point.",
         "midGameOptionKeepExplicit": "Start with my explicit marks only",
         "midGameOptionAdoptDeductions": "Adopt the Clue Solver's deductions",
         "exitPromptTitle": "Exit teach-me mode?",
-        "exitPromptBody": "Leaving teach-me mode reveals all the deductions the solver has worked out, which may take the thinking and fun out of the rest of this game. You can turn teach-me back on later — your marks will be waiting.",
+        "exitPromptBody": "Leaving teach-me mode reveals all the deductions the solver has worked out, which may take the thinking and fun out of the rest of this game. Any marks that the solver can't already prove will be carried over as hypotheses so you can keep them in view. You can turn teach-me back on later — your marks will be waiting.",
         "exitPromptConfirm": "Exit teach-me mode",
         "menuLabel": "Teach me mode",
         "menuLabelActive": "Teach me mode (on)",

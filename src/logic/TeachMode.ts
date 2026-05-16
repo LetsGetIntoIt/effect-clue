@@ -4,7 +4,8 @@ import { allCardIds, categoryOfCard } from "./CardSet";
 import type { Owner, Player } from "./GameObjects";
 import { CaseFileOwner, PlayerOwner } from "./GameObjects";
 import type { GameSetup } from "./GameSetup";
-import { Cell, getCell, type CellValue, type Knowledge } from "./Knowledge";
+import { Cell, getCell, getCellByOwnerCard, type CellValue, type Knowledge } from "./Knowledge";
+import type { HypothesisMap } from "./Hypothesis";
 import type { DeductionResult } from "./Deducer";
 
 /**
@@ -277,6 +278,88 @@ export const seedFromOwnHand = (
         }
     }
     return m;
+};
+
+/**
+ * Fold `hypotheses` into `userDeductions` for the teach-mode entry
+ * merge: each hypothesis becomes (or overwrites) a user-deduction
+ * mark. Hypothesis value wins on conflict — it represents the user's
+ * most recent edit in non-teach mode. Existing user-deduction entries
+ * for cells NOT in hypotheses are preserved.
+ */
+export const mergeHypothesesIntoUserDeductions = (
+    userDeductions: UserDeductionMap,
+    hypotheses: HypothesisMap,
+): UserDeductionMap => {
+    let out = userDeductions;
+    HashMap.forEach(hypotheses, (value, cell) => {
+        out = HashMap.set(out, cell, value);
+    });
+    return out;
+};
+
+export interface HypothesisMergeResult {
+    readonly hypotheses: HypothesisMap;
+    readonly hypothesisOrder: ReadonlyArray<Cell>;
+}
+
+/**
+ * Teach-mode exit merge: every user-deduction mark NOT substantiated by
+ * `knowledge` (the deducer's real-only output) becomes a hypothesis on
+ * the same cell. `userDeductions` itself is left untouched — the marks
+ * stay available for the next teach-mode session.
+ *
+ * - Substantiated mark: `getCellByOwnerCard(knowledge, owner, card) ===
+ *   value`. Skipped — adding it as a hypothesis would be redundant noise
+ *   in the hypotheses panel.
+ * - Contradicting mark (user Y, knowledge N): NOT substantiated → added
+ *   as a hypothesis, which then surfaces as `directly-contradicted` in
+ *   the hypothesis-conflict banner. Visible conflict beats vanished mark.
+ * - `knowledge === undefined` (deducer failed or not yet computed): be
+ *   conservative; every mark counts as unsubstantiated and becomes a
+ *   hypothesis.
+ * - Mark for a cell already in `hypotheses`: the mark's value wins
+ *   (overwrites the prior hypothesis). The cell's position in
+ *   `hypothesisOrder` is preserved.
+ * - New hypothesis cells append to the END of `hypothesisOrder` — bulk
+ *   conversion is not a fresh user action, so it shouldn't shove
+ *   existing hypotheses down the BehavioralInsights panel.
+ *
+ * When the merge produces no changes, returns the original `hypotheses`
+ * and `hypothesisOrder` references so the caller can skip a no-op
+ * dispatch via `===` comparison.
+ */
+export const mergeUnsubstantiatedMarksIntoHypotheses = (
+    userDeductions: UserDeductionMap,
+    knowledge: Knowledge | undefined,
+    hypotheses: HypothesisMap,
+    hypothesisOrder: ReadonlyArray<Cell>,
+): HypothesisMergeResult => {
+    let outHypotheses = hypotheses;
+    const appended: Cell[] = [];
+    const existingKeys = new Set<string>(hypothesisOrder.map(cellKey));
+    HashMap.forEach(userDeductions, (value, cell) => {
+        const substantiated =
+            knowledge !== undefined
+            && getCellByOwnerCard(knowledge, cell.owner, cell.card) === value;
+        if (substantiated) return;
+        outHypotheses = HashMap.set(outHypotheses, cell, value);
+        const k = cellKey(cell);
+        if (!existingKeys.has(k)) {
+            appended.push(cell);
+            existingKeys.add(k);
+        }
+    });
+    if (outHypotheses === hypotheses && appended.length === 0) {
+        return { hypotheses, hypothesisOrder };
+    }
+    return {
+        hypotheses: outHypotheses,
+        hypothesisOrder:
+            appended.length === 0
+                ? hypothesisOrder
+                : [...hypothesisOrder, ...appended],
+    };
 };
 
 /**

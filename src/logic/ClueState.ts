@@ -164,6 +164,19 @@ export type ClueAction =
     | { type: "setUiMode"; mode: UiMode }
     | { type: "setHypothesis"; cell: Cell; value: HypothesisValue }
     | { type: "clearHypothesis"; cell: Cell }
+    /**
+     * Bulk-replace `hypotheses` and `hypothesisOrder` together. Used by
+     * the teach-mode exit path, which folds the user's unsubstantiated
+     * marks into the hypotheses map so the marks remain visible in
+     * non-teach mode. Existing hypothesis positions in
+     * `hypothesisOrder` are preserved; freshly converted marks append
+     * to the end. Atomic so the two slices can't drift apart.
+     */
+    | {
+          type: "replaceHypotheses";
+          hypotheses: HypothesisMap;
+          hypothesisOrder: ReadonlyArray<Cell>;
+      }
     | { type: "replaceSession"; session: GameSession }
     | { type: "setPendingSuggestion"; draft: PendingSuggestionDraft | null }
     /**
