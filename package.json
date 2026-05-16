@@ -114,7 +114,7 @@
 		"serwist": "9.5.11",
 		"tailwindcss": "4.2.4",
 		"typescript": "6.0.3",
-		"vercel": "53.1.1",
+		"vercel": "53.4.0",
 		"vitest": "4.1.6"
 	},
 	"pnpm": {
