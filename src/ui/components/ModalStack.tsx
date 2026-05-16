@@ -67,10 +67,22 @@ interface ModalEntry {
      *  `Dialog.Title` (visually hidden — modal bodies render their own
      *  visible heading). */
     readonly title: string;
+    /** Optional sticky header pinned to the top of the modal, outside
+     *  the scrollable content region. Use this for modals whose body
+     *  scrolls and whose title / close-X should remain visible during
+     *  scroll. Modals whose content always fits in the viewport can
+     *  keep rendering their title inline in `content` instead — both
+     *  patterns are supported. */
+    readonly header?: ReactNode;
     /** The modal body. Must NOT wrap itself in another `Dialog.Root` /
      *  `Dialog.Content` — the shell provides those. Rendered inside a
      *  scrollable region so content overflowing the viewport scrolls
-     *  while `footer` stays pinned. */
+     *  while `header` / `footer` stay pinned. The shell resets the
+     *  page-level sticky offset CSS variables (`--header-offset`,
+     *  `--contradiction-banner-offset`) to 0 on the scrolling body so
+     *  any sticky `<thead>` / sticky first column inside `content`
+     *  (e.g. `CardSelectionGrid`) pins at the modal's scroll-container
+     *  top instead of where the page header would otherwise sit. */
     readonly content: ReactNode;
     /** Optional sticky footer pinned to the bottom of the modal,
      *  outside the scrollable content region. Modals with action
@@ -324,12 +336,18 @@ function DialogShellInternal({
 
                         Layout: the motion.div is a flex column that
                         fills the Dialog.Content's `max-h-[calc(100dvh-2rem)]`.
-                        `content` lives inside a `flex-1 min-h-0
-                        overflow-y-auto` body so it scrolls when too
-                        tall to fit. `footer`, when provided, sits in a
-                        `shrink-0` band below and stays pinned. Modals
-                        without a footer still scroll the same way —
-                        the body fills the whole modal height. */}
+                        `header` (optional) and `footer` (optional)
+                        sit in `shrink-0` bands at the top and bottom
+                        and stay pinned. `content` lives inside a
+                        `flex-1 min-h-0 overflow-y-auto` body so it
+                        scrolls when too tall to fit. The scroll body
+                        resets `--header-offset` /
+                        `--contradiction-banner-offset` to 0 so any
+                        sticky descendant (e.g. a
+                        `CardSelectionGrid`'s sticky `<thead>`) pins
+                        at the modal's scroll-container top rather
+                        than at the page-header offset its `top:` calc
+                        normally inherits from the page. */}
                     <AnimatePresence
                         mode={PRESENCE_WAIT_MODE}
                         custom={direction}
@@ -353,6 +371,11 @@ function DialogShellInternal({
                                 transition={transition}
                                 className="flex max-h-[calc(100dvh-2rem)] flex-col"
                             >
+                                {top.header !== undefined && (
+                                    <div className="relative z-[40] shrink-0">
+                                        {top.header}
+                                    </div>
+                                )}
                                 {/* `relative z-0` makes the body wrapper
                                     its own stacking context — any
                                     `z-index` on `top.content`'s
@@ -360,7 +383,8 @@ function DialogShellInternal({
                                     context, so high-z body elements
                                     (e.g. a `CardSelectionGrid`'s
                                     sticky-left column at z-30) can't
-                                    paint over the footer slot below.
+                                    paint over the header / footer
+                                    slots above and below.
 
                                     Paired with `z-[40]` on the footer
                                     slot: footer wins against any
@@ -368,7 +392,14 @@ function DialogShellInternal({
                                     common stacking ladder used inside
                                     cards / grids tops out at 39 so 40
                                     is a comfortable buffer. */}
-                                <div className="relative z-0 min-h-0 flex-1 overflow-y-auto">
+                                <div
+                                    className="relative z-0 min-h-0 flex-1 overflow-y-auto"
+                                    style={{
+                                        ["--header-offset" as never]: "0px",
+                                        ["--contradiction-banner-offset" as never]:
+                                            "0px",
+                                    }}
+                                >
                                     {top.content}
                                 </div>
                                 {top.footer !== undefined && (

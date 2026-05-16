@@ -108,5 +108,91 @@ describe("MyCardsModal — opens from null state B", () => {
         // Other players are NOT included as columns.
         expect(dialog?.textContent ?? "").not.toContain("Bob");
         expect(dialog?.textContent ?? "").not.toContain("Cho");
+
+        // Modal chrome matches the standard pattern: a visible
+        // Dialog.Title, an X close button in the header, and a Done
+        // CTA with the standard primary-button styling in a padded
+        // footer band.
+        const title = dialog?.querySelector("h2, [id^='radix-']");
+        expect(dialog?.textContent).toContain("myHand.modalTitle");
+        const closeButton =
+            dialog?.querySelector<HTMLButtonElement>(
+                "button[aria-label='common.close']",
+            );
+        expect(closeButton).not.toBeNull();
+        const doneButton = Array.from(
+            dialog?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+        ).find((b) => b.textContent === "myHand.modalDone");
+        expect(doneButton).toBeDefined();
+        expect(doneButton?.className).toContain("tap-target");
+        expect(doneButton?.className).toContain("text-tap");
+        expect(doneButton?.className).toContain("border-accent");
+        expect(doneButton?.className).toContain("bg-accent");
+        // Compact variant must NOT be present.
+        expect(doneButton?.className).not.toContain("tap-target-compact");
+
+        // Suppress unused-var lint on the optional title handle.
+        void title;
+    });
+
+    test("clicking Done closes the modal", async () => {
+        const session = {
+            version: 9,
+            setup: {
+                players: ["Alice", "Bob", "Cho"],
+                categories: [
+                    {
+                        id: "category-suspects",
+                        name: "Suspect",
+                        cards: [
+                            { id: "card-miss-scarlet", name: "Miss Scarlet" },
+                        ],
+                    },
+                ],
+            },
+            hands: [],
+            handSizes: [],
+            suggestions: [],
+            accusations: [],
+            hypotheses: [],
+            pendingSuggestion: null,
+            selfPlayerId: "Alice",
+            firstDealtPlayerId: null,
+        };
+        window.localStorage.setItem(
+            "effect-clue.session.v9",
+            JSON.stringify(session),
+        );
+        const user = userEvent.setup();
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+
+        const openButton = await waitFor(() => {
+            const found = document.querySelector<HTMLButtonElement>(
+                "[data-tour-anchor~='my-cards-add-button']",
+            );
+            if (!found) throw new Error("Select-cards button not mounted");
+            return found;
+        });
+        await user.click(openButton);
+
+        await waitFor(() => {
+            if (!document.querySelector("[role='dialog']")) {
+                throw new Error("dialog not mounted");
+            }
+        });
+
+        const doneButton = Array.from(
+            document.querySelectorAll<HTMLButtonElement>(
+                "[role='dialog'] button",
+            ),
+        ).find((b) => b.textContent === "myHand.modalDone");
+        if (!doneButton) throw new Error("Done button not mounted");
+        await user.click(doneButton);
+
+        await waitFor(() => {
+            if (document.querySelector("[role='dialog']")) {
+                throw new Error("dialog still mounted after Done");
+            }
+        });
     });
 });
