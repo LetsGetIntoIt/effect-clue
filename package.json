@@ -47,9 +47,9 @@
 	},
 	"homepage": "https://github.com/bigpopakap/effect-clue#readme",
 	"dependencies": {
-		"@effect/opentelemetry": "4.0.0-beta.65",
-		"@effect/platform-node": "4.0.0-beta.65",
-		"@effect/sql-pg": "4.0.0-beta.65",
+		"@effect/opentelemetry": "4.0.0-beta.66",
+		"@effect/platform-node": "4.0.0-beta.66",
+		"@effect/sql-pg": "4.0.0-beta.66",
 		"@opentelemetry/api": "1.9.1",
 		"@opentelemetry/exporter-logs-otlp-http": "0.216.0",
 		"@opentelemetry/exporter-metrics-otlp-http": "0.216.0",
@@ -74,7 +74,7 @@
 		"@tanstack/react-query-persist-client": "5.100.10",
 		"better-auth": "1.6.11",
 		"canvas-confetti": "1.9.4",
-		"effect": "4.0.0-beta.65",
+		"effect": "4.0.0-beta.66",
 		"lean-qr": "2.7.1",
 		"motion": "12.38.0",
 		"next": "16.2.6",
@@ -88,8 +88,8 @@
 		"web-vitals": "5.2.0"
 	},
 	"devDependencies": {
-		"@effect/language-service": "0.85.1",
-		"@effect/vitest": "4.0.0-beta.65",
+		"@effect/language-service": "0.86.1",
+		"@effect/vitest": "4.0.0-beta.66",
 		"@serwist/cli": "9.5.11",
 		"@serwist/next": "9.5.11",
 		"@tailwindcss/postcss": "4.2.4",
