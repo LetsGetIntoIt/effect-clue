@@ -2,7 +2,7 @@
 
 import { HashMap, Result } from "effect";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { findCardEntry, type GameSetup } from "../../logic/GameSetup";
 import { ownerLabel } from "../../logic/GameObjects";
 import {
@@ -20,6 +20,8 @@ import {
 } from "../../logic/TeachMode";
 import { teachModeCellCheckUsed } from "../../analytics/events";
 import { useClue } from "../state";
+import { useHasKeyboard } from "../hooks/useHasKeyboard";
+import { label, matches, shortcutSuffix } from "../keyMap";
 import { AlertIcon, CheckIcon, LightbulbIcon } from "./Icons";
 import { ProseChecklistIcon } from "./CellGlyph";
 import { buildCellWhy } from "./cellWhy";
@@ -57,6 +59,7 @@ export function TeachModeCellCheck({
     const tReasons = useTranslations("reasons");
     const { state, derived, dispatch } = useClue();
     const [revealed, setRevealed] = useState(false);
+    const hasKeyboard = useHasKeyboard();
 
     const cardLabel =
         findCardEntry(setup, cell.card)?.name ?? String(cell.card);
@@ -93,12 +96,65 @@ export function TeachModeCellCheck({
         setRevealed(false);
     };
 
+    // Window-level keyboard shortcuts (Y / N / O / C). The listener is
+    // installed once on mount and removed on unmount, so its lifetime
+    // matches the panel's open lifetime. Latest values for the
+    // callbacks and `revealed` flow through refs so the listener
+    // doesn't need re-registering on every render.
+    const setMarkRef = useRef(setMark);
+    setMarkRef.current = setMark;
+    const onCheckClickRef = useRef(onCheckClick);
+    onCheckClickRef.current = onCheckClick;
+    const revealedRef = useRef(revealed);
+    revealedRef.current = revealed;
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as Element | null;
+            if (
+                target instanceof HTMLInputElement
+                || target instanceof HTMLTextAreaElement
+                || (target instanceof HTMLElement && target.isContentEditable)
+            ) {
+                return;
+            }
+            if (matches("teachMode.markY", e)) {
+                e.preventDefault();
+                setMarkRef.current(Y);
+            } else if (matches("teachMode.markN", e)) {
+                e.preventDefault();
+                setMarkRef.current(N);
+            } else if (matches("teachMode.markOff", e)) {
+                e.preventDefault();
+                setMarkRef.current(null);
+            } else if (matches("teachMode.check", e)) {
+                // Mirror the button's visibility: only fire pre-reveal,
+                // so the analytics event doesn't double-fire after the
+                // verdict is already shown.
+                if (revealedRef.current) return;
+                e.preventDefault();
+                onCheckClickRef.current();
+            }
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, []);
+
     return (
         <section className="flex flex-col gap-3 px-4 py-3">
             <div className="text-[1.125rem] font-bold uppercase tracking-wide text-accent">
                 {t("yourMarkLabel")}
             </div>
             <MarkPicker value={userMark} onChange={setMark} />
+            {hasKeyboard && (
+                <p className="m-0 text-[1rem] text-muted">
+                    {t("shortcutHint", {
+                        y: label("teachMode.markY"),
+                        n: label("teachMode.markN"),
+                        off: label("teachMode.markOff"),
+                        check: label("teachMode.check"),
+                    })}
+                </p>
+            )}
             <div className="border-t border-border" />
             {revealed ? (
                 <VerdictDisplay
@@ -119,7 +175,10 @@ export function TeachModeCellCheck({
                     onClick={onCheckClick}
                     className="self-start cursor-pointer rounded border border-accent bg-accent px-3 py-1.5 text-[1.125rem] font-semibold text-panel hover:bg-accent/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                 >
-                    {t("checkThisCellButton", { card: cardLabel })}
+                    {t("checkThisCellButton", {
+                        card: cardLabel,
+                        shortcut: shortcutSuffix("teachMode.check", hasKeyboard),
+                    })}
                 </button>
             )}
         </section>

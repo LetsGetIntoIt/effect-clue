@@ -353,12 +353,14 @@ export function Checklist() {
         realKnowledge,
         jointKnowledge,
         jointFailed,
+        teachMode: state.teachMode,
     });
     analyticsCtxRef.current = {
         hypotheses,
         realKnowledge,
         jointKnowledge,
         jointFailed,
+        teachMode: state.teachMode,
     };
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
@@ -373,6 +375,12 @@ export function Checklist() {
             const cell = popoverCellRef.current;
             if (cell === null) return;
             const ctx = analyticsCtxRef.current;
+            // In teach mode the panel body renders `TeachModeCellCheck`
+            // instead of the hypothesis section, and it owns its own
+            // Y/N/O/C shortcuts on the same letter keys. Skip here so
+            // a single press never dispatches both `setHypothesis` and
+            // `setUserDeduction`.
+            if (ctx.teachMode) return;
             const prevValue = hypothesisValueFor(ctx.hypotheses, cell);
             const cellStatus = statusFor(
                 cell,
