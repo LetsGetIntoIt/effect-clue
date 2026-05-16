@@ -350,7 +350,8 @@
     "teachMode": {
         "yourMarkLabel": "Your mark",
         "markOff": "Off",
-        "checkThisCellButton": "Check {card}",
+        "shortcutHint": "Type ({y}, {n}, or {off}) to toggle your mark, ({check}) to check.",
+        "checkThisCellButton": "Check {card}{shortcut}",
         "verdictVerifiable": "You are right — this is provable from the evidence.",
         "verdictFalsifiable": "This contradicts the evidence — the evidence proves <deducerVerdict></deducerVerdict>.",
         "verdictPlausible": "This could be true, but there is no proof yet — keep gathering clues.",
