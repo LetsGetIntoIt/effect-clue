@@ -578,15 +578,25 @@ export function SetupWizard() {
     const stickyFooter = (
         <div
             className={
-                // z-index must clear the card-selection grid's
-                // sticky-left tiers (`--z-checklist-sticky-column`
-                // at 30 for card-name cells, `--z-checklist-sticky-header`
-                // at 39 for the thead). Without this, the grid's
-                // sticky-left card-name column paints over the CTA
-                // bar as the user scrolls vertically past the bar's
-                // pin position — "Conservatory" / "Dining room" et
-                // al leak through the bg-panel.
-                "sticky bottom-0 z-[40] flex flex-wrap items-center gap-2 " +
+                // z-index sits just below `--z-app-chrome` (40) so
+                // the page header's `bg-bg` paints over the footer
+                // when scroll lands the section's natural bottom in
+                // the header's vertical zone — otherwise the
+                // footer's `bg-panel` would leak through the
+                // header's transparent stack and visually overlap
+                // the title.
+                //
+                // Still clears the card-selection grid's sticky-left
+                // tiers (`--z-checklist-sticky-column` at 30 for the
+                // card-name cells): without z > 30 those cells leak
+                // through the bg-panel — "Conservatory" / "Dining
+                // room" et al — as the user scrolls vertically past
+                // the bar's pin position. The grid's sticky-top
+                // thead (`--z-checklist-sticky-header` at 39) ties
+                // with the footer at 39; the footer paints over it
+                // via DOM source order (the footer is rendered after
+                // `{children}` in `SetupStepPanel`).
+                "sticky bottom-0 z-[39] flex flex-wrap items-center gap-2 " +
                 "rounded-b-[var(--radius)] border-t border-border/30 " +
                 "bg-panel px-4 py-3 " +
                 "[padding-bottom:calc(env(safe-area-inset-bottom,0px)+0.75rem)] " +
