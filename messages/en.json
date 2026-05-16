@@ -702,7 +702,9 @@
             },
             "panelIntro": {
                 "title": "Here's the breakdown",
-                "body": "Every cell has its own breakdown — the reasoning behind its value, the suggestions that might help, and a what-if hypothesis tool. We'll walk through each section next."
+                "body": "Every cell has its own breakdown — the reasoning behind its value, the suggestions that might help, and a what-if hypothesis tool. We'll walk through each section next.",
+                "teachModeTitle": "Here's where you mark and check",
+                "teachModeBody": "Every cell opens this panel — mark what you think, then ask the solver to check your reasoning."
             },
             "cellClose": {
                 "title": "{action} the cell to close",
@@ -735,6 +737,10 @@
             "teachModeCheck": {
                 "title": "Check your work",
                 "body": "Press <strong>Check</strong> whenever you want a sanity check. We will compare your marks against the evidence and tell you what is consistent, missing, or wrong."
+            },
+            "teachModeCellCheck": {
+                "title": "Make a mark, then check it",
+                "body": "Set <yes></yes> or <no></no>, then press <strong>Check this cell</strong> to see if your mark holds up."
             }
         },
         "suggest": {
@@ -748,7 +754,9 @@
             },
             "addForm": {
                 "title": "Add the first suggestion of the game to get started!",
-                "body": "Pick a suspect, weapon, and room. The solver re-runs after each entry, so flip back to the checklist to see what changed."
+                "body": "Pick a suspect, weapon, and room. The solver re-runs after each entry, so flip back to the checklist to see what changed.",
+                "teachModeTitle": "Log every suggestion — the solver checks your work against it",
+                "teachModeBody": "Pick a suspect, weapon, and room. We still need every suggestion logged here — that's the evidence the solver uses when you press Check on a cell or your whole board."
             },
             "priorLog": {
                 "title": "All suggestions are logged here",
@@ -762,7 +770,9 @@
             },
             "checklist": {
                 "title": "See updated deductions on the checklist",
-                "body": "The solver re-runs after every suggestion — your next deduction may already be on the board."
+                "body": "The solver re-runs after every suggestion — your next deduction may already be on the board.",
+                "teachModeTitle": "Mark what you learned",
+                "teachModeBody": "You logged who passed, who refuted, and what they showed. Now mark the checklist with what that tells you — and press Check whenever you want a sanity check."
             }
         },
         "sharing": {

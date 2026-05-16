@@ -76,7 +76,12 @@ import { Modal } from "../components/Modal";
 import { useConfirm } from "../hooks/useConfirm";
 import { CardSelectionGrid } from "../setup/shared/CardSelectionGrid";
 import { firstDealtHandSizes } from "../setup/firstDealt";
-import { saveTourDismissed } from "../tour/TourState";
+import {
+    saveTourDismissed,
+    TOUR_MODE_NORMAL,
+    TOUR_MODE_TEACH,
+    type TourMode,
+} from "../tour/TourState";
 import {
     type ApplyOverrides,
     hasPersistedGameData,
@@ -728,8 +733,18 @@ export function ShareImportPage({
             // welcome tour. Mark the setup tour as dismissed so
             // `StartupCoordinator` doesn't redirect them back to
             // setup, and route them directly to the checklist so
-            // the `checklistSuggest` tour can fire in place.
-            saveTourDismissed(TOUR_SCREEN_SETUP, DateTime.nowUnsafe());
+            // the `checklistSuggest` tour can fire in place. Mark
+            // BOTH modes dismissed — the receiver may flip teach-mode
+            // on later, and we don't want a stale setup tour to fire
+            // for the same share.
+            const now = DateTime.nowUnsafe();
+            const dismissModes: ReadonlyArray<TourMode> = [
+                TOUR_MODE_NORMAL,
+                TOUR_MODE_TEACH,
+            ];
+            for (const mode of dismissModes) {
+                saveTourDismissed(TOUR_SCREEN_SETUP, mode, now);
+            }
             router.push(PLAY_CHECKLIST_PATH);
         } finally {
             setSubmitting(false);

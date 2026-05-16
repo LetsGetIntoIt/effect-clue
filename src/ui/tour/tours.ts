@@ -73,6 +73,21 @@ export interface TourStep {
      */
     readonly bodyKey?: string;
     /**
+     * Optional teach-mode override for `titleKey`. When set AND the
+     * user is in teach-me mode, the popover renders this title
+     * instead of `titleKey`. Used for steps that need a different
+     * lens in teach-me mode (e.g. the suggestion form's role shifts
+     * from "log what happened" to "feed the solver evidence to check
+     * your work").
+     */
+    readonly titleKeyTeachMode?: string;
+    /**
+     * Optional teach-mode override for `bodyKey`. When set AND the
+     * user is in teach-me mode, the popover renders this body
+     * instead of `bodyKey`. Same use case as `titleKeyTeachMode`.
+     */
+    readonly bodyKeyTeachMode?: string;
+    /**
      * Preferred side relative to the anchor. Radix may flip this if
      * there's not enough room. Defaults to `"bottom"`.
      */
@@ -504,6 +519,8 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             anchor: "cell-explanation-panel",
             titleKey: "checklist.panelIntro.title",
             bodyKey: "checklist.panelIntro.body",
+            titleKeyTeachMode: "checklist.panelIntro.teachModeTitle",
+            bodyKeyTeachMode: "checklist.panelIntro.teachModeBody",
             side: "bottom",
             align: "center",
             requiredUiMode: "checklist",
@@ -520,12 +537,41 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             // the vertical stack on mobile), so the popover goes
             // BELOW the section and the user can read the section +
             // popover in reading order.
+            //
+            // Filtered out in teach-mode — the deducer's section is
+            // replaced by `TeachModeCellCheck`'s Y/N picker + Check
+            // affordance there. The teach-mode equivalent step
+            // (`cell-explanation-teach-mode-check`) below spotlights
+            // that affordance instead.
             anchor: "cell-explanation-deductions",
             titleKey: "checklist.deductions.title",
             bodyKey: "checklist.deductions.body",
             side: "bottom",
             align: "start",
             requiredUiMode: "checklist",
+            requiredTeachMode: false,
+        },
+        {
+            // Teach-mode panel body. Replaces the LEADS / HYPOTHESIS
+            // pair when teach-mode is on — the panel renders a single
+            // `TeachModeCellCheck` body (Y/N mark picker + "Check this
+            // cell" button) instead of the three deducer-derived
+            // sections. Spotlight the whole teach-mode section so the
+            // user sees both the picker AND the button as one unit;
+            // the popover anchors to the Check button so it lands
+            // adjacent to the call-to-action.
+            //
+            // Popover side: bottom — the teach-mode section sits at
+            // the top of the panel body, so going below keeps reading
+            // order (heading → controls → popover explainer).
+            anchor: "cell-explanation-teach-mode-check",
+            popoverAnchor: "cell-explanation-teach-mode-check-button",
+            titleKey: "checklist.teachModeCellCheck.title",
+            bodyKey: "checklist.teachModeCellCheck.body",
+            side: "bottom",
+            align: "start",
+            requiredUiMode: "checklist",
+            requiredTeachMode: true,
         },
         {
             // LEADS — second section. Filtered out in teach-mode
@@ -723,6 +769,8 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             },
             titleKey: "suggest.addForm.title",
             bodyKey: "suggest.addForm.body",
+            titleKeyTeachMode: "suggest.addForm.teachModeTitle",
+            bodyKeyTeachMode: "suggest.addForm.teachModeBody",
             side: "bottom",
             align: "center",
             sideByViewport: {
@@ -777,6 +825,8 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             popoverAnchor: "checklist-case-file",
             titleKey: "firstSuggestion.checklist.title",
             bodyKey: "firstSuggestion.checklist.body",
+            titleKeyTeachMode: "firstSuggestion.checklist.teachModeTitle",
+            bodyKeyTeachMode: "firstSuggestion.checklist.teachModeBody",
             side: "top",
             align: "center",
             sideByViewport: {

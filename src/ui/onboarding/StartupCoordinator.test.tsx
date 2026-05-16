@@ -97,6 +97,7 @@ const mount = (
     activeScreen: "setup" | "checklistSuggest" = "setup",
     onRedirectToScreen?: (screen: ScreenKey) => void,
     gameStarted: boolean = false,
+    teachMode: boolean = false,
 ): { rerender: (nextScreen: ScreenKey) => void } => {
     // Conditional-spread the redirect callback so TypeScript's
     // `exactOptionalPropertyTypes` doesn't reject `undefined`. Tests
@@ -109,6 +110,7 @@ const mount = (
             hydrated
             activeScreen={screen}
             gameStarted={gameStarted}
+            teachMode={teachMode}
             {...redirectProp}
         >
             <Probe />

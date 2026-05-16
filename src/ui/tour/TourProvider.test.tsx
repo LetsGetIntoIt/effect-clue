@@ -108,7 +108,7 @@ describe("TourProvider — persistence on close", () => {
         // The completion path writes lastDismissedAt so the per-screen
         // gate doesn't re-fire the tour on the next page load (the
         // gate reads "show unless dismissed-and-recent").
-        expect(persisted.lastDismissedAt).toBeDefined();
+        expect(persisted.normal?.lastDismissedAt).toBeDefined();
     });
 
     test("dismissTour('skip') writes lastDismissedAt", () => {
@@ -117,7 +117,7 @@ describe("TourProvider — persistence on close", () => {
         act(() => api.current().dismissTour("skip"));
         expect(api.current().activeScreen).toBeUndefined();
         const persisted = loadTourState("setup");
-        expect(persisted.lastDismissedAt).toBeDefined();
+        expect(persisted.normal?.lastDismissedAt).toBeDefined();
     });
 
     test("dismissTour('esc') writes lastDismissedAt", () => {
@@ -126,7 +126,7 @@ describe("TourProvider — persistence on close", () => {
         act(() => api.current().dismissTour("esc"));
         expect(api.current().activeScreen).toBeUndefined();
         const persisted = loadTourState("setup");
-        expect(persisted.lastDismissedAt).toBeDefined();
+        expect(persisted.normal?.lastDismissedAt).toBeDefined();
     });
 
     test("dismissTour('close') writes lastDismissedAt", () => {
@@ -135,7 +135,7 @@ describe("TourProvider — persistence on close", () => {
         act(() => api.current().dismissTour("close"));
         expect(api.current().activeScreen).toBeUndefined();
         const persisted = loadTourState("setup");
-        expect(persisted.lastDismissedAt).toBeDefined();
+        expect(persisted.normal?.lastDismissedAt).toBeDefined();
     });
 
     test("completion of checklistSuggest tour writes lastDismissedAt for THAT screen only", () => {
@@ -151,8 +151,10 @@ describe("TourProvider — persistence on close", () => {
         }
         expect(api.current().activeScreen).toBeUndefined();
         // Per-screen isolation: only the active tour's gate is set.
-        expect(loadTourState("checklistSuggest").lastDismissedAt).toBeDefined();
-        expect(loadTourState("setup").lastDismissedAt).toBeUndefined();
+        expect(
+            loadTourState("checklistSuggest").normal?.lastDismissedAt,
+        ).toBeDefined();
+        expect(loadTourState("setup").normal?.lastDismissedAt).toBeUndefined();
     });
 });
 
@@ -337,7 +339,7 @@ describe("TourProvider — analytics events", () => {
     test("tour_started carries reengaged: true after a previous dismissal", () => {
         stubMatchMedia(true);
         // Pre-seed a dismissal so loadTourState reports lastDismissedAt.
-        saveTourDismissed("setup", DateTime.nowUnsafe());
+        saveTourDismissed("setup", "normal", DateTime.nowUnsafe());
         const api = mount();
         act(() => api.current().startTour("setup"));
         expect(captureCalls[0]).toMatchObject({
@@ -352,7 +354,7 @@ describe("TourProvider — analytics events", () => {
 
     test("restartTourForScreen reports reengaged from BEFORE wiping state", () => {
         stubMatchMedia(true);
-        saveTourDismissed("setup", DateTime.nowUnsafe());
+        saveTourDismissed("setup", "normal", DateTime.nowUnsafe());
         const api = mount();
         act(() => api.current().restartTourForScreen("setup"));
         const startedEvent = captureCalls.find(c => c.event === "tour_started");

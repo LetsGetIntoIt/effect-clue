@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useTranslations } from "next-intl";
 import { gameSetupStarted } from "../analytics/events";
 import { startSetup } from "../analytics/gameSession";
+import { useTeachModeSuperProperty } from "../analytics/useTeachModeSuperProperty";
 import { AccountProvider } from "./account/AccountProvider";
 import { ShareProvider } from "./share/ShareProvider";
 import { BottomNav } from "./components/BottomNav";
@@ -41,6 +42,7 @@ import {
     loadTourState,
     saveTourDismissed,
     saveTourVisited,
+    tourModeFromTeachMode,
 } from "./tour/TourState";
 import { TelemetryRuntime } from "../observability/runtime";
 import { hasCardInformation } from "../logic/GamePhase";
@@ -190,6 +192,12 @@ function CoordinatedShell({
     readonly headerRef: React.RefObject<HTMLElement | null>;
 }) {
     const { hydrated, state, dispatch } = useClue();
+    // Register `teach_mode_active` as a PostHog super-property so
+    // every event ships with the user's current teach-mode state —
+    // the dashboard can slice any funnel by mode without per-event
+    // wiring. The hook is a no-op when PostHog isn't loaded (dev
+    // without the key).
+    useTeachModeSuperProperty();
     const activeScreen = screenKeyForUiMode(state.uiMode);
     // Whether the hydrated game has any concrete card engagement.
     // Drives the staleGame slot's threshold choice (3-day vs 1-day)
@@ -215,6 +223,7 @@ function CoordinatedShell({
             hydrated={hydrated}
             activeScreen={activeScreen}
             gameStarted={gameStarted}
+            teachMode={state.teachMode}
             onRedirectToScreen={handleRedirectToScreen}
         >
             <TourProvider>
@@ -336,6 +345,11 @@ function TourScreenGate() {
     // candidates and picks the first whose prerequisites + own
     // re-engage gate are satisfied. Always returns SOME key so the
     // useTourGate signature stays stable.
+    // Resolve the current tour mode from teach-me state. Each mode
+    // tracks its own 4-week clock so a user who completes the
+    // normal-mode tour still gets walked through the teach-mode
+    // tour on their first teach-mode visit.
+    const tourMode = tourModeFromTeachMode(state.teachMode);
     const screenKey = useMemo(() => {
         if (!hydrated) return screenKeyForUiMode(state.uiMode);
         // Setup has two possible tours: the foundational setup tour
@@ -350,10 +364,11 @@ function TourScreenGate() {
                 : screensForUiMode(state.uiMode);
         return pickFirstEligibleScreenKey(
             candidates,
+            tourMode,
             DateTime.nowUnsafe(),
         );
-    }, [hydrated, phase, state.uiMode]);
-    const { shouldShow, dismiss } = useTourGate(screenKey, {
+    }, [hydrated, phase, state.uiMode, tourMode]);
+    const { shouldShow, deltaMode, dismiss } = useTourGate(screenKey, tourMode, {
         enabled: hydrated,
     });
 
@@ -382,7 +397,7 @@ function TourScreenGate() {
             return;
         }
         firedRef.current.add(screenKey);
-        startTour(screenKey);
+        startTour(screenKey, { deltaMode });
         // The gate's `dismiss` flips its own internal state and persists
         // `lastDismissedAt`. We pair tour completion / dismiss with
         // gate dismiss so subsequent visits respect the 4-week cadence.
@@ -390,7 +405,16 @@ function TourScreenGate() {
         // just mark "we showed the tour" so a refresh in this session
         // won't re-fire.
         dismiss();
-    }, [hydrated, shouldShow, phase, screenKey, activeScreen, startTour, dismiss]);
+    }, [
+        hydrated,
+        shouldShow,
+        deltaMode,
+        phase,
+        screenKey,
+        activeScreen,
+        startTour,
+        dismiss,
+    ]);
 
     // Whenever the tour transitions from active → not active AND we
     // were in the coordinator's "tour" phase, advance the coordinator.
@@ -463,10 +487,17 @@ function FirstSuggestionTourGate() {
         // This is what makes "Take tour"'s mid-session wipe of
         // `tour.firstSuggestion.v1` take effect on the next add —
         // a snapshot from useTourGate at mount would miss the wipe.
+        // Per-mode: each of normal / teach-mode gets its own
+        // 4-week clock, so the user who already saw the normal
+        // first-suggestion tour can still see the teach-mode
+        // variant the first time they log a suggestion in
+        // teach-mode.
         const now = DateTime.nowUnsafe();
+        const tourMode = tourModeFromTeachMode(state.teachMode);
+        const screenState = loadTourState(FIRST_SUGGESTION_SCREEN_KEY);
         const shouldShow = TelemetryRuntime.runSync(
             computeShouldShowTour(
-                loadTourState(FIRST_SUGGESTION_SCREEN_KEY),
+                screenState[tourMode],
                 now,
                 TOUR_RE_ENGAGE_DURATION,
             ),
@@ -478,10 +509,11 @@ function FirstSuggestionTourGate() {
         // the next 4-week re-engage window opens. `saveTourDismissed`
         // also writes the visit timestamp, but the explicit visit
         // write documents that this event-triggered tour was shown
-        // outside the usual screen-mount gate.
-        saveTourVisited(FIRST_SUGGESTION_SCREEN_KEY, now);
-        saveTourDismissed(FIRST_SUGGESTION_SCREEN_KEY, now);
-    }, [state.suggestions.length, hydrated, activeScreen, phase, startTour]);
+        // outside the usual screen-mount gate. Per-mode so each
+        // mode's clock advances independently.
+        saveTourVisited(FIRST_SUGGESTION_SCREEN_KEY, tourMode, now);
+        saveTourDismissed(FIRST_SUGGESTION_SCREEN_KEY, tourMode, now);
+    }, [state.suggestions.length, state.teachMode, hydrated, activeScreen, phase, startTour]);
 
     return null;
 }
