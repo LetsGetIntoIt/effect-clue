@@ -583,6 +583,13 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 ),
             };
 
+        case "replaceHypotheses":
+            return {
+                ...state,
+                hypotheses: action.hypotheses,
+                hypothesisOrder: action.hypothesisOrder,
+            };
+
         case "dismissInsight": {
             const next = new Map(state.dismissedInsights);
             next.set(action.key, action.atConfidence);

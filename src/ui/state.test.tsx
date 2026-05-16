@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import { HashMap } from "effect";
+import { HashMap, Option } from "effect";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -1152,6 +1152,87 @@ describe("derived values", () => {
         expect(conflict?.entries.length).toBe(1);
         expect(conflict?.entries[0]?.cell).toEqual(Cell(PlayerOwner(A), KNIFE));
         expect(conflict?.entries[0]?.value).toBe(N_VAL);
+    });
+});
+
+describe("replaceHypotheses", () => {
+    test("replaces both hypotheses and hypothesisOrder atomically", () => {
+        const { result } = renderClue();
+        const [first] = result.current.state.setup.players;
+        const knife = cardByName(result.current.state.setup, "Knife");
+        if (first === undefined || knife === undefined) {
+            throw new Error("default setup is missing players or knife");
+        }
+        const cell = Cell(PlayerOwner(first), knife);
+
+        act(() => {
+            result.current.dispatch({
+                type: "replaceHypotheses",
+                hypotheses: HashMap.set(emptyHypotheses, cell, Y_VAL),
+                hypothesisOrder: [cell],
+            });
+        });
+
+        expect(HashMap.size(result.current.state.hypotheses)).toBe(1);
+        expect(
+            Option.getOrUndefined(
+                HashMap.get(result.current.state.hypotheses, cell),
+            ),
+        ).toBe(Y_VAL);
+        expect(result.current.state.hypothesisOrder).toEqual([cell]);
+    });
+
+    test("dispatching with empty inputs clears both slices", () => {
+        const { result } = renderClue();
+        const [first] = result.current.state.setup.players;
+        const knife = cardByName(result.current.state.setup, "Knife");
+        if (first === undefined || knife === undefined) {
+            throw new Error("default setup is missing players or knife");
+        }
+        const cell = Cell(PlayerOwner(first), knife);
+
+        act(() => {
+            result.current.dispatch({
+                type: "setHypothesis",
+                cell,
+                value: Y_VAL,
+            });
+        });
+        expect(HashMap.size(result.current.state.hypotheses)).toBe(1);
+
+        act(() => {
+            result.current.dispatch({
+                type: "replaceHypotheses",
+                hypotheses: emptyHypotheses,
+                hypothesisOrder: [],
+            });
+        });
+        expect(HashMap.size(result.current.state.hypotheses)).toBe(0);
+        expect(result.current.state.hypothesisOrder).toEqual([]);
+    });
+
+    test("is undoable — prior slices restored after undo", () => {
+        const { result } = renderClue();
+        const [first] = result.current.state.setup.players;
+        const knife = cardByName(result.current.state.setup, "Knife");
+        if (first === undefined || knife === undefined) {
+            throw new Error("default setup is missing players or knife");
+        }
+        const cell = Cell(PlayerOwner(first), knife);
+
+        act(() => {
+            result.current.dispatch({
+                type: "replaceHypotheses",
+                hypotheses: HashMap.set(emptyHypotheses, cell, N_VAL),
+                hypothesisOrder: [cell],
+            });
+        });
+        expect(HashMap.size(result.current.state.hypotheses)).toBe(1);
+        expect(result.current.canUndo).toBe(true);
+
+        act(() => result.current.undo());
+        expect(HashMap.size(result.current.state.hypotheses)).toBe(0);
+        expect(result.current.state.hypothesisOrder).toEqual([]);
     });
 });
 

@@ -1,10 +1,12 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { Result } from "effect";
+import { HashMap, Result } from "effect";
 import { useTranslations } from "next-intl";
 import { useCallback, useRef } from "react";
 import {
+    mergeHypothesesIntoUserDeductions,
+    mergeUnsubstantiatedMarksIntoHypotheses,
     seedFromKnowledge,
     seedFromOwnHand,
 } from "../../logic/TeachMode";
@@ -51,6 +53,32 @@ export function useTeachModeToggle(): (
         (enabled: boolean, source: "wizard" | "overflowMenu" | "shareImport") => {
             if (!enabled) {
                 const finishOff = () => {
+                    // Marks the solver can't already prove ride along
+                    // as hypotheses so they stay visible in non-teach
+                    // mode. The mark itself stays in `userDeductions`
+                    // (preserved across exits). Substantiated marks
+                    // are skipped — the solver already shows them.
+                    const knowledge = Result.isSuccess(
+                        derived.deductionResult,
+                    )
+                        ? derived.deductionResult.success
+                        : undefined;
+                    const merged = mergeUnsubstantiatedMarksIntoHypotheses(
+                        state.userDeductions,
+                        knowledge,
+                        state.hypotheses,
+                        state.hypothesisOrder,
+                    );
+                    if (
+                        merged.hypotheses !== state.hypotheses
+                        || merged.hypothesisOrder !== state.hypothesisOrder
+                    ) {
+                        dispatch({
+                            type: "replaceHypotheses",
+                            hypotheses: merged.hypotheses,
+                            hypothesisOrder: merged.hypothesisOrder,
+                        });
+                    }
                     dispatch({ type: "setTeachMode", enabled: false });
                     if (source !== "wizard") {
                         teachModeDisabled({
@@ -131,9 +159,24 @@ export function useTeachModeToggle(): (
                         midGameAction: "keepDeduced",
                     });
                 } else {
-                    // "keep-explicit" — user's existing marks stay as
-                    // they are (empty if none, prior teach-mode marks
-                    // if the user toggled off then on again).
+                    // "keep-explicit" — user's existing marks stay,
+                    // with any active hypotheses folded in so the
+                    // user's non-teach-mode work isn't dropped on the
+                    // floor. Hypothesis value wins on conflict — it's
+                    // the user's most recent edit in non-teach mode.
+                    if (HashMap.size(state.hypotheses) > 0) {
+                        const mergedDeductions =
+                            mergeHypothesesIntoUserDeductions(
+                                state.userDeductions,
+                                state.hypotheses,
+                            );
+                        if (mergedDeductions !== state.userDeductions) {
+                            dispatch({
+                                type: "replaceUserDeductions",
+                                userDeductions: mergedDeductions,
+                            });
+                        }
+                    }
                     teachModeEnabled({
                         source,
                         midGameAction: "previousMarks",
@@ -186,6 +229,9 @@ export function useTeachModeToggle(): (
             state.setup.players,
             state.setup.cardSet,
             state.handSizes,
+            state.userDeductions,
+            state.hypotheses,
+            state.hypothesisOrder,
             t,
             tCommon,
         ],
