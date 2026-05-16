@@ -34,6 +34,7 @@ import {
 import { useConfirm } from "../hooks/useConfirm";
 import { usePrompt } from "../hooks/usePrompt";
 import { useClue } from "../state";
+import { DelayedReorderItem } from "./shared/useReorderPressDelay";
 
 // Reorder.Group axis values — pulled to module scope so the
 // i18next/no-literal-string lint reads them as wire identifiers.
@@ -345,11 +346,11 @@ function CategoriesEditor({
             className="m-0 flex list-none flex-col gap-3 p-0"
         >
             {categoryDraft.map((category, idx) => (
-                <Reorder.Item
+                <DelayedReorderItem
                     key={String(category.id)}
                     value={category}
                     onDragEnd={() => commitCategoryReorder(categoryDraft)}
-                    className="flex touch-none flex-col gap-2 rounded border border-border/40 bg-control p-2"
+                    className="flex flex-col gap-2 rounded border border-border/40 bg-control p-2"
                 >
                     <CategoryHeader
                         category={category}
@@ -398,7 +399,7 @@ function CategoriesEditor({
                     >
                         {t("addCard")}
                     </button>
-                </Reorder.Item>
+                </DelayedReorderItem>
             ))}
         </Reorder.Group>
     );
@@ -454,11 +455,11 @@ function CardListEditor({
             className="m-0 flex list-none flex-col gap-1 p-0"
         >
             {cardDraft.map((entry, idx) => (
-                <Reorder.Item
+                <DelayedReorderItem
                     key={String(entry.id)}
                     value={entry}
                     onDragEnd={() => commitCardReorder(cardDraft)}
-                    className="flex touch-none items-center gap-2 rounded border border-border/40 bg-control px-1 py-0.5"
+                    className="flex items-center gap-2 rounded border border-border/40 bg-control px-1 py-0.5"
                 >
                     <CardRow
                         entry={entry}
@@ -480,7 +481,7 @@ function CardListEditor({
                             );
                         }}
                     />
-                </Reorder.Item>
+                </DelayedReorderItem>
             ))}
         </Reorder.Group>
     );

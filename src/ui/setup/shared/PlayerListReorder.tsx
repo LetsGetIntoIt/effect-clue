@@ -7,6 +7,7 @@ import type { Player } from "../../../logic/GameObjects";
 import { useClue } from "../../state";
 import { ChevronLeftIcon, ChevronRightIcon } from "../../components/Icons";
 import { PlayerNameInput } from "./PlayerNameInput";
+import { DelayedReorderItem } from "./useReorderPressDelay";
 
 // Reorder.Group axis prop value — module-scope constant so the
 // i18next/no-literal-string lint treats it as a wire identifier.
@@ -70,11 +71,11 @@ export function PlayerListReorder() {
                 data-tour-anchor={PLAYERS_LIST_TOUR_ANCHOR}
             >
                 {draft.map((player, i) => (
-                    <Reorder.Item
+                    <DelayedReorderItem
                         key={player}
                         value={player}
                         onDragEnd={() => commitReorder(draft)}
-                        className="flex touch-none items-center gap-2 rounded border border-border/50 bg-control px-2 py-1.5"
+                        className="flex items-center gap-2 rounded border border-border/50 bg-control px-2 py-1.5"
                     >
                         <PlayerNameInput
                             player={player}
@@ -133,7 +134,7 @@ export function PlayerListReorder() {
                         >
                             {DRAG_HANDLE_GLYPH}
                         </span>
-                    </Reorder.Item>
+                    </DelayedReorderItem>
                 ))}
             </Reorder.Group>
 
