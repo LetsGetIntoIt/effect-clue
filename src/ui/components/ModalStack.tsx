@@ -28,7 +28,6 @@
  */
 "use client";
 
-import * as Dialog from "@radix-ui/react-dialog";
 import { AnimatePresence, motion } from "motion/react";
 import {
     createContext,
@@ -41,6 +40,7 @@ import {
     type ReactNode,
 } from "react";
 import { T_STANDARD, useReducedTransition } from "../motion";
+import { ModalBands, ModalChrome } from "./Modal";
 
 // `mode="wait"` makes the AnimatePresence run exit-then-enter
 // sequentially: the popped entry slides out fully before the revealed
@@ -49,15 +49,6 @@ import { T_STANDARD, useReducedTransition } from "../motion";
 // a grid stack so they don't collide layout-wise, which adds complexity
 // without much UX win at modal-swap timing (~200ms).
 const PRESENCE_WAIT_MODE = "wait" as const;
-
-const DEFAULT_MAX_WIDTH = "min(92vw,480px)" as const;
-
-// `role="alertdialog"` for entries that block backdrop / Escape
-// dismissal — matches the Radix `AlertDialog` role they previously
-// rendered. Assistive tech treats alertdialogs as time-critical and
-// reads them more aggressively, so we preserve that semantic for
-// confirms / prompts / logout-warning.
-const ROLE_ALERT_DIALOG = "alertdialog" as const;
 
 interface ModalEntry {
     /** Stable identifier — used for AnimatePresence key, popTo lookup,
@@ -290,128 +281,60 @@ function DialogShellInternal({
         if (stack.length > 0) setDialogOpen(true);
     }, [stack.length]);
 
+    // Both the chrome (Dialog.Root + Dialog.Content + outer styles)
+    // and the three-band layout (header / scrollable body with sticky-
+    // offset reset / footer) come from the shared `Modal` building
+    // blocks, so the stack's visual matches the static `Modal` used
+    // on route-level surfaces (e.g. `ShareImportPage`).
     return (
-        <Dialog.Root
+        <ModalChrome
             open={dialogOpen}
+            {...(top?.title !== undefined ? { title: top.title } : {})}
+            {...(top?.maxWidth !== undefined ? { maxWidth: top.maxWidth } : {})}
+            {...(top?.dismissOnOutsideClick !== undefined
+                ? { dismissOnOutsideClick: top.dismissOnOutsideClick }
+                : {})}
+            {...(top?.dismissOnEscape !== undefined
+                ? { dismissOnEscape: top.dismissOnEscape }
+                : {})}
             onOpenChange={(next) => {
-                // Backdrop click + Escape both flip `open` to false.
-                // Per-event opt-outs are wired below
-                // (`onPointerDownOutside`, `onEscapeKeyDown`). If both
-                // those handlers allow the close, Radix lets it through
-                // and we pop here.
                 if (!next) pop();
             }}
         >
-            <Dialog.Portal>
-                <Dialog.Overlay className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/40" />
-                <Dialog.Content
-                    onEscapeKeyDown={(e) => {
-                        if (top?.dismissOnEscape === false) e.preventDefault();
-                    }}
-                    onPointerDownOutside={(e) => {
-                        if (top?.dismissOnOutsideClick === false) {
-                            e.preventDefault();
-                        }
-                    }}
-                    style={{ width: top?.maxWidth ?? DEFAULT_MAX_WIDTH }}
-                    className={
-                        "fixed left-1/2 top-1/2 z-[var(--z-dialog-content)] " +
-                        "max-h-[calc(100dvh-2rem)] -translate-x-1/2 -translate-y-1/2 " +
-                        "overflow-hidden rounded-[var(--radius)] border border-border " +
-                        "bg-panel shadow-[0_10px_28px_rgba(0,0,0,0.28)] focus:outline-none"
-                    }
-                    aria-describedby={undefined}
-                    {...(top?.dismissOnOutsideClick === false ||
-                    top?.dismissOnEscape === false
-                        ? { role: ROLE_ALERT_DIALOG }
-                        : {})}
-                    aria-label={top?.title}
-                >
-                    {/* Modal content components render their own
-                        `Dialog.Title` (which Radix uses to label the
-                        dialog) — the shell's `aria-label` above is the
-                        fallback that suppresses Radix's
-                        missing-Title dev warning when a content
-                        component opts to omit it.
-
-                        Layout: the motion.div is a flex column that
-                        fills the Dialog.Content's `max-h-[calc(100dvh-2rem)]`.
-                        `header` (optional) and `footer` (optional)
-                        sit in `shrink-0` bands at the top and bottom
-                        and stay pinned. `content` lives inside a
-                        `flex-1 min-h-0 overflow-y-auto` body so it
-                        scrolls when too tall to fit. The scroll body
-                        resets `--header-offset` /
-                        `--contradiction-banner-offset` to 0 so any
-                        sticky descendant (e.g. a
-                        `CardSelectionGrid`'s sticky `<thead>`) pins
-                        at the modal's scroll-container top rather
-                        than at the page-header offset its `top:` calc
-                        normally inherits from the page. */}
-                    <AnimatePresence
-                        mode={PRESENCE_WAIT_MODE}
-                        custom={direction}
-                        initial={false}
-                        onExitComplete={() => {
-                            if (stack.length === 0) setDialogOpen(false);
+            <AnimatePresence
+                mode={PRESENCE_WAIT_MODE}
+                custom={direction}
+                initial={false}
+                onExitComplete={() => {
+                    if (stack.length === 0) setDialogOpen(false);
+                }}
+            >
+                {top ? (
+                    <motion.div
+                        key={top.id}
+                        initial={{
+                            x: direction === 0 ? 0 : direction * 60,
+                            opacity: direction === 0 ? 1 : 0,
                         }}
+                        animate={{ x: 0, opacity: 1 }}
+                        exit={{
+                            x: direction === 0 ? 0 : -direction * 60,
+                            opacity: direction === 0 ? 1 : 0,
+                        }}
+                        transition={transition}
                     >
-                        {top ? (
-                            <motion.div
-                                key={top.id}
-                                initial={{
-                                    x: direction === 0 ? 0 : direction * 60,
-                                    opacity: direction === 0 ? 1 : 0,
-                                }}
-                                animate={{ x: 0, opacity: 1 }}
-                                exit={{
-                                    x: direction === 0 ? 0 : -direction * 60,
-                                    opacity: direction === 0 ? 1 : 0,
-                                }}
-                                transition={transition}
-                                className="flex max-h-[calc(100dvh-2rem)] flex-col"
-                            >
-                                {top.header !== undefined && (
-                                    <div className="relative z-[40] shrink-0">
-                                        {top.header}
-                                    </div>
-                                )}
-                                {/* `relative z-0` makes the body wrapper
-                                    its own stacking context — any
-                                    `z-index` on `top.content`'s
-                                    descendants resolves WITHIN this
-                                    context, so high-z body elements
-                                    (e.g. a `CardSelectionGrid`'s
-                                    sticky-left column at z-30) can't
-                                    paint over the header / footer
-                                    slots above and below.
-
-                                    Paired with `z-[40]` on the footer
-                                    slot: footer wins against any
-                                    content z-index up through 39. The
-                                    common stacking ladder used inside
-                                    cards / grids tops out at 39 so 40
-                                    is a comfortable buffer. */}
-                                <div
-                                    className="relative z-0 min-h-0 flex-1 overflow-y-auto"
-                                    style={{
-                                        ["--header-offset" as never]: "0px",
-                                        ["--contradiction-banner-offset" as never]:
-                                            "0px",
-                                    }}
-                                >
-                                    {top.content}
-                                </div>
-                                {top.footer !== undefined && (
-                                    <div className="relative z-[40] shrink-0 border-t border-border/30">
-                                        {top.footer}
-                                    </div>
-                                )}
-                            </motion.div>
-                        ) : null}
-                    </AnimatePresence>
-                </Dialog.Content>
-            </Dialog.Portal>
-        </Dialog.Root>
+                        <ModalBands
+                            {...(top.header !== undefined
+                                ? { header: top.header }
+                                : {})}
+                            content={top.content}
+                            {...(top.footer !== undefined
+                                ? { footer: top.footer }
+                                : {})}
+                        />
+                    </motion.div>
+                ) : null}
+            </AnimatePresence>
+        </ModalChrome>
     );
 }

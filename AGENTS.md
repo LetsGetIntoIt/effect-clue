@@ -303,7 +303,12 @@ If you need a glyph that doesn't fit one of these, add it to `src/ui/components/
 
 ## Modals
 
-Every modal in the app is pushed onto the shared `ModalStack` (`src/ui/components/ModalStack.tsx`) — never as a standalone `<Dialog.Root>`. The shell handles the layout, the pinning, the sticky-offset CSS-variable reset, and the z-index stacking. Consumers supply three opt-in slots and trust the shell.
+Modal chrome (Dialog.Root + Dialog.Content + three-band layout + sticky-offset reset + z-index stacking) is centralized in `src/ui/components/Modal.tsx`. Two surfaces share it:
+
+- **Static modal** (`<Modal>` from `Modal.tsx`) — render directly on a route page when the modal IS the page (e.g. `/share/{id}`), or in any parent that controls `open` with `useState`. No provider needed.
+- **Dynamic stack** (`useModalStack().push(...)` from `ModalStack.tsx`) — push onto a global stack so an inner modal can open another. Internally renders through the same `ModalChrome` + `ModalBands` building blocks as static `Modal`, so visuals are identical.
+
+Pick by the question "does an inner modal of this open another?" — yes → push, no → static. Most modals push, since `useConfirm` / `usePrompt` and downstream alerts compose on top. Route-level standalones (`ShareImportPage`, `ShareMissingPage`) render static.
 
 ### The shape
 
@@ -335,15 +340,16 @@ Standalone landing pages at modal-shaped routes (today: `/share/{id}` — `Share
 
 ### What NOT to do
 
-- **No standalone `<Dialog.Root>` inside the app.** Every modal pushes through `ModalStack`. The exceptions documented above are routes — they still push, they just live at a URL.
+- **No standalone `<Dialog.Root>` inside the app.** Use `<Modal>` (static) or `useModalStack().push(...)` (dynamic). Both render through the shared `ModalChrome` + `ModalBands` so chrome stays consistent.
 - **No inline title or action band inside `content`.** They scroll away on tall content. Use `header` / `footer`.
 - **No re-introducing the `tap-target-compact` size** on modal buttons. The standard tap target is what the rest of the modal-button corpus uses.
 - **No `<table>` wrapped in `overflow-x: auto` inside `content`.** That creates a competing scroll container and breaks the "page owns horizontal scroll" invariant. Let the modal body's natural width carry the table.
 - **No re-rendering the title via the `title` prop alone.** That prop is `aria-label` only — the visible title goes in the `header` slot.
 
-### Reference implementation
+### Reference implementations
 
-`src/ui/components/MyCardsModal.tsx` is the canonical example — it uses all three slots, embeds `CardSelectionGrid`, and exercises the sticky-offset reset. Copy its shape when adding a new modal.
+- `src/ui/components/MyCardsModal.tsx` — canonical dynamic-stack consumer. Uses all three slots, embeds `CardSelectionGrid`, exercises the sticky-offset reset.
+- `src/ui/share/ShareMissingPage.tsx` — canonical static-`Modal` consumer. Route-level standalone with `useState(open)`, `onOpenChange` navigates away.
 
 ## Terminology
 
