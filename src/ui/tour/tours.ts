@@ -519,6 +519,8 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             anchor: "cell-explanation-panel",
             titleKey: "checklist.panelIntro.title",
             bodyKey: "checklist.panelIntro.body",
+            titleKeyTeachMode: "checklist.panelIntro.teachModeTitle",
+            bodyKeyTeachMode: "checklist.panelIntro.teachModeBody",
             side: "bottom",
             align: "center",
             requiredUiMode: "checklist",

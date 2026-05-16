@@ -702,7 +702,9 @@
             },
             "panelIntro": {
                 "title": "Here's the breakdown",
-                "body": "Every cell has its own breakdown — the reasoning behind its value, the suggestions that might help, and a what-if hypothesis tool. We'll walk through each section next."
+                "body": "Every cell has its own breakdown — the reasoning behind its value, the suggestions that might help, and a what-if hypothesis tool. We'll walk through each section next.",
+                "teachModeTitle": "Here's where you mark and check",
+                "teachModeBody": "Every cell opens this panel — mark what you think, then ask the solver to check your reasoning."
             },
             "cellClose": {
                 "title": "{action} the cell to close",
@@ -738,7 +740,7 @@
             },
             "teachModeCellCheck": {
                 "title": "Make a mark, then check it",
-                "body": "Set this cell to <yes></yes> or <no></no>, then press <strong>Check this cell</strong>. We will tell you whether your mark is consistent with the evidence, missing a deduction, or contradicts something else."
+                "body": "Set <yes></yes> or <no></no>, then press <strong>Check this cell</strong> to see if your mark holds up."
             }
         },
         "suggest": {
