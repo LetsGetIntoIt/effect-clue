@@ -105,7 +105,7 @@ describe("SplashModal", () => {
         const onDismiss = vi.fn();
         const SplashModal = await importModal();
         render(wrapped(<SplashModal open onDismiss={onDismiss} />));
-        fireEvent.click(screen.getByRole("button", { name: "splash.close" }));
+        fireEvent.click(screen.getByRole("button", { name: "common.close" }));
         expect(onDismiss).toHaveBeenCalledWith(false);
         expect(captureCalls).toHaveLength(1);
         expect(captureCalls[0]).toMatchObject({

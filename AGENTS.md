@@ -301,6 +301,56 @@ Use these icons consistently — picking the wrong glyph mis-signals what the af
 
 If you need a glyph that doesn't fit one of these, add it to `src/ui/components/Icons.tsx` (or `ShareIcon.tsx` for share variants) — don't reach for an emoji or a literal character (`×`, `→`, etc.) that might be misread.
 
+## Modals
+
+Modal chrome (Dialog.Root + Dialog.Content + three-band layout + sticky-offset reset + z-index stacking) is centralized in `src/ui/components/Modal.tsx`. Two surfaces share it:
+
+- **Static modal** (`<Modal>` from `Modal.tsx`) — render directly on a route page when the modal IS the page (e.g. `/share/{id}`), or in any parent that controls `open` with `useState`. No provider needed.
+- **Dynamic stack** (`useModalStack().push(...)` from `ModalStack.tsx`) — push onto a global stack so an inner modal can open another. Internally renders through the same `ModalChrome` + `ModalBands` building blocks as static `Modal`, so visuals are identical.
+
+Pick by the question "does an inner modal of this open another?" — yes → push, no → static. Most modals push, since `useConfirm` / `usePrompt` and downstream alerts compose on top. Route-level standalones (`ShareImportPage`, `ShareMissingPage`) render static.
+
+### The shape
+
+`useModalStack().push({ id, title, header, content, footer, ... })`. The motion.div is a flex column inside `Dialog.Content`'s `max-h-[calc(100dvh-2rem)]`. `header` and `footer` sit in `shrink-0` bands above and below an `overflow-y-auto` body that holds `content`.
+
+- **`header`** — pinned at the top, outside the scroll area. Holds `<Dialog.Title>` and (for dismissible modals) the X close button. Stays visible while the body scrolls.
+- **`content`** — the scrollable middle. Body padding goes on a single wrapping `<div>` inside `content` (default `px-5 pt-3 pb-3`; richer modals can deviate).
+- **`footer`** — pinned at the bottom, outside the scroll area. Holds the action buttons. The shell renders its own `border-t border-border/30` separator — don't add another in the slot content.
+- **`title`** — accessibility-only `aria-label` fallback; the visible title lives in `<Dialog.Title>` inside `header`. Always pass `title` so the shell can label the dialog when `header` is omitted.
+
+### What goes where
+
+The standard chrome inside the slots:
+
+- **Header band**: `<div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">` containing `<Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">{title}</Dialog.Title>` + `<button aria-label={tCommon("close")} className="-mt-1 -mr-1 cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-[#2a1f12] hover:bg-hover"><XIcon size={18} /></button>`.
+- **Footer band**: `<div className="flex items-center justify-end gap-2 bg-panel px-5 pt-4 pb-5">` with the action buttons. Primary CTA: `tap-target text-tap cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent font-semibold text-white hover:bg-accent-hover`. Secondary: `tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white hover:bg-hover`. Don't reach for `tap-target-compact` — modals use the standard size.
+
+### Alert-style modals
+
+Confirm-style modals (`useConfirm`, `usePrompt`, `LogoutWarningModal`, `CardPackEditorModal`, the mid-game teach-mode prompt) omit the X close button (dismissal goes through an explicit button in the footer) and pass `dismissOnOutsideClick: false` + `dismissOnEscape: false` on the entry. Same three-slot shape — header carries just the title, footer carries the Cancel + Confirm buttons. Pair the two opt-outs together — Escape and outside-click are the same dismissal concept in users' minds.
+
+### Sticky offsets are automatic
+
+Anything inside `content` that uses `top: calc(var(--header-offset, 0px) + var(--contradiction-banner-offset, 0px))` (e.g. `CardSelectionGrid`'s sticky `<thead>`) pins at the modal scroll-container top, not where the page header sits. The shell resets both variables to `0px` on the scrolling body so descendants inherit the correct values via the cascade. Don't add a per-modal override.
+
+### Routes that look like modals
+
+Standalone landing pages at modal-shaped routes (today: `/share/{id}` — `ShareImportPage`, `ShareMissingPage`) still push through `ModalStack`. The route mounts `ModalStackProvider` + `ModalStackShell` at its top (`app/share/[id]/page.tsx` already does), and the page component is a thin opener that pushes the modal entry in `useEffect` on mount and pops on unmount. The modal's `onClose` navigates the user away (`router.replace("/play")`) so dismissal lands them somewhere sensible — there's nothing meaningful behind the modal on a route-level mount.
+
+### What NOT to do
+
+- **No standalone `<Dialog.Root>` inside the app.** Use `<Modal>` (static) or `useModalStack().push(...)` (dynamic). Both render through the shared `ModalChrome` + `ModalBands` so chrome stays consistent.
+- **No inline title or action band inside `content`.** They scroll away on tall content. Use `header` / `footer`.
+- **No re-introducing the `tap-target-compact` size** on modal buttons. The standard tap target is what the rest of the modal-button corpus uses.
+- **No `<table>` wrapped in `overflow-x: auto` inside `content`.** That creates a competing scroll container and breaks the "page owns horizontal scroll" invariant. Let the modal body's natural width carry the table.
+- **No re-rendering the title via the `title` prop alone.** That prop is `aria-label` only — the visible title goes in the `header` slot.
+
+### Reference implementations
+
+- `src/ui/components/MyCardsModal.tsx` — canonical dynamic-stack consumer. Uses all three slots, embeds `CardSelectionGrid`, exercises the sticky-offset reset.
+- `src/ui/share/ShareMissingPage.tsx` — canonical static-`Modal` consumer. Route-level standalone with `useState(open)`, `onOpenChange` navigates away.
+
 ## Terminology
 
 A few words have specific app-wide meaning. Stay consistent in both code and user-facing copy:

@@ -56,9 +56,15 @@ export function ConfirmProvider({ children }: { readonly children: ReactNode }) 
                     resolve(value);
                     pop();
                 };
+                const visibleTitle = opts.title ?? tCommon("confirmTitle");
+                const confirmLabel =
+                    opts.confirmLabel ?? tCommon("confirm");
+                const cancelLabel =
+                    opts.cancelLabel ?? tCommon("cancel");
+                const destructive = opts.destructive ?? true;
                 push({
                     id,
-                    title: opts.title ?? tCommon("confirmTitle"),
+                    title: visibleTitle,
                     dismissOnOutsideClick: false,
                     dismissOnEscape: false,
                     maxWidth: "min(90vw,420px)",
@@ -68,14 +74,40 @@ export function ConfirmProvider({ children }: { readonly children: ReactNode }) 
                     // path resolves first; this onClose's resolve(false)
                     // is then a no-op (Promise resolves once).
                     onClose: () => resolve(false),
+                    header: (
+                        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+                            <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
+                                {visibleTitle}
+                            </Dialog.Title>
+                        </div>
+                    ),
                     content: (
-                        <ConfirmModalContent
-                            options={opts}
-                            onResolve={settle}
-                            confirmTitle={tCommon("confirmTitle")}
-                            defaultConfirmLabel={tCommon("confirm")}
-                            defaultCancelLabel={tCommon("cancel")}
-                        />
+                        <p className="m-0 px-5 pt-3 pb-3 text-[1rem] leading-normal text-[#2a1f12]">
+                            {opts.message}
+                        </p>
+                    ),
+                    footer: (
+                        <div className="flex flex-wrap items-center justify-end gap-2 bg-panel px-5 pt-4 pb-5">
+                            <button
+                                type="button"
+                                onClick={() => settle(false)}
+                                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-transparent font-semibold text-[#2a1f12] hover:bg-hover"
+                            >
+                                {cancelLabel}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => settle(true)}
+                                className={
+                                    "tap-target text-tap cursor-pointer rounded-[var(--radius)] border-2 font-semibold " +
+                                    (destructive
+                                        ? "border-accent bg-accent text-white hover:bg-accent-hover"
+                                        : "border-border bg-panel text-[#2a1f12] hover:bg-hover")
+                                }
+                            >
+                                {confirmLabel}
+                            </button>
+                        </div>
                     ),
                 });
             });
@@ -87,62 +119,6 @@ export function ConfirmProvider({ children }: { readonly children: ReactNode }) 
         <ConfirmContext.Provider value={confirm}>
             {children}
         </ConfirmContext.Provider>
-    );
-}
-
-function ConfirmModalContent({
-    options,
-    onResolve,
-    confirmTitle,
-    defaultConfirmLabel,
-    defaultCancelLabel,
-}: {
-    readonly options: ConfirmOptions;
-    readonly onResolve: (value: boolean) => void;
-    readonly confirmTitle: string;
-    readonly defaultConfirmLabel: string;
-    readonly defaultCancelLabel: string;
-}) {
-    const confirmLabel = options.confirmLabel ?? defaultConfirmLabel;
-    const cancelLabel = options.cancelLabel ?? defaultCancelLabel;
-    const destructive = options.destructive ?? true;
-    const visibleTitle = options.title ?? null;
-    return (
-        <div className="p-5">
-            {visibleTitle ? (
-                <Dialog.Title className="m-0 mb-2 font-display text-[1.125rem] text-accent">
-                    {visibleTitle}
-                </Dialog.Title>
-            ) : (
-                <Dialog.Title className="sr-only">
-                    {confirmTitle}
-                </Dialog.Title>
-            )}
-            <p className="m-0 text-[1rem] leading-normal text-[#2a1f12]">
-                {options.message}
-            </p>
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
-                <button
-                    type="button"
-                    onClick={() => onResolve(false)}
-                    className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-transparent font-semibold text-[#2a1f12] hover:bg-hover"
-                >
-                    {cancelLabel}
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onResolve(true)}
-                    className={
-                        "tap-target text-tap cursor-pointer rounded-[var(--radius)] border font-semibold " +
-                        (destructive
-                            ? "border-accent bg-accent text-white hover:bg-accent-hover"
-                            : "border-border bg-panel text-[#2a1f12] hover:bg-hover")
-                    }
-                >
-                    {confirmLabel}
-                </button>
-            </div>
-        </div>
     );
 }
 

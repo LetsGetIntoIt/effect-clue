@@ -84,7 +84,12 @@ vi.mock("../onboarding/StartupCoordinator", () => ({
 import * as React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { DateTime } from "effect";
-import { AccountModal, ACCOUNT_MODAL_ID, mergeCardPacks } from "./AccountModal";
+import {
+    AccountModal,
+    AccountModalHeader,
+    ACCOUNT_MODAL_ID,
+    mergeCardPacks,
+} from "./AccountModal";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
 import {
     ModalStackProvider,
@@ -120,6 +125,7 @@ const AccountModalSeeder = () => {
         push({
             id: ACCOUNT_MODAL_ID,
             title: "Account",
+            header: <AccountModalHeader />,
             content: <AccountModal />,
         });
     }, [push]);

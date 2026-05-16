@@ -72,6 +72,7 @@ import { cardPackUsageQueryKey } from "../../data/cardPackUsage";
 import { authClient } from "../account/authClient";
 import { useSession } from "../hooks/useSession";
 import { XIcon } from "../components/Icons";
+import { Modal } from "../components/Modal";
 import { useConfirm } from "../hooks/useConfirm";
 import { CardSelectionGrid } from "../setup/shared/CardSelectionGrid";
 import { firstDealtHandSizes } from "../setup/firstDealt";
@@ -868,64 +869,30 @@ export function ShareImportPage({
             : t(INCLUDES_HEADER_KEY_FOR[receiveFlow]);
     const showPackBullet = receiveFlow !== RECEIVE_FLOW_PACK;
 
-    return (
-        <main className="mx-auto flex max-w-[640px] flex-col gap-5 px-5 py-8">
-            {/* Page heading uses the same hierarchy as SetupWizard +
-                SuggestionLogPanel: slab/display family (inherited
-                via the global h1 rule), uppercase + accent for the
-                "you are here" cue. */}
-            <h1 className="m-0 text-[1.5rem] uppercase tracking-[0.05em] text-accent">
-                {t("importTitle")}
-            </h1>
-            <Dialog.Root
-                open={open}
-                onOpenChange={(next) => !next && close(VIA_BACKDROP)}
+    // Header / content / footer are pre-built as `ReactNode` so the
+    // single `<Modal>` mount below stays readable. `Modal` (shared
+    // with `ModalStack`'s shell — see `src/ui/components/Modal.tsx`)
+    // owns the chrome, the three-band layout, and the sticky-offset
+    // reset that pins the embedded `CardSelectionGrid`'s `<thead>` at
+    // the modal's scroll-container top.
+    const modalHeader = (
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+            <Dialog.Title className="m-0 font-display text-[1.25rem] uppercase tracking-[0.05em] text-accent">
+                {t(TITLE_KEY_FOR[receiveFlow])}
+            </Dialog.Title>
+            <button
+                type="button"
+                onClick={() => close(VIA_X)}
+                aria-label={tCommon("close")}
+                className="-mt-1 -mr-1 cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-[#2a1f12] hover:bg-hover"
             >
-                <Dialog.Portal>
-                    <Dialog.Overlay className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/40" />
-                    <Dialog.Content
-                        className={
-                            "fixed left-1/2 top-1/2 z-[var(--z-dialog-content)] flex w-[min(92vw,480px)] flex-col " +
-                            "max-h-[calc(100dvh-2rem)] overflow-hidden " +
-                            "-translate-x-1/2 -translate-y-1/2 rounded-[var(--radius)] border border-border " +
-                            "bg-panel shadow-[0_10px_28px_rgba(0,0,0,0.28)] focus:outline-none"
-                        }
-                    >
-                        {/* Header band — pinned, doesn't scroll. The modal's
-                            structural ladder mirrors `ModalStack`'s shell:
-                            header is `shrink-0`, the body in between is the
-                            `flex-1 min-h-0 overflow-y-auto` scroll
-                            container, and the footer below is `shrink-0
-                            z-[40]` so any sticky-thead inside the body
-                            (e.g. `CardSelectionGrid`'s player-name row)
-                            pins to the top of THIS scroll context and the
-                            grid never scrolls past the action buttons. */}
-                        <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
-                            {/* Modal title matches SuggestionLogPanel
-                                's `h2`: uppercase + accent + slab,
-                                one notch smaller than the page H1. */}
-                            <Dialog.Title className="m-0 text-[1.25rem] uppercase tracking-[0.05em] text-accent">
-                                {t(TITLE_KEY_FOR[receiveFlow])}
-                            </Dialog.Title>
-                            <button
-                                type="button"
-                                onClick={() => close(VIA_X)}
-                                aria-label={tCommon("close")}
-                                className="-mt-1 -mr-1 cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-[#2a1f12] hover:bg-hover"
-                            >
-                                <XIcon size={18} />
-                            </button>
-                        </div>
-                        {/* Scrollable body. `relative z-0` traps inner
-                            stacking contexts (high-z grid cells, sticky
-                            thead at z-39) below the footer band (z-40) so
-                            the picker grid can't paint over the action
-                            buttons. `min-h-0` is the load-bearing piece —
-                            without it, `flex-1` can't shrink below the
-                            children's intrinsic height and the modal grows
-                            past the viewport regardless of `max-h`. */}
-                        <div className="relative z-0 flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
-                        {snapshot.ownerName !== null ? (
+                <XIcon size={18} />
+            </button>
+        </div>
+    );
+    const modalContent = (
+        <div className="pb-4">
+            {snapshot.ownerName !== null ? (
                             <Dialog.Description
                                 className="px-5 pt-3 text-[1rem] leading-normal"
                                 data-share-import-sender
@@ -1090,45 +1057,50 @@ export function ShareImportPage({
                                 />
                             </div>
                         ) : null}
-                        {receiveFlow === RECEIVE_FLOW_TRANSFER
-                            && teachModeSnapshot !== null && (
-                                <TeachModeTransferSummary
-                                    on={teachModeSnapshot}
-                                />
-                            )}
-                        </div>
-                        {/* Sticky footer band. `relative z-[40]` wins
-                            against any z-index inside the body up
-                            through 39 (the checklist-style grid's
-                            sticky-header layer tops out at 39). The
-                            scroll boundary above ends here, so the
-                            grid's body scrolls UNDER this row instead
-                            of pushing it off-screen. */}
-                        <div className="relative z-[40] flex shrink-0 items-center justify-end gap-2 border-t border-border bg-panel px-5 pt-4 pb-5">
-                            <button
-                                type="button"
-                                onClick={() => close(VIA_X)}
-                                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white hover:bg-hover"
-                            >
-                                {tCommon("cancel")}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => void onImport()}
-                                disabled={submitting || isEmpty}
-                                data-share-import-cta
-                                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                                {submitting
-                                    ? t("importing")
-                                    : isAnonymous
-                                        ? t("signInToImport")
-                                        : t(ACTION_KEY_FOR[receiveFlow])}
-                            </button>
-                        </div>
-                    </Dialog.Content>
-                </Dialog.Portal>
-            </Dialog.Root>
+            {receiveFlow === RECEIVE_FLOW_TRANSFER
+                && teachModeSnapshot !== null && (
+                    <TeachModeTransferSummary on={teachModeSnapshot} />
+                )}
+        </div>
+    );
+    const modalFooter = (
+        <div className="flex items-center justify-end gap-2 bg-panel px-5 pt-4 pb-5">
+            <button
+                type="button"
+                onClick={() => close(VIA_X)}
+                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white hover:bg-hover"
+            >
+                {tCommon("cancel")}
+            </button>
+            <button
+                type="button"
+                onClick={() => void onImport()}
+                disabled={submitting || isEmpty}
+                data-share-import-cta
+                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+            >
+                {submitting
+                    ? t("importing")
+                    : isAnonymous
+                        ? t("signInToImport")
+                        : t(ACTION_KEY_FOR[receiveFlow])}
+            </button>
+        </div>
+    );
+
+    return (
+        <main className="mx-auto flex max-w-[640px] flex-col gap-5 px-5 py-8">
+            <h1 className="m-0 text-[1.5rem] uppercase tracking-[0.05em] text-accent">
+                {t("importTitle")}
+            </h1>
+            <Modal
+                open={open}
+                title={t(TITLE_KEY_FOR[receiveFlow])}
+                onOpenChange={(next) => !next && close(VIA_BACKDROP)}
+                header={modalHeader}
+                content={modalContent}
+                footer={modalFooter}
+            />
         </main>
     );
 }

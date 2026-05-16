@@ -113,6 +113,7 @@ vi.mock("motion/react", () => {
         useReducedMotion: () => false,
         LayoutGroup: ({ children }: { children: ReactNode }) => children,
         Reorder: { Group: ReorderGroup, Item: ReorderItem },
+        useDragControls: () => ({ start: () => {} }),
     };
 });
 

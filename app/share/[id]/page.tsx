@@ -1,12 +1,12 @@
 /**
  * Server-stored share landing page.
  *
- * Server-side: looks up the share by id; on not-found / expired,
- * renders a client-side missing-share modal. On hit, renders the
- * `<ShareImportPage>` with the snapshot. The actual import logic
- * (decode → toggle UI → apply to local game state) lives on the
- * client because it needs access to the receiver's
- * `<ClueProvider>`.
+ * Server-side: looks up the share by id. On not-found / expired,
+ * renders `<ShareMissingPage>` (a standalone static modal — no
+ * provider required). On hit, renders `<ShareImportPage>` inside
+ * `ModalStackProvider` + `ConfirmProvider` so the import flow can
+ * surface `useConfirm` warnings (dirty receiver game, save-as-new
+ * pack name, etc.) via the modal stack.
  */
 import {
     ModalStackProvider,

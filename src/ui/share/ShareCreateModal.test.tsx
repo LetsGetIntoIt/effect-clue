@@ -108,9 +108,15 @@ import {
     useModalStack,
 } from "../components/ModalStack";
 import {
+    createModalSlotStore,
+    initialShareCreateHandlers,
+    initialShareCreateStoreState,
     SHARE_CREATE_MODAL_ID,
+    ShareCreateFooter,
+    ShareCreateHeader,
     ShareCreateModal,
     pickProgressLabelKey,
+    type ShareCreateHandlers,
 } from "./ShareCreateModal";
 
 /**
@@ -129,15 +135,36 @@ const ShareModalSeeder = ({
 }) => {
     const { push } = useModalStack();
     const pushedRef = useRef(false);
+    // Fresh store + handlersRef per seeder mount — same shape as
+    // `ShareProvider.pushShareModal`.
+    const storeRef = useRef(createModalSlotStore(initialShareCreateStoreState()));
+    const handlersRef = useRef<{ current: ShareCreateHandlers }>({
+        current: initialShareCreateHandlers(),
+    });
     if (!pushedRef.current) {
         pushedRef.current = true;
         push({
             id: SHARE_CREATE_MODAL_ID,
             title: "Share",
+            header: (
+                <ShareCreateHeader
+                    variant={variant}
+                    store={storeRef.current}
+                    handlersRef={handlersRef.current}
+                />
+            ),
             content: (
                 <ShareCreateModal
                     variant={variant}
+                    store={storeRef.current}
+                    handlersRef={handlersRef.current}
                     {...(resumeIntent !== undefined ? { resumeIntent } : {})}
+                />
+            ),
+            footer: (
+                <ShareCreateFooter
+                    store={storeRef.current}
+                    handlersRef={handlersRef.current}
                 />
             ),
         });

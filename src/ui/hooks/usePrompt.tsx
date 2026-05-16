@@ -13,15 +13,18 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useTranslations } from "next-intl";
 import {
     createContext,
-    type FormEvent,
     type ReactNode,
     useCallback,
     useContext,
     useEffect,
     useRef,
-    useState,
 } from "react";
 import { useModalStack } from "../components/ModalStack";
+import {
+    createModalSlotStore,
+    type ModalSlotStore,
+    useModalSlotStoreSelector,
+} from "../components/modalSlotStore";
 
 interface PromptOptions {
     readonly title: string;
@@ -49,6 +52,14 @@ export function PromptProvider({ children }: { readonly children: ReactNode }) {
             return new Promise<string | null>((resolve) => {
                 nextIdRef.current += 1;
                 const id = `${PROMPT_ID_PREFIX}-${nextIdRef.current}`;
+                // Shared subscribable store across the content (input)
+                // and footer (Save / Cancel buttons) slots. The
+                // content updates it on every keystroke; the footer
+                // reads it via `useSyncExternalStore` so the Save
+                // button's disabled state stays in sync.
+                const store = createModalSlotStore({
+                    value: opts.initialValue ?? "",
+                });
                 const settle = (value: string | null) => {
                     // Resolve FIRST. `pop()` synchronously fires this
                     // entry's `onClose`, which calls `resolve(null)` as
@@ -68,10 +79,32 @@ export function PromptProvider({ children }: { readonly children: ReactNode }) {
                     dismissOnEscape: false,
                     maxWidth: "min(90vw,420px)",
                     onClose: () => resolve(null),
+                    header: (
+                        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+                            <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
+                                {opts.title}
+                            </Dialog.Title>
+                        </div>
+                    ),
                     content: (
                         <PromptModalContent
                             options={opts}
-                            onResolve={settle}
+                            store={store}
+                            onSubmit={() => {
+                                const trimmed = store.get().value.trim();
+                                if (trimmed.length > 0) settle(trimmed);
+                            }}
+                        />
+                    ),
+                    footer: (
+                        <PromptModalFooter
+                            options={opts}
+                            store={store}
+                            onCancel={() => settle(null)}
+                            onConfirm={() => {
+                                const trimmed = store.get().value.trim();
+                                if (trimmed.length > 0) settle(trimmed);
+                            }}
                             defaultConfirmLabel={tCommon("save")}
                             defaultCancelLabel={tCommon("cancel")}
                         />
@@ -89,26 +122,25 @@ export function PromptProvider({ children }: { readonly children: ReactNode }) {
     );
 }
 
+interface PromptStoreState {
+    readonly value: string;
+}
+
 function PromptModalContent({
     options,
-    onResolve,
-    defaultConfirmLabel,
-    defaultCancelLabel,
+    store,
+    onSubmit,
 }: {
     readonly options: PromptOptions;
-    readonly onResolve: (value: string | null) => void;
-    readonly defaultConfirmLabel: string;
-    readonly defaultCancelLabel: string;
+    readonly store: ModalSlotStore<PromptStoreState>;
+    readonly onSubmit: () => void;
 }) {
-    const [value, setValue] = useState(options.initialValue ?? "");
+    const value = useModalSlotStoreSelector(store, (s) => s.value);
     const inputRef = useRef<HTMLInputElement | null>(null);
 
     // Auto-focus + select on mount. Single rAF lets the modal's slide
     // animation start before we steal focus, so the cursor doesn't
-    // jump mid-transition. No retry timer needed since the content
-    // mounts inside the already-open shell — Radix's FocusScope
-    // doesn't fight us here the way it did when each modal owned its
-    // own Dialog.Root.
+    // jump mid-transition.
     useEffect(() => {
         const id = window.requestAnimationFrame(() => {
             const el = inputRef.current;
@@ -119,59 +151,75 @@ function PromptModalContent({
         return () => window.cancelAnimationFrame(id);
     }, []);
 
-    const trimmed = value.trim();
-    const canSubmit = trimmed.length > 0;
+    return (
+        <div className="px-5 pt-3 pb-3">
+            <p className="sr-only">{options.label}</p>
+            <label className="m-0 block text-[1rem] font-semibold text-[#2a1f12]">
+                {options.label}
+                <input
+                    ref={inputRef}
+                    type="text"
+                    value={value}
+                    onChange={(e) =>
+                        store.set(() => ({ value: e.target.value }))
+                    }
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                            e.preventDefault();
+                            onSubmit();
+                        }
+                    }}
+                    placeholder={options.placeholder}
+                    maxLength={options.maxLength}
+                    className="tap-target text-tap mt-1 block w-full rounded-[var(--radius)] border border-border bg-white text-[#2a1f12] focus:border-accent focus:outline-none"
+                />
+            </label>
+        </div>
+    );
+}
+
+function PromptModalFooter({
+    options,
+    store,
+    onCancel,
+    onConfirm,
+    defaultConfirmLabel,
+    defaultCancelLabel,
+}: {
+    readonly options: PromptOptions;
+    readonly store: ModalSlotStore<PromptStoreState>;
+    readonly onCancel: () => void;
+    readonly onConfirm: () => void;
+    readonly defaultConfirmLabel: string;
+    readonly defaultCancelLabel: string;
+}) {
+    const canSubmit = useModalSlotStoreSelector(
+        store,
+        (s) => s.value.trim().length > 0,
+    );
     const confirmLabel = options.confirmLabel ?? defaultConfirmLabel;
     const cancelLabel = options.cancelLabel ?? defaultCancelLabel;
 
-    const handleSubmit = useCallback(
-        (event: FormEvent<HTMLFormElement>) => {
-            event.preventDefault();
-            if (!canSubmit) return;
-            onResolve(trimmed);
-        },
-        [canSubmit, onResolve, trimmed],
-    );
-
     return (
-        <div className="p-5">
-            <Dialog.Title className="m-0 mb-2 font-display text-[1.125rem] text-accent">
-                {options.title}
-            </Dialog.Title>
-            <p className="sr-only">{options.label}</p>
-            <form onSubmit={handleSubmit}>
-                <label className="m-0 block text-[1rem] font-semibold text-[#2a1f12]">
-                    {options.label}
-                    <input
-                        ref={inputRef}
-                        type="text"
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        placeholder={options.placeholder}
-                        maxLength={options.maxLength}
-                        className="tap-target text-tap mt-1 block w-full rounded-[var(--radius)] border border-border bg-white text-[#2a1f12] focus:border-accent focus:outline-none"
-                    />
-                </label>
-                <div className="mt-5 flex flex-wrap justify-end gap-2">
-                    <button
-                        type="button"
-                        onClick={() => onResolve(null)}
-                        className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-transparent font-semibold text-[#2a1f12] hover:bg-hover"
-                    >
-                        {cancelLabel}
-                    </button>
-                    <button
-                        type="submit"
-                        disabled={!canSubmit}
-                        className={
-                            "tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-accent bg-accent font-semibold text-white hover:bg-accent-hover " +
-                            "disabled:cursor-not-allowed disabled:border-border disabled:bg-row-alt disabled:text-muted disabled:hover:bg-row-alt"
-                        }
-                    >
-                        {confirmLabel}
-                    </button>
-                </div>
-            </form>
+        <div className="flex flex-wrap items-center justify-end gap-2 bg-panel px-5 pt-4 pb-5">
+            <button
+                type="button"
+                onClick={onCancel}
+                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-transparent font-semibold text-[#2a1f12] hover:bg-hover"
+            >
+                {cancelLabel}
+            </button>
+            <button
+                type="button"
+                onClick={onConfirm}
+                disabled={!canSubmit}
+                className={
+                    "tap-target text-tap cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent font-semibold text-white hover:bg-accent-hover " +
+                    "disabled:cursor-not-allowed disabled:border-border disabled:bg-row-alt disabled:text-muted disabled:hover:bg-row-alt"
+                }
+            >
+                {confirmLabel}
+            </button>
         </div>
     );
 }

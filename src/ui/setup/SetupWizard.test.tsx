@@ -85,6 +85,10 @@ vi.mock("motion/react", () => {
         useReducedMotion: () => false,
         LayoutGroup: ({ children }: { children: ReactNode }) => children,
         Reorder: { Group: ReorderGroup, Item: ReorderItem },
+        // `useDragControls` returns a no-op-able controller; tests
+        // don't exercise real drag, only that `useReorderPressDelay`
+        // can call `.start()` without exploding.
+        useDragControls: () => ({ start: () => {} }),
     };
 });
 

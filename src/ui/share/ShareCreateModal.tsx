@@ -85,6 +85,11 @@ import { DevSignInForm } from "../account/DevSignInForm";
 import { T_STANDARD, useReducedTransition } from "../motion";
 import { CheckIcon, ClipboardIcon, QrCodeIcon, XIcon } from "../components/Icons";
 import { useModalStack } from "../components/ModalStack";
+import {
+    createModalSlotStore,
+    type ModalSlotStore,
+    useModalSlotStoreSelector,
+} from "../components/modalSlotStore";
 import { QrCodeSvg } from "./QrCodeSvg";
 import { useCardPackUsage } from "../../data/cardPackUsage";
 import { useCustomCardPacks } from "../../data/customCardPacks";
@@ -431,7 +436,61 @@ interface ShareCreateModalProps {
     /** Pending OAuth share restored after Better Auth redirects back. */
     readonly resumeIntent?: PendingShareIntent;
     readonly onResumeConsumed?: () => void;
+    /** Shared store the body publishes state into so the `header` and
+     *  `footer` slots can subscribe to step / submitting / shareUrl /
+     *  etc. The opener (`pushShareModal` in `ShareProvider`) creates
+     *  it fresh per push. */
+    readonly store: ShareCreateStore;
+    /** Mutable holder for the imperative handlers (close, onCreate,
+     *  goBackToToggles, copy). The body fills these on every render;
+     *  the header/footer slots call them on click. Created fresh per
+     *  push by the opener. */
+    readonly handlersRef: { current: ShareCreateHandlers };
 }
+
+export interface ShareCreateStoreState {
+    readonly step: Step;
+    readonly submitting: boolean;
+    readonly shareUrl: string | null;
+    readonly hasCopied: boolean;
+    readonly qrShown: boolean;
+    readonly needsSignIn: boolean;
+}
+
+export type ShareCreateStore = ModalSlotStore<ShareCreateStoreState>;
+
+export interface ShareCreateHandlers {
+    readonly close: () => void;
+    readonly onCreate: () => Promise<void>;
+    readonly goBackToToggles: () => void;
+}
+
+/**
+ * Initial values for a fresh push. The body's `useEffect`s seed the
+ * remaining derived fields (`needsSignIn` from session) on mount.
+ */
+export const initialShareCreateStoreState = (): ShareCreateStoreState => ({
+    step: STEP_TOGGLES,
+    submitting: false,
+    shareUrl: null,
+    hasCopied: false,
+    qrShown: false,
+    needsSignIn: true,
+});
+
+/**
+ * Build the initial `ShareCreateHandlers` shape used by the opener
+ * before the body has rendered to fill them in. Calling any of these
+ * pre-mount no-ops is safe — they're guaranteed to be replaced before
+ * a user interaction can reach the slots.
+ */
+export const initialShareCreateHandlers = (): ShareCreateHandlers => ({
+    close: () => {},
+    onCreate: async () => {},
+    goBackToToggles: () => {},
+});
+
+export { createModalSlotStore };
 
 export const SHARE_CREATE_MODAL_ID = "share-create" as const;
 export const SHARE_CREATE_MODAL_MAX_WIDTH = "min(92vw,480px)" as const;
@@ -442,9 +501,10 @@ export function ShareCreateModal({
     forcedCardPackLabel,
     resumeIntent,
     onResumeConsumed,
+    store,
+    handlersRef,
 }: ShareCreateModalProps) {
     const t = useTranslations("share");
-    const tCommon = useTranslations("common");
     const tAccount = useTranslations("account");
     const { state, derived } = useClue();
     const pathname = usePathname();
@@ -837,43 +897,36 @@ export function ShareCreateModal({
         pop();
     };
 
-    const titleKey = TITLE_KEY_FOR[variant];
     const descriptionKey = DESCRIPTION_KEY_FOR[variant];
 
-    // Once the URL is in hand AND the user has either copied it or
-    // revealed the QR (the two ways someone "uses" the link), flip the
-    // bottom CTA to "Done" — clicking it closes the modal. Without the
-    // QR branch the user who scans-but-doesn't-copy is still nudged to
-    // "Copy link," which feels off after they've already shared.
-    const isDoneState = hasCopied || qrShown;
-    const ctaLabel = submitting
-        ? t(CREATING_KEY)
-        : needsSignIn && shareUrl === null
-            ? t(SIGN_IN_TO_SHARE_KEY)
-            : shareUrl === null
-                ? t(GENERATE_LINK_KEY)
-                : isDoneState
-                    ? t(DONE_KEY)
-                    : t(COPY_LINK_KEY);
+    // Publish reactive state to the shared store on every change so
+    // the `header` and `footer` slots (which live as siblings in
+    // `ModalStack`'s shell, not as descendants of this body) stay in
+    // sync. `useSyncExternalStore` in those slots only re-runs when
+    // the selected slice changes.
+    useEffect(() => {
+        store.set(() => ({
+            step,
+            submitting,
+            shareUrl,
+            hasCopied,
+            qrShown,
+            needsSignIn,
+        }));
+    }, [store, step, submitting, shareUrl, hasCopied, qrShown, needsSignIn]);
+
+    // Fill the imperative handler refs the footer / header slots call
+    // on click. Filled on every render so each handler's closure sees
+    // fresh state — refs aren't reactive, so the slots don't re-render
+    // when the handlers change identity.
+    handlersRef.current = {
+        close,
+        onCreate,
+        goBackToToggles,
+    };
 
     return (
-                <div className="flex flex-col">
-                    <div className="flex shrink-0 items-start justify-between gap-3 px-5 pt-5">
-                        <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
-                            {step === STEP_TOGGLES
-                                ? t(titleKey)
-                                : t(SIGN_IN_TITLE_KEY)}
-                        </Dialog.Title>
-                        <button
-                            type="button"
-                            aria-label={tCommon("close")}
-                            onClick={close}
-                            className="-mt-1 -mr-1 cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-[#2a1f12] hover:bg-hover"
-                        >
-                            <XIcon size={18} />
-                        </button>
-                    </div>
-                    <div className="relative grid grid-cols-[minmax(0,1fr)] [grid-template-areas:'stack'] overflow-hidden">
+                <div className="relative grid grid-cols-[minmax(0,1fr)] [grid-template-areas:'stack'] overflow-hidden">
                         <AnimatePresence custom={direction} initial={false} mode={PRESENCE_WAIT_MODE}>
                             {step === STEP_TOGGLES ? (
                                 <motion.div
@@ -1101,36 +1154,116 @@ export function ShareCreateModal({
                                 </motion.div>
                             )}
                         </AnimatePresence>
-                    </div>
-                    <div className="mt-4 flex items-center justify-end gap-2 border-t border-border bg-panel px-5 pt-4 pb-5">
-                        {step === STEP_SIGN_IN ? (
-                            <button
-                                type="button"
-                                onClick={goBackToToggles}
-                                className="tap-target text-tap mr-auto cursor-pointer rounded-[var(--radius)] border border-border bg-white hover:bg-hover"
-                            >
-                                {tCommon("back")}
-                            </button>
-                        ) : null}
-                        <button
-                            type="button"
-                            onClick={close}
-                            className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white hover:bg-hover"
-                        >
-                            {tCommon("cancel")}
-                        </button>
-                        {step === STEP_TOGGLES ? (
-                            <button
-                                type="button"
-                                onClick={() => void onCreate()}
-                                disabled={submitting}
-                                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
-                                data-share-cta
-                            >
-                                {ctaLabel}
-                            </button>
-                        ) : null}
-                    </div>
                 </div>
+    );
+}
+
+/**
+ * Header band — pinned at the modal's top. Subscribes to `step` from
+ * the shared store and renders the right title for the current step;
+ * the X close button calls `handlersRef.current.close()`.
+ */
+export function ShareCreateHeader({
+    variant,
+    store,
+    handlersRef,
+}: {
+    readonly variant: ShareVariant;
+    readonly store: ShareCreateStore;
+    readonly handlersRef: { current: ShareCreateHandlers };
+}) {
+    const t = useTranslations("share");
+    const tCommon = useTranslations("common");
+    const step = useModalSlotStoreSelector(store, (s) => s.step);
+    const titleKey = TITLE_KEY_FOR[variant];
+    return (
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+            <Dialog.Title className="m-0 font-display text-[1.25rem] text-accent">
+                {step === STEP_TOGGLES ? t(titleKey) : t(SIGN_IN_TITLE_KEY)}
+            </Dialog.Title>
+            <button
+                type="button"
+                aria-label={tCommon("close")}
+                onClick={() => handlersRef.current.close()}
+                className="-mt-1 -mr-1 cursor-pointer rounded-[var(--radius)] border-none bg-transparent p-1 text-[#2a1f12] hover:bg-hover"
+            >
+                <XIcon size={18} />
+            </button>
+        </div>
+    );
+}
+
+/**
+ * Footer band — pinned at the modal's bottom. Subscribes to step +
+ * submitting + shareUrl + hasCopied + qrShown + needsSignIn to drive
+ * the 4-state CTA label machine, and renders Back (sign-in step
+ * only) + Cancel + CTA (toggles step only). All button clicks route
+ * through `handlersRef.current.*` so the body owns the imperative
+ * side-effects.
+ */
+export function ShareCreateFooter({
+    store,
+    handlersRef,
+}: {
+    readonly store: ShareCreateStore;
+    readonly handlersRef: { current: ShareCreateHandlers };
+}) {
+    const t = useTranslations("share");
+    const tCommon = useTranslations("common");
+    const step = useModalSlotStoreSelector(store, (s) => s.step);
+    const submitting = useModalSlotStoreSelector(store, (s) => s.submitting);
+    const shareUrl = useModalSlotStoreSelector(store, (s) => s.shareUrl);
+    const hasCopied = useModalSlotStoreSelector(store, (s) => s.hasCopied);
+    const qrShown = useModalSlotStoreSelector(store, (s) => s.qrShown);
+    const needsSignIn = useModalSlotStoreSelector(
+        store,
+        (s) => s.needsSignIn,
+    );
+
+    // 4-state CTA label machine — same as the original inline footer.
+    // `isDoneState`: the user has either copied the URL or revealed
+    // the QR (either way, they've "used" the share — close on the
+    // next click).
+    const isDoneState = hasCopied || qrShown;
+    const ctaLabel = submitting
+        ? t(CREATING_KEY)
+        : needsSignIn && shareUrl === null
+            ? t(SIGN_IN_TO_SHARE_KEY)
+            : shareUrl === null
+                ? t(GENERATE_LINK_KEY)
+                : isDoneState
+                    ? t(DONE_KEY)
+                    : t(COPY_LINK_KEY);
+
+    return (
+        <div className="flex items-center justify-end gap-2 bg-panel px-5 pt-4 pb-5">
+            {step === STEP_SIGN_IN ? (
+                <button
+                    type="button"
+                    onClick={() => handlersRef.current.goBackToToggles()}
+                    className="tap-target text-tap mr-auto cursor-pointer rounded-[var(--radius)] border border-border bg-white hover:bg-hover"
+                >
+                    {tCommon("back")}
+                </button>
+            ) : null}
+            <button
+                type="button"
+                onClick={() => handlersRef.current.close()}
+                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white hover:bg-hover"
+            >
+                {tCommon("cancel")}
+            </button>
+            {step === STEP_TOGGLES ? (
+                <button
+                    type="button"
+                    onClick={() => void handlersRef.current.onCreate()}
+                    disabled={submitting}
+                    className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+                    data-share-cta
+                >
+                    {ctaLabel}
+                </button>
+            ) : null}
+        </div>
     );
 }
