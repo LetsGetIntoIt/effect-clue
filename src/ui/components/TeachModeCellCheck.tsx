@@ -94,7 +94,10 @@ export function TeachModeCellCheck({
     };
 
     return (
-        <section className="flex flex-col gap-3 px-4 py-3">
+        <section
+            className="flex flex-col gap-3 px-4 py-3"
+            data-tour-anchor="cell-explanation-teach-mode-check"
+        >
             <div className="text-[1.125rem] font-bold uppercase tracking-wide text-accent">
                 {t("yourMarkLabel")}
             </div>
@@ -117,6 +120,7 @@ export function TeachModeCellCheck({
                 <button
                     type="button"
                     onClick={onCheckClick}
+                    data-tour-anchor="cell-explanation-teach-mode-check-button"
                     className="self-start cursor-pointer rounded border border-accent bg-accent px-3 py-1.5 text-[1.125rem] font-semibold text-panel hover:bg-accent/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                 >
                     {t("checkThisCellButton", { card: cardLabel })}

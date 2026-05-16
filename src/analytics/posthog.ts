@@ -41,4 +41,24 @@ export const initPosthog = (): void => {
     initialized = true;
 };
 
+/**
+ * Update the PostHog "super-properties" set — values attached to every
+ * subsequent event without each emitter having to know about them.
+ * Safe to call before `initPosthog`: when PostHog isn't loaded yet,
+ * this is a no-op rather than a throw.
+ *
+ * Used today for `teach_mode_active` so every event (suggestion logged,
+ * case file solved, $pageview, etc.) carries the user's teach-mode
+ * state without modifying every call site. Toggle teach-mode mid-
+ * session and the super-property updates; the next event ships with
+ * the new value.
+ */
+export const registerSuperProperties = (
+    props: Readonly<Record<string, unknown>>,
+): void => {
+    if (typeof window === "undefined") return;
+    if (!posthog.__loaded) return;
+    posthog.register(props);
+};
+
 export { posthog };
