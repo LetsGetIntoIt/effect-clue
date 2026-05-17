@@ -52,6 +52,7 @@ const KEY_RATIONALE_SUGGESTER_CAN_DEDUCE_DETAILS =
 const KEY_RATIONALE_ALREADY_SHOWN_TO_OTHER = "rationaleAlreadyShownToOther";
 const KEY_RATIONALE_FRESH_LEAK = "rationaleFreshLeak";
 const KEY_RATIONALE_FRESH_LEAK_SOLE = "rationaleFreshLeakSole";
+const KEY_ALL_FRESH_LEAK_NOTE = "allFreshLeakNote";
 
 /**
  * Refute-advice panel rendered below the existing `SuggestionBanner`
@@ -88,6 +89,17 @@ export function RefuteAdvicePanel({
     const { candidates, pendingSuggester, perspective, selfPlayer, setup } =
         advice;
     const soleCandidate = candidates.length === 1;
+    // When every candidate is a fresh leak (best tier across all
+    // candidates IS freshLeak) and there's more than one of them,
+    // there's no "Recommended" or even "Acceptable" pick — every
+    // choice leaks a new card and the user must decide. Render a
+    // single panel-level "forced" note in place of per-row rationale
+    // and per-row Recommended badges. The sole-Tier-4 case keeps its
+    // own per-row "forced" rationale (`rationaleFreshLeakSole`) since
+    // it phrases the same idea around a single candidate.
+    const allFreshLeak =
+        !soleCandidate &&
+        candidates.find(c => c.recommended)?.tier === "freshLeak";
 
     return (
         <section
@@ -101,6 +113,14 @@ export function RefuteAdvicePanel({
             >
                 {t("title")}
             </h3>
+            {allFreshLeak ? (
+                <p
+                    data-refute-advice-forced-note=""
+                    className="m-0 mb-2 text-[1rem] leading-snug text-muted"
+                >
+                    {t(KEY_ALL_FRESH_LEAK_NOTE)}
+                </p>
+            ) : null}
             <ul className="m-0 flex list-none flex-col gap-2 p-0">
                 {candidates.map(c => (
                     <RefuteAdviceRow
@@ -111,6 +131,7 @@ export function RefuteAdvicePanel({
                         selfPlayer={selfPlayer}
                         setup={setup}
                         soleCandidate={soleCandidate}
+                        allFreshLeak={allFreshLeak}
                         t={t}
                         tDeduce={tDeduce}
                         tReasons={tReasons}
@@ -128,6 +149,14 @@ interface RowProps {
     readonly selfPlayer: Player;
     readonly setup: GameSetup;
     readonly soleCandidate: boolean;
+    /**
+     * True when ALL candidates are fresh leaks AND there's more than
+     * one of them — the "all options leak something new, your call"
+     * case. The row collapses to just the card name + the tier label;
+     * no Recommended badge, no per-row rationale, no accent border —
+     * the panel-level forced note frames the situation instead.
+     */
+    readonly allFreshLeak: boolean;
     readonly t: ReturnType<typeof useTranslations<"refuteAdvice">>;
     readonly tDeduce: ReturnType<typeof useTranslations<"deduce">>;
     readonly tReasons: ReturnType<typeof useTranslations<"reasons">>;
@@ -140,17 +169,24 @@ function RefuteAdviceRow({
     selfPlayer,
     setup,
     soleCandidate,
+    allFreshLeak,
     t,
     tDeduce,
     tReasons,
 }: RowProps) {
     const cardLabel = cardName(setup, candidate.card);
     const suggesterLabel = String(pendingSuggester);
-    const showRecommendedBadge = candidate.recommended && !soleCandidate;
-    const rowClass =
-        candidate.recommended && !soleCandidate
-            ? "rounded border border-accent/40 bg-accent/10 p-2"
-            : "rounded border border-border/30 bg-bg p-2";
+    // "Recommended" badge fires for best-tier rows in a multi-
+    // candidate scenario when there IS a real recommendation — i.e.
+    // when the best tier is one of the safer tiers (already shown,
+    // already deducible, partial leak). When every option is a fresh
+    // leak there's no useful "best" to highlight, so the badge is
+    // dropped and the panel-level forced note carries the framing.
+    const showRecommendedBadge =
+        candidate.recommended && !soleCandidate && !allFreshLeak;
+    const rowClass = showRecommendedBadge
+        ? "rounded border border-accent/40 bg-accent/10 p-2"
+        : "rounded border border-border/30 bg-bg p-2";
 
     return (
         <li
@@ -169,17 +205,20 @@ function RefuteAdviceRow({
                     </span>
                 ) : null}
             </div>
-            <p className="m-0 mt-1 text-[1rem] leading-snug">
-                {renderRationale({
-                    candidate,
-                    cardLabel,
-                    suggesterLabel,
-                    setup,
-                    soleCandidate,
-                    t,
-                })}
-            </p>
-            {candidate.tier === "suggesterCanDeduce" &&
+            {allFreshLeak ? null : (
+                <p className="m-0 mt-1 text-[1rem] leading-snug">
+                    {renderRationale({
+                        candidate,
+                        cardLabel,
+                        suggesterLabel,
+                        setup,
+                        soleCandidate,
+                        t,
+                    })}
+                </p>
+            )}
+            {!allFreshLeak &&
+            candidate.tier === "suggesterCanDeduce" &&
             perspective !== undefined &&
             candidate.perspectiveChain !== undefined &&
             candidate.perspectiveChain.length > 0 ? (

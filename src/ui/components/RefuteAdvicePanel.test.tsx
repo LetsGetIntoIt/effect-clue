@@ -354,7 +354,7 @@ describe("RefuteAdvicePanel — row rendering", () => {
         expect(text).not.toContain("recommendedBadge");
     });
 
-    test("Tier 4 multi-candidate uses freshLeak (non-sole) and shows Recommended on each", async () => {
+    test("multi-Tier-4 (all fresh leaks): no badge, no per-row rationale, panel-level forced note replaces them", async () => {
         const RefuteAdvicePanel = await importPanel();
         mockState.knownCards = [
             KnownCard({ player: A, card: PLUM }),
@@ -364,13 +364,30 @@ describe("RefuteAdvicePanel — row rendering", () => {
             cards: [PLUM, KNIFE, CONSERV],
         });
         render(<RefuteAdvicePanel />);
+        // Panel-level forced note renders ABOVE the rows. Its
+        // visibility is the single signal that frames the
+        // "all options leak, your call" situation; the per-row
+        // rationale paragraphs are suppressed in this mode (the note
+        // says everything that would be repeated per row).
+        const panel = findPanel();
+        expect(panel).not.toBeNull();
+        const note = panel?.querySelector("[data-refute-advice-forced-note]");
+        expect(note).not.toBeNull();
+        expect(note?.textContent ?? "").toContain("allFreshLeakNote");
+        // Each row still appears so the user sees WHICH cards qualify,
+        // but with minimal content: card name + tier label only.
         const rows = Array.from(findRows());
+        expect(rows.length).toBeGreaterThan(1);
         for (const row of rows) {
             expect(row.getAttribute("data-tier")).toBe("freshLeak");
             const text = row.textContent ?? "";
-            expect(text).toContain("rationaleFreshLeak");
+            // No badge.
+            expect(text).not.toContain("recommendedBadge");
+            // No per-row rationale (panel-level note covers it).
+            expect(text).not.toContain("rationaleFreshLeak");
             expect(text).not.toContain("rationaleFreshLeakSole");
-            expect(text).toContain("recommendedBadge");
+            // Tier label still rendered.
+            expect(text).toContain("tierFreshLeakLabel");
         }
     });
 
@@ -402,10 +419,16 @@ describe("RefuteAdvicePanel — row rendering", () => {
         )!;
         expect(plumRow.getAttribute("data-recommended")).toBe("true");
         expect(knifeRow.getAttribute("data-recommended")).toBe("false");
-        // Recommended badge only on the Tier 1 row (and not the
-        // sole-candidate degenerate case).
+        // Best tier is T1 (a real safer-than-fresh-leak tier), so
+        // the Tier 1 row uses the solid "Recommended" badge and the
+        // worse-tier Tier 4 row gets no badge at all. The panel-
+        // level "all fresh leak" forced note does NOT render (it
+        // only fires when EVERY candidate is freshLeak).
         expect(plumRow.textContent ?? "").toContain("recommendedBadge");
         expect(knifeRow.textContent ?? "").not.toContain("recommendedBadge");
+        expect(
+            findPanel()?.querySelector("[data-refute-advice-forced-note]"),
+        ).toBeNull();
     });
 
     test("Tier 2 row renders the rationaleSuggesterCanDeduceSummary in the rationale paragraph", async () => {
@@ -518,6 +541,14 @@ describe("RefuteAdvicePanel — row rendering", () => {
         expect(knifeRow.textContent ?? "").not.toContain(
             "rationaleFreshLeakSole",
         );
+        // Best tier is T1 (a safer-than-fresh-leak tier), so the
+        // Tier 1 row uses the solid "Recommended" badge. The panel-
+        // level "all fresh leak" forced note does NOT render (it
+        // only fires when EVERY candidate is freshLeak).
+        expect(plumRow.textContent ?? "").toContain("recommendedBadge");
+        expect(
+            findPanel()?.querySelector("[data-refute-advice-forced-note]"),
+        ).toBeNull();
     });
 
     test("sole non-Tier-4 candidate uses the standard rationale and hides the Recommended badge", async () => {
