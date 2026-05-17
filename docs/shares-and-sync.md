@@ -155,8 +155,18 @@ re-prompt). Invite shares deliberately omit it — the receiver is a
 different player who may or may not want teach-me mode; the import
 modal offers an optional opt-in checkbox so they pick for themselves.
 The user's actual teach-me marks (`userDeductions`) are NEVER on the
-wire for any share kind — they're personal scratchwork; the receiver
-always starts with an empty marks board.
+wire for any share kind — they're personal scratchwork. The receiver
+starts with an empty marks board on every share kind EXCEPT one
+hydration-time derivation: when an invite-share recipient opts into
+teach-me via the import modal's checkbox AND has supplied an identity
++ known cards in the picker, `useApplyShareSnapshot` calls
+`seedFromOwnHand` to derive the same "free" Y/N facts a wizard
+teach-mode toggle would have produced (Y on their column for each
+known card, N on every other column + case file for the same cards).
+The wire format itself is unchanged; the seed is computed locally
+from the receiver's picker selections. Transfer shares carrying
+`teachModeData: true` on the wire keep `userDeductions` empty — the
+receiver re-enters their own deductions.
 
 The server whitelists the fields each `kind` is allowed to carry.
 A `kind: "pack"` request with an extraneous `playersData` is

@@ -98,19 +98,26 @@ import {
 } from "../components/ModalStack";
 import { ConfirmProvider } from "../hooks/useConfirm";
 import { PromptProvider } from "../hooks/usePrompt";
+import { ClueProvider } from "../state";
 
+// ClueProvider wraps everything because the card-pack editor (pushed
+// onto the modal stack by the "+ New card pack" button) calls
+// `useClue()` for active-session refs. AccountModal itself uses
+// `useClueOptional` and tolerates the absence, but the editor doesn't.
 const Wrappers = ({ children }: { readonly children: React.ReactNode }) => (
     <TestQueryClientProvider>
-        <ModalStackProvider>
-            <ConfirmProvider>
-                <PromptProvider>
-                    {children}
-                    {/* Shell mounted inside the providers so pushed
-                        content can read confirm / prompt context. */}
-                    <ModalStackShell />
-                </PromptProvider>
-            </ConfirmProvider>
-        </ModalStackProvider>
+        <ClueProvider>
+            <ModalStackProvider>
+                <ConfirmProvider>
+                    <PromptProvider>
+                        {children}
+                        {/* Shell mounted inside the providers so pushed
+                            content can read confirm / prompt context. */}
+                        <ModalStackShell />
+                    </PromptProvider>
+                </ConfirmProvider>
+            </ModalStackProvider>
+        </ClueProvider>
     </TestQueryClientProvider>
 );
 
@@ -777,6 +784,68 @@ describe("AccountModal — Sync now button", () => {
                     'packPendingAria:{"label":"Pending Pack"}',
                 ),
             ).toBeInTheDocument();
+        });
+    });
+});
+
+describe("AccountModal — + New card pack button", () => {
+    const signInAlice = () => {
+        mockSessionData = {
+            user: {
+                id: "u1",
+                email: "alice@example.test",
+                name: "Alice",
+                image: null,
+                isAnonymous: false,
+            },
+            session: { expiresAt: "2030-01-01T00:00:00.000Z" },
+        };
+    };
+
+    test("renders the button when signed in", async () => {
+        signInAlice();
+        renderModal();
+        expect(
+            await screen.findByText("newCardPackButton"),
+        ).toBeInTheDocument();
+    });
+
+    test("clicking the button opens the editor in new-with-name-input mode", async () => {
+        signInAlice();
+        renderModal();
+        const btn = await screen.findByText("newCardPackButton");
+        fireEvent.click(btn);
+        // titleNew is the new-mode title key — distinct from titleCreate
+        // (which the legacy "no initialPackId" path used).
+        await waitFor(() => {
+            expect(screen.getByText("titleNew")).toBeInTheDocument();
+        });
+        // Name input is rendered (the new-mode body extension).
+        expect(
+            screen.getByLabelText("newPackNameAria"),
+        ).toBeInTheDocument();
+    });
+
+    test("opens prefilled when a draft exists in localStorage", async () => {
+        signInAlice();
+        // Pre-seed a draft via the production codec — exercises the
+        // load path the production opener calls.
+        window.localStorage.setItem(
+            "effect-clue.new-card-pack-draft.v1",
+            JSON.stringify({
+                version: 1,
+                label: "Preseeded",
+                categories: [],
+            }),
+        );
+        renderModal();
+        const btn = await screen.findByText("newCardPackButton");
+        fireEvent.click(btn);
+        await waitFor(() => {
+            const input = screen.getByLabelText(
+                "newPackNameAria",
+            ) as HTMLInputElement;
+            expect(input.value).toBe("Preseeded");
         });
     });
 });

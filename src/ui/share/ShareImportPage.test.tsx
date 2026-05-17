@@ -729,6 +729,28 @@ describe("ShareImportPage — invite picker (identity + cards)", () => {
         ).toBeNull();
     });
 
+    test("teach-mode checkbox renders ABOVE the identity heading", () => {
+        // Layout invariant: the checkbox must come first inside the
+        // picker so it stays visible after the card grid appears. The
+        // bug this pins is "teach-me option gets pushed to the bottom
+        // when the card grid shows."
+        renderImportPage(inviteSnapshot());
+        const picker = document.querySelector(
+            "[data-share-import-picker]",
+        )!;
+        const teach = picker.querySelector("[data-share-import-teach-mode]");
+        const identity = picker.querySelector(
+            "[data-share-import-identity-heading]",
+        );
+        expect(teach).not.toBeNull();
+        expect(identity).not.toBeNull();
+        // DOCUMENT_POSITION_FOLLOWING means `identity` follows `teach`.
+        expect(
+            teach!.compareDocumentPosition(identity!) &
+                Node.DOCUMENT_POSITION_FOLLOWING,
+        ).not.toBe(0);
+    });
+
     test("pack-only share does NOT render the picker", () => {
         renderImportPage(
             buildSnapshot({ cardPackData: CUSTOM_PACK_PAYLOAD }),

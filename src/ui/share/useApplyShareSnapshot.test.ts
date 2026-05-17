@@ -36,7 +36,11 @@ import {
     playersCodec,
     selfPlayerIdCodec,
     suggestionsCodec,
+    teachModeCodec,
 } from "../../logic/ShareCodec";
+import { HashMap, Option } from "effect";
+import { Cell } from "../../logic/Knowledge";
+import { CaseFileOwner, PlayerOwner } from "../../logic/GameObjects";
 import {
     applyShareSnapshotToLocalStorage,
     buildSessionFromSnapshot,
@@ -574,6 +578,117 @@ describe("buildSessionFromSnapshot — receiver overrides", () => {
         );
         expect(session.selfPlayerId).toBeNull();
         expect(session.hands).toEqual([]);
+    });
+
+    test("invite teach-mode opt-in seeds userDeductions from override-supplied knownCards", () => {
+        // Receiver picks Alice as self, ticks card-scarlet, ticks teach-me.
+        // seedFromOwnHand should produce Y on Alice/scarlet, N on Bob/scarlet,
+        // and N on caseFile/scarlet — mirroring the wizard's teach-mode
+        // toggle behavior.
+        const session = buildSessionFromSnapshot(
+            sampleSnapshot({
+                cardPack: true,
+                players: true,
+                handSizes: true,
+            }),
+            RECEIVER_FALLBACK_PACK,
+            RECEIVER_FALLBACK_PLAYERS,
+            {
+                teachMode: true,
+                selfPlayerId: Player("Alice"),
+                knownCards: [
+                    KnownCard({
+                        player: Player("Alice"),
+                        card: Card("card-scarlet"),
+                    }),
+                ],
+            },
+        );
+        expect(session.teachMode).toBe(true);
+        expect(
+            HashMap.get(
+                session.userDeductions,
+                Cell(PlayerOwner(Player("Alice")), Card("card-scarlet")),
+            ),
+        ).toEqual(Option.some("Y"));
+        expect(
+            HashMap.get(
+                session.userDeductions,
+                Cell(PlayerOwner(Player("Bob")), Card("card-scarlet")),
+            ),
+        ).toEqual(Option.some("N"));
+        expect(
+            HashMap.get(
+                session.userDeductions,
+                Cell(CaseFileOwner(), Card("card-scarlet")),
+            ),
+        ).toEqual(Option.some("N"));
+    });
+
+    test("invite teach-mode opt-in with NO identity → empty userDeductions", () => {
+        // No anchor for seedFromOwnHand — even with teachMode opt-in,
+        // the deductions map stays empty.
+        const session = buildSessionFromSnapshot(
+            sampleSnapshot({
+                cardPack: true,
+                players: true,
+                handSizes: true,
+            }),
+            RECEIVER_FALLBACK_PACK,
+            RECEIVER_FALLBACK_PLAYERS,
+            { teachMode: true, selfPlayerId: null, knownCards: [] },
+        );
+        expect(session.teachMode).toBe(true);
+        expect(HashMap.size(session.userDeductions)).toBe(0);
+    });
+
+    test("teachMode override === false → empty userDeductions even with identity + knownCards", () => {
+        // Explicit opt-out: no seed regardless of other override fields.
+        const session = buildSessionFromSnapshot(
+            sampleSnapshot({
+                cardPack: true,
+                players: true,
+                handSizes: true,
+            }),
+            RECEIVER_FALLBACK_PACK,
+            RECEIVER_FALLBACK_PLAYERS,
+            {
+                teachMode: false,
+                selfPlayerId: Player("Alice"),
+                knownCards: [
+                    KnownCard({
+                        player: Player("Alice"),
+                        card: Card("card-scarlet"),
+                    }),
+                ],
+            },
+        );
+        expect(session.teachMode).toBe(false);
+        expect(HashMap.size(session.userDeductions)).toBe(0);
+    });
+
+    test("transfer share with teachModeData='true' and no override → empty userDeductions", () => {
+        // Today's behavior preserved: transfer shares carry teachMode on
+        // the wire but never userDeductions (recipe bucket 5). The
+        // receiver re-enters their own deductions.
+        const session = buildSessionFromSnapshot(
+            {
+                ...sampleSnapshot({
+                    cardPack: true,
+                    players: true,
+                    handSizes: true,
+                    knownCards: true,
+                }),
+                teachModeData: Schema.encodeSync(teachModeCodec)(true),
+                selfPlayerIdData: Schema.encodeSync(selfPlayerIdCodec)(
+                    Player("Alice"),
+                ),
+            },
+            RECEIVER_FALLBACK_PACK,
+            RECEIVER_FALLBACK_PLAYERS,
+        );
+        expect(session.teachMode).toBe(true);
+        expect(HashMap.size(session.userDeductions)).toBe(0);
     });
 });
 
