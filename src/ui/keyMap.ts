@@ -115,6 +115,14 @@ type BindingId =
     | "hypothesis.setOff"
     | "hypothesis.setY"
     | "hypothesis.setN"
+    // Teach-mode cell controls — only active when the teach-mode
+    // cell explanation panel is mounted (i.e. a cell is open AND
+    // `state.teachMode` is true). The handler lives inside
+    // `TeachModeCellCheck`, whose lifetime is exactly the panel's.
+    | "teachMode.markOff"
+    | "teachMode.markY"
+    | "teachMode.markN"
+    | "teachMode.check"
     // Navigation primitives (scoped)
     | "nav.up"
     | "nav.down"
@@ -193,6 +201,31 @@ const DEFAULT_KEY_MAP: Record<BindingId, KeyBinding> = {
         id: "hypothesis.setN",
         description: "Set the hypothesis on the open cell to N",
         combos: [combo.bareCI("n", "N")],
+    },
+    // Teach-mode mark shortcuts intentionally use the same letters as
+    // the hypothesis triple — the two are mutually exclusive (the panel
+    // body switches between hypothesis and teach-mode UIs based on
+    // `state.teachMode`), and the Checklist hypothesis handler gates
+    // itself on `!state.teachMode` so only one path can fire per press.
+    "teachMode.markOff": {
+        id: "teachMode.markOff",
+        description: "Turn off the teach-mode mark on the open cell",
+        combos: [combo.bareCI("o", "O")],
+    },
+    "teachMode.markY": {
+        id: "teachMode.markY",
+        description: "Mark the open cell as has (teach mode)",
+        combos: [combo.bareCI("y", "Y")],
+    },
+    "teachMode.markN": {
+        id: "teachMode.markN",
+        description: "Mark the open cell as does-not-have (teach mode)",
+        combos: [combo.bareCI("n", "N")],
+    },
+    "teachMode.check": {
+        id: "teachMode.check",
+        description: "Check the open cell against the deducer's verdict",
+        combos: [combo.bareCI("c", "C")],
     },
     "nav.up": {
         id: "nav.up",

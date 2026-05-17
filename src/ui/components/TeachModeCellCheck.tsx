@@ -2,7 +2,7 @@
 
 import { HashMap, Result } from "effect";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { findCardEntry, type GameSetup } from "../../logic/GameSetup";
 import { ownerLabel } from "../../logic/GameObjects";
 import {
@@ -20,6 +20,8 @@ import {
 } from "../../logic/TeachMode";
 import { teachModeCellCheckUsed } from "../../analytics/events";
 import { useClue } from "../state";
+import { useHasKeyboard } from "../hooks/useHasKeyboard";
+import { label, matches, shortcutSuffix } from "../keyMap";
 import { AlertIcon, CheckIcon, LightbulbIcon } from "./Icons";
 import { ProseChecklistIcon } from "./CellGlyph";
 import { buildCellWhy } from "./cellWhy";
@@ -57,6 +59,7 @@ export function TeachModeCellCheck({
     const tReasons = useTranslations("reasons");
     const { state, derived, dispatch } = useClue();
     const [revealed, setRevealed] = useState(false);
+    const hasKeyboard = useHasKeyboard();
 
     const cardLabel =
         findCardEntry(setup, cell.card)?.name ?? String(cell.card);
@@ -87,11 +90,46 @@ export function TeachModeCellCheck({
 
     const setMark = (next: UserDeductionValue | null) => {
         dispatch({ type: "setUserDeduction", cell, value: next });
-        // Setting a new value invalidates the previously-shown verdict
-        // — collapse the reveal so the user has to press "Check this
-        // cell" again to see the updated verdict.
-        setRevealed(false);
     };
+
+    // Setting a new value invalidates the previously-shown verdict —
+    // collapse the reveal so the user has to press "Check" again to
+    // see the updated verdict. Runs for any mark change, whether the
+    // mark moved via this component's `MarkPicker` or via Checklist's
+    // window-level Y/N/O handler (which dispatches `setUserDeduction`
+    // directly, bypassing `setMark`).
+    useEffect(() => {
+        setRevealed(false);
+    }, [userMark, cell]);
+
+    // C shortcut: reveal the verdict. Y/N/O are owned by Checklist's
+    // window-level handler (so they also work when this panel is
+    // closed but a cell is focused) — the only reason C lives here
+    // and not there is that the verdict's reveal state is local to
+    // this component, and gating C on `!revealed` keeps the analytics
+    // event from double-firing once the verdict is already shown.
+    const onCheckClickRef = useRef(onCheckClick);
+    onCheckClickRef.current = onCheckClick;
+    const revealedRef = useRef(revealed);
+    revealedRef.current = revealed;
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as Element | null;
+            if (
+                target instanceof HTMLInputElement
+                || target instanceof HTMLTextAreaElement
+                || (target instanceof HTMLElement && target.isContentEditable)
+            ) {
+                return;
+            }
+            if (!matches("teachMode.check", e)) return;
+            if (revealedRef.current) return;
+            e.preventDefault();
+            onCheckClickRef.current();
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, []);
 
     return (
         <section className="flex flex-col gap-3 px-4 py-3">
@@ -99,6 +137,16 @@ export function TeachModeCellCheck({
                 {t("yourMarkLabel")}
             </div>
             <MarkPicker value={userMark} onChange={setMark} />
+            {hasKeyboard && (
+                <p className="m-0 text-[1rem] text-muted">
+                    {t("shortcutHint", {
+                        y: label("teachMode.markY"),
+                        n: label("teachMode.markN"),
+                        off: label("teachMode.markOff"),
+                        check: label("teachMode.check"),
+                    })}
+                </p>
+            )}
             <div className="border-t border-border" />
             {revealed ? (
                 <VerdictDisplay
@@ -119,7 +167,10 @@ export function TeachModeCellCheck({
                     onClick={onCheckClick}
                     className="self-start cursor-pointer rounded border border-accent bg-accent px-3 py-1.5 text-[1.125rem] font-semibold text-panel hover:bg-accent/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                 >
-                    {t("checkThisCellButton", { card: cardLabel })}
+                    {t("checkThisCellButton", {
+                        card: cardLabel,
+                        shortcut: shortcutSuffix("teachMode.check", hasKeyboard),
+                    })}
                 </button>
             )}
         </section>

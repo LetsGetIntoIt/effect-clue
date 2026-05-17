@@ -305,6 +305,14 @@ export function Checklist() {
     //   - no why popover is open (`popoverCell === null`).
     const popoverCellRef = useRef<Cell | null>(popoverCell);
     popoverCellRef.current = popoverCell;
+    // Most-recently-focused cell. In teach mode the Y/N/O shortcuts
+    // mark the focused cell when no popover is open, so the user can
+    // sweep the grid by tab/arrow + Y/N/O without first opening the
+    // explanation panel each time. Updated by each cell's `onFocus`;
+    // the keydown handler validates that `document.activeElement` is
+    // still a checklist cell before reading the ref so a stale value
+    // can't bleed into a press while focus is on a button elsewhere.
+    const focusedCellRef = useRef<Cell | null>(null);
     // Touch two-tap protocol. On touch devices, the first tap on a
     // cell only focuses it; a second tap on the already-focused cell
     // is what opens its explanation row. Mouse and keyboard remain
@@ -353,12 +361,16 @@ export function Checklist() {
         realKnowledge,
         jointKnowledge,
         jointFailed,
+        teachMode: state.teachMode,
+        uiMode: state.uiMode,
     });
     analyticsCtxRef.current = {
         hypotheses,
         realKnowledge,
         jointKnowledge,
         jointFailed,
+        teachMode: state.teachMode,
+        uiMode: state.uiMode,
     };
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
@@ -370,9 +382,66 @@ export function Checklist() {
             ) {
                 return;
             }
-            const cell = popoverCellRef.current;
-            if (cell === null) return;
             const ctx = analyticsCtxRef.current;
+            const popover = popoverCellRef.current;
+            // Teach mode: Y/N/O fire on whichever cell the user is
+            // currently engaging with — the open explanation panel's
+            // cell if any, else the focused cell. The focused-cell
+            // fallback is gated on (a) we're not in setup mode (the
+            // wizard's grid uses these keys for nothing — user marks
+            // there go through known-cards, not user-deductions) and
+            // (b) the activeElement is still a `<td>` checklist cell,
+            // so `focusedCellRef` can't bleed into a press while the
+            // user's focus has moved to a button elsewhere.
+            //
+            // C is intentionally NOT handled here — it's owned by
+            // `TeachModeCellCheck`, whose lifetime is exactly the
+            // panel's open lifetime, so C correctly only fires when
+            // the panel is open.
+            if (ctx.teachMode) {
+                const activeEl =
+                    typeof document !== "undefined"
+                        ? document.activeElement
+                        : null;
+                const activeIsCell =
+                    activeEl instanceof HTMLElement
+                    && activeEl.hasAttribute("data-cell-row");
+                const focusedFallback =
+                    ctx.uiMode !== "setup" && activeIsCell
+                        ? focusedCellRef.current
+                        : null;
+                const teachCell = popover ?? focusedFallback;
+                if (teachCell === null) return;
+                if (matches("teachMode.markY", e)) {
+                    e.preventDefault();
+                    dispatch({
+                        type: "setUserDeduction",
+                        cell: teachCell,
+                        value: Y,
+                    });
+                } else if (matches("teachMode.markN", e)) {
+                    e.preventDefault();
+                    dispatch({
+                        type: "setUserDeduction",
+                        cell: teachCell,
+                        value: N,
+                    });
+                } else if (matches("teachMode.markOff", e)) {
+                    e.preventDefault();
+                    dispatch({
+                        type: "setUserDeduction",
+                        cell: teachCell,
+                        value: null,
+                    });
+                }
+                return;
+            }
+            // Non-teach mode: hypothesis Y/N/O only fire on an open
+            // popover. No focused-cell fallback — the visual hint
+            // lives inside the panel, so the shortcut shouldn't fire
+            // when the user has no panel-anchored context.
+            if (popover === null) return;
+            const cell = popover;
             const prevValue = hypothesisValueFor(ctx.hypotheses, cell);
             const cellStatus = statusFor(
                 cell,
@@ -1632,11 +1701,13 @@ export function Checklist() {
                                         const onGridArrowKey = (
                                             e: React.KeyboardEvent<HTMLTableCellElement>,
                                         ) => navigateGrid(e, rowIdx, colIdx, bounds);
-                                        const onCellFocus = () =>
+                                        const onCellFocus = () => {
                                             rememberChecklistCell(
                                                 rowIdx,
                                                 colIdx,
                                             );
+                                            focusedCellRef.current = cellRef;
+                                        };
                                         // Tour anchors:
                                         //   - `setup-known-cell` ("Mark
                                         //     the cards you were dealt")
