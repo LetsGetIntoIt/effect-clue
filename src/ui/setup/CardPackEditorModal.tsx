@@ -8,6 +8,7 @@ import {
     addCardToCategoryInCardSet,
     addCategoryToCardSet,
     CardSet,
+    cardSetsEqual,
     removeCardFromCardSet,
     removeCategoryFromCardSet,
     renameCardInCardSet,
@@ -18,6 +19,11 @@ import {
     type Category,
 } from "../../logic/CardSet";
 import { GameSetup } from "../../logic/GameSetup";
+import {
+    clearNewCardPackDraft,
+    loadNewCardPackDraft,
+    saveNewCardPackDraft,
+} from "../../data/newCardPackDraft";
 import { useCardPackActions } from "../components/cardPackActions";
 import {
     ChevronLeftIcon,
@@ -35,6 +41,15 @@ import { useConfirm } from "../hooks/useConfirm";
 import { usePrompt } from "../hooks/usePrompt";
 import { useClue } from "../state";
 import { DelayedReorderItem } from "./shared/useReorderPressDelay";
+
+// Module-scope constants so the `i18next/no-literal-string` lint rule
+// reads these as wire-format discriminators, not user copy.
+const EDITOR_MODE_EDIT = "edit" as const;
+const EDITOR_MODE_NEW = "new-with-name-input" as const;
+
+type CardPackEditorMode =
+    | typeof EDITOR_MODE_EDIT
+    | typeof EDITOR_MODE_NEW;
 
 // Reorder.Group axis values — pulled to module scope so the
 // i18next/no-literal-string lint reads them as wire identifiers.
@@ -75,10 +90,31 @@ interface Props {
     readonly initialPackIsBuiltIn?: boolean;
     readonly applyToActiveGame: boolean;
     readonly onSaved?: (savedPackId: string) => void;
+    /**
+     * Editor mode:
+     *
+     * - `"edit"` (default): the historical behavior. "Save as new
+     *   pack" prompts for a name via `usePrompt`; "Update loaded
+     *   pack" is visible when an editable pack is loaded; Cancel and
+     *   X close without confirmation. The four pre-existing callers
+     *   (setup step 1's Customize, My Card Packs row's edit button,
+     *   etc.) use this mode.
+     * - `EDITOR_MODE_NEW`: the new-pack flow opened from the
+     *   "+ New card pack" affordance. A required name `<input>`
+     *   renders at the top of the body; a sticky localStorage draft
+     *   (`effect-clue.new-card-pack-draft.v1`) carries the in-progress
+     *   edits across modal opens/closes/page reloads. "Start over"
+     *   button in the footer wipes the draft after confirmation.
+     */
+    readonly mode?: CardPackEditorMode;
 }
 
 interface EditorStoreState {
     readonly draft: CardSet;
+    /** Pack name. Used as the name input value in new-with-name-input
+     *  mode; ignored in edit mode (the existing prompt-driven save
+     *  flow reads from `initialPackLabel`). */
+    readonly label: string;
 }
 
 function CardPackEditorHeader({
@@ -109,25 +145,48 @@ function CardPackEditorHeader({
 function CardPackEditorBody({
     store,
     applyToActiveGame,
+    mode,
 }: {
     readonly store: ModalSlotStore<EditorStoreState>;
     readonly applyToActiveGame: boolean;
+    readonly mode: CardPackEditorMode;
 }) {
     const t = useTranslations("cardPackEditor");
     const { state } = useClue();
     const confirm = useConfirm();
     const draft = useModalSlotStoreSelector(store, (s) => s.draft);
+    const label = useModalSlotStoreSelector(store, (s) => s.label);
 
     const setDraft: React.Dispatch<React.SetStateAction<CardSet>> = (
         next,
     ) => {
         store.set((s) => ({
+            ...s,
             draft:
                 typeof next === "function"
                     ? (next as (prev: CardSet) => CardSet)(s.draft)
                     : next,
         }));
     };
+    const setLabel = (next: string): void => {
+        store.set((s) => ({ ...s, label: next }));
+    };
+
+    // In new-with-name-input mode, persist the draft to localStorage
+    // on every store change. The slot is exclusive to this mode —
+    // edit mode never touches the key.
+    useEffect(() => {
+        if (mode !== EDITOR_MODE_NEW) return;
+        const persist = (): void => {
+            const s = store.get();
+            saveNewCardPackDraft({ label: s.label, cardSet: s.draft });
+        };
+        // Persist immediately so the open of a draft-prefilled editor
+        // round-trips cleanly (load → state → save with identical
+        // contents). Plus subscribe to every subsequent edit.
+        persist();
+        return store.subscribe(persist);
+    }, [mode, store]);
 
     const cardHasSessionRefs = (cardId: string): boolean => {
         if (!applyToActiveGame) return false;
@@ -149,6 +208,26 @@ function CardPackEditorBody({
 
     return (
         <div className="flex flex-col gap-3 px-5 pt-3 pb-3">
+            {mode === EDITOR_MODE_NEW ? (
+                <div className="flex flex-col gap-1">
+                    <label
+                        htmlFor="new-card-pack-name-input"
+                        className="text-[1rem] font-semibold text-fg"
+                    >
+                        {t("newPackNameLabel")}
+                    </label>
+                    <input
+                        id="new-card-pack-name-input"
+                        type="text"
+                        className="box-border min-w-0 rounded border border-border px-2 py-1 text-[1rem]"
+                        value={label}
+                        placeholder={t("newPackNamePlaceholder")}
+                        aria-label={t("newPackNameAria")}
+                        autoFocus
+                        onChange={(e) => setLabel(e.currentTarget.value)}
+                    />
+                </div>
+            ) : null}
             <p className="m-0 text-[1rem] leading-normal text-muted">
                 {t("helperText")}
             </p>
@@ -194,6 +273,7 @@ function CardPackEditorFooter({
     applyToActiveGame,
     onClose,
     onSaved,
+    mode,
 }: {
     readonly store: ModalSlotStore<EditorStoreState>;
     readonly initialPackId: string | undefined;
@@ -202,12 +282,25 @@ function CardPackEditorFooter({
     readonly applyToActiveGame: boolean;
     readonly onClose: () => void;
     readonly onSaved?: (savedPackId: string) => void;
+    readonly mode: CardPackEditorMode;
 }) {
     const t = useTranslations("cardPackEditor");
     const tCommon = useTranslations("common");
     const prompt = usePrompt();
+    const confirm = useConfirm();
     const { savePack } = useCardPackActions();
     const { state, dispatch } = useClue();
+    const label = useModalSlotStoreSelector(store, (s) => s.label);
+    const draft = useModalSlotStoreSelector(store, (s) => s.draft);
+
+    const trimmedLabel = label.trim();
+    const hasAnyCards = draft.categories.some((c) => c.cards.length > 0);
+    const canSaveAsNew =
+        mode === EDITOR_MODE_NEW
+            ? trimmedLabel.length > 0 && hasAnyCards
+            : true;
+    const isAtBlankStart =
+        trimmedLabel.length === 0 && draft.categories.length === 0;
 
     const applyDraftToActiveGameIfRequested = (draft: CardSet) => {
         if (!applyToActiveGame) return;
@@ -223,22 +316,30 @@ function CardPackEditorFooter({
     };
 
     const saveAsNewPack = async () => {
-        const name = await prompt({
-            title: t("saveAsPackPromptTitle"),
-            label: t("saveAsPackPromptLabel"),
-            initialValue: initialPackLabel ?? "",
-            confirmLabel: tCommon("save"),
-        });
-        if (name === null) return;
-        const trimmed = name.trim();
-        if (trimmed.length === 0) return;
-        const draft = store.get().draft;
+        let name: string;
+        if (mode === EDITOR_MODE_NEW) {
+            if (!canSaveAsNew) return; // defensive — button is disabled
+            name = trimmedLabel;
+        } else {
+            const prompted = await prompt({
+                title: t("saveAsPackPromptTitle"),
+                label: t("saveAsPackPromptLabel"),
+                initialValue: initialPackLabel ?? "",
+                confirmLabel: tCommon("save"),
+            });
+            if (prompted === null) return;
+            const promptedTrimmed = prompted.trim();
+            if (promptedTrimmed.length === 0) return;
+            name = promptedTrimmed;
+        }
+        const currentDraft = store.get().draft;
         const saved = await savePack({
-            label: trimmed,
-            cardSet: draft,
+            label: name,
+            cardSet: currentDraft,
         });
         onSaved?.(saved.id);
-        applyDraftToActiveGameIfRequested(draft);
+        applyDraftToActiveGameIfRequested(currentDraft);
+        if (mode === EDITOR_MODE_NEW) clearNewCardPackDraft();
         onClose();
     };
 
@@ -256,8 +357,33 @@ function CardPackEditorFooter({
         onClose();
     };
 
+    const startOver = async () => {
+        if (isAtBlankStart) return;
+        const ok = await confirm({
+            message: t("startOverConfirmMessage"),
+            confirmLabel: t("startOverConfirm"),
+        });
+        if (!ok) return;
+        clearNewCardPackDraft();
+        store.set(() => ({
+            draft: CardSet({ categories: [] }),
+            label: "",
+        }));
+    };
+
     return (
         <div className="flex flex-wrap items-center justify-end gap-2 bg-panel px-5 pt-4 pb-5">
+            {mode === EDITOR_MODE_NEW && (
+                <button
+                    type="button"
+                    disabled={isAtBlankStart}
+                    onClick={startOver}
+                    className="tap-target text-tap mr-auto inline-flex items-center gap-1.5 cursor-pointer rounded-[var(--radius)] border border-border bg-white font-semibold text-[#2a1f12] hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white"
+                >
+                    <TrashIcon size={14} />
+                    <span>{t("startOver")}</span>
+                </button>
+            )}
             <button
                 type="button"
                 className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white font-semibold text-[#2a1f12] hover:bg-hover"
@@ -267,8 +393,13 @@ function CardPackEditorFooter({
             </button>
             <button
                 type="button"
-                className="tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white font-semibold text-[#2a1f12] hover:bg-hover"
+                disabled={!canSaveAsNew}
                 onClick={saveAsNewPack}
+                className={
+                    mode === EDITOR_MODE_NEW
+                        ? "tap-target text-tap cursor-pointer rounded-[var(--radius)] border-2 border-accent bg-accent font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:border-border disabled:bg-control disabled:text-muted disabled:hover:bg-control"
+                        : "tap-target text-tap cursor-pointer rounded-[var(--radius)] border border-border bg-white font-semibold text-[#2a1f12] hover:bg-hover"
+                }
             >
                 {t("saveAsNewPack")}
             </button>
@@ -701,25 +832,85 @@ const EDITOR_MODAL_MAX_WIDTH = "min(92vw, 720px)" as const;
  * `dismissOnOutsideClick: false` / `dismissOnEscape: false`
  * configuration so every entry point yields the same alert-style
  * "edits only close via explicit buttons" behavior.
+ *
+ * In `mode: EDITOR_MODE_NEW`:
+ *   - A sticky localStorage draft (`effect-clue.new-card-pack-draft.v1`)
+ *     is loaded on open if present, so the user resumes where they
+ *     left off across modal opens/closes/reloads. The caller's
+ *     `initialCardSet` is the fallback when no draft exists.
+ *   - Cancel + X close the editor WITHOUT clearing the draft —
+ *     re-opening picks back up. Discard happens explicitly via the
+ *     "Start over" button (in the footer) or implicitly on save.
+ *
+ * In `mode: "edit"` (default — every pre-existing caller):
+ *   - Cancel + X check whether the user's edits diverge from the
+ *     supplied `initialCardSet`. If dirty, a confirm dialog warns
+ *     "Discard your unsaved changes?" before closing.
  */
 export function useOpenCardPackEditor(): (args: Props) => void {
     const { push, pop } = useModalStack();
     const tEditor = useTranslations("cardPackEditor");
+    const confirm = useConfirm();
     return (args) => {
+        const mode: CardPackEditorMode = args.mode ?? EDITOR_MODE_EDIT;
+
+        // New mode: prefer a saved draft over the caller's
+        // initialCardSet. Edit mode never reads the draft slot.
+        let initialDraft = args.initialCardSet;
+        let initialLabel = args.initialPackLabel ?? "";
+        if (mode === EDITOR_MODE_NEW) {
+            const existing = loadNewCardPackDraft();
+            if (existing !== undefined) {
+                initialDraft = existing.cardSet;
+                initialLabel = existing.label;
+            }
+        }
+
         const title =
-            args.initialPackId === undefined
-                ? tEditor("titleCreate")
-                : args.initialPackIsBuiltIn
-                  ? tEditor("titleCustomize", {
-                        label: args.initialPackLabel ?? "",
-                    })
-                  : tEditor("titleEdit", {
-                        label: args.initialPackLabel ?? "",
-                    });
+            mode === EDITOR_MODE_NEW
+                ? tEditor("titleNew")
+                : args.initialPackId === undefined
+                  ? tEditor("titleCreate")
+                  : args.initialPackIsBuiltIn
+                    ? tEditor("titleCustomize", {
+                          label: args.initialPackLabel ?? "",
+                      })
+                    : tEditor("titleEdit", {
+                          label: args.initialPackLabel ?? "",
+                      });
         const store = createModalSlotStore<EditorStoreState>({
-            draft: args.initialCardSet,
+            draft: initialDraft,
+            label: initialLabel,
         });
-        const close = () => pop();
+
+        const requestClose = async (): Promise<void> => {
+            // New mode: cancel preserves the draft. No confirm needed
+            // — re-opening "+ New card pack" resumes from where they
+            // left off. The discard path is the explicit "Start
+            // over" button.
+            if (mode === EDITOR_MODE_NEW) {
+                pop();
+                return;
+            }
+            // Edit mode: check for unsaved changes against the
+            // caller's original initialCardSet. If clean, close
+            // silently. If dirty, confirm before closing.
+            const isDirty = !cardSetsEqual(
+                store.get().draft,
+                args.initialCardSet,
+            );
+            if (!isDirty) {
+                pop();
+                return;
+            }
+            const ok = await confirm({
+                message: tEditor("discardChangesConfirmMessage"),
+                confirmLabel: tEditor("discardChangesConfirm"),
+            });
+            if (!ok) return;
+            pop();
+        };
+
         push({
             id: EDITOR_MODAL_ID,
             title,
@@ -729,13 +920,16 @@ export function useOpenCardPackEditor(): (args: Props) => void {
             header: (
                 <CardPackEditorHeader
                     titleText={title}
-                    onClose={close}
+                    onClose={() => {
+                        void requestClose();
+                    }}
                 />
             ),
             content: (
                 <CardPackEditorBody
                     store={store}
                     applyToActiveGame={args.applyToActiveGame}
+                    mode={mode}
                 />
             ),
             footer: (
@@ -747,7 +941,10 @@ export function useOpenCardPackEditor(): (args: Props) => void {
                         args.initialPackIsBuiltIn ?? false
                     }
                     applyToActiveGame={args.applyToActiveGame}
-                    onClose={close}
+                    onClose={() => {
+                        void requestClose();
+                    }}
+                    mode={mode}
                     {...(args.onSaved !== undefined
                         ? { onSaved: args.onSaved }
                         : {})}

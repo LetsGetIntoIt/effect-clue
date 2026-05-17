@@ -38,7 +38,7 @@ import {
 import { useIsSyncingCardPacks } from "../../data/cardPacksInFlight";
 import { flushPendingChanges } from "../../data/cardPacksSync";
 import { decodeServerPack } from "../../data/serverPackCodec";
-import type { CardSet } from "../../logic/CardSet";
+import { CardSet } from "../../logic/CardSet";
 import type { CustomCardSet } from "../../logic/CustomCardSets";
 import { useSession } from "../hooks/useSession";
 import { useStartupCoordinator } from "../onboarding/StartupCoordinator";
@@ -365,9 +365,27 @@ export function AccountModal() {
                                     className="rounded-[var(--radius)] border border-border bg-white px-3 py-2"
                                 >
                                     <div className="flex items-center justify-between gap-2">
-                                        <h3 className="m-0 text-[1.125rem] font-semibold text-accent">
-                                            {t("myCardPacksTitle")}
-                                        </h3>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="m-0 text-[1.125rem] font-semibold text-accent">
+                                                {t("myCardPacksTitle")}
+                                            </h3>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    openCardPackEditor({
+                                                        initialCardSet:
+                                                            CardSet({
+                                                                categories: [],
+                                                            }),
+                                                        applyToActiveGame: false,
+                                                        mode: "new-with-name-input",
+                                                    })
+                                                }
+                                                className="inline-flex cursor-pointer items-center rounded-[var(--radius)] border border-border bg-white px-2 py-1 text-[1rem] font-semibold text-accent transition-colors duration-200 ease-out hover:bg-hover"
+                                            >
+                                                {t("newCardPackButton")}
+                                            </button>
+                                        </div>
                                         <button
                                             type="button"
                                             onClick={() => void handleSyncNow()}

@@ -87,6 +87,33 @@ export const cardIdsInCategory = (
 export const allCardIds = (cardSet: CardSet): ReadonlyArray<Card> =>
     cardSet.categories.flatMap(c => c.cards.map(e => e.id));
 
+/**
+ * Structural equality on two `CardSet`s, comparing categories AND
+ * cards element-wise by `id` and `name`. `Data.Class` would normally
+ * give this for free, but readonly arrays under `Data.Class` are
+ * compared by reference (since they're plain JS arrays, not
+ * `Data.Array`), so two structurally identical but freshly built
+ * card sets compare as not-equal. The editor's dirty-check needs the
+ * structural answer, so this helper walks the nested arrays itself.
+ */
+export const cardSetsEqual = (a: CardSet, b: CardSet): boolean => {
+    if (a.categories.length !== b.categories.length) return false;
+    for (let i = 0; i < a.categories.length; i++) {
+        const ac = a.categories[i]!;
+        const bc = b.categories[i]!;
+        if (ac.id !== bc.id) return false;
+        if (ac.name !== bc.name) return false;
+        if (ac.cards.length !== bc.cards.length) return false;
+        for (let j = 0; j < ac.cards.length; j++) {
+            const ae = ac.cards[j]!;
+            const be = bc.cards[j]!;
+            if (ae.id !== be.id) return false;
+            if (ae.name !== be.name) return false;
+        }
+    }
+    return true;
+};
+
 export const allCardEntries = (
     cardSet: CardSet,
 ): ReadonlyArray<CardEntry> =>
