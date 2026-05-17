@@ -788,9 +788,23 @@ export function TourPopover() {
     // value; passing it unconditionally is harmless and avoids
     // per-step branching.
     const actionVerb = hasKeyboard ? t("verbClick") : t("verbTap");
+    // Teach-mode-aware body/title key resolution. A step can specify
+    // `bodyKeyTeachMode` / `titleKeyTeachMode` overrides that swap in
+    // when teach-me mode is on (e.g. the suggestion form's body shifts
+    // from "log what happened at the table" to "feed the solver
+    // evidence to check your work"). Falls back to the base key when
+    // no override is set.
+    const resolvedBodyKey =
+        state.teachMode && currentStep.bodyKeyTeachMode !== undefined
+            ? currentStep.bodyKeyTeachMode
+            : currentStep.bodyKey;
+    const resolvedTitleKey =
+        state.teachMode && currentStep.titleKeyTeachMode !== undefined
+            ? currentStep.titleKeyTeachMode
+            : currentStep.titleKey;
     const bodyNode =
-        currentStep.bodyKey !== undefined
-            ? t.rich(currentStep.bodyKey, {
+        resolvedBodyKey !== undefined
+            ? t.rich(resolvedBodyKey, {
                   action: actionVerb,
                   yes: () => (
                       <ProseChecklistIcon
@@ -1101,7 +1115,7 @@ export function TourPopover() {
                                     per device). Step titles that
                                     don't reference `{action}` ignore
                                     the variable. */}
-                                {t(currentStep.titleKey, {
+                                {t(resolvedTitleKey, {
                                     action: actionVerb,
                                 })}
                             </div>

@@ -12,7 +12,7 @@
 import { DateTime, Duration } from "effect";
 import type { UiMode } from "../../logic/ClueState";
 import { TOUR_PREREQUISITES, TOUR_RE_ENGAGE_DURATION } from "./tours";
-import { loadTourState, type ScreenKey } from "./TourState";
+import { loadTourState, type ScreenKey, type TourMode } from "./TourState";
 
 const SETUP: ScreenKey = "setup";
 const CHECKLIST_SUGGEST: ScreenKey = "checklistSuggest";
@@ -76,9 +76,12 @@ export const screensForUiMode = (mode: UiMode): ReadonlyArray<ScreenKey> => {
 
 /**
  * Pick the first `ScreenKey` from `candidates` that's actually eligible
- * to fire right now: every prerequisite tour has been dismissed, AND
- * the candidate's own re-engage gate is open (never dismissed, OR
- * dismissed and the dormancy window has elapsed).
+ * to fire right now for the given tour `mode`: every prerequisite tour
+ * has been dismissed in EITHER mode (a dismissal in the other mode
+ * still counts as "the user has seen this category of step"), AND the
+ * candidate's own re-engage gate is open in the CURRENT mode (never
+ * dismissed in this mode, OR dismissed and the dormancy window has
+ * elapsed).
  *
  * Returns the first candidate when nothing is eligible — keeps the
  * call site's hook signature stable; the per-screen gate hook will
@@ -88,16 +91,23 @@ export const screensForUiMode = (mode: UiMode): ReadonlyArray<ScreenKey> => {
  */
 export const pickFirstEligibleScreenKey = (
     candidates: ReadonlyArray<ScreenKey>,
+    mode: TourMode,
     now: DateTime.Utc,
 ): ScreenKey => {
     for (const candidate of candidates) {
         const prereqs = TOUR_PREREQUISITES[candidate] ?? [];
-        const prereqsAllDismissed = prereqs.every(
-            (p) => loadTourState(p).lastDismissedAt !== undefined,
-        );
+        const prereqsAllDismissed = prereqs.every((p) => {
+            const prereqState = loadTourState(p);
+            return (
+                prereqState.normal?.lastDismissedAt !== undefined ||
+                prereqState.teach?.lastDismissedAt !== undefined
+            );
+        });
         if (!prereqsAllDismissed) continue;
-        const state = loadTourState(candidate);
-        if (state.lastDismissedAt === undefined) return candidate;
+        const state = loadTourState(candidate)[mode];
+        if (state === undefined || state.lastDismissedAt === undefined) {
+            return candidate;
+        }
         const referenceAt = state.lastVisitedAt ?? state.lastDismissedAt;
         const elapsed = DateTime.distance(referenceAt, now);
         if (Duration.isGreaterThan(elapsed, TOUR_RE_ENGAGE_DURATION)) {

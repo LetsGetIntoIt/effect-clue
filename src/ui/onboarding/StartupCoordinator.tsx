@@ -59,7 +59,12 @@ import { ABOUT_APP_SPLASH_SCREEN_DISMISSAL_DURATION } from "../hooks/useSplashGa
 import { uiModeForScreenKey } from "../tour/screenKey";
 import { TOUR_PREREQUISITES } from "../tour/tours";
 import { TOUR_RE_ENGAGE_DURATION } from "../tour/useTourGate";
-import { loadTourState, type ScreenKey } from "../tour/TourState";
+import {
+    loadTourState,
+    tourModeFromTeachMode,
+    type ScreenKey,
+    type TourMode,
+} from "../tour/TourState";
 
 /**
  * Priority order for auto-firing tours at boot. The coordinator
@@ -219,16 +224,25 @@ const isSplashEligible = (now: DateTime.Utc): boolean => {
     );
 };
 
-const isTourEligible = (screen: ScreenKey, now: DateTime.Utc): boolean => {
+const isTourEligible = (
+    screen: ScreenKey,
+    mode: TourMode,
+    now: DateTime.Utc,
+): boolean => {
     // Prerequisite tours must all have been dismissed (any reason —
-    // skip / complete / X / Esc). The follow-up tour is a "now that
-    // you've seen the basics" callout, not a primary onboarding step.
+    // skip / complete / X / Esc) in EITHER mode. A user who walked
+    // the prereq in normal mode shouldn't be blocked from the
+    // follow-up in teach mode (the prerequisite content was seen).
     const prereqs = TOUR_PREREQUISITES[screen] ?? [];
     for (const prereq of prereqs) {
-        if (loadTourState(prereq).lastDismissedAt === undefined) return false;
+        const prereqState = loadTourState(prereq);
+        const seenInEitherMode =
+            prereqState.normal?.lastDismissedAt !== undefined ||
+            prereqState.teach?.lastDismissedAt !== undefined;
+        if (!seenInEitherMode) return false;
     }
-    const state = loadTourState(screen);
-    if (state.lastDismissedAt === undefined) return true;
+    const state = loadTourState(screen)[mode];
+    if (state === undefined || state.lastDismissedAt === undefined) return true;
     const referenceAt = state.lastVisitedAt ?? state.lastDismissedAt;
     return Duration.isGreaterThan(
         DateTime.distance(referenceAt, now),
@@ -238,15 +252,16 @@ const isTourEligible = (screen: ScreenKey, now: DateTime.Utc): boolean => {
 
 /**
  * Walk `TOUR_PRECEDENCE` in order, return the FIRST eligible screen
- * (or `undefined` when no tour wants to fire). Pure read of
- * localStorage via `loadTourState` — same reads that
- * `isTourEligible` does, just done across the priority list.
+ * (or `undefined` when no tour wants to fire) for the given tour
+ * `mode`. Pure read of localStorage via `loadTourState` — same reads
+ * that `isTourEligible` does, just done across the priority list.
  */
 const findHighestPriorityEligibleTour = (
+    mode: TourMode,
     now: DateTime.Utc,
 ): ScreenKey | undefined => {
     for (const screen of TOUR_PRECEDENCE) {
-        if (isTourEligible(screen, now)) return screen;
+        if (isTourEligible(screen, mode, now)) return screen;
     }
     return undefined;
 };
@@ -317,6 +332,7 @@ export function StartupCoordinatorProvider({
     hydrated,
     activeScreen,
     gameStarted,
+    teachMode,
     onRedirectToScreen,
 }: {
     readonly children: ReactNode;
@@ -342,6 +358,14 @@ export function StartupCoordinatorProvider({
      */
     readonly gameStarted: boolean;
     /**
+     * Whether the user is in teach-me mode. Each tour mode gets its
+     * own 4-week re-engage clock, so the coordinator reads gate state
+     * from the corresponding mode subkey. A user who completed the
+     * normal-mode tour still gets the teach-mode tour on their first
+     * teach-mode boot.
+     */
+    readonly teachMode: boolean;
+    /**
      * Optional precedence-redirect callback. When the highest-priority
      * eligible tour (per `TOUR_PRECEDENCE`) does NOT match
      * `activeScreen`, the coordinator invokes this with the target
@@ -356,6 +380,7 @@ export function StartupCoordinatorProvider({
      */
     readonly onRedirectToScreen?: (screen: ScreenKey) => void;
 }) {
+    const tourMode = tourModeFromTeachMode(teachMode);
     const [phase, setPhase] = useState<StartupPhase>(PHASE_BOOT);
 
     // Eligibility snapshot taken once at boot. Held in a ref so that
@@ -426,7 +451,7 @@ export function StartupCoordinatorProvider({
             return;
         }
 
-        const target = findHighestPriorityEligibleTour(now);
+        const target = findHighestPriorityEligibleTour(tourMode, now);
         const decision = decideTourDispatch(
             target,
             activeScreen,
@@ -449,7 +474,7 @@ export function StartupCoordinatorProvider({
         };
         eligibilityRef.current = eligibility;
         setPhase(pickNextPhase(eligibility));
-    }, [hydrated, phase, activeScreen, gameStarted]);
+    }, [hydrated, phase, activeScreen, gameStarted, tourMode]);
 
     const reportClosed = useCallback((slot: StartupSlot) => {
         const snapshot = eligibilityRef.current;
@@ -482,7 +507,7 @@ export function StartupCoordinatorProvider({
                 setPhase(prev => (prev === SLOT_SPLASH ? SLOT_STALE_GAME : prev));
                 return;
             }
-            const target = findHighestPriorityEligibleTour(now);
+            const target = findHighestPriorityEligibleTour(tourMode, now);
             const decision = decideTourDispatch(
                 target,
                 activeScreen,
@@ -533,7 +558,7 @@ export function StartupCoordinatorProvider({
             // user stayed on Checklist / Suggest and the
             // `checklistSuggest` tour can fire if eligible.
             const now = DateTime.nowUnsafe();
-            const target = findHighestPriorityEligibleTour(now);
+            const target = findHighestPriorityEligibleTour(tourMode, now);
             const decision = decideTourDispatch(
                 target,
                 activeScreen,
@@ -580,7 +605,7 @@ export function StartupCoordinatorProvider({
             // install
             return PHASE_DONE;
         });
-    }, [activeScreen, gameStarted]);
+    }, [activeScreen, gameStarted, tourMode]);
 
     const value = useMemo<CoordinatorValue>(
         () => ({ phase, reportClosed }),

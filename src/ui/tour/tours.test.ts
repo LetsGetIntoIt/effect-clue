@@ -111,7 +111,7 @@ describe("TOURS — setup tour", () => {
 });
 
 describe("TOURS — checklistSuggest tour", () => {
-    test("registry holds 17 entries: two-halves pair + suggest-pane pair + My Cards pair (desktop + mobile) + shared steps", () => {
+    test("registry holds 19 entries: two-halves pair + suggest-pane pair + My Cards pair (desktop + mobile) + teach-mode cell variant + shared steps", () => {
         // The two-halves intro is split three ways: a desktop multi-
         // spotlight on the pane columns, a mobile multi-spotlight on
         // the BottomNav tabs, and a mobile-only tap-Checklist step
@@ -120,10 +120,11 @@ describe("TOURS — checklistSuggest tour", () => {
         // (desktop section + mobile FAB) between the case-file step
         // and the suggest-pane intro. The suggest-pane intro is
         // another viewport-locked pair (desktop info / mobile
-        // tap-Suggest). The unfiltered registry holds 17 entries;
-        // each viewport sees 13 (desktop) / 14 (mobile) after the
-        // filter.
-        expect(TOURS.checklistSuggest).toHaveLength(18);
+        // tap-Suggest). Project 4 follow-up adds the teach-mode
+        // cell-explanation step. The unfiltered registry holds 19
+        // entries; each viewport sees 13 / 14 in normal mode and
+        // a different count in teach mode after the filter.
+        expect(TOURS.checklistSuggest).toHaveLength(19);
     });
 
     test("registry anchors in order, including viewport-locked pairs", () => {
@@ -134,16 +135,19 @@ describe("TOURS — checklistSuggest tour", () => {
         //   4. bottom-nav-checklist (mobile, tap-to-advance)
         //   5. checklist-cell (both — advance-on-click, OPEN)
         //   6. cell-explanation-panel (both — whole-panel intro)
-        //   7-9. cell-explanation-{deductions,leads,hypothesis} (both)
-        //  10. checklist-cell-close (both — advance-on-click, CLOSE)
-        //  11. checklist-case-file (both — panel already dismissed)
-        //  12. my-cards-section (desktop — Project 3)
-        //  13. my-cards-fab (mobile — Project 3)
-        //  14. teach-mode-check (both, requiredTeachMode: true)
-        //  15. desktop-suggest-area (desktop)
-        //  16. bottom-nav-suggest (mobile)
-        //  17. suggest-prior-log (both)
-        //  18. suggest-add-form (both)
+        //   7. cell-explanation-deductions (requiredTeachMode: false)
+        //   8. cell-explanation-teach-mode-check (requiredTeachMode: true)
+        //   9. cell-explanation-leads (requiredTeachMode: false)
+        //  10. cell-explanation-hypothesis (requiredTeachMode: false)
+        //  11. checklist-cell-close (both — advance-on-click, CLOSE)
+        //  12. checklist-case-file (both — panel already dismissed)
+        //  13. my-cards-section (desktop — Project 3)
+        //  14. my-cards-fab (mobile — Project 3)
+        //  15. teach-mode-check (both, requiredTeachMode: true)
+        //  16. desktop-suggest-area (desktop)
+        //  17. bottom-nav-suggest (mobile)
+        //  18. suggest-prior-log (both)
+        //  19. suggest-add-form (both)
         expect(TOURS.checklistSuggest.map(s => s.anchor)).toEqual([
             "overflow-menu",
             "two-halves-spotlight",
@@ -152,6 +156,7 @@ describe("TOURS — checklistSuggest tour", () => {
             "checklist-cell",
             "cell-explanation-panel",
             "cell-explanation-deductions",
+            "cell-explanation-teach-mode-check",
             "cell-explanation-leads",
             "cell-explanation-hypothesis",
             "checklist-cell-close",

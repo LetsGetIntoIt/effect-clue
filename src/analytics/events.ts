@@ -979,11 +979,25 @@ export const setupFirstDealtPlayerSet = (props: {
  * Fired when the user turns teach-me mode on. `source` records WHERE
  * the toggle was triggered so we can see whether the wizard step,
  * the overflow menu, or a share import is the primary entry point.
+ *
+ * Sets two person properties as a side effect:
+ *   - `is_teach_mode_user` (`$set_once`) — sticky cohort flag for
+ *     "has ever turned teach-me on". Survives toggling off so we can
+ *     count users who tried it, not just users currently in it.
+ *   - `last_teach_mode_enabled_at` (`$set`) — updated on every enable
+ *     so we can cohort by recency.
  */
 export const teachModeEnabled = (props: {
     source: "wizard" | "overflowMenu" | "shareImport";
     midGameAction?: "blank" | "previousMarks" | "keepDeduced";
-}): void => capture("teach_mode_enabled", props);
+}): void =>
+    capture("teach_mode_enabled", {
+        ...props,
+        ...withPersonProperties(
+            { last_teach_mode_enabled_at: nowIso() },
+            { is_teach_mode_user: true, first_teach_mode_enabled_at: nowIso() },
+        ),
+    });
 
 export const teachModeDisabled = (props: {
     source: "overflowMenu" | "shareImport";

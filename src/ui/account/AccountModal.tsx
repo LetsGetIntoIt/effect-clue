@@ -42,6 +42,7 @@ import type { CardSet } from "../../logic/CardSet";
 import type { CustomCardSet } from "../../logic/CustomCardSets";
 import { useSession } from "../hooks/useSession";
 import { useStartupCoordinator } from "../onboarding/StartupCoordinator";
+import { useClueOptional } from "../state";
 import { useTour } from "../tour/TourProvider";
 import {
     computeShouldShowTour,
@@ -51,6 +52,7 @@ import {
     loadTourState,
     saveTourDismissed,
     saveTourVisited,
+    tourModeFromTeachMode,
 } from "../tour/TourState";
 import {
     CardStackIcon,
@@ -222,6 +224,8 @@ export function AccountModal() {
     // value without re-installing the effect.
     const { startTour, dismissTour, activeScreen } = useTour();
     const { phase } = useStartupCoordinator();
+    const clue = useClueOptional();
+    const tourMode = tourModeFromTeachMode(clue?.state.teachMode === true);
     const activeScreenRef = useRef(activeScreen);
     activeScreenRef.current = activeScreen;
     const firedRef = useRef(false);
@@ -248,7 +252,7 @@ export function AccountModal() {
         const now = DateTime.nowUnsafe();
         const shouldShow = TelemetryRuntime.runSync(
             computeShouldShowTour(
-                loadTourState(ACCOUNT_TOUR_SCREEN_KEY),
+                loadTourState(ACCOUNT_TOUR_SCREEN_KEY)[tourMode],
                 now,
                 TOUR_RE_ENGAGE_DURATION,
             ),
@@ -256,9 +260,9 @@ export function AccountModal() {
         if (!shouldShow) return;
         firedRef.current = true;
         startTourRef.current(ACCOUNT_TOUR_SCREEN_KEY);
-        saveTourVisited(ACCOUNT_TOUR_SCREEN_KEY, now);
-        saveTourDismissed(ACCOUNT_TOUR_SCREEN_KEY, now);
-    }, [isAnon, phase]);
+        saveTourVisited(ACCOUNT_TOUR_SCREEN_KEY, tourMode, now);
+        saveTourDismissed(ACCOUNT_TOUR_SCREEN_KEY, tourMode, now);
+    }, [isAnon, phase, tourMode]);
     // Cleanup: when AccountModal unmounts (X / Esc / `pop()`), if
     // the tour is still active on `account`, dismiss it. Read both
     // `activeScreen` and `dismissTour` via refs so this effect mounts

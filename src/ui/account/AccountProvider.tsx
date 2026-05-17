@@ -36,7 +36,11 @@ import {
 import { TelemetryRuntime } from "../../observability/runtime";
 import { useModalStack } from "../components/ModalStack";
 import { useSession } from "../hooks/useSession";
-import { loadTourState } from "../tour/TourState";
+import { useClueOptional } from "../state";
+import {
+    loadTourState,
+    tourModeFromTeachMode,
+} from "../tour/TourState";
 import {
     computeShouldShowTour,
     TOUR_RE_ENGAGE_DURATION,
@@ -102,6 +106,8 @@ export function AccountProvider({
     const session = useSession();
     const queryClient = useQueryClient();
     const { push, popTo } = useModalStack();
+    const clue = useClueOptional();
+    const tourMode = tourModeFromTeachMode(clue?.state.teachMode === true);
     /**
      * Resolver registry for in-flight `requestSignOut` calls. The
      * promise resolves once the user has either committed sign-out
@@ -138,7 +144,7 @@ export function AccountProvider({
             && !session.data.user.isAnonymous
             && TelemetryRuntime.runSync(
                 computeShouldShowTour(
-                    loadTourState(ACCOUNT_TOUR_SCREEN_KEY),
+                    loadTourState(ACCOUNT_TOUR_SCREEN_KEY)[tourMode],
                     DateTime.nowUnsafe(),
                     TOUR_RE_ENGAGE_DURATION,
                 ),
@@ -151,7 +157,7 @@ export function AccountProvider({
             content: <AccountModal />,
             ...(willFireTour ? { dismissOnOutsideClick: false } : {}),
         });
-    }, [push, tAccount, session]);
+    }, [push, tAccount, session, tourMode]);
     const closeAccountModal = useCallback(() => {
         popTo(ACCOUNT_MODAL_ID);
     }, [popTo]);

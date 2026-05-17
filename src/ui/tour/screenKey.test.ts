@@ -25,9 +25,11 @@ const seedDismissed = (key: string): void => {
     window.localStorage.setItem(
         key,
         JSON.stringify({
-            version: 1,
-            lastVisitedAt: recent,
-            lastDismissedAt: recent,
+            version: 2,
+            normal: {
+                lastVisitedAt: recent,
+                lastDismissedAt: recent,
+            },
         }),
     );
 };
@@ -36,8 +38,10 @@ const seedDismissedOnly = (key: string, recent: string): void => {
     window.localStorage.setItem(
         key,
         JSON.stringify({
-            version: 1,
-            lastDismissedAt: recent,
+            version: 2,
+            normal: {
+                lastDismissedAt: recent,
+            },
         }),
     );
 };
@@ -146,7 +150,7 @@ describe("pickFirstEligibleScreenKey", () => {
     const now = DateTime.makeUnsafe(new Date(0));
 
     test("brand-new user on setup → picks setup (no localStorage at all)", () => {
-        expect(pickFirstEligibleScreenKey(["setup", "sharing"], now)).toBe(
+        expect(pickFirstEligibleScreenKey(["setup", "sharing"], "normal", now)).toBe(
             "setup",
         );
     });
@@ -160,7 +164,7 @@ describe("pickFirstEligibleScreenKey", () => {
         // gate hook runs against a stable key (and decides not to
         // show).
         seedDismissed(STORAGE_TOUR_SETUP);
-        expect(pickFirstEligibleScreenKey(["setup", "sharing"], now)).toBe(
+        expect(pickFirstEligibleScreenKey(["setup", "sharing"], "normal", now)).toBe(
             "setup",
         );
     });
@@ -168,7 +172,7 @@ describe("pickFirstEligibleScreenKey", () => {
     test("both prereqs dismissed → sharing eligible → returns sharing", () => {
         seedDismissed(STORAGE_TOUR_SETUP);
         seedDismissed(STORAGE_TOUR_CHECKLIST_SUGGEST);
-        expect(pickFirstEligibleScreenKey(["setup", "sharing"], now)).toBe(
+        expect(pickFirstEligibleScreenKey(["setup", "sharing"], "normal", now)).toBe(
             "sharing",
         );
     });
@@ -177,7 +181,7 @@ describe("pickFirstEligibleScreenKey", () => {
         const recent = new Date(DateTime.toEpochMillis(now)).toISOString();
         seedDismissedOnly(STORAGE_TOUR_SETUP, recent);
         seedDismissed(STORAGE_TOUR_CHECKLIST_SUGGEST);
-        expect(pickFirstEligibleScreenKey(["setup", "sharing"], now)).toBe(
+        expect(pickFirstEligibleScreenKey(["setup", "sharing"], "normal", now)).toBe(
             "sharing",
         );
     });
@@ -188,7 +192,7 @@ describe("pickFirstEligibleScreenKey", () => {
         seedDismissed(STORAGE_TOUR_SHARING);
         // No tour eligible; helper returns the first candidate so the
         // gate signature stays stable.
-        expect(pickFirstEligibleScreenKey(["setup", "sharing"], now)).toBe(
+        expect(pickFirstEligibleScreenKey(["setup", "sharing"], "normal", now)).toBe(
             "setup",
         );
     });
@@ -200,7 +204,39 @@ describe("pickFirstEligibleScreenKey", () => {
         seedDismissed(STORAGE_TOUR_SETUP);
         seedDismissed(STORAGE_TOUR_CHECKLIST_SUGGEST);
         expect(
-            pickFirstEligibleScreenKey(["checklistSuggest"], now),
+            pickFirstEligibleScreenKey(["checklistSuggest"], "normal", now),
         ).toBe("checklistSuggest");
+    });
+
+    test("teach mode is independent: normal-mode dismissal doesn't suppress the teach-mode tour", () => {
+        // Even with both the setup and checklistSuggest tours dismissed
+        // in normal mode, a user who hasn't seen the teach-mode tours
+        // should still get them when their gate is read for `teach`.
+        seedDismissed(STORAGE_TOUR_SETUP);
+        seedDismissed(STORAGE_TOUR_CHECKLIST_SUGGEST);
+        expect(
+            pickFirstEligibleScreenKey(["checklistSuggest"], "teach", now),
+        ).toBe("checklistSuggest");
+    });
+
+    test("teach mode: sharing's prereqs satisfied by EITHER mode's dismissal", () => {
+        // Prerequisite check is mode-agnostic — a user who walked
+        // through setup + checklistSuggest in normal mode shouldn't
+        // be blocked from sharing in teach mode. Setup itself needs
+        // to be dismissed in teach mode too so it's not the first
+        // eligible candidate.
+        const recent = new Date(DateTime.toEpochMillis(now)).toISOString();
+        window.localStorage.setItem(
+            STORAGE_TOUR_SETUP,
+            JSON.stringify({
+                version: 2,
+                normal: { lastVisitedAt: recent, lastDismissedAt: recent },
+                teach: { lastVisitedAt: recent, lastDismissedAt: recent },
+            }),
+        );
+        seedDismissed(STORAGE_TOUR_CHECKLIST_SUGGEST);
+        expect(
+            pickFirstEligibleScreenKey(["setup", "sharing"], "teach", now),
+        ).toBe("sharing");
     });
 });

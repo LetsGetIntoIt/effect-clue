@@ -45,6 +45,8 @@ import {
     loadTourState,
     resetAllTourState,
     saveTourDismissed,
+    tourModeFromTeachMode,
+    type ModeState,
     type ScreenKey,
 } from "./TourState";
 import { useTourAbandonReporter } from "./useTourAbandonReporter";
@@ -60,8 +62,17 @@ interface TourContextValue {
     readonly currentStep: TourStep | undefined;
     /** `false` when the active tour has more steps after the current one. */
     readonly isLastStep: boolean;
-    /** Begin a tour for `screen`, starting at step 0. */
-    readonly startTour: (screen: ScreenKey) => void;
+    /**
+     * Begin a tour for `screen`, starting at step 0. `deltaMode`
+     * defaults to false; when true, the step filter restricts to
+     * steps with `requiredTeachMode === currentMode` (dropping
+     * shared structural steps the user already saw in the other
+     * mode).
+     */
+    readonly startTour: (
+        screen: ScreenKey,
+        options?: { readonly deltaMode?: boolean },
+    ) => void;
     /** Advance to the next step, or fire `tourCompleted` and close. */
     readonly nextStep: () => void;
     /** Step back one. Clamps to 0; emits no events. */
@@ -161,16 +172,27 @@ const useFilterStepsByViewport = (
 };
 
 /**
- * Filter the step list by `state.teachMode`. Steps with
- * `requiredTeachMode === true` render only when teach-mode is on;
- * `false` renders only when teach-mode is off; `undefined` always
- * renders. Composes with `useFilterStepsByViewport`.
+ * Filter the step list by `state.teachMode` and the optional
+ * `deltaMode` flag.
+ *
+ * - **Normal mode (deltaMode false)**: keep steps where
+ *   `requiredTeachMode === undefined` (shared) OR
+ *   `requiredTeachMode === teachMode` (current-mode-specific).
+ * - **Delta mode (deltaMode true)**: keep only
+ *   `requiredTeachMode === teachMode`. Skip shared steps because
+ *   the user already saw them in the other mode.
+ *
+ * Composes with `useFilterStepsByViewport`.
  */
 const filterStepsByTeachMode = (
     steps: ReadonlyArray<TourStep>,
     teachMode: boolean,
+    deltaMode: boolean,
 ): ReadonlyArray<TourStep> =>
     steps.filter(step => {
+        if (deltaMode) {
+            return step.requiredTeachMode === teachMode;
+        }
         if (step.requiredTeachMode === undefined) return true;
         return step.requiredTeachMode === teachMode;
     });
@@ -193,10 +215,10 @@ const daysBetween = (from: DateTime.Utc, to: DateTime.Utc): number => {
  * reflect the user's history.
  */
 const tourReengagementContext = (
-    state: { lastDismissedAt?: DateTime.Utc },
+    state: ModeState | undefined,
     now: DateTime.Utc,
 ): { reengaged: boolean; daysSinceLastDismissal: number | null } => {
-    const lastDismissedAt = state.lastDismissedAt;
+    const lastDismissedAt = state?.lastDismissedAt;
     if (lastDismissedAt === undefined) {
         return { reengaged: false, daysSinceLastDismissal: null };
     }
@@ -211,12 +233,20 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
         undefined,
     );
     const [stepIndex, setStepIndex] = useState(0);
+    /**
+     * Whether the active tour was opened in delta mode. Set by
+     * `startTour({ deltaMode: true })` when the gate detected the
+     * user had already seen the other-mode variant. Drives the step
+     * filter to drop shared structural steps.
+     */
+    const [activeDeltaMode, setActiveDeltaMode] = useState(false);
 
     // Filter happens BEFORE we expose `steps` to consumers so the
     // step counter, analytics, and the wrap-up `isLastStep` flag all
     // reflect the post-filter list. The filter is reactive — if the
-    // user resizes between mobile and desktop mid-tour, the step
-    // count and (if needed) the current index re-derive.
+    // user resizes between mobile and desktop mid-tour OR toggles
+    // teach-mode mid-tour, the step count and (if needed) the
+    // current index re-derive.
     const allSteps: ReadonlyArray<TourStep> =
         activeScreen ? TOURS[activeScreen] : EMPTY_STEPS;
     const filteredByViewport = useFilterStepsByViewport(allSteps);
@@ -227,43 +257,76 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
     // ones with `undefined` always show).
     const teachModeForTour = useClueOptional()?.state.teachMode ?? false;
     const filteredSteps = useMemo(
-        () => filterStepsByTeachMode(filteredByViewport, teachModeForTour),
-        [filteredByViewport, teachModeForTour],
+        () =>
+            filterStepsByTeachMode(
+                filteredByViewport,
+                teachModeForTour,
+                activeDeltaMode,
+            ),
+        [filteredByViewport, teachModeForTour, activeDeltaMode],
     );
     const steps = activeScreen ? filteredSteps : undefined;
-    const currentStep = steps?.[stepIndex];
     const totalSteps = steps?.length ?? 0;
-    const isLastStep = totalSteps > 0 && stepIndex === totalSteps - 1;
+    // Clamp stepIndex to the live filtered list. Mid-tour mode
+    // toggles can shrink the list (e.g., teach-mode-only steps
+    // disappear when teach-mode flips off); without clamping,
+    // `stepIndex` could point past the new end and `currentStep`
+    // would render as `undefined`. The reverse case (a step appears
+    // mid-tour because the user enabled teach-mode) is benign —
+    // stepIndex stays in bounds.
+    useEffect(() => {
+        if (activeScreen === undefined) return;
+        if (totalSteps > 0 && stepIndex >= totalSteps) {
+            setStepIndex(totalSteps - 1);
+        }
+    }, [activeScreen, stepIndex, totalSteps]);
+    const currentStep = steps?.[Math.min(stepIndex, totalSteps - 1)];
+    const isLastStep = totalSteps > 0 && stepIndex >= totalSteps - 1;
 
-    const startTour = useCallback((screen: ScreenKey) => {
-        // Match the filter the live `steps` will go through so the
-        // analytics step count is consistent with what the user
-        // actually sees. We run the same filter logic inline here
-        // because the hook can only run inside the component body.
-        const isDesktop =
-            typeof window !== "undefined" &&
-            window.matchMedia(DESKTOP_BREAKPOINT_QUERY).matches;
-        const stepsForScreen = TOURS[screen].filter(step => {
-            const v = step.viewport ?? VIEWPORT_BOTH;
-            if (v === VIEWPORT_BOTH) return true;
-            if (v === VIEWPORT_DESKTOP) return isDesktop;
-            if (v === VIEWPORT_MOBILE) return !isDesktop;
-            return true;
-        });
-        if (stepsForScreen.length === 0) return;
-        TelemetryRuntime.runSync(startEffect(screen));
-        const reengage = tourReengagementContext(
-            loadTourState(screen),
-            DateTime.nowUnsafe(),
-        );
-        tourStarted({
-            screenKey: screen,
-            stepCount: stepsForScreen.length,
-            ...reengage,
-        });
-        setActiveScreen(screen);
-        setStepIndex(0);
-    }, []);
+    const teachModeForCallback = teachModeForTour;
+    const startTour = useCallback(
+        (
+            screen: ScreenKey,
+            options?: { readonly deltaMode?: boolean },
+        ) => {
+            // Match the filter the live `steps` will go through so the
+            // analytics step count is consistent with what the user
+            // actually sees. We run the same filter logic inline here
+            // because the hook can only run inside the component body.
+            const isDesktop =
+                typeof window !== "undefined" &&
+                window.matchMedia(DESKTOP_BREAKPOINT_QUERY).matches;
+            const deltaMode = options?.deltaMode ?? false;
+            const stepsForScreen = TOURS[screen].filter(step => {
+                const v = step.viewport ?? VIEWPORT_BOTH;
+                if (v === VIEWPORT_BOTH) {
+                    /* viewport keep */
+                } else if (v === VIEWPORT_DESKTOP && !isDesktop) return false;
+                else if (v === VIEWPORT_MOBILE && isDesktop) return false;
+                if (deltaMode) {
+                    return step.requiredTeachMode === teachModeForCallback;
+                }
+                if (step.requiredTeachMode === undefined) return true;
+                return step.requiredTeachMode === teachModeForCallback;
+            });
+            if (stepsForScreen.length === 0) return;
+            TelemetryRuntime.runSync(startEffect(screen));
+            const mode = tourModeFromTeachMode(teachModeForCallback);
+            const reengage = tourReengagementContext(
+                loadTourState(screen)[mode],
+                DateTime.nowUnsafe(),
+            );
+            tourStarted({
+                screenKey: screen,
+                stepCount: stepsForScreen.length,
+                ...reengage,
+            });
+            setActiveScreen(screen);
+            setStepIndex(0);
+            setActiveDeltaMode(deltaMode);
+        },
+        [teachModeForCallback],
+    );
 
     const nextStep = useCallback(() => {
         if (!activeScreen || !steps) return;
@@ -289,15 +352,19 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
         // CTA) would see the same tour again on every page load.
         // Completion locks the tour the same way Skip / Esc / X do;
         // the analytics event still distinguishes the *reason* via
-        // `tourCompleted` vs `tourDismissed`.
-        saveTourDismissed(activeScreen, DateTime.nowUnsafe());
+        // `tourCompleted` vs `tourDismissed`. Saved under the
+        // current mode's subkey so each mode tracks its own
+        // completion + 4-week clock.
+        const completionMode = tourModeFromTeachMode(teachModeForCallback);
+        saveTourDismissed(activeScreen, completionMode, DateTime.nowUnsafe());
         tourCompleted({
             screenKey: activeScreen,
             totalSteps: steps.length,
         });
         setActiveScreen(undefined);
         setStepIndex(0);
-    }, [activeScreen, stepIndex, steps]);
+        setActiveDeltaMode(false);
+    }, [activeScreen, stepIndex, steps, teachModeForCallback]);
 
     const prevStep = useCallback(() => {
         if (!activeScreen || !steps) return;
@@ -319,15 +386,11 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
     const dismissTour = useCallback(
         (via: TourDismissVia) => {
             if (!activeScreen) return;
-            // Persist `lastDismissedAt` for the gate. The
-            // first-fire path also writes this eagerly on tour
-            // start (so a same-session refresh doesn't re-fire),
-            // but the "Restart tour" overflow-menu entrypoint wipes
-            // every tour key BEFORE starting, so we have to
-            // re-write here for the close to be locked across page
-            // loads. Idempotent — writing the same key with a
-            // fresher timestamp is fine.
-            saveTourDismissed(activeScreen, DateTime.nowUnsafe());
+            // Persist `lastDismissedAt` for the gate, under the
+            // current mode's subkey. Each mode tracks its own
+            // dismissal + 4-week clock.
+            const dismissMode = tourModeFromTeachMode(teachModeForCallback);
+            saveTourDismissed(activeScreen, dismissMode, DateTime.nowUnsafe());
             TelemetryRuntime.runSync(
                 dismissEffect(activeScreen, stepIndex, via),
             );
@@ -339,38 +402,45 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
             });
             setActiveScreen(undefined);
             setStepIndex(0);
+            setActiveDeltaMode(false);
         },
-        [activeScreen, stepIndex, steps],
+        [activeScreen, stepIndex, steps, teachModeForCallback],
     );
 
     const restartTourForScreen = useCallback(
         (screen: ScreenKey) => {
             // Read the dismissal state BEFORE wiping, so the analytics
             // payload reflects the user's actual history. After
-            // `resetAllTourState()` runs, `lastDismissedAt` is gone —
-            // but the user did dismiss it before, and a manual restart
-            // is a reengagement signal worth preserving.
+            // `resetAllTourState()` runs, every mode's
+            // `lastDismissedAt` is gone — but the user did dismiss
+            // it before, and a manual restart is a reengagement
+            // signal worth preserving. Read the current-mode subkey
+            // for the reengagement context.
+            const restartMode = tourModeFromTeachMode(teachModeForCallback);
             const reengage = tourReengagementContext(
-                loadTourState(screen),
+                loadTourState(screen)[restartMode],
                 DateTime.nowUnsafe(),
             );
             resetAllTourState();
             tourRestarted({ screenKey: screen });
-            // Same viewport filter as `startTour` so the analytics
-            // step count matches the live `steps` list.
+            // Same viewport + mode filter as `startTour` so the
+            // analytics step count matches the live `steps` list.
             const isDesktop =
                 typeof window !== "undefined" &&
                 window.matchMedia(DESKTOP_BREAKPOINT_QUERY).matches;
             const stepsForScreen = TOURS[screen].filter(step => {
                 const v = step.viewport ?? VIEWPORT_BOTH;
-                if (v === VIEWPORT_BOTH) return true;
-                if (v === VIEWPORT_DESKTOP) return isDesktop;
-                if (v === VIEWPORT_MOBILE) return !isDesktop;
-                return true;
+                if (v === VIEWPORT_BOTH) {
+                    /* viewport keep */
+                } else if (v === VIEWPORT_DESKTOP && !isDesktop) return false;
+                else if (v === VIEWPORT_MOBILE && isDesktop) return false;
+                if (step.requiredTeachMode === undefined) return true;
+                return step.requiredTeachMode === teachModeForCallback;
             });
             if (stepsForScreen.length === 0) {
                 setActiveScreen(undefined);
                 setStepIndex(0);
+                setActiveDeltaMode(false);
                 return;
             }
             TelemetryRuntime.runSync(startEffect(screen));
@@ -381,8 +451,11 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
             });
             setActiveScreen(screen);
             setStepIndex(0);
+            // Manual restart = full tour, not delta — the user just
+            // asked for a fresh walk.
+            setActiveDeltaMode(false);
         },
-        [],
+        [teachModeForCallback],
     );
 
     // Abandon reporter: fires `tour_abandoned` if the user closes

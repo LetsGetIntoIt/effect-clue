@@ -127,7 +127,7 @@ describe("useTourGate (integration)", () => {
         readonly screen: ScreenKey;
         readonly onFire: (screen: ScreenKey) => void;
     }): null {
-        const { shouldShow } = useTourGate(screen);
+        const { shouldShow } = useTourGate(screen, "normal");
         useEffect(() => {
             if (shouldShow) onFire(screen);
         }, [shouldShow, screen, onFire]);
@@ -146,11 +146,92 @@ describe("useTourGate (integration)", () => {
         await act(async () => {});
         expect(fired).toEqual(["checklistSuggest"]);
 
-        saveTourDismissed("setup", DateTime.nowUnsafe());
+        saveTourDismissed("setup", "normal", DateTime.nowUnsafe());
         rerender(<GateFiringProbe screen="setup" onFire={onFire} />);
 
         await act(async () => {});
         expect(fired).toEqual(["checklistSuggest"]);
+    });
+});
+
+describe("useTourGate — delta mode", () => {
+    beforeEach(() => {
+        window.localStorage.clear();
+    });
+
+    afterEach(() => {
+        window.localStorage.clear();
+    });
+
+    interface DeltaProbeProps {
+        readonly screen: ScreenKey;
+        readonly mode: "normal" | "teach";
+        readonly onState: (
+            state: { shouldShow: boolean; deltaMode: boolean },
+        ) => void;
+    }
+
+    function DeltaProbe({ screen, mode, onState }: DeltaProbeProps): null {
+        const { shouldShow, deltaMode } = useTourGate(screen, mode);
+        useEffect(() => {
+            onState({ shouldShow, deltaMode });
+        }, [shouldShow, deltaMode, onState]);
+        return null;
+    }
+
+    test("delta mode true when other mode is fresh but current mode is unseen", async () => {
+        // Dismiss in normal mode → user has walked the shared steps
+        // there. The teach-mode gate should fire as a delta tour: the
+        // user hasn't seen the teach-mode-specific differences yet.
+        saveTourDismissed("checklistSuggest", "normal", DateTime.nowUnsafe());
+        let latest = { shouldShow: false, deltaMode: false };
+        render(
+            <DeltaProbe
+                screen="checklistSuggest"
+                mode="teach"
+                onState={(s) => {
+                    latest = s;
+                }}
+            />,
+        );
+        await act(async () => {});
+        expect(latest.shouldShow).toBe(true);
+        expect(latest.deltaMode).toBe(true);
+    });
+
+    test("delta mode false on a brand-new install (neither mode seen)", async () => {
+        let latest = { shouldShow: false, deltaMode: false };
+        render(
+            <DeltaProbe
+                screen="checklistSuggest"
+                mode="normal"
+                onState={(s) => {
+                    latest = s;
+                }}
+            />,
+        );
+        await act(async () => {});
+        expect(latest.shouldShow).toBe(true);
+        expect(latest.deltaMode).toBe(false);
+    });
+
+    test("delta mode false when both modes have been dismissed in the window", async () => {
+        const now = DateTime.nowUnsafe();
+        saveTourDismissed("checklistSuggest", "normal", now);
+        saveTourDismissed("checklistSuggest", "teach", now);
+        let latest = { shouldShow: true, deltaMode: true };
+        render(
+            <DeltaProbe
+                screen="checklistSuggest"
+                mode="teach"
+                onState={(s) => {
+                    latest = s;
+                }}
+            />,
+        );
+        await act(async () => {});
+        expect(latest.shouldShow).toBe(false);
+        expect(latest.deltaMode).toBe(false);
     });
 });
 
