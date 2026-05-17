@@ -45,11 +45,17 @@ const TIER_LABEL_KEY: Record<RefuteAdviceTier, string> = {
 
 const KEY_RATIONALE_ALREADY_SHOWN_TO_SUGGESTER =
     "rationaleAlreadyShownToSuggester";
+const KEY_RATIONALE_ALREADY_SHOWN_TO_SUGGESTER_SOLE =
+    "rationaleAlreadyShownToSuggesterSole";
 const KEY_RATIONALE_SUGGESTER_CAN_DEDUCE_SUMMARY =
     "rationaleSuggesterCanDeduceSummary";
+const KEY_RATIONALE_SUGGESTER_CAN_DEDUCE_SOLE_SUMMARY =
+    "rationaleSuggesterCanDeduceSoleSummary";
 const KEY_RATIONALE_SUGGESTER_CAN_DEDUCE_DETAILS =
     "rationaleSuggesterCanDeduceDetailsToggle";
 const KEY_RATIONALE_ALREADY_SHOWN_TO_OTHER = "rationaleAlreadyShownToOther";
+const KEY_RATIONALE_ALREADY_SHOWN_TO_OTHER_SOLE =
+    "rationaleAlreadyShownToOtherSole";
 const KEY_RATIONALE_FRESH_LEAK = "rationaleFreshLeak";
 const KEY_RATIONALE_FRESH_LEAK_SOLE = "rationaleFreshLeakSole";
 const KEY_ALL_FRESH_LEAK_NOTE = "allFreshLeakNote";
@@ -252,13 +258,21 @@ const renderRationale = (args: {
 }): React.ReactNode => {
     const { candidate, cardLabel, suggesterLabel, setup, soleCandidate, t } =
         args;
+    // Every tier has a sole-variant rationale that leads with the
+    // "this is your only matching card, so showing it is forced"
+    // framing and then names what the leak level actually costs — so
+    // the user sees both that the choice is forced AND what they're
+    // revealing by playing the forced card.
     if (candidate.tier === "alreadyShownToSuggester") {
         const reveal: PriorReveal | undefined =
             candidate.priorRevealToSuggester;
         const tripleLabel = reveal
             ? formatPriorTriple(reveal, setup, t("tripleJoin"))
             : "";
-        return t.rich(KEY_RATIONALE_ALREADY_SHOWN_TO_SUGGESTER, {
+        const key = soleCandidate
+            ? KEY_RATIONALE_ALREADY_SHOWN_TO_SUGGESTER_SOLE
+            : KEY_RATIONALE_ALREADY_SHOWN_TO_SUGGESTER;
+        return t.rich(key, {
             card: cardLabel,
             suggester: suggesterLabel,
             priorTriple: tripleLabel,
@@ -266,7 +280,10 @@ const renderRationale = (args: {
         });
     }
     if (candidate.tier === "suggesterCanDeduce") {
-        return t.rich(KEY_RATIONALE_SUGGESTER_CAN_DEDUCE_SUMMARY, {
+        const key = soleCandidate
+            ? KEY_RATIONALE_SUGGESTER_CAN_DEDUCE_SOLE_SUMMARY
+            : KEY_RATIONALE_SUGGESTER_CAN_DEDUCE_SUMMARY;
+        return t.rich(key, {
             card: cardLabel,
             suggester: suggesterLabel,
             bold: boldChunks,
@@ -277,7 +294,10 @@ const renderRationale = (args: {
             String(r.suggester),
         );
         const othersLabel = joinOthers(others, t);
-        return t.rich(KEY_RATIONALE_ALREADY_SHOWN_TO_OTHER, {
+        const key = soleCandidate
+            ? KEY_RATIONALE_ALREADY_SHOWN_TO_OTHER_SOLE
+            : KEY_RATIONALE_ALREADY_SHOWN_TO_OTHER;
+        return t.rich(key, {
             card: cardLabel,
             suggester: suggesterLabel,
             others: othersLabel,
@@ -288,6 +308,7 @@ const renderRationale = (args: {
     if (soleCandidate) {
         return t.rich(KEY_RATIONALE_FRESH_LEAK_SOLE, {
             card: cardLabel,
+            suggester: suggesterLabel,
             bold: boldChunks,
         });
     }

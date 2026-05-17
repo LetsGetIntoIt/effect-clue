@@ -340,18 +340,30 @@ describe("RefuteAdvicePanel — row rendering", () => {
         expect(text).toContain("Cho");
     });
 
-    test("Tier 4 single-candidate uses freshLeakSole + omits Recommended badge", async () => {
+    test("sole Tier 4 uses rationaleFreshLeakSole + omits Recommended badge", async () => {
         const RefuteAdvicePanel = await importPanel();
         mockState.knownCards = [KnownCard({ player: A, card: PLUM })];
         mockState.pendingSuggestion = draftPending({
+            suggester: B,
             cards: [PLUM, KNIFE, CONSERV],
         });
         render(<RefuteAdvicePanel />);
         const row = findRows()[0]!;
         expect(row.getAttribute("data-tier")).toBe("freshLeak");
         const text = row.textContent ?? "";
+        // Sole-variant Tier 4 rationale fires — "forced" framing +
+        // softened "may not have deduced" language.
         expect(text).toContain("rationaleFreshLeakSole");
+        // No Recommended badge — sole-candidate suppression.
         expect(text).not.toContain("recommendedBadge");
+        // Tier label badge still rendered.
+        expect(text).toContain("tierFreshLeakLabel");
+        // Panel-level forced note only fires for MULTI-Tier-4 (this
+        // is sole-Tier-4 — the per-row sole rationale carries the
+        // forced framing).
+        expect(
+            findPanel()?.querySelector("[data-refute-advice-forced-note]"),
+        ).toBeNull();
     });
 
     test("multi-Tier-4 (all fresh leaks): no badge, no per-row rationale, panel-level forced note replaces them", async () => {
@@ -429,44 +441,6 @@ describe("RefuteAdvicePanel — row rendering", () => {
         expect(
             findPanel()?.querySelector("[data-refute-advice-forced-note]"),
         ).toBeNull();
-    });
-
-    test("Tier 2 row renders the rationaleSuggesterCanDeduceSummary in the rationale paragraph", async () => {
-        const RefuteAdvicePanel = await importPanel();
-        // Same Tier 2 fixture as the disclosure test: Bob holds Plum +
-        // Knife; Cho suggests {Plum, Knife, Conservatory}; A refutes
-        // with Conservatory (Cho sees it, Bob does not). B's
-        // perspective pins Cell(A, Conservatory) = Y via slice rules.
-        // Pending is Bob, A holds Conservatory.
-        mockState.knownCards = [
-            KnownCard({ player: A, card: CONSERV }),
-            KnownCard({ player: B, card: PLUM }),
-            KnownCard({ player: B, card: KNIFE }),
-        ];
-        mockState.suggestions = [
-            logEntry({
-                suggester: C,
-                cards: [PLUM, KNIFE, CONSERV],
-                refuter: A,
-                seenCard: CONSERV,
-            }),
-        ];
-        mockState.pendingSuggestion = draftPending({
-            suggester: B,
-            cards: [CONSERV, SCARLET, PLUM],
-        });
-        render(<RefuteAdvicePanel />);
-        const row = findRows()[0]!;
-        expect(row.getAttribute("data-tier")).toBe("suggesterCanDeduce");
-        // The disclosure test only checks the <details> summary label.
-        // This one asserts the rationale <p> ALSO rendered — that's
-        // the user-visible summary text above the disclosure ("Bob
-        // can already deduce that you have Conservatory from public
-        // moves so far…"). Without this assertion the rationale could
-        // silently regress while the disclosure label still passes.
-        expect(row.textContent ?? "").toContain(
-            "rationaleSuggesterCanDeduceSummary",
-        );
     });
 
     test("every leak level renders side-by-side in a 3-candidate scenario", async () => {
@@ -551,20 +525,22 @@ describe("RefuteAdvicePanel — row rendering", () => {
         ).toBeNull();
     });
 
-    test("sole non-Tier-4 candidate uses the standard rationale and hides the Recommended badge", async () => {
+    test("sole Tier 1 uses rationaleAlreadyShownToSuggesterSole and hides the Recommended badge", async () => {
         const RefuteAdvicePanel = await importPanel();
         // A holds exactly one matching card (Plum). Earlier B
         // suggested {Plum, Scarlet, Conservatory} and A refuted with
         // Plum → Tier 1. Pending: B suggests {Plum, Knife, …} again.
         // Only Plum matches A's hand, so it's the sole candidate.
-        // Two invariants this pins:
-        //   (1) the sole-candidate badge suppression is GENERIC
-        //       (applies to every tier, not just Tier 4) — Plum is
-        //       data-recommended="true" but the visible badge is
+        // Pins three invariants:
+        //   (1) Sole-candidate badge suppression is GENERIC — Plum is
+        //       data-recommended="true" but the Recommended badge is
         //       hidden because there's no other choice.
-        //   (2) only Tier 4 has a "sole" rationale variant
-        //       (rationaleFreshLeakSole). Tier 1's sole case reuses
-        //       the standard rationaleAlreadyShownToSuggester copy.
+        //   (2) Sole-Tier-1 uses the dedicated sole-variant rationale
+        //       (rationaleAlreadyShownToSuggesterSole), which leads
+        //       with the "forced" framing AND names what's being
+        //       leaked (nothing — already-shown to this suggester).
+        //   (3) The tier label badge ("Already shown") still renders
+        //       so the user sees the leak level at a glance.
         mockState.knownCards = [KnownCard({ player: A, card: PLUM })];
         mockState.suggestions = [
             logEntry({
@@ -585,11 +561,104 @@ describe("RefuteAdvicePanel — row rendering", () => {
         expect(row.getAttribute("data-tier")).toBe("alreadyShownToSuggester");
         expect(row.getAttribute("data-recommended")).toBe("true");
         const text = row.textContent ?? "";
-        // Standard Tier 1 rationale — NOT a sole variant.
-        expect(text).toContain("rationaleAlreadyShownToSuggester");
-        expect(text).not.toContain("rationaleFreshLeakSole");
-        // Sole-candidate badge suppression applies generically.
+        // Sole-variant rationale fires (asserted via the explicit
+        // "Sole" suffix — the multi variant prefix would not match).
+        expect(text).toContain("rationaleAlreadyShownToSuggesterSole");
+        // No Recommended badge — sole-candidate suppression.
         expect(text).not.toContain("recommendedBadge");
+        // Tier label badge still rendered.
+        expect(text).toContain("tierAlreadyShownToSuggesterLabel");
+        // Prior triple is still woven in so the user sees the prior
+        // moment.
+        expect(text).toContain("Miss Scarlet");
+        expect(text).toContain("Conservatory");
+    });
+
+    test("sole Tier 2 uses rationaleSuggesterCanDeduceSoleSummary, keeps the disclosure, hides the Recommended badge", async () => {
+        const RefuteAdvicePanel = await importPanel();
+        // Reuse the Tier 2 fixture: Bob holds Plum + Knife in his
+        // hand. Cho suggests {Plum, Knife, Conservatory} and Anisha
+        // refutes with Conservatory (Cho sees it; Bob does not). From
+        // Bob's perspective the slice rules pin Cell(A, Conservatory)
+        // = Y. Pending is Bob, A holds Conservatory only.
+        mockState.knownCards = [
+            KnownCard({ player: A, card: CONSERV }),
+            KnownCard({ player: B, card: PLUM }),
+            KnownCard({ player: B, card: KNIFE }),
+        ];
+        mockState.suggestions = [
+            logEntry({
+                suggester: C,
+                cards: [PLUM, KNIFE, CONSERV],
+                refuter: A,
+                seenCard: CONSERV,
+            }),
+        ];
+        mockState.pendingSuggestion = draftPending({
+            suggester: B,
+            cards: [CONSERV, SCARLET, PLUM],
+        });
+        render(<RefuteAdvicePanel />);
+        const rows = Array.from(findRows());
+        // Conservatory is the only matching candidate for Anisha.
+        expect(rows).toHaveLength(1);
+        const row = rows[0]!;
+        expect(row.getAttribute("data-tier")).toBe("suggesterCanDeduce");
+        expect(row.getAttribute("data-recommended")).toBe("true");
+        const text = row.textContent ?? "";
+        // Sole-variant Tier 2 rationale fires — "forced" framing +
+        // "the suggester can already deduce".
+        expect(text).toContain("rationaleSuggesterCanDeduceSoleSummary");
+        // No Recommended badge — sole-candidate suppression.
+        expect(text).not.toContain("recommendedBadge");
+        // Tier label badge still rendered.
+        expect(text).toContain("tierSuggesterCanDeduceLabel");
+        // The "Why does {suggester} know?" disclosure STILL renders
+        // in the sole case — the user can verify the engine's
+        // reasoning chain regardless of whether they had a choice.
+        const summary = row.querySelector("details summary");
+        expect(summary).not.toBeNull();
+        expect(summary?.textContent ?? "").toContain(
+            "rationaleSuggesterCanDeduceDetailsToggle",
+        );
+    });
+
+    test("sole Tier 3 uses rationaleAlreadyShownToOtherSole and hides the Recommended badge", async () => {
+        const RefuteAdvicePanel = await importPanel();
+        // A holds exactly one matching card (Plum). Earlier C — not
+        // the pending suggester — suggested {Plum, Knife,
+        // Conservatory} and A refuted with Plum, so Plum has been
+        // shown to C but not to B. Pending: B suggests {Plum, Knife,
+        // Study}. Only Plum matches A's hand → Tier 3 (alreadyShownToOther).
+        mockState.knownCards = [KnownCard({ player: A, card: PLUM })];
+        mockState.suggestions = [
+            logEntry({
+                suggester: C,
+                cards: [PLUM, KNIFE, CONSERV],
+                refuter: A,
+                seenCard: PLUM,
+            }),
+        ];
+        mockState.pendingSuggestion = draftPending({
+            suggester: B,
+            cards: [PLUM, KNIFE, CONSERV],
+        });
+        render(<RefuteAdvicePanel />);
+        const rows = Array.from(findRows());
+        expect(rows).toHaveLength(1);
+        const row = rows[0]!;
+        expect(row.getAttribute("data-tier")).toBe("alreadyShownToOther");
+        expect(row.getAttribute("data-recommended")).toBe("true");
+        const text = row.textContent ?? "";
+        // Sole-variant Tier 3 rationale fires.
+        expect(text).toContain("rationaleAlreadyShownToOtherSole");
+        // No Recommended badge — sole-candidate suppression.
+        expect(text).not.toContain("recommendedBadge");
+        // Tier label badge still rendered.
+        expect(text).toContain("tierAlreadyShownToOtherLabel");
+        // The other-suggester name is still woven into the copy so
+        // the user remembers who already saw the card.
+        expect(text).toContain("Cho");
     });
 });
 
