@@ -212,6 +212,43 @@ describe("classifyRefuteCandidates — tier precedence", () => {
         expect(c.priorRevealsToOthers).toEqual([]);
     });
 
+    test("Tier 1 wins over Tier 2 when both fire on the same card", () => {
+        // Earlier suggestion: B was the suggester of
+        // {Plum, Knife, Conservatory}; A (self) refuted with Plum
+        // and B saw the seenCard. From B's perspective the deducer
+        // pins Cell(A, Plum) = Y via RefuterShowed (B both suggested
+        // AND witnessed the refute), so Tier 2 would also fire. But
+        // Tier 1 has precedence — the directly-recorded prior reveal
+        // to this same suggester is more concrete than the same
+        // suggester's engine-derived deduction. Pending: B suggests
+        // {Plum, ...} again; A still holds Plum.
+        const priorId = newSuggestionId();
+        const suggestions = [
+            draft({
+                id: priorId,
+                suggester: B,
+                cards: [PLUM, KNIFE, CONSERV],
+                refuter: A,
+                seenCard: PLUM,
+            }),
+        ];
+        const perspective = perspectiveFor(B, suggestions);
+        expect(perspective).toBeDefined();
+        const out = classifyRefuteCandidates({
+            selfPlayer: A,
+            pendingSuggester: B,
+            handCandidates: [PLUM],
+            suggestions,
+            suggesterPerspective: perspective,
+        });
+        const c = out[0] as RefuteAdviceCandidate;
+        expect(c.tier).toBe("alreadyShownToSuggester");
+        expect(c.priorRevealToSuggester?.suggestionId).toBe(priorId);
+        // Tier 1 short-circuits — Tier 2's perspectiveChain bookkeeping
+        // does not fire.
+        expect(c.perspectiveChain).toBeUndefined();
+    });
+
     test("Tier 2 wins over Tier 3 when suggester can deduce AND we showed someone else", () => {
         const suggestions = [
             // Tier-3 candidate: we showed Conservatory to C earlier.

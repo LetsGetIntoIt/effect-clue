@@ -216,18 +216,18 @@ export function SuggestionBanner({
                 </>
             );
         }
-        const names = intersection.map(c => cardName(setup.cardSet, c));
-        return (
-            <>
-                <Banner kind={kind} paused={paused} variant={variant}>
-                    {t.rich("canRefute", {
-                        cards: names.join(t("join")),
-                        bold: boldChunks,
-                    })}
-                </Banner>
-                <RefuteAdvicePanel teaser={teaser} variant={variant} />
-            </>
-        );
+        // Expanded canRefute: collapse the redundancy between the
+        // banner sentence ("You can refute with X, Y") and the advice
+        // panel (which already names every refute candidate as a
+        // bolded row header). The panel carries the information AND
+        // ranks it by leak tier, so the banner sentence adds nothing
+        // and is dropped. In teach-mode the panel returns null
+        // (deducer-derived advice would defeat the "do the work
+        // yourself" promise), so this branch ends up rendering null
+        // — call sites (`MyHandPanel`, `MyCardsFAB`) preserve the
+        // existing "no refute hint in teach-mode" behavior by also
+        // suppressing the surface in teach-mode at their own level.
+        return <RefuteAdvicePanel teaser={teaser} variant={variant} />;
     }
 
     // kind === KIND_CANNOT_REFUTE

@@ -67,11 +67,13 @@ const mockClueState: {
     selfPlayerId: Player | null;
     knownCards: ReadonlyArray<KnownCard>;
     pendingSuggestion: PendingSuggestionDraft | null;
+    teachMode: boolean;
 } = {
     setup,
     selfPlayerId: A,
     knownCards: [],
     pendingSuggestion: null,
+    teachMode: false,
 };
 
 vi.mock("../state", () => ({
@@ -110,6 +112,7 @@ beforeEach(() => {
     mockClueState.selfPlayerId = A;
     mockClueState.knownCards = [];
     mockClueState.pendingSuggestion = null;
+    mockClueState.teachMode = false;
     myCardsBannerShownMock.mockReset();
     myCardsBannerDismissedMock.mockReset();
 });
@@ -144,7 +147,21 @@ describe("SuggestionBanner — gating", () => {
 });
 
 describe("SuggestionBanner — non-self suggester", () => {
-    test("partial draft with a matching card → 'can refute' shows", async () => {
+    // canRefute + non-teaser: the SuggestionBanner intentionally
+    // returns the RefuteAdvicePanel alone — the panel's row-by-row
+    // card names carry the same information the banner sentence
+    // would have, so the sentence is collapsed away. The panel is
+    // stubbed to `null` at the top of this file, so the only
+    // observable here is `findBanner()` returning null. The actual
+    // panel mount is asserted in `RefuteAdvicePanel.test.tsx`'s
+    // wiring describe block.
+    //
+    // Teach-mode: the panel's defense-in-depth gate returns null in
+    // teach-mode anyway, so the same observable holds — SuggestionBanner
+    // returns null overall. Call sites (`MyHandPanel`, `MyCardsFAB`)
+    // suppress the surface in teach-mode at their own level, so this
+    // null return is layered with their suppression.
+    test("partial draft with a matching card → banner hidden (panel takes over)", async () => {
         const SuggestionBanner = await importBanner();
         mockClueState.knownCards = [KnownCard({ player: A, card: MS_WHITE })];
         mockClueState.pendingSuggestion = draft({
@@ -152,10 +169,19 @@ describe("SuggestionBanner — non-self suggester", () => {
             cards: [MS_WHITE, null, null],
         });
         render(<SuggestionBanner />);
-        const el = findBanner();
-        expect(el).not.toBeNull();
-        expect(el?.getAttribute("data-banner-kind")).toBe("canRefute");
-        expect(el?.textContent).toContain("refuteHint.canRefute");
+        expect(findBanner()).toBeNull();
+    });
+
+    test("partial draft with a matching card in teach-mode → banner hidden (panel suppressed in teach-mode; SuggestionBanner returns null)", async () => {
+        const SuggestionBanner = await importBanner();
+        mockClueState.teachMode = true;
+        mockClueState.knownCards = [KnownCard({ player: A, card: MS_WHITE })];
+        mockClueState.pendingSuggestion = draft({
+            suggester: B,
+            cards: [MS_WHITE, null, null],
+        });
+        render(<SuggestionBanner />);
+        expect(findBanner()).toBeNull();
     });
 
     test("partial draft with NO matching card → banner hidden", async () => {
@@ -182,7 +208,7 @@ describe("SuggestionBanner — non-self suggester", () => {
         expect(el?.textContent).toContain("refuteHint.cannotRefute");
     });
 
-    test("complete draft with a matching card → 'can refute' shows", async () => {
+    test("complete draft with a matching card → banner hidden (panel takes over)", async () => {
         const SuggestionBanner = await importBanner();
         mockClueState.knownCards = [
             KnownCard({ player: A, card: KNIFE }),
@@ -193,13 +219,22 @@ describe("SuggestionBanner — non-self suggester", () => {
             cards: [MS_WHITE, KNIFE, KITCHEN],
         });
         render(<SuggestionBanner />);
-        const el = findBanner();
-        expect(el?.getAttribute("data-banner-kind")).toBe("canRefute");
-        // Banner copy should include the matching cards' names (rendered
-        // by cardName via the cardSet); the mocked template echoes the
-        // values payload.
-        expect(el?.textContent ?? "").toContain("Knife");
-        expect(el?.textContent ?? "").toContain("Kitchen");
+        expect(findBanner()).toBeNull();
+    });
+
+    test("complete draft with a matching card in teach-mode → banner hidden (panel suppressed in teach-mode; SuggestionBanner returns null)", async () => {
+        const SuggestionBanner = await importBanner();
+        mockClueState.teachMode = true;
+        mockClueState.knownCards = [
+            KnownCard({ player: A, card: KNIFE }),
+            KnownCard({ player: A, card: KITCHEN }),
+        ];
+        mockClueState.pendingSuggestion = draft({
+            suggester: B,
+            cards: [MS_WHITE, KNIFE, KITCHEN],
+        });
+        render(<SuggestionBanner />);
+        expect(findBanner()).toBeNull();
     });
 });
 

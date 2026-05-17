@@ -304,6 +304,10 @@ describe("RefuteAdvicePanel — row rendering", () => {
         // The mock t.rich emits values inline; we should see Bob's
         // name and the comma-joined prior triple.
         const text = row.textContent ?? "";
+        // The Tier 1 rationale key must render — proves the rationale
+        // <p> dispatches through KEY_RATIONALE_ALREADY_SHOWN_TO_SUGGESTER.
+        // (Matches the strictness the Tier 4 tests use.)
+        expect(text).toContain("rationaleAlreadyShownToSuggester");
         expect(text).toContain("Bob");
         expect(text).toContain("Prof. Plum");
         expect(text).toContain("Miss Scarlet");
@@ -329,6 +333,10 @@ describe("RefuteAdvicePanel — row rendering", () => {
         const row = findRows()[0]!;
         expect(row.getAttribute("data-tier")).toBe("alreadyShownToOther");
         const text = row.textContent ?? "";
+        // The Tier 3 rationale key must render — proves the rationale
+        // <p> dispatches through KEY_RATIONALE_ALREADY_SHOWN_TO_OTHER.
+        // (Matches the strictness the Tier 4 tests use.)
+        expect(text).toContain("rationaleAlreadyShownToOther");
         expect(text).toContain("Cho");
     });
 
@@ -399,6 +407,159 @@ describe("RefuteAdvicePanel — row rendering", () => {
         expect(plumRow.textContent ?? "").toContain("recommendedBadge");
         expect(knifeRow.textContent ?? "").not.toContain("recommendedBadge");
     });
+
+    test("Tier 2 row renders the rationaleSuggesterCanDeduceSummary in the rationale paragraph", async () => {
+        const RefuteAdvicePanel = await importPanel();
+        // Same Tier 2 fixture as the disclosure test: Bob holds Plum +
+        // Knife; Cho suggests {Plum, Knife, Conservatory}; A refutes
+        // with Conservatory (Cho sees it, Bob does not). B's
+        // perspective pins Cell(A, Conservatory) = Y via slice rules.
+        // Pending is Bob, A holds Conservatory.
+        mockState.knownCards = [
+            KnownCard({ player: A, card: CONSERV }),
+            KnownCard({ player: B, card: PLUM }),
+            KnownCard({ player: B, card: KNIFE }),
+        ];
+        mockState.suggestions = [
+            logEntry({
+                suggester: C,
+                cards: [PLUM, KNIFE, CONSERV],
+                refuter: A,
+                seenCard: CONSERV,
+            }),
+        ];
+        mockState.pendingSuggestion = draftPending({
+            suggester: B,
+            cards: [CONSERV, SCARLET, PLUM],
+        });
+        render(<RefuteAdvicePanel />);
+        const row = findRows()[0]!;
+        expect(row.getAttribute("data-tier")).toBe("suggesterCanDeduce");
+        // The disclosure test only checks the <details> summary label.
+        // This one asserts the rationale <p> ALSO rendered — that's
+        // the user-visible summary text above the disclosure ("Bob
+        // can already deduce that you have Conservatory from public
+        // moves so far…"). Without this assertion the rationale could
+        // silently regress while the disclosure label still passes.
+        expect(row.textContent ?? "").toContain(
+            "rationaleSuggesterCanDeduceSummary",
+        );
+    });
+
+    test("every leak level renders side-by-side in a 3-candidate scenario", async () => {
+        const RefuteAdvicePanel = await importPanel();
+        // A holds Plum, Knife, Conservatory.
+        // Earlier B suggested {Plum, Knife, Scarlet}, A refuted with
+        // Plum → Tier 1 for Plum (prior reveal to pending suggester).
+        // Earlier C suggested {Conservatory, Scarlet, Wrench}, A
+        // refuted with Conservatory → Tier 3 for Conservatory (prior
+        // reveal to a different suggester).
+        // Knife: never shown to anyone; we deliberately don't set up
+        // a perspective scenario that would deduce it → Tier 4 for
+        // Knife (fresh leak).
+        // Pending: B suggests {Plum, Knife, Conservatory}. All three
+        // candidates surface together, one per leak level the user
+        // can see.
+        mockState.knownCards = [
+            KnownCard({ player: A, card: PLUM }),
+            KnownCard({ player: A, card: KNIFE }),
+            KnownCard({ player: A, card: CONSERV }),
+        ];
+        mockState.suggestions = [
+            logEntry({
+                suggester: B,
+                cards: [PLUM, KNIFE, SCARLET],
+                refuter: A,
+                seenCard: PLUM,
+            }),
+            logEntry({
+                suggester: C,
+                cards: [CONSERV, SCARLET, WRENCH],
+                refuter: A,
+                seenCard: CONSERV,
+            }),
+        ];
+        mockState.pendingSuggestion = draftPending({
+            suggester: B,
+            cards: [PLUM, KNIFE, CONSERV],
+        });
+        render(<RefuteAdvicePanel />);
+        const rows = Array.from(findRows());
+        expect(rows).toHaveLength(3);
+        // Rows render in `handCandidates` order, which is filter-
+        // preserved from `pendingSuggestion.cards` (Plum, Knife,
+        // Conservatory). Find by data-tier to avoid substring
+        // collisions in textContent (Tier 1 rationale embeds the
+        // prior triple, which can contain the names of OTHER cards
+        // in this fixture).
+        const tierOf = (r: HTMLElement) => r.getAttribute("data-tier");
+        const plumRow = rows.find(r => tierOf(r) === "alreadyShownToSuggester")!;
+        const knifeRow = rows.find(r => tierOf(r) === "freshLeak")!;
+        const conservRow = rows.find(r => tierOf(r) === "alreadyShownToOther")!;
+        // Every leak level the user can see is present, side by side.
+        expect(plumRow).toBeDefined();
+        expect(knifeRow).toBeDefined();
+        expect(conservRow).toBeDefined();
+        // Only the best (lowest-leak) tier — Tier 1 — is recommended.
+        expect(plumRow.getAttribute("data-recommended")).toBe("true");
+        expect(knifeRow.getAttribute("data-recommended")).toBe("false");
+        expect(conservRow.getAttribute("data-recommended")).toBe("false");
+        // Each row's rationale key renders.
+        expect(plumRow.textContent ?? "").toContain(
+            "rationaleAlreadyShownToSuggester",
+        );
+        expect(knifeRow.textContent ?? "").toContain("rationaleFreshLeak");
+        expect(conservRow.textContent ?? "").toContain(
+            "rationaleAlreadyShownToOther",
+        );
+        // Multi-candidate Tier 4: standard rationale, not the sole
+        // variant. The sole variant is reserved for the
+        // exactly-one-matching-card forced case.
+        expect(knifeRow.textContent ?? "").not.toContain(
+            "rationaleFreshLeakSole",
+        );
+    });
+
+    test("sole non-Tier-4 candidate uses the standard rationale and hides the Recommended badge", async () => {
+        const RefuteAdvicePanel = await importPanel();
+        // A holds exactly one matching card (Plum). Earlier B
+        // suggested {Plum, Scarlet, Conservatory} and A refuted with
+        // Plum → Tier 1. Pending: B suggests {Plum, Knife, …} again.
+        // Only Plum matches A's hand, so it's the sole candidate.
+        // Two invariants this pins:
+        //   (1) the sole-candidate badge suppression is GENERIC
+        //       (applies to every tier, not just Tier 4) — Plum is
+        //       data-recommended="true" but the visible badge is
+        //       hidden because there's no other choice.
+        //   (2) only Tier 4 has a "sole" rationale variant
+        //       (rationaleFreshLeakSole). Tier 1's sole case reuses
+        //       the standard rationaleAlreadyShownToSuggester copy.
+        mockState.knownCards = [KnownCard({ player: A, card: PLUM })];
+        mockState.suggestions = [
+            logEntry({
+                suggester: B,
+                cards: [PLUM, SCARLET, CONSERV],
+                refuter: A,
+                seenCard: PLUM,
+            }),
+        ];
+        mockState.pendingSuggestion = draftPending({
+            suggester: B,
+            cards: [PLUM, KNIFE, CONSERV],
+        });
+        render(<RefuteAdvicePanel />);
+        const rows = Array.from(findRows());
+        expect(rows).toHaveLength(1);
+        const row = rows[0]!;
+        expect(row.getAttribute("data-tier")).toBe("alreadyShownToSuggester");
+        expect(row.getAttribute("data-recommended")).toBe("true");
+        const text = row.textContent ?? "";
+        // Standard Tier 1 rationale — NOT a sole variant.
+        expect(text).toContain("rationaleAlreadyShownToSuggester");
+        expect(text).not.toContain("rationaleFreshLeakSole");
+        // Sole-candidate badge suppression applies generically.
+        expect(text).not.toContain("recommendedBadge");
+    });
 });
 
 describe("RefuteAdvicePanel — Tier 2 disclosure", () => {
@@ -441,37 +602,72 @@ describe("RefuteAdvicePanel — Tier 2 disclosure", () => {
 });
 
 describe("RefuteAdvicePanel — wired into SuggestionBanner", () => {
-    test("panel renders below the banner in the KIND_CAN_REFUTE branch", async () => {
+    test("non-teach-mode + canRefute + expanded: panel renders, banner does NOT (collapse redundancy)", async () => {
         // Import the real SuggestionBanner (with no panel-mock) so
         // the integration covers the actual wiring inside its
-        // KIND_CAN_REFUTE branch. Both render through the same
-        // mocked useClue + next-intl above; the panel-mock used in
-        // SuggestionBanner.test.tsx is scoped to that test file.
+        // KIND_CAN_REFUTE non-teaser branch. Both render through the
+        // same mocked useClue + next-intl above; the panel-mock used
+        // in SuggestionBanner.test.tsx is scoped to that test file.
         const { SuggestionBanner } = await import("./SuggestionBanner");
+        mockState.teachMode = false;
         mockState.knownCards = [KnownCard({ player: A, card: PLUM })];
         mockState.pendingSuggestion = draftPending({
             suggester: B,
             cards: [PLUM, KNIFE, CONSERV],
         });
         render(<SuggestionBanner />);
-        // The banner mounts at the my-cards-banner anchor.
-        const banner = document.querySelector(
-            "[data-tour-anchor~='my-cards-banner']",
-        );
-        expect(banner).not.toBeNull();
-        // The panel mounts at refute-advice. Its presence here is
-        // proof that the banner's canRefute return path renders the
-        // fragment containing both.
+        // The advice panel renders (carries the "BEST CARD TO SHOW"
+        // title + bolded card-name rows — same information the banner
+        // sentence would have carried).
         const panel = document.querySelector(
             "[data-tour-anchor='refute-advice']",
         );
         expect(panel).not.toBeNull();
+        // The banner does NOT render — the panel's rows already name
+        // every refute candidate, so the banner sentence would be
+        // redundant.
+        const banner = document.querySelector(
+            "[data-tour-anchor~='my-cards-banner']",
+        );
+        expect(banner).toBeNull();
+    });
+
+    test("teach-mode + canRefute + expanded: neither banner nor panel renders (preserves 'no refute hint in teach-mode' contract)", async () => {
+        const { SuggestionBanner } = await import("./SuggestionBanner");
+        mockState.teachMode = true;
+        mockState.knownCards = [
+            KnownCard({ player: A, card: KNIFE }),
+            KnownCard({ player: A, card: CONSERV }),
+        ];
+        mockState.pendingSuggestion = draftPending({
+            suggester: B,
+            cards: [PLUM, KNIFE, CONSERV],
+        });
+        render(<SuggestionBanner />);
+        // The panel is gated off in teach-mode (deducer-derived
+        // advice would defeat the "do the work yourself" promise).
+        const panel = document.querySelector(
+            "[data-tour-anchor='refute-advice']",
+        );
+        expect(panel).toBeNull();
+        // The banner sentence is also suppressed — collapse-redundancy
+        // routes the canRefute non-teaser branch through the panel,
+        // which returns null in teach-mode. Net effect: SuggestionBanner
+        // renders nothing for canRefute in teach-mode. Call sites
+        // (`MyHandPanel`, `MyCardsFAB`) layer their own teach-mode
+        // suppression as defense-in-depth.
+        const banner = document.querySelector(
+            "[data-tour-anchor~='my-cards-banner']",
+        );
+        expect(banner).toBeNull();
     });
 
     test("panel hidden alongside banner in KIND_CANNOT_REFUTE", async () => {
         const { SuggestionBanner } = await import("./SuggestionBanner");
         // Self has no matching cards but the draft is complete →
         // banner kind is cannotRefute and the panel never renders.
+        // (The collapse-redundancy rule only applies to canRefute;
+        // cannotRefute still shows the banner.)
         mockState.knownCards = [KnownCard({ player: A, card: WRENCH })];
         mockState.pendingSuggestion = draftPending({
             suggester: B,
