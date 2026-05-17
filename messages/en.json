@@ -245,6 +245,23 @@
         "revealHintTouch": "(tap to reveal)",
         "join": ", "
     },
+    "refuteAdvice": {
+        "title": "Best card to show",
+        "tierAlreadyShownToSuggesterLabel": "Already shown",
+        "tierSuggesterCanDeduceLabel": "Already deducible",
+        "tierAlreadyShownToOtherLabel": "Partial leak",
+        "tierFreshLeakLabel": "New information",
+        "rationaleAlreadyShownToSuggester": "You already showed <bold>{card}</bold> to {suggester} when they suggested <bold>{priorTriple}</bold>. Showing it again now reveals nothing new — they have already seen this card in your hand.",
+        "rationaleSuggesterCanDeduceSummary": "{suggester} can already deduce that you have <bold>{card}</bold> from public moves so far. Showing it reveals nothing they could not work out on their own.",
+        "rationaleSuggesterCanDeduceDetailsToggle": "Why does {suggester} know?",
+        "rationaleAlreadyShownToOther": "You already showed <bold>{card}</bold> to {others} in earlier suggestions, but {suggester} has not seen it directly. Showing it leaks a card that part of the table already knows about, instead of an entirely new one.",
+        "rationaleFreshLeak": "You have not shown <bold>{card}</bold> before, and {suggester} cannot deduce from public moves that you have it. Showing it reveals a new card from your hand.",
+        "rationaleFreshLeakSole": "<bold>{card}</bold> is your only matching card, so showing it is forced. It reveals a new card from your hand.",
+        "recommendedBadge": "Recommended",
+        "tripleJoin": ", ",
+        "othersJoin": ", ",
+        "othersJoinLast": ", and "
+    },
     "deduce": {
         "title": "Deduction grid",
         "caseFileProgress": "Case file · {percent}% solved",

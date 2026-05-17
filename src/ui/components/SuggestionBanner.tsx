@@ -13,6 +13,7 @@ import type { Card } from "../../logic/GameObjects";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useClue } from "../state";
 import { HandOfCardsBadge } from "./Icons";
+import { RefuteAdvicePanel } from "./RefuteAdvicePanel";
 
 // Banner-kind tags used as a `data-banner-kind` attribute for tests
 // and CSS hooks. Hoisted into named constants so the literal values
@@ -206,20 +207,26 @@ export function SuggestionBanner({
     if (kind === KIND_CAN_REFUTE) {
         if (teaser) {
             return (
-                <Banner kind={kind} paused={paused} variant={variant}>
-                    <span>{t("canRefuteTeaser")}</span>
-                    <RevealHint label={t(revealHintKey)} />
-                </Banner>
+                <>
+                    <Banner kind={kind} paused={paused} variant={variant}>
+                        <span>{t("canRefuteTeaser")}</span>
+                        <RevealHint label={t(revealHintKey)} />
+                    </Banner>
+                    <RefuteAdvicePanel teaser={teaser} variant={variant} />
+                </>
             );
         }
         const names = intersection.map(c => cardName(setup.cardSet, c));
         return (
-            <Banner kind={kind} paused={paused} variant={variant}>
-                {t.rich("canRefute", {
-                    cards: names.join(t("join")),
-                    bold: boldChunks,
-                })}
-            </Banner>
+            <>
+                <Banner kind={kind} paused={paused} variant={variant}>
+                    {t.rich("canRefute", {
+                        cards: names.join(t("join")),
+                        bold: boldChunks,
+                    })}
+                </Banner>
+                <RefuteAdvicePanel teaser={teaser} variant={variant} />
+            </>
         );
     }
 

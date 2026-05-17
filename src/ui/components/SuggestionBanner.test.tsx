@@ -78,6 +78,14 @@ vi.mock("../state", () => ({
     useClue: () => ({ state: mockClueState }),
 }));
 
+// Stub the refute-advice panel so these tests stay focused on the
+// banner itself. The panel has its own test file
+// (`RefuteAdvicePanel.test.tsx`) which exercises gating + row
+// rendering in isolation.
+vi.mock("./RefuteAdvicePanel", () => ({
+    RefuteAdvicePanel: () => null,
+}));
+
 const myCardsBannerShownMock = vi.fn();
 const myCardsBannerDismissedMock = vi.fn();
 vi.mock("../../analytics/events", async () => {
