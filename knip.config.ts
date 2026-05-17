@@ -32,6 +32,14 @@ const config: KnipConfig = {
 		// vitest alias target — referenced from `vitest.config.ts`'s
 		// `resolve.alias`, which knip can't crawl.
 		"src/test-utils/server-only-stub.ts",
+		// Per-player perspective engine. `buildPerspective` is wired
+		// into `state.tsx`'s `derived.perspectives`; the named
+		// `Perspective` type is part of the public API for the
+		// follow-up refute-advice panel (M2) that consumes the
+		// engine. Treating the file as an entry point while the
+		// consumer is in flight, same pattern as the M8 card-pack
+		// server actions above.
+		"src/logic/Perspective.ts",
 	],
 	project: ["app/**/*.{ts,tsx}", "src/**/*.{ts,tsx}"],
 	ignore: ["src/logic/test-utils/**"],
