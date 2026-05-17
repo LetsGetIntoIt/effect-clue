@@ -254,6 +254,27 @@
         "revealHintTouch": "(tap to reveal)",
         "join": ", "
     },
+    "refuteAdvice": {
+        "title": "Best card to show",
+        "tierAlreadyShownToSuggesterLabel": "Already shown",
+        "tierSuggesterCanDeduceLabel": "Already deducible",
+        "tierAlreadyShownToOtherLabel": "Partial leak",
+        "tierFreshLeakLabel": "New information",
+        "rationaleAlreadyShownToSuggester": "You already showed <bold>{card}</bold> to {suggester} when they suggested <bold>{priorTriple}</bold>. Showing it again now reveals nothing new — they have already seen this card in your hand.",
+        "rationaleAlreadyShownToSuggesterSole": "<bold>{card}</bold> is your only matching card, so showing it is forced. {suggester} already saw it when they suggested <bold>{priorTriple}</bold>, so showing it again reveals nothing new.",
+        "rationaleSuggesterCanDeduceSummary": "{suggester} can already deduce that you have <bold>{card}</bold> from public moves so far. Showing it reveals nothing they could not work out on their own.",
+        "rationaleSuggesterCanDeduceSoleSummary": "<bold>{card}</bold> is your only matching card, so showing it is forced. {suggester} can already deduce from public moves that you have it, so showing it only confirms what they could already work out on their own.",
+        "rationaleSuggesterCanDeduceDetailsToggle": "Why does {suggester} know?",
+        "rationaleAlreadyShownToOther": "You already showed <bold>{card}</bold> to {others} in earlier suggestions, but {suggester} has not seen it directly. Showing it leaks a card that part of the table already knows about, instead of an entirely new one.",
+        "rationaleAlreadyShownToOtherSole": "<bold>{card}</bold> is your only matching card, so showing it is forced. You already showed it to {others} in earlier suggestions, but {suggester} has not seen it directly — showing it leaks a card that part of the table already knows about, instead of an entirely new one.",
+        "rationaleFreshLeak": "You have not shown <bold>{card}</bold> before, and {suggester} may not have deduced it. Showing it likely reveals a new card from your hand. If it's your only option, then you must show it.",
+        "rationaleFreshLeakSole": "<bold>{card}</bold> is your only matching card, so showing it is forced. {suggester} may not have deduced it from public moves, so showing it likely reveals a new card from your hand.",
+        "recommendedBadge": "Recommended",
+        "allFreshLeakNote": "You're forced to reveal new information. We cannot decide which is best to reveal — that is your choice.",
+        "tripleJoin": ", ",
+        "othersJoin": ", ",
+        "othersJoinLast": ", and "
+    },
     "deduce": {
         "title": "Deduction grid",
         "caseFileProgress": "Case file · {percent}% solved",

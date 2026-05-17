@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -28,6 +28,15 @@ const STORAGE_KEY = "effect-clue.my-hand-panel.collapsed.v1";
 const BODY_OPEN_PADDING_TOP = 6; // 0.375rem
 const BODY_OPEN_PADDING_BOTTOM = 6;
 const BODY_OPEN_MARGIN_TOP = 6;
+
+// Shared layoutId for the morph animation that moves the refute
+// banner from its inline-with-header position (collapsed) into the
+// body of the panel (expanded). Framer Motion saves the unmounting
+// element's layout under this id and animates the new element with
+// the same id from that saved rectangle — net effect is the teaser
+// banner appears to slide down into the body and grow into the full
+// advice panel as the section opens (and back when it closes).
+const BANNER_LAYOUT_ID = "my-cards-banner-frame";
 
 /**
  * Always-on My Cards section for the desktop play layout. Persistent
@@ -68,6 +77,14 @@ export function MyHandPanel() {
         }
     });
     const [isHovered, setIsHovered] = useState(false);
+    // Gate the layoutId morph on prefers-reduced-motion. Without the
+    // gate, Framer's layout animation still animates the transform
+    // between positions even when other transitions are disabled —
+    // for reduced-motion users we want the teaser to appear/disappear
+    // in place at each location, matching how `useReducedTransition`
+    // short-circuits the body's height/opacity animation.
+    const reducedMotion = useReducedMotion();
+    const bannerLayoutId = reducedMotion ? undefined : BANNER_LAYOUT_ID;
 
     useEffect(() => {
         const el = sectionRef.current;
@@ -119,21 +136,26 @@ export function MyHandPanel() {
                     <HandOfCardsBadge size={28} />
                     {t("title")}
                 </h3>
-                {/* Banner sits INLINE in the header row so its
-                    arrival (e.g. when a draft starts during a
-                    suggestion-log interaction) doesn't grow the
-                    section and shift everything below. When the
-                    banner has no content `:empty:hidden` removes the
-                    wrapper from layout entirely, keeping the header
-                    visually balanced (title left, chevron right).
-                    Suppressed in teach-mode — the refute hint is
-                    deducer-derived and would defeat the "do the work
-                    yourself" promise. */}
-                {!state.teachMode && (
+                {/* Header banner is the discoverable hook — it sits
+                    INLINE with the title only when the section is
+                    collapsed. The teaser copy ("You can refute this
+                    suggestion with…") + the empty:hidden trick (when
+                    there's no draft, the wrapper disappears) keeps
+                    the header visually balanced (title left, chevron
+                    right). When the user expands the section the
+                    refute content moves into the body below; the
+                    layoutId shared with the body slot animates the
+                    wrapper from its header position into the body
+                    position so the transition reads as one continuous
+                    morph. Suppressed in teach-mode — the refute hint
+                    is deducer-derived and would defeat the "do the
+                    work yourself" promise. */}
+                {!state.teachMode && collapsed && (
                     <BannerSlot
                         collapsed={collapsed}
                         paused={isHovered}
                         onTap={expandFromBanner}
+                        layoutId={bannerLayoutId}
                     />
                 )}
                 <button
@@ -194,6 +216,37 @@ export function MyHandPanel() {
                 style={{ overflow: "hidden" }}
                 aria-hidden={collapsed}
             >
+                {/* Body banner — full SuggestionBanner content when
+                    the section is expanded. Shares its layoutId with
+                    the header slot above; Framer morphs the wrapper
+                    rectangle from header-position+teaser-size to
+                    body-position+expanded-size while React swaps the
+                    content inside. SuggestionBanner returns the
+                    RefuteAdvicePanel alone in canRefute (the panel's
+                    bolded card-name rows are the same information the
+                    full banner sentence would have carried — the
+                    sentence is collapsed away as redundant). Gated
+                    on !state.teachMode to match the header slot —
+                    the refute hint is deducer-derived and would
+                    defeat the "do the work yourself" promise. The
+                    empty:hidden trick drops the wrapper from layout
+                    when there's no draft so the cards chips below
+                    don't sit on top of empty padding. */}
+                {!collapsed && !state.teachMode && (
+                    <motion.div
+                        {...(bannerLayoutId !== undefined && {
+                            layoutId: bannerLayoutId,
+                        })}
+                        className="mb-2 empty:hidden"
+                    >
+                        <SuggestionBanner
+                            surface={MY_CARDS_SURFACE_SECTION}
+                            expanded={true}
+                            teaser={false}
+                            paused={isHovered}
+                        />
+                    </motion.div>
+                )}
                 <MyHandPanelBody />
             </motion.div>
         </section>
@@ -201,26 +254,31 @@ export function MyHandPanel() {
 }
 
 /**
- * Banner wrapper that sits inline in the header row. When the section
- * is collapsed and the banner has content, the wrapper is a tap
- * target — clicking expands the section. When expanded, the banner
- * is purely informational. When `SuggestionBanner` returns `null`
- * (no draft / no overlap), the wrapper has no children and Tailwind's
- * `empty:hidden` drops it from layout so the header collapses back
- * to title + chevron at the row's edges.
+ * Banner wrapper that sits inline in the header row when the section
+ * is collapsed. The wrapper is a tap target — clicking expands the
+ * section. When `SuggestionBanner` returns `null` (no draft / no
+ * overlap), the wrapper has no children and Tailwind's `empty:hidden`
+ * drops it from layout so the header collapses back to title +
+ * chevron at the row's edges. The `layoutId` prop pairs this wrapper
+ * with the body-side wrapper (mounted only when expanded) so Framer
+ * Motion morphs the rectangle between the two positions when the
+ * section toggles.
  */
 function BannerSlot({
     collapsed,
     paused,
     onTap,
+    layoutId,
 }: {
     readonly collapsed: boolean;
     readonly paused: boolean;
     readonly onTap: () => void;
+    readonly layoutId: string | undefined;
 }) {
     const clickable = collapsed;
     return (
-        <div
+        <motion.div
+            {...(layoutId !== undefined && { layoutId })}
             role={clickable ? "button" : undefined}
             tabIndex={clickable ? 0 : undefined}
             onClick={clickable ? onTap : undefined}
@@ -245,7 +303,7 @@ function BannerSlot({
                 surface={MY_CARDS_SURFACE_SECTION}
                 expanded={!collapsed}
             />
-        </div>
+        </motion.div>
     );
 }
 

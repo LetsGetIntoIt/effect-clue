@@ -117,6 +117,10 @@ import {
     type Provenance,
 } from "../logic/Provenance";
 import {
+    buildPerspective,
+    type PerspectiveResult,
+} from "../logic/Perspective";
+import {
     emptyFootnotes,
     type FootnoteMap,
     refuterCandidateFootnotes,
@@ -826,6 +830,24 @@ interface ClueDerived {
      * vague-summary banner copy. Independent of the deducer.
      */
     readonly intrinsicContradictions: IntrinsicContradictionReport;
+    /**
+     * Per-player perspective deductions, keyed by viewer. For every
+     * non-self player V, this is a lower-bound model of what V can
+     * derive from the information V would have observed at the
+     * table — public moves, refute acts, and (for refutes V was the
+     * suggester or refuter of) the actual seenCard. Entries are
+     * `Result.Failure(trace)` when V's perspective is internally
+     * inconsistent.
+     *
+     * Self is intentionally absent — for V === self, the omniscient
+     * `deductionResult` IS self's view; consumers fall back to it.
+     *
+     * Drives the refute-advice "suggester can already deduce" tier
+     * (Tier 2) and future opponent-aware features
+     * (recommended suggestions weighted by opponent info-gain,
+     * theory-of-mind insights, hypothesis-tension detectors).
+     */
+    readonly perspectives: ReadonlyMap<Player, PerspectiveResult>;
 }
 
 const deriveState = (
@@ -1427,6 +1449,39 @@ export function ClueProvider({ children }: { children: ReactNode }) {
         ],
     );
 
+    // Per-player perspectives — one deducer run per non-self player.
+    // Cost is linear in the player count; recomputes on state change.
+    // If profiling later shows this is a hot path, switch to lazy
+    // memoization (compute on first read into a ref-stored Map).
+    const perspectives = useMemo<ReadonlyMap<Player, PerspectiveResult>>(
+        () => {
+            const out = new Map<Player, PerspectiveResult>();
+            for (const v of state.setup.players) {
+                if (v === state.selfPlayerId) continue;
+                out.set(
+                    v,
+                    buildPerspective({
+                        viewer: v,
+                        setup: state.setup,
+                        handSizes: state.handSizes,
+                        knownCards: state.knownCards,
+                        suggestions: suggestionsAsData,
+                        accusations: accusationsAsData,
+                    }),
+                );
+            }
+            return out;
+        },
+        [
+            state.setup,
+            state.handSizes,
+            state.knownCards,
+            state.selfPlayerId,
+            suggestionsAsData,
+            accusationsAsData,
+        ],
+    );
+
     const derived: ClueDerived = useMemo(
         () => ({
             suggestionsAsData,
@@ -1441,6 +1496,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             hypothesisConflict,
             behavioralInsights,
             intrinsicContradictions,
+            perspectives,
         }),
         [
             suggestionsAsData,
@@ -1455,6 +1511,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             hypothesisConflict,
             behavioralInsights,
             intrinsicContradictions,
+            perspectives,
         ],
     );
 

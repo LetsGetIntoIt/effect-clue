@@ -341,8 +341,18 @@ describe("MyHandPanel — banner integration", () => {
 
     const findBanner = (): HTMLElement | null =>
         document.querySelector("[data-tour-anchor~='my-cards-banner']");
+    const findRefuteAdvicePanel = (): HTMLElement | null =>
+        document.querySelector("[data-tour-anchor='refute-advice']");
 
-    test("banner mounts inside the My Cards section when intersection has matches", async () => {
+    test("refute-advice panel mounts inside the My Cards section when intersection has matches (non-teach-mode)", async () => {
+        // Non-teach-mode default. The SuggestionBanner's canRefute
+        // branch collapses the redundant banner sentence and renders
+        // only the RefuteAdvicePanel, whose row-by-row card-name
+        // listing carries the same information. The teach-mode
+        // banner-fallback path (where the panel is suppressed and the
+        // banner shows the matching cards instead) is covered at the
+        // SuggestionBanner / RefuteAdvicePanel unit-test level — this
+        // test pins the section-level integration in the default mode.
         seedSessionWithDraft([
             "card-miss-scarlet", // in hand
             "card-rope", // not in hand
@@ -351,10 +361,14 @@ describe("MyHandPanel — banner integration", () => {
         render(<Clue />, { wrapper: TestQueryClientProvider });
         await waitForPanel();
         await waitFor(() => {
-            const banner = findBanner();
-            if (!banner) throw new Error("banner not rendered");
-            expect(banner.textContent).toContain("Miss Scarlet");
+            const panel = findRefuteAdvicePanel();
+            if (!panel) throw new Error("refute-advice panel not rendered");
+            expect(panel.textContent).toContain("Miss Scarlet");
         });
+        // The banner sentence is intentionally suppressed in this
+        // mode — the panel's bolded card names are the same
+        // information.
+        expect(findBanner()).toBeNull();
     });
 
     test("banner stays hidden on partial draft with empty intersection", async () => {
