@@ -1002,6 +1002,10 @@ export function ShareImportPage({
                                 className="flex flex-col gap-2 px-5 pt-4"
                                 data-share-import-picker
                             >
+                                <TeachModeInviteCheckbox
+                                    checked={importTeachMode}
+                                    onChange={setImportTeachMode}
+                                />
                                 <h3
                                     className="m-0 font-sans! text-[1.125rem] font-bold uppercase tracking-wide text-accent"
                                     data-share-import-identity-heading
@@ -1066,10 +1070,6 @@ export function ShareImportPage({
                                         />
                                     </div>
                                 ) : null}
-                                <TeachModeInviteCheckbox
-                                    checked={importTeachMode}
-                                    onChange={setImportTeachMode}
-                                />
                             </div>
                         ) : null}
             {receiveFlow === RECEIVE_FLOW_TRANSFER
@@ -1135,7 +1135,10 @@ function TeachModeInviteCheckbox({
 }) {
     const t = useTranslations("teachMode");
     return (
-        <label className="mt-2 flex cursor-pointer items-start gap-3 rounded border border-border bg-control p-3">
+        <label
+            data-share-import-teach-mode
+            className="flex cursor-pointer items-start gap-3 rounded border border-border bg-control p-3"
+        >
             <input
                 type="checkbox"
                 checked={checked}
