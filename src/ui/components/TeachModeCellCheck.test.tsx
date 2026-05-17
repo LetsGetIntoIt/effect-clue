@@ -1,11 +1,10 @@
-import { act, fireEvent, renderHook } from "@testing-library/react";
-import { HashMap } from "effect";
+import { act, cleanup, fireEvent, renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { CLASSIC_SETUP_3P } from "../../logic/GameSetup";
 import { PlayerOwner } from "../../logic/GameObjects";
-import { Cell, N, Y } from "../../logic/Knowledge";
+import { Cell, Y } from "../../logic/Knowledge";
 import { cardByName } from "../../logic/test-utils/CardByName";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
 import { ClueProvider, useClue } from "../state";
@@ -17,10 +16,6 @@ import { TeachModeCellCheck } from "./TeachModeCellCheck";
 vi.mock("next-intl", () => {
     const t = (key: string, values?: Record<string, unknown>): string => {
         if (!values) return key;
-        // Render in a deterministic form. The Check-button assertions
-        // care about the `shortcut` placeholder specifically, so when
-        // present we splice it in directly; other values append as
-        // `:{json}` for easy contains-checks.
         if ("shortcut" in values) {
             const { shortcut, ...rest } = values;
             const restJson = Object.keys(rest).length
@@ -97,61 +92,15 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-    // Make sure the window keydown listener installed by the panel
-    // doesn't leak across tests.
+    // Unmount React trees so each component's `useEffect` cleanup
+    // fires — critical for the window-keydown listener, which would
+    // otherwise accumulate across tests and fire the analytics spy
+    // multiple times on a single press.
+    cleanup();
     document.body.innerHTML = "";
 });
 
-describe("TeachModeCellCheck — keyboard shortcuts", () => {
-    test("Y dispatches setUserDeduction(cell, Y)", () => {
-        const { h } = renderPanel();
-        act(() => {
-            fireEvent.keyDown(window, { key: "y" });
-        });
-        const mark = HashMap.get(h.result.current.state.userDeductions, cell);
-        expect(mark).toMatchObject({ _tag: "Some", value: Y });
-    });
-
-    test("N dispatches setUserDeduction(cell, N)", () => {
-        const { h } = renderPanel();
-        act(() => {
-            fireEvent.keyDown(window, { key: "n" });
-        });
-        const mark = HashMap.get(h.result.current.state.userDeductions, cell);
-        expect(mark).toMatchObject({ _tag: "Some", value: N });
-    });
-
-    test("O clears any existing mark", () => {
-        const { h } = renderPanel();
-        // Seed an existing Y mark first.
-        act(() => {
-            h.result.current.dispatch({
-                type: "setUserDeduction",
-                cell,
-                value: Y,
-            });
-        });
-        expect(
-            HashMap.get(h.result.current.state.userDeductions, cell),
-        ).toMatchObject({ _tag: "Some", value: Y });
-
-        act(() => {
-            fireEvent.keyDown(window, { key: "o" });
-        });
-        expect(
-            HashMap.get(h.result.current.state.userDeductions, cell),
-        ).toMatchObject({ _tag: "None" });
-    });
-
-    test("uppercase letters fire the same shortcuts (case-insensitive)", () => {
-        const { h } = renderPanel();
-        act(() => {
-            fireEvent.keyDown(window, { key: "Y" });
-        });
-        const mark = HashMap.get(h.result.current.state.userDeductions, cell);
-        expect(mark).toMatchObject({ _tag: "Some", value: Y });
-    });
-
+describe("TeachModeCellCheck — C keyboard shortcut", () => {
     test("C reveals the verdict and fires analytics once", () => {
         renderPanel();
         // Pre-reveal: Check button is visible.
@@ -164,10 +113,15 @@ describe("TeachModeCellCheck — keyboard shortcuts", () => {
         expect(teachModeCellCheckUsed).toHaveBeenCalledTimes(1);
         // Post-reveal: the Check button is replaced by the verdict
         // banner — its label string is no longer present in the body.
-        // (The actual verdict for a fresh game with no marks is
-        // "unknown", which the panel renders without the
-        // "checkThisCellButton" string.)
         expect(document.body.textContent).not.toContain("checkThisCellButton");
+    });
+
+    test("uppercase C is also accepted (case-insensitive binding)", () => {
+        renderPanel();
+        act(() => {
+            fireEvent.keyDown(window, { key: "C" });
+        });
+        expect(teachModeCellCheckUsed).toHaveBeenCalledTimes(1);
     });
 
     test("C is a no-op while already revealed (does not re-fire analytics)", () => {
@@ -185,30 +139,62 @@ describe("TeachModeCellCheck — keyboard shortcuts", () => {
         expect(teachModeCellCheckUsed).toHaveBeenCalledTimes(1);
     });
 
-    test("setting a new mark via keyboard collapses the verdict so C is live again", () => {
-        renderPanel();
+    test("changing the mark (via reducer dispatch) collapses the reveal so C is live again", () => {
+        const { h } = renderPanel();
         act(() => {
             fireEvent.keyDown(window, { key: "c" });
         });
         expect(teachModeCellCheckUsed).toHaveBeenCalledTimes(1);
-        // The Check button is gone now.
         expect(document.body.textContent).not.toContain("checkThisCellButton");
 
-        // Setting a fresh mark collapses the reveal, restoring the
-        // Check button and re-arming the C shortcut.
+        // Dispatch a fresh mark via the reducer (mirrors what
+        // Checklist's window-level Y/N/O handler does on a key
+        // press — the dispatch happens OUTSIDE this component, not
+        // through its local `setMark`).
         act(() => {
-            fireEvent.keyDown(window, { key: "y" });
+            h.result.current.dispatch({
+                type: "setUserDeduction",
+                cell,
+                value: Y,
+            });
         });
+        // The mark-reset effect collapses the verdict on any change
+        // to `userMark` (whether via local `setMark` or external
+        // dispatch), so the Check button is back.
         expect(document.body.textContent).toContain("checkThisCellButton");
 
+        // C re-fires now that the panel is back to its pre-reveal
+        // state.
         act(() => {
             fireEvent.keyDown(window, { key: "c" });
         });
         expect(teachModeCellCheckUsed).toHaveBeenCalledTimes(2);
     });
 
-    test("keystroke targeted at a text input is ignored", () => {
-        const { h } = renderPanel();
+    test("clicking a MarkPicker option also collapses the reveal", () => {
+        renderPanel();
+        act(() => {
+            fireEvent.keyDown(window, { key: "c" });
+        });
+        expect(teachModeCellCheckUsed).toHaveBeenCalledTimes(1);
+        expect(document.body.textContent).not.toContain("checkThisCellButton");
+
+        // Local `setMark` path: clicking the Y MarkPicker button (index
+        // 1) flips userDeductions from empty → {cell: Y}. The
+        // mark-reset effect detects the change and collapses the
+        // verdict. (Clicking Off (index 0) on an already-empty mark
+        // would be a no-op and not exercise the effect.)
+        const yButton = Array.from(
+            document.querySelectorAll<HTMLButtonElement>('[role="radio"]'),
+        )[1];
+        act(() => {
+            yButton?.click();
+        });
+        expect(document.body.textContent).toContain("checkThisCellButton");
+    });
+
+    test("C targeted at a text input is ignored", () => {
+        renderPanel();
         // Mount a stray text input — simulates the SuggestionLogPanel
         // text input sitting alongside the panel on desktop.
         const input = document.createElement("input");
@@ -217,10 +203,11 @@ describe("TeachModeCellCheck — keyboard shortcuts", () => {
         input.focus();
 
         act(() => {
-            fireEvent.keyDown(input, { key: "y" });
+            fireEvent.keyDown(input, { key: "c" });
         });
-        const mark = HashMap.get(h.result.current.state.userDeductions, cell);
-        expect(mark).toMatchObject({ _tag: "None" });
+        // Analytics never fired and the Check button is still present.
+        expect(teachModeCellCheckUsed).toHaveBeenCalledTimes(0);
+        expect(document.body.textContent).toContain("checkThisCellButton");
     });
 });
 

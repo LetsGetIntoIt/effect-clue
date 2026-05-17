@@ -90,19 +90,24 @@ export function TeachModeCellCheck({
 
     const setMark = (next: UserDeductionValue | null) => {
         dispatch({ type: "setUserDeduction", cell, value: next });
-        // Setting a new value invalidates the previously-shown verdict
-        // — collapse the reveal so the user has to press "Check this
-        // cell" again to see the updated verdict.
-        setRevealed(false);
     };
 
-    // Window-level keyboard shortcuts (Y / N / O / C). The listener is
-    // installed once on mount and removed on unmount, so its lifetime
-    // matches the panel's open lifetime. Latest values for the
-    // callbacks and `revealed` flow through refs so the listener
-    // doesn't need re-registering on every render.
-    const setMarkRef = useRef(setMark);
-    setMarkRef.current = setMark;
+    // Setting a new value invalidates the previously-shown verdict —
+    // collapse the reveal so the user has to press "Check" again to
+    // see the updated verdict. Runs for any mark change, whether the
+    // mark moved via this component's `MarkPicker` or via Checklist's
+    // window-level Y/N/O handler (which dispatches `setUserDeduction`
+    // directly, bypassing `setMark`).
+    useEffect(() => {
+        setRevealed(false);
+    }, [userMark, cell]);
+
+    // C shortcut: reveal the verdict. Y/N/O are owned by Checklist's
+    // window-level handler (so they also work when this panel is
+    // closed but a cell is focused) — the only reason C lives here
+    // and not there is that the verdict's reveal state is local to
+    // this component, and gating C on `!revealed` keeps the analytics
+    // event from double-firing once the verdict is already shown.
     const onCheckClickRef = useRef(onCheckClick);
     onCheckClickRef.current = onCheckClick;
     const revealedRef = useRef(revealed);
@@ -117,23 +122,10 @@ export function TeachModeCellCheck({
             ) {
                 return;
             }
-            if (matches("teachMode.markY", e)) {
-                e.preventDefault();
-                setMarkRef.current(Y);
-            } else if (matches("teachMode.markN", e)) {
-                e.preventDefault();
-                setMarkRef.current(N);
-            } else if (matches("teachMode.markOff", e)) {
-                e.preventDefault();
-                setMarkRef.current(null);
-            } else if (matches("teachMode.check", e)) {
-                // Mirror the button's visibility: only fire pre-reveal,
-                // so the analytics event doesn't double-fire after the
-                // verdict is already shown.
-                if (revealedRef.current) return;
-                e.preventDefault();
-                onCheckClickRef.current();
-            }
+            if (!matches("teachMode.check", e)) return;
+            if (revealedRef.current) return;
+            e.preventDefault();
+            onCheckClickRef.current();
         };
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
