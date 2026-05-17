@@ -52,7 +52,7 @@ import {
     type HypothesisMap,
     type HypothesisValue,
 } from "../../logic/Hypothesis";
-import { emptyUserDeductions } from "../../logic/TeachMode";
+import { emptyUserDeductions, seedFromOwnHand } from "../../logic/TeachMode";
 import type { KnownCard } from "../../logic/InitialKnowledge";
 import { Cell } from "../../logic/Knowledge";
 import {
@@ -449,9 +449,30 @@ export const buildSessionFromSnapshot = (
                       snapshot.teachModeData,
                       teachModeCodec,
                   )),
-        // User deductions are personal scratchwork — never on the wire,
-        // so the receiver starts blank.
-        userDeductions: emptyUserDeductions,
+        // User deductions are personal scratchwork — never on the wire.
+        // Two paths apply:
+        //   1. Invite-receive opt-in (overrides.teachMode === true):
+        //      mirror the wizard's `seedFromOwnHand` so the receiver
+        //      gets the same "free" Y/N facts the wizard's teach-mode
+        //      toggle would have produced.
+        //   2. Transfer share carrying teachMode on the wire (no
+        //      override): keep empty — the receiver re-enters their
+        //      own deductions. Same rule as the recipe in AGENTS.md
+        //      bucket 5.
+        userDeductions:
+            overrides?.teachMode === true && selfPlayerId !== null
+                ? seedFromOwnHand(
+                      hands.flatMap((h) =>
+                          h.cards.map((card) => ({ player: h.player, card })),
+                      ),
+                      selfPlayerId,
+                      setup.playerSet.players,
+                      handSizes.map(
+                          (h) => [h.player, h.size] as const,
+                      ),
+                      cardSet,
+                  )
+                : emptyUserDeductions,
     };
 };
 
