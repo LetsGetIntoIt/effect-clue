@@ -17,25 +17,38 @@
  * Usage:
  *   const controls = useDragControls();
  *   const press = useReorderPressDelay(controls);
+ *   const [isDragging, setIsDragging] = useState(false);
  *   return (
  *     <Reorder.Item
  *       dragListener={false}
  *       dragControls={controls}
- *       style={{ touchAction: "pan-y" }}
+ *       onDragStart={() => setIsDragging(true)}
+ *       onDragEnd={() => setIsDragging(false)}
+ *       style={{ touchAction: isDragging ? "none" : "pan-y" }}
  *       {...press}
  *     >...</Reorder.Item>
  *   );
  *
- * The accompanying CSS rule `touch-action: pan-y` is load-bearing:
- * it tells the browser "vertical scroll is mine until JS tells you
- * otherwise." Once `controls.start(event)` fires, Framer's drag
- * system takes over and the row tracks the pointer. Without
- * `pan-y`, the browser still won't scroll on touchmove inside the
- * row even before the timer fires (the previous bug).
+ * The `touch-action` toggle is load-bearing:
+ *
+ *  - Before drag arms (`isDragging === false`), `pan-y` tells the
+ *    browser "vertical scroll is mine until JS tells you otherwise."
+ *    Casual swipes that move more than `REORDER_PRESS_TOLERANCE_PX`
+ *    before the press timer fires never arm the drag and just scroll
+ *    the page.
+ *  - Once Framer's drag activates (`controls.start(event)` fires and
+ *    `onDragStart` flips `isDragging` to `true`), we switch to
+ *    `none`. Without this flip the browser keeps vertical-panning
+ *    the page in parallel with Framer dragging the row, so on touch
+ *    the user's finger appears to scroll the document while the row
+ *    stays put (the previous bug — symptom: "I start the drag, then
+ *    the page scrolls and the element doesn't go anywhere").
+ *  - On `onDragEnd` we flip back to `pan-y` so the next casual swipe
+ *    can scroll again.
  */
 import { Duration } from "effect";
 import { Reorder, useDragControls, type DragControls } from "motion/react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 // 250ms is the iOS-native drag-press delay; long enough that a flick
 // swipe-scroll never accidentally arms a drag, short enough that a
@@ -136,14 +149,19 @@ export function DelayedReorderItem<T>({
 }) {
     const controls = useDragControls();
     const press = useReorderPressDelay(controls);
+    const [isDragging, setIsDragging] = useState(false);
     return (
         <Reorder.Item
             value={value}
             dragListener={false}
             dragControls={controls}
-            {...(onDragEnd !== undefined ? { onDragEnd } : {})}
+            onDragStart={() => setIsDragging(true)}
+            onDragEnd={() => {
+                setIsDragging(false);
+                onDragEnd?.();
+            }}
             {...(className !== undefined ? { className } : {})}
-            style={{ touchAction: "pan-y" }}
+            style={{ touchAction: isDragging ? "none" : "pan-y" }}
             {...press}
         >
             {children}

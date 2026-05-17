@@ -1,7 +1,10 @@
 import { describe, expect, test, vi, beforeEach, afterEach } from "vitest";
 import { fireEvent, render } from "@testing-library/react";
-import { useDragControls } from "motion/react";
-import { useReorderPressDelay } from "./useReorderPressDelay";
+import { Reorder, useDragControls } from "motion/react";
+import {
+    DelayedReorderItem,
+    useReorderPressDelay,
+} from "./useReorderPressDelay";
 
 /**
  * Per-test harness: renders a `<div>` wired up with the press-delay
@@ -154,5 +157,18 @@ describe("useReorderPressDelay", () => {
         unmount();
         vi.advanceTimersByTime(500);
         expect(startSpy).not.toHaveBeenCalled();
+    });
+});
+
+describe("DelayedReorderItem", () => {
+    test("rests at touch-action: pan-y so casual swipes can scroll", () => {
+        const { container } = render(
+            <Reorder.Group axis="y" values={["a"]} onReorder={() => {}}>
+                <DelayedReorderItem value="a">item</DelayedReorderItem>
+            </Reorder.Group>,
+        );
+        const li = container.querySelector("li");
+        expect(li).not.toBeNull();
+        expect(li!.style.touchAction).toBe("pan-y");
     });
 });
