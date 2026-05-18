@@ -207,6 +207,88 @@ describe("MultiSelectList — onCommit identity stability", () => {
         expect(onCommit).toHaveBeenCalledTimes(1);
         expect(onCommit).toHaveBeenCalledWith(NOBODY);
     });
+
+    // Regression guard for the user-reported bug: opening the "Passed by"
+    // popover and closing it without toggling anything used to commit an
+    // empty `[]`, which the parent form treats as "has input" (its
+    // `hasAnyInput` check is `nonRefuters !== null`) and surfaces an X
+    // clear button. The popover should be a no-op when the user makes no
+    // selection.
+    test("does not commit on unmount when toggled set is unchanged", () => {
+        const onCommit = vi.fn();
+        const { unmount } = render(
+            <MultiSelectList
+                options={playerOpts}
+                selected={[]}
+                nobodyChosen={false}
+                nobodyLabel="Nobody"
+                commitHint="Press Enter"
+                onCommit={onCommit}
+            />,
+        );
+        unmount();
+        expect(onCommit).not.toHaveBeenCalled();
+    });
+
+    // Same protection covers the case where the parent already had
+    // NOBODY chosen. Without the dirty-check, an open-and-close would
+    // commit `[]` and silently clear the NOBODY selection.
+    test("does not commit on unmount when nobodyChosen and untouched", () => {
+        const onCommit = vi.fn();
+        const { unmount } = render(
+            <MultiSelectList
+                options={playerOpts}
+                selected={[]}
+                nobodyChosen={true}
+                nobodyLabel="Nobody"
+                commitHint="Press Enter"
+                onCommit={onCommit}
+            />,
+        );
+        unmount();
+        expect(onCommit).not.toHaveBeenCalled();
+    });
+
+    // Pre-selected players, opened and closed without touching the
+    // list: also a no-op. Without the dirty-check this committed the
+    // same array back, which is a wasted re-render at best and could
+    // mask other bugs.
+    test("does not commit on unmount when selection is unchanged", () => {
+        const onCommit = vi.fn();
+        const { unmount } = render(
+            <MultiSelectList
+                options={playerOpts}
+                selected={[A, B]}
+                nobodyChosen={false}
+                nobodyLabel="Nobody"
+                commitHint="Press Enter"
+                onCommit={onCommit}
+            />,
+        );
+        unmount();
+        expect(onCommit).not.toHaveBeenCalled();
+    });
+
+    // User toggles A on then off, ending where they started: still a
+    // no-op on close. Set-equality lets the cleanup recognise this.
+    test("does not commit on unmount when toggles cancel out", async () => {
+        const user = userEvent.setup();
+        const onCommit = vi.fn();
+        const { unmount } = render(
+            <MultiSelectList
+                options={playerOpts}
+                selected={[]}
+                nobodyChosen={false}
+                nobodyLabel="Nobody"
+                commitHint="Press Enter"
+                onCommit={onCommit}
+            />,
+        );
+        await user.click(screen.getByRole("option", { name: /Anisha/ }));
+        await user.click(screen.getByRole("option", { name: /Anisha/ }));
+        unmount();
+        expect(onCommit).not.toHaveBeenCalled();
+    });
 });
 
 describe("SingleSelectList — keyboard scroll-into-view", () => {
