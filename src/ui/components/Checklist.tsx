@@ -1304,11 +1304,24 @@ export function Checklist() {
                             {!hasKeyboard ? null : label("global.gotoChecklist")}
                         </th>
                         <AnimatePresence initial={false} mode={MOTION_SYNC}>
-                        {owners.flatMap(owner => {
+                        {owners.flatMap((owner, idx) => {
+                            const isCaseFile = owner._tag === "CaseFile";
+                            const isLastPlayer =
+                                owner._tag === "Player"
+                                && owners[idx + 1]?._tag === "CaseFile";
+                            const bgClass = isCaseFile
+                                ? CASE_FILE_HEADER_BG_CLASS
+                                : ROW_HEADER_BG_CLASS;
+                            const dividerClass = isCaseFile
+                                ? CASE_FILE_DIVIDER_CLASS
+                                : "";
+                            const lastPlayerClass = isLastPlayer
+                                ? CASE_FILE_LAST_PLAYER_SUPPRESS
+                                : "";
                             const cell = (
                                 <motion.th
                                     key={ownerKey(owner, playerColumnKeys)}
-                                    className={`${COLUMN_HEADER_STACK} overflow-hidden border-r border-b border-border bg-row-header p-0 text-center align-top font-semibold`}
+                                    className={`${COLUMN_HEADER_STACK} overflow-hidden border-r border-b border-border ${bgClass} p-0 text-center align-top font-semibold${dividerClass}${lastPlayerClass}`}
                                     layout={LAYOUT_POSITION}
                                     initial={TABLE_COLUMN_HIDDEN}
                                     animate={TABLE_COLUMN_VISIBLE}
@@ -1358,9 +1371,21 @@ export function Checklist() {
                                         </div>,
                                     )}
                                 </motion.th>
+                                {/* The maroon category strip is split into
+                                    two td's so the doubled vertical divider
+                                    between the last player column and the
+                                    case-file column paints cleanly through
+                                    this row. `border-spacing-0` keeps the
+                                    maroon visually continuous across the
+                                    split, while the gap inside the
+                                    doubled-border lines shows the maroon
+                                    underneath. */}
                                 <td
-                                    colSpan={cardSpan - 1}
-                                    className="border-r border-b border-border bg-category-header"
+                                    colSpan={owners.length - 1}
+                                    className="border-b border-border bg-category-header"
+                                />
+                                <td
+                                    className="border-r border-b border-border bg-category-header checklist-case-file-divider"
                                 />
                             </motion.tr>,
                             ...category.cards.flatMap(entry => {
@@ -1691,8 +1716,35 @@ export function Checklist() {
                                                 : revealVerdict === VERDICT_PLAUSIBLE
                                                 ? REVEAL_CLASS_PLAUSIBLE
                                                 : "";
+                                        // Doubled vertical divider between the
+                                        // last player column and the case-file
+                                        // column. `checklist-case-file-divider`
+                                        // paints a 5px `border-style: double`
+                                        // on the case-file cell's left edge;
+                                        // `!border-r-0` on the last player
+                                        // cell strips its right border so the
+                                        // doubled pair renders symmetrically
+                                        // (two lines of equal weight with a
+                                        // clean gap between them). When the
+                                        // case-file cell is open the divider
+                                        // is suppressed by appending
+                                        // `!border-l-0` in
+                                        // `interactiveTdClassName` below — the
+                                        // accent box-shadow ring should be the
+                                        // only treatment on that edge.
+                                        const isCaseFileCol = colIdx === totalCols - 1;
+                                        const isLastPlayerCol = colIdx === totalCols - 2;
+                                        const dividerClass = isCaseFileCol
+                                            ? CASE_FILE_DIVIDER_CLASS
+                                            : "";
+                                        const lastPlayerSuppress = isLastPlayerCol
+                                            ? CASE_FILE_LAST_PLAYER_SUPPRESS
+                                            : "";
                                         const tdClassName =
-                                            baseTdClassName + revealClass;
+                                            baseTdClassName
+                                            + revealClass
+                                            + dividerClass
+                                            + lastPlayerSuppress;
                                         // Arrow-key grid navigation: walk to
                                         // the nearest neighbour cell with a
                                         // data-cell-row/col pair. Shared by
@@ -1799,9 +1851,24 @@ export function Checklist() {
                                             // in `app/globals.css`.
                                             const isLastOwnerCol =
                                                 colIdx === totalCols - 1;
+                                            // When the case-file cell is open,
+                                            // suppress its doubled left border
+                                            // (added via
+                                            // `checklist-case-file-divider`
+                                            // in `tdClassName`) so the accent
+                                            // box-shadow ring is the only
+                                            // treatment on the cell's left
+                                            // edge — otherwise the tan doubled
+                                            // lines would sit just inside the
+                                            // oxblood ring and read as visual
+                                            // clutter.
+                                            const openSuppressDivider =
+                                                isOpen && isLastOwnerCol
+                                                    ? CASE_FILE_OPEN_SUPPRESS
+                                                    : "";
                                             const interactiveTdClassName =
                                                 isOpen
-                                                    ? `${tdClassName}${CELL_EXPANDED}${cellExpandedToneClass(display)}${isLastOwnerCol ? " cell-expanded-focus-last-col" : ""}`
+                                                    ? `${tdClassName}${CELL_EXPANDED}${cellExpandedToneClass(display)}${isLastOwnerCol ? " cell-expanded-focus-last-col" : ""}${openSuppressDivider}`
                                                     : tdClassName;
                                             cell = (
                                                 <motion.td
@@ -2294,6 +2361,19 @@ const CELL_EXPANDED =
 const CELL_EXPANDED_TONE_BLANK = " !bg-panel" as const;
 const CELL_EXPANDED_TONE_Y = " cell-expanded-tone-yes" as const;
 const CELL_EXPANDED_TONE_N = " cell-expanded-tone-no" as const;
+
+// Visual treatment of the case-file column. The doubled vertical
+// border lives on the case-file cell's left edge, so its adjacent
+// last-player cell strips its own right border via
+// `CASE_FILE_LAST_PLAYER_SUPPRESS` to render the doubled pair
+// symmetrically. When the case-file cell is open the divider is
+// suppressed by `CASE_FILE_OPEN_SUPPRESS` so the 3px accent
+// box-shadow ring is the only treatment on that edge.
+const CASE_FILE_DIVIDER_CLASS = " checklist-case-file-divider" as const;
+const CASE_FILE_LAST_PLAYER_SUPPRESS = " !border-r-0" as const;
+const CASE_FILE_OPEN_SUPPRESS = " !border-l-0" as const;
+const CASE_FILE_HEADER_BG_CLASS = "bg-case-file-header-bg" as const;
+const ROW_HEADER_BG_CLASS = "bg-row-header" as const;
 
 const cellExpandedToneClass = (display: CellDisplay): string => {
     const tone: CellValue | undefined =

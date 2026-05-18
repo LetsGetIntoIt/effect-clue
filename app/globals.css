@@ -42,6 +42,12 @@
     --color-row-header: #e5d9b8;
     /* Dossier manila for the case-file header strip. */
     --color-case-file-bg: #ead9b0;
+    /* Slightly darker manila for the case-file COLUMN header inside
+     * the checklist table. Reads as a deliberately darker tile within
+     * the `bg-row-header` strip; visually echoes the lighter
+     * `--color-case-file-bg` manila of the CaseFileHeader summary box
+     * sitting above the table, tying the column to the summary above. */
+    --color-case-file-header-bg: #d6c79a;
     /* Press-down hover tint shared by every `hover:bg-hover` site that
      * isn't a secondary button — transparent close-X buttons, modal
      * Cancel buttons, overflow-menu items, the toolbar's white pills.
@@ -286,6 +292,15 @@
 }
 @utility text-tap-compact {
     font-size: var(--tap-text-compact);
+}
+
+@utility checklist-case-file-divider {
+    /* 5px wide so `border-style: double` renders two visible parallel
+     * tan lines with a ~1.67px transparent gap between them. The gap
+     * shows whatever sits in the cell behind it — cream on body cells,
+     * maroon on category-header rows, the darker manila on the column
+     * header — so the divider reads cohesively top-to-bottom. */
+    border-left: 5px double var(--color-border);
 }
 
 html,
