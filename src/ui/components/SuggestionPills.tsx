@@ -59,8 +59,9 @@ const STATUS_PENDING_OPT: PillStatus = "pendingOptional";
 // discriminator only — never shown to the user. Same string each
 // re-render keeps the same element mounted; a flip triggers the
 // pop-out + pop-in transition between glyph states.
-type PillIconKey = "error" | "done" | "disabled" | "pending";
+type PillIconKey = "error" | "warning" | "done" | "disabled" | "pending";
 const ICON_KEY_ERROR: PillIconKey = "error";
+const ICON_KEY_WARNING: PillIconKey = "warning";
 const ICON_KEY_DONE: PillIconKey = "done";
 const ICON_KEY_DISABLED: PillIconKey = "disabled";
 const ICON_KEY_PENDING: PillIconKey = "pending";
@@ -184,6 +185,7 @@ export function PillPopover({
     disabled,
     disabledHint,
     errorReason,
+    warningReason,
     open,
     onOpenChange,
     onClear,
@@ -197,6 +199,14 @@ export function PillPopover({
     readonly disabled?: boolean | undefined;
     readonly disabledHint?: string | undefined;
     readonly errorReason?: string | undefined;
+    /**
+     * Soft-validation explanation. Renders in the warning tone (amber)
+     * with an AlertIcon glyph, distinct from `errorReason`'s danger
+     * tone. Suppressed when `errorReason` is set (hard error wins).
+     * The submit button stays enabled — soft warnings prompt "Add
+     * anyway" rather than blocking.
+     */
+    readonly warningReason?: string | undefined;
     readonly open: boolean;
     readonly onOpenChange: (open: boolean) => void;
     readonly onClear?: () => void;
@@ -211,31 +221,39 @@ export function PillPopover({
     // optional pill (e.g. Shown card without a refuter) fades and
     // swaps to `–` to signal it's currently unavailable. An error
     // pill (internal inconsistency) shows the standard `AlertIcon`
-    // warning triangle in a danger tone — the user can still open
-    // the popover to correct the value.
+    // warning triangle in a danger tone. A warning pill (soft
+    // validation against deducer Knowledge — e.g. listing self as
+    // refuter when self provably cannot refute) shows the same
+    // AlertIcon in a warning (amber) tone; the user can still submit
+    // ("Add anyway"), unlike hard errors.
     //
     // Matrix:
     //   state              | outline       | icon
     //   -------------------+---------------+-----
     //   error              | danger        | AlertIcon
+    //   warning            | warning       | AlertIcon
     //   done               | solid accent  | ✓
     //   pendingRequired    | solid border  | +
     //   pendingOptional    | dashed border | +      (disabled → "–")
     const hasError = errorReason !== undefined && !disabled;
+    const hasWarning =
+        !hasError && warningReason !== undefined && !disabled;
     const tone = hasError
         ? "bg-danger-bg text-danger border-danger-border"
-        : status === STATUS_DONE
-          ? "bg-accent text-white border-accent"
-          : status === STATUS_PENDING_REQ
-            ? "bg-transparent text-muted border-border"
-            : disabled
-              // Disabled-optional tone: the dashed border at 50%
-              // opacity + bg-transparent already signal "inactive".
-              // Keep text-muted (full) for legibility — the previous
-              // /60 variant dipped to ~2.5:1 on parchment.
-              ? "bg-transparent text-muted border-dashed border-border/50"
-              : "bg-transparent text-muted border-dashed border-border";
-    const iconNode: ReactNode = hasError
+        : hasWarning
+          ? "bg-warning-bg text-warning border-warning-border"
+          : status === STATUS_DONE
+            ? "bg-accent text-white border-accent"
+            : status === STATUS_PENDING_REQ
+              ? "bg-transparent text-muted border-border"
+              : disabled
+                // Disabled-optional tone: the dashed border at 50%
+                // opacity + bg-transparent already signal "inactive".
+                // Keep text-muted (full) for legibility — the previous
+                // /60 variant dipped to ~2.5:1 on parchment.
+                ? "bg-transparent text-muted border-dashed border-border/50"
+                : "bg-transparent text-muted border-dashed border-border";
+    const iconNode: ReactNode = hasError || hasWarning
         ? <AlertIcon className="h-[1.1em] w-[1.1em]" />
         : status === STATUS_DONE
             ? "✓"
@@ -247,11 +265,13 @@ export function PillPopover({
     // are internal discriminators, never shown to the user.
     const iconKey: PillIconKey = hasError
         ? ICON_KEY_ERROR
-        : status === STATUS_DONE
-            ? ICON_KEY_DONE
-            : status === STATUS_PENDING_OPT && disabled
-              ? ICON_KEY_DISABLED
-              : ICON_KEY_PENDING;
+        : hasWarning
+          ? ICON_KEY_WARNING
+          : status === STATUS_DONE
+              ? ICON_KEY_DONE
+              : status === STATUS_PENDING_OPT && disabled
+                ? ICON_KEY_DISABLED
+                : ICON_KEY_PENDING;
     const showClear = onClear !== undefined && status === STATUS_DONE;
     const iconTransition = useReducedTransition(T_FAST);
     const widthTransition = useReducedTransition(T_SPRING_SOFT);
@@ -323,7 +343,9 @@ export function PillPopover({
                 aria-disabled={disabled ? true : undefined}
                 aria-invalid={hasError ? true : undefined}
                 aria-describedby={
-                    open && (disabled || hasError) ? messageId : undefined
+                    open && (disabled || hasError || hasWarning)
+                        ? messageId
+                        : undefined
                 }
                 className={
                     (disabled ? "cursor-not-allowed " : "cursor-pointer ") +
@@ -415,6 +437,15 @@ export function PillPopover({
                                     {errorReason}
                                 </div>
                             )}
+                            {hasWarning && (
+                                <div
+                                    id={messageId}
+                                    role="status"
+                                    className="mx-1 mt-1 mb-1 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-2 py-1 text-[1rem] text-warning"
+                                >
+                                    {warningReason}
+                                </div>
+                            )}
                             {children}
                         </>
                     )}
@@ -444,12 +475,20 @@ export function SingleSelectList<T>({
     onCommit,
     nobodyLabel,
     nobodyValue,
+    renderOptionBadge,
 }: {
     readonly options: ReadonlyArray<Option<T>>;
     readonly selected: T | null;
     readonly onCommit: (value: T | Nobody) => void;
     readonly nobodyLabel: string | null;
     readonly nobodyValue: Nobody | null;
+    /**
+     * Optional per-option badge renderer. Returns nodes to render after
+     * the option label (e.g. "Cannot refute", "Forced", "Recommended"
+     * inline help). Return `null` to render nothing for that option.
+     * Receives the option's value so callers can branch on it.
+     */
+    readonly renderOptionBadge?: (value: T) => ReactNode;
 }): React.ReactElement {
     const rows = useMemo<
         ReadonlyArray<
@@ -574,7 +613,13 @@ export function SingleSelectList<T>({
                             commitAt(i);
                         }}
                     >
-                        {row.kind === "option" ? row.option.label : row.label}
+                        <span className="flex-1">
+                            {row.kind === "option"
+                                ? row.option.label
+                                : row.label}
+                        </span>
+                        {row.kind === "option" &&
+                            renderOptionBadge?.(row.option.value)}
                     </li>
                 );
             })}
@@ -609,6 +654,7 @@ export function MultiSelectList({
     nobodyLabel,
     commitHint,
     onCommit,
+    renderOptionBadge,
 }: {
     readonly options: ReadonlyArray<Option<Player>>;
     readonly selected: ReadonlyArray<Player>;
@@ -619,6 +665,12 @@ export function MultiSelectList({
         value: ReadonlyArray<Player> | Nobody,
         opts?: { advance: boolean },
     ) => void;
+    /**
+     * Optional per-option badge renderer. Returns nodes to render after
+     * the option label (e.g. "Can refute" / "Cannot refute" inline
+     * help). Return `null` to render nothing for that option.
+     */
+    readonly renderOptionBadge?: (value: Player) => ReactNode;
 }): React.ReactElement {
     const hasKeyboard = useHasKeyboard();
     const [toggled, setToggled] = useState<ReadonlyArray<Player>>(selected);
@@ -781,7 +833,8 @@ export function MultiSelectList({
                             >
                                 {checked ? "✓" : ""}
                             </span>
-                            {opt.label}
+                            <span className="flex-1">{opt.label}</span>
+                            {renderOptionBadge?.(opt.value)}
                         </li>
                     );
                 })}
