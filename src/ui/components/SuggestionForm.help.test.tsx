@@ -74,6 +74,8 @@ import {
 } from "../../logic/Knowledge";
 
 const A = Player("Anisha");
+const B = Player("Bob");
+const C = Player("Cho");
 const MUSTARD = cardByName(setup, "Col. Mustard");
 const KNIFE = cardByName(setup, "Knife");
 const KITCHEN = cardByName(setup, "Kitchen");
@@ -129,7 +131,7 @@ const openPopover = async (
 };
 
 describe("SuggestionForm — help badge gating", () => {
-    test("renders no help badges when self player is unset", async () => {
+    test("still renders badges when self player is unset (M2: per-player evidence)", async () => {
         setMockContext({
             selfPlayerId: null,
             knowledge: withCells([[A, MUSTARD, "Y"]]),
@@ -137,9 +139,10 @@ describe("SuggestionForm — help badge gating", () => {
         const user = userEvent.setup();
         renderForm(<SuggestionForm setup={setup} onSubmit={vi.fn()} />);
 
-        // Pick a suggester (Bob) + a card (Mustard) so the help engine
-        // would fire if it were active. Then open Passers — A's row
-        // should NOT carry a badge.
+        // Pick a suggester (Bob) + a card (Mustard) so the engine
+        // fires on every player with relevant Knowledge. Anisha holds
+        // Mustard — Anisha's row should carry "Can refute" even
+        // though selfPlayerId is null.
         const sp = await openPopover(user, /pillSuggester/);
         await user.click(within(sp).getByRole("option", { name: /Bob/ }));
         const cp = document.querySelector<HTMLElement>(
@@ -148,12 +151,10 @@ describe("SuggestionForm — help badge gating", () => {
         await user.click(
             within(cp).getByRole("option", { name: /Col\. Mustard/ }),
         );
-        // Skip the other category pills and jump to Passers via click.
         await user.keyboard("{Escape}");
         const pp = await openPopover(user, /pillPassers/);
-        // Help is suppressed when selfPlayerId is null.
         const anishaRow = within(pp).getByRole("option", { name: /Anisha/ });
-        expect(anishaRow.textContent).not.toMatch(/Can refute/);
+        expect(anishaRow.textContent).toMatch(/pillBadgeCanRefute/);
     });
 
     test("renders no help badges when teach mode is on", async () => {
@@ -176,8 +177,33 @@ describe("SuggestionForm — help badge gating", () => {
         await user.keyboard("{Escape}");
         const pp = await openPopover(user, /pillPassers/);
         const anishaRow = within(pp).getByRole("option", { name: /Anisha/ });
-        expect(anishaRow.textContent).not.toMatch(/Can refute/);
-        expect(anishaRow.textContent).not.toMatch(/Cannot refute/);
+        expect(anishaRow.textContent).not.toMatch(/pillBadgeCanRefute/);
+        expect(anishaRow.textContent).not.toMatch(/pillBadgeCannotRefute/);
+    });
+
+    test("suggester row carries no badge (own suggestion is not refutable)", async () => {
+        // Self is Anisha and Anisha holds Mustard. Then Bob is picked
+        // as the suggester. Bob's row should NOT carry a badge — the
+        // suggester can't refute their own suggestion.
+        setMockContext({
+            selfPlayerId: A,
+            knowledge: withCells([[B, MUSTARD, "Y"]]),
+        });
+        const user = userEvent.setup();
+        renderForm(<SuggestionForm setup={setup} onSubmit={vi.fn()} />);
+
+        const sp = await openPopover(user, /pillSuggester/);
+        await user.click(within(sp).getByRole("option", { name: /Bob/ }));
+        const cp = document.querySelector<HTMLElement>(
+            "[data-suggestion-form-popover='true']",
+        )!;
+        await user.click(
+            within(cp).getByRole("option", { name: /Col\. Mustard/ }),
+        );
+        await user.keyboard("{Escape}");
+        const pp = await openPopover(user, /pillPassers/);
+        const bobRow = within(pp).getByRole("option", { name: /Bob/ });
+        expect(bobRow.textContent).not.toMatch(/pillBadgeCanRefute/);
     });
 });
 
@@ -203,11 +229,40 @@ describe("SuggestionForm — help badges on Passers self-row", () => {
         await user.keyboard("{Escape}");
         const pp = await openPopover(user, /pillPassers/);
         const anishaRow = within(pp).getByRole("option", { name: /Anisha/ });
-        // The badge text is "pillBadgeCanRefuteSelf" via the i18n mock.
-        expect(anishaRow.textContent).toMatch(/pillBadgeCanRefuteSelf/);
+        expect(anishaRow.textContent).toMatch(/pillBadgeCanRefute/);
         // Other players (no info) get no badge.
         const choRow = within(pp).getByRole("option", { name: /Cho/ });
-        expect(choRow.textContent).not.toMatch(/pillBadgeCanRefuteSelf/);
+        expect(choRow.textContent).not.toMatch(/pillBadgeCanRefute/);
+    });
+
+    test("non-self player row shows 'Can refute' when Knowledge proves they hold one of the cards", async () => {
+        // Cho has the Knife. The user opens Passers — Cho's row should
+        // carry the warning badge even though Cho is not self.
+        setMockContext({
+            selfPlayerId: A,
+            knowledge: withCells([[C, KNIFE, "Y"]]),
+        });
+        const user = userEvent.setup();
+        renderForm(<SuggestionForm setup={setup} onSubmit={vi.fn()} />);
+
+        const sp = await openPopover(user, /pillSuggester/);
+        await user.click(within(sp).getByRole("option", { name: /Bob/ }));
+        const cp = document.querySelector<HTMLElement>(
+            "[data-suggestion-form-popover='true']",
+        )!;
+        await user.click(
+            within(cp).getByRole("option", { name: /Col\. Mustard/ }),
+        );
+        const cp2 = document.querySelector<HTMLElement>(
+            "[data-suggestion-form-popover='true']",
+        )!;
+        await user.click(within(cp2).getByRole("option", { name: /Knife/ }));
+        await user.keyboard("{Escape}");
+        const pp = await openPopover(user, /pillPassers/);
+        const choRow = within(pp).getByRole("option", { name: /Cho/ });
+        expect(choRow.textContent).toMatch(/pillBadgeCanRefute/);
+        const anishaRow = within(pp).getByRole("option", { name: /Anisha/ });
+        expect(anishaRow.textContent).not.toMatch(/pillBadgeCanRefute/);
     });
 
     test("self-row shows muted 'Cannot refute' when all cards are N and all categories filled", async () => {
@@ -242,7 +297,7 @@ describe("SuggestionForm — help badges on Passers self-row", () => {
         const pp = await openPopover(user, /pillPassers/);
         const anishaRow = within(pp).getByRole("option", { name: /Anisha/ });
         // Muted "Cannot refute" — consistent with passing, no warning icon.
-        expect(anishaRow.textContent).toMatch(/pillBadgeCannotRefuteSelf/);
+        expect(anishaRow.textContent).toMatch(/pillBadgeCannotRefute/);
     });
 
     test("no badge when self-evidence is noInfo (partial categories, no Y)", async () => {

@@ -393,13 +393,12 @@ export const SuggestionForm = forwardRef<
 
     // --- Help layer (badges + soft validation) ------------------------
     //
-    // Self-only in Milestone 1. The hook + validator both gracefully
-    // degrade to "inactive / empty" when `<ClueProvider>` is absent
-    // (test environments) or teach-me mode is on — call sites don't
-    // need conditional branches.
-    const help = useSelfRefuteHelp(form);
+    // The hook + validator both gracefully degrade to "inactive / empty"
+    // when `<ClueProvider>` is absent (test environments) or teach-me
+    // mode is on — call sites don't need conditional branches.
+    const help = useRefuteHelp(form);
     const clueCtx = useClueOptional();
-    const warnings = useMemo<ReadonlyMap<PillId, SoftWarningCode>>(
+    const warnings = useMemo<ReadonlyMap<PillId, SoftWarning>>(
         () =>
             validateFormSoft(form, {
                 knowledge:
@@ -462,24 +461,50 @@ export const SuggestionForm = forwardRef<
         [errors, errorMessageFor],
     );
 
+    const selfPlayerId = clueCtx?.state.selfPlayerId ?? null;
     const warningMessageFor = useCallback(
-        (code: SoftWarningCode): string => {
-            switch (code) {
-                case "passersIncludeSelfWhoCanRefute":
-                    return t("pillWarningPassersIncludeSelfCanRefute");
-                case "selfIsRefuterWithNoMatch":
-                    return t("pillWarningSelfRefuterNoMatch");
-                case "shownCardNotInSelfHand":
-                    return t("pillWarningShownCardNotInHand");
+        (warning: SoftWarning): string => {
+            switch (warning.kind) {
+                case "passersIncludePlayersWhoCanRefute": {
+                    if (warning.players.length === 1) {
+                        const offender = warning.players[0];
+                        if (offender === undefined) return "";
+                        return offender === selfPlayerId
+                            ? t("pillWarningPassersIncludeSelfCanRefute")
+                            : t("pillWarningPassersIncludePlayerCanRefute", {
+                                  player: String(offender),
+                              });
+                    }
+                    const labels = warning.players.map(p =>
+                        p === selfPlayerId
+                            ? t("playerLabelSelfSubject")
+                            : String(p),
+                    );
+                    return t("pillWarningPassersIncludePlayersCanRefute", {
+                        players: formatFieldList(labels),
+                    });
+                }
+                case "refuterCannotRefute":
+                    return warning.player === selfPlayerId
+                        ? t("pillWarningSelfRefuterNoMatch")
+                        : t("pillWarningRefuterCannotRefute", {
+                              player: String(warning.player),
+                          });
+                case "shownCardNotInRefuterHand":
+                    return warning.player === selfPlayerId
+                        ? t("pillWarningShownCardNotInHand")
+                        : t("pillWarningShownCardNotInRefuterHand", {
+                              player: String(warning.player),
+                          });
             }
         },
-        [t],
+        [t, selfPlayerId],
     );
 
     const warningReasonFor = useCallback(
         (id: PillId): string | undefined => {
-            const code = warnings.get(id);
-            return code === undefined ? undefined : warningMessageFor(code);
+            const w = warnings.get(id);
+            return w === undefined ? undefined : warningMessageFor(w);
         },
         [warnings, warningMessageFor],
     );
@@ -612,43 +637,45 @@ export const SuggestionForm = forwardRef<
 
     // --- Help-layer badge renderers -----------------------------------
     //
-    // M1 surfaces the help badges only on the self player's row of
-    // Passers / Refuter, and on the Shown-card dropdown when self is
-    // the resolved refuter. Each function returns `null` for any
-    // option / card we have nothing to say about — the underlying
-    // dropdown swallows the null cleanly.
+    // Every player row in Passers / Refuter consults
+    // `help.evidenceByPlayer`. Self gets the same treatment as other
+    // players — the engine doesn't differentiate. The badge tone is
+    // role-aware: in Passers, definiteYes is a warning (the player
+    // can refute, so listing them as passing contradicts what we
+    // know); in Refuter, definiteNo is the warning side. Returns
+    // `null` for any option / card we have nothing to say about — the
+    // underlying dropdown swallows the null cleanly.
     const renderPasserBadge = useCallback(
         (player: Player): ReactNode => {
             if (!help.active) return null;
-            if (player !== help.selfPlayerId) return null;
-            return renderPasserSelfBadge(help.selfEvidence, t);
+            const evidence = help.evidenceByPlayer.get(player);
+            if (evidence === undefined) return null;
+            return renderPasserOptionBadge(evidence, t);
         },
         [help, t],
     );
     const renderRefuterBadge = useCallback(
         (player: Player): ReactNode => {
             if (!help.active) return null;
-            if (player !== help.selfPlayerId) return null;
-            return renderRefuterSelfBadge(help.selfEvidence, t);
+            const evidence = help.evidenceByPlayer.get(player);
+            if (evidence === undefined) return null;
+            return renderRefuterOptionBadge(evidence, t);
         },
         [help, t],
     );
-    // Shown-card option badges only render when the help layer is
-    // active AND self is the resolved refuter. The Shown-card pill is
-    // itself disabled until a refuter is set, so the dropdown isn't
-    // reachable otherwise — but we still gate on `form.refuter ===
-    // self` to keep the badges meaningful when the user later types a
-    // refuter (the popover content rebuilds with each form change).
+    // Shown-card option badges render whenever we have advice for the
+    // current refuter — self gets the full tier-bearing badge, other
+    // refuters get the simpler N-cell warning. The Shown-card pill is
+    // itself disabled until a refuter is set.
     const renderShownCardBadge = useCallback(
         (card: Card): ReactNode => {
             if (!help.active) return null;
-            if (form.refuter !== help.selfPlayerId) return null;
             const badge = help.shownCardAdvice.get(card);
             return badge === undefined || badge === null
                 ? null
                 : renderShownCardBadgeNode(badge, t);
         },
-        [help, form.refuter, t],
+        [help, t],
     );
 
     // --- Slot configs --------------------------------------------------
@@ -1150,21 +1177,36 @@ export const validateFormConsistency = (
 };
 
 /**
- * Soft-validation warning codes. Distinct from `PillErrorCode` because
- * these are external-facts contradictions (between the user's form
- * choices and the deducer's `Knowledge`), not internal inconsistencies.
- * Submission stays enabled when only soft warnings fire — the user can
- * "Add anyway" if they know better than the solver.
+ * Soft-validation warning. Discriminated by `kind`; the payload names
+ * the offending player(s) so the message can read naturally for self
+ * ("You have...") and for other players ("Bob has...").
+ *
+ * Distinct from `PillErrorCode` because these are external-facts
+ * contradictions (between the user's form choices and the deducer's
+ * `Knowledge`), not internal inconsistencies. Submission stays enabled
+ * when only soft warnings fire — the user can "Add anyway" if they
+ * know something the solver has not been told.
  */
-export type SoftWarningCode =
-    | "passersIncludeSelfWhoCanRefute"
-    | "selfIsRefuterWithNoMatch"
-    | "shownCardNotInSelfHand";
+export type SoftWarning =
+    | {
+          readonly kind: "passersIncludePlayersWhoCanRefute";
+          readonly players: ReadonlyArray<Player>;
+      }
+    | {
+          readonly kind: "refuterCannotRefute";
+          readonly player: Player;
+      }
+    | {
+          readonly kind: "shownCardNotInRefuterHand";
+          readonly player: Player;
+      };
 
 /**
- * Context passed to `validateFormSoft`. Self-only in Milestone 1; the
- * shape generalises naturally to multi-player by allowing additional
- * fields without changing this signature.
+ * Context passed to `validateFormSoft`. `selfPlayerId` no longer gates
+ * the entire layer — every non-suggester player is checked against
+ * `knowledge` — but it's still carried through so the help layer's
+ * downstream consumers (badge tone, shown-card tier classification)
+ * can branch on self vs other.
  */
 export interface SoftValidationContext {
     readonly knowledge: Knowledge | undefined;
@@ -1175,9 +1217,15 @@ export interface SoftValidationContext {
 
 /**
  * Check a form snapshot for soft-validation conflicts with deducer
- * Knowledge. Returns a map from pill to a warning code. Empty map
- * when the help layer is suppressed (teach-me mode, no self player,
- * or no Knowledge available).
+ * Knowledge. Returns a map from pill to a warning. Empty map when the
+ * help layer is suppressed (teach-me mode or no Knowledge).
+ *
+ * In Milestone 2 every non-suggester player is checked against
+ * Knowledge, not just self — the engine `computeRefuteEvidence` is
+ * already player-agnostic, so the validator just iterates the
+ * selected passers / refuter and looks each up. Self gets the same
+ * treatment as everyone else; the message layer picks a self-friendly
+ * copy variant when the offender is self.
  *
  * Distinct from `validateFormConsistency` — that catches internal
  * paradoxes which BLOCK submission. These soft warnings let the user
@@ -1187,43 +1235,67 @@ export interface SoftValidationContext {
 export const validateFormSoft = (
     form: FormState,
     ctx: SoftValidationContext,
-): ReadonlyMap<PillId, SoftWarningCode> => {
-    const warnings = new Map<PillId, SoftWarningCode>();
+): ReadonlyMap<PillId, SoftWarning> => {
+    const warnings = new Map<PillId, SoftWarning>();
     if (ctx.teachMode) return warnings;
     if (ctx.knowledge === undefined) return warnings;
-    const selfId = ctx.selfPlayerId;
-    if (selfId === null) return warnings;
-    // Self-as-suggester is a hard error already; skip soft warnings.
-    if (form.suggester === selfId) return warnings;
+    const knowledge = ctx.knowledge;
 
     const filledCards = form.cards.filter((c): c is Card => c !== null);
     const complete = filledCards.length === ctx.categoryCount;
-    const selfEvidence = computeRefuteEvidence({
-        knowledge: ctx.knowledge,
-        player: selfId,
-        cards: filledCards,
-        complete,
-    });
 
+    // Compute evidence per selected passer + the refuter — the only
+    // players whose role contradicts something Knowledge could prove.
     const passers = Array.isArray(form.nonRefuters) ? form.nonRefuters : [];
-    if (passers.some(p => p === selfId) && selfEvidence === "definiteYes") {
-        // eslint-disable-next-line i18next/no-literal-string -- internal warning code
-        warnings.set(PILL_PASSERS, "passersIncludeSelfWhoCanRefute");
+    const passersWhoCanRefute: Array<Player> = [];
+    for (const p of passers) {
+        // Suggester-in-passers is a hard error already; skip soft.
+        if (p === form.suggester) continue;
+        const evidence = computeRefuteEvidence({
+            knowledge,
+            player: p,
+            cards: filledCards,
+            complete,
+        });
+        if (evidence === "definiteYes") passersWhoCanRefute.push(p);
     }
-
-    if (form.refuter === selfId && selfEvidence === "definiteNo") {
-        // eslint-disable-next-line i18next/no-literal-string -- internal warning code
-        warnings.set(PILL_REFUTER, "selfIsRefuterWithNoMatch");
+    if (passersWhoCanRefute.length > 0) {
+        warnings.set(PILL_PASSERS, {
+            kind: "passersIncludePlayersWhoCanRefute",
+            players: passersWhoCanRefute,
+        });
     }
 
     if (
-        form.refuter === selfId &&
+        form.refuter !== null &&
+        !isNobody(form.refuter) &&
+        form.refuter !== form.suggester
+    ) {
+        const refuterEvidence = computeRefuteEvidence({
+            knowledge,
+            player: form.refuter,
+            cards: filledCards,
+            complete,
+        });
+        if (refuterEvidence === "definiteNo") {
+            warnings.set(PILL_REFUTER, {
+                kind: "refuterCannotRefute",
+                player: form.refuter,
+            });
+        }
+    }
+
+    if (
+        form.refuter !== null &&
+        !isNobody(form.refuter) &&
         form.seenCard !== null &&
         !isNobody(form.seenCard) &&
-        playerCellValue(ctx.knowledge, selfId, form.seenCard) === "N"
+        playerCellValue(knowledge, form.refuter, form.seenCard) === "N"
     ) {
-        // eslint-disable-next-line i18next/no-literal-string -- internal warning code
-        warnings.set(PILL_SEEN, "shownCardNotInSelfHand");
+        warnings.set(PILL_SEEN, {
+            kind: "shownCardNotInRefuterHand",
+            player: form.refuter,
+        });
     }
 
     return warnings;
@@ -1255,27 +1327,29 @@ export type ShownCardBadge =
     | null;
 
 /**
- * Help context returned by `useSelfRefuteHelp`. `selfEvidence` is the
- * relationship between self and the current filled-card suggestion
- * (drives Passers / Refuter self-row badges). `shownCardAdvice` is the
- * per-card badge map for the Shown-card dropdown.
+ * Help context returned by `useRefuteHelp`. `evidenceByPlayer` carries
+ * the relationship between every non-suggester player and the current
+ * filled-card suggestion — drives the Passers / Refuter row badges.
+ * `shownCardAdvice` is the per-card badge map for the Shown-card
+ * dropdown, indexed by whichever player the user has named as refuter.
  *
  * `active === false` means the help layer is suppressed entirely (no
- * provider, no self, teach-me mode, or self-is-suggester). Callers
- * still get a stable shape so call sites don't need null-checks
- * everywhere.
+ * provider, teach-me mode, or no Knowledge available). Callers still
+ * get a stable shape so call sites don't need null-checks everywhere.
+ * `selfPlayerId` is still surfaced so the message layer can branch to
+ * a self-friendly copy variant when the offender is self.
  */
-export interface SelfRefuteHelp {
+export interface RefuteHelp {
     readonly active: boolean;
     readonly selfPlayerId: Player | null;
-    readonly selfEvidence: RefuteEvidence;
+    readonly evidenceByPlayer: ReadonlyMap<Player, RefuteEvidence>;
     readonly shownCardAdvice: ReadonlyMap<Card, ShownCardBadge>;
 }
 
-const INACTIVE_HELP: SelfRefuteHelp = {
+const INACTIVE_HELP: RefuteHelp = {
     active: false,
     selfPlayerId: null,
-    selfEvidence: "noInfo",
+    evidenceByPlayer: new Map(),
     shownCardAdvice: new Map(),
 };
 
@@ -1361,44 +1435,67 @@ export const computeShownCardAdvice = (args: {
 };
 
 /**
- * Hook: derive the self-player help context from the current form
+ * Hook: derive the multi-player help context from the current form
  * state + canonical Knowledge. Returns `INACTIVE_HELP` when the help
- * layer is suppressed (no `<ClueProvider>`, teach-me mode, no self,
- * or self is the suggester).
+ * layer is suppressed (no `<ClueProvider>`, teach-me mode, or no
+ * Knowledge).
  *
  * The shape is stable across call sites so consumers (Passers /
  * Refuter / Shown card dropdowns + soft-validation pill warnings)
  * never need to null-check on every render — they branch on `active`
  * and otherwise treat the fields as authoritative.
+ *
+ * Multi-player vs Milestone 1: the engine `computeRefuteEvidence` is
+ * applied to every non-suggester player to build `evidenceByPlayer`.
+ * Shown-card advice keys off the user's chosen `refuter` rather than
+ * self — self as refuter still gets the full leak-tier classifier,
+ * other refuters get a simpler N-cell "Do not have" warning.
  */
-const useSelfRefuteHelp = (form: FormState): SelfRefuteHelp => {
+const useRefuteHelp = (form: FormState): RefuteHelp => {
     const ctx = useClueOptional();
-    return useMemo<SelfRefuteHelp>(() => {
+    return useMemo<RefuteHelp>(() => {
         if (ctx === undefined) return INACTIVE_HELP;
         const { state, derived } = ctx;
         if (state.teachMode) return INACTIVE_HELP;
-        const selfPlayer = state.selfPlayerId;
-        if (selfPlayer === null) return INACTIVE_HELP;
-        if (form.suggester === selfPlayer) return INACTIVE_HELP;
         if (!Result.isSuccess(derived.deductionResult)) return INACTIVE_HELP;
         const knowledge = derived.deductionResult.success;
+        const selfPlayer = state.selfPlayerId;
         const filledCards = form.cards.filter(
             (c): c is Card => c !== null,
         );
         const complete =
             filledCards.length === state.setup.cardSet.categories.length;
-        const selfEvidence = computeRefuteEvidence({
-            knowledge,
-            player: selfPlayer,
-            cards: filledCards,
-            complete,
-        });
-        // Build the shown-card map only when we have a suggester
-        // resolved (the tier classifier needs `pendingSuggester`).
-        // Without a suggester, fall back to the simple Y/N branch so
-        // the user still sees "Do not have" warnings.
+
+        // Per-player evidence map. Skip the suggester — they can't
+        // refute their own suggestion, so badges on the suggester row
+        // would be confusing. The suggester-in-passers / -refuter
+        // case is already a hard error elsewhere.
+        const evidenceByPlayer = new Map<Player, RefuteEvidence>();
+        for (const p of state.setup.players) {
+            if (p === form.suggester) continue;
+            evidenceByPlayer.set(
+                p,
+                computeRefuteEvidence({
+                    knowledge,
+                    player: p,
+                    cards: filledCards,
+                    complete,
+                }),
+            );
+        }
+
+        // Shown-card advice: keyed off whichever player the user has
+        // named as refuter. Self gets the full leak-tier classifier;
+        // any other refuter gets the simpler N-cell warning so we
+        // still flag "Bob can't have shown the Knife".
         let shownCardAdvice: ReadonlyMap<Card, ShownCardBadge>;
-        if (form.suggester !== null && filledCards.length > 0) {
+        if (
+            form.refuter !== null
+            && !isNobody(form.refuter)
+            && form.refuter === selfPlayer
+            && form.suggester !== null
+            && filledCards.length > 0
+        ) {
             const perspectiveResult = derived.perspectives.get(form.suggester);
             const perspective =
                 perspectiveResult !== undefined &&
@@ -1413,21 +1510,32 @@ const useSelfRefuteHelp = (form: FormState): SelfRefuteHelp => {
                 suggestions: state.suggestions,
                 suggesterPerspective: perspective,
             });
-        } else {
-            // No suggester yet — just label N / Y cells without tier.
-            // Y cells render no badge (no pendingSuggester means no
-            // tier classification); N cells still warn "Do not have".
+        } else if (
+            form.refuter !== null
+            && !isNobody(form.refuter)
+            && filledCards.length > 0
+        ) {
+            // Non-self refuter — just flag N-cells. Y-cells get no
+            // badge: the user has confidently said "this player has
+            // this card", and confirming via a muted "Has" pill is
+            // visual noise rather than help.
+            const refuterId = form.refuter;
             const map = new Map<Card, ShownCardBadge>();
             for (const card of filledCards) {
-                const cell = playerCellValue(knowledge, selfPlayer, card);
-                if (cell === "N") map.set(card, { kind: "doNotHave" });
+                if (playerCellValue(knowledge, refuterId, card) === "N") {
+                    map.set(card, { kind: "doNotHave" });
+                }
             }
             shownCardAdvice = map;
+        } else {
+            // No refuter resolved — the Shown-card pill is disabled
+            // anyway, so an empty map is fine.
+            shownCardAdvice = new Map();
         }
         return {
             active: true,
             selfPlayerId: selfPlayer,
-            selfEvidence,
+            evidenceByPlayer,
             shownCardAdvice,
         };
     }, [ctx, form]);
@@ -1534,14 +1642,19 @@ const suggestedCards = (form: FormState): ReadonlyArray<Card> =>
 
 // ---- Help-layer badge node builders ----------------------------------
 //
-// Per the M1 spec:
-//   - Passers self-row: warning "Can refute" on definiteYes, muted
-//     "Cannot refute" on definiteNo, nothing otherwise.
-//   - Refuter self-row: muted "Can refute" on definiteYes, warning
-//     "Cannot refute" on definiteNo, nothing otherwise.
+// Per-player badge rules:
+//   - Passers row: warning "Can refute" on definiteYes (contradicts
+//     listing the player as passing), muted "Cannot refute" on
+//     definiteNo (consistent with the choice), nothing otherwise.
+//   - Refuter row: muted "Can refute" on definiteYes (consistent),
+//     warning "Cannot refute" on definiteNo (contradicts choosing
+//     them as refuter), nothing otherwise.
 //
-// Same engine, inverted tone: the warning fires for the choice that
-// contradicts what we know about self's hand.
+// Same engine, inverted tone per role: the warning fires for the
+// choice that contradicts what Knowledge says about the player.
+// Applied uniformly to self and other players — the user is equally
+// likely to mis-log either, and the engine has no reason to weight
+// "I'm sure about self" higher than "the deducer is sure about Bob".
 
 type TFnAny = ReturnType<typeof useTranslations<string>>;
 
@@ -1563,7 +1676,7 @@ const TIER_LABEL_KEY: Record<RefuteAdviceTier, string> = {
     freshLeak: "tierFreshLeakLabel",
 };
 
-const renderPasserSelfBadge = (
+const renderPasserOptionBadge = (
     evidence: RefuteEvidence,
     t: TFnAny,
 ): ReactNode => {
@@ -1571,28 +1684,28 @@ const renderPasserSelfBadge = (
         return (
             <span className={BADGE_WARNING_CLASS} role="status">
                 <AlertIcon className="h-[0.95em] w-[0.95em]" />
-                {t("pillBadgeCanRefuteSelf")}
+                {t("pillBadgeCanRefute")}
             </span>
         );
     }
     if (evidence === "definiteNo") {
         return (
             <span className={BADGE_MUTED_CLASS}>
-                {t("pillBadgeCannotRefuteSelf")}
+                {t("pillBadgeCannotRefute")}
             </span>
         );
     }
     return null;
 };
 
-const renderRefuterSelfBadge = (
+const renderRefuterOptionBadge = (
     evidence: RefuteEvidence,
     t: TFnAny,
 ): ReactNode => {
     if (evidence === "definiteYes") {
         return (
             <span className={BADGE_MUTED_CLASS}>
-                {t("pillBadgeCanRefuteSelf")}
+                {t("pillBadgeCanRefute")}
             </span>
         );
     }
@@ -1600,7 +1713,7 @@ const renderRefuterSelfBadge = (
         return (
             <span className={BADGE_WARNING_CLASS} role="status">
                 <AlertIcon className="h-[0.95em] w-[0.95em]" />
-                {t("pillBadgeCannotRefuteSelf")}
+                {t("pillBadgeCannotRefute")}
             </span>
         );
     }
@@ -1616,7 +1729,7 @@ const renderShownCardBadgeNode = (
         return (
             <span className={BADGE_WARNING_CLASS} role="status">
                 <AlertIcon className="h-[0.95em] w-[0.95em]" />
-                {t("pillBadgeDoNotHaveSelf")}
+                {t("pillBadgeDoNotHave")}
             </span>
         );
     }
