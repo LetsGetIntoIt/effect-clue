@@ -1371,21 +1371,15 @@ export function Checklist() {
                                         </div>,
                                     )}
                                 </motion.th>
-                                {/* The maroon category strip is split into
-                                    two td's so the doubled vertical divider
-                                    between the last player column and the
-                                    case-file column paints cleanly through
-                                    this row. `border-spacing-0` keeps the
-                                    maroon visually continuous across the
-                                    split, while the gap inside the
-                                    doubled-border lines shows the maroon
-                                    underneath. */}
+                                {/* The maroon category strip spans every
+                                    owner column as a single td so the
+                                    doubled vertical case-file divider does
+                                    NOT paint through this row — the maroon
+                                    reads as one continuous strip across
+                                    the player columns and the case file. */}
                                 <td
-                                    colSpan={owners.length - 1}
-                                    className="border-b border-border bg-category-header"
-                                />
-                                <td
-                                    className="border-r border-b border-border bg-category-header checklist-case-file-divider"
+                                    colSpan={owners.length}
+                                    className="border-r border-b border-border bg-category-header"
                                 />
                             </motion.tr>,
                             ...category.cards.flatMap(entry => {
