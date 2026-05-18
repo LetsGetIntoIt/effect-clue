@@ -16,7 +16,7 @@ import {
     PillPopover,
     type PillStatus,
 } from "./SuggestionPills";
-import { XIcon } from "./Icons";
+import { AlertIcon, XIcon } from "./Icons";
 import { Tooltip } from "./Tooltip";
 
 /**
@@ -53,6 +53,14 @@ export interface PillSlot {
     readonly disabled?: boolean | undefined;
     readonly disabledHint?: string | undefined;
     readonly errorReason?: string | undefined;
+    /**
+     * Soft-validation explanation. Distinct from `errorReason` —
+     * renders in warning (amber) tone and does NOT block submission.
+     * Surfaces when the user's choice contradicts what we know from
+     * deducer Knowledge, without preventing them from logging the
+     * suggestion anyway.
+     */
+    readonly warningReason?: string | undefined;
     /** Per-pill clear (×) affordance. When present, the pill renders the × glyph. */
     readonly onClear?: (() => void) | undefined;
     /**
@@ -88,6 +96,21 @@ interface PillFormProps {
     /** Submit affordance. */
     readonly canSubmit: boolean;
     readonly submitLabel: ReactNode;
+    /**
+     * Alternate label rendered on the submit button when at least one
+     * soft warning is active (and `canSubmit === true`). When provided,
+     * the button reads e.g. "Add anyway" and renders a leading
+     * AlertIcon to telegraph that submission is going ahead despite
+     * the warning. `submitBlockReason` is preferred over this if both
+     * are present (a hard error always wins).
+     */
+    readonly submitWarningLabel?: ReactNode;
+    /**
+     * Tooltip text shown over the submit button when at least one
+     * soft warning is active. Renders only when `submitBlockReason`
+     * is absent (a hard error supersedes warnings).
+     */
+    readonly submitWarningReason?: string;
     /** Tooltip text shown over the disabled submit button. */
     readonly submitBlockReason?: string;
     readonly onSubmit: () => void;
@@ -151,6 +174,8 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
             onOpenPillIdChange,
             canSubmit,
             submitLabel,
+            submitWarningLabel,
+            submitWarningReason,
             submitBlockReason,
             onSubmit,
             onCancel,
@@ -355,10 +380,23 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                 hasAnyInput === true &&
                 clearInputsLabel !== undefined);
 
+        // "Add anyway" mode: submit is enabled BUT there's a soft
+        // warning describing a contradiction with deducer Knowledge.
+        // Render the alternate label + AlertIcon in a warning-tone
+        // button so the user sees they're submitting against advice.
+        // A hard error (submitBlockReason) takes precedence — that
+        // disables the button entirely.
+        const showSubmitWarning =
+            canSubmit &&
+            submitBlockReason === undefined &&
+            submitWarningReason !== undefined;
+
         const submitButtonClass =
             "tap-target text-tap rounded border-none @max-[410px]/log:w-full " +
             (canSubmit
-                ? "cursor-pointer bg-accent text-white"
+                ? showSubmitWarning
+                    ? "cursor-pointer bg-warning-bg text-warning border border-warning-border"
+                    : "cursor-pointer bg-accent text-white"
                 // Disabled tone: bg-unknown-bg + cursor-not-allowed
                 // carry the "inactive" signal so text-muted (full) keeps
                 // the label legible. Opacity-modified muted dipped
@@ -395,6 +433,7 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                             disabled={slot.disabled}
                             disabledHint={slot.disabledHint}
                             errorReason={slot.errorReason}
+                            warningReason={slot.warningReason}
                             open={openPillId === slot.id}
                             onOpenChange={onOpenChangeFor(slot.id)}
                             {...(slot.onClear !== undefined
@@ -407,7 +446,9 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                             {slot.content}
                         </PillPopover>
                     ))}
-                    <Tooltip content={submitBlockReason}>
+                    <Tooltip
+                        content={submitBlockReason ?? submitWarningReason}
+                    >
                         <button
                             type="button"
                             ref={submitBtnRef}
@@ -417,7 +458,14 @@ export const PillForm = forwardRef<PillFormHandle, PillFormProps>(
                                 if (canSubmit) onSubmit();
                             }}
                         >
-                            {submitLabel}
+                            {showSubmitWarning && (
+                                <AlertIcon
+                                    className="mr-1 inline-block h-[1.1em] w-[1.1em] align-[-0.15em]"
+                                />
+                            )}
+                            {showSubmitWarning && submitWarningLabel !== undefined
+                                ? submitWarningLabel
+                                : submitLabel}
                         </button>
                     </Tooltip>
                     {onCancel !== undefined && (
