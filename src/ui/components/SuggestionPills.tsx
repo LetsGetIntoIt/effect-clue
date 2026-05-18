@@ -43,6 +43,14 @@ export type Nobody = typeof NOBODY;
 
 export const isNobody = (v: unknown): v is Nobody => v === NOBODY;
 
+// Set-equality on two arrays of Player (or any branded-string) values.
+// Used by MultiSelectList's unmount cleanup to detect "user did not
+// change the toggled set" so a stray open/close is a true no-op.
+const sameSet = <T,>(
+    a: ReadonlyArray<T>,
+    b: ReadonlyArray<T>,
+): boolean => a.length === b.length && a.every(item => b.includes(item));
+
 // ---- Pill status ------------------------------------------------------
 
 export type PillStatus =
@@ -703,9 +711,21 @@ export function MultiSelectList({
     const onCommitRef = useRef(onCommit);
     onCommitRef.current = onCommit;
     const committedRef = useRef(false);
+    // Capture the initial `selected` so the cleanup can detect "user
+    // didn't change anything" and skip the commit. Opening a popover
+    // and closing it without toggling should be a no-op — otherwise
+    // an empty `toggled` would overwrite `null` (no selection) with
+    // `[]`, which the parent form treats as "has input" and surfaces
+    // an X clear button. Same protection covers the `nobodyChosen`
+    // case, where the prior NOBODY would otherwise get clobbered by
+    // an empty array on a stray open/close.
+    const initialSelectedRef = useRef<ReadonlyArray<Player>>(selected);
     useEffect(
         () => () => {
             if (committedRef.current) return;
+            if (sameSet(initialSelectedRef.current, toggledRef.current)) {
+                return;
+            }
             onCommitRef.current(toggledRef.current, { advance: false });
         },
         [],
