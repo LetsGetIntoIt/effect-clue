@@ -46,7 +46,7 @@
                 },
                 "suggestionLog": {
                     "title": "Every suggestion, captured",
-                    "body": "Each guess at the table — who suggested what, who passed, who refuted — gets logged. When it is your turn to refute, the My Cards panel even suggests which card to show, picking the one that leaks the least information about your hand.",
+                    "body": "Log each suggestion at the table — who suggested what, who passed, who refuted. When it is your turn to refute, the My Cards panel even suggests which card to show, picking the one that leaks the least information about your hand.",
                     "imageAlt": "Animation of adding a suggestion and watching it land in the suggestion log"
                 },
                 "cellExplanation": {
@@ -80,7 +80,7 @@
                 "heading": "Custom card packs",
                 "create": {
                     "title": "Build your own deck",
-                    "body": "Not playing classic? Build a custom card pack with your own suspects, weapons, and rooms - or any other categories you want. How about _motive_, or _cool catchphrase_? Let your imagination run wild.",
+                    "body": "Not playing classic? Build a custom card pack with your own suspects, weapons, and rooms - or any other categories you want. How about <em>motive</em>, or <em>cool catchphrase</em>? Let your imagination run wild.",
                     "imageAlt": "Animation of building a custom card pack"
                 },
                 "share": {

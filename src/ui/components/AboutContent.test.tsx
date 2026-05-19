@@ -18,7 +18,9 @@ vi.mock("../../analytics/posthog", () => ({
 vi.mock("next-intl", () => ({
     useTranslations: (namespace?: string) => {
         const prefix = namespace !== undefined ? `${namespace}.` : "";
-        return (key: string) => `${prefix}${key}`;
+        const t = (key: string) => `${prefix}${key}`;
+        t.rich = (key: string) => `${prefix}${key}`;
+        return t;
     },
 }));
 

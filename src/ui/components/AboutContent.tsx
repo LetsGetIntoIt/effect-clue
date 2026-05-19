@@ -60,7 +60,7 @@ function WalkthroughSubsection({
     readonly image: StaticImageData;
     readonly alt: string;
     readonly title: string;
-    readonly body: string;
+    readonly body: ReactNode;
     readonly frameWidth: FrameWidth;
     readonly priority?: boolean;
 }) {
@@ -191,7 +191,9 @@ function Walkthrough() {
                     image={createPackGif}
                     alt={t("cardPacks.create.imageAlt")}
                     title={t("cardPacks.create.title")}
-                    body={t("cardPacks.create.body")}
+                    body={t.rich("cardPacks.create.body", {
+                        em: (chunks) => <em>{chunks}</em>,
+                    })}
                     frameWidth={FRAME_PHONE}
                 />
                 <WalkthroughSubsection

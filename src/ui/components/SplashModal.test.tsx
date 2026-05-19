@@ -17,8 +17,11 @@ vi.mock("../../analytics/posthog", () => ({
 }));
 
 vi.mock("next-intl", () => ({
-    useTranslations: (ns?: string) => (key: string) =>
-        ns ? `${ns}.${key}` : key,
+    useTranslations: (ns?: string) => {
+        const t = (key: string) => (ns ? `${ns}.${key}` : key);
+        t.rich = (key: string) => (ns ? `${ns}.${key}` : key);
+        return t;
+    },
 }));
 
 vi.mock("react-youtube", () => ({
