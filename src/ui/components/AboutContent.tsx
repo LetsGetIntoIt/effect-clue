@@ -31,29 +31,62 @@ import { YouTubeEmbed } from "./YouTubeEmbed";
 
 const VIDEO_ID = "ijkDbdlpY6c";
 
-const IMAGE_SIZES = "(max-width: 800px) 92vw, 640px";
+// Phone-shaped gifs (01–09) are 500×766 and feel out of place when
+// stretched to the full content column on desktop. Cap them around a
+// phone width and center the frame so the parchment sits around them;
+// on mobile the column is narrower than 400px so the wrapper hits the
+// column width first and the gif fills naturally.
+const PHONE_FRAME_MAX_WIDTH = "max-w-[400px]";
+
+const IMAGE_SIZES_PHONE = "(max-width: 400px) 92vw, 400px";
+const IMAGE_SIZES_FULL = "(max-width: 800px) 92vw, 640px";
+
+// Frame-width discriminators. Pulled to module scope so the
+// i18next/no-literal-string lint rule reads them as identifiers
+// rather than user copy.
+const FRAME_PHONE = "phone" as const;
+const FRAME_FULL = "full" as const;
+
+type FrameWidth = typeof FRAME_PHONE | typeof FRAME_FULL;
 
 function WalkthroughSubsection({
     image,
     alt,
     title,
     body,
+    frameWidth,
     priority = false,
 }: {
     readonly image: StaticImageData;
     readonly alt: string;
     readonly title: string;
     readonly body: string;
+    readonly frameWidth: FrameWidth;
     readonly priority?: boolean;
 }) {
+    const frameClass =
+        frameWidth === FRAME_PHONE
+            ? `mx-auto w-full ${PHONE_FRAME_MAX_WIDTH}`
+            : "w-full";
+    const sizes =
+        frameWidth === FRAME_PHONE ? IMAGE_SIZES_PHONE : IMAGE_SIZES_FULL;
     return (
         <section className="flex flex-col gap-3">
-            <div className="overflow-hidden rounded-[var(--radius)] border border-border/30 bg-panel shadow-sm">
+            <div
+                className={`${frameClass} overflow-hidden rounded-[var(--radius)] border border-border/30 bg-panel shadow-sm`}
+            >
+                {/*
+                  * Shave 2px off every edge of the asset to hide any
+                  * hairline artifact at the source-image boundary. The
+                  * image is sized 4px wider than its container and pulled
+                  * back with a negative margin; the wrapper's
+                  * `overflow-hidden` clips the result.
+                  */}
                 <Image
                     src={image}
                     alt={alt}
-                    sizes={IMAGE_SIZES}
-                    className="block h-auto w-full"
+                    sizes={sizes}
+                    className="-m-[2px] block h-auto w-[calc(100%+4px)] max-w-none"
                     {...(priority ? { priority: true } : {})}
                 />
             </div>
@@ -105,6 +138,7 @@ function Walkthrough() {
                     alt={t("smartDeductions.checklist.imageAlt")}
                     title={t("smartDeductions.checklist.title")}
                     body={t("smartDeductions.checklist.body")}
+                    frameWidth={FRAME_PHONE}
                     priority
                 />
                 <WalkthroughSubsection
@@ -112,12 +146,14 @@ function Walkthrough() {
                     alt={t("smartDeductions.suggestionLog.imageAlt")}
                     title={t("smartDeductions.suggestionLog.title")}
                     body={t("smartDeductions.suggestionLog.body")}
+                    frameWidth={FRAME_PHONE}
                 />
                 <WalkthroughSubsection
                     image={cellExplanationGif}
                     alt={t("smartDeductions.cellExplanation.imageAlt")}
                     title={t("smartDeductions.cellExplanation.title")}
                     body={t("smartDeductions.cellExplanation.body")}
+                    frameWidth={FRAME_PHONE}
                 />
             </MajorSection>
 
@@ -127,12 +163,14 @@ function Walkthrough() {
                     alt={t("hypotheses.manual.imageAlt")}
                     title={t("hypotheses.manual.title")}
                     body={t("hypotheses.manual.body")}
+                    frameWidth={FRAME_PHONE}
                 />
                 <WalkthroughSubsection
                     image={suggestedHypothesesGif}
                     alt={t("hypotheses.suggested.imageAlt")}
                     title={t("hypotheses.suggested.title")}
                     body={t("hypotheses.suggested.body")}
+                    frameWidth={FRAME_PHONE}
                 />
             </MajorSection>
 
@@ -142,6 +180,7 @@ function Walkthrough() {
                     alt={t("invite.setup.imageAlt")}
                     title={t("invite.setup.title")}
                     body={t("invite.setup.body")}
+                    frameWidth={FRAME_PHONE}
                 />
             </MajorSection>
 
@@ -151,18 +190,21 @@ function Walkthrough() {
                     alt={t("cardPacks.create.imageAlt")}
                     title={t("cardPacks.create.title")}
                     body={t("cardPacks.create.body")}
+                    frameWidth={FRAME_PHONE}
                 />
                 <WalkthroughSubsection
                     image={sharePackGif}
                     alt={t("cardPacks.share.imageAlt")}
                     title={t("cardPacks.share.title")}
                     body={t("cardPacks.share.body")}
+                    frameWidth={FRAME_PHONE}
                 />
                 <WalkthroughSubsection
                     image={savePackGif}
                     alt={t("cardPacks.save.imageAlt")}
                     title={t("cardPacks.save.title")}
                     body={t("cardPacks.save.body")}
+                    frameWidth={FRAME_PHONE}
                 />
             </MajorSection>
 
@@ -172,6 +214,7 @@ function Walkthrough() {
                     alt={t("platforms.desktopMobile.imageAlt")}
                     title={t("platforms.desktopMobile.title")}
                     body={t("platforms.desktopMobile.body")}
+                    frameWidth={FRAME_FULL}
                 />
             </MajorSection>
 
@@ -184,18 +227,21 @@ function Walkthrough() {
                     alt={t("teachMe.turnOn.imageAlt")}
                     title={t("teachMe.turnOn.title")}
                     body={t("teachMe.turnOn.body")}
+                    frameWidth={FRAME_FULL}
                 />
                 <WalkthroughSubsection
                     image={teachMeCheckButtonPng}
                     alt={t("teachMe.markCell.imageAlt")}
                     title={t("teachMe.markCell.title")}
                     body={t("teachMe.markCell.body")}
+                    frameWidth={FRAME_FULL}
                 />
                 <WalkthroughSubsection
                     image={teachMeCheckBannerPng}
                     alt={t("teachMe.checkResult.imageAlt")}
                     title={t("teachMe.checkResult.title")}
                     body={t("teachMe.checkResult.body")}
+                    frameWidth={FRAME_FULL}
                 />
             </MajorSection>
         </div>
