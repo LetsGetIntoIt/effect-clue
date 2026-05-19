@@ -67,8 +67,8 @@ Scripts that require `pnpm install`:
 - `pnpm i18n:check` — orphan-key audit (`scripts/check-i18n-keys.mjs`)
 - `pnpm dev` — Next.js dev server (used by Claude's `next-dev` preview and by Codex browser verification). It starts at `PORT` or `3000`, then automatically uses the next available port if that one is busy.
 - `pnpm db:up` / `pnpm db:down` — local Docker Postgres for server actions, auth, sharing, and card-pack sync
-- `pnpm build` — static export
-- `pnpm start` — serve the static export
+- `pnpm build` — Next.js production build for Vercel SSR (`next build`), followed by the Serwist PWA worker step (`serwist build`) that emits `public/sw.js`
+- `pnpm start` — serve the built app (`next start`)
 
 Claude's `next-dev` preview configured in `.claude/launch.json` runs `pnpm install && exec pnpm dev` itself, so those previews are self-healing for `node_modules` and the dev server receives shutdown signals directly. They are **not** self-healing for `.env.local` — see "Worktree env setup" below. In Codex, use the local preview workflow below. The pre-commit checks above are not self-healing either; if any of them fails with a module-not-found error, run `pnpm install` first and retry.
 

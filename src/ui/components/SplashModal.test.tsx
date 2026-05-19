@@ -25,6 +25,12 @@ vi.mock("react-youtube", () => ({
     default: () => <div data-testid="yt-mock" />,
 }));
 
+vi.mock("next/image", () => ({
+    default: ({ alt }: { alt: string }) => (
+        <div data-testid="next-image" data-alt={alt} />
+    ),
+}));
+
 afterEach(() => {
     captureCalls.length = 0;
 });

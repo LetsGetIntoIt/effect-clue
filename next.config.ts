@@ -38,12 +38,6 @@ const nextConfig: NextConfig = {
     // hydration runs once on mount, not twice. We still opt into
     // React 19's other strictness via `strict: true` in tsconfig.
     reactStrictMode: false,
-    images: {
-        // We don't use Next/Image; disable image optimization
-        // defensively so a stray `<Image>` somewhere can't accidentally
-        // route through the optimizer pipeline.
-        unoptimized: true,
-    },
 };
 
 /**

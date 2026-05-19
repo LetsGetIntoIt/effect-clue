@@ -34,7 +34,94 @@
         "motivation": "Every suggestion leaks information. Keeping track of who must have what gets hard fast — too much to do in your head.",
         "videoCallout": "This solver does the bookkeeping for you. It finds clues you'd miss and teaches the strategy as you play. Watch the kickoff video to learn the logic — so you can be the best detective in the room.",
         "videoTitle": "Clue strategy explainer",
-        "pageHeading": "About the Clue solver"
+        "pageHeading": "About the Clue solver",
+        "walkthrough": {
+            "heading": "Inside the solver",
+            "smartDeductions": {
+                "heading": "Smart deductions as you play",
+                "checklist": {
+                    "title": "A checklist that deduces for you",
+                    "body": "Mark what each player has, and the solver fills in the rest — propagating every clue across the grid and flagging contradictions the moment they appear.",
+                    "imageAlt": "Animation of the checklist filling in deductions as a suggestion is logged"
+                },
+                "suggestionLog": {
+                    "title": "Every suggestion, captured",
+                    "body": "Each guess at the table — who suggested what, who passed, who refuted — gets logged. When it is your turn to refute, the My Cards panel even suggests which card to show, picking the one that leaks the least information about your hand.",
+                    "imageAlt": "Animation of adding a suggestion and watching it land in the suggestion log"
+                },
+                "cellExplanation": {
+                    "title": "See exactly how it got there",
+                    "body": "Tap any cell to see the breakdown. The solver traces every deduction back to the clues that produced it — so you can follow the logic, or double-check its work.",
+                    "imageAlt": "Animation of tapping a cell to open its explanation panel"
+                }
+            },
+            "hypotheses": {
+                "heading": "Test your hunches",
+                "manual": {
+                    "title": "Have a hunch? Test it out.",
+                    "body": "Mark a what-if and the solver tells you whether it is verifiable (must be true), falsifiable (must be false), or unsubstantiated (no way to know yet). Run theories without committing to them in the real game.",
+                    "imageAlt": "Animation of marking a hypothesis and the solver classifying it"
+                },
+                "suggested": {
+                    "title": "Hunches we noticed for you",
+                    "body": "When another player's behavior gives them away — a suggestion they could have refuted but did not, or a pattern in the cards they have shown — the solver flags hunches of its own for you to test.",
+                    "imageAlt": "Animation of the solver surfacing a suggested hypothesis"
+                }
+            },
+            "invite": {
+                "heading": "Play with everyone at your table",
+                "setup": {
+                    "title": "One setup, everyone joins",
+                    "body": "Set up the game once — roster, hand sizes, card pack — then send an invite link. Each player joins on their own device with their own private hand, no duplicate entry.",
+                    "imageAlt": "Animation of setting up a game and inviting players"
+                }
+            },
+            "cardPacks": {
+                "heading": "Custom card packs",
+                "create": {
+                    "title": "Build your own deck",
+                    "body": "Not playing classic? Build a custom card pack with your own suspects, weapons, and rooms.",
+                    "imageAlt": "Animation of building a custom card pack"
+                },
+                "share": {
+                    "title": "Share it with the table",
+                    "body": "Send your pack to the other players so the whole table is on the same deck — no waiting for everyone to type it in themselves.",
+                    "imageAlt": "Animation of sharing a card pack with other players"
+                },
+                "save": {
+                    "title": "Save shared packs for next time",
+                    "body": "Packs other players share with you land in your library. Save them once and they are ready for every future game.",
+                    "imageAlt": "Animation of saving a shared card pack to your library"
+                }
+            },
+            "platforms": {
+                "heading": "Anywhere you play",
+                "desktopMobile": {
+                    "title": "Built for every screen",
+                    "body": "Full keyboard controls on desktop. Touch-friendly on mobile. Install it as an app for a home-screen shortcut and offline access — same game, same data, your choice of device.",
+                    "imageAlt": "The Clue solver running on a desktop browser"
+                }
+            },
+            "teachMe": {
+                "heading": "Or, solve it yourself",
+                "intro": "If you would rather not have the solver give it all away, Teach Me mode hands the deductions back. You mark each cell yourself, and the solver only weighs in when you ask. Solve the case, learn the strategy.",
+                "turnOn": {
+                    "title": "Turn it on at setup",
+                    "body": "Pick Teach Me when you set up the game. The solver steps back, leaving the deductions for you to make on your own.",
+                    "imageAlt": "The Teach Me toggle on the game setup screen"
+                },
+                "markCell": {
+                    "title": "Mark each cell yourself",
+                    "body": "As you spot what a player must (or must not) have, mark the cell. When you want a second opinion, the Check button asks the solver to verify your mark — without revealing anything else.",
+                    "imageAlt": "The Check button inside a cell explanation panel in Teach Me mode"
+                },
+                "checkResult": {
+                    "title": "See if your mark holds up",
+                    "body": "The solver tells you whether your mark is supported by the clues, contradicted by them, or still unsubstantiated — and shows the reasoning when you want to see it.",
+                    "imageAlt": "The Teach Me Check result banner showing the verdict on a marked cell"
+                }
+            }
+        }
     },
     "toolbar": {
         "undo": "Undo{shortcut}",

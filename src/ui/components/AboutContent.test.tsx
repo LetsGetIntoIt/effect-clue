@@ -16,11 +16,20 @@ vi.mock("../../analytics/posthog", () => ({
 }));
 
 vi.mock("next-intl", () => ({
-    useTranslations: () => (key: string) => key,
+    useTranslations: (namespace?: string) => {
+        const prefix = namespace !== undefined ? `${namespace}.` : "";
+        return (key: string) => `${prefix}${key}`;
+    },
 }));
 
 vi.mock("react-youtube", () => ({
     default: () => <div data-testid="yt-mock">video</div>,
+}));
+
+vi.mock("next/image", () => ({
+    default: ({ alt }: { alt: string }) => (
+        <div data-testid="next-image" data-alt={alt} />
+    ),
 }));
 
 afterEach(() => {
@@ -37,9 +46,32 @@ describe("AboutContent", () => {
         const AboutContent = await importContent();
         render(<AboutContent context="page" />);
         expect(screen.getByTestId("yt-mock")).toBeInTheDocument();
-        expect(screen.getByText("title")).toBeInTheDocument();
-        expect(screen.getByText("motivation")).toBeInTheDocument();
-        expect(screen.getByText("videoCallout")).toBeInTheDocument();
+        expect(screen.getByText("about.title")).toBeInTheDocument();
+        expect(screen.getByText("about.motivation")).toBeInTheDocument();
+        expect(screen.getByText("about.videoCallout")).toBeInTheDocument();
+    });
+
+    test("renders the walkthrough with every major section", async () => {
+        const AboutContent = await importContent();
+        render(<AboutContent context="page" />);
+        // Walkthrough container heading
+        expect(
+            screen.getByText("about.walkthrough.heading"),
+        ).toBeInTheDocument();
+        // One assertion per major section heading is enough to prove the
+        // walkthrough mounted end-to-end without enumerating all 12 sub-sections.
+        for (const heading of [
+            "about.walkthrough.smartDeductions.heading",
+            "about.walkthrough.hypotheses.heading",
+            "about.walkthrough.invite.heading",
+            "about.walkthrough.cardPacks.heading",
+            "about.walkthrough.platforms.heading",
+            "about.walkthrough.teachMe.heading",
+        ]) {
+            expect(screen.getByText(heading)).toBeInTheDocument();
+        }
+        // 13 walkthrough images render (one per sub-section).
+        expect(screen.getAllByTestId("next-image")).toHaveLength(13);
     });
 
     test("does not fire any analytics events on plain render", async () => {
