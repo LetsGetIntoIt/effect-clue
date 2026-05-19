@@ -64,7 +64,7 @@
                 },
                 "suggested": {
                     "title": "Hunches we noticed for you",
-                    "body": "When another player's behavior gives them away — a suggestion they could have refuted but did not, or a pattern in the cards they have shown — the solver flags hunches of its own for you to test.",
+                    "body": "When another player's behavior gives them away — a card they've been suggesting many times, or a pattern in the cards they have shown — the solver flags hunches of its own for you to test.",
                     "imageAlt": "Animation of the solver surfacing a suggested hypothesis"
                 }
             },
@@ -72,7 +72,7 @@
                 "heading": "Play with everyone at your table",
                 "setup": {
                     "title": "One setup, everyone joins",
-                    "body": "Set up the game once — roster, hand sizes, card pack — then send an invite link. Each player joins on their own device with their own private hand, no duplicate entry.",
+                    "body": "Set up the game once — roster, hand sizes, card pack — then send an invite link. Each player joins on their own device with their own private hand, no setup required to join.",
                     "imageAlt": "Animation of setting up a game and inviting players"
                 }
             },
@@ -80,7 +80,7 @@
                 "heading": "Custom card packs",
                 "create": {
                     "title": "Build your own deck",
-                    "body": "Not playing classic? Build a custom card pack with your own suspects, weapons, and rooms.",
+                    "body": "Not playing classic? Build a custom card pack with your own suspects, weapons, and rooms - or any other categories you want. How about _motive_, or _cool catchphrase_? Let your imagination run wild.",
                     "imageAlt": "Animation of building a custom card pack"
                 },
                 "share": {
@@ -112,12 +112,12 @@
                 },
                 "markCell": {
                     "title": "Mark each cell yourself",
-                    "body": "As you spot what a player must (or must not) have, mark the cell. When you want a second opinion, the Check button asks the solver to verify your mark — without revealing anything else.",
+                    "body": "As you spot what a player must (or must not) have, mark the cell. When you want a second opinion, the Check button asks the solver to verify your mark, without revealing anything else. The solver tells you whether your mark is supported by the clues, contradicted by them, or still unsubstantiated. Do it for a single cell...",
                     "imageAlt": "The Check button inside a cell explanation panel in Teach Me mode"
                 },
                 "checkResult": {
                     "title": "See if your mark holds up",
-                    "body": "The solver tells you whether your mark is supported by the clues, contradicted by them, or still unsubstantiated — and shows the reasoning when you want to see it.",
+                    "body": "...or check the whole grid at once. Get an overall spoiler-free check, or let the solver point out which specific cells have logical issues.",
                     "imageAlt": "The Teach Me Check result banner showing the verdict on a marked cell"
                 }
             }

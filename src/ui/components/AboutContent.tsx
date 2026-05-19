@@ -72,6 +72,12 @@ function WalkthroughSubsection({
         frameWidth === FRAME_PHONE ? IMAGE_SIZES_PHONE : IMAGE_SIZES_FULL;
     return (
         <section className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
+                <h3 className="m-0 font-display text-[1.125rem] leading-tight text-accent">
+                    {title}
+                </h3>
+                <p className="m-0 text-[0.9375rem] leading-relaxed">{body}</p>
+            </div>
             <div
                 className={`${frameClass} overflow-hidden rounded-[var(--radius)] border border-border/30 bg-panel shadow-sm`}
             >
@@ -89,12 +95,6 @@ function WalkthroughSubsection({
                     className="-m-[2px] block h-auto w-[calc(100%+4px)] max-w-none"
                     {...(priority ? { priority: true } : {})}
                 />
-            </div>
-            <div className="flex flex-col gap-2">
-                <h3 className="m-0 font-display text-[1.125rem] leading-tight text-accent">
-                    {title}
-                </h3>
-                <p className="m-0 text-[0.9375rem] leading-relaxed">{body}</p>
             </div>
         </section>
     );
@@ -119,7 +119,9 @@ function MajorSection({
                     <p className="m-0 text-[1rem] leading-relaxed">{intro}</p>
                 )}
             </div>
-            {children}
+            <div className="flex flex-col [&>*+*]:mt-10 [&>*+*]:border-t [&>*+*]:border-accent/30 [&>*+*]:pt-10">
+                {children}
+            </div>
         </div>
     );
 }
@@ -127,7 +129,7 @@ function MajorSection({
 function Walkthrough() {
     const t = useTranslations("about.walkthrough");
     return (
-        <div className="mt-4 flex flex-col gap-8">
+        <div className="mt-4 flex flex-col [&>*+*]:mt-10 [&>*+*]:border-t [&>*+*]:border-accent/30 [&>*+*]:pt-10">
             <h2 className="m-0 font-display text-[1.5rem] leading-tight text-accent">
                 {t("heading")}
             </h2>
