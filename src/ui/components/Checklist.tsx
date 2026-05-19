@@ -76,7 +76,6 @@ import { label, matches } from "../keyMap";
 import { AnimatePresence, motion, type Transition } from "motion/react";
 import {
     T_CELEBRATE,
-    T_EXPLAIN_ROW,
     T_FAST,
     T_STANDARD,
     T_WIGGLE,
@@ -829,7 +828,6 @@ export function Checklist() {
     const tableRowEntryTransition = useReducedTransition(
         TABLE_ROW_ENTRY_TRANSITION,
     );
-    const explainRowTransition = useReducedTransition(T_EXPLAIN_ROW);
     const tableCollapseTransition = useReducedTransition(
         TABLE_COLLAPSE_TRANSITION,
     );
@@ -1401,16 +1399,29 @@ export function Checklist() {
                                 const explainTr = showExplain ? (
                                     <motion.tr
                                         key={`explain-${String(entry.id)}`}
-                                        // `exit` (even empty) is what
-                                        // AnimatePresence keys off to keep
-                                        // the row mounted while the inner
-                                        // `AnimatePresence propagate`
-                                        // collapses height + borders. Without
-                                        // it, the parent tr unmounts
-                                        // immediately and the inner exit
-                                        // animation never runs to completion.
-                                        exit={{}}
-                                        transition={explainRowTransition}
+                                        // No exit prop: when popoverCell
+                                        // clears (or moves to a different
+                                        // card), the AnimatePresence above
+                                        // drops this child from its tracked
+                                        // list and the tr unmounts on the
+                                        // next commit. A prior version
+                                        // wrapped an inner motion.div in
+                                        // `AnimatePresence propagate` to
+                                        // run a 150ms height collapse, but
+                                        // the combination of empty
+                                        // `exit={{}}` on the tr + a
+                                        // propagating inner AP sometimes
+                                        // failed to fire the inner exit —
+                                        // the tr stayed mounted at full
+                                        // height after popoverCell had
+                                        // already cleared. The user-
+                                        // visible symptom was "panel won't
+                                        // close" after the tour's close-
+                                        // step click. Letting the tr
+                                        // unmount immediately is simpler
+                                        // and reliable; the 150ms collapse
+                                        // animation is gone, which reads
+                                        // as an instant dismiss.
                                         className="relative z-[var(--z-checklist-explain-row)]"
                                     >
                                         <td
@@ -1433,95 +1444,35 @@ export function Checklist() {
                                                 explainRowNodeRef.current = el;
                                             }}
                                         >
-                                            <AnimatePresence propagate>
-                                                <motion.div
-                                                    key="content"
-                                                    initial={{
-                                                        height: 0,
-                                                        borderTopWidth: 0,
-                                                        borderBottomWidth: 0,
-                                                    }}
-                                                    animate={{
-                                                        // eslint-disable-next-line i18next/no-literal-string -- CSS auto value
-                                                        height: "auto",
-                                                        borderTopWidth: 3,
-                                                        borderBottomWidth: 3,
-                                                    }}
-                                                    exit={{
-                                                        height: 0,
-                                                        borderTopWidth: 0,
-                                                        borderBottomWidth: 0,
-                                                    }}
-                                                    transition={
-                                                        explainRowTransition
-                                                    }
-                                                    style={
-                                                        STYLE_OVERFLOW_HIDDEN
-                                                    }
-                                                    // Only the top and bottom
-                                                    // border widths animate
-                                                    // alongside `height` so
-                                                    // the horizontal borders
-                                                    // collapse in lockstep
-                                                    // with the box (no
-                                                    // residual sliver after
-                                                    // height hits 0). The
-                                                    // right border stays at
-                                                    // its static
-                                                    // `border-r-[3px]`
-                                                    // Tailwind value — the
-                                                    // panel only grows
-                                                    // vertically, so the
-                                                    // right edge has nothing
-                                                    // to interpolate, and
-                                                    // animating
-                                                    // `borderRightWidth`
-                                                    // from 0→3 shifts the
-                                                    // panel's content left
-                                                    // by 3px mid-flight. At
-                                                    // `height: 0` the right
-                                                    // border has no vertical
-                                                    // extent so it stays
-                                                    // invisible. Tailwind
-                                                    // classes are the
-                                                    // rest-state source of
-                                                    // truth (color + 3px
-                                                    // widths); motion's
-                                                    // inline values agree at
-                                                    // the open steady state.
-                                                    // 3px matches the open
-                                                    // cell's accent ring
-                                                    // width so the cell's
-                                                    // vertical outline and
-                                                    // the panel's horizontal
-                                                    // border meet at clean
-                                                    // L-junctions with no
-                                                    // tab sticking out at
-                                                    // either bottom corner.
-                                                    // `contain-inline-size`
-                                                    // stops the inner
-                                                    // sections' min-widths
-                                                    // from propagating up
-                                                    // into <main>'s
-                                                    // min-w-max calculation
-                                                    // and pushing the
-                                                    // checklist past the
-                                                    // SuggestionLogPanel.
-                                                    className="border-t-[3px] border-r-[3px] border-b-[3px] border-accent bg-panel contain-inline-size"
-                                                >
-                                                    {explainContent}
-                                                </motion.div>
-                                            </AnimatePresence>
-                                            {/* Mask the 2px accent border
+                                            <div
+                                                // `contain-inline-size`
+                                                // stops the inner
+                                                // sections' min-widths
+                                                // from propagating up into
+                                                // <main>'s min-w-max
+                                                // calculation and pushing
+                                                // the checklist past the
+                                                // SuggestionLogPanel. The
+                                                // 3px top / bottom / right
+                                                // accent borders match the
+                                                // open cell's ring so the
+                                                // cell's vertical outline
+                                                // meets the panel's
+                                                // horizontal border at
+                                                // clean L-junctions with
+                                                // no tab sticking out at
+                                                // either bottom corner.
+                                                className="border-t-[3px] border-r-[3px] border-b-[3px] border-accent bg-panel contain-inline-size"
+                                            >
+                                                {explainContent}
+                                            </div>
+                                            {/* Mask the 3px accent border
                                                 directly under the open cell
                                                 so the cell flows seamlessly
                                                 into the details box. Lives
-                                                outside the height-animated
-                                                motion.div (which has
-                                                `overflow: hidden` and would
-                                                otherwise clip the cover) so
-                                                it can paint over the
-                                                motion.div's `border-t`. */}
+                                                outside the panel <div>
+                                                above so it can paint over
+                                                the panel's `border-t`. */}
                                             {openCellMetrics !== null && (
                                                 <div
                                                     aria-hidden

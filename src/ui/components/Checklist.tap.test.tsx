@@ -298,6 +298,61 @@ describe("Checklist — touch tap protocol", () => {
     });
 });
 
+describe("Checklist — explanation row mount/unmount", () => {
+    // The cell-explanation row is wired via a plain DOM mount/unmount.
+    // An earlier implementation kept the row mounted through Framer
+    // Motion's `AnimatePresence propagate` so the inner motion.div
+    // could collapse its height to 0 on exit. That combination — empty
+    // `exit={{}}` on the tr + propagating inner AP — sometimes failed
+    // to actually run the inner exit under Framer Motion 12, leaving
+    // the panel mounted at full height after popoverCell had already
+    // cleared. The user-visible symptom was "panel won't close" after
+    // the tour's close-step click. These tests pin the simpler
+    // invariant: when popoverCell clears (or moves to another card),
+    // the previous cell's explanation row is gone from the DOM.
+
+    const explainPanelCount = (): number =>
+        document.querySelectorAll('[data-tour-anchor="cell-explanation-panel"]')
+            .length;
+
+    test("clicking an open cell unmounts the explanation panel", async () => {
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitForChecklist();
+        fireEvent.pointerDown(getCell(0, 0), { pointerType: "mouse" });
+        fireEvent.click(getCell(0, 0));
+        await waitFor(() => expect(explainPanelCount()).toBe(1));
+        fireEvent.pointerDown(getCell(0, 0), { pointerType: "mouse" });
+        fireEvent.click(getCell(0, 0));
+        await waitFor(() => expect(explainPanelCount()).toBe(0));
+    });
+
+    test("switching cells leaves exactly one explanation panel mounted (the new one)", async () => {
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitForChecklist();
+        // Open (0, 0).
+        fireEvent.pointerDown(getCell(0, 0), { pointerType: "mouse" });
+        fireEvent.click(getCell(0, 0));
+        await waitFor(() => expect(isOpen(0, 0)).toBe(true));
+        expect(explainPanelCount()).toBe(1);
+        // Switch to (1, 0) — different row.
+        fireEvent.pointerDown(getCell(1, 0), { pointerType: "mouse" });
+        fireEvent.click(getCell(1, 0));
+        await waitFor(() => expect(isOpen(1, 0)).toBe(true));
+        // The previous row's panel must be gone, not stacked alongside.
+        expect(explainPanelCount()).toBe(1);
+    });
+
+    test("clicking outside the open cell unmounts the explanation panel", async () => {
+        render(<Clue />, { wrapper: TestQueryClientProvider });
+        await waitForChecklist();
+        fireEvent.pointerDown(getCell(0, 0), { pointerType: "mouse" });
+        fireEvent.click(getCell(0, 0));
+        await waitFor(() => expect(explainPanelCount()).toBe(1));
+        fireEvent.click(document.body);
+        await waitFor(() => expect(explainPanelCount()).toBe(0));
+    });
+});
+
 describe("Checklist — touch long-press protocol", () => {
     // Use REAL timers — vi.useFakeTimers (even with `toFake` narrowed
     // to setTimeout/clearTimeout) blocks React's scheduler enough that
