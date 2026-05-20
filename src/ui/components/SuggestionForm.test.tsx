@@ -4,6 +4,7 @@ import {
     applyPassersMove,
     applyRefuterMove,
     applySuggesterMove,
+    findHardRoleConflict,
     type FormState,
     PILL_PASSERS,
     PILL_REFUTER,
@@ -298,5 +299,155 @@ describe("validateFormConsistency", () => {
             }),
         );
         expect(errors.get(PILL_SEEN)).toBe("seenCardNotSuggested");
+    });
+});
+
+// ---------------------------------------------------------------------------
+// findHardRoleConflict — drives the red dropdown-option badges that preview
+// the cross-role hard errors from validateFormConsistency before the user
+// commits the offending pick. Mirrors the three rules (suggesterIsRefuter,
+// suggesterInPassers, refuterInPassers) symmetrically across the three player
+// dropdowns.
+// ---------------------------------------------------------------------------
+
+describe("findHardRoleConflict", () => {
+    test("returns null when the player has no other role on the form", () => {
+        expect(
+            findHardRoleConflict(A, baseForm({ suggester: B }), "suggester"),
+        ).toBe(null);
+    });
+
+    test("does not report the dropdown's own role as a conflict", () => {
+        // A is the current suggester. Reopening the Suggester dropdown to
+        // re-pick A is a re-selection, not a conflict.
+        expect(
+            findHardRoleConflict(A, baseForm({ suggester: A }), "suggester"),
+        ).toBe(null);
+        // Same for refuter inside the Refuter dropdown.
+        expect(
+            findHardRoleConflict(A, baseForm({ refuter: A }), "refuter"),
+        ).toBe(null);
+        // Same for a passer inside the Passers dropdown.
+        expect(
+            findHardRoleConflict(
+                A,
+                baseForm({ nonRefuters: [A, B] }),
+                "passer",
+            ),
+        ).toBe(null);
+    });
+
+    // Suggester dropdown — would-be-suggester conflicts with the current
+    // refuter (suggesterIsRefuter) and with anyone in the passers list
+    // (suggesterInPassers).
+    describe("dropdown = suggester", () => {
+        test("flags 'refuter' when the option is the current refuter", () => {
+            expect(
+                findHardRoleConflict(
+                    A,
+                    baseForm({ refuter: A }),
+                    "suggester",
+                ),
+            ).toBe("refuter");
+        });
+
+        test("does not flag 'refuter' when refuter is NOBODY", () => {
+            expect(
+                findHardRoleConflict(
+                    A,
+                    baseForm({ refuter: NOBODY }),
+                    "suggester",
+                ),
+            ).toBe(null);
+        });
+
+        test("flags 'passer' when the option is in the passers list", () => {
+            expect(
+                findHardRoleConflict(
+                    A,
+                    baseForm({ nonRefuters: [B, A] }),
+                    "suggester",
+                ),
+            ).toBe("passer");
+        });
+
+        test("does not flag 'passer' when passers is NOBODY", () => {
+            expect(
+                findHardRoleConflict(
+                    A,
+                    baseForm({ nonRefuters: NOBODY }),
+                    "suggester",
+                ),
+            ).toBe(null);
+        });
+    });
+
+    // Passers dropdown — would-be-passer conflicts with the current
+    // suggester (suggesterInPassers) and with the current refuter
+    // (refuterInPassers).
+    describe("dropdown = passer", () => {
+        test("flags 'suggester' when the option is the current suggester", () => {
+            expect(
+                findHardRoleConflict(
+                    A,
+                    baseForm({ suggester: A }),
+                    "passer",
+                ),
+            ).toBe("suggester");
+        });
+
+        test("flags 'refuter' when the option is the current refuter", () => {
+            expect(
+                findHardRoleConflict(
+                    A,
+                    baseForm({ refuter: A }),
+                    "passer",
+                ),
+            ).toBe("refuter");
+        });
+    });
+
+    // Refuter dropdown — would-be-refuter conflicts with the current
+    // suggester (suggesterIsRefuter) and with anyone in the passers list
+    // (refuterInPassers).
+    describe("dropdown = refuter", () => {
+        test("flags 'suggester' when the option is the current suggester", () => {
+            expect(
+                findHardRoleConflict(
+                    A,
+                    baseForm({ suggester: A }),
+                    "refuter",
+                ),
+            ).toBe("suggester");
+        });
+
+        test("flags 'passer' when the option is in the passers list", () => {
+            expect(
+                findHardRoleConflict(
+                    A,
+                    baseForm({ nonRefuters: [A, B] }),
+                    "refuter",
+                ),
+            ).toBe("passer");
+        });
+    });
+
+    // Precedence — both a hard role conflict AND a soft Knowledge warning
+    // could fire on the same dropdown row. The dropdown layer renders only
+    // the hard badge (decided in the renderXxxBadge callbacks in
+    // SuggestionForm.tsx); `findHardRoleConflict` itself just answers the
+    // hard question and lets the caller short-circuit before consulting
+    // soft evidence.
+    test("reports the suggester role first when multiple roles match", () => {
+        // A is both the suggester AND in the passers list. From the
+        // Refuter dropdown's perspective, both rules would block A —
+        // reporting the suggester slot is sufficient to render a badge.
+        expect(
+            findHardRoleConflict(
+                A,
+                baseForm({ suggester: A, nonRefuters: [A] }),
+                "refuter",
+            ),
+        ).toBe("suggester");
     });
 });

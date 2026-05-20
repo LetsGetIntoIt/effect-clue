@@ -637,31 +637,66 @@ export const SuggestionForm = forwardRef<
 
     // --- Help-layer badge renderers -----------------------------------
     //
-    // Every player row in Passers / Refuter consults
-    // `help.evidenceByPlayer`. Self gets the same treatment as other
-    // players — the engine doesn't differentiate. The badge tone is
-    // role-aware: in Passers, definiteYes is a warning (the player
-    // can refute, so listing them as passing contradicts what we
-    // know); in Refuter, definiteNo is the warning side. Returns
-    // `null` for any option / card we have nothing to say about — the
-    // underlying dropdown swallows the null cleanly.
+    // Every player row in Suggester / Passers / Refuter first checks
+    // for a cross-role hard conflict — picking that option would land
+    // a `validateFormConsistency` error on the pill, so we badge it
+    // (red, AlertIcon) BEFORE selection. If no hard conflict, fall
+    // back to soft `help.evidenceByPlayer`: in Passers, definiteYes
+    // is a warning (the player can refute, so listing them as passing
+    // contradicts what we know); in Refuter, definiteNo is the
+    // warning side. Returns `null` for any option / card we have
+    // nothing to say about — the underlying dropdown swallows the
+    // null cleanly. Suggester has no soft layer.
+    const renderSuggesterBadge = useCallback(
+        (player: Player): ReactNode => {
+            const conflict = findHardRoleConflict(
+                player,
+                form,
+                // eslint-disable-next-line i18next/no-literal-string -- internal role tag
+                "suggester",
+            );
+            if (conflict !== null) {
+                return renderHardRoleConflictBadge(conflict, t);
+            }
+            return null;
+        },
+        [form, t],
+    );
     const renderPasserBadge = useCallback(
         (player: Player): ReactNode => {
+            const conflict = findHardRoleConflict(
+                player,
+                form,
+                // eslint-disable-next-line i18next/no-literal-string -- internal role tag
+                "passer",
+            );
+            if (conflict !== null) {
+                return renderHardRoleConflictBadge(conflict, t);
+            }
             if (!help.active) return null;
             const evidence = help.evidenceByPlayer.get(player);
             if (evidence === undefined) return null;
             return renderPasserOptionBadge(evidence, t);
         },
-        [help, t],
+        [form, help, t],
     );
     const renderRefuterBadge = useCallback(
         (player: Player): ReactNode => {
+            const conflict = findHardRoleConflict(
+                player,
+                form,
+                // eslint-disable-next-line i18next/no-literal-string -- internal role tag
+                "refuter",
+            );
+            if (conflict !== null) {
+                return renderHardRoleConflictBadge(conflict, t);
+            }
             if (!help.active) return null;
             const evidence = help.evidenceByPlayer.get(player);
             if (evidence === undefined) return null;
             return renderRefuterOptionBadge(evidence, t);
         },
-        [help, t],
+        [form, help, t],
     );
     // Shown-card option badges render whenever we have advice for the
     // current refuter — self gets the full tier-bearing badge, other
@@ -704,6 +739,7 @@ export const SuggestionForm = forwardRef<
                     onCommit={commitSuggester}
                     nobodyLabel={null}
                     nobodyValue={null}
+                    renderOptionBadge={renderSuggesterBadge}
                 />
             ),
         };
@@ -850,6 +886,7 @@ export const SuggestionForm = forwardRef<
         onClearRefuter,
         onClearSeenCard,
         pillClearable,
+        renderSuggesterBadge,
         renderPasserBadge,
         renderRefuterBadge,
         renderShownCardBadge,
@@ -1663,9 +1700,84 @@ const BADGE_WARNING_CLASS =
     "border border-warning-border bg-warning-bg px-1.5 py-0.5 " +
     "text-[0.85em] text-warning";
 
+const BADGE_ERROR_CLASS =
+    "ml-2 inline-flex items-center gap-1 rounded-[var(--radius)] " +
+    "border border-danger-border bg-danger-bg px-1.5 py-0.5 " +
+    "text-[0.85em] text-danger";
+
 const BADGE_MUTED_CLASS =
     "ml-2 inline-flex items-center rounded-[var(--radius)] bg-panel " +
     "px-1.5 py-0.5 text-[0.85em] text-muted";
+
+/**
+ * The role a player currently occupies in `form`. Used by
+ * `findHardRoleConflict` to label dropdown options that would create
+ * a cross-role hard error if selected (e.g. picking the current
+ * Refuter as the Suggester triggers `suggesterIsRefuter`).
+ */
+export type FormPlayerRole = "suggester" | "refuter" | "passer";
+
+/**
+ * The dropdown the option lives in. The option's "own" role is never
+ * reported back — selecting the current refuter inside the Refuter
+ * dropdown is a re-selection, not a conflict.
+ */
+export type DropdownRole = FormPlayerRole;
+
+/**
+ * If `player` already occupies one of the OTHER cross-role slots in
+ * `form`, return which one. Otherwise null. Pure; exported for tests.
+ *
+ * The three rules this previews are the cross-role hard conflicts
+ * from `validateFormConsistency`: `suggesterIsRefuter`,
+ * `suggesterInPassers`, and `refuterInPassers`. Per `AGENTS.md`'s
+ * vocabulary rule we surface only the OFFENDING role on the badge —
+ * what the badge tells the user is "this player already plays role X
+ * elsewhere on this form".
+ */
+/* eslint-disable i18next/no-literal-string -- role tags are internal enum values, not user-facing copy */
+export const findHardRoleConflict = (
+    player: Player,
+    form: FormState,
+    dropdown: DropdownRole,
+): FormPlayerRole | null => {
+    if (dropdown !== "suggester" && form.suggester === player) {
+        return "suggester";
+    }
+    if (
+        dropdown !== "refuter" &&
+        form.refuter !== null &&
+        !isNobody(form.refuter) &&
+        form.refuter === player
+    ) {
+        return "refuter";
+    }
+    if (
+        dropdown !== "passer" &&
+        Array.isArray(form.nonRefuters) &&
+        form.nonRefuters.some(p => p === player)
+    ) {
+        return "passer";
+    }
+    return null;
+};
+/* eslint-enable i18next/no-literal-string */
+
+const HARD_CONFLICT_BADGE_KEY: Record<FormPlayerRole, string> = {
+    suggester: "pillBadgeRoleSuggester",
+    refuter: "pillBadgeRoleRefuter",
+    passer: "pillBadgeRolePasser",
+};
+
+const renderHardRoleConflictBadge = (
+    role: FormPlayerRole,
+    t: TFnAny,
+): ReactNode => (
+    <span className={BADGE_ERROR_CLASS} role="status">
+        <AlertIcon className="h-[0.95em] w-[0.95em]" />
+        {t(HARD_CONFLICT_BADGE_KEY[role])}
+    </span>
+);
 
 // Tier label key map — mirrors the one in RefuteAdvicePanel so the
 // dropdown badges read in the same vocabulary as the advice panel.
