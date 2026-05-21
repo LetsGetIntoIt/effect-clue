@@ -638,15 +638,104 @@ export const SuggestionForm = forwardRef<
     // --- Help-layer badge renderers -----------------------------------
     //
     // Every player row in Suggester / Passers / Refuter first checks
-    // for a cross-role hard conflict — picking that option would land
-    // a `validateFormConsistency` error on the pill, so we badge it
-    // (red, AlertIcon) BEFORE selection. If no hard conflict, fall
-    // back to soft `help.evidenceByPlayer`: in Passers, definiteYes
-    // is a warning (the player can refute, so listing them as passing
-    // contradicts what we know); in Refuter, definiteNo is the
-    // warning side. Returns `null` for any option / card we have
-    // nothing to say about — the underlying dropdown swallows the
-    // null cleanly. Suggester has no soft layer.
+    // for a cross-role hard conflict — picking that option WOULD land
+    // a `validateFormConsistency` error on the pill, so we surface the
+    // role label BEFORE selection. Without a conflict, fall back to
+    // soft `help.evidenceByPlayer` ("Can refute" / "Cannot refute").
+    //
+    // The CHIP STYLE is governed by `BadgeElevation`: every option is
+    // muted until the pill itself is in the matching error / warning
+    // state due to THIS option being committed. Then the chip elevates
+    // to error / warning, in lockstep with the pill. Precedence
+    // matches the pill: error > warning > muted.
+    //
+    // Returns `null` when there's no informational text to show.
+
+    /* eslint-disable i18next/no-literal-string -- internal pill-error-code and elevation-tag values, not user-facing copy */
+    const elevationForSuggester = useCallback(
+        (player: Player): BadgeElevation => {
+            const code = errors.get(PILL_SUGGESTER);
+            if (
+                (code === "suggesterIsRefuter" ||
+                    code === "suggesterInPassers") &&
+                player === form.suggester
+            ) {
+                return "error";
+            }
+            return "muted";
+        },
+        [errors, form.suggester],
+    );
+
+    const elevationForPasser = useCallback(
+        (player: Player): BadgeElevation => {
+            const code = errors.get(PILL_PASSERS);
+            if (code === "suggesterInPassers" && player === form.suggester) {
+                return "error";
+            }
+            if (code === "refuterInPassers" && player === form.refuter) {
+                return "error";
+            }
+            const w = warnings.get(PILL_PASSERS);
+            if (
+                w !== undefined &&
+                w.kind === "passersIncludePlayersWhoCanRefute" &&
+                w.players.some(p => p === player)
+            ) {
+                return "warning";
+            }
+            return "muted";
+        },
+        [errors, warnings, form.suggester, form.refuter],
+    );
+
+    const elevationForRefuter = useCallback(
+        (player: Player): BadgeElevation => {
+            const code = errors.get(PILL_REFUTER);
+            if (
+                (code === "suggesterIsRefuter" ||
+                    code === "refuterInPassers") &&
+                player === form.refuter
+            ) {
+                return "error";
+            }
+            const w = warnings.get(PILL_REFUTER);
+            if (
+                w !== undefined &&
+                w.kind === "refuterCannotRefute" &&
+                player === form.refuter
+            ) {
+                return "warning";
+            }
+            return "muted";
+        },
+        [errors, warnings, form.refuter],
+    );
+
+    const elevationForShownCard = useCallback(
+        (card: Card): BadgeElevation => {
+            const code = errors.get(PILL_SEEN);
+            if (
+                (code === "seenCardNotSuggested" ||
+                    code === "seenCardWithoutRefuter") &&
+                card === form.seenCard
+            ) {
+                return "error";
+            }
+            const w = warnings.get(PILL_SEEN);
+            if (
+                w !== undefined &&
+                w.kind === "shownCardNotInRefuterHand" &&
+                card === form.seenCard
+            ) {
+                return "warning";
+            }
+            return "muted";
+        },
+        [errors, warnings, form.seenCard],
+    );
+    /* eslint-enable i18next/no-literal-string */
+
     const renderSuggesterBadge = useCallback(
         (player: Player): ReactNode => {
             const conflict = findHardRoleConflict(
@@ -656,14 +745,19 @@ export const SuggestionForm = forwardRef<
                 "suggester",
             );
             if (conflict !== null) {
-                return renderHardRoleConflictBadge(conflict, t);
+                return renderHardRoleConflictBadge(
+                    conflict,
+                    t,
+                    elevationForSuggester(player),
+                );
             }
             return null;
         },
-        [form, t],
+        [form, t, elevationForSuggester],
     );
     const renderPasserBadge = useCallback(
         (player: Player): ReactNode => {
+            const elevation = elevationForPasser(player);
             const conflict = findHardRoleConflict(
                 player,
                 form,
@@ -671,17 +765,18 @@ export const SuggestionForm = forwardRef<
                 "passer",
             );
             if (conflict !== null) {
-                return renderHardRoleConflictBadge(conflict, t);
+                return renderHardRoleConflictBadge(conflict, t, elevation);
             }
             if (!help.active) return null;
             const evidence = help.evidenceByPlayer.get(player);
             if (evidence === undefined) return null;
-            return renderPasserOptionBadge(evidence, t);
+            return renderPasserOptionBadge(evidence, t, elevation);
         },
-        [form, help, t],
+        [form, help, t, elevationForPasser],
     );
     const renderRefuterBadge = useCallback(
         (player: Player): ReactNode => {
+            const elevation = elevationForRefuter(player);
             const conflict = findHardRoleConflict(
                 player,
                 form,
@@ -689,14 +784,14 @@ export const SuggestionForm = forwardRef<
                 "refuter",
             );
             if (conflict !== null) {
-                return renderHardRoleConflictBadge(conflict, t);
+                return renderHardRoleConflictBadge(conflict, t, elevation);
             }
             if (!help.active) return null;
             const evidence = help.evidenceByPlayer.get(player);
             if (evidence === undefined) return null;
-            return renderRefuterOptionBadge(evidence, t);
+            return renderRefuterOptionBadge(evidence, t, elevation);
         },
-        [form, help, t],
+        [form, help, t, elevationForRefuter],
     );
     // Shown-card option badges render whenever we have advice for the
     // current refuter — self gets the full tier-bearing badge, other
@@ -708,9 +803,9 @@ export const SuggestionForm = forwardRef<
             const badge = help.shownCardAdvice.get(card);
             return badge === undefined || badge === null
                 ? null
-                : renderShownCardBadgeNode(badge, t);
+                : renderShownCardBadgeNode(badge, t, elevationForShownCard(card));
         },
-        [help, t],
+        [help, t, elevationForShownCard],
     );
 
     // --- Slot configs --------------------------------------------------
@@ -1705,9 +1800,23 @@ const BADGE_ERROR_CLASS =
     "border border-danger-border bg-danger-bg px-1.5 py-0.5 " +
     "text-[0.85em] text-danger";
 
+// Muted needs a visible background on `bg-panel` popovers — `bg-control`
+// reads as a deliberate, slight lift on the cream popover surface, and
+// the aged-paper border parallels the warning / error badge shape.
 const BADGE_MUTED_CLASS =
-    "ml-2 inline-flex items-center rounded-[var(--radius)] bg-panel " +
-    "px-1.5 py-0.5 text-[0.85em] text-muted";
+    "ml-2 inline-flex items-center rounded-[var(--radius)] " +
+    "border border-border bg-control px-1.5 py-0.5 " +
+    "text-[0.85em] text-muted";
+
+/**
+ * Visual elevation for an option-row badge. Dropdown option badges
+ * stay informational (`muted`) until the pill itself surfaces an error
+ * or warning whose CAUSE is this specific option — then the badge
+ * elevates to match the pill's tone. The text label is identical
+ * across all three elevations; only the chip style + presence of
+ * `AlertIcon` changes.
+ */
+type BadgeElevation = "error" | "warning" | "muted";
 
 /**
  * The role a player currently occupies in `form`. Used by
@@ -1769,15 +1878,33 @@ const HARD_CONFLICT_BADGE_KEY: Record<FormPlayerRole, string> = {
     passer: "pillBadgeRolePasser",
 };
 
+const renderElevatedBadge = (
+    elevation: BadgeElevation,
+    label: string,
+): ReactNode => {
+    if (elevation === "muted") {
+        return <span className={BADGE_MUTED_CLASS}>{label}</span>;
+    }
+    return (
+        <span
+            className={
+                elevation === "error"
+                    ? BADGE_ERROR_CLASS
+                    : BADGE_WARNING_CLASS
+            }
+            role="status"
+        >
+            <AlertIcon className="h-[0.95em] w-[0.95em]" />
+            {label}
+        </span>
+    );
+};
+
 const renderHardRoleConflictBadge = (
     role: FormPlayerRole,
     t: TFnAny,
-): ReactNode => (
-    <span className={BADGE_ERROR_CLASS} role="status">
-        <AlertIcon className="h-[0.95em] w-[0.95em]" />
-        {t(HARD_CONFLICT_BADGE_KEY[role])}
-    </span>
-);
+    elevation: BadgeElevation,
+): ReactNode => renderElevatedBadge(elevation, t(HARD_CONFLICT_BADGE_KEY[role]));
 
 // Tier label key map — mirrors the one in RefuteAdvicePanel so the
 // dropdown badges read in the same vocabulary as the advice panel.
@@ -1791,21 +1918,13 @@ const TIER_LABEL_KEY: Record<RefuteAdviceTier, string> = {
 const renderPasserOptionBadge = (
     evidence: RefuteEvidence,
     t: TFnAny,
+    elevation: BadgeElevation,
 ): ReactNode => {
     if (evidence === "definiteYes") {
-        return (
-            <span className={BADGE_WARNING_CLASS} role="status">
-                <AlertIcon className="h-[0.95em] w-[0.95em]" />
-                {t("pillBadgeCanRefute")}
-            </span>
-        );
+        return renderElevatedBadge(elevation, t("pillBadgeCanRefute"));
     }
     if (evidence === "definiteNo") {
-        return (
-            <span className={BADGE_MUTED_CLASS}>
-                {t("pillBadgeCannotRefute")}
-            </span>
-        );
+        return renderElevatedBadge(elevation, t("pillBadgeCannotRefute"));
     }
     return null;
 };
@@ -1813,21 +1932,13 @@ const renderPasserOptionBadge = (
 const renderRefuterOptionBadge = (
     evidence: RefuteEvidence,
     t: TFnAny,
+    elevation: BadgeElevation,
 ): ReactNode => {
     if (evidence === "definiteYes") {
-        return (
-            <span className={BADGE_MUTED_CLASS}>
-                {t("pillBadgeCanRefute")}
-            </span>
-        );
+        return renderElevatedBadge(elevation, t("pillBadgeCanRefute"));
     }
     if (evidence === "definiteNo") {
-        return (
-            <span className={BADGE_WARNING_CLASS} role="status">
-                <AlertIcon className="h-[0.95em] w-[0.95em]" />
-                {t("pillBadgeCannotRefute")}
-            </span>
-        );
+        return renderElevatedBadge(elevation, t("pillBadgeCannotRefute"));
     }
     return null;
 };
@@ -1835,17 +1946,14 @@ const renderRefuterOptionBadge = (
 const renderShownCardBadgeNode = (
     badge: ShownCardBadge,
     t: TFnAny,
+    elevation: BadgeElevation,
 ): ReactNode => {
     if (badge === null) return null;
     if (badge.kind === "doNotHave") {
-        return (
-            <span className={BADGE_WARNING_CLASS} role="status">
-                <AlertIcon className="h-[0.95em] w-[0.95em]" />
-                {t("pillBadgeDoNotHave")}
-            </span>
-        );
+        return renderElevatedBadge(elevation, t("pillBadgeDoNotHave"));
     }
-    // Candidate: tier label + optional Forced / Recommended.
+    // Candidate: tier label + optional Forced / Recommended. These chips
+    // stay muted regardless of pill state — they're advice, not warnings.
     return (
         <span className="ml-2 inline-flex items-center gap-1">
             <span className={BADGE_MUTED_CLASS}>
