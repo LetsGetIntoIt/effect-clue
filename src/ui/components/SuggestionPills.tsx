@@ -424,7 +424,13 @@ export function PillPopover({
                             e.preventDefault();
                         }
                     }}
-                    className="z-[var(--z-popover)] min-w-[200px] rounded-[var(--radius)] border border-border bg-panel p-1 text-[1rem] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
+                    // `max-w-[calc(100vw-1rem)]` caps the popover at
+                    // viewport width so long warning-banner copy or
+                    // long option rows can't push it past the
+                    // visible edge. The banner inside has default
+                    // `white-space: normal`, so capping the
+                    // container is enough to make it wrap.
+                    className="z-[var(--z-popover)] min-w-[200px] max-w-[calc(100vw-1rem)] rounded-[var(--radius)] border border-border bg-panel p-1 text-[1rem] shadow-[0_6px_16px_rgba(0,0,0,0.18)]"
                 >
                     {disabled ? (
                         <div

@@ -290,19 +290,22 @@ export const SuggestionForm = forwardRef<
     // button should get focus." See the effect below.
     const [openPillId, setOpenPillId] = useState<OpenTarget>(null);
     const pillFormRef = useRef<PillFormHandle>(null);
-    // Tracks whether the user has addressed the Refuter pill — opened
-    // it (whether or not they selected) or attempted submit. Drives
-    // the soft warning `someoneCanRefuteButNobodyMarked` for the
-    // blank case so a pristine new form doesn't fire the instant
-    // we know a non-suggester has a card. Edit mode treats the
-    // stored suggestion's refuter as already affirmed.
+    // Tracks whether the user has addressed the Refuter pill — by
+    // closing it after opening it (whether they committed a value,
+    // picked Nobody, or closed without selecting) or by clicking
+    // Add. Drives the soft warning `someoneCanRefuteButNobodyMarked`
+    // for the blank case so a pristine new form doesn't fire the
+    // instant we know a non-suggester has a card, and merely
+    // *opening* the pill (without giving the user a beat to look
+    // at it) doesn't fire it either. Edit mode treats the stored
+    // suggestion's refuter as already affirmed.
     const [refuterTouched, setRefuterTouched] = useState<boolean>(
         suggestion !== undefined,
     );
     // Same shape as `refuterTouched`, for the Seen-card pill. Drives
-    // `selfSuggesterMissingSeenCard` — the warning that fires when
-    // self is the suggester and was refuted, but no shown card has
-    // been recorded.
+    // `selfSuggesterMissingSeenCard` / `selfRefuterMissingSeenCard`
+    // — the warnings that fire when self was involved in the
+    // refutation but no shown card has been recorded.
     const [seenCardTouched, setSeenCardTouched] = useState<boolean>(
         suggestion !== undefined,
     );
@@ -314,16 +317,29 @@ export const SuggestionForm = forwardRef<
         [],
     );
 
-    // Flip `refuterTouched` / `seenCardTouched` true the moment the
-    // corresponding pill becomes the open one — whether via user
-    // click, keyboard nav, or auto-advance after a previous pill
-    // commit. We watch `openPillId` instead of intercepting
-    // `onOpenPillIdChange` so internal `setOpenPillId(...)` calls
-    // (from `commitAndAdvance`) also count as "the pill was
-    // addressed".
+    // Flip `refuterTouched` / `seenCardTouched` true when the user
+    // is *done* with the pill — that is, when `openPillId`
+    // transitions FROM that pill to anything else (closed, or a
+    // different pill open). All of these count as "the user is
+    // done": a value commit (commitAndAdvance moves openPillId to
+    // the next pill), picking Nobody (same), closing without
+    // selecting (openPillId → null), or clicking another pill
+    // (Radix closes the current one). Firing on close (rather
+    // than on open) gives the user a beat to look at the dropdown
+    // before the warning surfaces.
+    //
+    // `doSubmit` flips both flags true on Add click independently
+    // of this effect — that path doesn't need a pill close.
+    const prevOpenPillIdRef = useRef<OpenTarget>(openPillId);
     useEffect(() => {
-        if (openPillId === PILL_REFUTER) setRefuterTouched(true);
-        if (openPillId === PILL_SEEN) setSeenCardTouched(true);
+        const prev = prevOpenPillIdRef.current;
+        prevOpenPillIdRef.current = openPillId;
+        if (prev === PILL_REFUTER && openPillId !== PILL_REFUTER) {
+            setRefuterTouched(true);
+        }
+        if (prev === PILL_SEEN && openPillId !== PILL_SEEN) {
+            setSeenCardTouched(true);
+        }
     }, [openPillId]);
 
     /**
