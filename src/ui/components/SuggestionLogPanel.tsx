@@ -1418,6 +1418,11 @@ function PriorSuggestionItem({
             selfPlayerId: state.selfPlayerId,
             solverMode: state.solverMode ?? SOLVER_MODE_SOLVE,
             categoryCount: setup.categories.length,
+            players: setup.players,
+            // Stored suggestions are always treated as "user
+            // affirmed" — the previous submit already locked the
+            // refuter value (whether a player, Nobody, or blank).
+            refuterTouched: true,
         });
     }, [
         isEditing,

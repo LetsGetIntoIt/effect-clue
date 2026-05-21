@@ -290,6 +290,15 @@ export const SuggestionForm = forwardRef<
     // button should get focus." See the effect below.
     const [openPillId, setOpenPillId] = useState<OpenTarget>(null);
     const pillFormRef = useRef<PillFormHandle>(null);
+    // Tracks whether the user has addressed the Refuter pill — opened
+    // it (whether or not they selected) or attempted submit. Drives
+    // the soft warning `someoneCanRefuteButNobodyMarked` for the
+    // blank case so a pristine new form doesn't fire the instant
+    // we know a non-suggester has a card. Edit mode treats the
+    // stored suggestion's refuter as already affirmed.
+    const [refuterTouched, setRefuterTouched] = useState<boolean>(
+        suggestion !== undefined,
+    );
     // Narrow `setOpenPillId` to `(next) => void` so PillForm's prop
     // type — which expects a value-only setter, not React's
     // `Dispatch<SetStateAction<T>>` overload — accepts it directly.
@@ -297,6 +306,16 @@ export const SuggestionForm = forwardRef<
         (next: OpenTarget) => setOpenPillId(next),
         [],
     );
+
+    // Flip `refuterTouched` true the moment the refuter pill becomes
+    // the open one — whether via user click, keyboard nav, or
+    // auto-advance after a previous pill commit. We watch
+    // `openPillId` instead of intercepting `onOpenPillIdChange` so
+    // internal `setOpenPillId(PILL_REFUTER)` calls (from
+    // `commitAndAdvance`) also count as "the pill was addressed".
+    useEffect(() => {
+        if (openPillId === PILL_REFUTER) setRefuterTouched(true);
+    }, [openPillId]);
 
     /**
      * Commit a new form AND move focus to the next enabled pill.
@@ -411,8 +430,10 @@ export const SuggestionForm = forwardRef<
                 selfPlayerId: clueCtx?.state.selfPlayerId ?? null,
                 solverMode: clueCtx?.state.solverMode ?? SOLVER_MODE_SOLVE,
                 categoryCount: setup.categories.length,
+                players: setup.players,
+                refuterTouched,
             }),
-        [form, clueCtx, setup.categories.length],
+        [form, clueCtx, setup.categories.length, setup.players, refuterTouched],
     );
 
     // --- Submit --------------------------------------------------------
@@ -498,6 +519,26 @@ export const SuggestionForm = forwardRef<
                         : t("pillWarningShownCardNotInRefuterHand", {
                               player: String(warning.player),
                           });
+                case "someoneCanRefuteButNobodyMarked": {
+                    if (warning.players.length === 1) {
+                        const player = warning.players[0];
+                        if (player === undefined) return "";
+                        return player === selfPlayerId
+                            ? t("pillWarningSelfCanRefuteRefuterBlank")
+                            : t(
+                                  "pillWarningPlayerCanRefuteRefuterBlank",
+                                  { player: String(player) },
+                              );
+                    }
+                    const labels = warning.players.map(p =>
+                        p === selfPlayerId
+                            ? t("playerLabelSelfSubject")
+                            : String(p),
+                    );
+                    return t("pillWarningPlayersCanRefuteRefuterBlank", {
+                        players: formatFieldList(labels),
+                    });
+                }
             }
         },
         [t, selfPlayerId],
@@ -547,6 +588,13 @@ export const SuggestionForm = forwardRef<
     ]);
 
     const doSubmit = useCallback(() => {
+        // Submit always affirms the refuter — even if the click is
+        // ultimately blocked by hard errors below, the user has
+        // chosen to commit, so a blank refuter is no longer
+        // "pristine." This makes the new
+        // `someoneCanRefuteButNobodyMarked` warning visible on the
+        // next render so the user sees what they're about to log.
+        setRefuterTouched(true);
         if (!canSubmit || draft === null) return;
         // Stamp the draft with the right loggedAt before handing off:
         // edit-mode preserves the original (so re-ordering doesn't
@@ -902,6 +950,9 @@ export const SuggestionForm = forwardRef<
             ),
         };
 
+        const refuterNobodyIsWarning =
+            warnings.get(PILL_REFUTER)?.kind ===
+            "someoneCanRefuteButNobodyMarked";
         const refuterSlot: PillSlot = {
             id: PILL_REFUTER,
             label: t("pillRefuter"),
@@ -926,6 +977,10 @@ export const SuggestionForm = forwardRef<
                     nobodyLabel={t("popoverNobodyRefuted")}
                     nobodyValue={NOBODY}
                     renderOptionBadge={renderRefuterBadge}
+                    nobodyTone={
+                        // eslint-disable-next-line i18next/no-literal-string -- internal tone discriminator
+                        refuterNobodyIsWarning ? "warning" : "neutral"
+                    }
                 />
             ),
         };
@@ -1333,6 +1388,10 @@ export type SoftWarning =
     | {
           readonly kind: "shownCardNotInRefuterHand";
           readonly player: Player;
+      }
+    | {
+          readonly kind: "someoneCanRefuteButNobodyMarked";
+          readonly players: ReadonlyArray<Player>;
       };
 
 /**
@@ -1347,6 +1406,22 @@ export interface SoftValidationContext {
     readonly selfPlayerId: Player | null;
     readonly solverMode: SolverMode;
     readonly categoryCount: number;
+    /**
+     * Every player at the table. Needed by
+     * `someoneCanRefuteButNobodyMarked` to scan non-suggester
+     * players who aren't already on the form. The form's own pill
+     * slots (passers + refuter) only reflect a subset.
+     */
+    readonly players: ReadonlyArray<Player>;
+    /**
+     * Whether the user has addressed the Refuter pill — either opened
+     * it (and possibly closed without selecting) or attempted submit.
+     * Gates `someoneCanRefuteButNobodyMarked` for the blank-refuter
+     * case so a pristine new form doesn't warn the instant a single
+     * Y-cell is in play. Defaults to `true` for stored suggestions
+     * (the previous submission already affirmed the blank).
+     */
+    readonly refuterTouched: boolean;
 }
 
 /**
@@ -1432,6 +1507,45 @@ export const validateFormSoft = (
         });
     }
 
+    // "Someone can refute but the refuter is Nobody / blank."
+    //
+    // Real Clue: every non-suggester gets asked, in order, until
+    // someone refutes. So if ANY non-suggester has a Y for a
+    // suggested card, the round resolved with a real refuter. A
+    // logged refuter of NOBODY (or a left-blank refuter the user has
+    // already addressed) contradicts that.
+    //
+    // We exclude players already in the passers list — those surface
+    // under `passersIncludePlayersWhoCanRefute` instead, and
+    // double-warning the same name in two pill warnings adds noise
+    // without value. The asymmetric counterpart (passer omitted from
+    // the list) is intentionally NOT validated here: a player who
+    // can't refute may simply never be reached around the table.
+    const refuterAffirmedBlank =
+        isNobody(form.refuter) ||
+        (form.refuter === null && ctx.refuterTouched);
+    if (refuterAffirmedBlank && form.suggester !== null) {
+        const passerSet = new Set(passers);
+        const canRefuteOthers: Array<Player> = [];
+        for (const p of ctx.players) {
+            if (p === form.suggester) continue;
+            if (passerSet.has(p)) continue;
+            const evidence = computeRefuteEvidence({
+                knowledge,
+                player: p,
+                cards: filledCards,
+                complete,
+            });
+            if (evidence === "definiteYes") canRefuteOthers.push(p);
+        }
+        if (canRefuteOthers.length > 0) {
+            warnings.set(PILL_REFUTER, {
+                kind: "someoneCanRefuteButNobodyMarked",
+                players: canRefuteOthers,
+            });
+        }
+    }
+
     return warnings;
 };
 
@@ -1493,6 +1607,25 @@ export const briefWarningMessage = (
                 : t("priorWarningShownCardNotInRefuterHand", {
                       player: String(warning.player),
                   });
+        case "someoneCanRefuteButNobodyMarked": {
+            if (warning.players.length === 1) {
+                const player = warning.players[0];
+                if (player === undefined) return "";
+                return player === selfPlayerId
+                    ? t("priorWarningSelfCanRefuteRefuterBlank")
+                    : t("priorWarningPlayerCanRefuteRefuterBlank", {
+                          player: String(player),
+                      });
+            }
+            const labels = warning.players.map(p =>
+                p === selfPlayerId
+                    ? t("playerLabelSelfSubject")
+                    : String(p),
+            );
+            return t("priorWarningPlayersCanRefuteRefuterBlank", {
+                players: formatFieldList(labels),
+            });
+        }
     }
 };
 

@@ -484,6 +484,7 @@ export function SingleSelectList<T>({
     nobodyLabel,
     nobodyValue,
     renderOptionBadge,
+    nobodyTone,
 }: {
     readonly options: ReadonlyArray<Option<T>>;
     readonly selected: T | null;
@@ -497,6 +498,14 @@ export function SingleSelectList<T>({
      * Receives the option's value so callers can branch on it.
      */
     readonly renderOptionBadge?: (value: T) => ReactNode;
+    /**
+     * Tone for the "Nobody" row. Defaults to `"neutral"` (muted
+     * separator). `"warning"` flips it to the warning palette
+     * (amber bg + AlertIcon) when picking Nobody would contradict
+     * what we know — e.g. the Refuter pill when a non-suggester
+     * is known to be able to refute.
+     */
+    readonly nobodyTone?: "neutral" | "warning";
 }): React.ReactElement {
     const rows = useMemo<
         ReadonlyArray<
@@ -602,6 +611,8 @@ export function SingleSelectList<T>({
                         ? row.option.value === selected
                         : selected === null && nobodyValue !== null;
                 const highlighted = i === focusedIdx;
+                const nobodyIsWarning =
+                    row.kind === "nobody" && nobodyTone === "warning";
                 return (
                     <li
                         key={i}
@@ -611,8 +622,11 @@ export function SingleSelectList<T>({
                         className={
                             "tap-target text-tap flex cursor-pointer items-center gap-1.5 rounded" +
                             (highlighted ? " bg-accent/15" : "") +
-                            (row.kind === "nobody"
+                            (row.kind === "nobody" && !nobodyIsWarning
                                 ? " border-b border-border/60 text-muted"
+                                : "") +
+                            (nobodyIsWarning
+                                ? " border-b border-warning-border bg-warning-bg text-warning"
                                 : "")
                         }
                         onMouseEnter={() => setFocusedIdx(i)}
@@ -621,6 +635,9 @@ export function SingleSelectList<T>({
                             commitAt(i);
                         }}
                     >
+                        {nobodyIsWarning && (
+                            <AlertIcon className="h-[1.1em] w-[1.1em]" />
+                        )}
                         <span className="flex-1">
                             {row.kind === "option"
                                 ? row.option.label

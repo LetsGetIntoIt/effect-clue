@@ -82,6 +82,8 @@ const warnsFor = (
         selfPlayerId,
         solverMode: "solve",
         categoryCount: setup.categories.length,
+        players: setup.players,
+        refuterTouched: true,
     });
 
 // Use a permissive `t` mock matching the project pattern: returns a
@@ -166,6 +168,8 @@ describe("validateFormSoft on a stored DraftSuggestion via formStateFromDraft", 
             selfPlayerId: null,
             solverMode: "check",
             categoryCount: setup.categories.length,
+            players: setup.players,
+            refuterTouched: true,
         });
         expect(w.size).toBe(0);
     });
@@ -237,6 +241,69 @@ describe("briefWarningMessage — short-form copy for prior-log badge", () => {
         expect(briefWarningMessage(w, tMock, ANISHA)).toBe(
             "priorWarningShownCardNotInHand",
         );
+    });
+
+    test("someoneCanRefuteButNobodyMarked single (other)", () => {
+        const w: SoftWarning = {
+            kind: "someoneCanRefuteButNobodyMarked",
+            players: [BOB],
+        };
+        expect(briefWarningMessage(w, tMock, null)).toContain(
+            "priorWarningPlayerCanRefuteRefuterBlank",
+        );
+        expect(briefWarningMessage(w, tMock, null)).toContain("Bob");
+    });
+
+    test("someoneCanRefuteButNobodyMarked single (self)", () => {
+        const w: SoftWarning = {
+            kind: "someoneCanRefuteButNobodyMarked",
+            players: [ANISHA],
+        };
+        expect(briefWarningMessage(w, tMock, ANISHA)).toBe(
+            "priorWarningSelfCanRefuteRefuterBlank",
+        );
+    });
+
+    test("someoneCanRefuteButNobodyMarked multiple", () => {
+        const w: SoftWarning = {
+            kind: "someoneCanRefuteButNobodyMarked",
+            players: [BOB, CHO],
+        };
+        expect(briefWarningMessage(w, tMock, null)).toContain(
+            "priorWarningPlayersCanRefuteRefuterBlank",
+        );
+    });
+});
+
+describe("prior-log: someoneCanRefuteButNobodyMarked on stored suggestions", () => {
+    test("fires when a stored suggestion has refuter=NOBODY and Knowledge shows another player has a card", () => {
+        const k = knowledgeWith([[BOB, KNIFE, "Y"]]);
+        const s = draft({
+            suggester: ANISHA,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [],
+            // Stored explicit NOBODY: encoded as refuter=undefined +
+            // empty nonRefuters; the prior-log reads this via the
+            // refutationLine helper. For the validator, NOBODY and
+            // undefined both trip the "blank or nobody" gate when
+            // refuterTouched=true.
+        });
+        const w = warnsFor(s, k);
+        expect(w.get(PILL_REFUTER)).toEqual({
+            kind: "someoneCanRefuteButNobodyMarked",
+            players: [BOB],
+        });
+    });
+
+    test("excludes a can-refute player who is also in the passers list", () => {
+        const k = knowledgeWith([[BOB, KNIFE, "Y"]]);
+        const s = draft({
+            suggester: ANISHA,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [BOB],
+        });
+        const w = warnsFor(s, k);
+        expect(w.has(PILL_REFUTER)).toBe(false);
     });
 });
 

@@ -52,11 +52,20 @@ const withCells = (
 const ctxFor = (knowledge: Knowledge | undefined, opts: {
     readonly selfPlayerId?: Player | null;
     readonly solverMode?: SolverMode;
+    readonly refuterTouched?: boolean;
+    readonly players?: ReadonlyArray<Player>;
 } = {}): SoftValidationContext => ({
     knowledge,
     selfPlayerId: "selfPlayerId" in opts ? opts.selfPlayerId ?? null : A,
     solverMode: opts.solverMode ?? "solve",
     categoryCount: setup.categories.length,
+    players: opts.players ?? setup.players,
+    // Default to `true` so existing tests (which were written
+    // before this field existed) keep producing the same warnings
+    // they did. The new
+    // `someoneCanRefuteButNobodyMarked` behavior has its own
+    // describe block that exercises both touched values explicitly.
+    refuterTouched: opts.refuterTouched ?? true,
 });
 
 describe("validateFormSoft — visibility gates", () => {
@@ -481,6 +490,182 @@ describe("validateFormSoft — multiple warnings combine", () => {
             kind: "refuterCannotRefute",
             player: A,
         });
+    });
+});
+
+describe("validateFormSoft — someoneCanRefuteButNobodyMarked", () => {
+    test("fires when refuter is NOBODY and a non-suggester has a Y for a card", () => {
+        const k = withCells([[B, KNIFE, "Y"]]);
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: null,
+            refuter: NOBODY,
+        };
+        const w = validateFormSoft(form, ctxFor(k));
+        expect(w.get(PILL_REFUTER)).toEqual({
+            kind: "someoneCanRefuteButNobodyMarked",
+            players: [B],
+        });
+    });
+
+    test("fires when refuter is blank AND touched (post-submit / opened+closed)", () => {
+        const k = withCells([[B, KNIFE, "Y"]]);
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: null,
+        };
+        const w = validateFormSoft(form, ctxFor(k, { refuterTouched: true }));
+        expect(w.get(PILL_REFUTER)).toEqual({
+            kind: "someoneCanRefuteButNobodyMarked",
+            players: [B],
+        });
+    });
+
+    test("DOES NOT fire when refuter is blank and untouched (pristine add form)", () => {
+        const k = withCells([[B, KNIFE, "Y"]]);
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: null,
+        };
+        const w = validateFormSoft(form, ctxFor(k, { refuterTouched: false }));
+        expect(w.has(PILL_REFUTER)).toBe(false);
+    });
+
+    test("DOES NOT fire when no non-suggester is known to have any card", () => {
+        // Empty knowledge: nothing is provable, so nobody must refute.
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: NOBODY,
+        };
+        const w = validateFormSoft(form, ctxFor(emptyKnowledge));
+        expect(w.has(PILL_REFUTER)).toBe(false);
+    });
+
+    test("excludes players already in the Passers list (avoids redundancy with passersIncludePlayersWhoCanRefute)", () => {
+        // B has KNIFE but is in passers — the existing passers warning
+        // covers them. The new warning's `players` array should not
+        // re-list B. With no OTHER can-refuter available, the new
+        // warning should not fire at all.
+        const k = withCells([[B, KNIFE, "Y"]]);
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [B],
+            refuter: NOBODY,
+        };
+        const w = validateFormSoft(form, ctxFor(k));
+        expect(w.get(PILL_PASSERS)).toEqual({
+            kind: "passersIncludePlayersWhoCanRefute",
+            players: [B],
+        });
+        expect(w.has(PILL_REFUTER)).toBe(false);
+    });
+
+    test("still fires for OTHER can-refuters when one can-refuter is already in passers", () => {
+        // B is in passers and has KNIFE (passers warning fires). C
+        // also has a card (KITCHEN). The new warning should fire for
+        // C only.
+        const k = withCells([
+            [B, KNIFE, "Y"],
+            [C, KITCHEN, "Y"],
+        ]);
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [B],
+            refuter: NOBODY,
+        };
+        const w = validateFormSoft(form, ctxFor(k));
+        expect(w.get(PILL_REFUTER)).toEqual({
+            kind: "someoneCanRefuteButNobodyMarked",
+            players: [C],
+        });
+    });
+
+    test("does not count the suggester as a potential refuter (even if they have a Y cell)", () => {
+        // A is the suggester. Even if Knowledge says A has KNIFE,
+        // the suggester cannot refute their own suggestion.
+        const k = withCells([[A, KNIFE, "Y"]]);
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: NOBODY,
+        };
+        const w = validateFormSoft(form, ctxFor(k));
+        expect(w.has(PILL_REFUTER)).toBe(false);
+    });
+
+    test("fires with multiple can-refuters (all non-suggester, non-passer players counted)", () => {
+        const k = withCells([
+            [B, MUSTARD, "Y"],
+            [C, KNIFE, "Y"],
+        ]);
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: NOBODY,
+        };
+        const w = validateFormSoft(form, ctxFor(k));
+        const warning = w.get(PILL_REFUTER);
+        expect(warning?.kind).toBe("someoneCanRefuteButNobodyMarked");
+        if (warning?.kind === "someoneCanRefuteButNobodyMarked") {
+            // Order matches `setup.players` iteration; B before C in
+            // CLASSIC_SETUP_3P.
+            expect(warning.players).toEqual([B, C]);
+        }
+    });
+
+    test("suppressed in check (teach-me) mode", () => {
+        const k = withCells([[B, KNIFE, "Y"]]);
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: NOBODY,
+        };
+        const w = validateFormSoft(form, ctxFor(k, { solverMode: "check" }));
+        expect(w.has(PILL_REFUTER)).toBe(false);
+    });
+
+    test("does not fire when refuter is a specific (non-Nobody) player", () => {
+        // Even if other players also have cards, picking a specific
+        // refuter means the "blank/nobody" case doesn't apply.
+        const k = withCells([
+            [B, KNIFE, "Y"],
+            [C, KITCHEN, "Y"],
+        ]);
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: B,
+        };
+        const w = validateFormSoft(form, ctxFor(k));
+        expect(w.has(PILL_REFUTER)).toBe(false);
+    });
+
+    test("does not fire when suggester is null (incomplete form)", () => {
+        const k = withCells([[B, KNIFE, "Y"]]);
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: null,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: NOBODY,
+        };
+        const w = validateFormSoft(form, ctxFor(k));
+        expect(w.has(PILL_REFUTER)).toBe(false);
     });
 });
 
