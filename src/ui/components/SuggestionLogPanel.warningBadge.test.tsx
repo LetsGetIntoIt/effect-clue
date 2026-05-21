@@ -291,6 +291,17 @@ describe("briefWarningMessage — short-form copy for prior-log badge", () => {
             "priorWarningSelfSuggesterMissingSeenCard",
         );
     });
+
+    test("selfRefuterMissingSeenCard — fixed prompt copy, no interpolation", () => {
+        const w: SoftWarning = { kind: "selfRefuterMissingSeenCard" };
+        expect(briefWarningMessage(w, tMock, null)).toBe(
+            "priorWarningSelfRefuterMissingSeenCard",
+        );
+        // selfPlayerId branch should not matter — same string.
+        expect(briefWarningMessage(w, tMock, ANISHA)).toBe(
+            "priorWarningSelfRefuterMissingSeenCard",
+        );
+    });
 });
 
 describe("prior-log: someoneCanRefuteButNobodyMarked on stored suggestions", () => {
@@ -361,6 +372,47 @@ describe("prior-log: selfSuggesterMissingSeenCard on stored suggestions", () => 
             cards: [MUSTARD, KNIFE, KITCHEN],
             nonRefuters: [],
             refuter: BOB,
+            seenCard: KNIFE,
+        });
+        const w = warnsFor(s, emptyKnowledge, ANISHA);
+        expect(w.has(PILL_SEEN)).toBe(false);
+    });
+});
+
+describe("prior-log: selfRefuterMissingSeenCard on stored suggestions", () => {
+    test("fires when self is the refuter and seenCard is missing", () => {
+        // BOB suggests, ANISHA refutes, no seenCard recorded.
+        // Self = ANISHA → the user personally chose a card to show.
+        const s = draft({
+            suggester: BOB,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [],
+            refuter: ANISHA,
+        });
+        const w = warnsFor(s, emptyKnowledge, ANISHA);
+        expect(w.get(PILL_SEEN)).toEqual({
+            kind: "selfRefuterMissingSeenCard",
+        });
+    });
+
+    test("does NOT fire when self is not the refuter", () => {
+        const s = draft({
+            suggester: ANISHA,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [],
+            refuter: BOB,
+        });
+        // Self = CHO (a bystander); doesn't know what BOB showed.
+        const w = warnsFor(s, emptyKnowledge, CHO);
+        expect(w.has(PILL_SEEN)).toBe(false);
+    });
+
+    test("does NOT fire when a seenCard is recorded", () => {
+        const s = draft({
+            suggester: BOB,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [],
+            refuter: ANISHA,
             seenCard: KNIFE,
         });
         const w = warnsFor(s, emptyKnowledge, ANISHA);

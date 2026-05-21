@@ -558,6 +558,8 @@ export const SuggestionForm = forwardRef<
                 }
                 case "selfSuggesterMissingSeenCard":
                     return t("pillWarningSelfSuggesterMissingSeenCard");
+                case "selfRefuterMissingSeenCard":
+                    return t("pillWarningSelfRefuterMissingSeenCard");
             }
         },
         [t, selfPlayerId],
@@ -1006,8 +1008,10 @@ export const SuggestionForm = forwardRef<
             ),
         };
 
+        const seenWarningKind = warnings.get(PILL_SEEN)?.kind;
         const seenNobodyIsWarning =
-            warnings.get(PILL_SEEN)?.kind === "selfSuggesterMissingSeenCard";
+            seenWarningKind === "selfSuggesterMissingSeenCard" ||
+            seenWarningKind === "selfRefuterMissingSeenCard";
         const seenSlot: PillSlot = {
             id: PILL_SEEN,
             label: t("pillSeen"),
@@ -1422,6 +1426,9 @@ export type SoftWarning =
       }
     | {
           readonly kind: "selfSuggesterMissingSeenCard";
+      }
+    | {
+          readonly kind: "selfRefuterMissingSeenCard";
       };
 
 /**
@@ -1570,6 +1577,31 @@ export const validateFormSoft = (
         });
     }
 
+    // "Self refuted, but no shown card recorded."
+    //
+    // The mirror of the case above: when the user is the refuter,
+    // they personally chose a card to show. Recording "no shown
+    // card" (or leaving the Seen-card pill blank after addressing
+    // it) contradicts what we know — self had to pick something.
+    //
+    // The two `selfSuggester*` / `selfRefuter*` branches are
+    // mutually exclusive because the `form.refuter !== form.suggester`
+    // guard rules out the only state where both could fire (self
+    // somehow being both suggester and refuter is already a hard
+    // error and never reaches this validator's compute).
+    if (
+        ctx.selfPlayerId !== null &&
+        form.refuter === ctx.selfPlayerId &&
+        form.suggester !== null &&
+        form.suggester !== form.refuter &&
+        (isNobody(form.seenCard) ||
+            (form.seenCard === null && ctx.seenCardTouched))
+    ) {
+        warnings.set(PILL_SEEN, {
+            kind: "selfRefuterMissingSeenCard",
+        });
+    }
+
     // "Someone can refute but the refuter is Nobody / blank."
     //
     // Real Clue: every non-suggester gets asked, in order, until
@@ -1693,6 +1725,8 @@ export const briefWarningMessage = (
         }
         case "selfSuggesterMissingSeenCard":
             return t("priorWarningSelfSuggesterMissingSeenCard");
+        case "selfRefuterMissingSeenCard":
+            return t("priorWarningSelfRefuterMissingSeenCard");
     }
 };
 
