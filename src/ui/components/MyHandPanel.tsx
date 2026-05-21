@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from "motion/react";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
     myCardsSectionToggled,
     MY_CARDS_SURFACE_SECTION,
@@ -395,24 +395,26 @@ export function MyHandPanelBody() {
     }
 
     return (
-        <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0">
-            {grouped.map(group => (
-                <li
-                    key={String(group.id)}
-                    className="flex items-center gap-1.5 text-[1rem]"
-                >
+        <div className="m-0 text-[1rem] leading-7">
+            {grouped.map((group, idx) => (
+                <Fragment key={String(group.id)}>
+                    {idx > 0 && " "}
                     {/* Category pill — mirrors the deduction-grid
                         category-header style (bg-category-header,
                         white text, uppercase, tracking-[0.05em]) so
-                        the chip row reads in the same visual
-                        vocabulary the user has already learned in the
-                        grid. */}
-                    <span className="rounded bg-category-header px-1.5 py-0 text-[0.75rem] font-semibold uppercase tracking-[0.05em] text-white">
+                        the chip reads in the same visual vocabulary
+                        the user has already learned in the grid. The
+                        non-breaking space after the pill keeps it
+                        glued to its first card name so a line wrap
+                        never strands the pill alone at the right
+                        edge. */}
+                    <span className="inline-block rounded bg-category-header px-1.5 py-0 align-middle text-[0.75rem] font-semibold uppercase tracking-[0.05em] text-white">
                         {group.label}
                     </span>
-                    <span>{group.cards.join(", ")}</span>
-                </li>
+                    {"\u00a0"}
+                    {group.cards.join(", ")}
+                </Fragment>
             ))}
-        </ul>
+        </div>
     );
 }
