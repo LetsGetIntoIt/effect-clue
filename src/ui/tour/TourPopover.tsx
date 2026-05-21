@@ -788,19 +788,20 @@ export function TourPopover() {
     // value; passing it unconditionally is harmless and avoids
     // per-step branching.
     const actionVerb = hasKeyboard ? t("verbClick") : t("verbTap");
-    // Teach-mode-aware body/title key resolution. A step can specify
-    // `bodyKeyTeachMode` / `titleKeyTeachMode` overrides that swap in
-    // when teach-me mode is on (e.g. the suggestion form's body shifts
-    // from "log what happened at the table" to "feed the solver
-    // evidence to check your work"). Falls back to the base key when
-    // no override is set.
+    // Check-mode-aware body/title key resolution. A step can specify
+    // `bodyKeyCheckMode` / `titleKeyCheckMode` overrides that swap in
+    // when `solverMode === "check"` (e.g. the suggestion form's body
+    // shifts from "log what happened at the table" to "feed the
+    // solver evidence to check your work"). Falls back to the base
+    // key when no override is set.
+    const inCheckMode = state.solverMode === "check";
     const resolvedBodyKey =
-        state.teachMode && currentStep.bodyKeyTeachMode !== undefined
-            ? currentStep.bodyKeyTeachMode
+        inCheckMode && currentStep.bodyKeyCheckMode !== undefined
+            ? currentStep.bodyKeyCheckMode
             : currentStep.bodyKey;
     const resolvedTitleKey =
-        state.teachMode && currentStep.titleKeyTeachMode !== undefined
-            ? currentStep.titleKeyTeachMode
+        inCheckMode && currentStep.titleKeyCheckMode !== undefined
+            ? currentStep.titleKeyCheckMode
             : currentStep.titleKey;
     const bodyNode =
         resolvedBodyKey !== undefined

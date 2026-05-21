@@ -417,7 +417,7 @@ describe("ShareCreateModal — wire payload by variant", () => {
             "../../logic/GameObjects"
         );
         const { emptyHypotheses } = await import("../../logic/Hypothesis");
-        const { emptyUserDeductions } = await import("../../logic/TeachMode");
+        const { emptyUserDeductions } = await import("../../logic/SolverMode");
         const { Cell } = await import("../../logic/Knowledge");
         const { PlayerOwner } = await import("../../logic/GameObjects");
         const { HashMap } = await import("effect");
@@ -460,7 +460,7 @@ describe("ShareCreateModal — wire payload by variant", () => {
             dismissedInsights: new Map([
                 ["FrequentSuggester:Alice:Knife", "med"],
             ]),
-            teachMode: false,
+            solverMode: "solve",
             userDeductions: emptyUserDeductions,
         });
 
@@ -516,7 +516,7 @@ describe("ShareCreateModal — wire payload by variant", () => {
             "../../logic/GameObjects"
         );
         const { emptyHypotheses } = await import("../../logic/Hypothesis");
-        const { emptyUserDeductions } = await import("../../logic/TeachMode");
+        const { emptyUserDeductions } = await import("../../logic/SolverMode");
 
         const distinctDeck = CardSet({
             categories: [
@@ -558,7 +558,7 @@ describe("ShareCreateModal — wire payload by variant", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
-            teachMode: false,
+            solverMode: "solve",
             userDeductions: emptyUserDeductions,
         });
 

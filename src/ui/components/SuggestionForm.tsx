@@ -12,9 +12,11 @@ import {
     useState,
     type ReactNode,
 } from "react";
-import type {
-    DraftSuggestion,
-    PendingSuggestionDraft,
+import {
+    SOLVER_MODE_SOLVE,
+    type DraftSuggestion,
+    type PendingSuggestionDraft,
+    type SolverMode,
 } from "../../logic/ClueState";
 import type { GameSetup } from "../../logic/GameSetup";
 import { categoryOfCard } from "../../logic/GameSetup";
@@ -407,7 +409,7 @@ export const SuggestionForm = forwardRef<
                         ? clueCtx.derived.deductionResult.success
                         : undefined,
                 selfPlayerId: clueCtx?.state.selfPlayerId ?? null,
-                teachMode: clueCtx?.state.teachMode ?? false,
+                solverMode: clueCtx?.state.solverMode ?? SOLVER_MODE_SOLVE,
                 categoryCount: setup.categories.length,
             }),
         [form, clueCtx, setup.categories.length],
@@ -1248,7 +1250,7 @@ export type SoftWarning =
 export interface SoftValidationContext {
     readonly knowledge: Knowledge | undefined;
     readonly selfPlayerId: Player | null;
-    readonly teachMode: boolean;
+    readonly solverMode: SolverMode;
     readonly categoryCount: number;
 }
 
@@ -1274,7 +1276,7 @@ export const validateFormSoft = (
     ctx: SoftValidationContext,
 ): ReadonlyMap<PillId, SoftWarning> => {
     const warnings = new Map<PillId, SoftWarning>();
-    if (ctx.teachMode) return warnings;
+    if (ctx.solverMode === "check") return warnings;
     if (ctx.knowledge === undefined) return warnings;
     const knowledge = ctx.knowledge;
 
@@ -1493,7 +1495,7 @@ const useRefuteHelp = (form: FormState): RefuteHelp => {
     return useMemo<RefuteHelp>(() => {
         if (ctx === undefined) return INACTIVE_HELP;
         const { state, derived } = ctx;
-        if (state.teachMode) return INACTIVE_HELP;
+        if (state.solverMode === "check") return INACTIVE_HELP;
         if (!Result.isSuccess(derived.deductionResult)) return INACTIVE_HELP;
         const knowledge = derived.deductionResult.success;
         const selfPlayer = state.selfPlayerId;

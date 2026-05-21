@@ -38,12 +38,14 @@ import {
     loadTourState,
     saveTourDismissed,
     saveTourVisited,
-    TOUR_MODE_NORMAL,
-    TOUR_MODE_TEACH,
     type ModeState,
     type ScreenKey,
-    type TourMode,
 } from "./TourState";
+import {
+    SOLVER_MODE_CHECK,
+    SOLVER_MODE_SOLVE,
+    type SolverMode,
+} from "../../logic/ClueState";
 
 // Re-exported for callers that already import from this module.
 export { TOUR_RE_ENGAGE_DURATION };
@@ -70,14 +72,14 @@ interface UseTourGateOptions {
 
 interface GateDecision {
     readonly screen: ScreenKey;
-    readonly mode: TourMode;
+    readonly mode: SolverMode;
     readonly shouldShow: boolean;
     readonly deltaMode: boolean;
 }
 
 export function useTourGate(
     screen: ScreenKey,
-    mode: TourMode,
+    mode: SolverMode,
     options: UseTourGateOptions = {},
 ): {
     /** True after mount when the gate decided to show this screen's tour. */
@@ -106,7 +108,7 @@ export function useTourGate(
         const now = DateTime.nowUnsafe();
         const currentModeState = state[mode];
         const otherModeState =
-            state[mode === TOUR_MODE_NORMAL ? TOUR_MODE_TEACH : TOUR_MODE_NORMAL];
+            state[mode === SOLVER_MODE_SOLVE ? SOLVER_MODE_CHECK : SOLVER_MODE_SOLVE];
         const should = TelemetryRuntime.runSync(
             computeShouldShowTour(currentModeState, now, TOUR_RE_ENGAGE_DURATION),
         );

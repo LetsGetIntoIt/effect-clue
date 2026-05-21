@@ -28,7 +28,7 @@ import { SetupStepHandSizes } from "./steps/SetupStepHandSizes";
 import { SetupStepIdentity } from "./steps/SetupStepIdentity";
 import { SetupStepInviteOtherPlayers } from "./steps/SetupStepInviteOtherPlayers";
 import { SetupStepKnownCards } from "./steps/SetupStepKnownCards";
-import { SetupStepTeachMode } from "./steps/SetupStepTeachMode";
+import { SetupStepSolverMode } from "./steps/SetupStepSolverMode";
 import { SetupStepMyCards } from "./steps/SetupStepMyCards";
 import { SetupStepPlayers } from "./steps/SetupStepPlayers";
 import {
@@ -767,7 +767,7 @@ export function SetupWizard() {
                     }
                     if (id === "teachMode") {
                         return (
-                            <SetupStepTeachMode
+                            <SetupStepSolverMode
                                 key={id}
                                 state={panelState}
                                 wizardMode={wizardMode}

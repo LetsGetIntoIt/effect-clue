@@ -10,9 +10,9 @@
  * re-fire after wiping the gate flags).
  */
 import { DateTime, Duration } from "effect";
-import type { UiMode } from "../../logic/ClueState";
+import type { SolverMode, UiMode } from "../../logic/ClueState";
 import { TOUR_PREREQUISITES, TOUR_RE_ENGAGE_DURATION } from "./tours";
-import { loadTourState, type ScreenKey, type TourMode } from "./TourState";
+import { loadTourState, type ScreenKey } from "./TourState";
 
 const SETUP: ScreenKey = "setup";
 const CHECKLIST_SUGGEST: ScreenKey = "checklistSuggest";
@@ -91,7 +91,7 @@ export const screensForUiMode = (mode: UiMode): ReadonlyArray<ScreenKey> => {
  */
 export const pickFirstEligibleScreenKey = (
     candidates: ReadonlyArray<ScreenKey>,
-    mode: TourMode,
+    mode: SolverMode,
     now: DateTime.Utc,
 ): ScreenKey => {
     for (const candidate of candidates) {
@@ -99,8 +99,8 @@ export const pickFirstEligibleScreenKey = (
         const prereqsAllDismissed = prereqs.every((p) => {
             const prereqState = loadTourState(p);
             return (
-                prereqState.normal?.lastDismissedAt !== undefined ||
-                prereqState.teach?.lastDismissedAt !== undefined
+                prereqState.solve?.lastDismissedAt !== undefined ||
+                prereqState.check?.lastDismissedAt !== undefined
             );
         });
         if (!prereqsAllDismissed) continue;

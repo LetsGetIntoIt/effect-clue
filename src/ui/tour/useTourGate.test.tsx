@@ -127,7 +127,7 @@ describe("useTourGate (integration)", () => {
         readonly screen: ScreenKey;
         readonly onFire: (screen: ScreenKey) => void;
     }): null {
-        const { shouldShow } = useTourGate(screen, "normal");
+        const { shouldShow } = useTourGate(screen, "solve");
         useEffect(() => {
             if (shouldShow) onFire(screen);
         }, [shouldShow, screen, onFire]);
@@ -146,7 +146,7 @@ describe("useTourGate (integration)", () => {
         await act(async () => {});
         expect(fired).toEqual(["checklistSuggest"]);
 
-        saveTourDismissed("setup", "normal", DateTime.nowUnsafe());
+        saveTourDismissed("setup", "solve", DateTime.nowUnsafe());
         rerender(<GateFiringProbe screen="setup" onFire={onFire} />);
 
         await act(async () => {});
@@ -165,7 +165,7 @@ describe("useTourGate — delta mode", () => {
 
     interface DeltaProbeProps {
         readonly screen: ScreenKey;
-        readonly mode: "normal" | "teach";
+        readonly mode: "solve" | "check";
         readonly onState: (
             state: { shouldShow: boolean; deltaMode: boolean },
         ) => void;
@@ -183,12 +183,12 @@ describe("useTourGate — delta mode", () => {
         // Dismiss in normal mode → user has walked the shared steps
         // there. The teach-mode gate should fire as a delta tour: the
         // user hasn't seen the teach-mode-specific differences yet.
-        saveTourDismissed("checklistSuggest", "normal", DateTime.nowUnsafe());
+        saveTourDismissed("checklistSuggest", "solve", DateTime.nowUnsafe());
         let latest = { shouldShow: false, deltaMode: false };
         render(
             <DeltaProbe
                 screen="checklistSuggest"
-                mode="teach"
+                mode="check"
                 onState={(s) => {
                     latest = s;
                 }}
@@ -204,7 +204,7 @@ describe("useTourGate — delta mode", () => {
         render(
             <DeltaProbe
                 screen="checklistSuggest"
-                mode="normal"
+                mode="solve"
                 onState={(s) => {
                     latest = s;
                 }}
@@ -217,13 +217,13 @@ describe("useTourGate — delta mode", () => {
 
     test("delta mode false when both modes have been dismissed in the window", async () => {
         const now = DateTime.nowUnsafe();
-        saveTourDismissed("checklistSuggest", "normal", now);
-        saveTourDismissed("checklistSuggest", "teach", now);
+        saveTourDismissed("checklistSuggest", "solve", now);
+        saveTourDismissed("checklistSuggest", "check", now);
         let latest = { shouldShow: true, deltaMode: true };
         render(
             <DeltaProbe
                 screen="checklistSuggest"
-                mode="teach"
+                mode="check"
                 onState={(s) => {
                     latest = s;
                 }}

@@ -1,7 +1,11 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useTeachModeToggle } from "../../components/useTeachModeToggle";
+import { useSolverModeToggle } from "../../components/useSolverModeToggle";
+import {
+    SOLVER_MODE_CHECK,
+    SOLVER_MODE_SOLVE,
+} from "../../../logic/ClueState";
 import { useClue } from "../../state";
 import { SetupStepPanel } from "../SetupStepPanel";
 import { VALID, type WizardStepId } from "../wizardSteps";
@@ -24,14 +28,15 @@ interface Props {
 
 /**
  * "Apprentice mode" wizard step — a two-option radio group that flips
- * `state.teachMode`. Default off (Solver mode). The user can also
- * toggle this mid-game from the overflow menu.
+ * `state.solverMode` between `"solve"` and `"check"`. Default is
+ * `"solve"`. The user can also flip this mid-game from the overflow
+ * menu.
  *
  * Always validates `valid` — fully optional. Skip = leave the choice
  * in its current state (which is the same outcome the wizard yields
  * if the user never visits this step).
  */
-export function SetupStepTeachMode({
+export function SetupStepSolverMode({
     state,
     wizardMode,
     stepNumber,
@@ -41,10 +46,10 @@ export function SetupStepTeachMode({
 }: Props) {
     const t = useTranslations("teachMode");
     const { state: clue } = useClue();
-    const requestTeachMode = useTeachModeToggle();
-    const teachMode = clue.teachMode;
+    const requestSolverMode = useSolverModeToggle();
+    const inCheckMode = clue.solverMode === SOLVER_MODE_CHECK;
 
-    const summary = teachMode
+    const summary = inCheckMode
         ? t("menuLabelActive")
         : t("wizardStepSummary");
 
@@ -70,19 +75,25 @@ export function SetupStepTeachMode({
                 className="flex flex-col gap-2"
             >
                 <ModeRadioOption
-                    checked={!teachMode}
+                    checked={!inCheckMode}
                     label={t("wizardOptionSolverLabel")}
                     help={t("wizardOptionSolverHelp")}
                     onSelect={() =>
-                        requestTeachMode(false, TEACH_SOURCE_WIZARD)
+                        requestSolverMode(
+                            SOLVER_MODE_SOLVE,
+                            TEACH_SOURCE_WIZARD,
+                        )
                     }
                 />
                 <ModeRadioOption
-                    checked={teachMode}
+                    checked={inCheckMode}
                     label={t("wizardOptionApprenticeLabel")}
                     help={t("wizardOptionApprenticeHelp")}
                     onSelect={() =>
-                        requestTeachMode(true, TEACH_SOURCE_WIZARD)
+                        requestSolverMode(
+                            SOLVER_MODE_CHECK,
+                            TEACH_SOURCE_WIZARD,
+                        )
                     }
                 />
             </div>

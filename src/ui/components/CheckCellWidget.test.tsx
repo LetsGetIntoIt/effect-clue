@@ -8,7 +8,7 @@ import { Cell, Y } from "../../logic/Knowledge";
 import { cardByName } from "../../logic/test-utils/CardByName";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
 import { ClueProvider, useClue } from "../state";
-import { TeachModeCellCheck } from "./TeachModeCellCheck";
+import { CheckCellWidget } from "./CheckCellWidget";
 
 // Light i18n shim — preserves namespace + key + interpolated values so
 // the test can assert on the rendered button label including the
@@ -66,7 +66,7 @@ const makeWrapper = () => {
         <TestQueryClientProvider>
             <ClueProvider>
                 {children}
-                <TeachModeCellCheck cell={cell} setup={setup} />
+                <CheckCellWidget cell={cell} setup={setup} />
             </ClueProvider>
         </TestQueryClientProvider>
     );
@@ -80,7 +80,7 @@ const renderPanel = () => {
         h.result.current.dispatch({ type: "setSetup", setup });
     });
     act(() => {
-        h.result.current.dispatch({ type: "setTeachMode", enabled: true });
+        h.result.current.dispatch({ type: "setSolverMode", mode: "check" });
     });
     return { h };
 };
@@ -100,7 +100,7 @@ afterEach(() => {
     document.body.innerHTML = "";
 });
 
-describe("TeachModeCellCheck — C keyboard shortcut", () => {
+describe("CheckCellWidget — C keyboard shortcut", () => {
     test("C reveals the verdict and fires analytics once", () => {
         renderPanel();
         // Pre-reveal: Check button is visible.
@@ -211,7 +211,7 @@ describe("TeachModeCellCheck — C keyboard shortcut", () => {
     });
 });
 
-describe("TeachModeCellCheck — keyboard hint visibility", () => {
+describe("CheckCellWidget — keyboard hint visibility", () => {
     test("renders the shortcut hint when useHasKeyboard returns true", () => {
         hasKeyboardOverride = true;
         renderPanel();

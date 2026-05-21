@@ -37,10 +37,8 @@ import { TelemetryRuntime } from "../../observability/runtime";
 import { useModalStack } from "../components/ModalStack";
 import { useSession } from "../hooks/useSession";
 import { useClueOptional } from "../state";
-import {
-    loadTourState,
-    tourModeFromTeachMode,
-} from "../tour/TourState";
+import { loadTourState } from "../tour/TourState";
+import { SOLVER_MODE_SOLVE } from "../../logic/ClueState";
 import {
     computeShouldShowTour,
     TOUR_RE_ENGAGE_DURATION,
@@ -107,7 +105,7 @@ export function AccountProvider({
     const queryClient = useQueryClient();
     const { push, popTo } = useModalStack();
     const clue = useClueOptional();
-    const tourMode = tourModeFromTeachMode(clue?.state.teachMode === true);
+    const tourMode = clue?.state.solverMode ?? SOLVER_MODE_SOLVE;
     /**
      * Resolver registry for in-flight `requestSignOut` calls. The
      * promise resolves once the user has either committed sign-out

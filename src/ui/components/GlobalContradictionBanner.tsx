@@ -47,7 +47,7 @@ export function GlobalContradictionBanner() {
     // Teach-mode fully suppresses the banner — contradictions (both
     // intrinsic user-mark and evidence) surface only when the user
     // presses the Toolbar "Check" button.
-    const bodyKey = state.teachMode
+    const bodyKey = state.solverMode === "check"
         ? undefined
         : realTrace
         ? KEY_REAL

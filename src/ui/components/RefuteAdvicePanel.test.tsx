@@ -6,6 +6,7 @@ import type {
     PendingSuggestionDraft,
 } from "../../logic/ClueState";
 import { Player } from "../../logic/GameObjects";
+import type { SolverMode } from "../../logic/ClueState";
 import { CLASSIC_SETUP_3P } from "../../logic/GameSetup";
 import { emptyHypotheses } from "../../logic/Hypothesis";
 import { KnownCard } from "../../logic/InitialKnowledge";
@@ -103,7 +104,7 @@ interface MockState {
     suggestions: ReadonlyArray<DraftSuggestion>;
     accusations: ReadonlyArray<DraftAccusation>;
     handSizes: ReadonlyArray<readonly [Player, number]>;
-    teachMode: boolean;
+    solverMode: SolverMode;
     hypotheses: typeof emptyHypotheses;
 }
 
@@ -115,7 +116,7 @@ const mockState: MockState = {
     suggestions: [],
     accusations: [],
     handSizes: [],
-    teachMode: false,
+    solverMode: "solve",
     hypotheses: emptyHypotheses,
 };
 
@@ -170,14 +171,14 @@ beforeEach(() => {
     mockState.suggestions = [];
     mockState.accusations = [];
     mockState.handSizes = [];
-    mockState.teachMode = false;
+    mockState.solverMode = "solve";
     mockState.hypotheses = emptyHypotheses;
 });
 
 describe("RefuteAdvicePanel — visibility gates", () => {
     test("hidden when teach mode is on", async () => {
         const RefuteAdvicePanel = await importPanel();
-        mockState.teachMode = true;
+        mockState.solverMode = "check";
         mockState.knownCards = [KnownCard({ player: A, card: PLUM })];
         mockState.pendingSuggestion = draftPending({
             cards: [PLUM, KNIFE, CONSERV],
@@ -709,7 +710,7 @@ describe("RefuteAdvicePanel — wired into SuggestionBanner", () => {
         // same mocked useClue + next-intl above; the panel-mock used
         // in SuggestionBanner.test.tsx is scoped to that test file.
         const { SuggestionBanner } = await import("./SuggestionBanner");
-        mockState.teachMode = false;
+        mockState.solverMode = "solve";
         mockState.knownCards = [KnownCard({ player: A, card: PLUM })];
         mockState.pendingSuggestion = draftPending({
             suggester: B,
@@ -734,7 +735,7 @@ describe("RefuteAdvicePanel — wired into SuggestionBanner", () => {
 
     test("teach-mode + canRefute + expanded: neither banner nor panel renders (preserves 'no refute hint in teach-mode' contract)", async () => {
         const { SuggestionBanner } = await import("./SuggestionBanner");
-        mockState.teachMode = true;
+        mockState.solverMode = "check";
         mockState.knownCards = [
             KnownCard({ player: A, card: KNIFE }),
             KnownCard({ player: A, card: CONSERV }),

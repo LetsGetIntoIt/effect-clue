@@ -17,7 +17,7 @@ import { Schema } from "effect";
 import { beforeEach, describe, expect, test } from "vitest";
 import { Card, CardCategory, Player } from "../../logic/GameObjects";
 import { emptyHypotheses } from "../../logic/Hypothesis";
-import { emptyUserDeductions } from "../../logic/TeachMode";
+import { emptyUserDeductions } from "../../logic/SolverMode";
 import { KnownCard } from "../../logic/InitialKnowledge";
 import { newAccusationId } from "../../logic/Accusation";
 import { newSuggestionId } from "../../logic/Suggestion";
@@ -36,7 +36,7 @@ import {
     playersCodec,
     selfPlayerIdCodec,
     suggestionsCodec,
-    teachModeCodec,
+    solverModeCodec,
 } from "../../logic/ShareCodec";
 import { HashMap, Option } from "effect";
 import { Cell } from "../../logic/Knowledge";
@@ -154,7 +154,7 @@ const sampleSnapshot = (overrides: {
     firstDealtPlayerIdData: null,
     dismissedInsightsData: null,
     hypothesisOrderData: null,
-    teachModeData: null,
+    solverModeData: null,
 });
 
 const apply = (
@@ -250,7 +250,7 @@ describe("buildSessionFromSnapshot — variant shapes", () => {
             firstDealtPlayerIdData: null,
             dismissedInsightsData: null,
             hypothesisOrderData: null,
-            teachModeData: null,
+            solverModeData: null,
         });
         expect(session.setup.cardSet).toBe(RECEIVER_FALLBACK_PACK);
         expect(session.setup.players).toEqual(
@@ -299,7 +299,7 @@ describe("buildSessionFromSnapshot — identity + scratchwork", () => {
             ),
             dismissedInsightsData: null,
             hypothesisOrderData: null,
-            teachModeData: null,
+            solverModeData: null,
         });
         expect(session.selfPlayerId).toBe(Player("Alice"));
         expect(session.firstDealtPlayerId).toBe(Player("Bob"));
@@ -323,7 +323,7 @@ describe("buildSessionFromSnapshot — identity + scratchwork", () => {
             ),
             dismissedInsightsData: null,
             hypothesisOrderData: null,
-            teachModeData: null,
+            solverModeData: null,
         });
         // Invite shares don't carry identity, but firstDealt is shared.
         expect(session.selfPlayerId).toBeNull();
@@ -352,7 +352,7 @@ describe("buildSessionFromSnapshot — identity + scratchwork", () => {
                 },
             ]),
             hypothesisOrderData: null,
-            teachModeData: null,
+            solverModeData: null,
         });
         expect(session.dismissedInsights.size).toBe(2);
         expect(
@@ -399,7 +399,7 @@ describe("buildSessionFromSnapshot — identity + scratchwork", () => {
                     card: Card("card-knife"),
                 },
             ]),
-            teachModeData: null,
+            solverModeData: null,
         });
         expect(session.hypothesisOrder.length).toBe(2);
         expect(session.hypothesisOrder[0]!.card).toBe(Card("card-scarlet"));
@@ -430,7 +430,7 @@ describe("buildSessionFromSnapshot — identity + scratchwork", () => {
             firstDealtPlayerIdData: null,
             dismissedInsightsData: null,
             hypothesisOrderData: null,
-            teachModeData: null,
+            solverModeData: null,
         });
         expect(session.hypothesisOrder.length).toBe(2);
         expect(session.hypothesisOrder[0]!.card).toBe(Card("card-knife"));
@@ -483,7 +483,7 @@ describe("buildSessionFromSnapshot — receiver overrides", () => {
                 firstDealtPlayerIdData: null,
                 dismissedInsightsData: null,
                 hypothesisOrderData: null,
-                teachModeData: null,
+                solverModeData: null,
             },
             RECEIVER_FALLBACK_PACK,
             RECEIVER_FALLBACK_PLAYERS,
@@ -594,7 +594,7 @@ describe("buildSessionFromSnapshot — receiver overrides", () => {
             RECEIVER_FALLBACK_PACK,
             RECEIVER_FALLBACK_PLAYERS,
             {
-                teachMode: true,
+                solverMode: "check" as const,
                 selfPlayerId: Player("Alice"),
                 knownCards: [
                     KnownCard({
@@ -604,7 +604,7 @@ describe("buildSessionFromSnapshot — receiver overrides", () => {
                 ],
             },
         );
-        expect(session.teachMode).toBe(true);
+        expect(session.solverMode).toBe("check");
         expect(
             HashMap.get(
                 session.userDeductions,
@@ -636,9 +636,9 @@ describe("buildSessionFromSnapshot — receiver overrides", () => {
             }),
             RECEIVER_FALLBACK_PACK,
             RECEIVER_FALLBACK_PLAYERS,
-            { teachMode: true, selfPlayerId: null, knownCards: [] },
+            { solverMode: "check" as const, selfPlayerId: null, knownCards: [] },
         );
-        expect(session.teachMode).toBe(true);
+        expect(session.solverMode).toBe("check");
         expect(HashMap.size(session.userDeductions)).toBe(0);
     });
 
@@ -653,7 +653,7 @@ describe("buildSessionFromSnapshot — receiver overrides", () => {
             RECEIVER_FALLBACK_PACK,
             RECEIVER_FALLBACK_PLAYERS,
             {
-                teachMode: false,
+                solverMode: "solve" as const,
                 selfPlayerId: Player("Alice"),
                 knownCards: [
                     KnownCard({
@@ -663,7 +663,7 @@ describe("buildSessionFromSnapshot — receiver overrides", () => {
                 ],
             },
         );
-        expect(session.teachMode).toBe(false);
+        expect(session.solverMode).toBe("solve");
         expect(HashMap.size(session.userDeductions)).toBe(0);
     });
 
@@ -679,7 +679,7 @@ describe("buildSessionFromSnapshot — receiver overrides", () => {
                     handSizes: true,
                     knownCards: true,
                 }),
-                teachModeData: Schema.encodeSync(teachModeCodec)(true),
+                solverModeData: Schema.encodeSync(solverModeCodec)(true),
                 selfPlayerIdData: Schema.encodeSync(selfPlayerIdCodec)(
                     Player("Alice"),
                 ),
@@ -687,7 +687,7 @@ describe("buildSessionFromSnapshot — receiver overrides", () => {
             RECEIVER_FALLBACK_PACK,
             RECEIVER_FALLBACK_PLAYERS,
         );
-        expect(session.teachMode).toBe(true);
+        expect(session.solverMode).toBe("check");
         expect(HashMap.size(session.userDeductions)).toBe(0);
     });
 });
@@ -707,7 +707,7 @@ describe("buildSessionFromSnapshot — decode failures", () => {
                 firstDealtPlayerIdData: null,
                 dismissedInsightsData: null,
                 hypothesisOrderData: null,
-                teachModeData: null,
+                solverModeData: null,
             }),
         ).toThrow(ShareSnapshotDecodeError);
         try {
@@ -723,7 +723,7 @@ describe("buildSessionFromSnapshot — decode failures", () => {
                 firstDealtPlayerIdData: null,
                 dismissedInsightsData: null,
                 hypothesisOrderData: null,
-                teachModeData: null,
+                solverModeData: null,
             });
         } catch (e) {
             expect((e as ShareSnapshotDecodeError).field).toBe("cardPackData");
@@ -753,7 +753,7 @@ describe("buildSessionFromSnapshot — decode failures", () => {
             firstDealtPlayerIdData: null,
             dismissedInsightsData: null,
             hypothesisOrderData: null,
-            teachModeData: null,
+            solverModeData: null,
         });
         expect(session.suggestions[0]!.id).toBeTruthy();
         expect(String(session.suggestions[0]!.id).length).toBeGreaterThan(0);
@@ -796,7 +796,7 @@ describe("applyShareSnapshotToLocalStorage — receive page handoff", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
-            teachMode: false,
+            solverMode: "solve" as const,
             userDeductions: emptyUserDeductions,
         });
 
@@ -830,7 +830,7 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
-            teachMode: false,
+            solverMode: "solve" as const,
             userDeductions: emptyUserDeductions,
         };
         saveToLocalStorage(currentSession);
@@ -1010,7 +1010,7 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
             firstDealtPlayerIdData: null,
             dismissedInsightsData: null,
             hypothesisOrderData: null,
-            teachModeData: null,
+            solverModeData: null,
         };
 
         const result = saveCardPackFromSnapshot(snapshot);
@@ -1037,7 +1037,7 @@ describe("saveCardPackFromSnapshot — pack-only receive", () => {
                 firstDealtPlayerIdData: null,
                 dismissedInsightsData: null,
                 hypothesisOrderData: null,
-                teachModeData: null,
+                solverModeData: null,
             }),
         ).toThrow(ShareSnapshotDecodeError);
         expect(loadCustomCardSets()).toEqual([]);
@@ -1079,7 +1079,7 @@ describe("applyShareSnapshotToLocalStorage — pack save side effect", () => {
             firstDealtPlayerIdData: null,
             dismissedInsightsData: null,
             hypothesisOrderData: null,
-            teachModeData: null,
+            solverModeData: null,
         };
         applyShareSnapshotToLocalStorage(snapshot);
         expect(loadCustomCardSets()).toEqual([]);
@@ -1104,7 +1104,7 @@ describe("share receive dirty-state detection", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
-            teachMode: false,
+            solverMode: "solve" as const,
             userDeductions: emptyUserDeductions,
         };
 
@@ -1130,7 +1130,7 @@ describe("share receive dirty-state detection", () => {
                 selfPlayerId: null,
                 firstDealtPlayerId: null,
                 dismissedInsights: new Map(),
-                teachMode: false,
+                solverMode: "solve" as const,
                 userDeductions: emptyUserDeductions,
             }),
         ).toBe(true);
@@ -1152,7 +1152,7 @@ describe("share receive dirty-state detection", () => {
                 selfPlayerId: null,
                 firstDealtPlayerId: null,
                 dismissedInsights: new Map(),
-                teachMode: false,
+                solverMode: "solve" as const,
                 userDeductions: emptyUserDeductions,
             }),
         ).toBe(true);
@@ -1175,7 +1175,7 @@ describe("share receive dirty-state detection", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
-            teachMode: false,
+            solverMode: "solve" as const,
             userDeductions: emptyUserDeductions,
         });
         expect(hasPersistedGameData()).toBe(true);

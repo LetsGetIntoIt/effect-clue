@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { forwardRef, createElement } from "react";
 import type { ReactNode } from "react";
 import { Result } from "effect";
+import type { SolverMode } from "../../logic/ClueState";
 
 // -----------------------------------------------------------------------
 // Mocks
@@ -92,7 +93,7 @@ const withCells = (
 
 interface MockOpts {
     readonly selfPlayerId: Player | null;
-    readonly teachMode?: boolean;
+    readonly solverMode?: SolverMode;
     readonly knowledge?: Knowledge;
 }
 
@@ -100,7 +101,7 @@ const setMockContext = (opts: MockOpts): void => {
     useClueOptionalMock.mockReturnValue({
         state: {
             selfPlayerId: opts.selfPlayerId,
-            teachMode: opts.teachMode ?? false,
+            solverMode: opts.solverMode ?? "solve",
             setup,
             suggestions: [],
         },
@@ -160,7 +161,7 @@ describe("SuggestionForm — help badge gating", () => {
     test("renders no help badges when teach mode is on", async () => {
         setMockContext({
             selfPlayerId: A,
-            teachMode: true,
+            solverMode: "check",
             knowledge: withCells([[A, MUSTARD, "Y"]]),
         });
         const user = userEvent.setup();

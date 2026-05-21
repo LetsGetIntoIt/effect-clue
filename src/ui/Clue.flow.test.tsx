@@ -134,7 +134,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { saveToLocalStorage } from "../logic/Persistence";
 import { emptyHypotheses } from "../logic/Hypothesis";
-import { emptyUserDeductions } from "../logic/TeachMode";
+import { emptyUserDeductions } from "../logic/SolverMode";
 import { CLASSIC_SETUP_3P } from "../logic/GameSetup";
 import { Clue } from "./Clue";
 import { TestQueryClientProvider } from "../test-utils/queryClient";
@@ -155,7 +155,7 @@ const seedSetupSession = (): void => {
         selfPlayerId: null,
         firstDealtPlayerId: null,
         dismissedInsights: new Map(),
-        teachMode: false,
+        solverMode: "solve",
         userDeductions: emptyUserDeductions,
     });
 };

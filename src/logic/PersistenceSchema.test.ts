@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { Result } from "effect";
 import { CLASSIC_SETUP_3P } from "./GameSetup";
 import { emptyHypotheses } from "./Hypothesis";
-import { emptyUserDeductions } from "./TeachMode";
+import { emptyUserDeductions } from "./SolverMode";
 import { decodeSession, encodeSession } from "./Persistence";
 import { decodeV6Unknown } from "./PersistenceSchema";
 import { Player } from "./GameObjects";
@@ -27,7 +27,7 @@ describe("Schema-backed persistence", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
-            teachMode: false,
+            solverMode: "solve",
             userDeductions: emptyUserDeductions,
         });
         expect(encoded.version).toBe(12);
@@ -120,7 +120,7 @@ describe("Schema-backed persistence", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: dismissed,
-            teachMode: false,
+            solverMode: "solve",
             userDeductions: emptyUserDeductions,
         });
         const decoded = decodeSession(encoded);

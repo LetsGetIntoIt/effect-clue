@@ -16,7 +16,7 @@ import {
     mergeHypothesesIntoUserDeductions,
     mergeUnsubstantiatedMarksIntoHypotheses,
     type UserDeductionMap,
-} from "./TeachMode";
+} from "./SolverMode";
 
 function getOrFail<K, V>(map: HashMap.HashMap<K, V>, key: K): V {
     return Option.getOrThrow(HashMap.get(map, key));

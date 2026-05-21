@@ -17,7 +17,7 @@ import {
     classifyCell,
     type TeachModeVerdict,
     type UserDeductionValue,
-} from "../../logic/TeachMode";
+} from "../../logic/SolverMode";
 import { teachModeCellCheckUsed } from "../../analytics/events";
 import { useClue } from "../state";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
@@ -47,7 +47,7 @@ import { buildCellWhy } from "./cellWhy";
  * output, so the user reads the same "Given / Reasoning" explanation
  * the non-teach-mode panel would have shown.
  */
-export function TeachModeCellCheck({
+export function CheckCellWidget({
     cell,
     setup,
 }: {

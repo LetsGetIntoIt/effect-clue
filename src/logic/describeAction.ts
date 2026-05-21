@@ -234,8 +234,8 @@ export const describeAction = (
                 : t("actions.setFirstDealtPlayer", {
                       player: String(action.player),
                   });
-        case "setTeachMode":
-            return action.enabled
+        case "setSolverMode":
+            return action.mode === "check"
                 ? t("actions.enableTeachMode")
                 : t("actions.disableTeachMode");
         case "setUserDeduction":

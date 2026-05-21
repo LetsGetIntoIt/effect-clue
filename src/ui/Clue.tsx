@@ -5,13 +5,13 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useTranslations } from "next-intl";
 import { gameSetupStarted } from "../analytics/events";
 import { startSetup } from "../analytics/gameSession";
-import { useTeachModeSuperProperty } from "../analytics/useTeachModeSuperProperty";
+import { useSolverModeSuperProperty } from "../analytics/useSolverModeSuperProperty";
 import { AccountProvider } from "./account/AccountProvider";
 import { ShareProvider } from "./share/ShareProvider";
 import { BottomNav } from "./components/BottomNav";
 import { GlobalContradictionBanner } from "./components/GlobalContradictionBanner";
-import { TeachModeCheckBanner } from "./components/TeachModeCheckBanner";
-import { TeachModeCheckProvider } from "./components/TeachModeCheckContext";
+import { CheckBanner } from "./components/CheckBanner";
+import { CheckBannerProvider } from "./components/CheckBannerContext";
 import { InstallPromptProvider } from "./components/InstallPromptProvider";
 import { PlayLayout } from "./components/PlayLayout";
 import { Toolbar } from "./components/Toolbar";
@@ -42,7 +42,6 @@ import {
     loadTourState,
     saveTourDismissed,
     saveTourVisited,
-    tourModeFromTeachMode,
 } from "./tour/TourState";
 import { TelemetryRuntime } from "../observability/runtime";
 import { hasCardInformation } from "../logic/GamePhase";
@@ -166,9 +165,9 @@ export function Clue() {
            <PromptProvider>
            <SelectionProvider>
            <SetupWizardFocusProvider>
-           <TeachModeCheckProvider>
+           <CheckBannerProvider>
             <CoordinatedShell headerRef={headerRef} />
-           </TeachModeCheckProvider>
+           </CheckBannerProvider>
            </SetupWizardFocusProvider>
            </SelectionProvider>
            </PromptProvider>
@@ -197,7 +196,7 @@ function CoordinatedShell({
     // the dashboard can slice any funnel by mode without per-event
     // wiring. The hook is a no-op when PostHog isn't loaded (dev
     // without the key).
-    useTeachModeSuperProperty();
+    useSolverModeSuperProperty();
     const activeScreen = screenKeyForUiMode(state.uiMode);
     // Whether the hydrated game has any concrete card engagement.
     // Drives the staleGame slot's threshold choice (3-day vs 1-day)
@@ -223,7 +222,7 @@ function CoordinatedShell({
             hydrated={hydrated}
             activeScreen={activeScreen}
             gameStarted={gameStarted}
-            teachMode={state.teachMode}
+            solverMode={state.solverMode}
             onRedirectToScreen={handleRedirectToScreen}
         >
             <TourProvider>
@@ -291,7 +290,7 @@ function ClueShell({
                 </header>
 
                 <GlobalContradictionBanner />
-                <TeachModeCheckBanner />
+                <CheckBanner />
 
                 <div className="flex flex-col">
                     <TabContent />
@@ -349,7 +348,7 @@ function TourScreenGate() {
     // tracks its own 4-week clock so a user who completes the
     // normal-mode tour still gets walked through the teach-mode
     // tour on their first teach-mode visit.
-    const tourMode = tourModeFromTeachMode(state.teachMode);
+    const tourMode = state.solverMode;
     const screenKey = useMemo(() => {
         if (!hydrated) return screenKeyForUiMode(state.uiMode);
         // Setup has two possible tours: the foundational setup tour
@@ -493,7 +492,7 @@ function FirstSuggestionTourGate() {
         // variant the first time they log a suggestion in
         // teach-mode.
         const now = DateTime.nowUnsafe();
-        const tourMode = tourModeFromTeachMode(state.teachMode);
+        const tourMode = state.solverMode;
         const screenState = loadTourState(FIRST_SUGGESTION_SCREEN_KEY);
         const shouldShow = TelemetryRuntime.runSync(
             computeShouldShowTour(
@@ -513,7 +512,7 @@ function FirstSuggestionTourGate() {
         // mode's clock advances independently.
         saveTourVisited(FIRST_SUGGESTION_SCREEN_KEY, tourMode, now);
         saveTourDismissed(FIRST_SUGGESTION_SCREEN_KEY, tourMode, now);
-    }, [state.suggestions.length, state.teachMode, hydrated, activeScreen, phase, startTour]);
+    }, [state.suggestions.length, state.solverMode, hydrated, activeScreen, phase, startTour]);
 
     return null;
 }

@@ -7,18 +7,22 @@
  * share-import contexts) owns its own gate so dismissing the setup
  * tour doesn't suppress the checklist tour later.
  *
- * Per-mode subkeys (v2). Each screen's tour fires once per 4 weeks
- * **per mode** — the regular-mode and teach-me-mode user journeys
- * are different enough that completing one shouldn't suppress the
- * other. The persisted shape is `{ normal?: ModeState, teach?:
- * ModeState }`, with `ModeState = { lastVisitedAt?, lastDismissedAt? }`.
+ * Per-mode subkeys (v3). Each screen's tour fires once per 4 weeks
+ * **per solver mode** — the `"solve"` (default) and `"check"` user
+ * journeys are different enough that completing one shouldn't
+ * suppress the other. The persisted shape is `{ solve?: ModeState,
+ * check?: ModeState }` (v3), with `ModeState = { lastVisitedAt?,
+ * lastDismissedAt? }`.
  *
- * v2 ↑ v1 migration: a v1 record (flat `{ lastVisitedAt?,
- * lastDismissedAt? }`) is lifted to `{ normal: <v1> }`. Pre-teach-me
- * users only ever ran the normal-mode flow, so attributing their
- * existing dismissal to the `normal` subkey preserves their gate
- * state across the upgrade and leaves the `teach` subkey fresh for
- * their first teach-mode visit.
+ * v3 ↑ v2 migration: v2 used the legacy subkey names `normal` /
+ * `teach`. The lift renames `normal` → `solve` and `teach` → `check`.
+ *
+ * v3 ↑ v1 migration: a v1 record (flat `{ lastVisitedAt?,
+ * lastDismissedAt? }`) is lifted to `{ solve: <v1> }`. Pre-check-mode
+ * users only ever ran the default-mode flow, so attributing their
+ * existing dismissal to the `solve` subkey preserves their gate
+ * state across the upgrade and leaves the `check` subkey fresh for
+ * their first check-mode visit.
  *
  * Storage shape mirrors the splash gate so the bump procedure
  * (encode/decode, silent fallback to `{}`) is consistent across
@@ -26,32 +30,21 @@
  * one timestamp never clobbers another mode's data.
  */
 import { DateTime, Result, Schema } from "effect";
-
-/**
- * Whether the user is in teach-me mode or the regular solver mode.
- * The two have distinct gate state because they walk through
- * different surfaces; completing one mode's tour shouldn't suppress
- * the other.
- */
-export type TourMode = "normal" | "teach";
-
-// Module-scope discriminator constants. Pulled out so the
-// `i18next/no-literal-string` lint rule doesn't flag them as
-// user-facing copy at every call site.
-export const TOUR_MODE_NORMAL: TourMode = "normal";
-export const TOUR_MODE_TEACH: TourMode = "teach";
-
-/**
- * Resolve the active tour mode from the boolean `state.teachMode`
- * flag. Used everywhere the tour gate, completion path, or analytics
- * super-property need a `TourMode` string.
- */
-export const tourModeFromTeachMode = (teachMode: boolean): TourMode =>
-    teachMode ? TOUR_MODE_TEACH : TOUR_MODE_NORMAL;
+import {
+    SOLVER_MODE_CHECK,
+    SOLVER_MODE_SOLVE,
+    type SolverMode,
+} from "../../logic/ClueState";
 
 const ModeStateSchema = Schema.Struct({
     lastVisitedAt: Schema.optional(Schema.String),
     lastDismissedAt: Schema.optional(Schema.String),
+});
+
+const PersistedTourStateV3Schema = Schema.Struct({
+    version: Schema.Literal(3),
+    solve: Schema.optional(ModeStateSchema),
+    check: Schema.optional(ModeStateSchema),
 });
 
 const PersistedTourStateV2Schema = Schema.Struct({
@@ -66,9 +59,10 @@ const PersistedTourStateV1Schema = Schema.Struct({
     lastDismissedAt: Schema.optional(Schema.String),
 });
 
+const decodeV3 = Schema.decodeUnknownResult(PersistedTourStateV3Schema);
 const decodeV2 = Schema.decodeUnknownResult(PersistedTourStateV2Schema);
 const decodeV1 = Schema.decodeUnknownResult(PersistedTourStateV1Schema);
-const encodeV2 = Schema.encodeSync(PersistedTourStateV2Schema);
+const encodeV3 = Schema.encodeSync(PersistedTourStateV3Schema);
 
 /**
  * Identifier for the screen a tour belongs to. Each value gets its
@@ -100,8 +94,8 @@ export interface ModeState {
 }
 
 export interface TourState {
-    readonly normal?: ModeState;
-    readonly teach?: ModeState;
+    readonly solve?: ModeState;
+    readonly check?: ModeState;
 }
 
 const STORAGE_KEY_PREFIX = "effect-clue.tour.";
@@ -142,24 +136,36 @@ export const loadTourState = (screen: ScreenKey): TourState => {
         const raw = window.localStorage.getItem(storageKeyFor(screen));
         if (!raw) return {};
         const parsed: unknown = JSON.parse(raw);
+        const v3 = decodeV3(parsed);
+        if (Result.isSuccess(v3)) {
+            const out: { -readonly [K in keyof TourState]: TourState[K] } = {};
+            if (v3.success.solve !== undefined) {
+                out.solve = liftModeState(v3.success.solve);
+            }
+            if (v3.success.check !== undefined) {
+                out.check = liftModeState(v3.success.check);
+            }
+            return out;
+        }
+        // v3 → v2 lift: legacy `normal` → `solve`, `teach` → `check`.
         const v2 = decodeV2(parsed);
         if (Result.isSuccess(v2)) {
             const out: { -readonly [K in keyof TourState]: TourState[K] } = {};
             if (v2.success.normal !== undefined) {
-                out.normal = liftModeState(v2.success.normal);
+                out.solve = liftModeState(v2.success.normal);
             }
             if (v2.success.teach !== undefined) {
-                out.teach = liftModeState(v2.success.teach);
+                out.check = liftModeState(v2.success.teach);
             }
             return out;
         }
-        // v2 → v1 lift: pre-teach-me users only ran the normal-mode
-        // flow, so their flat dismissal attributes to `normal` and
-        // the `teach` subkey stays fresh for their first teach-mode
-        // visit.
+        // v3 → v1 lift: pre-check-mode users only ran the default
+        // (`"solve"`) flow, so their flat dismissal attributes to the
+        // `solve` subkey and `check` stays fresh for their first
+        // check-mode visit.
         const v1 = decodeV1(parsed);
         if (Result.isSuccess(v1)) {
-            return { normal: liftModeState(v1.success) };
+            return { solve: liftModeState(v1.success) };
         }
         return {};
     } catch {
@@ -183,7 +189,7 @@ const encodeModeState = (
 
 const writeMerged = (
     screen: ScreenKey,
-    mode: TourMode,
+    mode: SolverMode,
     patch: Partial<ModeState>,
 ): void => {
     if (typeof window === "undefined") return;
@@ -199,13 +205,13 @@ const writeMerged = (
                 ? { lastDismissedAt: patch.lastDismissedAt }
                 : {}),
         };
-        const otherMode: TourMode =
-            mode === TOUR_MODE_NORMAL ? TOUR_MODE_TEACH : TOUR_MODE_NORMAL;
+        const otherMode: SolverMode =
+            mode === SOLVER_MODE_SOLVE ? SOLVER_MODE_CHECK : SOLVER_MODE_SOLVE;
         const merged: {
-            version: 2;
-            normal?: { lastVisitedAt?: string; lastDismissedAt?: string };
-            teach?: { lastVisitedAt?: string; lastDismissedAt?: string };
-        } = { version: 2 };
+            version: 3;
+            solve?: { lastVisitedAt?: string; lastDismissedAt?: string };
+            check?: { lastVisitedAt?: string; lastDismissedAt?: string };
+        } = { version: 3 };
         const nextSerialized = encodeModeState(nextForMode);
         const otherSerialized = encodeModeState(current[otherMode]);
         if (nextSerialized !== undefined) {
@@ -214,7 +220,7 @@ const writeMerged = (
         if (otherSerialized !== undefined) {
             merged[otherMode] = otherSerialized;
         }
-        const encoded = encodeV2(merged);
+        const encoded = encodeV3(merged);
         window.localStorage.setItem(
             storageKeyFor(screen),
             JSON.stringify(encoded),
@@ -226,13 +232,13 @@ const writeMerged = (
 
 export const saveTourVisited = (
     screen: ScreenKey,
-    mode: TourMode,
+    mode: SolverMode,
     now: DateTime.Utc,
 ): void => writeMerged(screen, mode, { lastVisitedAt: now });
 
 export const saveTourDismissed = (
     screen: ScreenKey,
-    mode: TourMode,
+    mode: SolverMode,
     now: DateTime.Utc,
 ): void =>
     writeMerged(screen, mode, { lastVisitedAt: now, lastDismissedAt: now });

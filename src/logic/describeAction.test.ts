@@ -9,7 +9,7 @@ import type {
 import { AccusationId } from "./Accusation";
 import { Card, CardCategory, Player } from "./GameObjects";
 import { emptyHypotheses } from "./Hypothesis";
-import { emptyUserDeductions } from "./TeachMode";
+import { emptyUserDeductions } from "./SolverMode";
 import { GameSetup, CardEntry, Category } from "./GameSetup";
 import { KnownCard } from "./InitialKnowledge";
 import { SuggestionId } from "./Suggestion";
@@ -81,7 +81,7 @@ const baseState: ClueState = {
     selfPlayerId: null,
     firstDealtPlayerId: null,
     dismissedInsights: new Map(),
-    teachMode: false,
+    solverMode: "solve",
     userDeductions: emptyUserDeductions,
 };
 

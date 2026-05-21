@@ -22,6 +22,7 @@ import {
     useStartupCoordinator,
 } from "./StartupCoordinator";
 import type { ScreenKey } from "../tour/TourState";
+import type { SolverMode } from "../../logic/ClueState";
 
 const STORAGE_SPLASH = "effect-clue.splash.v1";
 const STORAGE_TOUR_SETUP = "effect-clue.tour.setup.v1";
@@ -97,7 +98,7 @@ const mount = (
     activeScreen: "setup" | "checklistSuggest" = "setup",
     onRedirectToScreen?: (screen: ScreenKey) => void,
     gameStarted: boolean = false,
-    teachMode: boolean = false,
+    solverMode: SolverMode = "solve",
 ): { rerender: (nextScreen: ScreenKey) => void } => {
     // Conditional-spread the redirect callback so TypeScript's
     // `exactOptionalPropertyTypes` doesn't reject `undefined`. Tests
@@ -110,7 +111,7 @@ const mount = (
             hydrated
             activeScreen={screen}
             gameStarted={gameStarted}
-            teachMode={teachMode}
+            solverMode={solverMode}
             {...redirectProp}
         >
             <Probe />

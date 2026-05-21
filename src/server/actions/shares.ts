@@ -41,7 +41,7 @@ import {
     playersCodec,
     selfPlayerIdCodec,
     suggestionsCodec,
-    teachModeCodec,
+    solverModeCodec,
 } from "../../logic/ShareCodec";
 import { SHARE_TTL } from "../shares/constants";
 import { ERR_SHARE_NOT_FOUND } from "../shares/errors";
@@ -114,12 +114,14 @@ export type CreateShareInput =
            */
           readonly hypothesisOrderData: string;
           /**
-           * Whether the sender's game was in teach-me mode. Boolean
-           * JSON-encoded. The receiver's destination device inherits
-           * the mode but always starts with empty `userDeductions`
-           * (those are personal scratchwork; not on the wire).
+           * The sender's solver-mode preference (`"check"` or
+           * `"solve"`), JSON-encoded as a boolean on the wire (`true`
+           * = `"check"`, `false` = `"solve"`). The receiver's
+           * destination device inherits the mode but always starts
+           * with empty `userDeductions` (those are personal
+           * scratchwork; not on the wire).
            */
-          readonly teachModeData: string;
+          readonly solverModeData: string;
       };
 
 interface CreateShareResult {
@@ -139,7 +141,7 @@ interface ShareSnapshot {
     readonly firstDealtPlayerIdData: string | null;
     readonly dismissedInsightsData: string | null;
     readonly hypothesisOrderData: string | null;
-    readonly teachModeData: string | null;
+    readonly solverModeData: string | null;
     /**
      * Display name of the share's owner — populated via `LEFT JOIN
      * "user"` in `getShare`. `null` when:
@@ -173,7 +175,7 @@ const F_SELF_PLAYER_ID_DATA = "selfPlayerIdData";
 const F_FIRST_DEALT_PLAYER_ID_DATA = "firstDealtPlayerIdData";
 const F_DISMISSED_INSIGHTS_DATA = "dismissedInsightsData";
 const F_HYPOTHESIS_ORDER_DATA = "hypothesisOrderData";
-const F_TEACH_MODE_DATA = "teachModeData";
+const F_SOLVER_MODE_DATA = "solverModeData";
 
 const SUFFIX_UNEXPECTED_FIELD = "unexpected_field";
 const SUFFIX_SUGGESTIONS_PAIR = "suggestions_pair";
@@ -220,7 +222,7 @@ const ALLOWED_KEYS_FOR: Record<string, ReadonlySet<string>> = {
         F_FIRST_DEALT_PLAYER_ID_DATA,
         F_DISMISSED_INSIGHTS_DATA,
         F_HYPOTHESIS_ORDER_DATA,
-        F_TEACH_MODE_DATA,
+        F_SOLVER_MODE_DATA,
     ]),
 };
 
@@ -326,7 +328,7 @@ const validateInputShape = (input: unknown): CreateShareInput => {
     );
     const dismissedInsightsData = requireString(F_DISMISSED_INSIGHTS_DATA);
     const hypothesisOrderData = requireString(F_HYPOTHESIS_ORDER_DATA);
-    const teachModeData = requireString(F_TEACH_MODE_DATA);
+    const solverModeData = requireString(F_SOLVER_MODE_DATA);
     validateJsonField(F_CARD_PACK_DATA, cardPackData, cardPackCodec);
     validateJsonField(F_PLAYERS_DATA, playersData, playersCodec);
     validateJsonField(F_HAND_SIZES_DATA, handSizesData, handSizesCodec);
@@ -354,7 +356,7 @@ const validateInputShape = (input: unknown): CreateShareInput => {
         hypothesisOrderData,
         hypothesisOrderCodec,
     );
-    validateJsonField(F_TEACH_MODE_DATA, teachModeData, teachModeCodec);
+    validateJsonField(F_SOLVER_MODE_DATA, solverModeData, solverModeCodec);
     return {
         kind,
         cardPackData,
@@ -368,7 +370,7 @@ const validateInputShape = (input: unknown): CreateShareInput => {
         firstDealtPlayerIdData,
         dismissedInsightsData,
         hypothesisOrderData,
-        teachModeData,
+        solverModeData,
     };
 };
 
@@ -463,11 +465,14 @@ export async function createShare(
             : null;
     const hypothesisOrderData =
         validated.kind === "transfer" ? validated.hypothesisOrderData : null;
-    // Teach-mode preference is `transfer` only — the user wants their
-    // destination device to inherit the mode. Invite shares omit it
-    // (the receiver's import modal offers an optional opt-in checkbox).
-    const teachModeData =
-        validated.kind === "transfer" ? validated.teachModeData : null;
+    // Solver-mode preference is `transfer` only — the user wants
+    // their destination device to inherit the mode. Invite shares
+    // omit it (the receiver's import modal offers an optional opt-in
+    // checkbox). The DB column name is still `snapshot_teach_mode_data`
+    // (no forward-only rename in place); the in-code variable mirrors
+    // the wire/in-memory `solverModeData` naming.
+    const solverModeData =
+        validated.kind === "transfer" ? validated.solverModeData : null;
 
     return withServerAction(
         Effect.gen(function* () {
@@ -501,7 +506,7 @@ export async function createShare(
                     ${firstDealtPlayerIdData},
                     ${dismissedInsightsData},
                     ${hypothesisOrderData},
-                    ${teachModeData},
+                    ${solverModeData},
                     NOW() + (${ttlHours} || ' hours')::INTERVAL
                 )
             `;
@@ -586,7 +591,7 @@ export async function getShare(input: {
                     row.snapshot_first_dealt_player_id_data,
                 dismissedInsightsData: row.snapshot_dismissed_insights_data,
                 hypothesisOrderData: row.snapshot_hypothesis_order_data,
-                teachModeData: row.snapshot_teach_mode_data,
+                solverModeData: row.snapshot_teach_mode_data,
                 ownerName,
                 ownerIsAnonymous,
             };

@@ -59,12 +59,8 @@ import { ABOUT_APP_SPLASH_SCREEN_DISMISSAL_DURATION } from "../hooks/useSplashGa
 import { uiModeForScreenKey } from "../tour/screenKey";
 import { TOUR_PREREQUISITES } from "../tour/tours";
 import { TOUR_RE_ENGAGE_DURATION } from "../tour/useTourGate";
-import {
-    loadTourState,
-    tourModeFromTeachMode,
-    type ScreenKey,
-    type TourMode,
-} from "../tour/TourState";
+import { loadTourState, type ScreenKey } from "../tour/TourState";
+import { type SolverMode } from "../../logic/ClueState";
 
 /**
  * Priority order for auto-firing tours at boot. The coordinator
@@ -226,19 +222,19 @@ const isSplashEligible = (now: DateTime.Utc): boolean => {
 
 const isTourEligible = (
     screen: ScreenKey,
-    mode: TourMode,
+    mode: SolverMode,
     now: DateTime.Utc,
 ): boolean => {
     // Prerequisite tours must all have been dismissed (any reason —
     // skip / complete / X / Esc) in EITHER mode. A user who walked
-    // the prereq in normal mode shouldn't be blocked from the
-    // follow-up in teach mode (the prerequisite content was seen).
+    // the prereq in `"solve"` mode shouldn't be blocked from the
+    // follow-up in `"check"` mode (the prerequisite content was seen).
     const prereqs = TOUR_PREREQUISITES[screen] ?? [];
     for (const prereq of prereqs) {
         const prereqState = loadTourState(prereq);
         const seenInEitherMode =
-            prereqState.normal?.lastDismissedAt !== undefined ||
-            prereqState.teach?.lastDismissedAt !== undefined;
+            prereqState.solve?.lastDismissedAt !== undefined ||
+            prereqState.check?.lastDismissedAt !== undefined;
         if (!seenInEitherMode) return false;
     }
     const state = loadTourState(screen)[mode];
@@ -257,7 +253,7 @@ const isTourEligible = (
  * that `isTourEligible` does, just done across the priority list.
  */
 const findHighestPriorityEligibleTour = (
-    mode: TourMode,
+    mode: SolverMode,
     now: DateTime.Utc,
 ): ScreenKey | undefined => {
     for (const screen of TOUR_PRECEDENCE) {
@@ -332,7 +328,7 @@ export function StartupCoordinatorProvider({
     hydrated,
     activeScreen,
     gameStarted,
-    teachMode,
+    solverMode,
     onRedirectToScreen,
 }: {
     readonly children: ReactNode;
@@ -358,13 +354,13 @@ export function StartupCoordinatorProvider({
      */
     readonly gameStarted: boolean;
     /**
-     * Whether the user is in teach-me mode. Each tour mode gets its
-     * own 4-week re-engage clock, so the coordinator reads gate state
-     * from the corresponding mode subkey. A user who completed the
-     * normal-mode tour still gets the teach-mode tour on their first
-     * teach-mode boot.
+     * Which solver mode the user is in (`"solve"` or `"check"`). Each
+     * tour mode gets its own 4-week re-engage clock, so the
+     * coordinator reads gate state from the corresponding mode
+     * subkey. A user who completed the `"solve"`-mode tour still gets
+     * the `"check"`-mode tour on their first check-mode boot.
      */
-    readonly teachMode: boolean;
+    readonly solverMode: SolverMode;
     /**
      * Optional precedence-redirect callback. When the highest-priority
      * eligible tour (per `TOUR_PRECEDENCE`) does NOT match
@@ -380,7 +376,7 @@ export function StartupCoordinatorProvider({
      */
     readonly onRedirectToScreen?: (screen: ScreenKey) => void;
 }) {
-    const tourMode = tourModeFromTeachMode(teachMode);
+    const tourMode = solverMode;
     const [phase, setPhase] = useState<StartupPhase>(PHASE_BOOT);
 
     // Eligibility snapshot taken once at boot. Held in a ref so that

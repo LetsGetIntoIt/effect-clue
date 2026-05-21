@@ -9,7 +9,7 @@ import {
     type ReactNode,
 } from "react";
 import type { Cell } from "../../logic/Knowledge";
-import { cellKey } from "../../logic/TeachMode";
+import { cellKey } from "../../logic/SolverMode";
 
 /**
  * Render-time state for the global teach-me Check feature.
@@ -24,7 +24,7 @@ import { cellKey } from "../../logic/TeachMode";
  * uiMode change or page reload. The reducer doesn't see it.
  *
  * The verdict map is keyed by a stable cell-key string (not the `Cell`
- * Data-class instance) because the producer (`TeachModeCheckBanner`)
+ * Data-class instance) because the producer (`CheckBanner`)
  * and the consumer (`Checklist`) build their own Cell instances every
  * render. `Map<Cell, string>` would compare by reference, so the
  * lookup would always miss; the string key uses structural equality.
@@ -44,7 +44,7 @@ interface TeachModeCheckState {
 
 const Ctx = createContext<TeachModeCheckState | undefined>(undefined);
 
-export function TeachModeCheckProvider({ children }: { readonly children: ReactNode }) {
+export function CheckBannerProvider({ children }: { readonly children: ReactNode }) {
     const [bannerOpen, setBannerOpen] = useState(false);
     const [revealActive, setRevealActive] = useState(false);
     const [verdictMap, setVerdictMap] = useState<
@@ -99,9 +99,9 @@ export function TeachModeCheckProvider({ children }: { readonly children: ReactN
 // reads it as a code identifier rather than user-facing UI text.
 const ERR_TEACH_MODE_CHECK_PROVIDER_MISSING =
      
-    "useTeachModeCheck must be used inside <TeachModeCheckProvider>";
+    "useCheckBanner must be used inside <CheckBannerProvider>";
 
-export function useTeachModeCheck(): TeachModeCheckState {
+export function useCheckBanner(): TeachModeCheckState {
     const ctx = useContext(Ctx);
     if (!ctx) {
         throw new Error(ERR_TEACH_MODE_CHECK_PROVIDER_MISSING);

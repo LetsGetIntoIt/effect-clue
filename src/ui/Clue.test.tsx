@@ -243,7 +243,7 @@ describe("Clue — URL-based view hydration", () => {
             "../logic/Hypothesis"
         );
         const { emptyUserDeductions } = await import(
-            "../logic/TeachMode"
+            "../logic/SolverMode"
         );
         const { saveToLocalStorage } = await import(
             "../logic/Persistence"
@@ -279,7 +279,7 @@ describe("Clue — URL-based view hydration", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
-            teachMode: false,
+            solverMode: "solve",
             userDeductions: emptyUserDeductions,
         });
         render(<Clue />, { wrapper: TestQueryClientProvider });

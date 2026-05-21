@@ -66,7 +66,7 @@ import { KnownCard } from "../../logic/InitialKnowledge";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useSelection } from "../SelectionContext";
 import { useClue } from "../state";
-import { useTeachModeCheck } from "./TeachModeCheckContext";
+import { useCheckBanner } from "./CheckBannerContext";
 import { useTour } from "../tour/TourProvider";
 import {
     registerChecklistFocusHandler,
@@ -226,7 +226,7 @@ export function Checklist() {
     const tReasons = useTranslations("reasons");
     const hasKeyboard = useHasKeyboard();
     const { state, dispatch, derived } = useClue();
-    const { verdictForCell } = useTeachModeCheck();
+    const { verdictForCell } = useCheckBanner();
     const {
         activeSuggestionIndex,
         activeAccusationIndex,
@@ -361,7 +361,7 @@ export function Checklist() {
         realKnowledge,
         jointKnowledge,
         jointFailed,
-        teachMode: state.teachMode,
+        solverMode: state.solverMode,
         uiMode: state.uiMode,
     });
     analyticsCtxRef.current = {
@@ -369,7 +369,7 @@ export function Checklist() {
         realKnowledge,
         jointKnowledge,
         jointFailed,
-        teachMode: state.teachMode,
+        solverMode: state.solverMode,
         uiMode: state.uiMode,
     };
     useEffect(() => {
@@ -395,10 +395,10 @@ export function Checklist() {
             // user's focus has moved to a button elsewhere.
             //
             // C is intentionally NOT handled here — it's owned by
-            // `TeachModeCellCheck`, whose lifetime is exactly the
+            // `CheckCellWidget`, whose lifetime is exactly the
             // panel's open lifetime, so C correctly only fires when
             // the panel is open.
-            if (ctx.teachMode) {
+            if (ctx.solverMode === "check") {
                 const activeEl =
                     typeof document !== "undefined"
                         ? document.activeElement
@@ -1216,7 +1216,7 @@ export function Checklist() {
                     }
                 }}
                 selfPlayerId={state.selfPlayerId}
-                teachMode={state.teachMode}
+                solverMode={state.solverMode}
                 onClose={() => setExpandedCell(null)}
             />
         );
@@ -1235,7 +1235,7 @@ export function Checklist() {
         setup,
         state.knownCards,
         state.selfPlayerId,
-        state.teachMode,
+        state.solverMode,
         dispatch,
         setExpandedCell,
         t,
@@ -1521,31 +1521,31 @@ export function Checklist() {
                                         // cell looks identical to a normal
                                         // real-valued cell of that Y/N value
                                         // — "silent until Check," per spec.
-                                        const teachModeMark = state.teachMode
+                                        const userMark = state.solverMode === "check"
                                             ? HashMap.get(
                                                   state.userDeductions,
                                                   cellRef,
                                               )
                                             : undefined;
-                                        const teachModeValue =
-                                            teachModeMark !== undefined
-                                            && teachModeMark._tag === "Some"
-                                                ? teachModeMark.value
+                                        const userMarkValue =
+                                            userMark !== undefined
+                                            && userMark._tag === "Some"
+                                                ? userMark.value
                                                 : undefined;
-                                        const value = state.teachMode
-                                            ? teachModeValue
+                                        const value = state.solverMode === "check"
+                                            ? userMarkValue
                                             : getCellByOwnerCard(
                                                   knowledge,
                                                   owner,
                                                   entry.id,
                                               );
-                                        const hypothesisValue = state.teachMode
+                                        const hypothesisValue = state.solverMode === "check"
                                             ? undefined
                                             : hypothesisValueFor(
                                                   hypotheses,
                                                   cellRef,
                                               );
-                                        const hypothesisStatus = state.teachMode
+                                        const hypothesisStatus = state.solverMode === "check"
                                             ? ({ kind: "off" } as const)
                                             : statusFor(
                                                   cellRef,
@@ -1574,7 +1574,7 @@ export function Checklist() {
                                         // owns that flow).
                                         const playInteractive = isPlayerCell;
                                         const showChip =
-                                            !state.teachMode
+                                            state.solverMode !== "check"
                                             && footnoteNumbers.length > 0
                                             && value === undefined;
                                         const topLeft = showChip ? (
@@ -1648,7 +1648,7 @@ export function Checklist() {
                                         // (not box-shadow) since outline
                                         // doesn't change the cell's box
                                         // and supports dashed style.
-                                        const revealVerdict = state.teachMode
+                                        const revealVerdict = state.solverMode === "check"
                                             ? verdictForCell(cellRef)
                                             : undefined;
                                         const revealClass =

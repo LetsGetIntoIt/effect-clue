@@ -447,7 +447,7 @@ interface RefuteAdvice {
 function useRefuteAdvice(): RefuteAdvice | null {
     const { state, derived } = useClue();
     return useMemo<RefuteAdvice | null>(() => {
-        if (state.teachMode) return null;
+        if (state.solverMode === "check") return null;
         const selfPlayer = state.selfPlayerId;
         if (selfPlayer === null) return null;
         const draft = state.pendingSuggestion;
@@ -490,7 +490,7 @@ function useRefuteAdvice(): RefuteAdvice | null {
             setup: state.setup,
         };
     }, [
-        state.teachMode,
+        state.solverMode,
         state.selfPlayerId,
         state.pendingSuggestion,
         state.knownCards,

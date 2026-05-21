@@ -22,16 +22,21 @@ import { useEffect } from "react";
 import { useClue } from "../ui/state";
 import { registerSuperProperties } from "./posthog";
 
-export function useTeachModeSuperProperty(): null {
+export function useSolverModeSuperProperty(): null {
     const { state, hydrated } = useClue();
     useEffect(() => {
         // Wait for hydration so the registered value reflects the
-        // user's persisted teach-mode state, not the reducer's
-        // pre-hydration default of `false`. Registering before
+        // user's persisted solver-mode state, not the reducer's
+        // pre-hydration default of `"solve"`. Registering before
         // hydration would let a brief `false` ride on the first
-        // event after load for a user whose persisted state is `true`.
+        // event after load for a user whose persisted state is
+        // `"check"`. The PostHog property name `teach_mode_active`
+        // is preserved for dashboard continuity even though the
+        // in-code field is now `solverMode`.
         if (!hydrated) return;
-        registerSuperProperties({ teach_mode_active: state.teachMode });
-    }, [hydrated, state.teachMode]);
+        registerSuperProperties({
+            teach_mode_active: state.solverMode === "check",
+        });
+    }, [hydrated, state.solverMode]);
     return null;
 }

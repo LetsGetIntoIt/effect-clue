@@ -150,7 +150,7 @@ describe("pickFirstEligibleScreenKey", () => {
     const now = DateTime.makeUnsafe(new Date(0));
 
     test("brand-new user on setup → picks setup (no localStorage at all)", () => {
-        expect(pickFirstEligibleScreenKey(["setup", "sharing"], "normal", now)).toBe(
+        expect(pickFirstEligibleScreenKey(["setup", "sharing"], "solve", now)).toBe(
             "setup",
         );
     });
@@ -164,7 +164,7 @@ describe("pickFirstEligibleScreenKey", () => {
         // gate hook runs against a stable key (and decides not to
         // show).
         seedDismissed(STORAGE_TOUR_SETUP);
-        expect(pickFirstEligibleScreenKey(["setup", "sharing"], "normal", now)).toBe(
+        expect(pickFirstEligibleScreenKey(["setup", "sharing"], "solve", now)).toBe(
             "setup",
         );
     });
@@ -172,7 +172,7 @@ describe("pickFirstEligibleScreenKey", () => {
     test("both prereqs dismissed → sharing eligible → returns sharing", () => {
         seedDismissed(STORAGE_TOUR_SETUP);
         seedDismissed(STORAGE_TOUR_CHECKLIST_SUGGEST);
-        expect(pickFirstEligibleScreenKey(["setup", "sharing"], "normal", now)).toBe(
+        expect(pickFirstEligibleScreenKey(["setup", "sharing"], "solve", now)).toBe(
             "sharing",
         );
     });
@@ -181,7 +181,7 @@ describe("pickFirstEligibleScreenKey", () => {
         const recent = new Date(DateTime.toEpochMillis(now)).toISOString();
         seedDismissedOnly(STORAGE_TOUR_SETUP, recent);
         seedDismissed(STORAGE_TOUR_CHECKLIST_SUGGEST);
-        expect(pickFirstEligibleScreenKey(["setup", "sharing"], "normal", now)).toBe(
+        expect(pickFirstEligibleScreenKey(["setup", "sharing"], "solve", now)).toBe(
             "sharing",
         );
     });
@@ -192,7 +192,7 @@ describe("pickFirstEligibleScreenKey", () => {
         seedDismissed(STORAGE_TOUR_SHARING);
         // No tour eligible; helper returns the first candidate so the
         // gate signature stays stable.
-        expect(pickFirstEligibleScreenKey(["setup", "sharing"], "normal", now)).toBe(
+        expect(pickFirstEligibleScreenKey(["setup", "sharing"], "solve", now)).toBe(
             "setup",
         );
     });
@@ -204,7 +204,7 @@ describe("pickFirstEligibleScreenKey", () => {
         seedDismissed(STORAGE_TOUR_SETUP);
         seedDismissed(STORAGE_TOUR_CHECKLIST_SUGGEST);
         expect(
-            pickFirstEligibleScreenKey(["checklistSuggest"], "normal", now),
+            pickFirstEligibleScreenKey(["checklistSuggest"], "solve", now),
         ).toBe("checklistSuggest");
     });
 
@@ -215,7 +215,7 @@ describe("pickFirstEligibleScreenKey", () => {
         seedDismissed(STORAGE_TOUR_SETUP);
         seedDismissed(STORAGE_TOUR_CHECKLIST_SUGGEST);
         expect(
-            pickFirstEligibleScreenKey(["checklistSuggest"], "teach", now),
+            pickFirstEligibleScreenKey(["checklistSuggest"], "check", now),
         ).toBe("checklistSuggest");
     });
 
@@ -236,7 +236,7 @@ describe("pickFirstEligibleScreenKey", () => {
         );
         seedDismissed(STORAGE_TOUR_CHECKLIST_SUGGEST);
         expect(
-            pickFirstEligibleScreenKey(["setup", "sharing"], "teach", now),
+            pickFirstEligibleScreenKey(["setup", "sharing"], "check", now),
         ).toBe("sharing");
     });
 });

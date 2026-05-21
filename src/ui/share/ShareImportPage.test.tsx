@@ -240,7 +240,7 @@ const buildSnapshot = (overrides: SnapshotOverrides) => ({
     firstDealtPlayerIdData: null,
     dismissedInsightsData: null,
     hypothesisOrderData: null,
-    teachModeData: null,
+    solverModeData: null,
     ownerName: null,
     ownerIsAnonymous: null,
     ...overrides,

@@ -88,7 +88,7 @@ export function MyCardsFAB() {
     // into stacked-teaser mode whenever the user had a draft suggestion
     // in flight, even though the teaser bar (which renders
     // `<SuggestionBanner />`) would be empty in teach-mode.
-    const bannerVisible = clueState.teachMode ? false : bannerVisibleRaw;
+    const bannerVisible = clueState.solverMode === "check" ? false : bannerVisibleRaw;
     const showTeaser = !panelOpen && bannerVisible;
     const showFab = !panelOpen && !bannerVisible;
 
@@ -360,7 +360,7 @@ export function MyCardsFAB() {
                           passing `paused`. Suppressed in teach-mode
                           (refute hint is deducer-derived).
                         */}
-                        {!clueState.teachMode && (
+                        {clueState.solverMode !== "check" && (
                             <div className="mt-1.5">
                                 <SuggestionBanner
                                     paused

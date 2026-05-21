@@ -121,8 +121,8 @@ export function BehavioralInsights() {
     // (deducer-driven recommendations) and the "Active" hypotheses
     // (which themselves don't render in teach-mode). The state and
     // hooks above still run so the Rules of Hooks aren't violated when
-    // the user toggles teach-mode mid-game.
-    if (state.teachMode) return null;
+    // the user toggles solver-mode mid-game.
+    if (state.solverMode === "check") return null;
 
     return (
         <div

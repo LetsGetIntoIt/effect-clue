@@ -8,6 +8,11 @@ import type { GameSetup } from "../../logic/GameSetup";
 import type { Cell } from "../../logic/Knowledge";
 import { findCardEntry } from "../../logic/GameSetup";
 import {
+    SOLVER_MODE_CHECK,
+    SOLVER_MODE_SOLVE,
+    type SolverMode,
+} from "../../logic/ClueState";
+import {
     type CellDisplay,
     type HypothesisMap,
     type HypothesisStatus,
@@ -22,7 +27,7 @@ import {
     XIcon,
 } from "./Icons";
 import { HypothesisControl } from "./HypothesisControl";
-import { TeachModeCellCheck } from "./TeachModeCellCheck";
+import { CheckCellWidget } from "./CheckCellWidget";
 import {
     cellToneClass,
     glyphKindFor,
@@ -88,15 +93,15 @@ interface CellExplanationRowProps {
     /**
      * When true, replaces the entire body (deductions / leads /
      * hypothesis sections) with a single "Check this cell" affordance.
-     * The body re-renders via `TeachModeCellCheck`, which pulls
+     * The body re-renders via `CheckCellWidget`, which pulls
      * `userDeductions` / deducer verdict / intrinsic contradictions
      * from `useClue()` directly to compute its five-state verdict.
      *
-     * Optional with a `false` default so existing render-shape tests
+     * Optional with a `"solve"` default so existing render-shape tests
      * don't have to pass it explicitly; production callers should
-     * always pass `state.teachMode`.
+     * always pass `state.solverMode`.
      */
-    readonly teachMode?: boolean;
+    readonly solverMode?: SolverMode;
     /** Closes the row. Wired to the row's [×] button. */
     readonly onClose: () => void;
 }
@@ -144,7 +149,7 @@ export function CellExplanationRow({
     observed,
     onObservationChange,
     selfPlayerId,
-    teachMode = false,
+    solverMode = SOLVER_MODE_SOLVE,
     onClose,
 }: CellExplanationRowProps) {
     const t = useTranslations("hypothesis");
@@ -492,7 +497,7 @@ export function CellExplanationRow({
     // empty so the grid never reflows when content fills in.
     //
     // Teach-mode replaces the whole 3-section grid with a single
-    // `TeachModeCellCheck` body — the user hasn't asked the deducer
+    // `CheckCellWidget` body — the user hasn't asked the deducer
     // to talk yet, so we don't pre-render its reasoning.
     return (
         <div className="flex flex-col">
@@ -512,8 +517,8 @@ export function CellExplanationRow({
                     <XIcon size={16} />
                 </button>
             </div>
-            {teachMode ? (
-                <TeachModeCellCheck cell={cell} setup={setup} />
+            {solverMode === SOLVER_MODE_CHECK ? (
+                <CheckCellWidget cell={cell} setup={setup} />
             ) : (
                 <div className="@container/sections">
                     <div className="grid grid-cols-1 gap-px bg-border @[400px]/sections:grid-cols-2">
