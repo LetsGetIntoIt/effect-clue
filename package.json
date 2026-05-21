@@ -110,7 +110,7 @@
 		"eslint-plugin-i18next": "6.1.4",
 		"jsdom": "29.1.1",
 		"knip": "6.14.1",
-		"postcss": "8.5.14",
+		"postcss": "8.5.15",
 		"serwist": "9.5.11",
 		"tailwindcss": "4.3.0",
 		"typescript": "6.0.3",
