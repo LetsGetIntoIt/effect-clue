@@ -43,14 +43,19 @@ import { useIsDesktop } from "../hooks/useIsDesktop";
 import { useListFormatter } from "../hooks/useListFormatter";
 import { useSelection } from "../SelectionContext";
 import { BehavioralInsights } from "./BehavioralInsights";
-import { TrashIcon, XIcon } from "./Icons";
+import { AlertIcon, TrashIcon, XIcon } from "./Icons";
 import { InfoPopover } from "./InfoPopover";
 import { AccusationForm, type AccusationFormHandle } from "./AccusationForm";
 import {
+    briefWarningMessage,
+    formStateFromDraft,
     SuggestionForm,
     type SuggestionFormHandle,
+    validateFormSoft,
+    type SoftWarning,
 } from "./SuggestionForm";
 import { isInsideSuggestionPopover } from "./SuggestionPills";
+import { SOLVER_MODE_SOLVE } from "../../logic/ClueState";
 import type { DraftAccusation } from "../../logic/ClueState";
 import {
     DraftSuggestion,
@@ -1393,6 +1398,54 @@ function PriorSuggestionItem({
 
     const isSelected = selectedSuggestionIndex === idx;
 
+    // Soft inconsistency warnings for the idle (non-editing) row.
+    // Re-derives at render time from current Knowledge — if the user
+    // later resolves the conflict on the Checklist, the badge
+    // disappears without needing to touch the stored suggestion;
+    // conversely, marks that introduce a new conflict surface a
+    // badge here. Same `validateFormSoft` + message helper the form
+    // uses, so badge copy stays in lockstep with pill warnings
+    // automatically. Skipped while editing — the embedded
+    // <SuggestionForm /> renders its own per-pill warnings.
+    const deductionResult = derived.deductionResult;
+    const priorWarnings = useMemo<ReadonlyMap<string, SoftWarning>>(() => {
+        if (isEditing) return new Map();
+        const knowledge = Result.isSuccess(deductionResult)
+            ? deductionResult.success
+            : undefined;
+        return validateFormSoft(formStateFromDraft(s, setup), {
+            knowledge,
+            selfPlayerId: state.selfPlayerId,
+            solverMode: state.solverMode ?? SOLVER_MODE_SOLVE,
+            categoryCount: setup.categories.length,
+            players: setup.players,
+            // Stored suggestions are always treated as "user
+            // affirmed" — the previous submit already locked the
+            // refuter value (whether a player, Nobody, or blank).
+            refuterTouched: true,
+        });
+    }, [
+        isEditing,
+        s,
+        setup,
+        deductionResult,
+        state.selfPlayerId,
+        state.solverMode,
+    ]);
+    const priorWarningTexts = useMemo<ReadonlyArray<string>>(() => {
+        if (priorWarnings.size === 0) return [];
+        const seen = new Set<string>();
+        const out: Array<string> = [];
+        for (const w of priorWarnings.values()) {
+            const text = briefWarningMessage(w, t, state.selfPlayerId);
+            if (text !== "" && !seen.has(text)) {
+                seen.add(text);
+                out.push(text);
+            }
+        }
+        return out;
+    }, [priorWarnings, t, state.selfPlayerId]);
+
     // Cell → suggestion cross-highlight (reverse of the Checklist's
     // `cellIsHighlighted`). Two ways a cell can reference a suggestion:
     //   1. Provenance chain: the cell was SET by a rule that consulted
@@ -1708,6 +1761,19 @@ function PriorSuggestionItem({
                                 ),
                             })}
                         </div>
+                        {priorWarningTexts.length > 0 && (
+                            <div className="mt-1 flex flex-col items-start gap-1">
+                                {priorWarningTexts.map(text => (
+                                    <span
+                                        key={text}
+                                        className="inline-flex items-center gap-1 rounded-[var(--radius)] border border-warning-border bg-warning-bg px-1.5 py-0.5 text-[0.875rem] text-warning"
+                                    >
+                                        <AlertIcon size={14} />
+                                        <span>{text}</span>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
                         {!hasKeyboard && !showMobileEditButton && (
                             <div className="mt-0.5 text-[1rem] text-muted">
                                 {t("priorRowHintMobile")}
