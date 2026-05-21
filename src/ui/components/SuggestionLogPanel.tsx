@@ -1421,8 +1421,10 @@ function PriorSuggestionItem({
             players: setup.players,
             // Stored suggestions are always treated as "user
             // affirmed" — the previous submit already locked the
-            // refuter value (whether a player, Nobody, or blank).
+            // refuter and seen-card values (whether a player,
+            // Nobody, or blank).
             refuterTouched: true,
+            seenCardTouched: true,
         });
     }, [
         isEditing,
