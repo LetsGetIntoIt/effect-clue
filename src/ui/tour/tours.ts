@@ -12,7 +12,12 @@
  * here; the wiring picks up new steps for free.
  */
 import { Duration } from "effect";
-import type { UiMode } from "../../logic/ClueState";
+import {
+    SOLVER_MODE_CHECK,
+    SOLVER_MODE_SOLVE,
+    type SolverMode,
+    type UiMode,
+} from "../../logic/ClueState";
 import type { ScreenKey } from "./TourState";
 
 /**
@@ -73,20 +78,20 @@ export interface TourStep {
      */
     readonly bodyKey?: string;
     /**
-     * Optional teach-mode override for `titleKey`. When set AND the
-     * user is in teach-me mode, the popover renders this title
+     * Optional check-mode override for `titleKey`. When set AND the
+     * user's `solverMode === "check"`, the popover renders this title
      * instead of `titleKey`. Used for steps that need a different
-     * lens in teach-me mode (e.g. the suggestion form's role shifts
+     * lens in check mode (e.g. the suggestion form's role shifts
      * from "log what happened" to "feed the solver evidence to check
      * your work").
      */
-    readonly titleKeyTeachMode?: string;
+    readonly titleKeyCheckMode?: string;
     /**
-     * Optional teach-mode override for `bodyKey`. When set AND the
-     * user is in teach-me mode, the popover renders this body
-     * instead of `bodyKey`. Same use case as `titleKeyTeachMode`.
+     * Optional check-mode override for `bodyKey`. When set AND the
+     * user's `solverMode === "check"`, the popover renders this body
+     * instead of `bodyKey`. Same use case as `titleKeyCheckMode`.
      */
-    readonly bodyKeyTeachMode?: string;
+    readonly bodyKeyCheckMode?: string;
     /**
      * Preferred side relative to the anchor. Radix may flip this if
      * there's not enough room. Defaults to `"bottom"`.
@@ -123,15 +128,14 @@ export interface TourStep {
      */
     readonly requiredUiMode?: UiMode;
     /**
-     * Filter the step by the current `state.teachMode`. `undefined`
-     * (the default) renders the step always; `true` renders only
-     * when teach-mode is ON; `false` renders only when teach-mode is
-     * OFF. Used to drop deducer-derived steps (hypotheses, leads,
-     * refute hint) when teach-mode is on, and to show the
-     * teach-mode-specific Check-button step only when teach-mode is
-     * on.
+     * Filter the step by the current `state.solverMode`. `undefined`
+     * (the default) renders the step always; `"check"` renders only
+     * when `solverMode === "check"`; `"solve"` renders only when
+     * `solverMode === "solve"`. Used to drop deducer-derived steps
+     * (hypotheses, leads, refute hint) in check mode, and to show
+     * the check-mode-specific Check-button step only in check mode.
      */
-    readonly requiredTeachMode?: boolean;
+    readonly requiredSolverMode?: SolverMode;
     /**
      * Optional next-intl key (under the `onboarding` namespace) used
      * for the "next" button on the LAST step. Defaults to
@@ -519,8 +523,8 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             anchor: "cell-explanation-panel",
             titleKey: "checklist.panelIntro.title",
             bodyKey: "checklist.panelIntro.body",
-            titleKeyTeachMode: "checklist.panelIntro.teachModeTitle",
-            bodyKeyTeachMode: "checklist.panelIntro.teachModeBody",
+            titleKeyCheckMode: "checklist.panelIntro.teachModeTitle",
+            bodyKeyCheckMode: "checklist.panelIntro.teachModeBody",
             side: "bottom",
             align: "center",
             requiredUiMode: "checklist",
@@ -539,7 +543,7 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             // popover in reading order.
             //
             // Filtered out in teach-mode — the deducer's section is
-            // replaced by `TeachModeCellCheck`'s Y/N picker + Check
+            // replaced by `CheckCellWidget`'s Y/N picker + Check
             // affordance there. The teach-mode equivalent step
             // (`cell-explanation-teach-mode-check`) below spotlights
             // that affordance instead.
@@ -549,12 +553,12 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             side: "bottom",
             align: "start",
             requiredUiMode: "checklist",
-            requiredTeachMode: false,
+            requiredSolverMode: SOLVER_MODE_SOLVE,
         },
         {
             // Teach-mode panel body. Replaces the LEADS / HYPOTHESIS
             // pair when teach-mode is on — the panel renders a single
-            // `TeachModeCellCheck` body (Y/N mark picker + "Check this
+            // `CheckCellWidget` body (Y/N mark picker + "Check this
             // cell" button) instead of the three deducer-derived
             // sections. Spotlight the whole teach-mode section so the
             // user sees both the picker AND the button as one unit;
@@ -571,7 +575,7 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             side: "bottom",
             align: "start",
             requiredUiMode: "checklist",
-            requiredTeachMode: true,
+            requiredSolverMode: SOLVER_MODE_CHECK,
         },
         {
             // LEADS — second section. Filtered out in teach-mode
@@ -583,7 +587,7 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             side: "bottom",
             align: "start",
             requiredUiMode: "checklist",
-            requiredTeachMode: false,
+            requiredSolverMode: SOLVER_MODE_SOLVE,
         },
         {
             // HYPOTHESIS — third section. Popover side: bottom
@@ -600,7 +604,7 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             side: "bottom",
             align: "end",
             requiredUiMode: "checklist",
-            requiredTeachMode: false,
+            requiredSolverMode: SOLVER_MODE_SOLVE,
         },
         {
             // Tap the cell again to close the panel. Anchored to the
@@ -670,7 +674,7 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             align: "start",
             requiredUiMode: "checklist",
             viewport: "desktop",
-            requiredTeachMode: false,
+            requiredSolverMode: SOLVER_MODE_SOLVE,
         },
         {
             // My Cards FAB (mobile). The fixed bottom-left FAB is the
@@ -683,7 +687,7 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             align: "start",
             requiredUiMode: "checklist",
             viewport: "mobile",
-            requiredTeachMode: false,
+            requiredSolverMode: SOLVER_MODE_SOLVE,
         },
         {
             // Teach-me Check button — only shown when teach-mode is
@@ -699,7 +703,7 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             side: "bottom",
             align: "end",
             requiredUiMode: "checklist",
-            requiredTeachMode: true,
+            requiredSolverMode: SOLVER_MODE_CHECK,
         },
         {
             // Step 9 (desktop): Suggest pane intro. The suggestion log
@@ -769,8 +773,8 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             },
             titleKey: "suggest.addForm.title",
             bodyKey: "suggest.addForm.body",
-            titleKeyTeachMode: "suggest.addForm.teachModeTitle",
-            bodyKeyTeachMode: "suggest.addForm.teachModeBody",
+            titleKeyCheckMode: "suggest.addForm.teachModeTitle",
+            bodyKeyCheckMode: "suggest.addForm.teachModeBody",
             side: "bottom",
             align: "center",
             sideByViewport: {
@@ -825,8 +829,8 @@ export const TOURS: Record<ScreenKey, ReadonlyArray<TourStep>> = {
             popoverAnchor: "checklist-case-file",
             titleKey: "firstSuggestion.checklist.title",
             bodyKey: "firstSuggestion.checklist.body",
-            titleKeyTeachMode: "firstSuggestion.checklist.teachModeTitle",
-            bodyKeyTeachMode: "firstSuggestion.checklist.teachModeBody",
+            titleKeyCheckMode: "firstSuggestion.checklist.teachModeTitle",
+            bodyKeyCheckMode: "firstSuggestion.checklist.teachModeBody",
             side: "top",
             align: "center",
             sideByViewport: {

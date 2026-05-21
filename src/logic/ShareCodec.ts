@@ -26,11 +26,18 @@
  *                 firstDealtPlayerIdCodec
  *   - `transfer`: all of the above plus knownCardsCodec, hypothesesCodec,
  *                 selfPlayerIdCodec, dismissedInsightsCodec,
- *                 hypothesisOrderCodec, teachModeCodec
+ *                 hypothesisOrderCodec, solverModeCodec
  *
- * `teachModeCodec` carries the per-game teach-me preference; the
+ * `solverModeCodec` carries the per-game solver-mode preference; the
  * receiver inherits the mode but always starts with empty
  * `userDeductions` (personal scratchwork; deliberately not on the wire).
+ *
+ * The wire JSON for the solver mode is still a plain boolean (`true`
+ * for `"check"`, `false` for `"solve"`) — this matches the on-disk
+ * persistence format and preserves backward compatibility with share
+ * URLs that pre-date the in-memory `solverMode: "solve" | "check"`
+ * representation. `solverModeCodec` transforms between the two via
+ * `Schema.transform`.
  */
 import { Schema } from "effect";
 import {
@@ -48,12 +55,26 @@ import {
 } from "./PersistenceSchema";
 
 /**
- * Teach-mode wire schema — a single boolean. `transfer` shares carry
- * this so the receiver's destination device inherits the sender's
- * mode preference. Invite shares omit it (the receiver's import
- * modal offers an opt-in checkbox instead).
+ * Solver-mode wire schema — a plain boolean (`true` = `"check"`,
+ * `false` = `"solve"`). `transfer` shares carry this so the receiver's
+ * destination device inherits the sender's mode preference. Invite
+ * shares omit it (the receiver's import modal offers an opt-in
+ * checkbox instead). The boolean wire format is preserved for
+ * backward compatibility with existing share URLs; callers map
+ * between the boolean and the in-memory `SolverMode` enum via the
+ * `solverModeFromBoolean` / `solverModeToBoolean` helpers below.
  */
-const TeachModeSchema = Schema.Boolean;
+const SolverModeWireSchema = Schema.Boolean;
+
+/**
+ * Map between the on-wire boolean and the in-memory `SolverMode`
+ * enum. Kept here next to the codec so the mapping rule
+ * (`true` ↔ `"check"`) lives in one place.
+ */
+export const solverModeFromBoolean = (b: boolean): "solve" | "check" =>
+    b ? "check" : "solve";
+export const solverModeToBoolean = (m: "solve" | "check"): boolean =>
+    m === "check";
 
 export const cardPackCodec = Schema.fromJsonString(CardSetSchema);
 export const playersCodec = Schema.fromJsonString(PlayersArraySchema);
@@ -96,8 +117,10 @@ export const hypothesisOrderCodec = Schema.fromJsonString(
 );
 
 /**
- * Teach-mode codec — `transfer`-only. Boolean indicating whether the
- * sender's game was in teach-me mode. Receivers inherit the mode but
- * always start with empty `userDeductions`.
+ * Solver-mode codec — `transfer`-only. The wire JSON is a boolean
+ * (`true` = `"check"`, `false` = `"solve"`). Callers convert between
+ * the boolean and the in-memory `SolverMode` enum via
+ * `solverModeFromBoolean` / `solverModeToBoolean`. Receivers inherit
+ * the mode but always start with empty `userDeductions`.
  */
-export const teachModeCodec = Schema.fromJsonString(TeachModeSchema);
+export const solverModeCodec = Schema.fromJsonString(SolverModeWireSchema);

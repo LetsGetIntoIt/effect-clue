@@ -52,8 +52,8 @@ import {
     loadTourState,
     saveTourDismissed,
     saveTourVisited,
-    tourModeFromTeachMode,
 } from "../tour/TourState";
+import { SOLVER_MODE_SOLVE } from "../../logic/ClueState";
 import {
     CardStackIcon,
     ListEditIcon,
@@ -225,7 +225,7 @@ export function AccountModal() {
     const { startTour, dismissTour, activeScreen } = useTour();
     const { phase } = useStartupCoordinator();
     const clue = useClueOptional();
-    const tourMode = tourModeFromTeachMode(clue?.state.teachMode === true);
+    const tourMode = clue?.state.solverMode ?? SOLVER_MODE_SOLVE;
     const activeScreenRef = useRef(activeScreen);
     activeScreenRef.current = activeScreen;
     const firedRef = useRef(false);

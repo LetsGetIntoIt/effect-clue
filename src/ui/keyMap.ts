@@ -118,7 +118,7 @@ type BindingId =
     // Teach-mode cell controls — only active when the teach-mode
     // cell explanation panel is mounted (i.e. a cell is open AND
     // `state.teachMode` is true). The handler lives inside
-    // `TeachModeCellCheck`, whose lifetime is exactly the panel's.
+    // `CheckCellWidget`, whose lifetime is exactly the panel's.
     | "teachMode.markOff"
     | "teachMode.markY"
     | "teachMode.markN"

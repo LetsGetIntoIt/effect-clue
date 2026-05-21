@@ -56,7 +56,7 @@ import {
     findIntrinsicContradictions,
     type IntrinsicContradictionReport,
     type UserDeductionMap,
-} from "../logic/TeachMode";
+} from "../logic/SolverMode";
 import {
     generateInsights,
     isConfidenceGreater,
@@ -173,10 +173,11 @@ function needsPaneSettle(fromMode: UiMode, toMode: UiMode): boolean {
 }
 
 export type { DraftSuggestion } from "../logic/ClueState";
-import type {
-    ClueAction,
-    ClueState,
-    PendingSuggestionDraft,
+import {
+    SOLVER_MODE_SOLVE,
+    type ClueAction,
+    type ClueState,
+    type PendingSuggestionDraft,
 } from "../logic/ClueState";
 
 const initialState: ClueState = {
@@ -192,7 +193,7 @@ const initialState: ClueState = {
     selfPlayerId: null,
     firstDealtPlayerId: null,
     dismissedInsights: new Map<string, InsightConfidence>(),
-    teachMode: false,
+    solverMode: SOLVER_MODE_SOLVE,
     userDeductions: emptyUserDeductions,
 };
 
@@ -653,12 +654,12 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
                 dismissedInsights:
                     session.dismissedInsights
                         ?? new Map<string, InsightConfidence>(),
-                // Teach-me preference rides `transfer` shares (so the
-                // user's destination device inherits the mode); local
-                // round-trip preserves it. `userDeductions` is local-
-                // only — receivers of a transfer share inherit the
-                // mode but start with no marks.
-                teachMode: session.teachMode ?? false,
+                // Solver-mode preference rides `transfer` shares (so
+                // the user's destination device inherits the mode);
+                // local round-trip preserves it. `userDeductions` is
+                // local-only — receivers of a transfer share inherit
+                // the mode but start with no marks.
+                solverMode: session.solverMode ?? SOLVER_MODE_SOLVE,
                 userDeductions: session.userDeductions ?? emptyUserDeductions,
             };
         }
@@ -672,8 +673,8 @@ const reducer = (state: ClueState, action: ClueAction): ClueState => {
         case "setFirstDealtPlayer":
             return { ...state, firstDealtPlayerId: action.player };
 
-        case "setTeachMode":
-            return { ...state, teachMode: action.enabled };
+        case "setSolverMode":
+            return { ...state, solverMode: action.mode };
 
         case "setUserDeduction": {
             const next =
@@ -823,11 +824,11 @@ interface ClueDerived {
      */
     readonly behavioralInsights: ReadonlyArray<Insight>;
     /**
-     * Intrinsic contradictions in the user's teach-me marks (e.g. two
-     * players marked Y for the same card). Computed only when
-     * `teachMode` is on; otherwise reports `offendingCells: new Set()`.
-     * Drives the Check feature's "Inconsistent" verdict and the
-     * vague-summary banner copy. Independent of the deducer.
+     * Intrinsic contradictions in the user's check-mode marks (e.g.
+     * two players marked Y for the same card). Computed only when
+     * `solverMode === "check"`; otherwise reports `offendingCells: new
+     * Set()`. Drives the Check feature's "Inconsistent" verdict and
+     * the vague-summary banner copy. Independent of the deducer.
      */
     readonly intrinsicContradictions: IntrinsicContradictionReport;
     /**
@@ -1006,7 +1007,7 @@ export const useClue = (): ClueContextValue => {
  * Non-throwing variant of `useClue`. Returns `undefined` when no
  * `<ClueProvider>` is mounted above. Used by providers that compose
  * inside ClueProvider in production but render under bare React trees
- * in unit tests (e.g. `TourProvider` reading `state.teachMode` for
+ * in unit tests (e.g. `TourProvider` reading `state.solverMode` for
  * the step filter).
  */
 export const useClueOptional = (): ClueContextValue | undefined =>
@@ -1429,7 +1430,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
 
     const intrinsicContradictions = useMemo<IntrinsicContradictionReport>(
         () => {
-            if (!state.teachMode) {
+            if (state.solverMode !== "check") {
                 return {
                     offendingCells: new Set(),
                     conflictsByCell: new Map(),
@@ -1442,7 +1443,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             );
         },
         [
-            state.teachMode,
+            state.solverMode,
             state.userDeductions,
             state.setup.cardSet,
             state.handSizes,
@@ -1626,7 +1627,7 @@ export function ClueProvider({ children }: { children: ReactNode }) {
             selfPlayerId: state.selfPlayerId,
             firstDealtPlayerId: state.firstDealtPlayerId,
             dismissedInsights: state.dismissedInsights,
-            teachMode: state.teachMode,
+            solverMode: state.solverMode,
             userDeductions: state.userDeductions,
         };
         saveToLocalStorage(session);

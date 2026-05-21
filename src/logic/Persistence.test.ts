@@ -16,7 +16,7 @@ import {
     type GameSession,
 } from "./Persistence";
 import { emptyHypotheses } from "./Hypothesis";
-import { emptyUserDeductions } from "./TeachMode";
+import { emptyUserDeductions } from "./SolverMode";
 
 const STORAGE_KEY = "effect-clue.session.v12";
 const LEGACY_STORAGE_KEY_V10 = "effect-clue.session.v10";
@@ -51,7 +51,7 @@ const minimalSession: GameSession = {
     selfPlayerId: null,
     firstDealtPlayerId: null,
     dismissedInsights: new Map(),
-    teachMode: false,
+    solverMode: "solve",
     userDeductions: emptyUserDeductions,
 };
 
@@ -110,7 +110,7 @@ const richSession = (): GameSession => ({
     selfPlayerId: null,
     firstDealtPlayerId: null,
     dismissedInsights: new Map(),
-    teachMode: false,
+    solverMode: "solve",
     userDeductions: emptyUserDeductions,
 });
 
@@ -232,7 +232,7 @@ describe("saveToLocalStorage / loadFromLocalStorage", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: [],
-            teachMode: false,
+            solverMode: "solve",
             userDeductions: emptyUserDeductions,
         };
         window.localStorage.setItem(

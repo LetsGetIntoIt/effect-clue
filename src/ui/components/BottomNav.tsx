@@ -6,6 +6,10 @@ import {
     aboutLinkClicked,
 } from "../../analytics/events";
 import { routes } from "../../routes";
+import {
+    SOLVER_MODE_CHECK,
+    SOLVER_MODE_SOLVE,
+} from "../../logic/ClueState";
 import { useHasKeyboard } from "../hooks/useHasKeyboard";
 import { useClue } from "../state";
 import { shortcutSuffix } from "../keyMap";
@@ -22,9 +26,9 @@ import type { InstallPromptTrigger } from "../../analytics/events";
 import { OverflowMenu } from "./OverflowMenu";
 import { PlayCTAButton } from "./PlayCTAButton";
 import { useToolbarActions } from "./Toolbar";
-import { useTeachModeToggle } from "./useTeachModeToggle";
-import { useTeachModeCheck } from "./TeachModeCheckContext";
-import { tallyVerdicts } from "../../logic/TeachMode";
+import { useSolverModeToggle } from "./useSolverModeToggle";
+import { useCheckBanner } from "./CheckBannerContext";
+import { tallyVerdicts } from "../../logic/SolverMode";
 import { teachModeCheckUsed } from "../../analytics/events";
 
 const TRIGGER_MENU: InstallPromptTrigger = "menu";
@@ -236,8 +240,8 @@ function BottomOverflowMenu({
     const hasKeyboard = useHasKeyboard();
     const { state, derived, canUndo, canRedo, undo, redo } = useClue();
     const { onNewGame } = useToolbarActions();
-    const requestTeachMode = useTeachModeToggle();
-    const { openBanner } = useTeachModeCheck();
+    const requestSolverMode = useSolverModeToggle();
+    const { openBanner } = useCheckBanner();
     const onCheckClick = () => {
         const tally = tallyVerdicts(
             state.setup,
@@ -352,25 +356,27 @@ function BottomOverflowMenu({
                         tourAnchor: "menu-item-transfer-device",
                     },
                     { type: "divider" },
-                    // Group 2: Teach-me mode + Check my work — own
+                    // Group 2: Apprentice mode + Check my work — own
                     // section so the toggle's "(on)" indicator and the
                     // Check shortcut sit together, distinct from the
                     // surrounding chrome. Mobile-primary surface for
                     // Check (the Toolbar's top-level button is
                     // desktop-only).
                     {
-                        label: state.teachMode
+                        label: state.solverMode === "check"
                             ? tTeach("menuLabelActive")
                             : tTeach("menuLabel"),
-                        active: state.teachMode,
+                        active: state.solverMode === "check",
                         onClick: () =>
-                            requestTeachMode(
-                                !state.teachMode,
+                            requestSolverMode(
+                                state.solverMode === SOLVER_MODE_CHECK
+                                    ? SOLVER_MODE_SOLVE
+                                    : SOLVER_MODE_CHECK,
                                 TEACH_SOURCE_OVERFLOW_MENU,
                             ),
                         tourAnchor: "menu-item-teach-mode",
                     },
-                    ...(state.teachMode && state.uiMode !== "setup"
+                    ...(state.solverMode === "check" && state.uiMode !== "setup"
                         ? [
                               {
                                   label: tTeach("toolbarCheckLabel"),

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { Player } from "../logic/GameObjects";
 import { CLASSIC_SETUP_3P, DEFAULT_SETUP } from "../logic/GameSetup";
 import { emptyHypotheses } from "../logic/Hypothesis";
-import { emptyUserDeductions } from "../logic/TeachMode";
+import { emptyUserDeductions } from "../logic/SolverMode";
 import { KnownCard } from "../logic/InitialKnowledge";
 import type { GameSession } from "../logic/Persistence";
 import type { PendingSuggestionDraft } from "../logic/ClueState";
@@ -896,7 +896,7 @@ describe("replaceSession", () => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
-            teachMode: false,
+            solverMode: "solve",
             userDeductions: emptyUserDeductions,
         };
         act(() => result.current.dispatch({ type: "replaceSession", session }));
@@ -925,7 +925,7 @@ describe("replaceSession", () => {
                 selfPlayerId: null,
                 firstDealtPlayerId: null,
                 dismissedInsights: new Map(),
-                teachMode: false,
+                solverMode: "solve",
                 userDeductions: emptyUserDeductions,
             },
         }));
@@ -1061,7 +1061,7 @@ describe("derived values", () => {
                     selfPlayerId: null,
                     firstDealtPlayerId: null,
                     dismissedInsights: new Map(),
-                    teachMode: false,
+                    solverMode: "solve",
                     userDeductions: emptyUserDeductions,
                 } satisfies GameSession,
             });
@@ -1131,7 +1131,7 @@ describe("derived values", () => {
                     selfPlayerId: null,
                     firstDealtPlayerId: null,
                     dismissedInsights: new Map(),
-                    teachMode: false,
+                    solverMode: "solve",
                     userDeductions: emptyUserDeductions,
                 } satisfies GameSession,
             });
@@ -1458,7 +1458,7 @@ describe("pendingSuggestion", () => {
                     selfPlayerId: null,
                     firstDealtPlayerId: null,
                     dismissedInsights: new Map(),
-                    teachMode: false,
+                    solverMode: "solve",
                     userDeductions: emptyUserDeductions,
                 },
             }),

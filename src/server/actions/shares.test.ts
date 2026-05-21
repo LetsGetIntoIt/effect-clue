@@ -51,7 +51,7 @@ interface RecordedInsert {
     readonly firstDealtPlayerIdData: string | null;
     readonly dismissedInsightsData: string | null;
     readonly hypothesisOrderData: string | null;
-    readonly teachModeData: string | null;
+    readonly solverModeData: string | null;
 }
 const recordedInserts: RecordedInsert[] = [];
 
@@ -207,7 +207,7 @@ const SAMPLE_DISMISSED_INSIGHTS = JSON.stringify([
 const SAMPLE_HYPOTHESIS_ORDER = JSON.stringify([
     { player: Player("Alice"), card: Card("card-scarlet") },
 ]);
-const SAMPLE_TEACH_MODE = JSON.stringify(true);
+const SAMPLE_SOLVER_MODE = JSON.stringify(true);
 
 /** Verify a JSON string round-trips through its codec — used in the
  * smoke tests below to make sure SAMPLE_* are valid before we hand
@@ -301,9 +301,9 @@ const projectInsert = (id: string, input: unknown): RecordedInsert => {
             kind === "transfer"
                 ? ((obj["hypothesisOrderData"] as string | undefined) ?? null)
                 : null,
-        teachModeData:
+        solverModeData:
             kind === "transfer"
-                ? ((obj["teachModeData"] as string | undefined) ?? null)
+                ? ((obj["solverModeData"] as string | undefined) ?? null)
                 : null,
     };
 };
@@ -358,7 +358,7 @@ describe("createShare — universal sign-in", () => {
             firstDealtPlayerIdData: SAMPLE_FIRST_DEALT_PLAYER_ID,
             dismissedInsightsData: SAMPLE_DISMISSED_INSIGHTS,
             hypothesisOrderData: SAMPLE_HYPOTHESIS_ORDER,
-            teachModeData: SAMPLE_TEACH_MODE,
+            solverModeData: SAMPLE_SOLVER_MODE,
         });
         expect(result).toBeInstanceOf(Error);
         expect((result as Error).message).toContain(
@@ -467,7 +467,7 @@ describe("createShare — kind dispatch (signed-in)", () => {
             firstDealtPlayerIdData: SAMPLE_FIRST_DEALT_PLAYER_ID,
             dismissedInsightsData: SAMPLE_DISMISSED_INSIGHTS,
             hypothesisOrderData: SAMPLE_HYPOTHESIS_ORDER,
-            teachModeData: SAMPLE_TEACH_MODE,
+            solverModeData: SAMPLE_SOLVER_MODE,
         });
         const insert = recordedInserts[0]!;
         expect(insert.cardPackData).toBe(SAMPLE_PACK);
@@ -483,7 +483,7 @@ describe("createShare — kind dispatch (signed-in)", () => {
         );
         expect(insert.dismissedInsightsData).toBe(SAMPLE_DISMISSED_INSIGHTS);
         expect(insert.hypothesisOrderData).toBe(SAMPLE_HYPOTHESIS_ORDER);
-        expect(insert.teachModeData).toBe(SAMPLE_TEACH_MODE);
+        expect(insert.solverModeData).toBe(SAMPLE_SOLVER_MODE);
     });
 
     test("kind: pack rejects extraneous hypothesesData", async () => {

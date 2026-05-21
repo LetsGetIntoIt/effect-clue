@@ -150,7 +150,7 @@ export function MyHandPanel() {
                     morph. Suppressed in teach-mode — the refute hint
                     is deducer-derived and would defeat the "do the
                     work yourself" promise. */}
-                {!state.teachMode && collapsed && (
+                {state.solverMode !== "check" && collapsed && (
                     <BannerSlot
                         collapsed={collapsed}
                         paused={isHovered}
@@ -226,13 +226,13 @@ export function MyHandPanel() {
                     bolded card-name rows are the same information the
                     full banner sentence would have carried — the
                     sentence is collapsed away as redundant). Gated
-                    on !state.teachMode to match the header slot —
+                    on state.solverMode !== "check" to match the header slot —
                     the refute hint is deducer-derived and would
                     defeat the "do the work yourself" promise. The
                     empty:hidden trick drops the wrapper from layout
                     when there's no draft so the cards chips below
                     don't sit on top of empty padding. */}
-                {!collapsed && !state.teachMode && (
+                {!collapsed && state.solverMode !== "check" && (
                     <motion.div
                         {...(bannerLayoutId !== undefined && {
                             layoutId: bannerLayoutId,

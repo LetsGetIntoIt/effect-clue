@@ -40,12 +40,17 @@ import {
     type PersistedSessionV12,
     type PersistedUserDeduction,
 } from "./PersistenceSchema";
-import type { PendingSuggestionDraft } from "./ClueState";
+import {
+    SOLVER_MODE_CHECK,
+    SOLVER_MODE_SOLVE,
+    type PendingSuggestionDraft,
+    type SolverMode,
+} from "./ClueState";
 import {
     emptyUserDeductions,
     type UserDeductionMap,
     type UserDeductionValue,
-} from "./TeachMode";
+} from "./SolverMode";
 import {
     newSuggestionId,
     Suggestion,
@@ -145,15 +150,21 @@ export interface GameSession {
     firstDealtPlayerId: Player | null;
     dismissedInsights: ReadonlyMap<string, InsightConfidence>;
     /**
-     * Per-game teach-me preference. Default `false` (off). The
+     * Per-game solver-mode preference. Default `"solve"`. The
      * localStorage round-trip carries it; the share wire format
-     * carries it only for `transfer` kind.
+     * carries it only for `transfer` kind. The on-disk JSON shape
+     * (`PersistedGameV12`) and the share wire codec still use a
+     * `teachMode: boolean` field for backward compatibility with
+     * existing storage and share URLs — `encodeSession` /
+     * `buildSessionFromV12` transform between the boolean and the
+     * `"solve" | "check"` enum at the boundary.
      */
-    teachMode: boolean;
+    solverMode: SolverMode;
     /**
-     * User's manual checklist marks while in teach-me mode. Persisted
-     * in localStorage so toggling teach-me off then back on restores
-     * the user's prior reasoning. NEVER on the wire for any share kind.
+     * User's manual checklist marks while `solverMode === "check"`.
+     * Persisted in localStorage so switching back to `"solve"` and
+     * then to `"check"` restores the user's prior reasoning. NEVER
+     * on the wire for any share kind.
      */
     userDeductions: UserDeductionMap;
 }
@@ -402,7 +413,7 @@ export const encodeSession = (session: GameSession): PersistedGame => ({
             ? null
             : String(session.firstDealtPlayerId),
     dismissedInsights: encodeDismissedInsights(session.dismissedInsights),
-    teachMode: session.teachMode,
+    teachMode: session.solverMode === SOLVER_MODE_CHECK,
     userDeductions: encodeUserDeductions(session.userDeductions),
 });
 
@@ -448,7 +459,7 @@ const buildSessionFromV12 = (v12: PersistedSessionV12): GameSession => ({
     selfPlayerId: v12.selfPlayerId,
     firstDealtPlayerId: v12.firstDealtPlayerId,
     dismissedInsights: decodeDismissedInsights(v12.dismissedInsights),
-    teachMode: v12.teachMode,
+    solverMode: v12.teachMode ? SOLVER_MODE_CHECK : SOLVER_MODE_SOLVE,
     userDeductions: decodeUserDeductions(v12.userDeductions),
 });
 
@@ -495,7 +506,7 @@ const buildSessionFromV11 = (v11: PersistedSessionV11): GameSession => ({
     firstDealtPlayerId: v11.firstDealtPlayerId,
     dismissedInsights: decodeDismissedInsights(v11.dismissedInsights),
     // v11 → v12 lift: teach-me mode default off; empty user deductions.
-    teachMode: false,
+    solverMode: SOLVER_MODE_SOLVE,
     userDeductions: emptyUserDeductions,
 });
 
@@ -550,7 +561,7 @@ const buildSessionFromV10 = (v10: PersistedSessionV10): GameSession => ({
     firstDealtPlayerId: v10.firstDealtPlayerId,
     dismissedInsights: decodeDismissedInsights(v10.dismissedInsights),
     // v10 → v12 lift: same as v11 → v12.
-    teachMode: false,
+    solverMode: SOLVER_MODE_SOLVE,
     userDeductions: emptyUserDeductions,
 });
 
@@ -604,7 +615,7 @@ const buildSessionFromV9 = (v9: PersistedSessionV9): GameSession => ({
     // v9 → v10 lift: no recorded dismissals on prior builds.
     dismissedInsights: new Map<string, InsightConfidence>(),
     // v9 → v12 lift: teach-me default off, no marks.
-    teachMode: false,
+    solverMode: SOLVER_MODE_SOLVE,
     userDeductions: emptyUserDeductions,
 });
 
@@ -662,7 +673,7 @@ const buildSessionFromV8 = (v8: PersistedSessionV8): GameSession => ({
     // v8 → v10 lift: no dismissals on the prior build.
     dismissedInsights: new Map<string, InsightConfidence>(),
     // v8 → v12 lift: teach-me default off, no marks.
-    teachMode: false,
+    solverMode: SOLVER_MODE_SOLVE,
     userDeductions: emptyUserDeductions,
 });
 
@@ -717,7 +728,7 @@ const buildSessionFromV7 = (v7: PersistedSessionV7): GameSession => ({
     firstDealtPlayerId: null,
     dismissedInsights: new Map<string, InsightConfidence>(),
     // v7 → v12 lift: teach-me default off, no marks.
-    teachMode: false,
+    solverMode: SOLVER_MODE_SOLVE,
     userDeductions: emptyUserDeductions,
 });
 
@@ -769,7 +780,7 @@ const liftV6ToV7 = (v6: PersistedSessionV6): GameSession => ({
     firstDealtPlayerId: null,
     dismissedInsights: new Map<string, InsightConfidence>(),
     // v6 → v12 lift: teach-me default off, no marks.
-    teachMode: false,
+    solverMode: SOLVER_MODE_SOLVE,
     userDeductions: emptyUserDeductions,
 });
 

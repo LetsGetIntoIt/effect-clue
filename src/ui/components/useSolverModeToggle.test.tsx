@@ -63,12 +63,12 @@ import { Cell, N as N_VAL, Y as Y_VAL } from "../../logic/Knowledge";
 import { CLASSIC_SETUP_3P } from "../../logic/GameSetup";
 import { PlayerOwner } from "../../logic/GameObjects";
 import { cardByName } from "../../logic/test-utils/CardByName";
-import { emptyUserDeductions } from "../../logic/TeachMode";
+import { emptyUserDeductions } from "../../logic/SolverMode";
 import { TestQueryClientProvider } from "../../test-utils/queryClient";
 import { ClueProvider, useClue } from "../state";
 import { ConfirmProvider } from "../hooks/useConfirm";
 import { ModalStackProvider, ModalStackShell } from "./ModalStack";
-import { useTeachModeToggle } from "./useTeachModeToggle";
+import { useSolverModeToggle } from "./useSolverModeToggle";
 
 function getOrFail<K, V>(map: HashMap.HashMap<K, V>, key: K): V {
     return Option.getOrThrow(HashMap.get(map, key));
@@ -106,7 +106,7 @@ const Wrapper = ({ children }: { readonly children: ReactNode }) => (
 const renderToggle = () => {
     const harness = renderHook(
         () => ({
-            requestSetTeachMode: useTeachModeToggle(),
+            requestSetSolverMode: useSolverModeToggle(),
             clue: useClue(),
         }),
         { wrapper: Wrapper },
@@ -144,14 +144,14 @@ const seedSession = (clue: ReturnType<typeof useClue>) => {
             selfPlayerId: null,
             firstDealtPlayerId: null,
             dismissedInsights: new Map(),
-            teachMode: false,
+            solverMode: "solve",
             userDeductions: emptyUserDeductions,
         },
     });
     return { first, second, knife, rope };
 };
 
-describe("useTeachModeToggle — entry", () => {
+describe("useSolverModeToggle — entry", () => {
     test("wizard source: seeds from own hand, does NOT merge hypotheses", () => {
         silenceConsoleError();
         const { result } = renderToggle();
@@ -185,16 +185,16 @@ describe("useTeachModeToggle — entry", () => {
                     selfPlayerId: first,
                     firstDealtPlayerId: null,
                     dismissedInsights: new Map(),
-                    teachMode: false,
+                    solverMode: "solve",
                     userDeductions: emptyUserDeductions,
                 },
             });
         });
 
-        act(() => result.current.requestSetTeachMode(true, "wizard"));
+        act(() => result.current.requestSetSolverMode("check", "wizard"));
 
         // teachMode flipped on.
-        expect(result.current.clue.state.teachMode).toBe(true);
+        expect(result.current.clue.state.solverMode).toBe("check");
         // userDeductions has the own-hand seed (Y on first's column for
         // Knife, N elsewhere), and does NOT contain the rope hypothesis.
         expect(
@@ -246,14 +246,14 @@ describe("useTeachModeToggle — entry", () => {
                     selfPlayerId: null,
                     firstDealtPlayerId: null,
                     dismissedInsights: new Map(),
-                    teachMode: false,
+                    solverMode: "solve",
                     userDeductions: emptyUserDeductions,
                 },
             });
         });
 
         act(() =>
-            result.current.requestSetTeachMode(true, "overflowMenu"),
+            result.current.requestSetSolverMode("check", "overflowMenu"),
         );
 
         // Modal is now in the DOM with the i18n key as button text.
@@ -266,7 +266,7 @@ describe("useTeachModeToggle — entry", () => {
 
         // teachMode on, userDeductions now includes the (second, rope)
         // hypothesis as a mark.
-        expect(result.current.clue.state.teachMode).toBe(true);
+        expect(result.current.clue.state.solverMode).toBe("check");
         expect(
             getOrFail(
                 result.current.clue.state.userDeductions,
@@ -294,7 +294,7 @@ describe("useTeachModeToggle — entry", () => {
         const before = result.current.clue.state.userDeductions;
 
         act(() =>
-            result.current.requestSetTeachMode(true, "overflowMenu"),
+            result.current.requestSetSolverMode("check", "overflowMenu"),
         );
         const keepBtn = await screen.findByText(
             "midGameOptionKeepExplicit",
@@ -305,7 +305,7 @@ describe("useTeachModeToggle — entry", () => {
 
         // Same reference — no replaceUserDeductions dispatch happened.
         expect(result.current.clue.state.userDeductions).toBe(before);
-        expect(result.current.clue.state.teachMode).toBe(true);
+        expect(result.current.clue.state.solverMode).toBe("check");
     });
 
     test("overflowMenu + keep-explicit + conflicting hypothesis: hypothesis value wins", async () => {
@@ -329,7 +329,7 @@ describe("useTeachModeToggle — entry", () => {
         });
 
         act(() =>
-            result.current.requestSetTeachMode(true, "overflowMenu"),
+            result.current.requestSetSolverMode("check", "overflowMenu"),
         );
         const keepBtn = await screen.findByText(
             "midGameOptionKeepExplicit",
@@ -384,14 +384,14 @@ describe("useTeachModeToggle — entry", () => {
                     selfPlayerId: null,
                     firstDealtPlayerId: null,
                     dismissedInsights: new Map(),
-                    teachMode: false,
+                    solverMode: "solve",
                     userDeductions: emptyUserDeductions,
                 },
             });
         });
 
         act(() =>
-            result.current.requestSetTeachMode(true, "overflowMenu"),
+            result.current.requestSetSolverMode("check", "overflowMenu"),
         );
         const adoptBtn = await screen.findByText(
             "midGameOptionAdoptDeductions",
@@ -419,7 +419,7 @@ describe("useTeachModeToggle — entry", () => {
     });
 });
 
-describe("useTeachModeToggle — exit", () => {
+describe("useSolverModeToggle — exit", () => {
     test("wizard source: marks not proved by the deducer become hypotheses", () => {
         silenceConsoleError();
         const { result } = renderToggle();
@@ -433,8 +433,8 @@ describe("useTeachModeToggle — exit", () => {
         // (unsubstantiated — should become a hypothesis).
         act(() => {
             result.current.clue.dispatch({
-                type: "setTeachMode",
-                enabled: true,
+                type: "setSolverMode",
+                mode: "check",
             });
             result.current.clue.dispatch({
                 type: "setUserDeduction",
@@ -449,10 +449,10 @@ describe("useTeachModeToggle — exit", () => {
         });
         expect(HashMap.size(result.current.clue.state.hypotheses)).toBe(0);
 
-        act(() => result.current.requestSetTeachMode(false, "wizard"));
+        act(() => result.current.requestSetSolverMode("solve", "wizard"));
 
         // teachMode off.
-        expect(result.current.clue.state.teachMode).toBe(false);
+        expect(result.current.clue.state.solverMode).toBe("solve");
         // userDeductions preserved.
         expect(
             HashMap.size(result.current.clue.state.userDeductions),
@@ -483,19 +483,19 @@ describe("useTeachModeToggle — exit", () => {
         seedSession(result.current.clue);
         act(() => {
             result.current.clue.dispatch({
-                type: "setTeachMode",
-                enabled: true,
+                type: "setSolverMode",
+                mode: "check",
             });
         });
         const hypothesesBefore = result.current.clue.state.hypotheses;
         const orderBefore = result.current.clue.state.hypothesisOrder;
 
-        act(() => result.current.requestSetTeachMode(false, "wizard"));
+        act(() => result.current.requestSetSolverMode("solve", "wizard"));
 
         // Same references — no replaceHypotheses fired.
         expect(result.current.clue.state.hypotheses).toBe(hypothesesBefore);
         expect(result.current.clue.state.hypothesisOrder).toBe(orderBefore);
-        expect(result.current.clue.state.teachMode).toBe(false);
+        expect(result.current.clue.state.solverMode).toBe("solve");
     });
 
     test("wizard source + mark conflicts with existing hypothesis: mark wins, order position preserved", () => {
@@ -513,8 +513,8 @@ describe("useTeachModeToggle — exit", () => {
                 value: Y_VAL,
             });
             result.current.clue.dispatch({
-                type: "setTeachMode",
-                enabled: true,
+                type: "setSolverMode",
+                mode: "check",
             });
             result.current.clue.dispatch({
                 type: "setUserDeduction",
@@ -525,7 +525,7 @@ describe("useTeachModeToggle — exit", () => {
         const orderBefore =
             result.current.clue.state.hypothesisOrder;
 
-        act(() => result.current.requestSetTeachMode(false, "wizard"));
+        act(() => result.current.requestSetSolverMode("solve", "wizard"));
 
         // Hypothesis value overwritten with the mark's value.
         expect(
@@ -549,8 +549,8 @@ describe("useTeachModeToggle — exit", () => {
 
         act(() => {
             result.current.clue.dispatch({
-                type: "setTeachMode",
-                enabled: true,
+                type: "setSolverMode",
+                mode: "check",
             });
             result.current.clue.dispatch({
                 type: "setUserDeduction",
@@ -560,7 +560,7 @@ describe("useTeachModeToggle — exit", () => {
         });
 
         act(() =>
-            result.current.requestSetTeachMode(false, "overflowMenu"),
+            result.current.requestSetSolverMode("solve", "overflowMenu"),
         );
         // useConfirm renders the confirm dialog with the i18n key as
         // its label.
@@ -571,7 +571,7 @@ describe("useTeachModeToggle — exit", () => {
             await user.click(confirmBtn);
         });
 
-        expect(result.current.clue.state.teachMode).toBe(false);
+        expect(result.current.clue.state.solverMode).toBe("solve");
         expect(
             getOrFail(
                 result.current.clue.state.hypotheses,
@@ -589,8 +589,8 @@ describe("useTeachModeToggle — exit", () => {
 
         act(() => {
             result.current.clue.dispatch({
-                type: "setTeachMode",
-                enabled: true,
+                type: "setSolverMode",
+                mode: "check",
             });
             result.current.clue.dispatch({
                 type: "setUserDeduction",
@@ -603,7 +603,7 @@ describe("useTeachModeToggle — exit", () => {
         const hypothesesBefore = result.current.clue.state.hypotheses;
 
         act(() =>
-            result.current.requestSetTeachMode(false, "overflowMenu"),
+            result.current.requestSetSolverMode("solve", "overflowMenu"),
         );
         const cancelBtn = await screen.findByText("cancel");
         await act(async () => {
@@ -611,7 +611,7 @@ describe("useTeachModeToggle — exit", () => {
         });
 
         // teachMode still on; nothing dispatched.
-        expect(result.current.clue.state.teachMode).toBe(true);
+        expect(result.current.clue.state.solverMode).toBe("check");
         expect(result.current.clue.state.userDeductions).toBe(
             userDeductionsBefore,
         );

@@ -103,22 +103,22 @@
                 }
             },
             "teachMe": {
-                "heading": "Or, solve it yourself",
-                "intro": "If you would rather not have the solver give it all away, Teach Me mode hands the deductions back. You mark each cell yourself, and the solver only weighs in when you ask. Solve the case, learn the strategy.",
+                "heading": "Or, hone your skills with Apprentice mode",
+                "intro": "If you would rather solve the case yourself, Apprentice mode hands the deductions back. You mark each cell yourself, and the solver only weighs in when you ask. Solve the case, hone your skills.",
                 "turnOn": {
                     "title": "Turn it on at setup",
-                    "body": "Pick Teach Me when you set up the game. The solver steps back, leaving the deductions for you to make on your own.",
-                    "imageAlt": "The Teach Me toggle on the game setup screen"
+                    "body": "Pick Apprentice mode when you set up the game. The solver steps back, leaving the deductions for you to make on your own.",
+                    "imageAlt": "The Apprentice mode toggle on the game setup screen"
                 },
                 "markCell": {
                     "title": "Mark each cell yourself",
                     "body": "As you spot what a player must (or must not) have, mark the cell. When you want a second opinion, the Check button asks the solver to verify your mark, without revealing anything else. The solver tells you whether your mark is supported by the clues, contradicted by them, or still unsubstantiated. Do it for a single cell...",
-                    "imageAlt": "The Check button inside a cell explanation panel in Teach Me mode"
+                    "imageAlt": "The Check button inside a cell explanation panel in Apprentice mode"
                 },
                 "checkResult": {
                     "title": "See if your mark holds up",
                     "body": "...or check the whole grid at once. Get an overall spoiler-free check, or let the solver point out which specific cells have logical issues.",
-                    "imageAlt": "The Teach Me Check result banner showing the verdict on a marked cell"
+                    "imageAlt": "The Apprentice mode Check result banner showing the verdict on a marked cell"
                 }
             }
         }
@@ -174,13 +174,13 @@
             "clearSelfPlayer": "clearing your identity",
             "setFirstDealtPlayer": "marking {player} as the first dealt",
             "clearFirstDealtPlayer": "clearing the first-dealt player",
-            "enableTeachMode": "turning on teach-me mode",
-            "disableTeachMode": "turning off teach-me mode",
+            "enableTeachMode": "turning on Apprentice mode",
+            "disableTeachMode": "turning off Apprentice mode",
             "setUserDeduction": "marking {owner} {value, select, Y {has} other {does not have}} {card}",
             "clearUserDeduction": "clearing your mark on {owner} / {card}",
-            "clearUserDeductions": "clearing all your teach-me marks",
-            "replaceUserDeductions": "filling your teach-me board from the deducer",
-            "replaceHypotheses": "carrying your teach-me marks over as hypotheses"
+            "clearUserDeductions": "clearing all your Apprentice mode marks",
+            "replaceUserDeductions": "filling your Apprentice mode board from the deducer",
+            "replaceHypotheses": "carrying your Apprentice mode marks over as hypotheses"
         }
     },
     "setup": {
@@ -477,7 +477,7 @@
         "verdictInconsistent": "This contradicts another mark you made — only one of them can be right.",
         "verdictUnknown": "Nothing to check yet — mark this cell or wait for more clues.",
         "toolbarCheckLabel": "Check my work",
-        "toolbarCheckAria": "Check your teach-me marks against the evidence",
+        "toolbarCheckAria": "Check your Apprentice mode marks against the evidence",
         "bannerLookingGood": "Looking good — every mark is consistent with the evidence.",
         "bannerNothingMarked": "Mark some cells first, then press Check.",
         "bannerEvidenceContradiction": "Your evidence is inconsistent — review your suggestion log.",
@@ -488,23 +488,28 @@
         "bannerShowMeWhere": "Show me where",
         "bannerDismissAria": "Dismiss feedback",
         "bannerSummaryAnd": " and ",
-        "midGamePromptTitle": "Turn on teach-me mode?",
-        "midGamePromptBody": "Teach-me mode hides the solver's deductions so you can work the puzzle yourself. You can either start from your own explicit marks (any active hypotheses come along as editable marks too), or adopt everything the Clue Solver has already deduced as your starting point.",
-        "midGameOptionKeepExplicit": "Start with my explicit marks only",
-        "midGameOptionAdoptDeductions": "Adopt the Clue Solver's deductions",
-        "exitPromptTitle": "Exit teach-me mode?",
-        "exitPromptBody": "Leaving teach-me mode reveals all the deductions the solver has worked out, which may take the thinking and fun out of the rest of this game. Any marks that the solver can't already prove will be carried over as hypotheses so you can keep them in view. You can turn teach-me back on later — your marks will be waiting.",
-        "exitPromptConfirm": "Exit teach-me mode",
-        "menuLabel": "Teach me mode",
-        "menuLabelActive": "Teach me mode (on)",
-        "wizardStepTitle": "Teach-me mode",
-        "wizardStepSummary": "Solve the puzzle yourself — we will hide deductions, hypotheses, and hints until you ask us to check your work.",
-        "wizardToggleLabel": "Teach me as I solve",
+        "midGamePromptTitle": "Turn on Apprentice mode?",
+        "midGamePromptBodyParagraph1": "Apprentice mode hides the solver's deductions so you can work the puzzle yourself.",
+        "midGamePromptBodyParagraph2": "Start fresh with just your own marks, or carry over what the solver has already figured out.",
+        "midGameOptionKeepExplicit": "Start with my marks only",
+        "midGameOptionAdoptDeductions": "Adopt the solver's deductions",
+        "exitPromptTitle": "Exit Apprentice mode?",
+        "exitPromptBodyParagraph1": "Exiting reveals everything the solver has worked out — this may take the thinking and fun out of the rest of this game.",
+        "exitPromptBodyParagraph2": "Your marks aren't lost. Anything the solver can't prove will be carried over as hypotheses, and you can return to Apprentice mode anytime.",
+        "exitPromptConfirm": "Exit Apprentice mode",
+        "menuLabel": "Apprentice mode",
+        "menuLabelActive": "Apprentice mode (on)",
+        "wizardStepTitle": "Apprentice mode",
+        "wizardStepSummary": "Pick whether the solver does the thinking for you, or whether you do the solving and check your work as you go.",
+        "wizardOptionSolverLabel": "Solve for me",
+        "wizardOptionSolverHelp": "The Clue Solver tracks every deduction. You just log suggestions as the game plays out, and the checklist updates itself.",
+        "wizardOptionApprenticeLabel": "I'll solve myself",
+        "wizardOptionApprenticeHelp": "The solver steps back. You mark each cell yourself and press Check when you want a sanity check — hones your skills.",
         "wizardToggleHelp": "Optional. You can change this mid-game from the overflow menu.",
-        "shareImportInviteCheckbox": "Use teach-me mode for this game",
+        "shareImportInviteCheckbox": "Use Apprentice mode for this game",
         "shareImportInviteHelp": "Solve the puzzle yourself; press Check to compare your marks against the evidence.",
-        "shareImportTransferSummaryOn": "Includes teach-me mode: on",
-        "shareImportTransferSummaryOff": "Includes teach-me mode: off"
+        "shareImportTransferSummaryOn": "Includes Apprentice mode: on",
+        "shareImportTransferSummaryOff": "Includes Apprentice mode: off"
     },
     "suggestions": {
         "title": "Suggestion log",
@@ -931,7 +936,7 @@
                 "body": "Save custom decks here and share them with friends. Each saved pack syncs across your devices when you're signed in."
             },
             "teachMode": {
-                "title": "Solve it yourself with teach-me mode",
+                "title": "Solve it yourself with Apprentice mode",
                 "body": "Turn this on to hide deductions, hypotheses, and hints. Mark the checklist yourself, and press Check when you want a sanity check from the solver."
             }
         },

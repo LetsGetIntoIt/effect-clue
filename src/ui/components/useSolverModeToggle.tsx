@@ -9,7 +9,12 @@ import {
     mergeUnsubstantiatedMarksIntoHypotheses,
     seedFromKnowledge,
     seedFromOwnHand,
-} from "../../logic/TeachMode";
+} from "../../logic/SolverMode";
+import {
+    SOLVER_MODE_CHECK,
+    SOLVER_MODE_SOLVE,
+    type SolverMode,
+} from "../../logic/ClueState";
 import {
     teachModeDisabled,
     teachModeEnabled,
@@ -18,28 +23,29 @@ import { useConfirm } from "../hooks/useConfirm";
 import { useClue } from "../state";
 import { useModalStack } from "./ModalStack";
 
-const PROMPT_ID_PREFIX = "teach-mode-prompt" as const;
+const PROMPT_ID_PREFIX = "solver-mode-prompt" as const;
 
 type MidGameChoice = "keep-explicit" | "adopt-deductions" | "cancel";
 
 /**
- * Imperatively-invoked teach-mode toggle. The overflow menu items
+ * Imperatively-invoked solver-mode toggle. The overflow menu items
  * (desktop Toolbar + mobile BottomNav) and the setup wizard step call
- * `requestSetTeachMode` — the hook handles confirmation and seeding:
+ * `requestSolverMode` — the hook handles confirmation and seeding:
  *
- * - Turning OFF: prompts the user to confirm (exiting teach-mode
- *   reveals all the deductions the solver knows, which can take the
- *   thinking out of the rest of the game). Wizard source skips the
- *   confirm — unchecking the setup-time toggle is low-stakes.
- * - Turning ON from the wizard: skip the prompt, auto-seed the
- *   "free" facts derived from the user's own hand.
- * - Turning ON mid-game: opens a 3-option modal letting the user
- *   pick between keeping their explicit marks (or starting blank
- *   if they have none) and adopting the Clue Solver's current
+ * - Switching to `"solve"`: prompts the user to confirm (exiting
+ *   check mode reveals all the deductions the solver knows, which
+ *   can take the thinking out of the rest of the game). Wizard
+ *   source skips the confirm — flipping the setup-time choice is
+ *   low-stakes.
+ * - Switching to `"check"` from the wizard: skip the prompt,
+ *   auto-seed the "free" facts derived from the user's own hand.
+ * - Switching to `"check"` mid-game: opens a 3-option modal letting
+ *   the user pick between keeping their explicit marks (or starting
+ *   blank if they have none) and adopting the Clue Solver's current
  *   deductions wholesale.
  */
-export function useTeachModeToggle(): (
-    enabled: boolean,
+export function useSolverModeToggle(): (
+    mode: SolverMode,
     source: "wizard" | "overflowMenu" | "shareImport",
 ) => void {
     const t = useTranslations("teachMode");
@@ -50,11 +56,11 @@ export function useTeachModeToggle(): (
     const nextIdRef = useRef(0);
 
     return useCallback(
-        (enabled: boolean, source: "wizard" | "overflowMenu" | "shareImport") => {
-            if (!enabled) {
+        (mode: SolverMode, source: "wizard" | "overflowMenu" | "shareImport") => {
+            if (mode === SOLVER_MODE_SOLVE) {
                 const finishOff = () => {
                     // Marks the solver can't already prove ride along
-                    // as hypotheses so they stay visible in non-teach
+                    // as hypotheses so they stay visible in solve
                     // mode. The mark itself stays in `userDeductions`
                     // (preserved across exits). Substantiated marks
                     // are skipped — the solver already shows them.
@@ -79,7 +85,7 @@ export function useTeachModeToggle(): (
                             hypothesisOrder: merged.hypothesisOrder,
                         });
                     }
-                    dispatch({ type: "setTeachMode", enabled: false });
+                    dispatch({ type: "setSolverMode", mode: SOLVER_MODE_SOLVE });
                     if (source !== "wizard") {
                         teachModeDisabled({
                             source:
@@ -91,7 +97,7 @@ export function useTeachModeToggle(): (
                 };
                 // Wizard source: low-stakes setup-time toggle, no
                 // confirm. Other sources: warn the user that exiting
-                // teach-mode reveals the solver's deductions and
+                // check mode reveals the solver's deductions and
                 // can take the thinking and fun out of the rest of
                 // the game.
                 if (source === "wizard") {
@@ -101,7 +107,16 @@ export function useTeachModeToggle(): (
                 void (async () => {
                     const ok = await confirm({
                         title: t("exitPromptTitle"),
-                        message: t("exitPromptBody"),
+                        message: (
+                            <div className="flex flex-col gap-3">
+                                <p className="m-0">
+                                    {t("exitPromptBodyParagraph1")}
+                                </p>
+                                <p className="m-0">
+                                    {t("exitPromptBodyParagraph2")}
+                                </p>
+                            </div>
+                        ),
                         confirmLabel: t("exitPromptConfirm"),
                         cancelLabel: tCommon("cancel"),
                         destructive: true,
@@ -129,13 +144,13 @@ export function useTeachModeToggle(): (
                     type: "replaceUserDeductions",
                     userDeductions: seed,
                 });
-                dispatch({ type: "setTeachMode", enabled: true });
+                dispatch({ type: "setSolverMode", mode: SOLVER_MODE_CHECK });
                 teachModeEnabled({ source });
                 return;
             }
 
             // Mid-game (overflowMenu / shareImport) — open the
-            // 3-option prompt. Both choices flip teach-mode on; they
+            // 3-option prompt. Both choices flip to `"check"`; they
             // differ in what `userDeductions` look like afterwards.
             nextIdRef.current += 1;
             const id = `${PROMPT_ID_PREFIX}-${nextIdRef.current}`;
@@ -146,7 +161,7 @@ export function useTeachModeToggle(): (
             const resolveChoice = (choice: MidGameChoice) => {
                 pop();
                 if (choice === "cancel") return;
-                dispatch({ type: "setTeachMode", enabled: true });
+                dispatch({ type: "setSolverMode", mode: SOLVER_MODE_CHECK });
                 if (choice === "adopt-deductions") {
                     if (knowledge !== undefined) {
                         dispatch({
@@ -161,9 +176,9 @@ export function useTeachModeToggle(): (
                 } else {
                     // "keep-explicit" — user's existing marks stay,
                     // with any active hypotheses folded in so the
-                    // user's non-teach-mode work isn't dropped on the
+                    // user's solve-mode work isn't dropped on the
                     // floor. Hypothesis value wins on conflict — it's
-                    // the user's most recent edit in non-teach mode.
+                    // the user's most recent edit in solve mode.
                     if (HashMap.size(state.hypotheses) > 0) {
                         const mergedDeductions =
                             mergeHypothesesIntoUserDeductions(
@@ -202,8 +217,15 @@ export function useTeachModeToggle(): (
                     </div>
                 ),
                 content: (
-                    <Dialog.Description className="m-0 px-5 pt-3 pb-3 text-[1rem] leading-normal text-[#2a1f12]">
-                        {t("midGamePromptBody")}
+                    <Dialog.Description asChild>
+                        <div className="flex flex-col gap-3 px-5 pt-3 pb-3 text-[1rem] leading-normal text-[#2a1f12]">
+                            <p className="m-0">
+                                {t("midGamePromptBodyParagraph1")}
+                            </p>
+                            <p className="m-0">
+                                {t("midGamePromptBodyParagraph2")}
+                            </p>
+                        </div>
                     </Dialog.Description>
                 ),
                 footer: (

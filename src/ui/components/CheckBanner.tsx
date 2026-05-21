@@ -9,7 +9,7 @@ import {
     classifyCell,
     tallyVerdicts,
     tallyHasIssues,
-} from "../../logic/TeachMode";
+} from "../../logic/SolverMode";
 import { allCardIds } from "../../logic/CardSet";
 import { CaseFileOwner, PlayerOwner } from "../../logic/GameObjects";
 import { Result } from "effect";
@@ -18,8 +18,8 @@ import { teachModeCheckUsed } from "../../analytics/events";
 import { T_STANDARD, useReducedTransition } from "../motion";
 import { useClue } from "../state";
 import { AlertIcon, CheckIcon, XIcon } from "./Icons";
-import { cellKey } from "../../logic/TeachMode";
-import { useTeachModeCheck } from "./TeachModeCheckContext";
+import { cellKey } from "../../logic/SolverMode";
+import { useCheckBanner } from "./CheckBannerContext";
 
 /**
  * The vague-summary banner that appears after the user presses the
@@ -31,7 +31,7 @@ import { useTeachModeCheck } from "./TeachModeCheckContext";
  * suppressed in teach-mode anyway) and above the page header offset,
  * matching the same fixed-top pattern.
  */
-export function TeachModeCheckBanner() {
+export function CheckBanner() {
     const t = useTranslations("teachMode");
     const { state, derived } = useClue();
     const {
@@ -40,7 +40,7 @@ export function TeachModeCheckBanner() {
         enableReveal,
         closeBanner,
         setVerdictMap,
-    } = useTeachModeCheck();
+    } = useCheckBanner();
     const transition = useReducedTransition(T_STANDARD, { fadeMs: 120 });
 
     const tally = useMemo(

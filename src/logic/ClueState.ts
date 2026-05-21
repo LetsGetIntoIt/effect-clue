@@ -8,7 +8,27 @@ import type { KnownCard } from "./InitialKnowledge";
 import type { Cell } from "./Knowledge";
 import type { GameSession } from "./Persistence";
 import type { SuggestionId } from "./Suggestion";
-import type { UserDeductionMap, UserDeductionValue } from "./TeachMode";
+import type { UserDeductionMap, UserDeductionValue } from "./SolverMode";
+
+/**
+ * Which mode the solver runs in for this game.
+ *
+ * - `"solve"`: the solver does the deducing. The checklist auto-fills,
+ *   contradiction banner / hypothesis controls / behavioral insights /
+ *   lead footnotes all render normally. Surfaced in the UI as
+ *   "Solver mode".
+ * - `"check"`: the solver steps back. The cell renderer reads from
+ *   `userDeductions` instead of the deducer's output; deductive UI
+ *   surfaces are suppressed; the toolbar Check button compares the
+ *   user's marks against the real-only deducer output. Surfaced in
+ *   the UI as "Apprentice mode".
+ *
+ * Persisted per-game and rideable on `transfer` shares.
+ */
+export type SolverMode = "solve" | "check";
+
+export const SOLVER_MODE_SOLVE: SolverMode = "solve";
+export const SOLVER_MODE_CHECK: SolverMode = "check";
 
 /**
  * UI-level shape of a suggestion that hasn't been converted to a
@@ -205,20 +225,22 @@ export type ClueAction =
      */
     | { type: "setFirstDealtPlayer"; player: Player | null }
     /**
-     * Flip teach-me mode on or off for this game. Teach-me mode hides
-     * deducer-derived UI (hypotheses, leads, suggestion banners, cell
-     * "why" reasoning, contradiction banner) and lets the user mark
-     * checklist cells themselves via `setUserDeduction`. They can press
-     * the Toolbar "Check" button to see how their marks compare to the
-     * deducer's verdict. Per-game preference; rideable on transfer shares.
+     * Switch the solver mode for this game. In `"check"` mode the
+     * solver hides deducer-derived UI (hypotheses, leads, suggestion
+     * banners, cell "why" reasoning, contradiction banner) and lets the
+     * user mark checklist cells themselves via `setUserDeduction`. They
+     * can press the Toolbar "Check" button to see how their marks
+     * compare to the deducer's verdict. In `"solve"` mode the solver
+     * runs and renders normally. Per-game preference; rideable on
+     * transfer shares.
      */
-    | { type: "setTeachMode"; enabled: boolean }
+    | { type: "setSolverMode"; mode: SolverMode }
     /**
      * Set or clear a user-deduction mark for one cell. `value === null`
-     * removes the entry (blank). Only meaningful when `teachMode` is on
-     * but the reducer doesn't enforce that — toggling teach-mode off
-     * preserves `userDeductions` so toggling back on restores the user's
-     * marks.
+     * removes the entry (blank). Only meaningful when `solverMode` is
+     * `"check"` but the reducer doesn't enforce that — switching back
+     * to `"solve"` preserves `userDeductions` so switching back to
+     * `"check"` restores the user's marks.
      */
     | { type: "setUserDeduction"; cell: Cell; value: UserDeductionValue | null }
     /** Drop every user-deduction mark. */
@@ -307,7 +329,7 @@ export interface ClueState {
      */
     readonly dismissedInsights: ReadonlyMap<string, InsightConfidence>;
     /**
-     * Whether teach-me mode is active for this game. When `true`:
+     * Which solver mode is active for this game. In `"check"` mode:
      * - the cell renderer reads `userDeductions` instead of the deducer's
      *   output
      * - the contradiction banner, hypothesis control, behavioral-insight
@@ -328,22 +350,22 @@ export interface ClueState {
      * on the wire for `invite` shares (the receive modal offers an
      * optional opt-in checkbox instead).
      *
-     * Reset to `false` on `newGame`. Preserved across `loadCardSet` and
-     * `replaceSession` (the localStorage round-trip carries it; share
-     * wire format is governed by kind).
+     * Reset to `"solve"` on `newGame`. Preserved across `loadCardSet`
+     * and `replaceSession` (the localStorage round-trip carries it;
+     * share wire format is governed by kind).
      */
-    readonly teachMode: boolean;
+    readonly solverMode: SolverMode;
     /**
-     * The user's manual checklist marks while teach-me mode is on.
+     * The user's manual checklist marks while `solverMode === "check"`.
      * Distinct from `knownCards` (which represents observed evidence
      * that feeds the deducer): user deductions are render-only guesses,
      * the user's *reasoning*. The deducer ignores them.
      *
-     * Persists across `teachMode` toggles — toggling off doesn't wipe
-     * the marks, so toggling back on restores them. The mid-game toggle
-     * prompt asks the user whether to overwrite their existing marks
-     * with the current deducer output ("Keep what we've deduced") or
-     * keep them as-is.
+     * Persists across `solverMode` switches — going back to `"solve"`
+     * doesn't wipe the marks, so going back to `"check"` restores them.
+     * The mid-game toggle prompt asks the user whether to overwrite
+     * their existing marks with the current deducer output ("Keep what
+     * we've deduced") or keep them as-is.
      *
      * Reset to `emptyUserDeductions` on `newGame` and `loadCardSet`.
      * NOT on the wire for any share kind — personal scratchwork.

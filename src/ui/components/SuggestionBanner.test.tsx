@@ -4,7 +4,10 @@ import { Player } from "../../logic/GameObjects";
 import { CLASSIC_SETUP_3P } from "../../logic/GameSetup";
 import { KnownCard } from "../../logic/InitialKnowledge";
 import { cardByName } from "../../logic/test-utils/CardByName";
-import type { PendingSuggestionDraft } from "../../logic/ClueState";
+import type {
+    PendingSuggestionDraft,
+    SolverMode,
+} from "../../logic/ClueState";
 
 // next-intl mock — echoes back `${namespace}.${key}:${values}` for `t()`,
 // and for `t.rich()` returns a React-node array that includes the
@@ -67,13 +70,13 @@ const mockClueState: {
     selfPlayerId: Player | null;
     knownCards: ReadonlyArray<KnownCard>;
     pendingSuggestion: PendingSuggestionDraft | null;
-    teachMode: boolean;
+    solverMode: SolverMode;
 } = {
     setup,
     selfPlayerId: A,
     knownCards: [],
     pendingSuggestion: null,
-    teachMode: false,
+    solverMode: "solve",
 };
 
 vi.mock("../state", () => ({
@@ -112,7 +115,7 @@ beforeEach(() => {
     mockClueState.selfPlayerId = A;
     mockClueState.knownCards = [];
     mockClueState.pendingSuggestion = null;
-    mockClueState.teachMode = false;
+    mockClueState.solverMode = "solve";
     myCardsBannerShownMock.mockReset();
     myCardsBannerDismissedMock.mockReset();
 });
@@ -174,7 +177,7 @@ describe("SuggestionBanner — non-self suggester", () => {
 
     test("partial draft with a matching card in teach-mode → banner hidden (panel suppressed in teach-mode; SuggestionBanner returns null)", async () => {
         const SuggestionBanner = await importBanner();
-        mockClueState.teachMode = true;
+        mockClueState.solverMode = "check";
         mockClueState.knownCards = [KnownCard({ player: A, card: MS_WHITE })];
         mockClueState.pendingSuggestion = draft({
             suggester: B,
@@ -224,7 +227,7 @@ describe("SuggestionBanner — non-self suggester", () => {
 
     test("complete draft with a matching card in teach-mode → banner hidden (panel suppressed in teach-mode; SuggestionBanner returns null)", async () => {
         const SuggestionBanner = await importBanner();
-        mockClueState.teachMode = true;
+        mockClueState.solverMode = "check";
         mockClueState.knownCards = [
             KnownCard({ player: A, card: KNIFE }),
             KnownCard({ player: A, card: KITCHEN }),

@@ -76,12 +76,12 @@ import { Modal } from "../components/Modal";
 import { useConfirm } from "../hooks/useConfirm";
 import { CardSelectionGrid } from "../setup/shared/CardSelectionGrid";
 import { firstDealtHandSizes } from "../setup/firstDealt";
+import { saveTourDismissed } from "../tour/TourState";
 import {
-    saveTourDismissed,
-    TOUR_MODE_NORMAL,
-    TOUR_MODE_TEACH,
-    type TourMode,
-} from "../tour/TourState";
+    SOLVER_MODE_CHECK,
+    SOLVER_MODE_SOLVE,
+    type SolverMode,
+} from "../../logic/ClueState";
 import {
     type ApplyOverrides,
     hasPersistedGameData,
@@ -111,7 +111,7 @@ interface ShareSnapshot {
     readonly firstDealtPlayerIdData: string | null;
     readonly dismissedInsightsData: string | null;
     readonly hypothesisOrderData: string | null;
-    readonly teachModeData: string | null;
+    readonly solverModeData: string | null;
     readonly ownerName: string | null;
     readonly ownerIsAnonymous: boolean | null;
 }
@@ -353,15 +353,16 @@ export function ShareImportPage({
     const hasKnown = snapshot.knownCardsData !== null;
     const hasSugg = snapshot.suggestionsData !== null;
     const hasAccu = snapshot.accusationsData !== null;
-    // Teach-me preference rides `transfer` shares only. `null` here
-    // means "not on the wire" (invite / pack share, or pre-migration
-    // transfer share). On decode, default to `false`. The boolean is
-    // surfaced in the import summary so the receiver knows what they
-    // are about to inherit.
-    const teachModeSnapshot: boolean | null = (() => {
-        if (snapshot.teachModeData === null) return null;
+    // Solver-mode preference rides `transfer` shares only. `null`
+    // here means "not on the wire" (invite / pack share, or
+    // pre-migration transfer share). The boolean is surfaced in the
+    // import summary so the receiver knows what they are about to
+    // inherit. The wire format is still a boolean (`true` = check
+    // mode); see ShareCodec for the SolverMode transform.
+    const solverModeSnapshot: boolean | null = (() => {
+        if (snapshot.solverModeData === null) return null;
         try {
-            const parsed = JSON.parse(snapshot.teachModeData);
+            const parsed = JSON.parse(snapshot.solverModeData);
             return typeof parsed === "boolean" ? parsed : null;
         } catch {
             return null;
@@ -620,11 +621,11 @@ export function ShareImportPage({
         const overrides: {
             selfPlayerId?: Player | null;
             knownCards?: ReadonlyArray<KnownCard>;
-            teachMode?: boolean;
+            solverMode?: SolverMode;
         } = {};
         if (importIdentity !== null) overrides.selfPlayerId = importIdentity;
         if (importKnownCards.length > 0) overrides.knownCards = importKnownCards;
-        if (importTeachMode) overrides.teachMode = true;
+        if (importTeachMode) overrides.solverMode = SOLVER_MODE_CHECK;
         return overrides;
     };
 
@@ -738,9 +739,9 @@ export function ShareImportPage({
             // on later, and we don't want a stale setup tour to fire
             // for the same share.
             const now = DateTime.nowUnsafe();
-            const dismissModes: ReadonlyArray<TourMode> = [
-                TOUR_MODE_NORMAL,
-                TOUR_MODE_TEACH,
+            const dismissModes: ReadonlyArray<SolverMode> = [
+                SOLVER_MODE_SOLVE,
+                SOLVER_MODE_CHECK,
             ];
             for (const mode of dismissModes) {
                 saveTourDismissed(TOUR_SCREEN_SETUP, mode, now);
@@ -1073,8 +1074,8 @@ export function ShareImportPage({
                             </div>
                         ) : null}
             {receiveFlow === RECEIVE_FLOW_TRANSFER
-                && teachModeSnapshot !== null && (
-                    <TeachModeTransferSummary on={teachModeSnapshot} />
+                && solverModeSnapshot !== null && (
+                    <TeachModeTransferSummary on={solverModeSnapshot} />
                 )}
         </div>
     );

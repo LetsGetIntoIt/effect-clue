@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { Player, PlayerOwner } from "../../logic/GameObjects";
+import type { SolverMode } from "../../logic/ClueState";
 import { CLASSIC_SETUP_3P } from "../../logic/GameSetup";
 import {
     Cell,
@@ -50,16 +51,16 @@ const withCells = (
 
 const ctxFor = (knowledge: Knowledge | undefined, opts: {
     readonly selfPlayerId?: Player | null;
-    readonly teachMode?: boolean;
+    readonly solverMode?: SolverMode;
 } = {}): SoftValidationContext => ({
     knowledge,
     selfPlayerId: "selfPlayerId" in opts ? opts.selfPlayerId ?? null : A,
-    teachMode: opts.teachMode ?? false,
+    solverMode: opts.solverMode ?? "solve",
     categoryCount: setup.categories.length,
 });
 
 describe("validateFormSoft — visibility gates", () => {
-    test("returns empty when teachMode is true", () => {
+    test("returns empty when solverMode is check", () => {
         const k = withCells([[A, KNIFE, "Y"]]);
         const form: FormState = {
             ...baseFormState(),
@@ -67,7 +68,7 @@ describe("validateFormSoft — visibility gates", () => {
             cards: [MUSTARD, KNIFE, KITCHEN],
             nonRefuters: [A],
         };
-        expect(validateFormSoft(form, ctxFor(k, { teachMode: true })).size)
+        expect(validateFormSoft(form, ctxFor(k, { solverMode: "check" })).size)
             .toBe(0);
     });
 

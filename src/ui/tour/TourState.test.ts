@@ -5,8 +5,9 @@
  * `resetAllTourState` only touches keys under the `effect-clue.tour.`
  * prefix.
  *
- * v2 ↑ v1: a flat persisted record lifts to `{ normal: <flat> }` so
- * pre-teach-me users keep their gate state across the upgrade.
+ * v2 ↑ v1: a flat persisted record lifts to `{ solve: <flat> }` so
+ * pre-check-mode users keep their gate state across the upgrade.
+ * v3 ↑ v2: legacy `normal` / `teach` subkeys lift to `solve` / `check`.
  */
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { DateTime } from "effect";
@@ -16,8 +17,8 @@ import {
     saveTourDismissed,
     saveTourVisited,
     type ScreenKey,
-    type TourMode,
 } from "./TourState";
+import type { SolverMode } from "../../logic/ClueState";
 
 const screens: ReadonlyArray<ScreenKey> = ["setup", "checklistSuggest"];
 
@@ -49,7 +50,7 @@ describe("loadTourState", () => {
         expect(loadTourState("setup")).toEqual({});
     });
 
-    test("v1 record lifts into the `normal` subkey", () => {
+    test("v1 record lifts into the `solve` subkey", () => {
         const iso = "2026-04-01T00:00:00Z";
         window.localStorage.setItem(
             "effect-clue.tour.setup.v1",
@@ -60,19 +61,40 @@ describe("loadTourState", () => {
             }),
         );
         const loaded = loadTourState("setup");
-        expect(loaded.normal).toBeDefined();
-        expect(loaded.teach).toBeUndefined();
+        expect(loaded.solve).toBeDefined();
+        expect(loaded.check).toBeUndefined();
         expect(
-            DateTime.toEpochMillis(loaded.normal!.lastVisitedAt!),
+            DateTime.toEpochMillis(loaded.solve!.lastVisitedAt!),
         ).toBe(DateTime.toEpochMillis(now(iso)));
         expect(
-            DateTime.toEpochMillis(loaded.normal!.lastDismissedAt!),
+            DateTime.toEpochMillis(loaded.solve!.lastDismissedAt!),
+        ).toBe(DateTime.toEpochMillis(now(iso)));
+    });
+
+    test("v2 record lifts `normal` → `solve` and `teach` → `check`", () => {
+        const iso = "2026-04-01T00:00:00Z";
+        window.localStorage.setItem(
+            "effect-clue.tour.setup.v1",
+            JSON.stringify({
+                version: 2,
+                normal: { lastVisitedAt: iso, lastDismissedAt: iso },
+                teach: { lastVisitedAt: iso },
+            }),
+        );
+        const loaded = loadTourState("setup");
+        expect(loaded.solve).toBeDefined();
+        expect(loaded.check).toBeDefined();
+        expect(
+            DateTime.toEpochMillis(loaded.solve!.lastDismissedAt!),
+        ).toBe(DateTime.toEpochMillis(now(iso)));
+        expect(
+            DateTime.toEpochMillis(loaded.check!.lastVisitedAt!),
         ).toBe(DateTime.toEpochMillis(now(iso)));
     });
 });
 
 describe("saveTourVisited / saveTourDismissed round-trip", () => {
-    test.each<TourMode>(["normal", "teach"])(
+    test.each<SolverMode>(["solve", "check"])(
         "%s: save visited then load returns the timestamp",
         (mode) => {
             const t = now();
@@ -88,9 +110,9 @@ describe("saveTourVisited / saveTourDismissed round-trip", () => {
     test("save dismissed records the dismissal as the latest visit", () => {
         const visited = now("2026-04-01T00:00:00Z");
         const dismissed = now("2026-04-29T00:00:00Z");
-        saveTourVisited("setup", "normal", visited);
-        saveTourDismissed("setup", "normal", dismissed);
-        const loaded = loadTourState("setup").normal;
+        saveTourVisited("setup", "solve", visited);
+        saveTourDismissed("setup", "solve", dismissed);
+        const loaded = loadTourState("setup").solve;
         expect(
             DateTime.toEpochMillis(loaded!.lastVisitedAt!),
         ).toBe(DateTime.toEpochMillis(dismissed));
@@ -101,8 +123,8 @@ describe("saveTourVisited / saveTourDismissed round-trip", () => {
 
     test("save dismissed without a prior visit writes both timestamps", () => {
         const dismissed = now("2026-04-29T00:00:00Z");
-        saveTourDismissed("setup", "normal", dismissed);
-        const loaded = loadTourState("setup").normal;
+        saveTourDismissed("setup", "solve", dismissed);
+        const loaded = loadTourState("setup").solve;
         expect(
             DateTime.toEpochMillis(loaded!.lastVisitedAt!),
         ).toBe(DateTime.toEpochMillis(dismissed));
@@ -118,39 +140,39 @@ describe("saveTourVisited / saveTourDismissed round-trip", () => {
                 throw new DOMException("QuotaExceededError");
             });
         expect(() =>
-            saveTourVisited("setup", "normal", now()),
+            saveTourVisited("setup", "solve", now()),
         ).not.toThrow();
         spy.mockRestore();
     });
 
     test("writing to one mode preserves the other mode's data", () => {
-        const tNormal = now("2026-04-01T00:00:00Z");
-        const tTeach = now("2026-04-15T00:00:00Z");
-        saveTourDismissed("setup", "normal", tNormal);
-        saveTourDismissed("setup", "teach", tTeach);
+        const tSolve = now("2026-04-01T00:00:00Z");
+        const tCheck = now("2026-04-15T00:00:00Z");
+        saveTourDismissed("setup", "solve", tSolve);
+        saveTourDismissed("setup", "check", tCheck);
         const loaded = loadTourState("setup");
         expect(
-            DateTime.toEpochMillis(loaded.normal!.lastDismissedAt!),
-        ).toBe(DateTime.toEpochMillis(tNormal));
+            DateTime.toEpochMillis(loaded.solve!.lastDismissedAt!),
+        ).toBe(DateTime.toEpochMillis(tSolve));
         expect(
-            DateTime.toEpochMillis(loaded.teach!.lastDismissedAt!),
-        ).toBe(DateTime.toEpochMillis(tTeach));
+            DateTime.toEpochMillis(loaded.check!.lastDismissedAt!),
+        ).toBe(DateTime.toEpochMillis(tCheck));
     });
 });
 
 describe("per-screen storage isolation", () => {
     test("dismissing setup does not affect checklistSuggest's state", () => {
         const t = now();
-        saveTourDismissed("setup", "normal", t);
-        expect(loadTourState("setup").normal?.lastDismissedAt).toBeDefined();
+        saveTourDismissed("setup", "solve", t);
+        expect(loadTourState("setup").solve?.lastDismissedAt).toBeDefined();
         expect(
-            loadTourState("checklistSuggest").normal?.lastDismissedAt,
+            loadTourState("checklistSuggest").solve?.lastDismissedAt,
         ).toBeUndefined();
     });
 
     test("each screen writes under its own storage key", () => {
-        saveTourVisited("setup", "normal", now());
-        saveTourVisited("checklistSuggest", "normal", now());
+        saveTourVisited("setup", "solve", now());
+        saveTourVisited("checklistSuggest", "solve", now());
         expect(
             window.localStorage.getItem("effect-clue.tour.setup.v1"),
         ).not.toBeNull();
@@ -165,7 +187,7 @@ describe("per-screen storage isolation", () => {
 
 describe("resetAllTourState", () => {
     test("wipes every per-screen tour key", () => {
-        for (const s of screens) saveTourVisited(s, "normal", now());
+        for (const s of screens) saveTourVisited(s, "solve", now());
         resetAllTourState();
         for (const s of screens) {
             expect(loadTourState(s)).toEqual({});
@@ -173,7 +195,7 @@ describe("resetAllTourState", () => {
     });
 
     test("does NOT touch unrelated localStorage keys", () => {
-        saveTourVisited("setup", "normal", now());
+        saveTourVisited("setup", "solve", now());
         // Seed unrelated namespaces.
         window.localStorage.setItem(
             "effect-clue.session.v6",

@@ -81,10 +81,10 @@ vi.mock("../tour/TourProvider", () => ({
 }));
 
 // Stub the teach-mode-check context — Checklist calls
-// `useTeachModeCheck()` for the toolbar's "Check my work" flow, which
+// `useCheckBanner()` for the toolbar's "Check my work" flow, which
 // is unrelated to the keydown gates this file verifies.
-vi.mock("./TeachModeCheckContext", () => ({
-    useTeachModeCheck: () => ({
+vi.mock("./CheckBannerContext", () => ({
+    useCheckBanner: () => ({
         verdictForCell: () => undefined,
         runCheck: () => {},
         banner: null,
@@ -161,8 +161,8 @@ const enableTeachMode = (
     });
     act(() => {
         h.result.current.clue.dispatch({
-            type: "setTeachMode",
-            enabled: teach,
+            type: "setSolverMode",
+            mode: teach ? "check" : "solve",
         });
     });
     // Move out of setup mode so the focused-cell fallback gate
@@ -325,8 +325,8 @@ describe("Checklist keyboard — teach mode + focused-cell fallback (panel close
         });
         act(() => {
             h.result.current.clue.dispatch({
-                type: "setTeachMode",
-                enabled: true,
+                type: "setSolverMode",
+                mode: "check",
             });
         });
         // Explicitly assert we're in setup mode.

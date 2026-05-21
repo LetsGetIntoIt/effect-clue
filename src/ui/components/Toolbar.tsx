@@ -6,6 +6,10 @@ import {
     gameSetupStarted,
 } from "../../analytics/events";
 import { startSetup } from "../../analytics/gameSession";
+import {
+    SOLVER_MODE_CHECK,
+    SOLVER_MODE_SOLVE,
+} from "../../logic/ClueState";
 import { describeAction } from "../../logic/describeAction";
 import { routes } from "../../routes";
 import { useConfirm } from "../hooks/useConfirm";
@@ -25,16 +29,16 @@ import type { InstallPromptTrigger } from "../../analytics/events";
 import { OverflowMenu } from "./OverflowMenu";
 import { PlayCTAButton } from "./PlayCTAButton";
 import { teachModeCheckUsed } from "../../analytics/events";
-import { tallyVerdicts } from "../../logic/TeachMode";
-import { useTeachModeCheck } from "./TeachModeCheckContext";
-import { useTeachModeToggle } from "./useTeachModeToggle";
+import { tallyVerdicts } from "../../logic/SolverMode";
+import { useCheckBanner } from "./CheckBannerContext";
+import { useSolverModeToggle } from "./useSolverModeToggle";
 import { Tooltip } from "./Tooltip";
 
 // Module-scope discriminator values, exempt from the i18next literal
 // lint rule.
 const TRIGGER_MENU: InstallPromptTrigger = "menu";
 
-// Source token passed to `requestTeachMode` from the overflow menu.
+// Source token passed to `requestSolverMode` from the overflow menu.
 // Hoisted so the lint rule reads it as a code identifier.
 const TEACH_SOURCE_OVERFLOW_MENU = "overflowMenu" as const;
 
@@ -100,8 +104,8 @@ export function Toolbar() {
         nextRedo,
     } = useClue();
     const { onNewGame } = useToolbarActions();
-    const { openBanner } = useTeachModeCheck();
-    const requestTeachMode = useTeachModeToggle();
+    const { openBanner } = useCheckBanner();
+    const requestSolverMode = useSolverModeToggle();
     const onCheckClick = () => {
         const tally = tallyVerdicts(
             state.setup,
@@ -199,7 +203,7 @@ export function Toolbar() {
                     {t("redo", { shortcut: shortcutSuffix("global.redo", hasKeyboard) })}
                 </button>
             </Tooltip>
-            {state.teachMode && state.uiMode !== "setup" && (
+            {state.solverMode === "check" && state.uiMode !== "setup" && (
                 <button
                     type="button"
                     onClick={onCheckClick}
@@ -250,29 +254,30 @@ export function Toolbar() {
                         tourAnchor: "menu-item-transfer-device",
                     },
                     { type: "divider" },
-                    // Group 2: Teach-me mode + Check my work — own
+                    // Group 2: Apprentice mode + Check my work — own
                     // section so the toggle's "(on)" indicator and the
                     // Check shortcut sit together, distinct from the
                     // surrounding chrome.
                     {
-                        label: state.teachMode
+                        label: state.solverMode === "check"
                             ? tTeach("menuLabelActive")
                             : tTeach("menuLabel"),
-                        active: state.teachMode,
+                        active: state.solverMode === "check",
                         onClick: () =>
-                            requestTeachMode(
-                                !state.teachMode,
+                            requestSolverMode(
+                                state.solverMode === SOLVER_MODE_CHECK
+                                    ? SOLVER_MODE_SOLVE
+                                    : SOLVER_MODE_CHECK,
                                 TEACH_SOURCE_OVERFLOW_MENU,
                             ),
                         tourAnchor: "menu-item-teach-mode",
                     },
-                    // Check my work — hidden when not in teach-mode
-                    // or while still in setup. The Toolbar top-level
-                    // button covers desktop; this menu item is the
-                    // primary entry point on mobile (Toolbar isn't
-                    // rendered below 800px) and a secondary path on
-                    // desktop.
-                    ...(state.teachMode && state.uiMode !== "setup"
+                    // Check my work — hidden when in solve mode or
+                    // still in setup. The Toolbar top-level button
+                    // covers desktop; this menu item is the primary
+                    // entry point on mobile (Toolbar isn't rendered
+                    // below 800px) and a secondary path on desktop.
+                    ...(state.solverMode === "check" && state.uiMode !== "setup"
                         ? [
                               {
                                   label: tTeach("toolbarCheckLabel"),

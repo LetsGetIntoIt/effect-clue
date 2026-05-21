@@ -40,6 +40,7 @@ import {
     Category,
 } from "../../logic/CardSet";
 import { CARD_SETS, DEFAULT_SETUP, GameSetup } from "../../logic/GameSetup";
+import { SOLVER_MODE_SOLVE, type SolverMode } from "../../logic/ClueState";
 import { HashMap } from "effect";
 import {
     type Card,
@@ -52,7 +53,7 @@ import {
     type HypothesisMap,
     type HypothesisValue,
 } from "../../logic/Hypothesis";
-import { emptyUserDeductions, seedFromOwnHand } from "../../logic/TeachMode";
+import { emptyUserDeductions, seedFromOwnHand } from "../../logic/SolverMode";
 import type { KnownCard } from "../../logic/InitialKnowledge";
 import { Cell } from "../../logic/Knowledge";
 import {
@@ -82,7 +83,8 @@ import {
     playersCodec,
     selfPlayerIdCodec,
     suggestionsCodec,
-    teachModeCodec,
+    solverModeCodec,
+    solverModeFromBoolean,
 } from "../../logic/ShareCodec";
 import { newSuggestionId, Suggestion } from "../../logic/Suggestion";
 
@@ -98,7 +100,7 @@ export interface ShareSnapshotForHydration {
     readonly firstDealtPlayerIdData: string | null;
     readonly dismissedInsightsData: string | null;
     readonly hypothesisOrderData: string | null;
-    readonly teachModeData: string | null;
+    readonly solverModeData: string | null;
 }
 
 /**
@@ -117,16 +119,16 @@ export interface ApplyOverrides {
     readonly selfPlayerId?: Player | null;
     readonly knownCards?: ReadonlyArray<KnownCard>;
     /**
-     * Optional teach-mode override. Used by the invite-share import
-     * modal's opt-in checkbox: invite shares don't carry teach-mode on
-     * the wire (it's a personal preference), so the receiver picks it
-     * themselves. Transfer shares carry it on the wire and don't need
-     * this override — the wire value is honored.
+     * Optional solver-mode override. Used by the invite-share import
+     * modal's opt-in checkbox: invite shares don't carry solver-mode
+     * on the wire (it's a personal preference), so the receiver picks
+     * it themselves. Transfer shares carry it on the wire and don't
+     * need this override — the wire value is honored.
      *
      * `undefined` means "no override — use whatever the snapshot
-     * decodes (or `false` if absent)"; `true` / `false` win.
+     * decodes (or `"solve"` if absent)"; an explicit value wins.
      */
-    readonly teachMode?: boolean;
+    readonly solverMode?: SolverMode;
 }
 
 // Wire-format field names. Module-scope so they don't trip the
@@ -143,7 +145,7 @@ const F_SELF_PLAYER_ID_DATA = "selfPlayerIdData";
 const F_FIRST_DEALT_PLAYER_ID_DATA = "firstDealtPlayerIdData";
 const F_DISMISSED_INSIGHTS_DATA = "dismissedInsightsData";
 const F_HYPOTHESIS_ORDER_DATA = "hypothesisOrderData";
-const F_TEACH_MODE_DATA = "teachModeData";
+const F_SOLVER_MODE_DATA = "solverModeData";
 
 const DECODE_ERROR_PREFIX = "share snapshot decode failed: ";
 
@@ -435,32 +437,35 @@ export const buildSessionFromSnapshot = (
         selfPlayerId,
         firstDealtPlayerId,
         dismissedInsights,
-        // Teach-mode precedence: override > wire field > false. Invite
-        // shares omit the wire field entirely (kind-discriminated
-        // contract); the import modal supplies the override via the
-        // optional opt-in checkbox. Transfer shares put the value on
-        // the wire and the override is typically `undefined`.
-        teachMode:
-            overrides?.teachMode
-            ?? (snapshot.teachModeData === null
-                ? false
-                : decodeField(
-                      F_TEACH_MODE_DATA,
-                      snapshot.teachModeData,
-                      teachModeCodec,
+        // Solver-mode precedence: override > wire field > "solve".
+        // Invite shares omit the wire field entirely (kind-
+        // discriminated contract); the import modal supplies the
+        // override via the optional opt-in checkbox. Transfer shares
+        // put the value on the wire and the override is typically
+        // `undefined`.
+        solverMode:
+            overrides?.solverMode
+            ?? (snapshot.solverModeData === null
+                ? SOLVER_MODE_SOLVE
+                : solverModeFromBoolean(
+                      decodeField(
+                          F_SOLVER_MODE_DATA,
+                          snapshot.solverModeData,
+                          solverModeCodec,
+                      ),
                   )),
         // User deductions are personal scratchwork — never on the wire.
         // Two paths apply:
-        //   1. Invite-receive opt-in (overrides.teachMode === true):
+        //   1. Invite-receive opt-in (overrides.solverMode === "check"):
         //      mirror the wizard's `seedFromOwnHand` so the receiver
-        //      gets the same "free" Y/N facts the wizard's teach-mode
+        //      gets the same "free" Y/N facts the wizard's solver-mode
         //      toggle would have produced.
-        //   2. Transfer share carrying teachMode on the wire (no
+        //   2. Transfer share carrying solverMode on the wire (no
         //      override): keep empty — the receiver re-enters their
         //      own deductions. Same rule as the recipe in AGENTS.md
         //      bucket 5.
         userDeductions:
-            overrides?.teachMode === true && selfPlayerId !== null
+            overrides?.solverMode === "check" && selfPlayerId !== null
                 ? seedFromOwnHand(
                       hands.flatMap((h) =>
                           h.cards.map((card) => ({ player: h.player, card })),

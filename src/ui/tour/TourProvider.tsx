@@ -40,12 +40,15 @@ import {
 } from "../../analytics/events";
 import { TelemetryRuntime } from "../../observability/runtime";
 import { useClueOptional } from "../state";
+import {
+    SOLVER_MODE_SOLVE,
+    type SolverMode,
+} from "../../logic/ClueState";
 import { TOURS, type TourStep } from "./tours";
 import {
     loadTourState,
     resetAllTourState,
     saveTourDismissed,
-    tourModeFromTeachMode,
     type ModeState,
     type ScreenKey,
 } from "./TourState";
@@ -65,7 +68,7 @@ interface TourContextValue {
     /**
      * Begin a tour for `screen`, starting at step 0. `deltaMode`
      * defaults to false; when true, the step filter restricts to
-     * steps with `requiredTeachMode === currentMode` (dropping
+     * steps with `requiredSolverMode === currentMode` (dropping
      * shared structural steps the user already saw in the other
      * mode).
      */
@@ -172,29 +175,29 @@ const useFilterStepsByViewport = (
 };
 
 /**
- * Filter the step list by `state.teachMode` and the optional
+ * Filter the step list by `state.solverMode` and the optional
  * `deltaMode` flag.
  *
  * - **Normal mode (deltaMode false)**: keep steps where
- *   `requiredTeachMode === undefined` (shared) OR
- *   `requiredTeachMode === teachMode` (current-mode-specific).
+ *   `requiredSolverMode === undefined` (shared) OR
+ *   `requiredSolverMode === solverMode` (current-mode-specific).
  * - **Delta mode (deltaMode true)**: keep only
- *   `requiredTeachMode === teachMode`. Skip shared steps because
+ *   `requiredSolverMode === solverMode`. Skip shared steps because
  *   the user already saw them in the other mode.
  *
  * Composes with `useFilterStepsByViewport`.
  */
-const filterStepsByTeachMode = (
+const filterStepsBySolverMode = (
     steps: ReadonlyArray<TourStep>,
-    teachMode: boolean,
+    solverMode: SolverMode,
     deltaMode: boolean,
 ): ReadonlyArray<TourStep> =>
     steps.filter(step => {
         if (deltaMode) {
-            return step.requiredTeachMode === teachMode;
+            return step.requiredSolverMode === solverMode;
         }
-        if (step.requiredTeachMode === undefined) return true;
-        return step.requiredTeachMode === teachMode;
+        if (step.requiredSolverMode === undefined) return true;
+        return step.requiredSolverMode === solverMode;
     });
 
 // Empty array used as the no-active-tour stand-in so the viewport
@@ -251,19 +254,19 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
         activeScreen ? TOURS[activeScreen] : EMPTY_STEPS;
     const filteredByViewport = useFilterStepsByViewport(allSteps);
     // `useClueOptional` returns undefined under bare-tree unit tests
-    // that don't mount ClueProvider. Default teach-mode off in that
-    // case — the filter then has no effect (steps with
-    // `requiredTeachMode === false` show, ones with `true` are hidden,
-    // ones with `undefined` always show).
-    const teachModeForTour = useClueOptional()?.state.teachMode ?? false;
+    // that don't mount ClueProvider. Default to `"solve"` in that case
+    // — the filter then has no effect (steps with `requiredSolverMode
+    // === "solve"` show, `"check"` ones are hidden, undefined always
+    // show).
+    const solverModeForTour = useClueOptional()?.state.solverMode ?? SOLVER_MODE_SOLVE;
     const filteredSteps = useMemo(
         () =>
-            filterStepsByTeachMode(
+            filterStepsBySolverMode(
                 filteredByViewport,
-                teachModeForTour,
+                solverModeForTour,
                 activeDeltaMode,
             ),
-        [filteredByViewport, teachModeForTour, activeDeltaMode],
+        [filteredByViewport, solverModeForTour, activeDeltaMode],
     );
     const steps = activeScreen ? filteredSteps : undefined;
     const totalSteps = steps?.length ?? 0;
@@ -283,7 +286,7 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
     const currentStep = steps?.[Math.min(stepIndex, totalSteps - 1)];
     const isLastStep = totalSteps > 0 && stepIndex >= totalSteps - 1;
 
-    const teachModeForCallback = teachModeForTour;
+    const solverModeForCallback = solverModeForTour;
     const startTour = useCallback(
         (
             screen: ScreenKey,
@@ -304,14 +307,14 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
                 } else if (v === VIEWPORT_DESKTOP && !isDesktop) return false;
                 else if (v === VIEWPORT_MOBILE && isDesktop) return false;
                 if (deltaMode) {
-                    return step.requiredTeachMode === teachModeForCallback;
+                    return step.requiredSolverMode === solverModeForCallback;
                 }
-                if (step.requiredTeachMode === undefined) return true;
-                return step.requiredTeachMode === teachModeForCallback;
+                if (step.requiredSolverMode === undefined) return true;
+                return step.requiredSolverMode === solverModeForCallback;
             });
             if (stepsForScreen.length === 0) return;
             TelemetryRuntime.runSync(startEffect(screen));
-            const mode = tourModeFromTeachMode(teachModeForCallback);
+            const mode = solverModeForCallback;
             const reengage = tourReengagementContext(
                 loadTourState(screen)[mode],
                 DateTime.nowUnsafe(),
@@ -325,7 +328,7 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
             setStepIndex(0);
             setActiveDeltaMode(deltaMode);
         },
-        [teachModeForCallback],
+        [solverModeForCallback],
     );
 
     const nextStep = useCallback(() => {
@@ -355,7 +358,7 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
         // `tourCompleted` vs `tourDismissed`. Saved under the
         // current mode's subkey so each mode tracks its own
         // completion + 4-week clock.
-        const completionMode = tourModeFromTeachMode(teachModeForCallback);
+        const completionMode = solverModeForCallback;
         saveTourDismissed(activeScreen, completionMode, DateTime.nowUnsafe());
         tourCompleted({
             screenKey: activeScreen,
@@ -364,7 +367,7 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
         setActiveScreen(undefined);
         setStepIndex(0);
         setActiveDeltaMode(false);
-    }, [activeScreen, stepIndex, steps, teachModeForCallback]);
+    }, [activeScreen, stepIndex, steps, solverModeForCallback]);
 
     const prevStep = useCallback(() => {
         if (!activeScreen || !steps) return;
@@ -389,7 +392,7 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
             // Persist `lastDismissedAt` for the gate, under the
             // current mode's subkey. Each mode tracks its own
             // dismissal + 4-week clock.
-            const dismissMode = tourModeFromTeachMode(teachModeForCallback);
+            const dismissMode = solverModeForCallback;
             saveTourDismissed(activeScreen, dismissMode, DateTime.nowUnsafe());
             TelemetryRuntime.runSync(
                 dismissEffect(activeScreen, stepIndex, via),
@@ -404,7 +407,7 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
             setStepIndex(0);
             setActiveDeltaMode(false);
         },
-        [activeScreen, stepIndex, steps, teachModeForCallback],
+        [activeScreen, stepIndex, steps, solverModeForCallback],
     );
 
     const restartTourForScreen = useCallback(
@@ -416,7 +419,7 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
             // it before, and a manual restart is a reengagement
             // signal worth preserving. Read the current-mode subkey
             // for the reengagement context.
-            const restartMode = tourModeFromTeachMode(teachModeForCallback);
+            const restartMode = solverModeForCallback;
             const reengage = tourReengagementContext(
                 loadTourState(screen)[restartMode],
                 DateTime.nowUnsafe(),
@@ -434,8 +437,8 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
                     /* viewport keep */
                 } else if (v === VIEWPORT_DESKTOP && !isDesktop) return false;
                 else if (v === VIEWPORT_MOBILE && isDesktop) return false;
-                if (step.requiredTeachMode === undefined) return true;
-                return step.requiredTeachMode === teachModeForCallback;
+                if (step.requiredSolverMode === undefined) return true;
+                return step.requiredSolverMode === solverModeForCallback;
             });
             if (stepsForScreen.length === 0) {
                 setActiveScreen(undefined);
@@ -455,7 +458,7 @@ export function TourProvider({ children }: { readonly children: ReactNode }) {
             // asked for a fresh walk.
             setActiveDeltaMode(false);
         },
-        [teachModeForCallback],
+        [solverModeForCallback],
     );
 
     // Abandon reporter: fires `tour_abandoned` if the user closes

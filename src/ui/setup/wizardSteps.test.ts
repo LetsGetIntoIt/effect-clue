@@ -4,7 +4,7 @@ import { CardSet } from "../../logic/CardSet";
 import { Player } from "../../logic/GameObjects";
 import { CLASSIC_SETUP_3P, GameSetup } from "../../logic/GameSetup";
 import { emptyHypotheses } from "../../logic/Hypothesis";
-import { emptyUserDeductions } from "../../logic/TeachMode";
+import { emptyUserDeductions } from "../../logic/SolverMode";
 import { PlayerSet } from "../../logic/PlayerSet";
 import {
     isStepDataComplete,
@@ -26,7 +26,7 @@ const baseState: ClueState = {
     selfPlayerId: null,
     firstDealtPlayerId: null,
     dismissedInsights: new Map(),
-    teachMode: false,
+    solverMode: "solve",
     userDeductions: emptyUserDeductions,
 };
 

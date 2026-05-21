@@ -17,7 +17,7 @@ import {
     phaseAtLeast,
 } from "./GamePhase";
 import { emptyHypotheses } from "./Hypothesis";
-import { emptyUserDeductions } from "./TeachMode";
+import { emptyUserDeductions } from "./SolverMode";
 import { KnownCard } from "./InitialKnowledge";
 import { newSuggestionId } from "./Suggestion";
 import { newAccusationId } from "./Accusation";
@@ -38,7 +38,7 @@ const baseState: ClueState = {
     selfPlayerId: null,
     firstDealtPlayerId: null,
     dismissedInsights: new Map(),
-    teachMode: false,
+    solverMode: "solve",
     userDeductions: emptyUserDeductions,
 };
 
