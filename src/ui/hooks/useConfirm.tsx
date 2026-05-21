@@ -23,7 +23,7 @@ import { useModalStack } from "../components/ModalStack";
 
 interface ConfirmOptions {
     readonly title?: string;
-    readonly message: string;
+    readonly message: ReactNode;
     readonly confirmLabel?: string;
     readonly cancelLabel?: string;
     readonly destructive?: boolean;
@@ -82,9 +82,9 @@ export function ConfirmProvider({ children }: { readonly children: ReactNode }) 
                         </div>
                     ),
                     content: (
-                        <p className="m-0 px-5 pt-3 pb-3 text-[1rem] leading-normal text-[#2a1f12]">
+                        <div className="px-5 pt-3 pb-3 text-[1rem] leading-normal text-[#2a1f12]">
                             {opts.message}
-                        </p>
+                        </div>
                     ),
                     footer: (
                         <div className="flex flex-wrap items-center justify-end gap-2 bg-panel px-5 pt-4 pb-5">

@@ -101,7 +101,16 @@ export function useTeachModeToggle(): (
                 void (async () => {
                     const ok = await confirm({
                         title: t("exitPromptTitle"),
-                        message: t("exitPromptBody"),
+                        message: (
+                            <div className="flex flex-col gap-3">
+                                <p className="m-0">
+                                    {t("exitPromptBodyParagraph1")}
+                                </p>
+                                <p className="m-0">
+                                    {t("exitPromptBodyParagraph2")}
+                                </p>
+                            </div>
+                        ),
                         confirmLabel: t("exitPromptConfirm"),
                         cancelLabel: tCommon("cancel"),
                         destructive: true,
@@ -202,8 +211,15 @@ export function useTeachModeToggle(): (
                     </div>
                 ),
                 content: (
-                    <Dialog.Description className="m-0 px-5 pt-3 pb-3 text-[1rem] leading-normal text-[#2a1f12]">
-                        {t("midGamePromptBody")}
+                    <Dialog.Description asChild>
+                        <div className="flex flex-col gap-3 px-5 pt-3 pb-3 text-[1rem] leading-normal text-[#2a1f12]">
+                            <p className="m-0">
+                                {t("midGamePromptBodyParagraph1")}
+                            </p>
+                            <p className="m-0">
+                                {t("midGamePromptBodyParagraph2")}
+                            </p>
+                        </div>
                     </Dialog.Description>
                 ),
                 footer: (
