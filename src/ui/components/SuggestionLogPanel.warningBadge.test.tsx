@@ -84,6 +84,7 @@ const warnsFor = (
         categoryCount: setup.categories.length,
         players: setup.players,
         refuterTouched: true,
+        seenCardTouched: true,
     });
 
 // Use a permissive `t` mock matching the project pattern: returns a
@@ -170,6 +171,7 @@ describe("validateFormSoft on a stored DraftSuggestion via formStateFromDraft", 
             categoryCount: setup.categories.length,
             players: setup.players,
             refuterTouched: true,
+            seenCardTouched: true,
         });
         expect(w.size).toBe(0);
     });
@@ -215,11 +217,16 @@ describe("briefWarningMessage — short-form copy for prior-log badge", () => {
         expect(briefWarningMessage(w, tMock, null)).toContain("Cho");
     });
 
-    test("refuterCannotRefute (self)", () => {
+    test("refuterCannotRefute (self) — copy now includes the player name", () => {
+        // Updated to `"{player} (you) refuted, but has none of these
+        // cards"` — the self branch passes the player name through
+        // alongside a `(you)` indicator so the two branches read in
+        // identical structure.
         const w: SoftWarning = { kind: "refuterCannotRefute", player: ANISHA };
-        expect(briefWarningMessage(w, tMock, ANISHA)).toBe(
+        expect(briefWarningMessage(w, tMock, ANISHA)).toContain(
             "priorWarningSelfRefuterNoMatch",
         );
+        expect(briefWarningMessage(w, tMock, ANISHA)).toContain("Anisha");
     });
 
     test("shownCardNotInRefuterHand (other)", () => {
@@ -273,6 +280,17 @@ describe("briefWarningMessage — short-form copy for prior-log badge", () => {
             "priorWarningPlayersCanRefuteRefuterBlank",
         );
     });
+
+    test("selfSuggesterMissingSeenCard — fixed prompt copy, no interpolation", () => {
+        const w: SoftWarning = { kind: "selfSuggesterMissingSeenCard" };
+        expect(briefWarningMessage(w, tMock, null)).toBe(
+            "priorWarningSelfSuggesterMissingSeenCard",
+        );
+        // selfPlayerId branch should not matter — same string.
+        expect(briefWarningMessage(w, tMock, ANISHA)).toBe(
+            "priorWarningSelfSuggesterMissingSeenCard",
+        );
+    });
 });
 
 describe("prior-log: someoneCanRefuteButNobodyMarked on stored suggestions", () => {
@@ -304,6 +322,49 @@ describe("prior-log: someoneCanRefuteButNobodyMarked on stored suggestions", () 
         });
         const w = warnsFor(s, k);
         expect(w.has(PILL_REFUTER)).toBe(false);
+    });
+});
+
+describe("prior-log: selfSuggesterMissingSeenCard on stored suggestions", () => {
+    test("fires when self is the suggester, refuter is set, and seenCard is missing", () => {
+        // ANISHA suggests, BOB refutes, no seenCard recorded.
+        // Self = ANISHA → the user would have personally seen the
+        // card.
+        const s = draft({
+            suggester: ANISHA,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [],
+            refuter: BOB,
+        });
+        const w = warnsFor(s, emptyKnowledge, ANISHA);
+        expect(w.get(PILL_SEEN)).toEqual({
+            kind: "selfSuggesterMissingSeenCard",
+        });
+    });
+
+    test("does NOT fire when self is not the suggester", () => {
+        // BOB suggests, ANISHA refutes. Self = CHO (irrelevant);
+        // we never know what BOB was shown.
+        const s = draft({
+            suggester: BOB,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [],
+            refuter: ANISHA,
+        });
+        const w = warnsFor(s, emptyKnowledge, CHO);
+        expect(w.has(PILL_SEEN)).toBe(false);
+    });
+
+    test("does NOT fire when a seenCard is recorded", () => {
+        const s = draft({
+            suggester: ANISHA,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [],
+            refuter: BOB,
+            seenCard: KNIFE,
+        });
+        const w = warnsFor(s, emptyKnowledge, ANISHA);
+        expect(w.has(PILL_SEEN)).toBe(false);
     });
 });
 

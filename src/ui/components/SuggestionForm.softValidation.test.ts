@@ -53,6 +53,7 @@ const ctxFor = (knowledge: Knowledge | undefined, opts: {
     readonly selfPlayerId?: Player | null;
     readonly solverMode?: SolverMode;
     readonly refuterTouched?: boolean;
+    readonly seenCardTouched?: boolean;
     readonly players?: ReadonlyArray<Player>;
 } = {}): SoftValidationContext => ({
     knowledge,
@@ -60,12 +61,13 @@ const ctxFor = (knowledge: Knowledge | undefined, opts: {
     solverMode: opts.solverMode ?? "solve",
     categoryCount: setup.categories.length,
     players: opts.players ?? setup.players,
-    // Default to `true` so existing tests (which were written
-    // before this field existed) keep producing the same warnings
-    // they did. The new
-    // `someoneCanRefuteButNobodyMarked` behavior has its own
-    // describe block that exercises both touched values explicitly.
+    // Default both touched flags to `true` so existing tests
+    // (written before these fields existed) keep producing the same
+    // warnings they did. The new `*Touched`-gated branches have
+    // their own describe blocks that exercise both touched values
+    // explicitly.
     refuterTouched: opts.refuterTouched ?? true,
+    seenCardTouched: opts.seenCardTouched ?? true,
 });
 
 describe("validateFormSoft — visibility gates", () => {
@@ -666,6 +668,135 @@ describe("validateFormSoft — someoneCanRefuteButNobodyMarked", () => {
         };
         const w = validateFormSoft(form, ctxFor(k));
         expect(w.has(PILL_REFUTER)).toBe(false);
+    });
+});
+
+describe("validateFormSoft — selfSuggesterMissingSeenCard", () => {
+    test("fires when self is suggester, refuter is set, and seenCard is NOBODY", () => {
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: B,
+            seenCard: NOBODY,
+        };
+        const w = validateFormSoft(form, ctxFor(emptyKnowledge));
+        // ctxFor defaults selfPlayerId to A.
+        expect(w.get(PILL_SEEN)).toEqual({
+            kind: "selfSuggesterMissingSeenCard",
+        });
+    });
+
+    test("fires when self is suggester, refuter is set, and seenCard is blank AND touched", () => {
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: B,
+            seenCard: null,
+        };
+        const w = validateFormSoft(
+            form,
+            ctxFor(emptyKnowledge, { seenCardTouched: true }),
+        );
+        expect(w.get(PILL_SEEN)).toEqual({
+            kind: "selfSuggesterMissingSeenCard",
+        });
+    });
+
+    test("DOES NOT fire when seenCard is blank and untouched (pristine form)", () => {
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: B,
+            seenCard: null,
+        };
+        const w = validateFormSoft(
+            form,
+            ctxFor(emptyKnowledge, { seenCardTouched: false }),
+        );
+        expect(w.has(PILL_SEEN)).toBe(false);
+    });
+
+    test("DOES NOT fire when suggester is not self", () => {
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: B,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: C,
+            seenCard: NOBODY,
+        };
+        // selfPlayerId stays A (the default) — different from
+        // suggester B, so we never know what B was shown.
+        const w = validateFormSoft(form, ctxFor(emptyKnowledge));
+        expect(w.has(PILL_SEEN)).toBe(false);
+    });
+
+    test("DOES NOT fire when selfPlayerId is null", () => {
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: B,
+            seenCard: NOBODY,
+        };
+        const w = validateFormSoft(
+            form,
+            ctxFor(emptyKnowledge, { selfPlayerId: null }),
+        );
+        expect(w.has(PILL_SEEN)).toBe(false);
+    });
+
+    test("DOES NOT fire when refuter is NOBODY (round had no refutation)", () => {
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: NOBODY,
+            seenCard: NOBODY,
+        };
+        const w = validateFormSoft(form, ctxFor(emptyKnowledge));
+        expect(w.has(PILL_SEEN)).toBe(false);
+    });
+
+    test("DOES NOT fire when refuter is null (incomplete form)", () => {
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: null,
+            seenCard: NOBODY,
+        };
+        const w = validateFormSoft(form, ctxFor(emptyKnowledge));
+        expect(w.has(PILL_SEEN)).toBe(false);
+    });
+
+    test("DOES NOT fire when a real seen card has been recorded", () => {
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: B,
+            seenCard: KNIFE,
+        };
+        const w = validateFormSoft(form, ctxFor(emptyKnowledge));
+        expect(w.has(PILL_SEEN)).toBe(false);
+    });
+
+    test("suppressed in check (teach-me) mode", () => {
+        const form: FormState = {
+            ...baseFormState(),
+            suggester: A,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            refuter: B,
+            seenCard: NOBODY,
+        };
+        const w = validateFormSoft(
+            form,
+            ctxFor(emptyKnowledge, { solverMode: "check" }),
+        );
+        expect(w.has(PILL_SEEN)).toBe(false);
     });
 });
 

@@ -299,6 +299,13 @@ export const SuggestionForm = forwardRef<
     const [refuterTouched, setRefuterTouched] = useState<boolean>(
         suggestion !== undefined,
     );
+    // Same shape as `refuterTouched`, for the Seen-card pill. Drives
+    // `selfSuggesterMissingSeenCard` — the warning that fires when
+    // self is the suggester and was refuted, but no shown card has
+    // been recorded.
+    const [seenCardTouched, setSeenCardTouched] = useState<boolean>(
+        suggestion !== undefined,
+    );
     // Narrow `setOpenPillId` to `(next) => void` so PillForm's prop
     // type — which expects a value-only setter, not React's
     // `Dispatch<SetStateAction<T>>` overload — accepts it directly.
@@ -307,14 +314,16 @@ export const SuggestionForm = forwardRef<
         [],
     );
 
-    // Flip `refuterTouched` true the moment the refuter pill becomes
-    // the open one — whether via user click, keyboard nav, or
-    // auto-advance after a previous pill commit. We watch
-    // `openPillId` instead of intercepting `onOpenPillIdChange` so
-    // internal `setOpenPillId(PILL_REFUTER)` calls (from
-    // `commitAndAdvance`) also count as "the pill was addressed".
+    // Flip `refuterTouched` / `seenCardTouched` true the moment the
+    // corresponding pill becomes the open one — whether via user
+    // click, keyboard nav, or auto-advance after a previous pill
+    // commit. We watch `openPillId` instead of intercepting
+    // `onOpenPillIdChange` so internal `setOpenPillId(...)` calls
+    // (from `commitAndAdvance`) also count as "the pill was
+    // addressed".
     useEffect(() => {
         if (openPillId === PILL_REFUTER) setRefuterTouched(true);
+        if (openPillId === PILL_SEEN) setSeenCardTouched(true);
     }, [openPillId]);
 
     /**
@@ -432,8 +441,16 @@ export const SuggestionForm = forwardRef<
                 categoryCount: setup.categories.length,
                 players: setup.players,
                 refuterTouched,
+                seenCardTouched,
             }),
-        [form, clueCtx, setup.categories.length, setup.players, refuterTouched],
+        [
+            form,
+            clueCtx,
+            setup.categories.length,
+            setup.players,
+            refuterTouched,
+            seenCardTouched,
+        ],
     );
 
     // --- Submit --------------------------------------------------------
@@ -539,6 +556,8 @@ export const SuggestionForm = forwardRef<
                         players: formatFieldList(labels),
                     });
                 }
+                case "selfSuggesterMissingSeenCard":
+                    return t("pillWarningSelfSuggesterMissingSeenCard");
             }
         },
         [t, selfPlayerId],
@@ -588,13 +607,15 @@ export const SuggestionForm = forwardRef<
     ]);
 
     const doSubmit = useCallback(() => {
-        // Submit always affirms the refuter — even if the click is
-        // ultimately blocked by hard errors below, the user has
-        // chosen to commit, so a blank refuter is no longer
-        // "pristine." This makes the new
-        // `someoneCanRefuteButNobodyMarked` warning visible on the
+        // Submit always affirms both the refuter and the seen-card —
+        // even if the click is ultimately blocked by hard errors
+        // below, the user has chosen to commit, so a blank value is
+        // no longer "pristine." This makes the
+        // `someoneCanRefuteButNobodyMarked` and
+        // `selfSuggesterMissingSeenCard` warnings visible on the
         // next render so the user sees what they're about to log.
         setRefuterTouched(true);
+        setSeenCardTouched(true);
         if (!canSubmit || draft === null) return;
         // Stamp the draft with the right loggedAt before handing off:
         // edit-mode preserves the original (so re-ordering doesn't
@@ -985,6 +1006,8 @@ export const SuggestionForm = forwardRef<
             ),
         };
 
+        const seenNobodyIsWarning =
+            warnings.get(PILL_SEEN)?.kind === "selfSuggesterMissingSeenCard";
         const seenSlot: PillSlot = {
             id: PILL_SEEN,
             label: t("pillSeen"),
@@ -1011,6 +1034,10 @@ export const SuggestionForm = forwardRef<
                     nobodyLabel={t("popoverNoShownCard")}
                     nobodyValue={NOBODY}
                     renderOptionBadge={renderShownCardBadge}
+                    nobodyTone={
+                        // eslint-disable-next-line i18next/no-literal-string -- internal tone discriminator
+                        seenNobodyIsWarning ? "warning" : "neutral"
+                    }
                 />
             ),
         };
@@ -1392,6 +1419,9 @@ export type SoftWarning =
     | {
           readonly kind: "someoneCanRefuteButNobodyMarked";
           readonly players: ReadonlyArray<Player>;
+      }
+    | {
+          readonly kind: "selfSuggesterMissingSeenCard";
       };
 
 /**
@@ -1422,6 +1452,14 @@ export interface SoftValidationContext {
      * (the previous submission already affirmed the blank).
      */
     readonly refuterTouched: boolean;
+    /**
+     * Same shape as `refuterTouched`, for the Seen-card pill. Gates
+     * `selfSuggesterMissingSeenCard` so the warning only fires once
+     * the user has addressed the Seen-card pill (opened the
+     * dropdown or clicked Add) — not the instant a refuter is
+     * picked.
+     */
+    readonly seenCardTouched: boolean;
 }
 
 /**
@@ -1504,6 +1542,31 @@ export const validateFormSoft = (
         warnings.set(PILL_SEEN, {
             kind: "shownCardNotInRefuterHand",
             player: form.refuter,
+        });
+    }
+
+    // "Self suggested + was refuted, but no shown card recorded."
+    //
+    // When the user is the suggester and the suggestion was refuted
+    // by a specific player, the user would have personally been
+    // shown one of the suggested cards. Recording "no shown card"
+    // (or leaving the Seen-card pill blank after addressing it)
+    // contradicts what we know about how Clue works.
+    //
+    // Self-only by construction — we never know what card was shown
+    // to other players. The seenCard slot is disabled in the UI
+    // when refuter is null/NOBODY, so we don't fire there either.
+    if (
+        ctx.selfPlayerId !== null &&
+        form.suggester === ctx.selfPlayerId &&
+        form.refuter !== null &&
+        !isNobody(form.refuter) &&
+        form.refuter !== form.suggester &&
+        (isNobody(form.seenCard) ||
+            (form.seenCard === null && ctx.seenCardTouched))
+    ) {
+        warnings.set(PILL_SEEN, {
+            kind: "selfSuggesterMissingSeenCard",
         });
     }
 
@@ -1597,7 +1660,9 @@ export const briefWarningMessage = (
         }
         case "refuterCannotRefute":
             return warning.player === selfPlayerId
-                ? t("priorWarningSelfRefuterNoMatch")
+                ? t("priorWarningSelfRefuterNoMatch", {
+                      player: String(warning.player),
+                  })
                 : t("priorWarningRefuterCannotRefute", {
                       player: String(warning.player),
                   });
@@ -1626,6 +1691,8 @@ export const briefWarningMessage = (
                 players: formatFieldList(labels),
             });
         }
+        case "selfSuggesterMissingSeenCard":
+            return t("priorWarningSelfSuggesterMissingSeenCard");
     }
 };
 
