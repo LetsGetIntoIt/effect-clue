@@ -1086,7 +1086,7 @@ const isEmptyFormState = (f: FormState): boolean =>
     && f.refuter === null
     && f.seenCard === null;
 
-const formStateFromDraft = (
+export const formStateFromDraft = (
     s: DraftSuggestion,
     setup: GameSetup,
 ): FormState => {
@@ -1433,6 +1433,67 @@ export const validateFormSoft = (
     }
 
     return warnings;
+};
+
+/**
+ * Minimal callable shape `briefWarningMessage` needs from the i18n
+ * translator. Lifted to a named interface so callers (and tests)
+ * can pass a thin mock without importing the full next-intl
+ * `TFnAny` (which carries `.rich`, `.markup`, etc. that this
+ * helper doesn't use).
+ */
+export type WarningTFn = (
+    key: string,
+    values?: Record<string, string | number | Date>,
+) => string;
+
+/**
+ * Short, prior-log-friendly text for a soft warning. The form's
+ * pill messages explain WHY the value is flagged ("listing them as
+ * passing contradicts what we know") so the user can act on it in
+ * the active pill. In the prior-suggestions list the row is the
+ * record, not an active control — a one-line "what's wrong" reads
+ * better than the form's full sentence. Editors get the verbose
+ * version automatically when they tap to edit (form takes over).
+ */
+export const briefWarningMessage = (
+    warning: SoftWarning,
+    t: WarningTFn,
+    selfPlayerId: Player | null,
+): string => {
+    switch (warning.kind) {
+        case "passersIncludePlayersWhoCanRefute": {
+            if (warning.players.length === 1) {
+                const offender = warning.players[0];
+                if (offender === undefined) return "";
+                return offender === selfPlayerId
+                    ? t("priorWarningSelfCouldRefute")
+                    : t("priorWarningPlayerCouldRefute", {
+                          player: String(offender),
+                      });
+            }
+            const labels = warning.players.map(p =>
+                p === selfPlayerId
+                    ? t("playerLabelSelfSubject")
+                    : String(p),
+            );
+            return t("priorWarningPlayersCouldRefute", {
+                players: formatFieldList(labels),
+            });
+        }
+        case "refuterCannotRefute":
+            return warning.player === selfPlayerId
+                ? t("priorWarningSelfRefuterNoMatch")
+                : t("priorWarningRefuterCannotRefute", {
+                      player: String(warning.player),
+                  });
+        case "shownCardNotInRefuterHand":
+            return warning.player === selfPlayerId
+                ? t("priorWarningShownCardNotInHand")
+                : t("priorWarningShownCardNotInRefuterHand", {
+                      player: String(warning.player),
+                  });
+    }
 };
 
 /**
