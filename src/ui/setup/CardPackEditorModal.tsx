@@ -364,11 +364,15 @@ function CardPackEditorFooter({
             confirmLabel: t("startOverConfirm"),
         });
         if (!ok) return;
-        clearNewCardPackDraft();
+        // Reset the editor first so the persist subscriber writes the
+        // blank draft to localStorage, then clear the key — otherwise
+        // the subscriber's write would race ahead of the clear and
+        // leave a blank-but-present draft on disk.
         store.set(() => ({
             draft: CardSet({ categories: [] }),
             label: "",
         }));
+        clearNewCardPackDraft();
     };
 
     return (
