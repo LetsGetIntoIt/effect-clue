@@ -17,7 +17,9 @@ import {
     PILL_PASSERS,
     PILL_REFUTER,
     PILL_SEEN,
+    subsumePriorWarnings,
     validateFormSoft,
+    type PillId,
     type SoftWarning,
 } from "./SuggestionForm";
 
@@ -76,7 +78,7 @@ const warnsFor = (
     s: DraftSuggestion,
     knowledge: Knowledge,
     selfPlayerId: Player | null = null,
-): ReadonlyMap<string, SoftWarning> =>
+): ReadonlyMap<PillId, SoftWarning> =>
     validateFormSoft(formStateFromDraft(s, setup), {
         knowledge,
         selfPlayerId,
@@ -417,6 +419,127 @@ describe("prior-log: selfRefuterMissingSeenCard on stored suggestions", () => {
         });
         const w = warnsFor(s, emptyKnowledge, ANISHA);
         expect(w.has(PILL_SEEN)).toBe(false);
+    });
+});
+
+// Subsumption happens between `validateFormSoft` and the display
+// loop in <PriorSuggestionItem>. These cases pin the integration —
+// the validator produces the redundant pair, `subsumePriorWarnings`
+// collapses it. The unit test for the helper alone lives in
+// `SuggestionForm.subsumePriorWarnings.test.ts`.
+describe("prior-log: subsumePriorWarnings on validateFormSoft output", () => {
+    test("self refuted + has none of these cards → only refuterCannotRefute remains (screenshot)", () => {
+        // ANISHA = self. ANISHA is the refuter for a suggestion by
+        // BOB, but Knowledge says ANISHA has none of the suggested
+        // cards. The validator emits BOTH:
+        //   • W2 refuterCannotRefute (ANISHA can't possibly refute)
+        //   • W6 selfRefuterMissingSeenCard (no shown card recorded)
+        // After subsumption only W2 should remain — asking "what
+        // card did you show?" is downstream noise when ANISHA can't
+        // refute at all.
+        const k = knowledgeWith([
+            [ANISHA, MUSTARD, "N"],
+            [ANISHA, KNIFE, "N"],
+            [ANISHA, KITCHEN, "N"],
+        ]);
+        const s = draft({
+            suggester: BOB,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [],
+            refuter: ANISHA,
+        });
+        const raw = warnsFor(s, k, ANISHA);
+        // Sanity check: the validator emits both warnings.
+        expect(raw.get(PILL_REFUTER)?.kind).toBe("refuterCannotRefute");
+        expect(raw.get(PILL_SEEN)?.kind).toBe("selfRefuterMissingSeenCard");
+
+        // After subsumption only the REFUTER warning survives.
+        const subsumed = subsumePriorWarnings(raw);
+        expect(subsumed.has(PILL_SEEN)).toBe(false);
+        expect(subsumed.get(PILL_REFUTER)?.kind).toBe("refuterCannotRefute");
+        expect(subsumed.size).toBe(1);
+    });
+
+    test("other refuter has none + self suggested → only refuterCannotRefute remains", () => {
+        // Self (ANISHA) suggests; CHO refutes; but Knowledge says
+        // CHO has none of the cards. Validator emits W2 + W5
+        // (selfSuggesterMissingSeenCard). Subsumed → W2 only.
+        const k = knowledgeWith([
+            [CHO, MUSTARD, "N"],
+            [CHO, KNIFE, "N"],
+            [CHO, KITCHEN, "N"],
+        ]);
+        const s = draft({
+            suggester: ANISHA,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [],
+            refuter: CHO,
+        });
+        const raw = warnsFor(s, k, ANISHA);
+        expect(raw.get(PILL_REFUTER)?.kind).toBe("refuterCannotRefute");
+        expect(raw.get(PILL_SEEN)?.kind).toBe(
+            "selfSuggesterMissingSeenCard",
+        );
+
+        const subsumed = subsumePriorWarnings(raw);
+        expect(subsumed.has(PILL_SEEN)).toBe(false);
+        expect(subsumed.get(PILL_REFUTER)?.kind).toBe("refuterCannotRefute");
+    });
+
+    test("W2 + W3 → only refuterCannotRefute remains", () => {
+        // CHO is the refuter with seenCard=KNIFE; Knowledge says CHO
+        // has N for all three cards (including KNIFE). The validator
+        // emits both W2 and W3; subsumption keeps only W2.
+        const k = knowledgeWith([
+            [CHO, MUSTARD, "N"],
+            [CHO, KNIFE, "N"],
+            [CHO, KITCHEN, "N"],
+        ]);
+        const s = draft({
+            suggester: ANISHA,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [],
+            refuter: CHO,
+            seenCard: KNIFE,
+        });
+        const raw = warnsFor(s, k);
+        expect(raw.get(PILL_REFUTER)?.kind).toBe("refuterCannotRefute");
+        expect(raw.get(PILL_SEEN)?.kind).toBe("shownCardNotInRefuterHand");
+
+        const subsumed = subsumePriorWarnings(raw);
+        expect(subsumed.has(PILL_SEEN)).toBe(false);
+        expect(subsumed.get(PILL_REFUTER)?.kind).toBe("refuterCannotRefute");
+    });
+
+    test("W1 + W2 (different players) → both remain after subsumption", () => {
+        // BOB is a passer who has KNIFE (W1 — passer could refute).
+        // CHO is the refuter but Knowledge says CHO has none of the
+        // suggested cards (W2). Both warnings describe different
+        // players and stay independently actionable.
+        const k = knowledgeWith([
+            [BOB, KNIFE, "Y"],
+            [CHO, MUSTARD, "N"],
+            [CHO, KNIFE, "N"],
+            [CHO, KITCHEN, "N"],
+        ]);
+        const s = draft({
+            suggester: ANISHA,
+            cards: [MUSTARD, KNIFE, KITCHEN],
+            nonRefuters: [BOB],
+            refuter: CHO,
+        });
+        const raw = warnsFor(s, k);
+        expect(raw.get(PILL_PASSERS)?.kind).toBe(
+            "passersIncludePlayersWhoCanRefute",
+        );
+        expect(raw.get(PILL_REFUTER)?.kind).toBe("refuterCannotRefute");
+
+        const subsumed = subsumePriorWarnings(raw);
+        expect(subsumed.get(PILL_PASSERS)?.kind).toBe(
+            "passersIncludePlayersWhoCanRefute",
+        );
+        expect(subsumed.get(PILL_REFUTER)?.kind).toBe("refuterCannotRefute");
+        expect(subsumed.size).toBe(2);
     });
 });
 

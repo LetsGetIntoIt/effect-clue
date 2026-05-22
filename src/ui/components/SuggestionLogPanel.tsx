@@ -49,6 +49,7 @@ import { AccusationForm, type AccusationFormHandle } from "./AccusationForm";
 import {
     briefWarningMessage,
     formStateFromDraft,
+    subsumePriorWarnings,
     SuggestionForm,
     type SuggestionFormHandle,
     validateFormSoft,
@@ -1413,19 +1414,27 @@ function PriorSuggestionItem({
         const knowledge = Result.isSuccess(deductionResult)
             ? deductionResult.success
             : undefined;
-        return validateFormSoft(formStateFromDraft(s, setup), {
-            knowledge,
-            selfPlayerId: state.selfPlayerId,
-            solverMode: state.solverMode ?? SOLVER_MODE_SOLVE,
-            categoryCount: setup.categories.length,
-            players: setup.players,
-            // Stored suggestions are always treated as "user
-            // affirmed" — the previous submit already locked the
-            // refuter and seen-card values (whether a player,
-            // Nobody, or blank).
-            refuterTouched: true,
-            seenCardTouched: true,
-        });
+        // `subsumePriorWarnings` collapses redundant pairs (today:
+        // `refuterCannotRefute` silences the SEENCARD slot). The form
+        // does not apply this — each pill renders its own warning in
+        // place — but the prior-log row reads one entry at a time, so
+        // showing both halves of an "X can't refute / what card did X
+        // show?" pair is noise.
+        return subsumePriorWarnings(
+            validateFormSoft(formStateFromDraft(s, setup), {
+                knowledge,
+                selfPlayerId: state.selfPlayerId,
+                solverMode: state.solverMode ?? SOLVER_MODE_SOLVE,
+                categoryCount: setup.categories.length,
+                players: setup.players,
+                // Stored suggestions are always treated as "user
+                // affirmed" — the previous submit already locked the
+                // refuter and seen-card values (whether a player,
+                // Nobody, or blank).
+                refuterTouched: true,
+                seenCardTouched: true,
+            }),
+        );
     }, [
         isEditing,
         s,
