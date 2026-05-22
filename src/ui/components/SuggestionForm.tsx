@@ -1661,6 +1661,36 @@ export const validateFormSoft = (
 };
 
 /**
+ * Prior-log-only redundancy filter. When the named refuter has none
+ * of the suggested cards (`refuterCannotRefute`), the SEENCARD-slot
+ * warnings (`shownCardNotInRefuterHand`, `selfSuggesterMissingSeenCard`,
+ * `selfRefuterMissingSeenCard`) all describe consequences of the same
+ * impossibility — the refuter couldn't have shown any card, so asking
+ * which one is downstream noise. Drop the SEENCARD entry so the row
+ * reads with one clear actionable warning.
+ *
+ * The form itself does NOT apply this — each pill renders its own
+ * warning in place, so the in-pill copy stays specific to that pill's
+ * context (the user is actively editing one pill at a time).
+ *
+ * Other cross-slot pairs (W4 + SEENCARD; W1 + anything) are kept as
+ * separate warnings: W4 is mutex with the SEENCARD warnings by
+ * construction (they require contradictory refuter states), and W1
+ * always describes a different player from the REFUTER/SEENCARD slot
+ * so both are independently actionable.
+ */
+export const subsumePriorWarnings = (
+    warnings: ReadonlyMap<PillId, SoftWarning>,
+): ReadonlyMap<PillId, SoftWarning> => {
+    const refuter = warnings.get(PILL_REFUTER);
+    if (refuter?.kind !== "refuterCannotRefute") return warnings;
+    if (!warnings.has(PILL_SEEN)) return warnings;
+    const next = new Map(warnings);
+    next.delete(PILL_SEEN);
+    return next;
+};
+
+/**
  * Minimal callable shape `briefWarningMessage` needs from the i18n
  * translator. Lifted to a named interface so callers (and tests)
  * can pass a thin mock without importing the full next-intl
