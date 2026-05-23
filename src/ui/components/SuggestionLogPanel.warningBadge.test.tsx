@@ -314,8 +314,7 @@ describe("prior-log: someoneCanRefuteButNobodyMarked on stored suggestions", () 
             cards: [MUSTARD, KNIFE, KITCHEN],
             nonRefuters: [],
             // Stored explicit NOBODY: encoded as refuter=undefined +
-            // empty nonRefuters; the prior-log reads this via the
-            // refutationLine helper. For the validator, NOBODY and
+            // empty nonRefuters. For the validator, NOBODY and
             // undefined both trip the "blank or nobody" gate when
             // refuterTouched=true.
         });
