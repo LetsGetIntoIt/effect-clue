@@ -18,6 +18,8 @@ import { footnotesForCell } from "../../logic/Footnotes";
 import {
     cardName,
     categoryName as resolveCategoryName,
+    categoryOfCard,
+    type GameSetup,
 } from "../../logic/GameSetup";
 import { chainFor } from "../../logic/Provenance";
 import {
@@ -43,7 +45,7 @@ import { useIsDesktop } from "../hooks/useIsDesktop";
 import { useListFormatter } from "../hooks/useListFormatter";
 import { useSelection } from "../SelectionContext";
 import { BehavioralInsights } from "./BehavioralInsights";
-import { AlertIcon, TrashIcon, XIcon } from "./Icons";
+import { AlertIcon, EyeIcon, TrashIcon, XIcon } from "./Icons";
 import { InfoPopover } from "./InfoPopover";
 import { AccusationForm, type AccusationFormHandle } from "./AccusationForm";
 import {
@@ -649,32 +651,23 @@ function FormSlide({
 }
 
 /**
- * Pick the ICU `select` branch for the refutation-summary template
- * in `suggestions.refutationLine`. Combining the refuted/nobody axis
- * with the seen-card and non-refuters axes via select keeps the copy
- * as a single translatable sentence per case rather than a
- * concatenation of fragments.
- *
- * Exported for unit-test coverage of all six branches.
+ * Reorder a suggestion's three cards into the setup's canonical
+ * category order (suspect → weapon → room) so the prior-log row's
+ * chip strip reads predictably regardless of the order the user
+ * entered them in the pill picker.
  */
-export const refutationStatus = (
-    s: DraftSuggestion,
-):
-    | "refutedSeenPassed"
-    | "refutedSeen"
-    | "refutedPassed"
-    | "refuted"
-    | "nobodyPassed"
-    | "nobody" => {
-    const hasRefuter = s.refuter !== undefined;
-    const hasSeen = s.seenCard !== undefined;
-    const hasPassers = s.nonRefuters.length > 0;
-    if (hasRefuter && hasSeen && hasPassers) return "refutedSeenPassed";
-    if (hasRefuter && hasSeen) return "refutedSeen";
-    if (hasRefuter && hasPassers) return "refutedPassed";
-    if (hasRefuter) return "refuted";
-    if (hasPassers) return "nobodyPassed";
-    return "nobody";
+const sortCardsByCategory = (
+    setup: GameSetup,
+    cards: ReadonlyArray<Card>,
+): ReadonlyArray<Card> => {
+    const order = setup.categories.map(c => c.id);
+    return cards.slice().sort((a, b) => {
+        const ca = categoryOfCard(setup, a);
+        const cb = categoryOfCard(setup, b);
+        const ai = ca === undefined ? order.length : order.indexOf(ca);
+        const bi = cb === undefined ? order.length : order.indexOf(cb);
+        return ai - bi;
+    });
 };
 
 /**
@@ -1747,31 +1740,60 @@ function PriorSuggestionItem({
                 ) : (
                     <>
                         <div>
-                            {t.rich("suggestedLine", {
+                            {t.rich("priorSuggesterLine", {
                                 suggester: String(s.suggester),
-                                cards: s.cards
-                                    .map(id => cardName(setup, id))
-                                    .join(" + "),
-                                strong: chunks => (
-                                    <strong>{chunks}</strong>
-                                ),
+                                strong: chunks => <strong>{chunks}</strong>,
                             })}
                         </div>
-                        <div className="text-[1rem] text-muted">
-                            {t.rich("refutationLine", {
-                                status: refutationStatus(s),
-                                refuter: s.refuter ? String(s.refuter) : "",
-                                seen: s.seenCard
-                                    ? cardName(setup, s.seenCard)
-                                    : "",
-                                passers: listFormatter.format(
-                                    s.nonRefuters.map(String),
-                                ),
-                                strong: chunks => (
-                                    <strong>{chunks}</strong>
-                                ),
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                            {sortCardsByCategory(setup, s.cards).map(id => {
+                                const isShown = s.seenCard === id;
+                                return (
+                                    <span
+                                        key={String(id)}
+                                        className={
+                                            isShown
+                                                ? "inline-flex items-center gap-1 rounded-[var(--radius)] border-2 border-accent bg-control px-[calc(0.5rem-1px)] py-[calc(0.125rem-1px)] text-[1rem] font-semibold text-accent"
+                                                : "inline-block rounded-[var(--radius)] border border-border bg-control px-2 py-0.5 text-[1rem]"
+                                        }
+                                        data-prior-card-shown={
+                                            isShown ? "true" : undefined
+                                        }
+                                    >
+                                        {isShown && <EyeIcon size={14} />}
+                                        {cardName(setup, id)}
+                                    </span>
+                                );
                             })}
                         </div>
+                        <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[1rem]">
+                            <dt className="text-muted">{t("priorOutcomeLabelPassed")}</dt>
+                            <dd className="m-0">
+                                {s.nonRefuters.length > 0 ? (
+                                    listFormatter.format(s.nonRefuters.map(String))
+                                ) : (
+                                    <span className="text-muted">{t("priorOutcomeNobody")}</span>
+                                )}
+                            </dd>
+                            <dt className="text-muted">{t("priorOutcomeLabelRefuted")}</dt>
+                            <dd className="m-0">
+                                {s.refuter !== undefined ? (
+                                    <>
+                                        <strong>{String(s.refuter)}</strong>
+                                        <span className="text-muted">
+                                            {" — "}
+                                            {s.seenCard !== undefined
+                                                ? t("priorShowedCard", {
+                                                      card: cardName(setup, s.seenCard),
+                                                  })
+                                                : t("priorCardNotSeen")}
+                                        </span>
+                                    </>
+                                ) : (
+                                    <span className="text-muted">{t("priorOutcomeNobody")}</span>
+                                )}
+                            </dd>
+                        </dl>
                         {priorWarningTexts.length > 0 && (
                             <div className="mt-1 flex flex-col items-start gap-1">
                                 {priorWarningTexts.map(text => (

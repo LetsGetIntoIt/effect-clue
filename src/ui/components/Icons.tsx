@@ -134,6 +134,33 @@ export function CheckIcon({ className, size = 18 }: IconProps) {
 }
 
 /**
+ * Eye glyph — used on prior-suggestion chips to mark the card a
+ * refuter actually showed (i.e. the one the user saw). Not a generic
+ * "view" affordance; reserved for the "this is the seen card" cue.
+ */
+export function EyeIcon({ className, size = 14 }: IconProps) {
+    return (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+            className={className}
+        >
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+            <circle cx="12" cy="12" r="3" />
+        </svg>
+    );
+}
+
+/**
  * Triangular warning / alert glyph — used wherever the UI flags a
  * problem the user needs to attend to (contradictions, validation
  * errors, conflicts). NOT for non-destructive close — that's `XIcon`.
