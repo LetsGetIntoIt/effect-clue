@@ -116,10 +116,5 @@
 		"typescript": "6.0.3",
 		"vercel": "54.1.0",
 		"vitest": "4.1.6"
-	},
-	"pnpm": {
-		"onlyBuiltDependencies": [
-			"sharp"
-		]
 	}
 }
