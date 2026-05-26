@@ -152,6 +152,10 @@ All of these must pass green before every commit:
 
 If you amend or update a commit, re-run the full set — a previously-green commit can break after edits.
 
+## Static linting
+
+Whenever you introduce a new dependency, library, framework, or architectural pattern — or whenever you hit a bug that a static check could have caught — look for an ESLint plugin (or rule) that enforces correct usage and wire it into the flat config. The repo already does this: `eslint-plugin-i18next` guards against untranslated strings. Catching a whole class of mistake at lint time is cheaper than catching each instance in review or production, so reach for the plugin before relying on convention or code review.
+
 ## Manual verification in the preview
 
 For any change that's observable in the browser, exercise the change yourself before reporting the task done. In Claude, use the `next-dev` preview configured in `.claude/launch.json`; in Codex, follow the local database and dev server lifecycle above, then use the printed `Local:` URL in the in-app browser. Follow the active agent's browser verification workflow: start/reload the preview, check console/network/logs, take a screenshot or snapshot as proof. Don't ask the user to verify manually.
