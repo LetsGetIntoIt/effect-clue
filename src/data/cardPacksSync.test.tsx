@@ -106,6 +106,28 @@ describe("reconcileCardPacks", () => {
         expect(result.idMap.get("local-1")).toBe("server-1");
     });
 
+    test("cross-device rename of a fully-synced pack updates in place, no duplicate", () => {
+        // Device B is fully synced: its local id was already swapped to
+        // the server id, and the stable cgid is the original custom-…
+        // id. Device A renamed the pack on the server. Phase 1 must pair
+        // by cgid (local id no longer equals the server's cgid) so the
+        // rename lands without spawning a second pack.
+        const synced: CustomCardSet = {
+            ...localPack("server-1", "Office", "Rope"),
+            clientGeneratedId: "custom-abc",
+            lastSyncedSnapshot: { label: "Office", cardSet: makeCardSet("Rope") },
+        };
+        const result = reconcileCardPacks(
+            [synced],
+            [serverPack("server-1", "custom-abc", "Mansion", "Rope")],
+        );
+        expect(result.packs).toHaveLength(1);
+        expect(result.packs[0]?.id).toBe("server-1");
+        expect(result.packs[0]?.clientGeneratedId).toBe("custom-abc");
+        expect(result.packs[0]?.label).toBe("Mansion");
+        expect(result.countPulled).toBe(0);
+    });
+
     test("server-only packs land with lastSyncedSnapshot populated", () => {
         const result = reconcileCardPacks(
             [],

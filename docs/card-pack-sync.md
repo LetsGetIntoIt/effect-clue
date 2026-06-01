@@ -220,8 +220,12 @@ Every successful settle triggers `applyServerSnapshot`:
    is in `tombstoneIds` is dropped. Any local pack whose `id` is in
    `tombstoneIds` is dropped (defensive — already gone from
    localStorage, but belt-and-braces).
-2. **Pair match (clientGeneratedId).** When a local pack's `id`
-   equals a server pack's `clientGeneratedId`:
+2. **Pair match (clientGeneratedId).** When a server pack's
+   `clientGeneratedId` equals a local pack's `clientGeneratedId` **or**
+   its `id` (pre-swap the local id *is* the cgid; post-swap only the
+   local `clientGeneratedId` still carries the original value, so a
+   cross-device rename of an already-synced pack pairs here rather than
+   looking like a fresh pull):
    - If content matches, merge with server's `id`, clear
      `unsyncedSince`, set `lastSyncedSnapshot` to the server view.
    - If content differs and `unsyncedSince` is set on the local
