@@ -141,8 +141,17 @@ export const reconcileCardPacks = (
 
     // Phase 1: client-id pair matches.
     for (const localPack of filteredLocal) {
+        // Pair the local pack to its server row by the stable
+        // clientGeneratedId. Match the server's cgid against the local
+        // pack's cgid OR its id: pre-swap the local id IS the cgid;
+        // post-swap the id is the server cuid2 and only the local cgid
+        // still carries the original value (so a cross-device rename of
+        // an already-synced pack pairs here instead of falling through
+        // to Phase 2 and looking like a fresh pull).
         const match = decodedServer.find(
-            s => s.clientGeneratedId === localPack.id,
+            s =>
+                s.clientGeneratedId === localPack.id ||
+                s.clientGeneratedId === localPack.clientGeneratedId,
         );
         if (match === undefined) continue;
         const matchingServer = match.pack;
