@@ -1425,8 +1425,9 @@ export function Checklist() {
                                         className="relative z-[var(--z-checklist-explain-row)]"
                                     >
                                         <td
-                                            // z-0 (not `--z-checklist-sticky-column`) so the sibling td's popup paints on top during horizontal scroll — this cell is intentionally empty.
-                                            className="sticky left-0 z-0 bg-panel border-b border-border p-0"
+                                            // z-0 (not `--z-checklist-sticky-column`) so the sibling td's popup paints on top during horizontal scroll — this cell has no content.
+                                            // It carries the panel's LEFT edge: a 3px accent border on top / left / bottom (no right) closes the frame the sibling panel <div> leaves open on its left, so the accent box fully encloses the explanation row across the two <td>s. The blank first-column cell always lines up with the panel above/below it, so a constant border is safe — no measurement needed.
+                                            className="sticky left-0 z-0 bg-panel border-t-[3px] border-l-[3px] border-b-[3px] border-accent p-0"
                                             data-tour-sticky-left=""
                                         />
                                         <td
@@ -1461,7 +1462,16 @@ export function Checklist() {
                                                 // horizontal border at
                                                 // clean L-junctions with
                                                 // no tab sticking out at
-                                                // either bottom corner.
+                                                // either bottom corner. The
+                                                // LEFT edge is intentionally
+                                                // omitted here — the blank
+                                                // first-column <td> above
+                                                // carries the matching
+                                                // top/left/bottom accent
+                                                // border, so the frame
+                                                // closes across the two
+                                                // <td>s with no seam between
+                                                // them.
                                                 className="border-t-[3px] border-r-[3px] border-b-[3px] border-accent bg-panel contain-inline-size"
                                             >
                                                 {explainContent}
