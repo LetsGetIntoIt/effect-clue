@@ -142,7 +142,7 @@ export const mergeCardPacks = (
         .filter((pack) => !serverIdentities.has(pack.id))
         .map((pack) => ({
             id: pack.id,
-            clientGeneratedId: pack.id,
+            clientGeneratedId: pack.clientGeneratedId,
             label: pack.label,
             cardSet: pack.cardSet,
             source: "local" as const,

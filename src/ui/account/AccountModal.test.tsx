@@ -525,6 +525,7 @@ describe("mergeCardPacks", () => {
             [
                 {
                     id: "custom-1",
+                    clientGeneratedId: "custom-1",
                     label: "Local name",
                     cardSet: { categories: [] } as never,
                 },
@@ -574,6 +575,7 @@ describe("mergeCardPacks", () => {
             [
                 {
                     id: "server-1",
+                    clientGeneratedId: "custom-mansion",
                     label: "Mansion",
                     cardSet: { categories: [] } as never,
                 },
@@ -601,6 +603,7 @@ describe("mergeCardPacks", () => {
             [
                 {
                     id: "server-1",
+                    clientGeneratedId: "custom-mansion",
                     label: "Mansion",
                     cardSet: { categories: [] } as never,
                     unsyncedSince: stamp,
@@ -629,6 +632,7 @@ describe("mergeCardPacks", () => {
             [
                 {
                     id: "custom-1",
+                    clientGeneratedId: "custom-1",
                     label: "Local",
                     cardSet: { categories: [] } as never,
                     unsyncedSince: stamp,
@@ -669,6 +673,7 @@ describe("mergeCardPacks", () => {
             [
                 {
                     id: "custom-local",
+                    clientGeneratedId: "custom-local",
                     label: "Local-only",
                     cardSet: { categories: [] } as never,
                     unsyncedSince: stamp,

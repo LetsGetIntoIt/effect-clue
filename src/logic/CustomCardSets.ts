@@ -55,6 +55,12 @@ const PersistedCustomCardSetSchema = Schema.Struct({
     id: Schema.String,
     label: Schema.String,
     categories: Schema.Array(PersistedCategorySchema),
+    /**
+     * Cross-device-stable identity (the server's `client_generated_id`).
+     * Optional on disk so pre-existing blobs decode; absent ⇒ defaulted
+     * to `id` on load (see `loadCustomCardSets`).
+     */
+    clientGeneratedId: Schema.optional(Schema.String),
     /** Epoch millis at the storage edge; `DateTime.Utc` in memory. */
     unsyncedSince: Schema.optional(Schema.Number),
     lastSyncedSnapshot: Schema.optional(PersistedSnapshotSchema),
@@ -93,6 +99,15 @@ export interface CardPackSnapshot {
  */
 export interface CustomCardSet {
     readonly id: string;
+    /**
+     * Cross-device-stable identity — the server's `client_generated_id`.
+     * Minted equal to `id` on a fresh local creation; preserved across
+     * the `markPackSynced` id-swap (which swaps `id` to the server's
+     * cuid2 but leaves this untouched) so every server-write site can
+     * UPSERT on the stable `(owner_id, client_generated_id)` key
+     * instead of accidentally inserting a duplicate row.
+     */
+    readonly clientGeneratedId: string;
     readonly label: string;
     readonly cardSet: CardSet;
     /**
@@ -217,6 +232,12 @@ export const loadCustomCardSets = (): ReadonlyArray<CustomCardSet> => {
         const decodedPacks: ReadonlyArray<CustomCardSet> =
             decoded.success.presets.map(p => ({
                 id: p.id,
+                // Legacy blobs predate this field; default to `id`. For a
+                // never-synced pack `id` IS the cgid, so that's exact. For
+                // a legacy synced pack `id` is the server id — wrong, but
+                // the next reconcile backfills the real cgid from the
+                // server row (see `reconcileCardPacks`).
+                clientGeneratedId: p.clientGeneratedId ?? p.id,
                 label: p.label,
                 cardSet: decodePersistedCategories(p.categories),
                 unsyncedSince: p.unsyncedSince !== undefined
@@ -245,6 +266,7 @@ const writeAll = (packs: ReadonlyArray<CustomCardSet>): void => {
             version: 1,
             presets: deduped.map(p => ({
                 id: p.id,
+                clientGeneratedId: p.clientGeneratedId,
                 label: p.label,
                 categories: encodePersistedCategories(p.cardSet),
                 unsyncedSince: p.unsyncedSince !== undefined
@@ -291,6 +313,7 @@ export const saveCustomCardSet = (
             const previous = packs[matchIdx]!;
             const updated: CustomCardSet = {
                 id: existingId,
+                clientGeneratedId: previous.clientGeneratedId,
                 label,
                 cardSet,
                 unsyncedSince: previous.unsyncedSince,
@@ -305,7 +328,9 @@ export const saveCustomCardSet = (
     const id = `custom-${Date.now().toString(36)}-${Math.random()
         .toString(36)
         .slice(2, 7)}`;
-    const newPack: CustomCardSet = { id, label, cardSet };
+    // Fresh creation: the cgid is the locally-minted id. It stays stable
+    // through the later server-sync id-swap so re-saves UPSERT cleanly.
+    const newPack: CustomCardSet = { id, clientGeneratedId: id, label, cardSet };
     writeAll([...packs, newPack]);
     return newPack;
 };
@@ -367,6 +392,10 @@ export const markPackSynced = (
     const previous = packs[idx]!;
     const updated: CustomCardSet = {
         id: serverRow.id,
+        // Preserve the cross-device-stable cgid across the id-swap. The
+        // server row's `client_generated_id` equals this value, so future
+        // saves UPSERT the same row instead of inserting a duplicate.
+        clientGeneratedId: previous.clientGeneratedId,
         label: previous.label,
         cardSet: previous.cardSet,
         unsyncedSince: undefined,

@@ -29,6 +29,7 @@ const localPack = (
     cardName: string,
 ): CustomCardSet => ({
     id,
+    clientGeneratedId: id,
     label,
     cardSet: makeCardSet(cardName),
 });
@@ -205,6 +206,47 @@ describe("reconcileCardPacks", () => {
         const result = reconcileCardPacks([local], []);
         expect(result.packs[0]?.unsyncedSince).toBeDefined();
         expect(result.packs[0]?.id).toBe("local-1");
+    });
+
+    describe("clientGeneratedId threading", () => {
+        test("Phase 1 paired match carries the server's clientGeneratedId", () => {
+            const result = reconcileCardPacks(
+                [localPack("local-1", "Office", "Rope")],
+                [serverPack("server-1", "local-1", "Office", "Rope")],
+            );
+            expect(result.packs[0]?.id).toBe("server-1");
+            expect(result.packs[0]?.clientGeneratedId).toBe("local-1");
+        });
+
+        test("Phase 2 server-only pull carries the server's clientGeneratedId", () => {
+            const result = reconcileCardPacks(
+                [],
+                [serverPack("server-1", "other-client", "Office", "Rope")],
+            );
+            expect(result.packs[0]?.clientGeneratedId).toBe("other-client");
+        });
+
+        test("backfills cgid for a legacy synced pack whose local cgid defaulted to the server id", () => {
+            // Pre-cgid-field state: local id was swapped to the server id
+            // and the cgid defaulted to it on load. Reconcile must correct
+            // it to the server's real client_generated_id so the next save
+            // UPSERTs in place instead of inserting a duplicate.
+            const legacy: CustomCardSet = {
+                ...localPack("server-1", "Office", "Rope"),
+                clientGeneratedId: "server-1",
+                lastSyncedSnapshot: {
+                    label: "Office",
+                    cardSet: makeCardSet("Rope"),
+                },
+            };
+            const result = reconcileCardPacks(
+                [legacy],
+                [serverPack("server-1", "custom-orig", "Office", "Rope")],
+            );
+            expect(result.packs).toHaveLength(1);
+            expect(result.packs[0]?.id).toBe("server-1");
+            expect(result.packs[0]?.clientGeneratedId).toBe("custom-orig");
+        });
     });
 
     // The dedupe pass at the end of `reconcileCardPacks` exists because

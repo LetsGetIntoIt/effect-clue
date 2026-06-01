@@ -134,6 +134,33 @@ export function useCardPackActions(): CardPackActions {
         [queryClient, findServer],
     );
 
+    /**
+     * Resolve the cross-device-stable `clientGeneratedId` to send to the
+     * server's `(owner_id, client_generated_id)` UPSERT.
+     *
+     * The local pack carries its own `clientGeneratedId`, which is
+     * authoritative for packs created/synced under the current code. But
+     * a pack that was synced before the field existed loads with its cgid
+     * defaulted to `id` (= the server id) — wrong until the next reconcile
+     * backfills it. The server cache holds the real `client_generated_id`,
+     * so when a server row matches the local id (by either its `id` or its
+     * `clientGeneratedId`) we trust the server's value; otherwise we fall
+     * back to the local cgid (never-synced packs, or an unpopulated cache).
+     */
+    const resolveServerClientGeneratedId = useCallback(
+        (localId: string, fallbackCgid: string): string => {
+            const server =
+                queryClient.getQueryData<ReadonlyArray<PersistedCardPack>>(
+                    myCardPacksQueryKey(userId),
+                );
+            const match = server?.find(
+                (p) => p.id === localId || p.clientGeneratedId === localId,
+            );
+            return match?.clientGeneratedId ?? fallbackCgid;
+        },
+        [queryClient, userId],
+    );
+
     const sharePack = useCallback<CardPackActions["sharePack"]>(
         (pack) => {
             openShareCardPack({
@@ -149,14 +176,17 @@ export function useCardPackActions(): CardPackActions {
             const localPack = await saveLocal.mutateAsync(input);
             if (userId !== undefined) {
                 saveServer.mutate({
-                    clientGeneratedId: localPack.id,
+                    clientGeneratedId: resolveServerClientGeneratedId(
+                        localPack.id,
+                        localPack.clientGeneratedId,
+                    ),
                     label: localPack.label,
                     cardSet: localPack.cardSet,
                 });
             }
             return localPack;
         },
-        [saveLocal, saveServer, userId],
+        [saveLocal, saveServer, userId, resolveServerClientGeneratedId],
     );
 
     const renamePack = useCallback<CardPackActions["renamePack"]>(
@@ -182,12 +212,16 @@ export function useCardPackActions(): CardPackActions {
             // Always push to the server when signed in. The server
             // action is idempotent on `(owner_id,
             // client_generated_id)` — if the row already exists,
-            // it's an UPDATE; if not, an INSERT. Covers both the
-            // "synced pack rename" and "server-only pack rename"
-            // cases without a separate fallback branch.
+            // it's an UPDATE; if not, an INSERT. Resolve the stable
+            // cgid (a synced pack's local id is the swapped server id,
+            // so the caller's target id can't be trusted as the cgid)
+            // so the UPSERT updates in place instead of duplicating.
             if (userId !== undefined) {
                 saveServer.mutate({
-                    clientGeneratedId: pack.clientGeneratedId,
+                    clientGeneratedId: resolveServerClientGeneratedId(
+                        localMatch?.id ?? pack.clientGeneratedId,
+                        localMatch?.clientGeneratedId ?? pack.clientGeneratedId,
+                    ),
                     label: trimmed,
                     cardSet: pack.cardSet,
                 });
@@ -202,6 +236,7 @@ export function useCardPackActions(): CardPackActions {
             saveLocal,
             saveServer,
             userId,
+            resolveServerClientGeneratedId,
         ],
     );
 

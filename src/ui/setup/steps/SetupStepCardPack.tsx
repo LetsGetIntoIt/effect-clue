@@ -64,6 +64,14 @@ const LOCALE_COMPARE_OPTIONS = { sensitivity: "base" } as const;
 
 interface DisplayPack {
     readonly id: string;
+    /**
+     * Cross-device-stable cgid. For a custom pack this is the
+     * `CustomCardSet.clientGeneratedId` (survives the server-sync
+     * id-swap); for a built-in it's just the pack id. Used as the
+     * action-target id so rename/delete/save key the server UPSERT on
+     * the stable identity instead of the swapped local id.
+     */
+    readonly clientGeneratedId: string;
     readonly label: string;
     readonly cardSet: CardSet;
     readonly isCustom: boolean;
@@ -74,6 +82,8 @@ const toDisplayPack = (
     isCustom: boolean,
 ): DisplayPack => ({
     id: pack.id,
+    clientGeneratedId:
+        "clientGeneratedId" in pack ? pack.clientGeneratedId : pack.id,
     label: pack.label,
     cardSet: pack.cardSet,
     isCustom,
@@ -335,7 +345,7 @@ export function SetupStepCardPack({
     };
 
     const toActionTarget = (pack: DisplayPack) => ({
-        clientGeneratedId: pack.id,
+        clientGeneratedId: pack.clientGeneratedId,
         label: pack.label,
         cardSet: pack.cardSet,
     });

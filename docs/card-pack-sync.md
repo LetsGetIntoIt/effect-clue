@@ -99,15 +99,17 @@ once signed in**:
 ## Per-pack metadata (the core data shape)
 
 Each `CustomCardSet` in `effect-clue.custom-presets.v1` carries
-three optional sync-related fields. They're **additive** to the
-schema — old payloads decode unchanged — and they're the foundation
-for every state machine in this doc.
+sync-related fields beyond the deck itself. The `unsyncedSince` /
+`lastSyncedSnapshot` pair is **additive** to the schema — old payloads
+decode unchanged — and they're the foundation for every state machine
+in this doc.
 
 | Field | Type | Meaning |
 |---|---|---|
 | `unsyncedSince` | `DateTime.Utc \| undefined` | Set on every local mutation while signed in. Cleared by a successful server roundtrip. Absent ⇒ pack is in sync (or pre-dates sync entirely). |
 | `lastSyncedSnapshot` | `{ label, cardSet } \| undefined` | The server's last-known view of this pack. Set by pulls and successful pushes. **Never mutated by local edits**, so it stays a stable diff baseline across multiple offline edits. Absent ⇒ the server has never acknowledged this pack. |
 | `id` | `string` | The canonical identifier the UI keys on. Equals the server's cuid2 once the pack has been pushed (or pulled); a `custom-…` ephemeral id otherwise. |
+| `clientGeneratedId` | `string` | The **cross-device-stable identity** — the server's `client_generated_id` column. Minted equal to `id` on a fresh local creation, then **preserved across the `markPackSynced` id-swap** (which moves `id` to the server's cuid2 but leaves this untouched). Every server-write site UPSERTs on this value so a re-save updates the existing `(owner_id, client_generated_id)` row instead of inserting a duplicate. Persisted as an optional schema field; legacy blobs lacking it decode with it **defaulted to `id`**, and the next reconcile backfills the real value from the server row (see below). |
 
 The discriminator that drives most decisions:
 
@@ -166,11 +168,18 @@ future pack-mutating UI use. They:
 
 - Always write to localStorage first (so the UI snaps).
 - Stamp `unsyncedSince` if signed in.
-- Fire the server action in parallel (idempotent on
-  `(owner_id, client_generated_id)`).
+- Fire the server action in parallel, keyed on the pack's
+  **`clientGeneratedId`** (not its `id`) so the UPSERT is idempotent on
+  `(owner_id, client_generated_id)`. `useCardPackActions` resolves this
+  via the pack's persisted `clientGeneratedId`, falling back to the
+  server cache's `client_generated_id` for a legacy pack whose local
+  cgid still defaults to the swapped server id. Sending the swapped
+  `id` here is exactly what used to insert a duplicate row on every
+  edit of an already-synced pack.
 - On success, swap the localStorage `id` for the server's cuid2
-  (when different), set `lastSyncedSnapshot`, clear `unsyncedSince`,
-  and remap usage entries via `remapCardPackUsageIds`.
+  (when different) **while preserving `clientGeneratedId`**, set
+  `lastSyncedSnapshot`, clear `unsyncedSince`, and remap usage entries
+  via `remapCardPackUsageIds`.
 - On failure, log via `Effect.logError` and leave local state alone.
   The next reconcile retries.
 
@@ -225,6 +234,14 @@ Every successful settle triggers `applyServerSnapshot`:
    clientGeneratedId pair-match BUT same label + cardSet as a local
    pack: server wins (already canonical), idMap remaps.
 4. **Server-only.** Pulled in. Increments `countPulled`.
+
+In every branch that emits a server-paired or server-pulled entry, the
+merged pack takes the **server's `client_generated_id`** as its
+`clientGeneratedId`. This is what backfills the stable cgid onto a
+legacy synced pack whose local cgid had defaulted to the swapped server
+id — once the next reconcile runs, that pack's saves UPSERT in place
+again. Phase-3 local-only passthrough keeps the pack's existing
+`clientGeneratedId` untouched.
 5. **Local-only.** Preserved with all metadata intact.
 
 ## The sign-in transition
@@ -295,15 +312,18 @@ T=0    Device A, signed in
 T+50ms Server returns row { id: "srv-xyz", clientGeneratedId:
        "custom-abc", label: "Office", cardSetData: ... }
        useSaveCardPack onSuccess:
-         1. markPackSynced("custom-abc", row) → swaps id to "srv-xyz",
+         1. markPackSynced("custom-abc", row) → swaps id to "srv-xyz"
+            BUT keeps clientGeneratedId: "custom-abc",
             sets lastSyncedSnapshot = { label: "Office", cardSet },
             clears unsyncedSince
          2. remapCardPackUsageIds("custom-abc" → "srv-xyz")
          3. clearTombstones(["custom-abc", "srv-xyz"])
        Device A's localStorage state:
-         { id: "srv-xyz", label: "Office",
-           unsyncedSince: undefined,
+         { id: "srv-xyz", clientGeneratedId: "custom-abc",
+           label: "Office", unsyncedSince: undefined,
            lastSyncedSnapshot: { label: "Office", cardSet } }
+       A later edit re-saves with clientGeneratedId "custom-abc", so
+       the server UPSERT updates srv-xyz in place — no duplicate row.
 
 T+5min User picks up Device B and signs in for the first time.
        <CardPacksSync /> mounts.
