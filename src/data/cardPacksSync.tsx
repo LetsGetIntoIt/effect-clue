@@ -156,6 +156,7 @@ export const reconcileCardPacks = (
         if (contentMatches) {
             merged.push({
                 id: matchingServer.id,
+                clientGeneratedId: match.clientGeneratedId,
                 label: localPack.label,
                 cardSet: localPack.cardSet,
                 unsyncedSince: undefined,
@@ -165,6 +166,7 @@ export const reconcileCardPacks = (
             // Local edit, conflict — local wins.
             merged.push({
                 id: matchingServer.id,
+                clientGeneratedId: match.clientGeneratedId,
                 label: localPack.label,
                 cardSet: localPack.cardSet,
                 unsyncedSince: localPack.unsyncedSince,
@@ -174,6 +176,7 @@ export const reconcileCardPacks = (
             // No local edit — server wins (rename, other-device update).
             merged.push({
                 id: matchingServer.id,
+                clientGeneratedId: match.clientGeneratedId,
                 label: matchingServer.label,
                 cardSet: matchingServer.cardSet,
                 unsyncedSince: undefined,
@@ -188,7 +191,7 @@ export const reconcileCardPacks = (
     }
 
     // Phase 2: remaining server packs — exact-content duplicate or fresh pull.
-    for (const { pack: serverPack } of decodedServer) {
+    for (const { pack: serverPack, clientGeneratedId } of decodedServer) {
         if (handledServerIds.has(serverPack.id)) continue;
         const exactDup = filteredLocal.find(
             local =>
@@ -201,6 +204,7 @@ export const reconcileCardPacks = (
         };
         merged.push({
             id: serverPack.id,
+            clientGeneratedId,
             label: serverPack.label,
             cardSet: serverPack.cardSet,
             unsyncedSince: undefined,
@@ -328,7 +332,7 @@ const signInPushEffect = Effect.fn("data.cardPacks.signInPush")(function* (
     }
     const promise = pushLocalPacksOnSignIn({
         packs: packs.map(p => ({
-            clientGeneratedId: p.id,
+            clientGeneratedId: p.clientGeneratedId,
             label: p.label,
             cardSetData: encodeCardSet(p.cardSet),
         })),
@@ -598,7 +602,7 @@ export const flushPendingChanges = async (): Promise<FlushResult> => {
         if (!needsPush) continue;
         try {
             const promise = saveCardPack({
-                clientGeneratedId: pack.id,
+                clientGeneratedId: pack.clientGeneratedId,
                 label: pack.label,
                 cardSetData: encodeCardSet(pack.cardSet),
             });

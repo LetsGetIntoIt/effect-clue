@@ -108,6 +108,7 @@ const localPackOf = (
     overrides: Partial<CustomCardSet> = {},
 ): CustomCardSet => ({
     id,
+    clientGeneratedId: id,
     label,
     cardSet: makeCardSet(label),
     ...overrides,
@@ -201,6 +202,56 @@ describe("useCardPackActions.savePack", () => {
             label: "Office",
         });
         expect(result.id).toBe("custom-1");
+    });
+
+    test("synced pack edit → saveServer keys on the original cgid, not the swapped server id", async () => {
+        // Post-sync: the local pack's id is the server's id; its
+        // clientGeneratedId is the original `custom-…`. Sending the
+        // server id as the cgid is exactly what duplicated the row.
+        signedInUserId = "alice";
+        const localPack = localPackOf("srv-1", "Office", {
+            clientGeneratedId: "custom-1",
+            lastSyncedSnapshot: {
+                label: "Office",
+                cardSet: makeCardSet("Office"),
+            },
+        });
+        saveLocalMutateAsync.mockResolvedValue(localPack);
+        renderWithSeed(
+            [localPack],
+            [serverPackOf("srv-1", "custom-1", "Office")],
+        );
+        await actionsRef!.savePack({
+            label: "Office",
+            cardSet: makeCardSet("Office"),
+            existingId: "srv-1",
+        });
+        expect(saveServerMutate).toHaveBeenCalledTimes(1);
+        expect(saveServerMutate.mock.calls[0]?.[0]).toMatchObject({
+            clientGeneratedId: "custom-1",
+        });
+    });
+
+    test("legacy synced pack (local cgid defaulted to server id) is corrected from the server cache", async () => {
+        // A pack synced before cgid was persisted loads with cgid === id
+        // (the server id). The server-cache lookup recovers the real cgid.
+        signedInUserId = "alice";
+        const localPack = localPackOf("srv-1", "Office", {
+            clientGeneratedId: "srv-1",
+        });
+        saveLocalMutateAsync.mockResolvedValue(localPack);
+        renderWithSeed(
+            [localPack],
+            [serverPackOf("srv-1", "custom-1", "Office")],
+        );
+        await actionsRef!.savePack({
+            label: "Office",
+            cardSet: makeCardSet("Office"),
+            existingId: "srv-1",
+        });
+        expect(saveServerMutate.mock.calls[0]?.[0]).toMatchObject({
+            clientGeneratedId: "custom-1",
+        });
     });
 });
 
@@ -296,6 +347,31 @@ describe("useCardPackActions.renamePack", () => {
             existingId: "srv-1",
         });
         // saveServer called with the cgid (the wire-format-stable id).
+        expect(saveServerMutate.mock.calls[0]?.[0]).toMatchObject({
+            clientGeneratedId: "custom-1",
+        });
+    });
+
+    test("synced pack rename falls back to the local pack's cgid when the server cache is empty", async () => {
+        // The persisted clientGeneratedId carries the stable identity
+        // even before the server query lands, so an offline-ish rename
+        // still keys the eventual UPSERT correctly.
+        signedInUserId = "alice";
+        promptAnswer = "Office Edition";
+        renderWithSeed(
+            [
+                localPackOf("srv-1", "Office", {
+                    clientGeneratedId: "custom-1",
+                }),
+            ],
+            [], // server cache not yet populated
+        );
+        await actionsRef!.renamePack({
+            // Caller passed the swapped server id as the target cgid.
+            clientGeneratedId: "srv-1",
+            label: "Office",
+            cardSet: makeCardSet("Office"),
+        });
         expect(saveServerMutate.mock.calls[0]?.[0]).toMatchObject({
             clientGeneratedId: "custom-1",
         });

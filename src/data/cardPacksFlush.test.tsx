@@ -58,6 +58,7 @@ const localPack = (
     overrides: Partial<CustomCardSet> = {},
 ): CustomCardSet => ({
     id,
+    clientGeneratedId: id,
     label,
     cardSet: makeCardSet(cardName),
     ...overrides,

@@ -110,6 +110,30 @@ describe("loadCustomCardSets", () => {
         expect(loaded).toHaveLength(1);
         expect(loaded[0]?.id).toBe("q7xao88qw0hobmp43aa5s0r8");
     });
+
+    test("defaults clientGeneratedId to id on a legacy blob lacking the field", () => {
+        window.localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({
+                version: 1,
+                presets: [
+                    {
+                        id: "legacy-1",
+                        label: "Legacy",
+                        categories: [
+                            {
+                                id: "cat-w",
+                                name: "Weapon",
+                                cards: [{ id: "card-knife", name: "Knife" }],
+                            },
+                        ],
+                    },
+                ],
+            }),
+        );
+        const loaded = loadCustomCardSets();
+        expect(loaded[0]?.clientGeneratedId).toBe("legacy-1");
+    });
 });
 
 describe("saveCustomCardSet + loadCustomCardSets", () => {
@@ -136,6 +160,13 @@ describe("saveCustomCardSet + loadCustomCardSets", () => {
         const pack = saveCustomCardSet("Label", makePack());
         expect(pack.id).toMatch(/^custom-/);
         expect(pack.label).toBe("Label");
+    });
+
+    test("a fresh creation mints clientGeneratedId equal to its id", () => {
+        const pack = saveCustomCardSet("Label", makePack());
+        expect(pack.clientGeneratedId).toBe(pack.id);
+        const loaded = loadCustomCardSets();
+        expect(loaded[0]!.clientGeneratedId).toBe(pack.id);
     });
 
     test("generated ids are unique across rapid successive calls", () => {
@@ -173,6 +204,24 @@ describe("saveCustomCardSet + loadCustomCardSets", () => {
         expect(all).toHaveLength(1);
         expect(all[0]!.id).toBe(original.id);
         expect(all[0]!.label).toBe("First — edited");
+    });
+
+    test("an in-place update preserves clientGeneratedId", () => {
+        // Simulate a previously-synced pack: id swapped to the server
+        // id, but the stable cgid retained.
+        replaceCustomCardSets([
+            {
+                id: "server-1",
+                clientGeneratedId: "custom-orig",
+                label: "Synced",
+                cardSet: makePack(),
+                lastSyncedSnapshot: { label: "Synced", cardSet: makePack() },
+            },
+        ]);
+        const updated = saveCustomCardSet("Synced — edited", makePack(), "server-1");
+        expect(updated.id).toBe("server-1");
+        expect(updated.clientGeneratedId).toBe("custom-orig");
+        expect(loadCustomCardSets()[0]!.clientGeneratedId).toBe("custom-orig");
     });
 
     test("with a stale existingId, falls back to insert", () => {
@@ -261,6 +310,21 @@ describe("markPackSynced", () => {
         expect(loaded[0]?.id).toBe("server-1");
     });
 
+    test("preserves clientGeneratedId across the id-swap", () => {
+        // The cgid must survive: the server keys its UPSERT on it, so
+        // losing it here is what made edits insert a duplicate row.
+        const saved = saveCustomCardSet("Office", makePack());
+        const cgid = saved.clientGeneratedId;
+        const result = markPackSynced(saved.id, {
+            id: "server-1",
+            label: "Office",
+            cardSet: makePack(),
+        });
+        expect(result?.id).toBe("server-1");
+        expect(result?.clientGeneratedId).toBe(cgid);
+        expect(loadCustomCardSets()[0]?.clientGeneratedId).toBe(cgid);
+    });
+
     test("returns undefined when the local id doesn't match", () => {
         saveCustomCardSet("A", makePack());
         const result = markPackSynced("nonexistent", {
@@ -290,6 +354,7 @@ describe("replaceCustomCardSets metadata round-trip", () => {
         replaceCustomCardSets([
             {
                 id: "server-1",
+                clientGeneratedId: "custom-1",
                 label: "Office",
                 cardSet: makePack(),
                 unsyncedSince: DateTime.makeUnsafe("2026-04-22T12:00:00Z"),
@@ -301,6 +366,7 @@ describe("replaceCustomCardSets metadata round-trip", () => {
         ]);
         const loaded = loadCustomCardSets();
         expect(loaded).toHaveLength(1);
+        expect(loaded[0]?.clientGeneratedId).toBe("custom-1");
         expect(DateTime.toEpochMillis(loaded[0]!.unsyncedSince!)).toBe(
             DateTime.toEpochMillis(
                 DateTime.makeUnsafe("2026-04-22T12:00:00Z"),
@@ -330,16 +396,19 @@ describe("writeAll dedupe — collapses ids on persist", () => {
             replaceCustomCardSets([
                 {
                     id: "server-1",
+                    clientGeneratedId: "custom-1",
                     label: "Office",
                     cardSet: makePack(),
                 },
                 {
                     id: "server-1",
+                    clientGeneratedId: "custom-1",
                     label: "Office (stale)",
                     cardSet: makePack(),
                 },
                 {
                     id: "server-1",
+                    clientGeneratedId: "custom-1",
                     label: "Office (stale 2)",
                     cardSet: makePack(),
                 },
@@ -352,9 +421,9 @@ describe("writeAll dedupe — collapses ids on persist", () => {
 
     test("non-colliding ids round-trip unchanged", () => {
         replaceCustomCardSets([
-            { id: "a", label: "A", cardSet: makePack() },
-            { id: "b", label: "B", cardSet: makePack() },
-            { id: "c", label: "C", cardSet: makePack() },
+            { id: "a", clientGeneratedId: "a", label: "A", cardSet: makePack() },
+            { id: "b", clientGeneratedId: "b", label: "B", cardSet: makePack() },
+            { id: "c", clientGeneratedId: "c", label: "C", cardSet: makePack() },
         ]);
         const loaded = loadCustomCardSets();
         expect(loaded.map(p => p.id)).toEqual(["a", "b", "c"]);

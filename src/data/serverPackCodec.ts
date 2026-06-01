@@ -99,9 +99,10 @@ export const decodeCardSet = (raw: string): CardSet | null => {
 
 /**
  * Decode a server-side `PersistedCardPack` into a domain
- * `CustomCardSet`. Drops the wire-format-only `clientGeneratedId` —
- * callers that need it pluck it from the original `PersistedCardPack`
- * they already had access to.
+ * `CustomCardSet`. Carries the server's `clientGeneratedId` through as
+ * the pack's cross-device-stable identity so the reconcile pipeline and
+ * the AccountModal preview don't have to re-pluck it from the original
+ * `PersistedCardPack`.
  */
 export const decodeServerPack = (
     pack: PersistedCardPack,
@@ -110,6 +111,7 @@ export const decodeServerPack = (
     if (cardSet === null) return null;
     return {
         id: pack.id,
+        clientGeneratedId: pack.clientGeneratedId,
         label: pack.label,
         cardSet,
     };

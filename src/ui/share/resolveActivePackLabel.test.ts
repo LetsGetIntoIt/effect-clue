@@ -35,8 +35,18 @@ const PACK_B = CardSet({
     ],
 });
 
-const customA: CustomCardSet = { id: "id-a", label: "Pack A", cardSet: PACK_A };
-const customB: CustomCardSet = { id: "id-b", label: "Pack B", cardSet: PACK_B };
+const customA: CustomCardSet = {
+    id: "id-a",
+    clientGeneratedId: "id-a",
+    label: "Pack A",
+    cardSet: PACK_A,
+};
+const customB: CustomCardSet = {
+    id: "id-b",
+    clientGeneratedId: "id-b",
+    label: "Pack B",
+    cardSet: PACK_B,
+};
 
 const usageOf = (
     entries: ReadonlyArray<readonly [string, string]>,
