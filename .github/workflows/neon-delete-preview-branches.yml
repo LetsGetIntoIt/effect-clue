@@ -108,7 +108,7 @@ jobs:
 
       - name: Delete Neon Preview Branch
         if: steps.check.outputs.is_preview == 'true'
-        uses: neondatabase/delete-branch-action@v3
+        uses: neondatabase/delete-branch-action@v3.2.1
         with:
           project_id: ${{ vars.NEON_PROJECT_ID }}
           branch: ${{ steps.branches.outputs.neon_branch }}
