@@ -1,7 +1,7 @@
 {
     $schema: "https://docs.renovatebot.com/renovate-schema.json",
     extends: [
-        "github>StoryCut/renovate-config:js-app.json5",
-        "github>StoryCut/renovate-config:neon-local-postgres.json5",
+        "github>nunofyobiz/renovate-config:js-app.json5",
+        "github>nunofyobiz/renovate-config:neon-local-postgres.json5",
     ],
 }
