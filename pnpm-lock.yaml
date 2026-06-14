@@ -108,8 +108,8 @@ importers:
         specifier: 8.21.0
         version: 8.21.0
       posthog-js:
-        specifier: 1.382.0
-        version: 1.382.0
+        specifier: 1.383.3
+        version: 1.383.3
       react:
         specifier: 19.2.7
         version: 19.2.7
@@ -2033,11 +2033,11 @@ packages:
     resolution: {integrity: sha512-h104Kh26rR8tm+a3Qkc5S4VLYint3FE48as7+/5oCEcKR2idC/pF1G6AhIXKI+eHPJa/3J9i5z0Al47IeGHPkA==}
     engines: {node: '>=12'}
 
-  '@posthog/core@1.30.10':
-    resolution: {integrity: sha512-R7Z5jDB3ugwfSujMmRd5osPPR6L6BqfcaSNcYOekzRMZ4Jklq74p05xByP09EnUvKXb5czI+RQVCITTWRWuFXw==}
+  '@posthog/core@1.30.14':
+    resolution: {integrity: sha512-cC0che/17kP6qMIMgdmxsoz3h8Jar8knQfDM8WqQwVacSeWXkrwkemoV7S5tCGmgTuRTTsdigirs9HiBXHQ/dA==}
 
-  '@posthog/types@1.382.0':
-    resolution: {integrity: sha512-iK4OcSgvtmS9FZ9EUpvwlRZmHCLXaZ3+6dbRjkE7q9LL0zHLewxJH84H6uGvCw8aGzxs5rIliZqPHgimTcQEaw==}
+  '@posthog/types@1.383.3':
+    resolution: {integrity: sha512-N4jtmLaJxzjQ/C0UHnF0igQPSwUqwScPDv9ePGjKCfDomIEUcO3+c6pBrjTp7woxuMQ49BmyM/pV4/SOBPpe0Q==}
 
   '@radix-ui/primitive@1.1.4':
     resolution: {integrity: sha512-7AdCK9PQyiljKoBDbN8OuctCbd/esdwZPQ8RtOE3SsyQtUpiPb+ND75q0jEhC1m1ecBI0MFNeLJvwIh9iKHRcQ==}
@@ -5202,8 +5202,8 @@ packages:
   postgres-range@1.1.4:
     resolution: {integrity: sha512-i/hbxIE9803Alj/6ytL7UHQxRvZkI9O4Sy+J3HGc4F4oo/2eQAjTSNJ0bfxyse3bH0nuVesCk+3IRLaMtG3H6w==}
 
-  posthog-js@1.382.0:
-    resolution: {integrity: sha512-lXwVlNdPLkhDft48ZgLQ5Jf4RsuQVwz7Hr7luD4DAG+4wDGA+k9eE2no36r3Z1w4uK0EmIf9lmav6+4RsmP7nA==}
+  posthog-js@1.383.3:
+    resolution: {integrity: sha512-caH+lSELdgqaS2uxmBiJT22/cr3epuMKSqBsO8QYQgORehokwdWB/Q4LIh3Dgyjy26B2yhprcAAqmuKMf4s3Nw==}
 
   preact@10.29.1:
     resolution: {integrity: sha512-gQCLc/vWroE8lIpleXtdJhTFDogTdZG9AjMUpVkDf2iTCNwYNWA+u16dL41TqUDJO4gm2IgrcMv3uTpjd4Pwmg==}
@@ -5975,9 +5975,6 @@ packages:
 
   web-vitals@0.2.4:
     resolution: {integrity: sha512-6BjspCO9VriYy12z356nL6JBS0GYeEcA457YyRzD+dD6XYCQ75NKhcOHUMHentOE7OcVCIXXDvOm0jKFfQG2Gg==}
-
-  web-vitals@5.2.0:
-    resolution: {integrity: sha512-i2z98bEmaCqSDiHEDu+gHl/dmR4Q+TxFmG3/13KkMO+o8UxQzCqWaDRCiLgEa41nlO4VpXSI0ASa1xWmO9sBlA==}
 
   web-vitals@5.3.0:
     resolution: {integrity: sha512-q6LWsLatGYZp5VGBIOvbTj6JBV2nOmC8KvWztXBmwJcfFAzhwKwbOxhUH306XY3CcaZDUlSmSuNPBsCn0bFu+g==}
@@ -7465,11 +7462,11 @@ snapshots:
       '@pnpm/network.ca-file': 1.0.2
       config-chain: 1.1.13
 
-  '@posthog/core@1.30.10':
+  '@posthog/core@1.30.14':
     dependencies:
-      '@posthog/types': 1.382.0
+      '@posthog/types': 1.383.3
 
-  '@posthog/types@1.382.0': {}
+  '@posthog/types@1.383.3': {}
 
   '@radix-ui/primitive@1.1.4': {}
 
@@ -10671,16 +10668,16 @@ snapshots:
 
   postgres-range@1.1.4: {}
 
-  posthog-js@1.382.0:
+  posthog-js@1.383.3:
     dependencies:
-      '@posthog/core': 1.30.10
-      '@posthog/types': 1.382.0
+      '@posthog/core': 1.30.14
+      '@posthog/types': 1.383.3
       core-js: 3.49.0
       dompurify: 3.4.1
       fflate: 0.4.8
       preact: 10.29.1
       query-selector-shadow-dom: 1.0.1
-      web-vitals: 5.2.0
+      web-vitals: 5.3.0
 
   preact@10.29.1: {}
 
@@ -11482,8 +11479,6 @@ snapshots:
       graceful-fs: 4.2.11
 
   web-vitals@0.2.4: {}
-
-  web-vitals@5.2.0: {}
 
   web-vitals@5.3.0: {}
 
