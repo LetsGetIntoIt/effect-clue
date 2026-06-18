@@ -18,13 +18,22 @@ auto-approves a command only when *every* part of it is independently safe, so s
 an otherwise-allowlisted command. The allowlist in [`.claude/settings.json`](./.claude/settings.json)
 covers the safe reads and routine scripts; you keep prompts low by *how* you invoke things:
 
-- **Prefer the built-in `Grep` / `Glob` / `Read` tools** over shell `grep` / `find` / `cat` and
-  pipelines. They don't go through the Bash permission path, so they never prompt — and they're faster.
-- **One command per tool call — never `&&` / `;` / `|` chains.** A compound line is auto-approved only
-  if every segment independently clears, so even an all-allowlisted chain (`git add … && git commit …
-  && git log …`) prompts. Run the steps as separate calls. (The one sanctioned chain is the
-  `export NVM_DIR=… && source …` nvm-escalation in the next section — and only after a `pnpm` command
-  has actually failed.)
+- **Prefer the built-in `Grep` / `Glob` / `Read` tools** over shell `grep` / `git grep` / `find` /
+  `cat` / `sed` / `head` and pipelines. They don't go through the Bash permission path, so they never
+  prompt — and they're faster. Concretely:
+  - `sed -n 'A,Bp' file` / `head -n N file` → `Read` with `offset` / `limit`.
+  - `grep … file` / `git grep …` → the `Grep` tool. Scope with `glob` (e.g. `**/*.ts`) and exclude
+    tests with a negated glob (`!**/*.test.*`) instead of a `| grep -v` pipe.
+  - **Reading or searching N files → one `Grep`/`Read`, never a `for f in …; do grep …; done` loop.**
+  - Drop `echo "=== … ==="` section separators and `|| echo "no matches"` fallbacks entirely — the
+    native tools label their output and report empty results for free. A stray `echo` is enough to
+    force a prompt on an otherwise-allowlisted block.
+- **One command per tool call — never `&&` / `;` / `|` / `$(…)` chains or `for`/`while` loops.** A
+  compound line is auto-approved only if every segment independently clears, so even an all-allowlisted
+  chain (`git add … && git commit … && git log …`) prompts. Run the steps as separate calls. (The one
+  sanctioned chain is the `export NVM_DIR=… && source …` nvm-escalation in the next section — and only
+  after a `pnpm` command has actually failed.) Loops and command substitution prompt structurally —
+  reach for the native tools above instead of trying to allowlist your way around it.
 - **Run project scripts verbatim** — `pnpm typecheck` / `pnpm test` / `pnpm lint`, with no env-var
   prefix (`TMPDIR=…`), no extra flags, and no `2>&1 | tail` / `2>/dev/null` capture wrapper. Run them
   bare and read the output; the redirect/pipe is itself what prompts.
@@ -34,10 +43,12 @@ covers the safe reads and routine scripts; you keep prompts low by *how* you inv
   prompt. The cwd already *is* the repo; run `git status`, `pnpm test`, etc. directly.
 
 Consequential actions stay **deliberately gated** (they *should* prompt): inline code runners
-(`tsx -e`, `npx -e`), `gh pr merge`, `gh issue create`, deploys, the volume-dropping `pnpm db:reset`
-(`docker compose down -v`), and destructive git (`git reset --hard`, `git clean -fd`, bare
-`git push --force`). Expanding the allowlist is the smallest lever, not the first — fix the root cause
-in scripts or command shape before reaching for it.
+(`node -e`, `tsx -e`, `npx -e`), `gh pr merge`, `gh issue create`, deploys, daemon launches and the
+volume-dropping `pnpm db:reset` (`docker compose down -v`), and destructive git (`git reset --hard`,
+`git clean -fd`, bare `git push --force`). Read-only Docker status (`docker info` / `docker ps` /
+`docker compose ls`) is allowlisted; bringing the database stack up or down is not. Expanding the
+allowlist is the smallest lever, not the first — fix the root cause in scripts or command shape before
+reaching for it.
 
 ## Use the right Node version
 
