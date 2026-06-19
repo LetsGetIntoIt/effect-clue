@@ -31,7 +31,7 @@ jobs:
 
           echo "compare=$compare_branch" >> $GITHUB_OUTPUT
           echo "base=$base_branch" >> $GITHUB_OUTPUT
-      - uses: neondatabase/schema-diff-action@v1
+      - uses: neondatabase/schema-diff-action@v1.0.1
         with:
           project_id: ${{ vars.NEON_PROJECT_ID }}
           api_key: ${{ secrets.NEON_API_KEY }}
