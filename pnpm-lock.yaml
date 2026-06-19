@@ -108,8 +108,8 @@ importers:
         specifier: 8.21.0
         version: 8.21.0
       posthog-js:
-        specifier: 1.386.6
-        version: 1.386.6
+        specifier: 1.386.8
+        version: 1.386.8
       react:
         specifier: 19.2.7
         version: 19.2.7
@@ -5193,8 +5193,8 @@ packages:
   postgres-range@1.1.4:
     resolution: {integrity: sha512-i/hbxIE9803Alj/6ytL7UHQxRvZkI9O4Sy+J3HGc4F4oo/2eQAjTSNJ0bfxyse3bH0nuVesCk+3IRLaMtG3H6w==}
 
-  posthog-js@1.386.6:
-    resolution: {integrity: sha512-xRcbToRtU07Ojk+VaCCos6I/zD60sNKfWxdeZih0xbncgegIqLZJmBzi4HdkSkXrf14b6HhwMI/s2GxWha5ADQ==}
+  posthog-js@1.386.8:
+    resolution: {integrity: sha512-L4cJD1sleUULE7K4mZQI5wpS24NHGtNmFw1rPHruc579unVzHuooHiVDEHp/qyNnhNxtNE6alBTiVORbYnRTSw==}
 
   preact@10.29.1:
     resolution: {integrity: sha512-gQCLc/vWroE8lIpleXtdJhTFDogTdZG9AjMUpVkDf2iTCNwYNWA+u16dL41TqUDJO4gm2IgrcMv3uTpjd4Pwmg==}
@@ -10651,7 +10651,7 @@ snapshots:
 
   postgres-range@1.1.4: {}
 
-  posthog-js@1.386.6:
+  posthog-js@1.386.8:
     dependencies:
       '@posthog/core': 1.33.0
       '@posthog/types': 1.387.0
