@@ -8,9 +8,9 @@
  * from the standard browser packages.
  *
  * ─── Why so many `@opentelemetry/*` peer deps? ─────────────────────────
- * The Effect 4 beta of `@effect/opentelemetry` (4.0.0-beta.50) intentionally
+ * The Effect 4 RC of `@effect/opentelemetry` intentionally
  * does NOT include the `Otlp.layer` convenience helper that the Effect 3
- * stable (0.63.x) shipped with. Instead, the beta expects the consumer to
+ * stable (0.63.x) shipped with. Instead, the RC expects the consumer to
  * supply browser SDK pieces directly:
  *
  *   - `@opentelemetry/sdk-trace-web` + `@opentelemetry/sdk-trace-base`
@@ -22,7 +22,7 @@
  *   - `@opentelemetry/api`, `@opentelemetry/resources`,
  *     `@opentelemetry/semantic-conventions`
  *
- * They're all peer deps of `@effect/opentelemetry@4.x-beta`, so they MUST
+ * They're all peer deps of `@effect/opentelemetry@4.0.0-rc.x`, so they MUST
  * be present. We isolate every raw `@opentelemetry/*` import to this file
  * so the rest of the app only ever sees `Effect`, `Effect.fn`, and our
  * own `TelemetryLayer`.
@@ -123,4 +123,3 @@ export const TelemetryLayer: Layer.Layer<never> = (() => {
         loggerMergeWithExisting: true,
     }));
 })();
-
