@@ -184,8 +184,8 @@ importers:
         specifier: 10.4.1
         version: 10.4.1(jiti@2.7.0)
       eslint-plugin-i18next:
-        specifier: 6.1.4
-        version: 6.1.4
+        specifier: 6.1.5
+        version: 6.1.5
       jsdom:
         specifier: 29.1.1
         version: 29.1.1(@noble/hashes@2.2.0)
@@ -4022,8 +4022,8 @@ packages:
     engines: {node: '>=6.0'}
     hasBin: true
 
-  eslint-plugin-i18next@6.1.4:
-    resolution: {integrity: sha512-BekXQu1VaVFkREepQGsntBYoKuPsf89V16n/s2xpKMtsw0/lDseds1wBhj3RtO1dKnHsfTPaG+xul1vF0R7LEQ==}
+  eslint-plugin-i18next@6.1.5:
+    resolution: {integrity: sha512-xCTfstbK9ZpQ6UFT5S1s6zbZMhKn2o2jRSQYiU2UkV7wt8y1m3WjkUYGkGlipgRdFInYI9+LAqE+JQU/L73HmA==}
     engines: {node: '>=18.10.0'}
 
   eslint-scope@5.1.1:
@@ -4677,9 +4677,6 @@ packages:
 
   lodash.sortby@4.7.0:
     resolution: {integrity: sha512-HDWXG8isMntAyRF5vZ7xKuEvOhT4AhlRt/3czTSjvGUxjYCBVRQY48ViDHyfYz9VIoBkW4TMGQNapx+l3RUwdA==}
-
-  lodash@4.18.1:
-    resolution: {integrity: sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==}
 
   loose-envify@1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
@@ -9471,9 +9468,8 @@ snapshots:
     optionalDependencies:
       source-map: 0.6.1
 
-  eslint-plugin-i18next@6.1.4:
+  eslint-plugin-i18next@6.1.5:
     dependencies:
-      lodash: 4.18.1
       requireindex: 1.1.0
 
   eslint-scope@5.1.1:
@@ -10110,8 +10106,6 @@ snapshots:
       p-locate: 5.0.0
 
   lodash.sortby@4.7.0: {}
-
-  lodash@4.18.1: {}
 
   loose-envify@1.4.0:
     dependencies:
