@@ -2,7 +2,7 @@
 
 A solver for the board game **Clue** (a.k.a. *Cluedo*) — a single-page web app that tracks suggestions and disproofs as you play and deduces what each player must, might, or cannot hold.
 
-The app is offline-first: the deducer runs entirely in your browser and game state lives in `localStorage`. The `/play` page server-renders an empty skeleton on each request and hydrates from your local data on the client — there's no server-side game state. Server-backed features (custom card packs, accounts, shareable game links) layer on top in later milestones.
+The app is offline-first: the deducer runs entirely in your browser and game state lives in `localStorage`. The `/play` page server-renders an empty skeleton on each request and hydrates from your local data on the client — there's no server-side game state. Server-backed features — accounts (Better Auth + Google), synced custom card packs, and shareable game links — are backed by Postgres (Neon in production, Docker locally).
 
 > **Production:** <https://winclue.vercel.app/>
 
@@ -24,7 +24,9 @@ The app is offline-first: the deducer runs entirely in your browser and game sta
 | --- | --- |
 | Framework | [Next.js 16](https://nextjs.org/) App Router on Vercel (Fluid Compute). The `/play` page server-renders a skeleton; client hydrates from `localStorage`. |
 | UI | React 19 + React Compiler, [Radix Primitives](https://www.radix-ui.com/), [Motion](https://motion.dev/), Tailwind CSS v4 |
-| Logic | [Effect 4 (beta)](https://effect.website/) — the deducer, services, persistence schema, and rules are all Effect programs |
+| Logic | [Effect 4 (RC)](https://effect.website/) — the deducer, services, persistence schema, and rules are all Effect programs |
+| Server | Postgres (Neon / Docker) via `@effect/sql-pg`, [Better Auth](https://better-auth.com/) with Google OAuth — see [src/server/README.md](src/server/README.md) |
+| PWA | [Serwist](https://serwist.pages.dev/) service worker (`pnpm build` runs `serwist build`) |
 | i18n | [`next-intl`](https://next-intl.dev/) — single English locale today, structured for adding more |
 | Tests | [Vitest 4](https://vitest.dev/) + Testing Library + jsdom |
 | Errors | [Sentry](https://sentry.io/) (`@sentry/nextjs`) — JS errors, Web Vitals, Session Replay |
@@ -37,12 +39,16 @@ The app is offline-first: the deducer runs entirely in your browser and game sta
 ## Repository layout
 
 ```
-app/                    Next.js App Router entry — layout, providers, four routes.
+app/                    Next.js App Router entry — layout, providers, routes.
   page.tsx              Server component; redirects / → /play.
   play/page.tsx         Renders <Clue/> + <SplashModal/>; the main game UI. SSR
                         emits a skeleton; the client hydrates from localStorage.
   about/page.tsx        Renders shared <AboutContent/> (motivation copy + YouTube embed).
-  share/[id]/page.tsx   Reserved for the M9 server-stored share flow; 404 today.
+  share/[id]/page.tsx   Share import page for server-stored share links.
+  api/auth/[...all]/    Better Auth handler.
+  api/health/           Health check.
+  api/crons/            Vercel cron handlers (daily share cleanup; see vercel.json).
+  sw.ts                 Serwist service-worker source.
 
 instrumentation.ts      Next.js instrumentation hook — wires Sentry server SDK on cold-start.
 instrumentation-client.ts  Next.js client instrumentation — wires Sentry browser SDK.
@@ -70,11 +76,17 @@ src/
   i18n/                 next-intl provider + flat message map.
   analytics/            PostHog client + typed event emitters + Web Vitals.
   observability/        Effect → OpenTelemetry → Honeycomb runtime.
+  data/                 React Query hooks, card-pack sync (see src/data/README.md).
+  server/               Server-only Effect runtime, actions, auth, migrations.
+  pwa/                  Service-worker / offline support.
+  test-utils/           Shared test helpers.
 
 messages/en.json        UI strings.
-scripts/check-i18n-keys.mjs   Audits orphan/missing translation keys.
+scripts/                Dev server launcher, i18n key audit, build assertions.
+docs/                   Sharing, card-pack sync and deployment setup guides.
 
-.github/workflows/ci.yml   typecheck / lint / test / knip / i18n-check / build
+.github/workflows/      ci.yml (typecheck / lint / test / knip / i18n-check / build),
+                        plus the two Neon workflows.
 renovate.json5             Dependency PRs.
 CODEOWNERS                 Review routing.
 ```
@@ -87,8 +99,8 @@ Tests live next to source as `Foo.test.ts(x)` beside `Foo.ts(x)`.
 
 ### Prerequisites
 
-- **Node** — version pinned in [.nvmrc](.nvmrc) (currently `22.22.2`). `engine-strict=true` in [.npmrc](.npmrc) means scripts will refuse to run on the wrong version.
-- **pnpm** — `>= 10.32.0`. Required; `npm` / `yarn` / `bun` are not supported.
+- **Node** — version pinned in [.nvmrc](.nvmrc) (`package.json` `engines` sets the minimum). `engine-strict=true` in [.npmrc](.npmrc) means scripts will refuse to run on the wrong version.
+- **pnpm** — pinned via `packageManager` in `package.json`, with `engines` requiring `>= 10.32.0`. Required; `npm` / `yarn` / `bun` are not supported.
 - **Docker** — only required if you want to exercise the server-backed features (custom card packs, accounts, sharing). The pure-client deducer doesn't need it.
 
 ### First-time setup
@@ -170,8 +182,11 @@ To deploy these features to a Vercel preview / production, see [docs/setup-verce
 
 | Command | What it does |
 | --- | --- |
-| `pnpm dev` | Next dev server (Turbopack). |
-| `pnpm build` | Production build (SSR, `next build`). |
+| `pnpm dev` | Next dev server via `scripts/dev.mjs`; auto-selects a free port. |
+| `pnpm build` | Production build: `next build && serwist build` (emits `public/sw.js`). Needs the DB and auth env vars. |
+| `pnpm build:offline-test` | `pnpm build && pnpm start`, for exercising offline/PWA behavior. |
+| `pnpm assert:sw-emitted` | Fails if the build did not emit the service worker (CI runs it after build). |
+| `pnpm assert:no-dev-auth` | Fails if dev-only sign-in identifiers appear in the production bundle. |
 | `pnpm start` | Serve the production build (`next start`). |
 | `pnpm test` | Vitest, run mode. |
 | `pnpm test:watch` | Vitest, watch mode. |
@@ -234,10 +249,10 @@ Neon schema-diff and preview-branch cleanup workflows also need GitHub Actions a
 
 ## Observability
 
-Three integrations, all browser-side:
+Three integrations:
 
-- **Sentry** — unhandled JS errors, Web Vitals, Session Replay. Auto-captures uncaught throws; breadcrumbs are added when we `Effect.logError`.
-- **Honeycomb** — `@effect/opentelemetry` ships Effect spans / metrics / logs to OTLP HTTP. Wrap heavy or I/O-bound work in `Effect.fn("module.operation")` and run via `TelemetryRuntime` ([`src/observability/runtime.ts`](src/observability/runtime.ts)).
+- **Sentry** — unhandled JS errors, Web Vitals, Session Replay in the browser, plus server-side errors via `instrumentation.ts` and `sentry.server.config.ts`. Auto-captures uncaught throws; breadcrumbs are added when we `Effect.logError`.
+- **Honeycomb** (browser-side) — `@effect/opentelemetry` ships Effect spans / metrics / logs to OTLP HTTP. Wrap heavy or I/O-bound work in `Effect.fn("module.operation")` and run via `TelemetryRuntime` ([`src/observability/runtime.ts`](src/observability/runtime.ts)).
 - **PostHog** — every product event is a typed function in [`src/analytics/events.ts`](src/analytics/events.ts). Never invent event names inline at the call site — adding/renaming events is a TypeScript-checked change.
 
 Three production funnels are wired up — see the **Observability and analytics** section of [CLAUDE.md](CLAUDE.md) for the funnel definitions and the change-checklist that applies to every PR.
@@ -246,8 +261,9 @@ Three production funnels are wired up — see the **Observability and analytics*
 
 ## CI / dependencies
 
-- **CI** — [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs typecheck, lint, test, knip, i18n-check, and build in parallel on every PR and on `main`.
-- **Renovate** — [`renovate.json`](renovate.json) opens dependency PRs.
+- **CI** — [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs typecheck, lint, test, knip, i18n-check, and build in parallel on every PR and on `main`; the build job also runs `pnpm assert:sw-emitted`.
+- **Neon** — [`neon-schema-diff.yml`](.github/workflows/neon-schema-diff.yml) comments schema diffs on PRs; [`neon-delete-preview-branches.yml`](.github/workflows/neon-delete-preview-branches.yml) deletes `preview/*` DB branches when PRs merge.
+- **Renovate** — [`renovate.json5`](renovate.json5) opens dependency PRs.
 - **CODEOWNERS** — [`CODEOWNERS`](CODEOWNERS) routes reviews.
 
 ---

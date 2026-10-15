@@ -2,7 +2,7 @@
 
 Application-wide data layer. Exposes React Query hooks for every
 read- or write-side concern that crosses a persistence boundary
-(localStorage today, server actions starting in M8). Co-located test
+(localStorage and server actions). Co-located test
 files cover the cache-behaviour surface that `src/logic/`'s direct
 unit tests don't reach.
 
@@ -13,6 +13,10 @@ unit tests don't reach.
 | [`QueryClientProvider.tsx`](./QueryClientProvider.tsx) | Top-level `QueryClient` + `localStorage` persister. Mounted once at `app/Providers.tsx`. |
 | [`customCardPacks.ts`](./customCardPacks.ts) | `useCustomCardPacks`, `useSaveCardPack`, `useDeleteCardPack`. Wraps the pure `src/logic/CustomCardSets.ts` localStorage layer. |
 | [`cardPackUsage.ts`](./cardPackUsage.ts) | `useCardPackUsage`, `useRecordCardPackUse`, `useForgetCardPackUse`. Wraps `src/logic/CardPackUsage.ts`. |
+| [`cardPacksSync.tsx`](./cardPacksSync.tsx) | `<CardPacksSync />` reconcile loop between localStorage and the server. See [docs/card-pack-sync.md](../../docs/card-pack-sync.md). |
+| [`cardPacksInFlight.ts`](./cardPacksInFlight.ts) | In-flight registry of pack operations during sync. See [docs/card-pack-sync.md](../../docs/card-pack-sync.md). |
+| [`serverPackCodec.ts`](./serverPackCodec.ts) | Encode/decode between local card packs and the server row shape. See [docs/card-pack-sync.md](../../docs/card-pack-sync.md). |
+| [`newCardPackDraft.ts`](./newCardPackDraft.ts) | Draft state for a card pack being created in the editor. |
 
 ## Conventions
 

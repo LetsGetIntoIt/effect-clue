@@ -11,8 +11,11 @@ migrator, and (later) one auth context per process.
 | [`runtime.ts`](./runtime.ts) | `ServerRuntime` — singleton `ManagedRuntime` carrying the Pg pool + migrator. |
 | [`withServerAction.ts`](./withServerAction.ts) | Wrapper for handlers: `withServerAction(Effect.gen(...))` returns `Promise<A>`. |
 | [`migrations/`](./migrations) | Numbered TypeScript migrations + an `index.ts` registry the migrator walks at startup. |
-| [`actions/`](./actions) | Server-only Effect functions invoked via `withServerAction`. M7 / M8 / M9 add real ones; `health.ts` is the sanity-check. |
-| [`models/`](./models) | Effect Schema + `@effect/sql` `Model.Class` definitions for each persisted shape. Empty until M8 adds `CardPack`. |
+| [`actions/`](./actions) | Server-only Effect functions invoked via `withServerAction`: `health.ts` (sanity check), `packs.ts` (card-pack sync), `shares.ts` (share links), `dev-auth.ts` (development-only sign-in). |
+| [`shares/`](./shares) | Share constants and typed errors used by `actions/shares.ts` and the share page. |
+| [`auth.ts`](./auth.ts) | Better Auth configuration (Google OAuth, its own `pg` pool). |
+| [`authEnv.ts`](./authEnv.ts) | Auth env validation; `pnpm dev` exits at startup when the OAuth vars are missing. |
+| [`localDatabase.ts`](./localDatabase.ts) | Local Docker `DATABASE_URL` fallback used in development. |
 
 ## Conventions
 
@@ -40,7 +43,7 @@ migrator, and (later) one auth context per process.
 
 ## Two-pool note
 
-Once M7 lands, the app holds **two** Postgres pools at runtime:
+The app holds **two** Postgres pools at runtime:
 
 - `@effect/sql-pg`'s `PgClient` (this directory).
 - `better-auth`'s built-in `pg` pool (in `src/server/auth.ts`).
@@ -107,6 +110,6 @@ from the request when Next auto-selects a fallback port.
 | `DATABASE_URL` | Neon / Vercel Marketplace | Pooled Postgres connection string. |
 | `DATABASE_URL_UNPOOLED` | Neon / Vercel Marketplace | Direct (non-pooler) URL. Reserved for migration runs that need a stable session. |
 
-M7 will add `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`,
-`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. M8 + M9 don't add new
-env vars.
+Auth adds `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`,
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (see the root
+[README](../../README.md)).
