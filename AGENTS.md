@@ -7,6 +7,34 @@ Codex, and `CLAUDE.md` is a symlink to it for Claude Code.
 
 When a section here changes, **rewrite the whole section cohesively** — don't append a "Update:" / "Note:" / "(post-N)" patch to the bottom. The section should read as if it had always been written that way, with old guidance pruned and new guidance woven in. A future reader skims this file top-to-bottom; layered amendments turn it into a changelog instead of a spec.
 
+## What this repository is
+
+effect-clue is a solver for the board game Clue (Cluedo) — not a game. Production is <https://winclue.vercel.app>. It is offline-first: game state lives in `localStorage` and the deducer runs in the browser. Postgres backs only accounts, synced card packs and shares. See [README.md](README.md) for setup and env vars.
+
+**Stack:** Next.js 16 App Router on Vercel, React 19 with React Compiler, Tailwind v4, Radix, Motion, **Effect v4 RC** (`4.0.0-rc.x`), `@effect/sql-pg` (Neon in production, Docker Postgres locally), Better Auth with Google OAuth, next-intl, Vitest + jsdom, Serwist PWA, Sentry, Honeycomb (browser-side, via `@effect/opentelemetry`) and PostHog.
+
+**Where things live:**
+
+- `app/` — routes: `/` (redirects to `/play`), `/play`, `/about`, `/share/[id]`, `/api/auth/[...all]`, `/api/health`, `/api/crons/cleanup-shares`; plus `Providers.tsx`, `sw.ts`, `manifest.ts`.
+- `src/logic/` — pure Effect game model and deducer. `src/ui/` — React components. `src/data/` — React Query hooks ([src/data/README.md](src/data/README.md)). `src/server/` — server runtime, actions, migrations ([src/server/README.md](src/server/README.md)).
+- `src/analytics/`, `src/observability/`, `src/pwa/`, `src/i18n/`, `src/test-utils/`, `src/routes.ts` (in-app paths); `messages/en.json` (UI strings); `scripts/` (dev server, i18n audit, build assertions); `docs/` ([shares-and-sync](docs/shares-and-sync.md), [card-pack-sync](docs/card-pack-sync.md), [Vercel/Neon/Google setup](docs/setup-vercel-neon-google.md)).
+
+**Things that trip newcomers up:**
+
+- **Effect v4 renamed many APIs.** Effect 3 examples and training data are often wrong here (e.g. Effect 3's `DateTime.unsafe*` constructors are `DateTime.makeUnsafe` / `nowUnsafe` now). Check `node_modules/effect` or nearby code for the current name.
+- **Node is pinned by `.nvmrc`** and `engine-strict=true` in `.npmrc`, so a wrong Node version makes `pnpm` fail outright. Dependencies are pinned exactly (`save-prefix=''`).
+- **`pnpm dev`** runs `scripts/dev.mjs`: it picks the next free port when 3000 is busy and exits at startup without the Google OAuth and `DATABASE_URL` env (see "Worktree env setup").
+- **`pnpm build`** is `next build && serwist build` (emits `public/sw.js`) and needs the DB and auth env vars; CI supplies dummy values.
+- **Migrations** apply automatically on the first server request after a cold start.
+
+## CI, deploys and dependencies
+
+- [`ci.yml`](.github/workflows/ci.yml) runs typecheck, lint, test, knip, i18n-check and build as parallel jobs on PRs to `main` and pushes to `main`. The build job also runs `pnpm assert:sw-emitted`, which fails if `public/sw.js` was not emitted.
+- Vercel deploys `main` to production and every PR to a preview. Each preview gets a Neon `preview/<branch>` database branch from the Vercel–Neon integration. Setup: [docs/setup-vercel-neon-google.md](docs/setup-vercel-neon-google.md).
+- [`neon-schema-diff.yml`](.github/workflows/neon-schema-diff.yml) comments the schema diff on PRs. [`neon-delete-preview-branches.yml`](.github/workflows/neon-delete-preview-branches.yml) deletes the preview DB branch when a PR merges or a branch is deleted, because the Neon free plan allows only 10 preview branches. The production database is not protected on that plan, so the workflow's guards (skip `main`, refuse anything not named `preview/*`) are load-bearing — never loosen them casually.
+- [`vercel.json`](vercel.json) schedules a daily `/api/crons/cleanup-shares` run (07:00 UTC).
+- Renovate (presets from `nunofyobiz/renovate-config`, see `renovate.json5`) opens most dependency PRs. [`CODEOWNERS`](CODEOWNERS) routes reviews.
+
 ## Package manager
 
 Use `pnpm` for everything. Never `npm`, `yarn`, or `bun`.
@@ -113,7 +141,7 @@ Claude's `next-dev` preview configured in `.claude/launch.json` runs `pnpm insta
 
 ## Worktree env setup
 
-Both Claude and Codex agents typically work in a worktree under `.claude/worktrees/<name>/`. A fresh worktree starts without a `.env.local`, but `pnpm dev` exits at startup on missing `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `DATABASE_URL` (by design — see `src/server/authEnv.ts`). The fix is one shell command:
+Agents typically work in a git worktree (often `.claude/worktrees/<name>/`, but harnesses may place it elsewhere). A fresh worktree starts without a `.env.local`, but `pnpm dev` exits at startup on missing `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `DATABASE_URL` (by design — see `src/server/authEnv.ts`). The fix is one shell command:
 
 ```sh
 cp "$(git rev-parse --git-common-dir)/../.env.local" .env.local
@@ -234,7 +262,6 @@ Resize the preview between viewports as you go — many of these regress on one 
 - The browser's horizontal scrollbar does NOT flash during the slide. (The off-screen pane's `translateX(±100%)` would otherwise extend `body.scrollWidth` mid-animation.) `contain-paint` on the slide container clips that — but ONLY while the AnimatePresence transition is in flight. At rest the container drops `contain-paint` so a wide Play-mode `<Checklist>` (`min-w-max`) propagates its overflow up to `body` and the page becomes horizontally scrollable. Permanent `contain-paint` on this container would silently clip the table's scrollable overflow at the slide-container's box and break the "page owns horizontal scroll" invariant on mobile, so don't move it back to "always on" without a different mechanism for the slide flash.
 - The `isAnimating` toggle that drives `contain-paint` is gated on `hydrated` and only flips true on changes from a *post-hydration* `topLevelKey` baseline. Pre-hydration `topLevelKey` is always `"setup"` (default `uiMode`); when hydration resolves the URL to e.g. `?view=checklist`, `topLevelKey` flips to `"play"` at the same render where `AnimatePresence` mounts for the first time — so it has no previous child to exit, no exit animation runs, and `onExitComplete` never fires. Treating that hydration-driven change as a "real" slide leaves `isAnimating: true` forever and pins `contain-paint` permanently, which silently kills mobile horizontal scroll. The baseline ref is `null` until the first post-hydration render captures the settled `topLevelKey`; only subsequent user-driven changes flip `isAnimating` true and rely on `onExitComplete` to clear it. If you ever rewire this to track changes without the hydration gate, re-verify the wide-table mobile scroll case after a hard nav to `/play?view=checklist`.
 - After the slide completes, `window.scrollY` is back to 0 — switching tabs doesn't leave you mid-page.
-- Setup → Checklist on a wide setup table has a small known regression: the exiting `<Checklist>` re-renders with `inSetup: false` the moment `state.uiMode` flips, so its table layout shrinks while sliding out and `<main>` resizes accordingly. This isn't fixable without changing `<Checklist>`'s API to accept `inSetup` as a prop instead of reading from state. Verify it still feels acceptable; if the user complains, the refactor is the next step.
 
 **Mobile Checklist ↔ Suggest slide (`MobilePlayLayout`'s own `AnimatePresence`):**
 
@@ -444,7 +471,7 @@ The three rules from `docs/shares-and-sync.md` that govern sharing and shouldn't
 
 - **Universal sign-in.** Every share requires a real, non-anonymous user. The check lives at the top of `createShare` and the DB enforces it via `owner_id NOT NULL`. Don't reintroduce per-flow auth conditionals. The same gate (`useSignedInUserId` / `requireSignedInUser`) governs server-side card-pack mirroring.
 - **Kind-based wire contract.** `createShare`'s input is a discriminated union by `kind`. The server whitelists fields per kind and rejects anything extraneous. Don't expose the column structure to the client; add new flows by adding new kinds.
-- **Effect-Schema-validated wire format.** All eleven wire fields go through codecs in `src/logic/ShareCodec.ts`. Don't add a new wire field with a raw `JSON.stringify` / `JSON.parse` — write a codec, route both sender and receiver through it.
+- **Effect-Schema-validated wire format.** All twelve wire fields go through codecs in `src/logic/ShareCodec.ts`. Don't add a new wire field with a raw `JSON.stringify` / `JSON.parse` — write a codec, route both sender and receiver through it.
 
 The card-pack sync architecture has its own load-bearing invariants that `docs/card-pack-sync.md` covers in depth — the four-quadrant pack-state matrix (`unsyncedSince` × `lastSyncedSnapshot`), the conflict-resolution rules (local-wins when `unsyncedSince` is set, otherwise server-wins), the always-tombstone-when-signed-in delete policy, and the `clearAccountTiedLocalState` keys list. Read the doc before changing those.
 
@@ -496,7 +523,7 @@ Tests live next to source (`Foo.test.ts(x)` beside `Foo.ts(x)`) — match that p
 All durations and dates flow as Effect's `Duration` and `DateTime` types, never raw `number` (milliseconds, Unix timestamps) or `Date` objects. Convert to a primitive **only at the edge** — right before handing the value to a non-Effect API (`setTimeout`, CSS animation, persistence, third-party library).
 
 - **Define durations declaratively:** `Duration.seconds(15)`, `Duration.minutes(1)`, `Duration.millis(180)`. Add / compare with `Duration.sum`, `Duration.greaterThan`, etc.
-- **Define dates with `DateTime`:** `DateTime.now`, `DateTime.unsafeMake(...)`, `DateTime.add(...)`. Diff with `DateTime.distanceDuration` (returns a `Duration`, not a number).
+- **Define dates with `DateTime`:** `DateTime.now`, `DateTime.makeUnsafe(...)`, `DateTime.nowUnsafe()`, `DateTime.add(...)`. Diff with `DateTime.distance` (returns a `Duration`, not a number). These are the Effect v4 names; the Effect 3 spellings no longer exist.
 - **At the edge:** `Duration.toMillis(d)` → `setTimeout`. `DateTime.toEpochMillis(t)` → JSON / persistence. `new Date(DateTime.toEpochMillis(t)).toISOString()` → ISO string. Animation libraries that take seconds (Framer Motion's `transition.duration`) → `Duration.toSeconds(d)`.
 
 Why: `Duration.seconds(15)` reads as "15 seconds" at every call site; `15_000` reads as "fifteen thousand" with the unit implicit. Adding two `Duration`s is unit-safe; adding two `number`s is a runtime bug waiting to happen. Mixing minutes and millis is a TypeScript error, not a 60×-off latency mystery.
@@ -620,6 +647,6 @@ The mechanical version:
 2. Read the diff and the commit bodies. Don't just skim the latest commit — earlier commits on the branch are equally part of the PR.
 3. Rewrite the title to cover the whole branch cohesively. If the scope of the branch changed (e.g. the original feature plus a tangential fix that came up during review), the title should reflect the new scope, not the original framing.
 4. Rewrite the description from scratch: user-facing behavior changes at the top, commit-by-commit technical log at the bottom (regenerated from `git log`, not edited in place from the previous version).
-5. Update via `mcp__github__update_pull_request` — don't ask the user to do it.
+5. Update via `mcp__github__update_pull_request` when that tool is available, otherwise `gh pr edit <n> --title … --body-file …` — don't ask the user to do it.
 
 This applies even when the change you just pushed feels small ("just a typo fix"). The cost of re-reading the diff and regenerating the body is a few seconds; the cost of a PR whose description has silently drifted out of sync with the code is a reviewer trusting outdated copy and missing a real change. Always re-derive from the branch, never patch the existing body.
